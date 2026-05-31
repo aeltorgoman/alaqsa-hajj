@@ -33,10 +33,7 @@ interface Bus {
 }
  
 // ===== CONSTANTS =====
-const SUPABASE_URL = "https://zkucwcnclbfvukhdqhgc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprdWN3Y25jbGJmdnVraGRxaGdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjM5MTMsImV4cCI6MjA5NTc5OTkxM30._aSwnxSW01cLjFyXQPDn-qJLIEwVrrNBsi-rOxq8xzw";
  
-const PAGES = ["dash", "scan", "passengers", "buses", "mina", "arafa", "hotel", "reports"] as const;
  
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "📊 لوحة التحكم" }] },
