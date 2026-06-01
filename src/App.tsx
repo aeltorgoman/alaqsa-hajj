@@ -270,24 +270,24 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     reader.onload = async (e) => {
       const base64 = (e.target?.result as string).split(",")[1];
       try {
-        const res = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/scan-passport", {
+const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/scan-passport", {
   method: "POST",
-  headers: { 
+  headers: {
     "Content-Type": "application/json",
     "Authorization": "Bearer " + import.meta.env.VITE_SUPABASE_ANON_KEY
   },
   body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
 });
-        clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
-        setTimeout(() => {
-          setLoading(false);
-          const text = data.content.map((i: any) => i.text || "").join("");
-          let parsed: any = {};
-          try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
-          setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
-          setShowFields(true);
-        }, 500);
-      } catch { clearInterval(iv); setLoading(false); setShowFields(true); }
+const data = await response.json();
+clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
+setTimeout(() => {
+  setLoading(false);
+  const text = data.content.map((i: any) => i.text || "").join("");
+  let parsed: any = {};
+  try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
+  setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
+  setShowFields(true);
+}, 500);
     };
     reader.readAsDataURL(file);
   };
