@@ -270,7 +270,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     reader.onload = async (e) => {
       const base64 = (e.target?.result as string).split(",")[1];
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch("https://const res = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/scan-passport", {   method: "POST",   headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },   body: JSON.stringify({ imageBase64: base64, mediaType: file.type }) });", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
           body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: [{ type: "image", source: { type: "base64", media_type: file.type, data: base64 } }, { type: "text", text: `استخرج بيانات جواز السفر وأجب فقط بـ JSON: {"name_en":"","name_ar":"","short_en":"","short_ar":"","passport":"","national_id":"الرقم الشخصي من الجواز القطري أو المصري","nationality":"","dob":"","expiry":"","gender":"ذكر أو أنثى"}` }] }] })
         });
