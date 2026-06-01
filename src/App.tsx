@@ -272,7 +272,10 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       try {
         const res = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/scan-passport", {
   method: "POST",
-  headers: { "Content-Type": "application/json", "Authorization": Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY} },
+  headers: { 
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + import.meta.env.VITE_SUPABASE_ANON_KEY
+  },
   body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
 });
         clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
