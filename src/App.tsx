@@ -270,7 +270,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     reader.onload = async (e) => {
       const base64 = (e.target?.result as string).split(",")[1];
       try {
-const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/scan-passport", {
+const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
