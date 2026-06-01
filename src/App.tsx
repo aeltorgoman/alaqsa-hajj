@@ -274,7 +274,7 @@ const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer " + import.meta.env.VITE_SUPABASE_ANON_KEY
+    "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY
   },
   body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
 });
