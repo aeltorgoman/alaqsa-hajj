@@ -272,25 +272,17 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       try {
 const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
   method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY
-  },
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
 });
 const data = await response.json();
 clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
 setTimeout(() => {
   setLoading(false);
-  console.log("الرد من Claude:", JSON.stringify(data));
-const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
+  const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
   let parsed: any = {};
-try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
-  setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
-  setShowFields(true);
-}, 500);
-} catch { clearInterval(iv); setLoading(false); setShowFields(true); }
-        reader.readAsDataURL(file);
+  try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
+  setForm(prev => ({ ...prev, name_en: parsed.name_en ||
   };
   const handleSave = () => { setPassengers([...passengers, { id: Date.now(), ...form, services, rel: "", linked: -1 }]); setSaved(true); };
   const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); };
