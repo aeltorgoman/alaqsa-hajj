@@ -271,14 +271,11 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       const base64 = (e.target?.result as string).split(",")[1];
       try {
 const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
-const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprZ"
+    "Authorization": "Bearer " + import.meta.env.VITE_SUPABASE_ANON_KEY
   },
-  body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
-});  },
   body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
 });
 const data = await response.json();
