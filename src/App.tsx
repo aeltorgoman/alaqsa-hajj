@@ -283,7 +283,7 @@ clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بن�
 setTimeout(() => {
   setLoading(false);
   console.log("الرد من Claude:", JSON.stringify(data));
-const text = data.content.map((i: any) => i.text || "").join("");
+const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
   let parsed: any = {};
   try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
   setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
