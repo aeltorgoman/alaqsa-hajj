@@ -286,10 +286,10 @@ setTimeout(() => {
   let parsed: any = {};
   try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
   setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
-  setShowFields(true);
-}, 500);
-    };
-    reader.readAsDataURL(file);
+ }, 500);
+} catch { clearInterval(iv); setLoading(false); setShowFields(true); }
+        };
+        reader.readAsDataURL(file);
   };
   const handleSave = () => { setPassengers([...passengers, { id: Date.now(), ...form, services, rel: "", linked: -1 }]); setSaved(true); };
   const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); };
