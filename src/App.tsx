@@ -40,7 +40,40 @@ function parseDate(dateStr: string): Date | null {
   return d;
 }
 
-// ضغط الصورة قبل الرفع (المستندات تتصغّر تلقائياً لتوفير المساحة)
+// تحويل ملف لـ base64
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve((e.target?.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// قراءة مستند بالـ AI (جواز أو بطاقة)
+async function scanDocument(file: File, mode: "passport" | "idcard"): Promise<any> {
+  const base64 = await fileToBase64(file);
+  const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode })
+  });
+  const data = await response.json();
+  const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
+  let parsed: any = {};
+  try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
+  return parsed;
+}
+
+// استخراج مسار الملف من الرابط عشان نقدر نحذفه
+function getStoragePath(url: string): string {
+  const prefix = "/storage/v1/object/public/passengers-docs/";
+  const idx = url.indexOf(prefix);
+  if (idx === -1) return "";
+  return decodeURIComponent(url.slice(idx + prefix.length));
+}
+
+// ضغط الصور تلقائياً لتوفير المساحة
 function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) { resolve(file); return; }
@@ -323,16 +356,28 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
   const [statusMsg, setStatusMsg] = useState("");
   const [showFields, setShowFields] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  // جواز السفر
   const [previewImg, setPreviewImg] = useState<string | null>(null);
+  const [passportFile, setPassportFile] = useState<File | null>(null);
+  // البطاقة الشخصية
+  const [idCardFile, setIdCardFile] = useState<File | null>(null);
+  const [idCardPreview, setIdCardPreview] = useState<string | null>(null);
+  const [idScanLoading, setIdScanLoading] = useState(false);
+  const [idExpiry, setIdExpiry] = useState("");
+  // البيانات
   const [form, setForm] = useState({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
   const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
+  // مستندات إضافية (بدون الجواز والبطاقة — هم بيتعاملوا فوق)
+  const [docs, setDocs] = useState<{ photo: File | null; contract: File | null }>({ photo: null, contract: null });
+
   const setField = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
-  const [locked, setLocked] = useState(false);
-  // المستندات: صورة شخصية + بطاقة + عقد
-  const [docs, setDocs] = useState<{ photo: File | null; idcard: File | null; contract: File | null }>({ photo: null, idcard: null, contract: null });
-  const [uploading, setUploading] = useState(false);
   const setService = (key: string, val: string) => setServices(prev => ({ ...prev, [key]: val }));
+
+  // رفع وقراءة جواز السفر
   const handleFile = (file: File) => {
+    setPassportFile(file);
     setPreviewImg(URL.createObjectURL(file));
     setLoading(true); setProgress(0); setShowFields(false); setSaved(false);
     const msgs = ["جاري تحليل الجواز...", "استخراج البيانات...", "التحقق..."];
@@ -345,7 +390,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
         const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
+          body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode: "passport" })
         });
         const data = await response.json();
         clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
@@ -354,23 +399,33 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
           const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
           let parsed: any = {};
           try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
-          setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
+          setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
           setShowFields(true);
         }, 500);
       } catch { clearInterval(iv); setLoading(false); setShowFields(true); }
     };
     reader.readAsDataURL(file);
   };
+
+  // رفع وقراءة البطاقة الشخصية بالـ AI
+  const handleIdCard = async (file: File) => {
+    setIdCardFile(file);
+    setIdCardPreview(URL.createObjectURL(file));
+    setIdScanLoading(true);
+    try {
+      const parsed = await scanDocument(file, "idcard");
+      if (parsed.national_id) setForm(prev => ({ ...prev, national_id: parsed.national_id }));
+      if (parsed.id_expiry) setIdExpiry(parsed.id_expiry);
+    } catch {}
+    setIdScanLoading(false);
+  };
+
   const handleSave = async () => {
-    // منع التكرار: فحص لو الجواز أو الرقم الشخصي مسجل قبل كده
     const dupPassport = form.passport && passengers.some(p => p.passport && p.passport === form.passport);
     const dupNational = form.national_id && passengers.some(p => p.national_id && p.national_id === form.national_id);
-    if (dupPassport || dupNational) {
-      alert("⚠️ هذا الحاج مسجل بالفعل! (رقم الجواز أو البطاقة موجود)");
-      return;
-    }
+    if (dupPassport) { alert("⚠️ رقم الجواز ده مسجل بالفعل!"); return; }
+    if (dupNational) { alert("⚠️ رقم البطاقة ده مسجل بالفعل!"); return; }
     setUploading(true);
-    // الاسم المختصر تلقائياً
     const short_en = makeShort(form.name_en);
     const short_ar = makeShort(form.name_ar);
     const { data, error } = await supabase.from("passengers").insert([{
@@ -379,31 +434,39 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       passport: form.passport, national_id: form.national_id,
       nat: form.nat, dob: form.dob, expiry: form.expiry,
       gender: form.gender, phone: form.phone,
+      id_expiry: idExpiry,
       bus: services.bus, flight: services.flight,
       hotel: services.hotel, camp_mina: services.camp_mina,
       camp_arafa: services.camp_arafa
     }]).select();
     if (!error && data && data[0]) {
       const pid = data[0].id;
-      // رفع المستندات لو موجودة
       const urls: any = {};
+      if (passportFile) urls.passport_url = await uploadDoc(passportFile, pid, "passport_doc");
+      if (idCardFile) urls.national_id_url = await uploadDoc(idCardFile, pid, "idcard");
       if (docs.photo) urls.photo_url = await uploadDoc(docs.photo, pid, "photo");
-      if (docs.idcard) urls.national_id_url = await uploadDoc(docs.idcard, pid, "idcard");
       if (docs.contract) urls.contract_url = await uploadDoc(docs.contract, pid, "contract");
-      if (Object.keys(urls).length > 0) {
-        await supabase.from("passengers").update(urls).eq("id", pid);
-      }
-      setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, ...urls } as any]);
+      if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls).eq("id", pid);
+      setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, id_expiry: idExpiry, ...urls } as any]);
       setSaved(true); setLocked(true);
     } else alert("حصل خطأ في الحفظ!");
     setUploading(false);
   };
-  const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); setLocked(false); setDocs({ photo: null, idcard: null, contract: null }); };
+
+  const reset = () => {
+    setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
+    setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
+    setPreviewImg(null); setPassportFile(null); setShowFields(false); setSaved(false); setLocked(false);
+    setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setDocs({ photo: null, contract: null });
+  };
+
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
-      {saved && <div style={{ background: "#E1F5EE", border: "0.5px solid #5DCAA5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#085041" }}>✓ تم حفظ الحاج! <button onClick={reset} style={{ marginRight: "auto", ...btnP({ fontSize: 11, padding: "3px 10px" }) }}>+ حاج جديد</button></div>}
+      {saved && <div style={{ background: "#E1F5EE", border: "0.5px solid #5DCAA5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#085041" }}>✓ تم حفظ الحاج! <button onClick={reset} style={{ marginRight: "auto", ...btnP({ fontSize: 11, padding: "3px 10px" }) }}>➕ حاج جديد</button></div>}
+
+      {/* رفع جواز السفر */}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 رفع جواز السفر</div>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 جواز السفر</div>
         {!previewImg ? (
           <div onClick={() => document.getElementById("pu")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 10, padding: "24px", textAlign: "center", cursor: "pointer", background: "#f9f9f9" }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>🛂</div>
@@ -421,14 +484,16 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
           </div>
         )}
       </div>
+
       {showFields && (<>
+        {/* البيانات المستخرجة */}
         <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "#FAFFFD" }}>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>👤 البيانات <span style={{ fontSize: 10, background: "#E1F5EE", color: "#085041", padding: "1px 7px", borderRadius: 99 }}>✨ مستخرجة</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {[["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الرقم الشخصي", "national_id", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]].map(([l, k, col]) => (
-              <div key={k as string} style={{ gridColumn: col as string || "auto" }}>
-                <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l as string}</div>
-                <input disabled={locked} style={{ ...inp, borderColor: "#5DCAA5", background: locked ? "#f5f5f5" : "#E1F5EE", color: locked ? "#666" : "#000" }} value={(form as any)[k as string]} onChange={e => setField(k as string, e.target.value)} />
+            {([["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]] as [string,string,string][]).map(([l, k, col]) => (
+              <div key={k} style={{ gridColumn: col || "auto" }}>
+                <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l}</div>
+                <input disabled={locked} style={{ ...inp, borderColor: "#5DCAA5", background: locked ? "#f5f5f5" : "#E1F5EE", color: locked ? "#666" : "#000" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
               </div>
             ))}
             <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div>
@@ -438,33 +503,66 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
             </div>
           </div>
         </div>
+
+        {/* البطاقة الشخصية */}
+        <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🪪 البطاقة الشخصية <span style={{ fontSize: 10, color: "#888" }}>(اختياري)</span></div>
+          {!idCardPreview ? (
+            <div onClick={() => !locked && document.getElementById("id-card-upload")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 8, padding: "14px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: "#f9f9f9", opacity: locked ? 0.6 : 1 }}>
+              <div style={{ fontSize: 11, color: "#666" }}>ارفع البطاقة لاستخراج الرقم والصلاحية تلقائياً</div>
+              <input id="id-card-upload" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleIdCard(e.target.files[0])} />
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+              <img src={idCardPreview} style={{ width: 100, height: 65, objectFit: "cover", borderRadius: 6, border: "0.5px solid #e5e5e5" }} />
+              <div style={{ flex: 1 }}>
+                {idScanLoading ? <div style={{ fontSize: 11, color: "#888" }}>⏳ جاري قراءة البطاقة...</div> : <div style={{ fontSize: 11, color: "#1D9E75", fontWeight: 500 }}>✓ تم استخراج البيانات</div>}
+                <button onClick={() => { setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setForm(prev => ({ ...prev, national_id: "" })); }} style={{ marginTop: 6, ...btnS({ fontSize: 10, padding: "2px 8px" }) }}>تغيير</button>
+              </div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+            <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>رقم البطاقة</div>
+              <input disabled={locked} style={{ ...inp }} value={form.national_id} onChange={e => setField("national_id", e.target.value)} placeholder="يتعبى تلقائياً من البطاقة" />
+            </div>
+            <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>انتهاء البطاقة</div>
+              <input disabled={locked} style={{ ...inp }} value={idExpiry} onChange={e => setIdExpiry(e.target.value)} placeholder="DD/MM/YYYY" />
+            </div>
+          </div>
+        </div>
+
+        {/* الخدمات */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>⭐ الخدمات المطلوبة</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {[["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى"]], ["🏨 الفندق", "hotel", ["مطل", "جانبي", "داخلي"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]].map(([l, k, opts]) => (
-              <div key={k as string}>
-                <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l as string}</div>
+            {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى"]], ["🏨 الفندق", "hotel", ["مطل", "جانبي", "داخلي"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
+              <div key={k}>
+                <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {(opts as string[]).map(o => <div key={o} onClick={() => setService(k as string, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k as string] === o ? "#1D9E75" : "#ddd"}`, background: (services as any)[k as string] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k as string] === o ? "#085041" : "#666", textAlign: "center", fontWeight: (services as any)[k as string] === o ? 500 : 400 }}>{o}</div>)}
+                  {opts.map(o => <div key={o} onClick={() => setService(k, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k] === o ? "#1D9E75" : "#ddd"}`, background: (services as any)[k] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k] === o ? "#085041" : "#666", textAlign: "center", fontWeight: (services as any)[k] === o ? 500 : 400 }}>{o}</div>)}
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* مستندات إضافية */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>📎 المستندات <span style={{ fontSize: 10, color: "#888" }}>(اختياري)</span></div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-            {[["📷 صورة شخصية", "photo", "image/*"], ["🪪 البطاقة", "idcard", "image/*"], ["📄 العقد", "contract", "image/*,application/pdf"]].map(([label, key, accept]) => (
-              <div key={key as string}>
-                <input id={`doc-${key}`} type="file" accept={accept as string} disabled={locked} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) setDocs(prev => ({ ...prev, [key as string]: f })); }} />
-                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${(docs as any)[key as string] ? "#1D9E75" : "#ddd"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: (docs as any)[key as string] ? "#E1F5EE" : "#f9f9f9", opacity: locked ? 0.6 : 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: (docs as any)[key as string] ? "#085041" : "#666" }}>{label as string}</div>
-                  <div style={{ fontSize: 9, color: "#999", marginTop: 3 }}>{(docs as any)[key as string] ? "✓ تم الاختيار" : "اضغط للرفع"}</div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>📎 مستندات إضافية <span style={{ fontSize: 10, color: "#888" }}>(اختياري)</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {([["📷 صورة شخصية", "photo", "image/*"], ["📄 عقد الانتفاق", "contract", "image/*,application/pdf"]] as [string, "photo"|"contract", string][]).map(([label, key, accept]) => (
+              <div key={key}>
+                <input id={`doc-${key}`} type="file" accept={accept} disabled={locked} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) setDocs(prev => ({ ...prev, [key]: f })); }} />
+                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${docs[key] ? "#1D9E75" : "#ddd"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: docs[key] ? "#E1F5EE" : "#f9f9f9", opacity: locked ? 0.6 : 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: docs[key] ? "#085041" : "#666" }}>{label}</div>
+                  <div style={{ fontSize: 9, color: "#999", marginTop: 3 }}>{docs[key] ? "✓ تم الاختيار" : "اضغط للرفع"}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* الأزرار */}
         <div style={{ display: "flex", gap: 8 }}>
           {locked ? (<>
             <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "#E6F1FB", color: "#0C447C" }), flex: 1 }}>✏️ تعديل</button>
@@ -478,6 +576,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     </div>
   );
 }
+
 
 function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [search, setSearch] = useState("");
@@ -520,6 +619,80 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     });
   });
 
+  const [docUploading, setDocUploading] = useState<string | null>(null);
+  const [showManual, setShowManual] = useState(false);
+  const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+  const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
+  const [manualSaving, setManualSaving] = useState(false);
+
+  const handleManualSave = async () => {
+    if (!manualForm.name_ar && !manualForm.name_en) { alert("اكتب الاسم على الأقل!"); return; }
+    const dupP = manualForm.passport && passengers.some((p: any) => p.passport === manualForm.passport);
+    const dupN = manualForm.national_id && passengers.some((p: any) => p.national_id === manualForm.national_id);
+    if (dupP) { alert("⚠️ رقم الجواز ده مسجل بالفعل!"); return; }
+    if (dupN) { alert("⚠️ رقم البطاقة ده مسجل بالفعل!"); return; }
+    setManualSaving(true);
+    const short_ar = makeShort(manualForm.name_ar);
+    const short_en = makeShort(manualForm.name_en);
+    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel: manualServices.hotel, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa }]).select();
+    if (!error && data && data[0]) {
+      setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as any]);
+      setShowManual(false);
+      setManualForm({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+    } else alert("حصل خطأ في الحفظ!");
+    setManualSaving(false);
+  };
+
+  const handleDocUpload = async (p: any, docType: string, field: string, file: File) => {
+    setDocUploading(docType);
+    if (docType === "passport_doc") {
+      // رفع الجواز + تحديث البيانات بالـ AI
+      const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "passport")]);
+      const updates: any = {};
+      if (url) updates.passport_url = url;
+      if (parsed.name_en) { updates.name_en = parsed.name_en; updates.short_en = makeShort(parsed.name_en); }
+      if (parsed.name_ar) { updates.name_ar = parsed.name_ar; updates.short_ar = makeShort(parsed.name_ar); }
+      if (parsed.passport) updates.passport = parsed.passport;
+      if (parsed.nationality) updates.nat = parsed.nationality;
+      if (parsed.dob) updates.dob = parsed.dob;
+      if (parsed.expiry) updates.expiry = parsed.expiry;
+      if (parsed.gender) updates.gender = parsed.gender;
+      await supabase.from("passengers").update(updates).eq("id", p.id);
+      const updated = { ...p, ...updates };
+      setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+      setSelected(updated);
+    } else if (docType === "idcard") {
+      // رفع البطاقة + استخراج رقمها وصلاحيتها
+      const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "idcard")]);
+      const updates: any = {};
+      if (url) updates.national_id_url = url;
+      if (parsed.national_id) updates.national_id = parsed.national_id;
+      if (parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
+      await supabase.from("passengers").update(updates).eq("id", p.id);
+      const updated = { ...p, ...updates };
+      setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+      setSelected(updated);
+    } else {
+      const url = await uploadDoc(file, p.id, docType);
+      if (url) {
+        await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
+        const updated = { ...p, [field]: url };
+        setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+        setSelected(updated);
+      }
+    }
+    setDocUploading(null);
+  };
+
+  const handleDocDelete = async (p: any, field: string, url: string) => {
+    if (!confirm("هتمسح المستند ده؟")) return;
+    const path = getStoragePath(url);
+    if (path) await supabase.storage.from("passengers-docs").remove([path]);
+    await supabase.from("passengers").update({ [field]: null }).eq("id", p.id);
+    const updated = { ...p, [field]: null };
+    setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+    setSelected(updated);
+  };
   const deleteP = (id: number) => { setPassengers(passengers.filter(p => p.id !== id)); setSelected(null); };
   const saveEdit = (p: Passenger) => { setPassengers(passengers.map(x => x.id === p.id ? p : x)); setEditing(null); setSelected(p); };
 
@@ -557,6 +730,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: 11, color: "#888" }}>{filtered.length} من {passengers.length} حاج</div>
             <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setShowManual(true)} style={{ ...btnP({ fontSize: 10, padding: "3px 8px" }) }}>➕ إضافة يدوي</button>
               <button onClick={exportExcel} style={{ ...btnS({ fontSize: 10, padding: "3px 8px" }) }}>⬇️ Excel</button>
               <button onClick={exportPDF} style={{ ...btnS({ fontSize: 10, padding: "3px 8px" }) }}>📄 PDF</button>
             </div>
@@ -603,9 +777,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
                       <input value={colFilters[col.key] || ""} onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))} style={{ ...inp, padding: "2px 6px", fontSize: 10, minWidth: 60 }} placeholder="فلتر..." />
                     </td>
                   ))}
-                  <td style={{ padding: "4px 6px", border: "0.5px solid #ddd", textAlign: "center" }}>
-                    <span onClick={() => setColFilters({})} style={{ fontSize: 10, color: "#c0392b", cursor: "pointer" }}>مسح الكل</span>
-                  </td>
+                  <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
                 </tr>
               </thead>
               <tbody>
@@ -668,15 +840,30 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           </div>
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>📎 المستندات</div>
-            {[["📷 صورة شخصية", (selected as any).photo_url], ["🛂 جواز السفر", (selected as any).passport_url], ["🪪 البطاقة", (selected as any).national_id_url], ["📄 العقد", (selected as any).contract_url]].map(([label, url]) => (
-              <div key={label as string} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                <span style={{ fontSize: 11, color: url ? "#444" : "#bbb" }}>{label as string}</span>
-                {url ? (
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <a href={url as string} target="_blank" rel="noreferrer" style={{ background: "#E6F1FB", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#0C447C", textDecoration: "none" }}>👁 عرض</a>
-                    <a href={url as string} download style={{ background: "#E1F5EE", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#085041", textDecoration: "none" }}>⬇️</a>
-                  </div>
-                ) : <span style={{ fontSize: 10, color: "#bbb" }}>غير مرفوع</span>}
+            {([
+              ["📷 صورة شخصية", (selected as any).photo_url, "photo_url", "photo", "image/*"],
+              ["🛂 جواز السفر", (selected as any).passport_url, "passport_url", "passport_doc", "image/*"],
+              ["🪪 البطاقة", (selected as any).national_id_url, "national_id_url", "idcard", "image/*"],
+              ["📄 العقد", (selected as any).contract_url, "contract_url", "contract", "image/*,application/pdf"],
+            ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
+              <div key={label} style={{ padding: "7px 0", borderBottom: "0.5px solid #f5f5f5" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 11, color: url ? "#333" : "#bbb" }}>{label}</span>
+                  {docUploading === docType ? (
+                    <span style={{ fontSize: 10, color: "#888" }}>⏳ جاري الرفع...</span>
+                  ) : url ? (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <a href={url} target="_blank" rel="noreferrer" style={{ background: "#E6F1FB", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#0C447C", textDecoration: "none" }}>👁</a>
+                      <a href={url} download style={{ background: "#E1F5EE", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#085041", textDecoration: "none" }}>⬇️</a>
+                      <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "#FBEAF0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input id={`upload-${docType}`} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
+                      <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#085041" }}>⬆️ رفع</button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -702,6 +889,39 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             </div>
           </>
         )}
+      </Modal>
+
+      {/* مودال الإضافة اليدوية */}
+      <Modal show={showManual} onClose={() => setShowManual(false)} title="➕ إضافة حاج يدوياً" maxWidth={460}>
+        <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+          {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
+            <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l}</div>
+              <input style={inp} value={(manualForm as any)[k]} onChange={e => setManualForm(prev => ({ ...prev, [k]: e.target.value }))} />
+            </div>
+          ))}
+          <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div>
+            <select style={inp} value={manualForm.gender} onChange={e => setManualForm(prev => ({ ...prev, gender: e.target.value }))}>
+              <option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى"]], ["🏨 الفندق", "hotel", ["مطل","جانبي","داخلي"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+              <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "#1D9E75" : "#ddd"}`, background: (manualServices as any)[k] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "#085041" : "#666", textAlign: "center" }}>{o}</div>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "⏳ جاري الحفظ..." : "💾 حفظ"}</button>
+          <button onClick={() => setShowManual(false)} style={btnS()}>إلغاء</button>
+        </div>
       </Modal>
     </div>
   );
