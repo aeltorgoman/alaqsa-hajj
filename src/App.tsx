@@ -283,7 +283,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     };
     reader.readAsDataURL(file);
   };
-  const handleSave = () => { setPassengers([...passengers, { id: Date.now(), ...form, services, rel: "", linked: -1 }]); setSaved(true); };
+  const handleSave = async () => {   const newPassenger = { id: Date.now(), ...form, services, rel: "", linked: -1 };   const { error } = await supabase.from("passengers").insert([{     name_ar: form.name_ar, name_en: form.name_en,     short_ar: form.short_ar, short_en: form.short_en,     passport: form.passport, national_id: form.national_id,     nat: form.nat, dob: form.dob, expiry: form.expiry,     gender: form.gender, phone: form.phone,     bus: services.bus, flight: services.flight,     hotel: services.hotel, camp_mina: services.camp_mina,     camp_arafa: services.camp_arafa   }]);   if (!error) { setPassengers([...passengers, newPassenger]); setSaved(true); }   else alert("حصل خطأ في الحفظ!"); };
   const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); };
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
