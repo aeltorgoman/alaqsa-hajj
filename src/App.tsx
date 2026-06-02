@@ -23,7 +23,6 @@ interface Bus { id: number; name: string; type: string; passengers: number[]; }
 interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; passengers: number[]; }
 interface Room { id: number; number: string; floor: string; type: "مطل" | "جانبي" | "داخلي" | "سويت"; passengers: number[]; }
 
-// ===== CONSTANTS =====
 const ALL_PERMISSIONS = [
   { key: "add_passenger", label: "إضافة حجاج" },
   { key: "edit_passenger", label: "تعديل حجاج" },
@@ -50,7 +49,6 @@ const NAV = [
   { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين" }] },
 ];
 
-// ===== SHARED COMPONENTS =====
 function Avatar({ name, gender, size = 32 }: { name: string; gender: string; size?: number }) {
   const initials = name.split(" ").slice(0, 2).map(w => w[0] || "").join("");
   const f = gender === "أنثى";
@@ -76,7 +74,6 @@ const inp = { fontSize: 12, background: "#f5f5f5", border: "0.5px solid #ddd", b
 const btnP = (extra?: any) => ({ background: "#1D9E75", color: "white", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, ...extra });
 const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid #ddd", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#333", ...extra });
 
-// ===== SIDEBAR =====
 function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
   return (
     <div style={{ width: 200, background: "#f9f9f9", borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%" }}>
@@ -105,7 +102,6 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
   );
 }
 
-// ===== LOGIN =====
 function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   const [users] = useState<User[]>(INIT_USERS);
   const [username, setUsername] = useState("");
@@ -147,7 +143,6 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   );
 }
 
-// ===== USERS PAGE =====
 function UsersPage({ currentUser }: { currentUser: User }) {
   const [users, setUsers] = useState<User[]>(INIT_USERS);
   const [showAdd, setShowAdd] = useState(false);
@@ -207,7 +202,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   );
 }
 
-// ===== DASHBOARD =====
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
   const males = passengers.filter(p => p.gender === "ذكر").length;
   const females = passengers.filter(p => p.gender === "أنثى").length;
@@ -263,8 +257,95 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
   const handleFile = (file: File) => {
     setPreviewImg(URL.createObjectURL(file));
     setLoading(true); setProgress(0); setShowFields(false); setSaved(false);
-    const msgs = ["جار
-// ===== PASSENGERS PAGE =====
+    const msgs = ["جاري تحليل الجواز...", "استخراج البيانات...", "التحقق..."];
+    let p = 0;
+    const iv = setInterval(() => { p = Math.min(p + Math.random() * 20, 85); setProgress(p); setStatusMsg(msgs[Math.min(Math.floor(p / 30), 2)]); }, 400);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = (e.target?.result as string).split(",")[1];
+      try {
+        const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
+        });
+        const data = await response.json();
+        clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
+        setTimeout(() => {
+          setLoading(false);
+          const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
+          let parsed: any = {};
+          try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
+          setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", national_id: parsed.national_id || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
+          setShowFields(true);
+        }, 500);
+      } catch { clearInterval(iv); setLoading(false); setShowFields(true); }
+    };
+    reader.readAsDataURL(file);
+  };
+  const handleSave = () => { setPassengers([...passengers, { id: Date.now(), ...form, services, rel: "", linked: -1 }]); setSaved(true); };
+  const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); };
+  return (
+    <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+      {saved && <div style={{ background: "#E1F5EE", border: "0.5px solid #5DCAA5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#085041" }}>✓ تم حفظ الحاج! <button onClick={reset} style={{ marginRight: "auto", ...btnP({ fontSize: 11, padding: "3px 10px" }) }}>+ حاج جديد</button></div>}
+      <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 رفع جواز السفر</div>
+        {!previewImg ? (
+          <div onClick={() => document.getElementById("pu")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 10, padding: "24px", textAlign: "center", cursor: "pointer", background: "#f9f9f9" }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>🛂</div>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 3 }}>ارفع صورة جواز السفر</div>
+            <div style={{ fontSize: 11, color: "#888" }}>الذكاء الاصطناعي يستخرج البيانات تلقائياً</div>
+            <input id="pu" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <img src={previewImg} style={{ width: 140, height: 100, objectFit: "cover", borderRadius: 8, border: "0.5px solid #e5e5e5" }} />
+            <div style={{ flex: 1 }}>
+              {loading ? (<><div style={{ background: "#f0f0f0", borderRadius: 99, height: 4, overflow: "hidden", marginBottom: 6 }}><div style={{ width: `${progress}%`, height: "100%", background: "#1D9E75", borderRadius: 99, transition: "width 0.3s" }} /></div><div style={{ fontSize: 11, color: "#888" }}>{statusMsg}</div></>) : <div style={{ fontSize: 11, color: "#1D9E75", fontWeight: 500 }}>✓ {statusMsg}</div>}
+              <button onClick={reset} style={{ marginTop: 8, ...btnS({ fontSize: 10, padding: "3px 10px" }) }}>تغيير</button>
+            </div>
+          </div>
+        )}
+      </div>
+      {showFields && (<>
+        <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "#FAFFFD" }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>👤 البيانات <span style={{ fontSize: 10, background: "#E1F5EE", color: "#085041", padding: "1px 7px", borderRadius: 99 }}>✨ مستخرجة</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الرقم الشخصي", "national_id", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]].map(([l, k, col]) => (
+              <div key={k as string} style={{ gridColumn: col as string || "auto" }}>
+                <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l as string}</div>
+                <input style={{ ...inp, borderColor: "#5DCAA5", background: "#E1F5EE" }} value={(form as any)[k as string]} onChange={e => setField(k as string, e.target.value)} />
+              </div>
+            ))}
+            <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div>
+              <select style={{ ...inp, borderColor: "#5DCAA5", background: "#E1F5EE" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
+                <option value="">—</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>⭐ الخدمات المطلوبة</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {[["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى"]], ["🏨 الفندق", "hotel", ["مطل", "جانبي", "داخلي"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]].map(([l, k, opts]) => (
+              <div key={k as string}>
+                <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l as string}</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {(opts as string[]).map(o => <div key={o} onClick={() => setService(k as string, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k as string] === o ? "#1D9E75" : "#ddd"}`, background: (services as any)[k as string] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k as string] === o ? "#085041" : "#666", textAlign: "center", fontWeight: (services as any)[k as string] === o ? 500 : 400 }}>{o}</div>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleSave} style={{ ...btnP(), flex: 1 }}>{saved ? "✓ تم الحفظ" : "💾 حفظ الحاج"}</button>
+          <button onClick={reset} style={btnS()}>مسح</button>
+        </div>
+      </>)}
+    </div>
+  );
+}
+
 function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -350,7 +431,6 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
   );
 }
 
-// ===== BUSES PAGE =====
 function BusesPage({ passengers }: { passengers: Passenger[] }) {
   const [buses, setBuses] = useState<Bus[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -487,7 +567,6 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-// ===== CAMPS PAGE =====
 function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[] }) {
   const [camps, setCamps] = useState<Camp[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -641,7 +720,6 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
   );
 }
 
-// ===== HOTEL PAGE =====
 function HotelPage({ passengers }: { passengers: Passenger[] }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -665,13 +743,10 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
   const [printFloor, setPrintFloor] = useState("");
   const [printType, setPrintType] = useState<Room["type"]>("مطل");
   const fileRef = useRef<HTMLInputElement>(null);
-
   const getAssigned = () => { const s = new Set<number>(); rooms.forEach(r => r.passengers.forEach(id => s.add(id))); return s; };
   const assigned = getAssigned();
   const floors = [...new Set(rooms.filter(r => r.floor).map(r => r.floor))].sort();
-
   const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-
   const addRoom = () => {
     if (!roomNumber.trim()) return;
     if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
@@ -679,7 +754,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
     setRooms(prev => [...prev, { id, number: roomNumber.trim(), floor: roomFloor.trim(), type: roomType, passengers: [] }]);
     setExpanded(prev => new Set([...prev, id])); setRoomNumber(""); setRoomFloor(""); setRoomType("مطل"); setShowAdd(false);
   };
-
   const addRange = () => {
     const from = parseInt(rangeFrom), to = parseInt(rangeTo);
     if (!from || !to || from > to) { setRangeError("تأكد من الأرقام"); return; }
@@ -693,7 +767,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
     setRangeError(""); setRooms(prev => [...prev, ...newRooms]);
     setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeType("مطل"); setShowRange(false);
   };
-
   const handleExcel = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -715,14 +788,12 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
     };
     reader.readAsText(file);
   };
-
   const deleteRoom = (id: number) => { const r = rooms.find(x => x.id === id); if (r && r.passengers.length > 0) { alert("أزل المسافرين الأول!"); return; } setRooms(prev => prev.filter(x => x.id !== id)); };
   const openAddP = (roomId: number) => { setCurrentRoomId(roomId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   const confirmAddP = () => { setRooms(prev => prev.map(r => { if (r.id !== currentRoomId) return r; const nl = [...r.passengers]; selectedP.forEach(id => { if (!nl.includes(id)) nl.push(id); }); return { ...r, passengers: nl }; })); setShowAddP(false); };
   const removeP = (pId: number, roomId: number) => setRooms(prev => prev.map(r => r.id !== roomId ? r : { ...r, passengers: r.passengers.filter(id => id !== pId) }));
   const moveP = (pId: number, fromId: number, toId: string) => { if (!toId) return; setRooms(prev => prev.map(r => { if (r.id === fromId) return { ...r, passengers: r.passengers.filter(id => id !== pId) }; if (r.id === parseInt(toId) && !r.passengers.includes(pId)) return { ...r, passengers: [...r.passengers, pId] }; return r; })); };
-
   const doPrint = (roomsToPrint: Room[]) => {
     const w = window.open("", "_blank"); if (!w) return;
     const half = Math.ceil(roomsToPrint.length / 2);
@@ -735,17 +806,14 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
     w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>🏨 تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();</script></body></html>`);
     w.document.close();
   };
-
   const handlePrint = () => {
     let r = rooms;
     if (printFilter === "floor") r = rooms.filter(x => x.floor === printFloor);
     else if (printFilter === "type") r = rooms.filter(x => x.type === printType);
     doPrint(r); setShowPrint(false);
   };
-
   const currentRoom = rooms.find(r => r.id === currentRoomId);
   const filteredP = passengers.filter(p => !pSearch || p.name_ar.includes(pSearch));
-
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 12 }}>
@@ -760,7 +828,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
         {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS({ flex: 1 })}>🖨️ طباعة</button>}
         <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
       </div>
-      {rooms.length > 0 && <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>💡 شكل ملف Excel: رقم الغرفة، النوع، الطابق (CSV)</div>}
       {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> :
         rooms.map(room => {
           const isExpanded = expanded.has(room.id);
@@ -796,8 +863,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
             </div>
           );
         })}
-
-      {/* Add Single Room */}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="🛏 غرفة جديدة" maxWidth={340}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "#c0392b" : "#ddd" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 10, color: "#c0392b", marginTop: 3 }}>{numberError}</div>}</div>
@@ -811,8 +876,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
-
-      {/* Add Range */}
       <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="📋 إضافة نطاق غرف" maxWidth={360}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} placeholder="1601" /></div>
@@ -829,8 +892,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
         {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "#1D9E75", marginBottom: 10, background: "#E1F5EE", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
         <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
-
-      {/* Add Passenger */}
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — غرفة ${currentRoom?.number}`}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
           <span style={{ color: "#aaa" }}>🔍</span>
@@ -852,8 +913,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
         })}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>✓ إضافة ({selectedP.size})</button><button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button></div>
       </Modal>
-
-      {/* Print Modal */}
       <Modal show={showPrint} onClose={() => setShowPrint(false)} title="🖨️ خيارات الطباعة" maxWidth={340}>
         {[["all", "طباعة كل الغرف"], ["floor", "طباعة دور معين"], ["type", "طباعة نوع معين"]].map(([val, label]) => (
           <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "#E1F5EE" : "#f9f9f9", border: `0.5px solid ${printFilter === val ? "#5DCAA5" : "#e5e5e5"}` }}>
@@ -884,7 +943,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-// ===== REPORTS PAGE =====
 function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const reports = [
@@ -952,16 +1010,12 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-// ===== MAIN APP =====
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [page, setPage] = useState("dash");
   const [passengers, setPassengers] = useState<Passenger[]>([]);
-
   if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
-
   const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "المسافرون", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
-
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
@@ -976,7 +1030,6 @@ export default function App() {
       default: return <Dashboard passengers={passengers} setPage={setPage} />;
     }
   };
-
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "system-ui,-apple-system,sans-serif", background: "white", overflow: "hidden" }}>
       <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={() => { setCurrentUser(null); setPage("dash"); }} />
