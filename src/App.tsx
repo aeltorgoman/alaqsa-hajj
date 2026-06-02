@@ -1,5 +1,31 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
+
+// ===== دوال مساعدة =====
+// الاسم المختصر = الأول + الثاني + الأخير
+function makeShort(fullName: string): string {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 3) return parts.join(" ");
+  return [parts[0], parts[1], parts[parts.length - 1]].join(" ");
+}
+
+// فحص لو التاريخ فاضل عليه أقل من 6 شهور
+function isExpiringSoon(dateStr: string): boolean {
+  if (!dateStr) return false;
+  // محاولة قراءة التاريخ بصيغ مختلفة DD/MM/YYYY أو YYYY-MM-DD
+  let d: Date | null = null;
+  const parts = dateStr.split(/[\/\-.]/).map(s => s.trim());
+  if (parts.length === 3) {
+    if (parts[0].length === 4) d = new Date(+parts[0], +parts[1] - 1, +parts[2]); // YYYY-MM-DD
+    else d = new Date(+parts[2], +parts[1] - 1, +parts[0]); // DD/MM/YYYY
+  }
+  if (!d || isNaN(d.getTime())) return false;
+  const sixMonths = new Date();
+  sixMonths.setMonth(sixMonths.getMonth() + 6);
+  return d < sixMonths;
+}
+
 // ===== TYPES =====
 interface Passenger {
   id: number;
@@ -253,6 +279,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
   const [form, setForm] = useState({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
   const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
   const setField = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
+  const [locked, setLocked] = useState(false);
   const setService = (key: string, val: string) => setServices(prev => ({ ...prev, [key]: val }));
   const handleFile = (file: File) => {
     setPreviewImg(URL.createObjectURL(file));
@@ -283,8 +310,33 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     };
     reader.readAsDataURL(file);
   };
-  const handleSave = async () => {   const newPassenger = { id: Date.now(), ...form, services, rel: "", linked: -1 };   const { error } = await supabase.from("passengers").insert([{     name_ar: form.name_ar, name_en: form.name_en,     short_ar: form.short_ar, short_en: form.short_en,     passport: form.passport, national_id: form.national_id,     nat: form.nat, dob: form.dob, expiry: form.expiry,     gender: form.gender, phone: form.phone,     bus: services.bus, flight: services.flight,     hotel: services.hotel, camp_mina: services.camp_mina,     camp_arafa: services.camp_arafa   }]);   if (!error) { setPassengers([...passengers, newPassenger]); setSaved(true); }   else alert("حصل خطأ في الحفظ!"); };
-  const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); };
+  const handleSave = async () => {
+    // منع التكرار: فحص لو الجواز أو الرقم الشخصي مسجل قبل كده
+    const dupPassport = form.passport && passengers.some(p => p.passport && p.passport === form.passport);
+    const dupNational = form.national_id && passengers.some(p => p.national_id && p.national_id === form.national_id);
+    if (dupPassport || dupNational) {
+      alert("⚠️ هذا الحاج مسجل بالفعل! (رقم الجواز أو البطاقة موجود)");
+      return;
+    }
+    // الاسم المختصر تلقائياً
+    const short_en = makeShort(form.name_en);
+    const short_ar = makeShort(form.name_ar);
+    const { data, error } = await supabase.from("passengers").insert([{
+      name_ar: form.name_ar, name_en: form.name_en,
+      short_ar, short_en,
+      passport: form.passport, national_id: form.national_id,
+      nat: form.nat, dob: form.dob, expiry: form.expiry,
+      gender: form.gender, phone: form.phone,
+      bus: services.bus, flight: services.flight,
+      hotel: services.hotel, camp_mina: services.camp_mina,
+      camp_arafa: services.camp_arafa
+    }]).select();
+    if (!error && data && data[0]) {
+      setPassengers([...passengers, { id: data[0].id, ...form, short_ar, short_en, services, rel: "", linked: -1 }]);
+      setSaved(true); setLocked(true);
+    } else alert("حصل خطأ في الحفظ!");
+  };
+  const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); setLocked(false); };
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
       {saved && <div style={{ background: "#E1F5EE", border: "0.5px solid #5DCAA5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#085041" }}>✓ تم حفظ الحاج! <button onClick={reset} style={{ marginRight: "auto", ...btnP({ fontSize: 11, padding: "3px 10px" }) }}>+ حاج جديد</button></div>}
@@ -314,11 +366,11 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
             {[["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الرقم الشخصي", "national_id", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]].map(([l, k, col]) => (
               <div key={k as string} style={{ gridColumn: col as string || "auto" }}>
                 <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l as string}</div>
-                <input style={{ ...inp, borderColor: "#5DCAA5", background: "#E1F5EE" }} value={(form as any)[k as string]} onChange={e => setField(k as string, e.target.value)} />
+                <input disabled={locked} style={{ ...inp, borderColor: "#5DCAA5", background: locked ? "#f5f5f5" : "#E1F5EE", color: locked ? "#666" : "#000" }} value={(form as any)[k as string]} onChange={e => setField(k as string, e.target.value)} />
               </div>
             ))}
             <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div>
-              <select style={{ ...inp, borderColor: "#5DCAA5", background: "#E1F5EE" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
+              <select disabled={locked} style={{ ...inp, borderColor: "#5DCAA5", background: locked ? "#f5f5f5" : "#E1F5EE" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
                 <option value="">—</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
               </select>
             </div>
@@ -338,8 +390,13 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={handleSave} style={{ ...btnP(), flex: 1 }}>{saved ? "✓ تم الحفظ" : "💾 حفظ الحاج"}</button>
-          <button onClick={reset} style={btnS()}>مسح</button>
+          {locked ? (<>
+            <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "#E6F1FB", color: "#0C447C" }), flex: 1 }}>✏️ تعديل</button>
+            <button onClick={reset} style={{ ...btnP(), flex: 1 }}>➕ حاج جديد</button>
+          </>) : (<>
+            <button onClick={handleSave} style={{ ...btnP(), flex: 1 }}>💾 حفظ الحاج</button>
+            <button onClick={reset} style={btnS()}>مسح</button>
+          </>)}
         </div>
       </>)}
     </div>
@@ -370,7 +427,10 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
               <div key={p.id} onClick={() => setSelected(p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, marginBottom: 3, cursor: "pointer", background: selected?.id === p.id ? "#E1F5EE" : "transparent", border: `0.5px solid ${selected?.id === p.id ? "#5DCAA5" : "transparent"}` }}>
                 <Avatar name={p.name_ar} gender={p.gender} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                    {p.short_ar || p.name_ar}
+                    {(isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span title="صلاحية قرب انتهائها" style={{ color: "#c0392b", fontSize: 12 }}>⚠️</span>}
+                  </div>
                   <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
                   <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
                     <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: p.gender === "أنثى" ? "#FBEAF0" : "#E6F1FB", color: p.gender === "أنثى" ? "#72243E" : "#0C447C" }}>{p.gender}</span>
@@ -389,10 +449,17 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
       {selected && !editing && (
         <div style={{ width: 260, borderRight: "0.5px solid #e5e5e5", overflowY: "auto", padding: 12 }}>
           <div style={{ textAlign: "center", marginBottom: 12, background: "#f9f9f9", borderRadius: 10, padding: 12 }}>
-            <Avatar name={selected.name_ar} gender={selected.gender} size={48} />
+            {(selected as any).photo_url ? (
+              <img src={(selected as any).photo_url} alt={selected.name_ar} style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", margin: "0 auto", display: "block", border: "2px solid #5DCAA5" }} />
+            ) : <Avatar name={selected.name_ar} gender={selected.gender} size={48} />}
             <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>{selected.name_ar}</div>
             <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{selected.name_en}</div>
           </div>
+          {(isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
+            <div style={{ background: "#FBEAF0", border: "1px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#c0392b", fontWeight: 600, textAlign: "center" }}>
+              ⚠️ تنبيه: صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
+            </div>
+          )}
           {[["🛂", selected.passport], ["🪪", selected.national_id], ["🌍", selected.nat], ["🎂", selected.dob], ["📅", selected.expiry], ["📞", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
             <div key={icon as string} style={{ background: "#f9f9f9", borderRadius: 8, padding: "6px 10px", marginBottom: 5, fontSize: 12 }}>{icon as string} {val as string}</div>
           ))}
@@ -1026,13 +1093,15 @@ export default function App() {
           nat: p.nat || "", dob: p.dob || "", expiry: p.expiry || "",
           gender: p.gender || "", phone: p.phone || "",
           services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel: p.hotel || "مطل", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
-          rel: "", linked: -1
+          rel: "", linked: -1,
+          photo_url: p.photo_url || "", id_expiry: p.id_expiry || ""
         }));
-        setPassengers(mapped);
+        setPassengers(mapped as any);
       }
     };
     loadPassengers();
   }, []);
+
   if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
   const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "المسافرون", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
   const renderPage = () => {
