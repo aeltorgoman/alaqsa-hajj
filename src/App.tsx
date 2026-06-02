@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-
+import { supabase } from "./supabase";
 // ===== TYPES =====
 interface Passenger {
   id: number;
