@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
 // ===== TYPES =====
 interface Passenger {
@@ -1014,6 +1014,25 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [page, setPage] = useState("dash");
   const [passengers, setPassengers] = useState<Passenger[]>([]);
+
+  useEffect(() => {
+    const loadPassengers = async () => {
+      const { data, error } = await supabase.from("passengers").select("*").order("created_at", { ascending: false });
+      if (!error && data) {
+        const mapped = data.map((p: any) => ({
+          id: p.id, name_ar: p.name_ar || "", name_en: p.name_en || "",
+          short_ar: p.short_ar || "", short_en: p.short_en || "",
+          passport: p.passport || "", national_id: p.national_id || "",
+          nat: p.nat || "", dob: p.dob || "", expiry: p.expiry || "",
+          gender: p.gender || "", phone: p.phone || "",
+          services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel: p.hotel || "مطل", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
+          rel: "", linked: -1
+        }));
+        setPassengers(mapped);
+      }
+    };
+    loadPassengers();
+  }, []);
   if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
   const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "المسافرون", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
   const renderPage = () => {
