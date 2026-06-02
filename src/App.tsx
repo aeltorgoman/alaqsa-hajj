@@ -117,7 +117,7 @@ const ROOM_TYPES = ["مطل", "جانبي", "داخلي", "سويت"] as const;
 const ROOM_COLORS: Record<string, [string, string]> = { "مطل": ["#E6F1FB", "#0C447C"], "جانبي": ["#FAEEDA", "#633806"], "داخلي": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "📊 لوحة التحكم" }] },
-  { section: "التسجيل", items: [{ id: "scan", label: "🔍 رفع وثيقة" }, { id: "passengers", label: "👥 المسافرون" }] },
+  { section: "التسجيل", items: [{ id: "scan", label: "🔍 رفع وثيقة" }, { id: "passengers", label: "🕌 الحجاج" }] },
   { section: "التنظيم", items: [{ id: "buses", label: "🚌 الباصات" }, { id: "mina", label: "⛺ مخيمات منى" }, { id: "arafa", label: "🏔 مخيمات عرفة" }, { id: "hotel", label: "🏨 الفندق" }] },
   { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير" }] },
   { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين" }] },
@@ -481,49 +481,163 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
 
 function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
-  const filtered = passengers.filter(p => !search || [p.name_ar, p.name_en, p.passport, p.national_id, p.nat, p.phone, p.gender, p.services?.bus].join(" ").toLowerCase().includes(search.toLowerCase()));
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
+
+  const COLS = [
+    { key: "name_ar", label: "الاسم بالعربي" },
+    { key: "name_en", label: "الاسم بالإنجليزي" },
+    { key: "passport", label: "رقم الجواز" },
+    { key: "national_id", label: "رقم البطاقة" },
+    { key: "nat", label: "الجنسية" },
+    { key: "gender", label: "الجنس" },
+    { key: "dob", label: "تاريخ الميلاد" },
+    { key: "expiry", label: "انتهاء الجواز" },
+    { key: "phone", label: "التليفون" },
+    { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
+    { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
+    { key: "hotel", label: "الفندق", get: (p: Passenger) => p.services?.hotel },
+    { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
+    { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
+  ] as { key: string; label: string; get?: (p: Passenger) => string }[];
+
+  const getVal = (p: Passenger, key: string, getter?: (p: Passenger) => string) => {
+    if (getter) return getter(p) || "";
+    return (p as any)[key] || "";
+  };
+
+  const filtered = passengers.filter(p => {
+    const fullName = `${p.name_ar} ${p.name_en}`;
+    const searchMatch = !search || fullName.toLowerCase().includes(search.toLowerCase()) ||
+      [p.passport, p.national_id, p.nat, p.phone, p.gender, p.services?.bus].join(" ").toLowerCase().includes(search.toLowerCase());
+    if (!searchMatch) return false;
+    return COLS.every(col => {
+      const filter = colFilters[col.key];
+      if (!filter) return true;
+      return getVal(p, col.key, col.get).toLowerCase().includes(filter.toLowerCase());
+    });
+  });
+
   const deleteP = (id: number) => { setPassengers(passengers.filter(p => p.id !== id)); setSelected(null); };
   const saveEdit = (p: Passenger) => { setPassengers(passengers.map(x => x.id === p.id ? p : x)); setEditing(null); setSelected(p); };
+
+  const exportExcel = () => {
+    const headers = ["م", ...COLS.map(c => c.label)];
+    const rows = filtered.map((p, i) => [i + 1, ...COLS.map(col => getVal(p, col.key, col.get))]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "الحجاج.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<html><head><title>قائمة الحجاج</title><style>body{font-family:Arial;direction:rtl;padding:20px;font-size:10px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:5px 8px;text-align:right;white-space:nowrap}th{background:#1D9E75;color:white}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>قائمة الحجاج — حملة الأقصى</h1><table><tr><th>م</th>${COLS.map(c => `<th>${c.label}</th>`).join("")}</tr>${filtered.map((p, i) => `<tr><td>${i + 1}</td>${COLS.map(col => `<td>${getVal(p, col.key, col.get)}</td>`).join("")}</tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.close();
+  };
+
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
-            <span style={{ color: "#aaa" }}>🔍</span>
-            <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث بأي معلومة..." />
-            {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "#aaa" }}>✕</span>}
+        <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
+              <span style={{ color: "#aaa" }}>🔍</span>
+              <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث بالاسم الكامل أو أي معلومة..." />
+              {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "#aaa" }}>✕</span>}
+            </div>
+            <div style={{ display: "flex", border: "0.5px solid #ddd", borderRadius: 8, overflow: "hidden" }}>
+              <div onClick={() => setViewMode("list")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "list" ? "#1D9E75" : "white", color: viewMode === "list" ? "white" : "#666" }}>☰ قائمة</div>
+              <div onClick={() => setViewMode("table")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "table" ? "#1D9E75" : "white", color: viewMode === "table" ? "white" : "#666" }}>⊞ جدول</div>
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: "#888", marginTop: 6 }}>{filtered.length} من {passengers.length} حاج</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontSize: 11, color: "#888" }}>{filtered.length} من {passengers.length} حاج</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={exportExcel} style={{ ...btnS({ fontSize: 10, padding: "3px 8px" }) }}>⬇️ Excel</button>
+              <button onClick={exportPDF} style={{ ...btnS({ fontSize: 10, padding: "3px 8px" }) }}>📄 PDF</button>
+            </div>
+          </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
-          {filtered.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>لا توجد نتائج</div> :
-            filtered.map(p => (
-              <div key={p.id} onClick={() => setSelected(p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, marginBottom: 3, cursor: "pointer", background: selected?.id === p.id ? "#E1F5EE" : "transparent", border: `0.5px solid ${selected?.id === p.id ? "#5DCAA5" : "transparent"}` }}>
-                <Avatar name={p.name_ar} gender={p.gender} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
-                    {p.short_ar || p.name_ar}
-                    {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span title="منتهي" style={{ color: "#c0392b", fontSize: 12 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span title="صلاحية قرب انتهائها" style={{ color: "#e67e22", fontSize: 12 }}>⚠️</span>}
+        <div style={{ flex: 1, overflow: "auto" }}>
+          {viewMode === "list" ? (
+            <div style={{ padding: "8px 10px" }}>
+              {filtered.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>لا توجد نتائج</div> :
+                filtered.map(p => (
+                  <div key={p.id} onClick={() => setSelected(p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, marginBottom: 3, cursor: "pointer", background: selected?.id === p.id ? "#E1F5EE" : "transparent", border: `0.5px solid ${selected?.id === p.id ? "#5DCAA5" : "transparent"}` }}>
+                    <Avatar name={p.name_ar} gender={p.gender} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                        {p.short_ar || p.name_ar}
+                        {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ color: "#c0392b", fontSize: 11 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ color: "#e67e22", fontSize: 11 }}>⚠️</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
+                      <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
+                        <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: p.gender === "أنثى" ? "#FBEAF0" : "#E6F1FB", color: p.gender === "أنثى" ? "#72243E" : "#0C447C" }}>{p.gender}</span>
+                        {p.services?.bus === "VIP" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "#FAEEDA", color: "#633806" }}>⭐ VIP</span>}
+                        {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "#EEEDFE", color: "#3C3489" }}>✈️ أولى</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "#E6F1FB", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>✏️</button>
+                      <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "#FBEAF0", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
-                  <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
-                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: p.gender === "أنثى" ? "#FBEAF0" : "#E6F1FB", color: p.gender === "أنثى" ? "#72243E" : "#0C447C" }}>{p.gender}</span>
-                    {p.services?.bus === "VIP" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "#FAEEDA", color: "#633806" }}>⭐ VIP</span>}
-                    {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "#EEEDFE", color: "#3C3489" }}>✈️ أولى</span>}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "#E6F1FB", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>✏️</button>
-                  <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "#FBEAF0", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
-                </div>
-              </div>
-            ))}
+                ))}
+            </div>
+          ) : (
+            <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "max-content", width: "100%" }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+                <tr style={{ background: "#1D9E75", color: "white" }}>
+                  <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
+                  {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right" }}>{col.label}</th>)}
+                  <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
+                </tr>
+                <tr style={{ background: "#f0f0f0" }}>
+                  <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
+                  {COLS.map(col => (
+                    <td key={col.key} style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}>
+                      <input value={colFilters[col.key] || ""} onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))} style={{ ...inp, padding: "2px 6px", fontSize: 10, minWidth: 60 }} placeholder="فلتر..." />
+                    </td>
+                  ))}
+                  <td style={{ padding: "4px 6px", border: "0.5px solid #ddd", textAlign: "center" }}>
+                    <span onClick={() => setColFilters({})} style={{ fontSize: 10, color: "#c0392b", cursor: "pointer" }}>مسح الكل</span>
+                  </td>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p, i) => (
+                  <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: "pointer", background: selected?.id === p.id ? "#E1F5EE" : i % 2 === 0 ? "white" : "#fafafa" }}>
+                    <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                    {COLS.map(col => (
+                      <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid #eee", whiteSpace: "nowrap" }}>
+                        {getVal(p, col.key, col.get)}
+                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "#c0392b" }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "#e67e22" }}>⚠️</span>)}
+                      </td>
+                    ))}
+                    <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center" }}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "#E6F1FB", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>✏️</button>
+                        <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "#FBEAF0", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+
       {selected && !editing && (
-        <div style={{ width: 260, borderRight: "0.5px solid #e5e5e5", overflowY: "auto", padding: 12 }}>
+        <div style={{ width: 280, borderRight: "0.5px solid #e5e5e5", overflowY: "auto", padding: 12, flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>ملف الحاج</div>
+            <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 16 }}>✕</button>
+          </div>
           <div style={{ textAlign: "center", marginBottom: 12, background: "#f9f9f9", borderRadius: 10, padding: 12 }}>
             {(selected as any).photo_url ? (
               <img src={(selected as any).photo_url} alt={selected.name_ar} style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", margin: "0 auto", display: "block", border: "2px solid #5DCAA5" }} />
@@ -533,22 +647,36 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           </div>
           {(isExpired(selected.expiry) || isExpired((selected as any).id_expiry)) ? (
             <div style={{ background: "#FBEAF0", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#c0392b", fontWeight: 700, textAlign: "center" }}>
-              ❌ تنبيه: {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
+              ❌ {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
             </div>
           ) : (isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
             <div style={{ background: "#FAEEDA", border: "1px solid #e67e22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#a85318", fontWeight: 600, textAlign: "center" }}>
-              ⚠️ تنبيه: صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
+              ⚠️ صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
             </div>
           )}
-          {[["🛂", selected.passport], ["🪪", selected.national_id], ["🌍", selected.nat], ["🎂", selected.dob], ["📅", selected.expiry], ["📞", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
-            <div key={icon as string} style={{ background: "#f9f9f9", borderRadius: 8, padding: "6px 10px", marginBottom: 5, fontSize: 12 }}>{icon as string} {val as string}</div>
+          {[["🛂 الجواز", selected.passport], ["🪪 البطاقة", selected.national_id], ["🌍 الجنسية", selected.nat], ["⚧ الجنس", selected.gender], ["🎂 الميلاد", selected.dob], ["📅 انتهاء الجواز", selected.expiry], ["📞 التليفون", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
+            <div key={icon as string} style={{ background: "#f9f9f9", borderRadius: 8, padding: "6px 10px", marginBottom: 4, fontSize: 11 }}>{icon as string} {val as string}</div>
           ))}
-          <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginTop: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>⭐ الخدمات المطلوبة</div>
+          <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>⭐ الخدمات</div>
             {[["🚌", "الباص", selected.services?.bus], ["✈️", "الطيران", selected.services?.flight], ["🏨", "الفندق", selected.services?.hotel], ["⛺", "منى", selected.services?.camp_mina], ["🏔", "عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <span style={{ color: "#888" }}>{icon as string} {label as string}</span>
                 <span style={{ fontWeight: 500, color: (val === "VIP" || val === "درجة أولى" || val === "خاص") ? "#633806" : "#333" }}>{val as string}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>📎 المستندات</div>
+            {[["📷 صورة شخصية", (selected as any).photo_url], ["🛂 جواز السفر", (selected as any).passport_url], ["🪪 البطاقة", (selected as any).national_id_url], ["📄 العقد", (selected as any).contract_url]].map(([label, url]) => (
+              <div key={label as string} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0", borderBottom: "0.5px solid #f5f5f5" }}>
+                <span style={{ fontSize: 11, color: url ? "#444" : "#bbb" }}>{label as string}</span>
+                {url ? (
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <a href={url as string} target="_blank" rel="noreferrer" style={{ background: "#E6F1FB", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#0C447C", textDecoration: "none" }}>👁 عرض</a>
+                    <a href={url as string} download style={{ background: "#E1F5EE", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#085041", textDecoration: "none" }}>⬇️</a>
+                  </div>
+                ) : <span style={{ fontSize: 10, color: "#bbb" }}>غير مرفوع</span>}
               </div>
             ))}
           </div>
@@ -558,6 +686,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           </div>
         </div>
       )}
+
       <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج">
         {editing && (
           <>
@@ -577,6 +706,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     </div>
   );
 }
+
 
 function BusesPage({ passengers }: { passengers: Passenger[] }) {
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -1174,7 +1304,9 @@ export default function App() {
           gender: p.gender || "", phone: p.phone || "",
           services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel: p.hotel || "مطل", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
           rel: "", linked: -1,
-          photo_url: p.photo_url || "", id_expiry: p.id_expiry || ""
+          photo_url: p.photo_url || "", id_expiry: p.id_expiry || "",
+          national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
+          passport_url: p.passport_url || ""
         }));
         setPassengers(mapped as any);
       }
@@ -1183,7 +1315,7 @@ export default function App() {
   }, []);
 
   if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
-  const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "المسافرون", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
+  const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
