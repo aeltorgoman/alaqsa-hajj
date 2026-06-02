@@ -12,18 +12,66 @@ function makeShort(fullName: string): string {
 
 // فحص لو التاريخ فاضل عليه أقل من 6 شهور
 function isExpiringSoon(dateStr: string): boolean {
-  if (!dateStr) return false;
-  // محاولة قراءة التاريخ بصيغ مختلفة DD/MM/YYYY أو YYYY-MM-DD
+  const d = parseDate(dateStr);
+  if (!d) return false;
+  const now = new Date();
+  const sixMonths = new Date();
+  sixMonths.setMonth(sixMonths.getMonth() + 6);
+  return d >= now && d < sixMonths;
+}
+
+// فحص لو التاريخ منتهي بالفعل
+function isExpired(dateStr: string): boolean {
+  const d = parseDate(dateStr);
+  if (!d) return false;
+  return d < new Date();
+}
+
+// قراءة التاريخ بصيغ مختلفة
+function parseDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
   let d: Date | null = null;
   const parts = dateStr.split(/[\/\-.]/).map(s => s.trim());
   if (parts.length === 3) {
     if (parts[0].length === 4) d = new Date(+parts[0], +parts[1] - 1, +parts[2]); // YYYY-MM-DD
     else d = new Date(+parts[2], +parts[1] - 1, +parts[0]); // DD/MM/YYYY
   }
-  if (!d || isNaN(d.getTime())) return false;
-  const sixMonths = new Date();
-  sixMonths.setMonth(sixMonths.getMonth() + 6);
-  return d < sixMonths;
+  if (!d || isNaN(d.getTime())) return null;
+  return d;
+}
+
+// ضغط الصورة قبل الرفع (المستندات تتصغّر تلقائياً لتوفير المساحة)
+function compressImage(file: File): Promise<Blob> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("image/")) { resolve(file); return; }
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1400;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = height * maxDim / width; width = maxDim; }
+        else { width = width * maxDim / height; height = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => resolve(b || file), "image/jpeg", 0.8);
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// رفع مستند على Supabase Storage وإرجاع الرابط
+async function uploadDoc(file: File, passengerId: number, docType: string): Promise<string | null> {
+  const compressed = await compressImage(file);
+  const ext = file.type === "application/pdf" ? "pdf" : "jpg";
+  const path = `${passengerId}/${docType}_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("passengers-docs").upload(path, compressed, { upsert: true, contentType: file.type === "application/pdf" ? "application/pdf" : "image/jpeg" });
+  if (error) { console.error("upload error", error); return null; }
+  const { data } = supabase.storage.from("passengers-docs").getPublicUrl(path);
+  return data?.publicUrl || null;
 }
 
 // ===== TYPES =====
@@ -280,6 +328,9 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
   const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
   const setField = (key: string, val: string) => setForm(prev => ({ ...prev, [key]: val }));
   const [locked, setLocked] = useState(false);
+  // المستندات: صورة شخصية + بطاقة + عقد
+  const [docs, setDocs] = useState<{ photo: File | null; idcard: File | null; contract: File | null }>({ photo: null, idcard: null, contract: null });
+  const [uploading, setUploading] = useState(false);
   const setService = (key: string, val: string) => setServices(prev => ({ ...prev, [key]: val }));
   const handleFile = (file: File) => {
     setPreviewImg(URL.createObjectURL(file));
@@ -318,6 +369,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       alert("⚠️ هذا الحاج مسجل بالفعل! (رقم الجواز أو البطاقة موجود)");
       return;
     }
+    setUploading(true);
     // الاسم المختصر تلقائياً
     const short_en = makeShort(form.name_en);
     const short_ar = makeShort(form.name_ar);
@@ -332,11 +384,21 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       camp_arafa: services.camp_arafa
     }]).select();
     if (!error && data && data[0]) {
-      setPassengers([...passengers, { id: data[0].id, ...form, short_ar, short_en, services, rel: "", linked: -1 }]);
+      const pid = data[0].id;
+      // رفع المستندات لو موجودة
+      const urls: any = {};
+      if (docs.photo) urls.photo_url = await uploadDoc(docs.photo, pid, "photo");
+      if (docs.idcard) urls.national_id_url = await uploadDoc(docs.idcard, pid, "idcard");
+      if (docs.contract) urls.contract_url = await uploadDoc(docs.contract, pid, "contract");
+      if (Object.keys(urls).length > 0) {
+        await supabase.from("passengers").update(urls).eq("id", pid);
+      }
+      setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, ...urls } as any]);
       setSaved(true); setLocked(true);
     } else alert("حصل خطأ في الحفظ!");
+    setUploading(false);
   };
-  const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); setLocked(false); };
+  const reset = () => { setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" }); setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" }); setPreviewImg(null); setShowFields(false); setSaved(false); setLocked(false); setDocs({ photo: null, idcard: null, contract: null }); };
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
       {saved && <div style={{ background: "#E1F5EE", border: "0.5px solid #5DCAA5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#085041" }}>✓ تم حفظ الحاج! <button onClick={reset} style={{ marginRight: "auto", ...btnP({ fontSize: 11, padding: "3px 10px" }) }}>+ حاج جديد</button></div>}
@@ -389,12 +451,26 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
             ))}
           </div>
         </div>
+        <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>📎 المستندات <span style={{ fontSize: 10, color: "#888" }}>(اختياري)</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {[["📷 صورة شخصية", "photo", "image/*"], ["🪪 البطاقة", "idcard", "image/*"], ["📄 العقد", "contract", "image/*,application/pdf"]].map(([label, key, accept]) => (
+              <div key={key as string}>
+                <input id={`doc-${key}`} type="file" accept={accept as string} disabled={locked} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) setDocs(prev => ({ ...prev, [key as string]: f })); }} />
+                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${(docs as any)[key as string] ? "#1D9E75" : "#ddd"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: (docs as any)[key as string] ? "#E1F5EE" : "#f9f9f9", opacity: locked ? 0.6 : 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: (docs as any)[key as string] ? "#085041" : "#666" }}>{label as string}</div>
+                  <div style={{ fontSize: 9, color: "#999", marginTop: 3 }}>{(docs as any)[key as string] ? "✓ تم الاختيار" : "اضغط للرفع"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           {locked ? (<>
             <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "#E6F1FB", color: "#0C447C" }), flex: 1 }}>✏️ تعديل</button>
             <button onClick={reset} style={{ ...btnP(), flex: 1 }}>➕ حاج جديد</button>
           </>) : (<>
-            <button onClick={handleSave} style={{ ...btnP(), flex: 1 }}>💾 حفظ الحاج</button>
+            <button onClick={handleSave} disabled={uploading} style={{ ...btnP(), flex: 1, opacity: uploading ? 0.6 : 1 }}>{uploading ? "⏳ جاري الحفظ..." : "💾 حفظ الحاج"}</button>
             <button onClick={reset} style={btnS()}>مسح</button>
           </>)}
         </div>
@@ -429,7 +505,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
                     {p.short_ar || p.name_ar}
-                    {(isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span title="صلاحية قرب انتهائها" style={{ color: "#c0392b", fontSize: 12 }}>⚠️</span>}
+                    {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span title="منتهي" style={{ color: "#c0392b", fontSize: 12 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span title="صلاحية قرب انتهائها" style={{ color: "#e67e22", fontSize: 12 }}>⚠️</span>}
                   </div>
                   <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
                   <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
@@ -455,8 +531,12 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>{selected.name_ar}</div>
             <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{selected.name_en}</div>
           </div>
-          {(isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
-            <div style={{ background: "#FBEAF0", border: "1px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#c0392b", fontWeight: 600, textAlign: "center" }}>
+          {(isExpired(selected.expiry) || isExpired((selected as any).id_expiry)) ? (
+            <div style={{ background: "#FBEAF0", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#c0392b", fontWeight: 700, textAlign: "center" }}>
+              ❌ تنبيه: {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
+            </div>
+          ) : (isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
+            <div style={{ background: "#FAEEDA", border: "1px solid #e67e22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#a85318", fontWeight: 600, textAlign: "center" }}>
               ⚠️ تنبيه: صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
             </div>
           )}
