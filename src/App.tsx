@@ -65,6 +65,22 @@ async function scanDocument(file: File, mode: "passport" | "idcard"): Promise<an
   return parsed;
 }
 
+// تنزيل ملف عبر blob لتجاوز قيود Cross-Origin
+async function downloadFile(url: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = url.split("/").pop() || "file";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch { window.open(url, "_blank"); }
+}
+
 // استخراج مسار الملف من الرابط عشان نقدر نحذفه
 function getStoragePath(url: string): string {
   const prefix = "/storage/v1/object/public/passengers-docs/";
@@ -693,7 +709,11 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
     setSelected(updated);
   };
-  const deleteP = (id: number) => { setPassengers(passengers.filter(p => p.id !== id)); setSelected(null); };
+  const deleteP = async (id: number) => {
+    await supabase.from("passengers").delete().eq("id", id);
+    setPassengers(passengers.filter(p => p.id !== id));
+    setSelected(null);
+  };
   const saveEdit = (p: Passenger) => { setPassengers(passengers.map(x => x.id === p.id ? p : x)); setEditing(null); setSelected(p); };
 
   const exportExcel = () => {
@@ -853,8 +873,8 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
                     <span style={{ fontSize: 10, color: "#888" }}>⏳ جاري الرفع...</span>
                   ) : url ? (
                     <div style={{ display: "flex", gap: 4 }}>
-                      <a href={url} target="_blank" rel="noreferrer" style={{ background: "#E6F1FB", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#0C447C", textDecoration: "none" }}>👁</a>
-                      <a href={url} download style={{ background: "#E1F5EE", padding: "3px 8px", borderRadius: 6, fontSize: 10, color: "#085041", textDecoration: "none" }}>⬇️</a>
+                      <button onClick={() => window.open(url, "_blank")} style={{ background: "#E6F1FB", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>👁 عرض</button>
+                      <button onClick={() => downloadFile(url)} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#085041" }}>⬇️</button>
                       <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "#FBEAF0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
                     </div>
                   ) : (
