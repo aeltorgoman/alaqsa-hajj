@@ -1532,26 +1532,43 @@ export default function App() {
   const [page, setPage] = useState("dash");
   const [passengers, setPassengers] = useState<Passenger[]>([]);
 
+  const mapPassenger = (p: any) => ({
+    id: p.id, name_ar: p.name_ar || "", name_en: p.name_en || "",
+    short_ar: p.short_ar || "", short_en: p.short_en || "",
+    passport: p.passport || "", national_id: p.national_id || "",
+    nat: p.nat || "", dob: p.dob || "", expiry: p.expiry || "",
+    gender: p.gender || "", phone: p.phone || "",
+    services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel: p.hotel || "مطل", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
+    rel: "", linked: -1,
+    photo_url: p.photo_url || "", id_expiry: p.id_expiry || "",
+    national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
+    passport_url: p.passport_url || ""
+  });
+
   useEffect(() => {
     const loadPassengers = async () => {
       const { data, error } = await supabase.from("passengers").select("*").order("created_at", { ascending: false });
-      if (!error && data) {
-        const mapped = data.map((p: any) => ({
-          id: p.id, name_ar: p.name_ar || "", name_en: p.name_en || "",
-          short_ar: p.short_ar || "", short_en: p.short_en || "",
-          passport: p.passport || "", national_id: p.national_id || "",
-          nat: p.nat || "", dob: p.dob || "", expiry: p.expiry || "",
-          gender: p.gender || "", phone: p.phone || "",
-          services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel: p.hotel || "مطل", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
-          rel: "", linked: -1,
-          photo_url: p.photo_url || "", id_expiry: p.id_expiry || "",
-          national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
-          passport_url: p.passport_url || ""
-        }));
-        setPassengers(mapped as any);
-      }
+      if (!error && data) setPassengers(data.map(mapPassenger) as any);
     };
     loadPassengers();
+
+    // Realtime — يتحدّث تلقائياً على كل الأجهزة
+    const channel = supabase.channel("passengers-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "passengers" }, (payload: any) => {
+        if (payload.eventType === "INSERT") {
+          setPassengers(prev => {
+            if ((prev as any[]).some((p: any) => p.id === payload.new.id)) return prev;
+            return [mapPassenger(payload.new), ...(prev as any[])];
+          });
+        } else if (payload.eventType === "UPDATE") {
+          setPassengers(prev => (prev as any[]).map((p: any) => p.id === payload.new.id ? mapPassenger(payload.new) : p) as any);
+        } else if (payload.eventType === "DELETE") {
+          setPassengers(prev => (prev as any[]).filter((p: any) => p.id !== payload.old.id) as any);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
