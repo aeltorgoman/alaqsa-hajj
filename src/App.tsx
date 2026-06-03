@@ -1528,9 +1528,22 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
 }
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try { const s = sessionStorage.getItem("hajj_user"); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [page, setPage] = useState("dash");
   const [passengers, setPassengers] = useState<Passenger[]>([]);
+
+  const handleLogin = (user: User) => {
+    sessionStorage.setItem("hajj_user", JSON.stringify(user));
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("hajj_user");
+    setCurrentUser(null);
+    setPage("dash");
+  };
 
   const mapPassenger = (p: any) => ({
     id: p.id, name_ar: p.name_ar || "", name_en: p.name_en || "",
@@ -1571,7 +1584,7 @@ export default function App() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  if (!currentUser) return <LoginPage onLogin={setCurrentUser} />;
+  if (!currentUser) return <LoginPage onLogin={handleLogin} />;
   const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
   const renderPage = () => {
     switch (page) {
@@ -1589,7 +1602,7 @@ export default function App() {
   };
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "system-ui,-apple-system,sans-serif", background: "white", overflow: "hidden" }}>
-      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={() => { setCurrentUser(null); setPage("dash"); }} />
+      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ padding: "10px 16px", borderBottom: "0.5px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500 }}>{pageTitles[page]}</div>
