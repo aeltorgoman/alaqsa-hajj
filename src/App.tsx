@@ -408,7 +408,18 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
           const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
           let parsed: any = {};
           try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
-          setForm(prev => ({ ...prev, name_en: parsed.name_en || "", name_ar: parsed.name_ar || "", short_en: parsed.short_en || "", short_ar: parsed.short_ar || "", passport: parsed.passport || "", nat: parsed.nationality || "قطري", dob: parsed.dob || "", expiry: parsed.expiry || "", gender: parsed.gender || "" }));
+          setForm(prev => ({
+            ...prev,
+            name_en: parsed.name_en || prev.name_en,
+            name_ar: parsed.name_ar || prev.name_ar,
+            short_en: parsed.short_en || prev.short_en,
+            short_ar: parsed.short_ar || prev.short_ar,
+            passport: parsed.passport || prev.passport,
+            nat: parsed.nationality || prev.nat,
+            dob: parsed.dob || prev.dob,
+            expiry: parsed.expiry || prev.expiry,
+            gender: parsed.gender || prev.gender
+          }));
           setShowFields(true);
         }, 500);
       } catch { clearInterval(iv); setLoading(false); setShowFields(true); }
@@ -731,7 +742,17 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setPassengers(passengers.filter(p => p.id !== id));
     setSelected(null);
   };
-  const saveEdit = (p: Passenger) => { setPassengers(passengers.map(x => x.id === p.id ? p : x)); setEditing(null); setSelected(p); };
+  const saveEdit = async (p: Passenger) => {
+    await supabase.from("passengers").update({
+      name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
+      passport: p.passport, national_id: p.national_id, nat: p.nat,
+      dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
+      bus: p.services?.bus, flight: p.services?.flight, hotel: p.services?.hotel,
+      camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa
+    }).eq("id", p.id);
+    setPassengers(passengers.map(x => x.id === p.id ? p : x));
+    setEditing(null); setSelected(p);
+  };
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -894,16 +915,15 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             {getFamilyMembers(selected).length === 0 ? (
               <div style={{ fontSize: 10, color: "#aaa" }}>لا يوجد أقارب مرتبطين</div>
             ) : (
-              <>
-                {getFamilyMembers(selected).map(fm => (
-                  <div key={fm.id} onClick={() => setSelected(fm)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "0.5px solid #f5f5f5", cursor: "pointer" }}>
+              getFamilyMembers(selected).map(fm => (
+                <div key={fm.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: "0.5px solid #f5f5f5" }}>
+                  <div onClick={() => setSelected(fm)} style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer" }}>
                     <Avatar name={fm.name_ar} gender={fm.gender} size={24} />
-                    <span style={{ fontSize: 11, flex: 1 }}>{fm.short_ar || fm.name_ar}</span>
-                    <span style={{ fontSize: 9, color: "#888" }}>{fm.gender}</span>
+                    <span style={{ fontSize: 11 }}>{fm.short_ar || fm.name_ar}</span>
                   </div>
-                ))}
-                <button onClick={() => handleUnlinkFamily(selected)} style={{ marginTop: 6, background: "#FBEAF0", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>فك الارتباط</button>
-              </>
+                  <button onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط مع هذا الشخص" style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                </div>
+              ))
             )}
           </div>
 
@@ -937,16 +957,28 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
         <button onClick={() => setShowLinkFamily(false)} style={{ ...btnS(), width: "100%", marginTop: 10 }}>إلغاء</button>
       </Modal>
 
-      <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج">
+      <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج" maxWidth={460}>
         {editing && (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
               {[["الاسم بالعربي", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["المختصر عربي", "short_ar"], ["المختصر إنجليزي", "short_en"], ["رقم الجواز", "passport"], ["الرقم الشخصي", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"]].map(([l, k]) => (
                 <div key={k as string}><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l as string}</div><input style={inp} value={(editing as any)[k as string] || ""} onChange={e => setEditing({ ...editing, [k as string]: e.target.value })} /></div>
               ))}
               <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div><select style={inp} value={editing.gender} onChange={e => setEditing({ ...editing, gender: e.target.value })}><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
             </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات المطلوبة</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 الفندق", "hotel", ["مطل","جانبي","داخلي"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+                  <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "#1D9E75" : "#ddd"), background: editing.services?.[k as keyof typeof editing.services] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "#085041" : "#666", textAlign: "center" as const }}>{o}</div>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => saveEdit(editing)} style={{ ...btnP(), flex: 1 }}>✓ حفظ</button>
               <button onClick={() => setEditing(null)} style={btnS()}>إلغاء</button>
             </div>
