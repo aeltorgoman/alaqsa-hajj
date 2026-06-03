@@ -1113,7 +1113,6 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   }, [pageType]);
 
   const getCampPassengers = (campId: number) => passengers.filter(p => (p as any)[campIdKey] === campId);
-  const assigned = new Set(passengers.filter(p => (p as any)[campIdKey] != null).map(p => p.id));
 
   const toggleCamp = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
