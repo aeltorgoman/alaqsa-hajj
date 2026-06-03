@@ -132,6 +132,7 @@ interface Passenger {
   services: { bus: string; flight: string; hotel: string; camp_mina: string; camp_arafa: string; };
   rel: string; linked: number;
   bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
+  family_id?: string | null;
 }
 interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
 interface Bus { id: number; name: string; type: string; }
@@ -543,7 +544,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>⭐ الخدمات المطلوبة</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى"]], ["🏨 الفندق", "hotel", ["مطل", "جانبي", "داخلي"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
+            {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["🏨 الفندق", "hotel", ["مطل", "جانبي", "داخلي"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
               <div key={k}>
                 <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
@@ -701,6 +702,30 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
     setSelected(updated);
   };
+  const [showLinkFamily, setShowLinkFamily] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+
+  const handleLinkFamily = async (p1: Passenger, p2: Passenger) => {
+    const familyId = p1.family_id || p2.family_id || `fam_${Date.now()}`;
+    await supabase.from("passengers").update({ family_id: familyId }).eq("id", p1.id);
+    await supabase.from("passengers").update({ family_id: familyId }).eq("id", p2.id);
+    const updated1 = { ...p1, family_id: familyId };
+    const updated2 = { ...p2, family_id: familyId };
+    setPassengers(passengers.map(p => p.id === p1.id ? updated1 : p.id === p2.id ? updated2 : p));
+    setSelected(updated1);
+    setShowLinkFamily(false); setLinkSearch("");
+  };
+
+  const handleUnlinkFamily = async (p: Passenger) => {
+    if (!confirm("هتفك الارتباط العائلي لهذا الحاج؟")) return;
+    await supabase.from("passengers").update({ family_id: null }).eq("id", p.id);
+    const updated = { ...p, family_id: null };
+    setPassengers(passengers.map(x => x.id === p.id ? updated : x));
+    setSelected(updated);
+  };
+
+  const getFamilyMembers = (p: Passenger) => p.family_id ? passengers.filter(x => x.family_id === p.family_id && x.id !== p.id) : [];
+
   const deleteP = async (id: number) => {
     await supabase.from("passengers").delete().eq("id", id);
     setPassengers(passengers.filter(p => p.id !== id));
@@ -739,6 +764,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
                       <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
                         {p.short_ar || p.name_ar}
                         {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ color: "#c0392b", fontSize: 11 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ color: "#e67e22", fontSize: 11 }}>⚠️</span>}
+                        {p.family_id && <span title="مرتبط بأقارب" style={{ fontSize: 10 }}>👨‍👩‍👧</span>}
                       </div>
                       <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
                       <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
@@ -859,12 +885,57 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
               </div>
             ))}
           </div>
+          {/* الأقارب */}
+          <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 500 }}>👨‍👩‍👧 الأقارب</div>
+              <button onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ background: "#E1F5EE", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#085041" }}>+ ربط</button>
+            </div>
+            {getFamilyMembers(selected).length === 0 ? (
+              <div style={{ fontSize: 10, color: "#aaa" }}>لا يوجد أقارب مرتبطين</div>
+            ) : (
+              <>
+                {getFamilyMembers(selected).map(fm => (
+                  <div key={fm.id} onClick={() => setSelected(fm)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", borderBottom: "0.5px solid #f5f5f5", cursor: "pointer" }}>
+                    <Avatar name={fm.name_ar} gender={fm.gender} size={24} />
+                    <span style={{ fontSize: 11, flex: 1 }}>{fm.short_ar || fm.name_ar}</span>
+                    <span style={{ fontSize: 9, color: "#888" }}>{fm.gender}</span>
+                  </div>
+                ))}
+                <button onClick={() => handleUnlinkFamily(selected)} style={{ marginTop: 6, background: "#FBEAF0", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>فك الارتباط</button>
+              </>
+            )}
+          </div>
+
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "#E6F1FB", color: "#0C447C" }), flex: 1 }}>✏️ تعديل</button>
             <button onClick={() => { if (confirm("هتمسح الحاج ده؟")) deleteP(selected.id); }} style={{ background: "#FBEAF0", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑</button>
           </div>
         </div>
       )}
+
+      <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="👨‍👩‍👧 ربط بأقارب">
+        <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>اختر الحاج اللي عايز تربطه بـ {selected?.short_ar}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "#aaa" }}>🔍</span>
+          <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={linkSearch} onChange={e => setLinkSearch(e.target.value)} autoFocus />
+        </div>
+        <div style={{ maxHeight: 300, overflowY: "auto" }}>
+          {passengers.filter(p => selected && p.id !== selected.id && (!linkSearch || p.name_ar.includes(linkSearch) || p.short_ar.includes(linkSearch))).map(p => (
+            <div key={p.id} onClick={() => selected && handleLinkFamily(selected, p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: "transparent" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#E1F5EE"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <Avatar name={p.name_ar} gender={p.gender} size={28} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
+                <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.gender}</div>
+              </div>
+              {p.family_id && <span style={{ fontSize: 9, background: "#E1F5EE", color: "#085041", padding: "1px 5px", borderRadius: 99 }}>عنده أقارب</span>}
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setShowLinkFamily(false)} style={{ ...btnS(), width: "100%", marginTop: 10 }}>إلغاء</button>
+      </Modal>
 
       <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج">
         {editing && (
@@ -901,7 +972,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى"]], ["🏨 الفندق", "hotel", ["مطل","جانبي","داخلي"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+            {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 الفندق", "hotel", ["مطل","جانبي","داخلي"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
               <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
                   {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "#1D9E75" : "#ddd"}`, background: (manualServices as any)[k] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "#085041" : "#666", textAlign: "center" }}>{o}</div>)}
@@ -966,6 +1037,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const confirmAddP = async () => {
     await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", id)));
     setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, bus_id: currentBusId } : p));
+    // اقتراح إضافة الأقارب
+    const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && p.bus_id == null && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
+    if (familyToAdd.length > 0 && confirm(`هتوضع حجاج بدون أقاربهم!\nهتضيف أقاربهم معاهم؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
+      await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", p.id)));
+      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: any) => f.id === p.id) ? { ...p, bus_id: currentBusId } : p));
+    }
     setShowAddP(false);
   };
 
@@ -1140,6 +1217,13 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const confirmAddP = async () => {
     await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [campIdKey]: currentCampId }).eq("id", id)));
     setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [campIdKey]: currentCampId } : p));
+    // اقتراح إضافة الأقارب
+    const isSpecial = currentCamp?.type === "خاص";
+    const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && (p as any)[campIdKey] == null && (isSpecial || p.gender === currentCamp?.gender) && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
+    if (familyToAdd.length > 0 && confirm(`هتوضع حجاج بدون أقاربهم!\nهتضيف أقاربهم معاهم؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
+      await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ [campIdKey]: currentCampId }).eq("id", p.id)));
+      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: any) => f.id === p.id) ? { ...p, [campIdKey]: currentCampId } : p));
+    }
     setShowAddP(false);
   };
 
@@ -1153,7 +1237,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const newCampId = parseInt(toId);
     const fc = camps.find(c => c.id === (passengers.find(p => p.id === pId) as any)?.[campIdKey]);
     const tc = camps.find(c => c.id === newCampId);
-    if (fc && tc && fc.gender !== tc.gender) return;
+    if (fc && tc && fc.gender !== tc.gender && tc.type !== "خاص") return;
     await supabase.from("passengers").update({ [campIdKey]: newCampId }).eq("id", pId);
     setPassengers(passengers.map(p => p.id === pId ? { ...p, [campIdKey]: newCampId } : p));
   };
@@ -1172,7 +1256,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   };
 
   const currentCamp = camps.find(c => c.id === currentCampId);
-  const genderPool = passengers.filter(p => p.gender === currentCamp?.gender);
+  const genderPool = currentCamp?.type === "خاص" ? passengers : passengers.filter(p => p.gender === currentCamp?.gender);
   const filteredP = genderPool.filter(p => !pSearch || p.name_ar.includes(pSearch));
   const maleCamps = camps.filter(c => c.gender === "ذكر");
   const femaleCamps = camps.filter(c => c.gender === "أنثى");
@@ -1618,7 +1702,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
 
   const printFlightReport = () => {
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>كشف الحجاج</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:7px 10px;text-align:center}th{background:#1D9E75;color:white}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>كشف الحجاج ( التذاكر )</h1><table><tr><th>S.N.</th><th>NAME</th><th>NAT.</th><th>P.NO.</th><th>TEL. NO.</th><th>GENDER</th><th>NOTE</th></tr>${passengers.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name_en}</td><td>${p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${p.gender === "ذكر" ? "MR." : "MRS."}</td><td>${p.services?.flight === "درجة أولى" ? "First Class" : ""}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>كشف الحجاج</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:7px 10px;text-align:center}th{background:#1D9E75;color:white}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>كشف الحجاج ( التذاكر )</h1><table><tr><th>S.N.</th><th>NAME</th><th>NAT.</th><th>P.NO.</th><th>TEL. NO.</th><th>GENDER</th><th>NOTE</th></tr>${passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => `<tr><td>${i + 1}</td><td>${p.name_en}</td><td>${p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${p.gender === "ذكر" ? "MR." : "MRS."}</td><td>${p.services?.flight === "درجة أولى" ? "First Class" : ""}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
@@ -1703,7 +1787,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           <div style={{ textAlign: "center", fontSize: 16, fontWeight: 600, marginBottom: 14 }}>كشف الحجاج ( التذاكر )</div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
             <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["S.N.", "NAME", "NAT.", "P.NO.", "TEL.", "GENDER", "NOTE"].map(h => <th key={h} style={{ padding: "7px 8px", border: "1px solid #ccc", textAlign: "center" }}>{h}</th>)}</tr></thead>
-            <tbody>{passengers.map((p, i) => (<tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f9f9f9" }}>
+            <tbody>{passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => (<tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f9f9f9" }}>
               <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{i + 1}</td>
               <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", fontWeight: 500 }}>{p.name_en}</td>
               <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td>
@@ -1764,7 +1848,8 @@ export default function App() {
     national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
     passport_url: p.passport_url || "",
     bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
-    camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null
+    camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
+    family_id: p.family_id || null
   });
 
   useEffect(() => {
