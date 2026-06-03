@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
+import * as XLSX from "xlsx";
 
 // ===== دوال مساعدة =====
 // الاسم المختصر = الأول + الثاني + الأخير
@@ -716,22 +717,6 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
   };
   const saveEdit = (p: Passenger) => { setPassengers(passengers.map(x => x.id === p.id ? p : x)); setEditing(null); setSelected(p); };
 
-  const exportExcel = () => {
-    const headers = ["م", ...COLS.map(c => c.label)];
-    const rows = filtered.map((p, i) => [i + 1, ...COLS.map(col => getVal(p, col.key, col.get))]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "الحجاج.csv"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportPDF = () => {
-    const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>قائمة الحجاج</title><style>body{font-family:Arial;direction:rtl;padding:20px;font-size:10px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:5px 8px;text-align:right;white-space:nowrap}th{background:#1D9E75;color:white}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>قائمة الحجاج — حملة الأقصى</h1><table><tr><th>م</th>${COLS.map(c => `<th>${c.label}</th>`).join("")}</tr>${filtered.map((p, i) => `<tr><td>${i + 1}</td>${COLS.map(col => `<td>${getVal(p, col.key, col.get)}</td>`).join("")}</tr>`).join("")}</table><script>window.print();</script></body></html>`);
-    w.document.close();
-  };
-
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -749,11 +734,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: 11, color: "#888" }}>{filtered.length} من {passengers.length} حاج</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setShowManual(true)} style={{ ...btnP({ fontSize: 10, padding: "3px 8px" }) }}>➕ إضافة يدوي</button>
-              <button onClick={exportExcel} style={{ ...btnS({ fontSize: 10, padding: "3px 8px" }) }}>⬇️ Excel</button>
-              <button onClick={exportPDF} style={{ ...btnS({ fontSize: 10, padding: "3px 8px" }) }}>📄 PDF</button>
-            </div>
+            <button onClick={() => setShowManual(true)} style={{ ...btnP({ fontSize: 10, padding: "3px 8px" }) }}>➕ إضافة يدوي</button>
           </div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
@@ -1462,18 +1443,78 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
 
 function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   const [activeReport, setActiveReport] = useState<string | null>(null);
+
+  const ALL_COLS = [
+    { key: "name_ar", label: "الاسم بالعربي", get: (p: Passenger) => p.name_ar },
+    { key: "name_en", label: "الاسم بالإنجليزي", get: (p: Passenger) => p.name_en },
+    { key: "passport", label: "رقم الجواز", get: (p: Passenger) => p.passport },
+    { key: "national_id", label: "رقم البطاقة", get: (p: Passenger) => p.national_id },
+    { key: "nat", label: "الجنسية", get: (p: Passenger) => p.nat },
+    { key: "gender", label: "الجنس", get: (p: Passenger) => p.gender },
+    { key: "dob", label: "تاريخ الميلاد", get: (p: Passenger) => p.dob },
+    { key: "expiry", label: "انتهاء الجواز", get: (p: Passenger) => p.expiry },
+    { key: "phone", label: "التليفون", get: (p: Passenger) => p.phone },
+    { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
+    { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
+    { key: "hotel", label: "الفندق", get: (p: Passenger) => p.services?.hotel },
+    { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
+    { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
+  ];
+
+  const [selectedCols, setSelectedCols] = useState<string[]>(ALL_COLS.map(c => c.key));
+  const toggleCol = (key: string) => setSelectedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  const toggleAll = () => setSelectedCols(prev => prev.length === ALL_COLS.length ? [] : ALL_COLS.map(c => c.key));
+
+  const activeCols = ALL_COLS.filter(c => selectedCols.includes(c.key));
+
+  const exportXLSX = () => {
+    const headers = ["م", ...activeCols.map(c => c.label)];
+    const rows = passengers.map((p, i) => [i + 1, ...activeCols.map(c => c.get(p) || "")]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // ضبط عرض الأعمدة تلقائياً
+    ws["!cols"] = [{ wch: 4 }, ...activeCols.map(c => ({ wch: Math.max(c.label.length + 2, 15) }))];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
+    XLSX.writeFile(wb, "تقرير_الحجاج.xlsx");
+  };
+
+  const printPDF = () => {
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<html><head><title>تقرير الحجاج</title><style>
+      @page { size: A4 landscape; margin: 8mm; }
+      body { font-family: Arial; direction: rtl; font-size: 9px; }
+      h2 { text-align: center; margin-bottom: 8px; font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 0.5px solid #ccc; padding: 4px 6px; text-align: right; white-space: nowrap; }
+      th { background: #1D9E75; color: white; font-size: 9px; }
+      tr { page-break-inside: avoid; }
+      tr:nth-child(even) { background: #f9f9f9; }
+    </style></head><body>
+    <h2>تقرير الحجاج — حملة الأقصى</h2>
+    <table>
+      <tr><th>م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>
+      ${passengers.map((p, i) => `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`).join("")}
+    </table>
+    <script>window.print();</script>
+    </body></html>`);
+    w.document.close();
+  };
+
   const reports = [
+    { id: "passengers_report", name: "تقرير الحجاج", icon: "👥", desc: "كشف بيانات الحجاج", color: "#E1F5EE" },
     { id: "flight", name: "تقرير الطيران", icon: "✈️", desc: "كشف الحجاج (التذاكر)", color: "#E6F1FB" },
     { id: "buses", name: "تقرير الباصات", icon: "🚌", desc: "توزيع المسافرين", color: "#EEEDFE" },
     { id: "mina", name: "تقرير منى", icon: "⛺", desc: "مخيمات منى", color: "#E1F5EE" },
     { id: "arafa", name: "تقرير عرفة", icon: "🏔", desc: "مخيمات عرفة", color: "#FAEEDA" },
     { id: "hotel", name: "تقرير الفندق", icon: "🏨", desc: "توزيع الغرف", color: "#FBEAF0" },
   ];
+
   const printFlightReport = () => {
     const w = window.open("", "_blank"); if (!w) return;
     w.document.write(`<html><head><title>كشف الحجاج</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:7px 10px;text-align:center}th{background:#1D9E75;color:white}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>كشف الحجاج ( التذاكر )</h1><table><tr><th>S.N.</th><th>NAME</th><th>NAT.</th><th>P.NO.</th><th>TEL. NO.</th><th>GENDER</th><th>NOTE</th></tr>${passengers.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name_en}</td><td>${p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${p.gender === "ذكر" ? "MR." : "MRS."}</td><td>${p.services?.flight === "درجة أولى" ? "First Class" : ""}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
+
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       {!activeReport ? (
@@ -1481,57 +1522,116 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>اختر التقرير</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {reports.map(r => (
-              <div key={r.id} onClick={() => setActiveReport(r.id)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+              <div key={r.id} onClick={() => setActiveReport(r.id)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "white" }}
                 onMouseEnter={e => e.currentTarget.style.background = "#f9f9f9"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{r.icon}</div>
-                <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div><div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{r.desc}</div>
-                  <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#E1F5EE", color: "#085041" }}>Excel</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#FAEEDA", color: "#633806" }}>PDF</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#f0f0f0", color: "#555" }}>🖨️</span>
-                  </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
+                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{r.desc}</div>
                 </div>
               </div>
             ))}
           </div>
         </>
+      ) : activeReport === "passengers_report" ? (
+        <div>
+          <button onClick={() => setActiveReport(null)} style={{ ...btnS(), marginBottom: 14 }}>← رجوع</button>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>👥 تقرير الحجاج</div>
+
+          {/* اختيار الأعمدة */}
+          <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>اختر الأعمدة</div>
+              <div onClick={toggleAll} style={{ fontSize: 11, color: "#1D9E75", cursor: "pointer" }}>
+                {selectedCols.length === ALL_COLS.length ? "إلغاء الكل" : "تحديد الكل"}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {ALL_COLS.map(col => (
+                <div key={col.key} onClick={() => toggleCol(col.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "#E1F5EE" : "#f9f9f9", border: `0.5px solid ${selectedCols.includes(col.key) ? "#5DCAA5" : "#e5e5e5"}` }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "#1D9E75" : "white", border: `1.5px solid ${selectedCols.includes(col.key) ? "#1D9E75" : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {selectedCols.includes(col.key) && <span style={{ color: "white", fontSize: 10 }}>✓</span>}
+                  </div>
+                  <span style={{ fontSize: 11 }}>{col.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* معاينة */}
+          <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+            <div style={{ padding: "8px 14px", background: "#f9f9f9", fontSize: 11, color: "#888", borderBottom: "0.5px solid #e5e5e5" }}>
+              معاينة — {passengers.length} حاج · {activeCols.length} عمود
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", fontSize: 10, minWidth: "max-content", width: "100%" }}>
+                <thead>
+                  <tr style={{ background: "#1D9E75", color: "white" }}>
+                    <th style={{ padding: "6px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
+                    {activeCols.map(c => <th key={c.key} style={{ padding: "6px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap" }}>{c.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {passengers.slice(0, 5).map((p, i) => (
+                    <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}>
+                      <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                      {activeCols.map(c => <td key={c.key} style={{ padding: "5px 10px", border: "0.5px solid #eee", whiteSpace: "nowrap" }}>{c.get(p) || "—"}</td>)}
+                    </tr>
+                  ))}
+                  {passengers.length > 5 && <tr><td colSpan={activeCols.length + 1} style={{ padding: "6px", textAlign: "center", color: "#aaa", fontSize: 10 }}>... و {passengers.length - 5} حاج آخر</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* أزرار التصدير */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={exportXLSX} disabled={activeCols.length === 0} style={{ ...btnP(), flex: 1, opacity: activeCols.length === 0 ? 0.5 : 1 }}>⬇️ تحميل Excel</button>
+            <button onClick={printPDF} disabled={activeCols.length === 0} style={{ ...btnS(), flex: 1, opacity: activeCols.length === 0 ? 0.5 : 1 }}>🖨️ طباعة PDF</button>
+          </div>
+        </div>
+      ) : activeReport === "flight" ? (
+        <div>
+          <button onClick={() => setActiveReport(null)} style={{ ...btnS(), marginBottom: 14 }}>← رجوع</button>
+          <div style={{ textAlign: "center", fontSize: 16, fontWeight: 600, marginBottom: 14 }}>كشف الحجاج ( التذاكر )</div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
+            <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["S.N.", "NAME", "NAT.", "P.NO.", "TEL.", "GENDER", "NOTE"].map(h => <th key={h} style={{ padding: "7px 8px", border: "1px solid #ccc", textAlign: "center" }}>{h}</th>)}</tr></thead>
+            <tbody>{passengers.map((p, i) => (<tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f9f9f9" }}>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{i + 1}</td>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", fontWeight: 500 }}>{p.name_en}</td>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.passport}</td>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.phone || "—"}</td>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
+              <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.services?.flight === "درجة أولى" ? "⭐ First" : ""}</td>
+            </tr>))}</tbody>
+          </table>
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            <button onClick={printFlightReport} style={{ ...btnS({ flex: 1 }) }}>🖨️ طباعة</button>
+            <button onClick={() => setActiveReport(null)} style={{ ...btnS() }}>← رجوع</button>
+          </div>
+        </div>
       ) : (
         <div>
           <button onClick={() => setActiveReport(null)} style={{ ...btnS(), marginBottom: 14 }}>← رجوع</button>
-          {activeReport === "flight" && (
-            <>
-              <div style={{ textAlign: "center", fontSize: 16, fontWeight: 600, marginBottom: 14 }}>كشف الحجاج ( التذاكر )</div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
-                <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["S.N.", "NAME", "NAT.", "P.NO.", "TEL.", "GENDER", "NOTE"].map(h => <th key={h} style={{ padding: "7px 8px", border: "1px solid #ccc", textAlign: "center" }}>{h}</th>)}</tr></thead>
-                <tbody>{passengers.map((p, i) => (<tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f9f9f9" }}>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{i + 1}</td>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", fontWeight: 500 }}>{p.name_en}</td>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.passport}</td>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.phone || "—"}</td>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
-                  <td style={{ padding: "6px 8px", border: "1px solid #e0e0e0", textAlign: "center" }}>{p.services?.flight === "درجة أولى" ? "⭐ First" : ""}</td>
-                </tr>))}</tbody>
-              </table>
-              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                <button style={btnP({ flex: 1 })}>⬇️ Excel</button>
-                <button style={btnS({ flex: 1 })}>📄 PDF</button>
-                <button onClick={printFlightReport} style={btnS({ flex: 1 })}>🖨️ طباعة</button>
-              </div>
-            </>
-          )}
-          {activeReport !== "flight" && <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}><div style={{ fontSize: 32, marginBottom: 8 }}>{reports.find(r => r.id === activeReport)?.icon}</div><div style={{ fontSize: 13 }}>وزّع الحجاج أول من صفحات التنظيم</div></div>}
+          <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>{reports.find(r => r.id === activeReport)?.icon}</div>
+            <div style={{ fontSize: 13 }}>وزّع الحجاج أول من صفحات التنظيم</div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try { const s = sessionStorage.getItem("hajj_user"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
-  const [page, setPage] = useState("dash");
+  const [page, setPage] = useState(() => sessionStorage.getItem("hajj_page") || "dash");
+
+  useEffect(() => { sessionStorage.setItem("hajj_page", page); }, [page]);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
 
   const handleLogin = (user: User) => {
