@@ -126,26 +126,17 @@ async function uploadDoc(file: File, passengerId: number, docType: string): Prom
 
 // ===== TYPES =====
 interface Passenger {
-  id: number;
-  name_ar: string;
-  name_en: string;
-  short_ar: string;
-  short_en: string;
-  passport: string;
-  national_id: string;
-  nat: string;
-  dob: string;
-  expiry: string;
-  gender: string;
-  phone: string;
+  id: number; name_ar: string; name_en: string; short_ar: string; short_en: string;
+  passport: string; national_id: string; nat: string; dob: string; expiry: string;
+  gender: string; phone: string;
   services: { bus: string; flight: string; hotel: string; camp_mina: string; camp_arafa: string; };
-  rel: string;
-  linked: number;
+  rel: string; linked: number;
+  bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
 }
 interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
-interface Bus { id: number; name: string; type: string; passengers: number[]; }
-interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; passengers: number[]; }
-interface Room { id: number; number: string; floor: string; type: "مطل" | "جانبي" | "داخلي" | "سويت"; passengers: number[]; }
+interface Bus { id: number; name: string; type: string; }
+interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
+interface Room { id: number; number: string; floor: string; type: "مطل" | "جانبي" | "داخلي" | "سويت"; }
 
 const ALL_PERMISSIONS = [
   { key: "add_passenger", label: "إضافة حجاج" },
@@ -929,7 +920,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
 }
 
 
-function BusesPage({ passengers }: { passengers: Passenger[] }) {
+function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [buses, setBuses] = useState<Bus[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
@@ -940,38 +931,72 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
   const [currentBusId, setCurrentBusId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
-  const getAssigned = () => { const s = new Set<number>(); buses.forEach(b => b.passengers.forEach(id => s.add(id))); return s; };
-  const assigned = getAssigned();
+
+  useEffect(() => {
+    supabase.from("buses").select("*").order("created_at").then(({ data }: any) => { if (data) setBuses(data); });
+  }, []);
+
+  const getBusPassengers = (busId: number) => passengers.filter(p => p.bus_id === busId);
+  const assigned = new Set(passengers.filter(p => p.bus_id != null).map(p => p.id));
+
   const toggleBus = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const addBus = () => {
+
+  const addBus = async () => {
     if (!busName.trim()) return;
     if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`باص باسم "${busName}" موجود بالفعل!`); return; }
     setNameError("");
-    const id = Date.now(); setBuses(prev => [...prev, { id, name: busName.trim(), type: busType, passengers: [] }]); setExpanded(prev => new Set([...prev, id])); setBusName(""); setBusType("عادي"); setShowAdd(false);
+    const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType }]).select();
+    if (!error && data?.[0]) {
+      const newBus = data[0] as Bus;
+      setBuses(prev => [...prev, newBus]);
+      setExpanded(prev => new Set([...prev, newBus.id]));
+      setBusName(""); setBusType("عادي"); setShowAdd(false);
+    }
   };
-  const deleteBus = (id: number) => {
-    const bus = buses.find(b => b.id === id);
-    if (bus && bus.passengers.length > 0) { alert("مش هينفع تمسح باص فيه مسافرين!"); return; }
+
+  const deleteBus = async (id: number) => {
+    if (getBusPassengers(id).length > 0) { alert("مش هينفع تمسح باص فيه مسافرين!"); return; }
+    await supabase.from("buses").delete().eq("id", id);
     setBuses(prev => prev.filter(b => b.id !== id));
   };
+
   const openAddP = (busId: number) => { setCurrentBusId(busId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const confirmAddP = () => { setBuses(prev => prev.map(b => { if (b.id !== currentBusId) return b; const nl = [...b.passengers]; selectedP.forEach(id => { if (!nl.includes(id)) nl.push(id); }); return { ...b, passengers: nl }; })); setShowAddP(false); };
-  const removeP = (pId: number, busId: number) => setBuses(prev => prev.map(b => b.id !== busId ? b : { ...b, passengers: b.passengers.filter(id => id !== pId) }));
-  const moveP = (pId: number, fromId: number, toId: string) => { if (!toId) return; setBuses(prev => prev.map(b => { if (b.id === fromId) return { ...b, passengers: b.passengers.filter(id => id !== pId) }; if (b.id === parseInt(toId) && !b.passengers.includes(pId)) return { ...b, passengers: [...b.passengers, pId] }; return b; })); };
+
+  const confirmAddP = async () => {
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, bus_id: currentBusId } : p));
+    setShowAddP(false);
+  };
+
+  const removeP = async (pId: number) => {
+    await supabase.from("passengers").update({ bus_id: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, bus_id: null } : p));
+  };
+
+  const moveP = async (pId: number, toId: string) => {
+    if (!toId) return;
+    const newBusId = parseInt(toId);
+    await supabase.from("passengers").update({ bus_id: newBusId }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, bus_id: newBusId } : p));
+  };
+
   const printBus = (bus: Bus) => {
-    const bp = bus.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[];
+    const bp = getBusPassengers(bus.id);
     const w = window.open("", "_blank"); if (!w) return;
     w.document.write(`<html><head><title>${bus.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>🚌 ${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
+
   const printAll = () => {
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>تقرير الباصات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.bus{page-break-after:always}}</style></head><body><h1>🚌 تقرير الباصات</h1>${buses.map(bus => { const bp = bus.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[]; return `<div class="bus"><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>تقرير الباصات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.bus{page-break-after:always}}</style></head><body><h1>🚌 تقرير الباصات</h1>${buses.map(bus => { const bp = getBusPassengers(bus.id); return `<div class="bus"><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
     w.document.close();
   };
+
   const currentBus = buses.find(b => b.id === currentBusId);
   const filteredP = passengers.filter(p => !pSearch || p.name_ar.includes(pSearch));
+
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
@@ -986,7 +1011,7 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
       {!buses.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>🚌<br />لا يوجد باصات بعد</div> :
         buses.map(bus => {
           const isExpanded = expanded.has(bus.id);
-          const bp = bus.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[];
+          const bp = getBusPassengers(bus.id);
           const isVIP = bus.type === "VIP";
           return (
             <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "#F5C842" : "#e5e5e5"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
@@ -1009,11 +1034,11 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
                       {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
-                      <select onChange={e => moveP(p.id, bus.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
+                      <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
                         <option value="">نقل لـ...</option>
                         {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
-                      <button onClick={() => removeP(p.id, bus.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
                     </div>
                   )) : <div style={{ textAlign: "center", padding: "10px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
@@ -1024,13 +1049,13 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="🚌 إضافة باص جديد" maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>اسم الباص</div>
-          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={busName} onChange={e => { setBusName(e.target.value); setNameError(""); }} placeholder="مثال: باص 1، باص VIP..." autoFocus onKeyDown={e => e.key === "Enter" && addBus()} />
+          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={busName} onChange={e => { setBusName(e.target.value); setNameError(""); }} placeholder="مثال: باص 1" autoFocus onKeyDown={e => e.key === "Enter" && addBus()} />
           {nameError && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>{nameError}</div>}
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الباص</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "#1D9E75" : "#ddd"}`, background: busType === t ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "#085041" : "#666", fontWeight: busType === t ? 500 : 400 }}>{t === "VIP" ? "⭐ VIP" : "🚌 عادي"}</div>)}
+            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "#1D9E75" : "#ddd"}`, background: busType === t ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "#085041" : "#666" }}>{t === "VIP" ? "⭐ VIP" : "🚌 عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -1044,8 +1069,8 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
-          const isAssigned = assigned.has(p.id) && !currentBus?.passengers.includes(p.id);
-          const isInBus = currentBus?.passengers.includes(p.id);
+          const isAssigned = p.bus_id != null && p.bus_id !== currentBusId;
+          const isInBus = p.bus_id === currentBusId;
           const isSel = selectedP.has(p.id);
           return (
             <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "#E1F5EE" : p.services?.bus === "VIP" ? "#FFFBEA" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : p.services?.bus === "VIP" ? "#F5C842" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
@@ -1065,7 +1090,8 @@ function BusesPage({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[] }) {
+
+function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [camps, setCamps] = useState<Camp[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
@@ -1077,40 +1103,81 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
   const [currentCampId, setCurrentCampId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
+
+  const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
   const serviceKey = pageType === "منى" ? "camp_mina" : "camp_arafa";
   const icon = pageType === "منى" ? "⛺" : "🏔";
-  const getAssigned = () => { const s = new Set<number>(); camps.forEach(c => c.passengers.forEach(id => s.add(id))); return s; };
-  const assigned = getAssigned();
+
+  useEffect(() => {
+    supabase.from("camps").select("*").eq("page_type", pageType).order("created_at").then(({ data }: any) => { if (data) setCamps(data as Camp[]); });
+  }, [pageType]);
+
+  const getCampPassengers = (campId: number) => passengers.filter(p => (p as any)[campIdKey] === campId);
+  const assigned = new Set(passengers.filter(p => (p as any)[campIdKey] != null).map(p => p.id));
+
   const toggleCamp = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const addCamp = () => {
+
+  const addCamp = async () => {
     if (!campName.trim()) return;
     if (camps.some(c => c.name.trim() === campName.trim() && c.gender === campGender)) { setNameError(`مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} باسم "${campName}" موجود!`); return; }
-    setNameError(""); const id = Date.now();
-    setCamps(prev => [...prev, { id, name: campName.trim(), gender: campGender, type: campType, passengers: [] }]);
-    setExpanded(prev => new Set([...prev, id])); setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setShowAdd(false);
+    setNameError("");
+    const { data, error } = await supabase.from("camps").insert([{ name: campName.trim(), gender: campGender, type: campType, page_type: pageType }]).select();
+    if (!error && data?.[0]) {
+      setCamps(prev => [...prev, data[0] as Camp]);
+      setExpanded(prev => new Set([...prev, data[0].id]));
+      setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setShowAdd(false);
+    }
   };
-  const deleteCamp = (id: number) => { const c = camps.find(x => x.id === id); if (c && c.passengers.length > 0) { alert("أزل المسافرين الأول!"); return; } setCamps(prev => prev.filter(x => x.id !== id)); };
+
+  const deleteCamp = async (id: number) => {
+    if (getCampPassengers(id).length > 0) { alert("أزل المسافرين الأول!"); return; }
+    await supabase.from("camps").delete().eq("id", id);
+    setCamps(prev => prev.filter(c => c.id !== id));
+  };
+
   const openAddP = (campId: number) => { setCurrentCampId(campId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const confirmAddP = () => { setCamps(prev => prev.map(c => { if (c.id !== currentCampId) return c; const nl = [...c.passengers]; selectedP.forEach(id => { if (!nl.includes(id)) nl.push(id); }); return { ...c, passengers: nl }; })); setShowAddP(false); };
-  const removeP = (pId: number, campId: number) => setCamps(prev => prev.map(c => c.id !== campId ? c : { ...c, passengers: c.passengers.filter(id => id !== pId) }));
-  const moveP = (pId: number, fromId: number, toId: string) => { if (!toId) return; const fc = camps.find(c => c.id === fromId); const tc = camps.find(c => c.id === parseInt(toId)); if (!fc || !tc || fc.gender !== tc.gender) return; setCamps(prev => prev.map(c => { if (c.id === fromId) return { ...c, passengers: c.passengers.filter(id => id !== pId) }; if (c.id === parseInt(toId) && !c.passengers.includes(pId)) return { ...c, passengers: [...c.passengers, pId] }; return c; })); };
+
+  const confirmAddP = async () => {
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [campIdKey]: currentCampId }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [campIdKey]: currentCampId } : p));
+    setShowAddP(false);
+  };
+
+  const removeP = async (pId: number) => {
+    await supabase.from("passengers").update({ [campIdKey]: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, [campIdKey]: null } : p));
+  };
+
+  const moveP = async (pId: number, toId: string) => {
+    if (!toId) return;
+    const newCampId = parseInt(toId);
+    const fc = camps.find(c => c.id === (passengers.find(p => p.id === pId) as any)?.[campIdKey]);
+    const tc = camps.find(c => c.id === newCampId);
+    if (fc && tc && fc.gender !== tc.gender) return;
+    await supabase.from("passengers").update({ [campIdKey]: newCampId }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, [campIdKey]: newCampId } : p));
+  };
+
   const printCamp = (camp: Camp) => {
-    const cp = camp.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[];
+    const cp = getCampPassengers(camp.id);
     const w = window.open("", "_blank"); if (!w) return;
     w.document.write(`<html><head><title>مخيم ${camp.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:${camp.gender === "ذكر" ? "#0C447C" : "#72243E"};color:white}</style></head><body><h2>${icon} مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"} (${camp.type})</h2><table><tr><th>م</th><th>الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
+
   const printAll = () => {
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>مخيمات ${pageType}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}@media print{.c{page-break-after:always}}</style></head><body><h1>${icon} مخيمات ${pageType}</h1>${camps.map(camp => { const cp = camp.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[]; return `<div class="c"><h2 style="background:${camp.gender === "ذكر" ? "#0C447C" : "#72243E"};color:white;padding:8px;border-radius:6px">مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"}</h2><table><tr><th style="background:#555;color:white">م</th><th style="background:#555;color:white">الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>مخيمات ${pageType}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}@media print{.c{page-break-after:always}}</style></head><body><h1>${icon} مخيمات ${pageType}</h1>${camps.map(camp => { const cp = getCampPassengers(camp.id); return `<div class="c"><h2 style="background:${camp.gender === "ذكر" ? "#0C447C" : "#72243E"};color:white;padding:8px;border-radius:6px">مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"}</h2><table><tr><th style="background:#555;color:white">م</th><th style="background:#555;color:white">الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
     w.document.close();
   };
+
   const currentCamp = camps.find(c => c.id === currentCampId);
   const genderPool = passengers.filter(p => p.gender === currentCamp?.gender);
   const filteredP = genderPool.filter(p => !pSearch || p.name_ar.includes(pSearch));
   const maleCamps = camps.filter(c => c.gender === "ذكر");
   const femaleCamps = camps.filter(c => c.gender === "أنثى");
+
   const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "#E6F1FB" : "#FBEAF0", color: gender === "ذكر" ? "#0C447C" : "#72243E", display: "inline-block", marginBottom: 10 }}>
@@ -1119,7 +1186,7 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
       {groupCamps.length === 0 ? <div style={{ fontSize: 11, color: "#aaa", padding: "6px 0" }}>لا يوجد مخيمات بعد</div> :
         groupCamps.map(camp => {
           const isExpanded = expanded.has(camp.id);
-          const cp = camp.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[];
+          const cp = getCampPassengers(camp.id);
           const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
           const isSpecial = camp.type === "خاص";
           return (
@@ -1143,8 +1210,8 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
                       {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
-                      {sameCamps.length > 0 && <select onChange={e => moveP(p.id, camp.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{sameCamps.map(c => <option key={c.id} value={c.id}>مخيم {c.name}</option>)}</select>}
-                      <button onClick={() => removeP(p.id, camp.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      {sameCamps.length > 0 && <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{sameCamps.map(c => <option key={c.id} value={c.id}>مخيم {c.name}</option>)}</select>}
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
                     </div>
                   )) : <div style={{ textAlign: "center", padding: "10px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
@@ -1154,6 +1221,7 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
         })}
     </div>
   );
+
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
@@ -1169,19 +1237,19 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title={`${icon} مخيم جديد`} maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم / اسم المخيم</div>
-          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={campName} onChange={e => { setCampName(e.target.value); setNameError(""); }} placeholder="مثال: 15، 203..." autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
+          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={campName} onChange={e => { setCampName(e.target.value); setNameError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
           {nameError && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>{nameError}</div>}
         </div>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع المخيم</div>
+          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>الجنس</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "#0C447C" : "#72243E") : "#ddd"}`, background: campGender === g ? (g === "ذكر" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "#0C447C" : "#72243E") : "#666", fontWeight: campGender === g ? 500 : 400 }}>{g === "ذكر" ? "👨 رجال" : "👩 نساء"}</div>)}
+            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "#0C447C" : "#72243E") : "#ddd"}`, background: campGender === g ? (g === "ذكر" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "#0C447C" : "#72243E") : "#666" }}>{g === "ذكر" ? "👨 رجال" : "👩 نساء"}</div>)}
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الخيمة</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["عادي", "خاص"] as const).map(t => <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "#1D9E75" : "#ddd"}`, background: campType === t ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "#085041" : "#666", fontWeight: campType === t ? 500 : 400 }}>{t === "خاص" ? "⭐ خاص" : "🏕 عادي"}</div>)}
+            {(["عادي", "خاص"] as const).map(t => <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "#1D9E75" : "#ddd"}`, background: campType === t ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "#085041" : "#666" }}>{t === "خاص" ? "⭐ خاص" : "🏕 عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -1196,8 +1264,8 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
         </div>
         {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "#aaa", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين</div> :
           filteredP.map(p => {
-            const isInCamp = currentCamp?.passengers.includes(p.id);
-            const isAssigned = assigned.has(p.id) && !isInCamp;
+            const isInCamp = (p as any)[campIdKey] === currentCampId;
+            const isAssigned = (p as any)[campIdKey] != null && !isInCamp;
             const isSel = selectedP.has(p.id);
             const wantsSpecial = (p.services as any)[serviceKey] === "خاص";
             return (
@@ -1218,7 +1286,8 @@ function CampsPage({ pageType, passengers }: { pageType: "منى" | "عرفة"; 
   );
 }
 
-function HotelPage({ passengers }: { passengers: Passenger[] }) {
+
+function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
@@ -1241,77 +1310,116 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
   const [printFloor, setPrintFloor] = useState("");
   const [printType, setPrintType] = useState<Room["type"]>("مطل");
   const fileRef = useRef<HTMLInputElement>(null);
-  const getAssigned = () => { const s = new Set<number>(); rooms.forEach(r => r.passengers.forEach(id => s.add(id))); return s; };
-  const assigned = getAssigned();
+
+  useEffect(() => {
+    supabase.from("rooms").select("*").order("number").then(({ data }: any) => { if (data) setRooms(data as Room[]); });
+  }, []);
+
+  const getRoomPassengers = (roomId: number) => passengers.filter(p => p.room_id === roomId);
+  const assigned = new Set(passengers.filter(p => p.room_id != null).map(p => p.id));
   const floors = [...new Set(rooms.filter(r => r.floor).map(r => r.floor))].sort();
+
   const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const addRoom = () => {
+
+  const addRoom = async () => {
     if (!roomNumber.trim()) return;
     if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
-    setNumberError(""); const id = Date.now();
-    setRooms(prev => [...prev, { id, number: roomNumber.trim(), floor: roomFloor.trim(), type: roomType, passengers: [] }]);
-    setExpanded(prev => new Set([...prev, id])); setRoomNumber(""); setRoomFloor(""); setRoomType("مطل"); setShowAdd(false);
+    setNumberError("");
+    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: roomType }]).select();
+    if (!error && data?.[0]) {
+      setRooms(prev => [...prev, data[0] as Room]);
+      setExpanded(prev => new Set([...prev, data[0].id]));
+      setRoomNumber(""); setRoomFloor(""); setRoomType("مطل"); setShowAdd(false);
+    }
   };
-  const addRange = () => {
+
+  const addRange = async () => {
     const from = parseInt(rangeFrom), to = parseInt(rangeTo);
     if (!from || !to || from > to) { setRangeError("تأكد من الأرقام"); return; }
-    const newRooms: Room[] = [];
     const existingNums = new Set(rooms.map(r => r.number));
+    const newRooms = [];
     for (let n = from; n <= to; n++) {
-      const num = String(n);
-      if (!existingNums.has(num)) newRooms.push({ id: Date.now() + n, number: num, floor: rangeFloor.trim(), type: rangeType, passengers: [] });
+      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: rangeType });
     }
     if (newRooms.length === 0) { setRangeError("كل الغرف في هذا النطاق موجودة بالفعل!"); return; }
-    setRangeError(""); setRooms(prev => [...prev, ...newRooms]);
+    setRangeError("");
+    const { data, error } = await supabase.from("rooms").insert(newRooms).select();
+    if (!error && data) { setRooms(prev => [...prev, ...data as Room[]]); }
     setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeType("مطل"); setShowRange(false);
   };
+
   const handleExcel = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       const lines = text.split("\n").slice(1);
-      const newRooms: Room[] = [];
       const existingNums = new Set(rooms.map(r => r.number));
+      const newRooms: any[] = [];
       lines.forEach(line => {
         const parts = line.split(",");
         if (parts.length >= 2) {
-          const num = parts[0]?.trim();
-          const type = parts[1]?.trim() as Room["type"];
-          const floor = parts[2]?.trim() || "";
-          if (num && !existingNums.has(num) && ROOM_TYPES.includes(type)) newRooms.push({ id: Date.now() + Math.random(), number: num, floor, type, passengers: [] });
+          const num = parts[0]?.trim(), type = parts[1]?.trim() as Room["type"], floor = parts[2]?.trim() || "";
+          if (num && !existingNums.has(num) && ROOM_TYPES.includes(type)) newRooms.push({ number: num, floor, type });
         }
       });
-      if (newRooms.length > 0) setRooms(prev => [...prev, ...newRooms]);
-      else alert("لم يتم إضافة غرف. تأكد من شكل الملف.");
+      if (newRooms.length > 0) {
+        const { data, error } = await supabase.from("rooms").insert(newRooms).select();
+        if (!error && data) setRooms(prev => [...prev, ...data as Room[]]);
+      } else alert("لم يتم إضافة غرف. تأكد من شكل الملف.");
     };
     reader.readAsText(file);
   };
-  const deleteRoom = (id: number) => { const r = rooms.find(x => x.id === id); if (r && r.passengers.length > 0) { alert("أزل المسافرين الأول!"); return; } setRooms(prev => prev.filter(x => x.id !== id)); };
+
+  const deleteRoom = async (id: number) => {
+    if (getRoomPassengers(id).length > 0) { alert("أزل المسافرين الأول!"); return; }
+    await supabase.from("rooms").delete().eq("id", id);
+    setRooms(prev => prev.filter(r => r.id !== id));
+  };
+
   const openAddP = (roomId: number) => { setCurrentRoomId(roomId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const confirmAddP = () => { setRooms(prev => prev.map(r => { if (r.id !== currentRoomId) return r; const nl = [...r.passengers]; selectedP.forEach(id => { if (!nl.includes(id)) nl.push(id); }); return { ...r, passengers: nl }; })); setShowAddP(false); };
-  const removeP = (pId: number, roomId: number) => setRooms(prev => prev.map(r => r.id !== roomId ? r : { ...r, passengers: r.passengers.filter(id => id !== pId) }));
-  const moveP = (pId: number, fromId: number, toId: string) => { if (!toId) return; setRooms(prev => prev.map(r => { if (r.id === fromId) return { ...r, passengers: r.passengers.filter(id => id !== pId) }; if (r.id === parseInt(toId) && !r.passengers.includes(pId)) return { ...r, passengers: [...r.passengers, pId] }; return r; })); };
+
+  const confirmAddP = async () => {
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ room_id: currentRoomId }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, room_id: currentRoomId } : p));
+    setShowAddP(false);
+  };
+
+  const removeP = async (pId: number) => {
+    await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: null } : p));
+  };
+
+  const moveP = async (pId: number, toId: string) => {
+    if (!toId) return;
+    const newRoomId = parseInt(toId);
+    await supabase.from("passengers").update({ room_id: newRoomId }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: newRoomId } : p));
+  };
+
   const doPrint = (roomsToPrint: Room[]) => {
     const w = window.open("", "_blank"); if (!w) return;
     const half = Math.ceil(roomsToPrint.length / 2);
     const left = roomsToPrint.slice(0, half), right = roomsToPrint.slice(half);
     const renderRoom = (room: Room) => {
-      const rp = room.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[];
+      const rp = getRoomPassengers(room.id);
       const [bg] = ROOM_COLORS[room.type] || ["#f5f5f5"];
       return `<div style="margin-bottom:12px"><div style="background:${bg};padding:5px 10px;border:1px solid #ddd;border-bottom:none;font-size:11px;font-weight:bold;display:flex;justify-content:space-between"><span>${room.type}</span><span>${room.number}${room.floor ? ` (طابق ${room.floor})` : ""}</span></div><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f5"><th style="padding:4px 8px;border:1px solid #ddd;text-align:center;width:28px">م</th><th style="padding:4px 8px;border:1px solid #ddd;text-align:right">الاسم</th></tr>${rp.map((p, i) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;text-align:center">${i + 1}</td><td style="padding:4px 8px;border:1px solid #ddd">${p.short_ar}</td></tr>`).join("")}</table></div>`;
     };
     w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>🏨 تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();</script></body></html>`);
     w.document.close();
   };
+
   const handlePrint = () => {
     let r = rooms;
     if (printFilter === "floor") r = rooms.filter(x => x.floor === printFloor);
     else if (printFilter === "type") r = rooms.filter(x => x.type === printType);
     doPrint(r); setShowPrint(false);
   };
+
   const currentRoom = rooms.find(r => r.id === currentRoomId);
   const filteredP = passengers.filter(p => !pSearch || p.name_ar.includes(pSearch));
+
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 12 }}>
@@ -1329,7 +1437,7 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
       {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> :
         rooms.map(room => {
           const isExpanded = expanded.has(room.id);
-          const rp = room.passengers.map(id => passengers.find(p => p.id === id)).filter(Boolean) as Passenger[];
+          const rp = getRoomPassengers(room.id);
           const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["#f5f5f5", "#333"];
           return (
             <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
@@ -1352,8 +1460,8 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
                       <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel]?.[0] || "#f0f0f0", color: ROOM_COLORS[p.services.hotel]?.[1] || "#555" }}>طلب {p.services.hotel}</span>
                       {p.services.hotel !== room.type && <span style={{ fontSize: 9, color: "#e67e22" }}>⚠️</span>}
-                      <select onChange={e => moveP(p.id, room.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
-                      <button onClick={() => removeP(p.id, room.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
                     </div>
                   )) : <div style={{ textAlign: "center", padding: "10px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
@@ -1369,22 +1477,22 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الغرفة</div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRoomType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${roomType === t ? clr : "#ddd"}`, background: roomType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: roomType === t ? clr : "#666", fontWeight: roomType === t ? 500 : 400 }}>{t}</div>; })}
+            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRoomType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${roomType === t ? clr : "#ddd"}`, background: roomType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: roomType === t ? clr : "#666" }}>{t}</div>; })}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
       <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="📋 إضافة نطاق غرف" maxWidth={360}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} placeholder="1601" /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} placeholder="1620" /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} placeholder="16" /></div>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} /></div>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} /></div>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} /></div>
         </div>
         {rangeError && <div style={{ fontSize: 11, color: "#c0392b", marginBottom: 8 }}>{rangeError}</div>}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الغرف</div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRangeType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${rangeType === t ? clr : "#ddd"}`, background: rangeType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: rangeType === t ? clr : "#666", fontWeight: rangeType === t ? 500 : 400 }}>{t}</div>; })}
+            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRangeType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${rangeType === t ? clr : "#ddd"}`, background: rangeType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: rangeType === t ? clr : "#666" }}>{t}</div>; })}
           </div>
         </div>
         {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "#1D9E75", marginBottom: 10, background: "#E1F5EE", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
@@ -1396,8 +1504,8 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
-          const isInRoom = currentRoom?.passengers.includes(p.id);
-          const isAssigned = assigned.has(p.id) && !isInRoom;
+          const isInRoom = p.room_id === currentRoomId;
+          const isAssigned = p.room_id != null && !isInRoom;
           const isSel = selectedP.has(p.id);
           const [reqBg, reqClr] = ROOM_COLORS[p.services.hotel] || ["#f0f0f0", "#555"];
           return (
@@ -1423,7 +1531,6 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
             <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>اختر الطابق</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "#1D9E75" : "#ddd"}`, background: printFloor === f ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "#085041" : "#666" }}>طابق {f}</div>)}
-              {floors.length === 0 && <div style={{ fontSize: 11, color: "#aaa" }}>لا يوجد طوابق</div>}
             </div>
           </div>
         )}
@@ -1440,6 +1547,7 @@ function HotelPage({ passengers }: { passengers: Passenger[] }) {
     </div>
   );
 }
+
 
 function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   const [activeReport, setActiveReport] = useState<string | null>(null);
@@ -1655,7 +1763,9 @@ export default function App() {
     rel: "", linked: -1,
     photo_url: p.photo_url || "", id_expiry: p.id_expiry || "",
     national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
-    passport_url: p.passport_url || ""
+    passport_url: p.passport_url || "",
+    bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
+    camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null
   });
 
   useEffect(() => {
@@ -1691,10 +1801,10 @@ export default function App() {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
       case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} />;
       case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} />;
-      case "buses": return <BusesPage passengers={passengers} />;
-      case "mina": return <CampsPage pageType="منى" passengers={passengers} />;
-      case "arafa": return <CampsPage pageType="عرفة" passengers={passengers} />;
-      case "hotel": return <HotelPage passengers={passengers} />;
+      case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
+      case "mina": return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
+      case "arafa": return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
+      case "hotel": return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
       case "reports": return <ReportsPage passengers={passengers} />;
       case "users": return <UsersPage currentUser={currentUser} />;
       default: return <Dashboard passengers={passengers} setPage={setPage} />;
