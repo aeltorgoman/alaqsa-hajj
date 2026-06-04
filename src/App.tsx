@@ -129,7 +129,7 @@ interface Passenger {
   id: number; name_ar: string; name_en: string; short_ar: string; short_en: string;
   passport: string; national_id: string; nat: string; dob: string; expiry: string;
   gender: string; phone: string;
-  services: { bus: string; flight: string; hotel: string; camp_mina: string; camp_arafa: string; };
+  services: { bus: string; flight: string; hotel_type: string; hotel_view: string; camp_mina: string; camp_arafa: string; };
   rel: string; linked: number;
   bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
   family_id?: string | null;
@@ -137,7 +137,7 @@ interface Passenger {
 interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
 interface Bus { id: number; name: string; type: string; }
 interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
-interface Room { id: number; number: string; floor: string; type: "مطل" | "جانبي" | "داخلي" | "سويت"; }
+interface Room { id: number; number: string; floor: string; type: "ثنائية" | "ثلاثية" | "رباعية" | "سويت"; }
 
 const ALL_PERMISSIONS = [
   { key: "add_passenger", label: "إضافة حجاج" },
@@ -155,8 +155,9 @@ const ALL_PERMISSIONS = [
 ];
 
 
-const ROOM_TYPES = ["مطل", "جانبي", "داخلي", "سويت"] as const;
-const ROOM_COLORS: Record<string, [string, string]> = { "مطل": ["#E6F1FB", "#0C447C"], "جانبي": ["#FAEEDA", "#633806"], "داخلي": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
+const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
+const ROOM_VIEW_OPTIONS = ["مطلة", "غير مطلة"] as const;
+const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["#E6F1FB", "#0C447C"], "ثلاثية": ["#FAEEDA", "#633806"], "رباعية": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
   { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
@@ -412,7 +413,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
   const [idExpiry, setIdExpiry] = useState("");
   // البيانات
   const [form, setForm] = useState({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
-  const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
+  const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   // مستندات إضافية (بدون الجواز والبطاقة — هم بيتعاملوا فوق)
   const [docs, setDocs] = useState<{ photo: File | null; contract: File | null }>({ photo: null, contract: null });
 
@@ -491,7 +492,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       gender: form.gender, phone: form.phone,
       id_expiry: idExpiry,
       bus: services.bus, flight: services.flight,
-      hotel: services.hotel, camp_mina: services.camp_mina,
+      hotel_type: services.hotel_type, hotel_view: services.hotel_view, camp_mina: services.camp_mina,
       camp_arafa: services.camp_arafa
     }]).select();
     if (!error && data && data[0]) {
@@ -510,7 +511,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
 
   const reset = () => {
     setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
-    setServices({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
+    setServices({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
     setPreviewImg(null); setPassportFile(null); setShowFields(false); setSaved(false); setLocked(false);
     setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setDocs({ photo: null, contract: null });
   };
@@ -590,7 +591,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>⭐ الخدمات المطلوبة</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["🏨 الفندق", "hotel", ["مطل", "جانبي", "داخلي"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
+            {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية", "ثلاثية", "رباعية", "سويت"]], ["🪟 إطلالة الغرفة", "hotel_view", ["مطلة", "غير مطلة"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
               <div key={k}>
                 <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
@@ -652,7 +653,8 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     { key: "phone", label: "التليفون" },
     { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
-    { key: "hotel", label: "الفندق", get: (p: Passenger) => p.services?.hotel },
+    { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
+    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
     { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
     { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
   ] as { key: string; label: string; get?: (p: Passenger) => string }[];
@@ -677,7 +679,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
-  const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel: "مطل", camp_mina: "عادي", camp_arafa: "عادي" });
+  const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   const [manualSaving, setManualSaving] = useState(false);
 
   const handleManualSave = async () => {
@@ -689,7 +691,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setManualSaving(true);
     const short_ar = makeShort(manualForm.name_ar);
     const short_en = makeShort(manualForm.name_en);
-    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel: manualServices.hotel, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa }]).select();
+    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa }]).select();
     if (!error && data && data[0]) {
       setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as any]);
       setShowManual(false);
@@ -698,10 +700,12 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setManualSaving(false);
   };
 
+  const [showVerify, setShowVerify] = useState(false);
+  const [verifyData, setVerifyData] = useState<{ passportUrl: string; idUrl: string; passenger: any; updates: any; isQatari: boolean; idMismatch: boolean; } | null>(null);
+
   const handleDocUpload = async (p: any, docType: string, field: string, file: File) => {
     setDocUploading(docType);
     if (docType === "passport_doc") {
-      // رفع الجواز + تحديث البيانات بالـ AI
       const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "passport")]);
       const updates: any = {};
       if (url) updates.passport_url = url;
@@ -712,21 +716,30 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
       if (parsed.dob) updates.dob = parsed.dob;
       if (parsed.expiry) updates.expiry = parsed.expiry;
       if (parsed.gender) updates.gender = parsed.gender;
-      await supabase.from("passengers").update(updates).eq("id", p.id);
-      const updated = { ...p, ...updates };
-      setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
-      setSelected(updated);
+      setDocUploading(null);
+      // لو في بطاقة موجودة → عرض مودال التحقق
+      if (p.national_id_url) {
+        setVerifyData({ passportUrl: url || p.passport_url, idUrl: p.national_id_url, passenger: p, updates, isQatari: p.nat === "قطري", idMismatch: false });
+        setShowVerify(true);
+      } else {
+        await saveDocUpdates(p, updates);
+      }
     } else if (docType === "idcard") {
-      // رفع البطاقة + استخراج رقمها وصلاحيتها
       const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "idcard")]);
       const updates: any = {};
       if (url) updates.national_id_url = url;
       if (parsed.national_id) updates.national_id = parsed.national_id;
       if (parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
-      await supabase.from("passengers").update(updates).eq("id", p.id);
-      const updated = { ...p, ...updates };
-      setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
-      setSelected(updated);
+      setDocUploading(null);
+      // لو في جواز موجود → عرض مودال التحقق
+      if (p.passport_url) {
+        const isQatari = p.nat === "قطري";
+        const idMismatch = isQatari && parsed.national_id && p.national_id && parsed.national_id !== p.national_id;
+        setVerifyData({ passportUrl: p.passport_url, idUrl: url || p.national_id_url, passenger: p, updates, isQatari, idMismatch: !!idMismatch });
+        setShowVerify(true);
+      } else {
+        await saveDocUpdates(p, updates);
+      }
     } else {
       const url = await uploadDoc(file, p.id, docType);
       if (url) {
@@ -735,8 +748,21 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
         setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
         setSelected(updated);
       }
+      setDocUploading(null);
     }
-    setDocUploading(null);
+  };
+
+  const saveDocUpdates = async (p: any, updates: any) => {
+    await supabase.from("passengers").update(updates).eq("id", p.id);
+    const updated = { ...p, ...updates };
+    setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+    setSelected(updated);
+  };
+
+  const confirmVerify = async () => {
+    if (!verifyData) return;
+    await saveDocUpdates(verifyData.passenger, verifyData.updates);
+    setShowVerify(false); setVerifyData(null);
   };
 
   const handleDocDelete = async (p: any, field: string, url: string) => {
@@ -782,7 +808,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
       name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
       passport: p.passport, national_id: p.national_id, nat: p.nat,
       dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
-      bus: p.services?.bus, flight: p.services?.flight, hotel: p.services?.hotel,
+      bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
       camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa
     }).eq("id", p.id);
     if (error) { alert("حصل خطأ في الحفظ!"); return; }
@@ -906,7 +932,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           ))}
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>⭐ الخدمات</div>
-            {[["🚌", "الباص", selected.services?.bus], ["✈️", "الطيران", selected.services?.flight], ["🏨", "الفندق", selected.services?.hotel], ["⛺", "منى", selected.services?.camp_mina], ["🏔", "عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
+            {[["🚌", "الباص", selected.services?.bus], ["✈️", "الطيران", selected.services?.flight], ["🏨", "الفندق", `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim()], ["⛺", "منى", selected.services?.camp_mina], ["🏔", "عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <span style={{ color: "#888" }}>{icon as string} {label as string}</span>
                 <span style={{ fontWeight: 500, color: (val === "VIP" || val === "درجة أولى" || val === "خاص") ? "#633806" : "#333" }}>{val as string}</span>
@@ -970,6 +996,33 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
         </div>
       )}
 
+      {/* مودال التحقق من الهوية */}
+      <Modal show={showVerify} onClose={() => { setShowVerify(false); setVerifyData(null); }} title="🛡️ تأكيد هوية الحاج" maxWidth={520}>
+        <p style={{ fontSize: 12, color: "#888", margin: "0 0 14px", lineHeight: 1.6 }}>تأكد إن صورة الجواز وصورة البطاقة لنفس الشخص قبل الحفظ</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          {[["🛂 صورة الجواز", verifyData?.passportUrl], ["🪪 صورة البطاقة", verifyData?.idUrl]].map(([label, url]) => (
+            <div key={label as string} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ background: "#f5f5f5", padding: "6px 10px", fontSize: 11, fontWeight: 500, borderBottom: "0.5px solid #e5e5e5" }}>{label as string}</div>
+              {url ? (
+                <img src={url as string} alt={label as string} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+              ) : (
+                <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: "#ccc", fontSize: 12 }}>لم يتم الرفع</div>
+              )}
+            </div>
+          ))}
+        </div>
+        {verifyData?.idMismatch && (
+          <div style={{ background: "#FAEEDA", border: "0.5px solid #e67e22", borderRadius: 8, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <span style={{ fontSize: 12, color: "#633806", lineHeight: 1.6 }}>الرقم الشخصي في البطاقة مختلف عن المسجل في الجواز — تأكد قبل الحفظ</span>
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <button onClick={confirmVerify} style={{ background: "#1D9E75", color: "white", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✅ نعم، نفس الشخص — حفظ</button>
+          <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "#FBEAF0", color: "#c0392b", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}>❌ لا، مش نفس الشخص</button>
+        </div>
+      </Modal>
+
       <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="👨‍👩‍👧 ربط بأقارب">
         <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>اختر الحاج اللي عايز تربطه بـ {selected?.short_ar}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
@@ -1005,7 +1058,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات المطلوبة</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 الفندق", "hotel", ["مطل","جانبي","داخلي"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+                {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
                   <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "#1D9E75" : "#ddd"), background: editing.services?.[k as keyof typeof editing.services] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "#085041" : "#666", textAlign: "center" as const }}>{o}</div>)}
@@ -1040,7 +1093,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 الفندق", "hotel", ["مطل","جانبي","داخلي"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+            {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
               <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
                   {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "#1D9E75" : "#ddd"}`, background: (manualServices as any)[k] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "#085041" : "#666", textAlign: "center" }}>{o}</div>)}
@@ -1447,19 +1500,19 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [showPrint, setShowPrint] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [roomFloor, setRoomFloor] = useState("");
-  const [roomType, setRoomType] = useState<Room["type"]>("مطل");
+  const [roomType, setRoomType] = useState<Room["type"]>("ثنائية");
   const [numberError, setNumberError] = useState("");
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeFloor, setRangeFloor] = useState("");
-  const [rangeType, setRangeType] = useState<Room["type"]>("مطل");
+  const [rangeType, setRangeType] = useState<Room["type"]>("ثنائية");
   const [rangeError, setRangeError] = useState("");
   const [currentRoomId, setCurrentRoomId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
   const [printFilter, setPrintFilter] = useState<"all" | "floor" | "type">("all");
   const [printFloor, setPrintFloor] = useState("");
-  const [printType, setPrintType] = useState<Room["type"]>("مطل");
+  const [printType, setPrintType] = useState<Room["type"]>("ثنائية");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1480,7 +1533,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!error && data?.[0]) {
       setRooms(prev => [...prev, data[0] as Room]);
       setExpanded(prev => new Set([...prev, data[0].id]));
-      setRoomNumber(""); setRoomFloor(""); setRoomType("مطل"); setShowAdd(false);
+      setRoomNumber(""); setRoomFloor(""); setRoomType("ثنائية"); setShowAdd(false);
     }
   };
 
@@ -1496,7 +1549,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     setRangeError("");
     const { data, error } = await supabase.from("rooms").insert(newRooms).select();
     if (!error && data) { setRooms(prev => [...prev, ...data as Room[]]); }
-    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeType("مطل"); setShowRange(false);
+    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeType("ثنائية"); setShowRange(false);
   };
 
   const handleExcel = (file: File) => {
@@ -1609,8 +1662,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
-                      <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel]?.[0] || "#f0f0f0", color: ROOM_COLORS[p.services.hotel]?.[1] || "#555" }}>طلب {p.services.hotel}</span>
-                      {p.services.hotel !== room.type && <span style={{ fontSize: 9, color: "#e67e22" }}>⚠️</span>}
+                      <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "#f0f0f0", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "#555" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
+                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "#e67e22" }}>⚠️</span>}
                       <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
                       <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
                     </div>
@@ -1658,12 +1711,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           const isInRoom = p.room_id === currentRoomId;
           const isAssigned = p.room_id != null && !isInRoom;
           const isSel = selectedP.has(p.id);
-          const [reqBg, reqClr] = ROOM_COLORS[p.services.hotel] || ["#f0f0f0", "#555"];
+          const [reqBg, reqClr] = ROOM_COLORS[p.services.hotel_type] || ["#f0f0f0", "#555"];
           return (
             <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "#E1F5EE" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
               <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "#888" }}>{isInRoom ? "✓ في الغرفة" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
-              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: reqBg, color: reqClr }}>طلب {p.services.hotel}</span>
+              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: reqBg, color: reqClr }}>{p.services.hotel_type} {p.services.hotel_view}</span>
               {isSel && <span style={{ color: "#1D9E75" }}>✓</span>}
             </div>
           );
@@ -1715,6 +1768,27 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
     supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false })
       .then(({ data: d }: any) => { if (d) setSeasons(d); });
   }, []);
+
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteStep, setDeleteStep] = useState(1);
+  const [seasonToDelete, setSeasonToDelete] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const openDelete = (s: any) => { setSeasonToDelete(s); setDeleteStep(1); setShowDelete(true); };
+
+  const confirmDelete = async () => {
+    if (!seasonToDelete) return;
+    setDeleting(true);
+    await Promise.all([
+      supabase.from("passengers").delete().eq("season_id", seasonToDelete.id),
+      supabase.from("buses").delete().eq("season_id", seasonToDelete.id),
+      supabase.from("camps").delete().eq("season_id", seasonToDelete.id),
+      supabase.from("rooms").delete().eq("season_id", seasonToDelete.id),
+    ]);
+    await supabase.from("seasons").delete().eq("id", seasonToDelete.id);
+    setSeasons(prev => prev.filter(s => s.id !== seasonToDelete.id));
+    setDeleting(false); setShowDelete(false); setSeasonToDelete(null);
+  };
 
   const openSeason = async (season: any) => {
     setSelected(season); setLoading(true); setActiveReport("passengers");
@@ -1786,7 +1860,12 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
                 <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>أُقفل: {new Date(s.closed_at).toLocaleDateString("ar-EG")} · بواسطة {s.closed_by}</div>
               </div>
             </div>
-            <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {currentUser.permissions.view_archive && (
+                <button onClick={e => { e.stopPropagation(); openDelete(s); }} style={{ background: "#FBEAF0", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑 مسح</button>
+              )}
+              <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+            </div>
           </div>
         ))}
         <Modal show={showClose} onClose={() => setShowClose(false)} title="🔒 إقفال الموسم" maxWidth={380}>
@@ -1842,6 +1921,49 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={closeSeason} disabled={closing} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 إقفال الموسم نهائياً"}</button>
                 <button onClick={() => setCloseStep(2)} disabled={closing} style={btnS()}>→ رجوع</button>
+              </div>
+            </>
+          )}
+        </Modal>
+        <Modal show={showDelete} onClose={() => setShowDelete(false)} title="🗑 مسح موسم من الأرشيف" maxWidth={380}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            {[1, 2, 3].map(s => <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: deleteStep >= s ? "#c0392b" : "#eee" }} />)}
+          </div>
+          {deleteStep === 1 && (
+            <>
+              <div style={{ background: "#FBEAF0", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#c0392b", marginBottom: 8 }}>⚠️ تحذير — مسح موسم من الأرشيف</div>
+                <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+                  أنت على وشك مسح موسم <span style={{ fontWeight: 700 }}>{seasonToDelete?.name}</span> نهائياً من الأرشيف.<br /><br />
+                  سيتم مسح جميع البيانات المرتبطة بهذا الموسم (الحجاج، الباصات، المخيمات، الغرف) بشكل كامل.<br /><br />
+                  <span style={{ fontWeight: 700, color: "#c0392b" }}>هذا الإجراء لا يمكن التراجع عنه.</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setDeleteStep(2)} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>فهمت، التالي ←</button>
+                <button onClick={() => setShowDelete(false)} style={btnS()}>إلغاء</button>
+              </div>
+            </>
+          )}
+          {deleteStep === 2 && (
+            <>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 16, lineHeight: 1.6 }}>هل أنت متأكد 100% إنك عايز تمسح موسم <span style={{ fontWeight: 700, color: "#c0392b" }}>{seasonToDelete?.name}</span> وكل بياناته؟</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setDeleteStep(3)} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>نعم، متأكد — التالي ←</button>
+                <button onClick={() => setDeleteStep(1)} style={btnS()}>→ رجوع</button>
+              </div>
+            </>
+          )}
+          {deleteStep === 3 && (
+            <>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🗑</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>تأكيد المسح النهائي</div>
+                <div style={{ fontSize: 12, color: "#888" }}>سيتم مسح موسم <span style={{ fontWeight: 700, color: "#c0392b" }}>{seasonToDelete?.name}</span> وكل بياناته نهائياً</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={confirmDelete} disabled={deleting} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "⏳ جاري المسح..." : "🗑 مسح نهائي"}</button>
+                <button onClick={() => setDeleteStep(2)} disabled={deleting} style={btnS()}>→ رجوع</button>
               </div>
             </>
           )}
@@ -1942,7 +2064,8 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     { key: "phone", label: "التليفون", get: (p: Passenger) => p.phone },
     { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
-    { key: "hotel", label: "الفندق", get: (p: Passenger) => p.services?.hotel },
+    { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
+    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
     { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
     { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
   ];
@@ -2053,7 +2176,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     const rows: any[][] = [["رقم الغرفة", "الطابق", "النوع", "م", "اسم الحاج", "الجنس", "طلب الحاج"]];
     rooms.forEach(room => {
       const rp = passengers.filter(p => p.room_id === room.id);
-      rp.forEach((p, i) => rows.push([room.number, room.floor || "—", room.type, i + 1, p.short_ar || p.name_ar, p.gender, p.services?.hotel]));
+      rp.forEach((p, i) => rows.push([room.number, room.floor || "—", room.type, i + 1, p.short_ar || p.name_ar, p.gender, p.services?.hotel_type, p.services?.hotel_view]));
       if (rp.length === 0) rows.push([room.number, room.floor || "—", room.type, "", "لا يوجد مسافرون", "", ""]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -2279,7 +2402,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                         {rp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                             <thead><tr style={{ background: "#1D9E75", color: "white" }}><th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th><th style={{ padding: "5px 10px", textAlign: "right" }}>طلب</th></tr></thead>
-                            <tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.services?.hotel}</td></tr>)}</tbody>
+                            <tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.services?.hotel_type} {p.services?.hotel_view}</td></tr>)}</tbody>
                           </table>
                         )}
                       </div>
@@ -2325,7 +2448,7 @@ export default function App() {
     passport: p.passport || "", national_id: p.national_id || "",
     nat: p.nat || "", dob: p.dob || "", expiry: p.expiry || "",
     gender: p.gender || "", phone: p.phone || "",
-    services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel: p.hotel || "مطل", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
+    services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel_type: p.hotel_type || "ثنائية", hotel_view: p.hotel_view || "مطلة", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي" },
     rel: "", linked: -1,
     photo_url: p.photo_url || "", id_expiry: p.id_expiry || "",
     national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
