@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
+import { useConfig } from "./config/ConfigContext";
 
-// ===== دوال مساعدة =====
-// الاسم المختصر = الأول + الثاني + الأخير
 function makeShort(fullName: string): string {
   if (!fullName) return "";
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -11,7 +10,6 @@ function makeShort(fullName: string): string {
   return [parts[0], parts[1], parts[parts.length - 1]].join(" ");
 }
 
-// فحص لو التاريخ فاضل عليه أقل من 6 شهور
 function isExpiringSoon(dateStr: string): boolean {
   const d = parseDate(dateStr);
   if (!d) return false;
@@ -21,27 +19,24 @@ function isExpiringSoon(dateStr: string): boolean {
   return d >= now && d < sixMonths;
 }
 
-// فحص لو التاريخ منتهي بالفعل
 function isExpired(dateStr: string): boolean {
   const d = parseDate(dateStr);
   if (!d) return false;
   return d < new Date();
 }
 
-// قراءة التاريخ بصيغ مختلفة
 function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
   let d: Date | null = null;
   const parts = dateStr.split(/[\/\-.]/).map(s => s.trim());
   if (parts.length === 3) {
-    if (parts[0].length === 4) d = new Date(+parts[0], +parts[1] - 1, +parts[2]); // YYYY-MM-DD
-    else d = new Date(+parts[2], +parts[1] - 1, +parts[0]); // DD/MM/YYYY
+    if (parts[0].length === 4) d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    else d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
   }
   if (!d || isNaN(d.getTime())) return null;
   return d;
 }
 
-// تحويل ملف لـ base64
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -51,7 +46,6 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// قراءة مستند بالـ AI (جواز أو بطاقة)
 async function scanDocument(file: File, mode: "passport" | "idcard"): Promise<any> {
   const base64 = await fileToBase64(file);
   const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
@@ -66,7 +60,6 @@ async function scanDocument(file: File, mode: "passport" | "idcard"): Promise<an
   return parsed;
 }
 
-// تنزيل ملف عبر blob لتجاوز قيود Cross-Origin
 async function downloadFile(url: string) {
   try {
     const response = await fetch(url);
@@ -82,7 +75,6 @@ async function downloadFile(url: string) {
   } catch { window.open(url, "_blank"); }
 }
 
-// استخراج مسار الملف من الرابط عشان نقدر نحذفه
 function getStoragePath(url: string): string {
   const prefix = "/storage/v1/object/public/passengers-docs/";
   const idx = url.indexOf(prefix);
@@ -90,7 +82,6 @@ function getStoragePath(url: string): string {
   return decodeURIComponent(url.slice(idx + prefix.length));
 }
 
-// ضغط الصور تلقائياً لتوفير المساحة
 function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) { resolve(file); return; }
@@ -113,7 +104,6 @@ function compressImage(file: File): Promise<Blob> {
   });
 }
 
-// رفع مستند على Supabase Storage وإرجاع الرابط
 async function uploadDoc(file: File, passengerId: number, docType: string): Promise<string | null> {
   const compressed = await compressImage(file);
   const ext = file.type === "application/pdf" ? "pdf" : "jpg";
@@ -124,7 +114,6 @@ async function uploadDoc(file: File, passengerId: number, docType: string): Prom
   return data?.publicUrl || null;
 }
 
-// ===== TYPES =====
 interface Passenger {
   id: number; name_ar: string; name_en: string; short_ar: string; short_en: string;
   passport: string; national_id: string; nat: string; dob: string; expiry: string;
@@ -154,9 +143,9 @@ const ALL_PERMISSIONS = [
   { key: "view_archive", label: "عرض الأرشيف" },
 ];
 
-
 const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
 const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["#E6F1FB", "#0C447C"], "ثلاثية": ["#FAEEDA", "#633806"], "رباعية": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
+
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
   { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
@@ -191,11 +180,15 @@ const btnP = (extra?: any) => ({ background: "#1D9E75", color: "white", border: 
 const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid #ddd", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#333", ...extra });
 
 function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
+  const config = useConfig();
   return (
-    <div style={{ width: 200, background: "#f9f9f9", borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
+    <div style={{ width: 200, background: config.color_sidebar, borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
       <div style={{ padding: "0 12px 12px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 6, flexShrink: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>✈️ نظام الحج</div>
-        <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>نظام إدارة الحج</div>
+        {config.logo_url
+          ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 36, marginBottom: 4 }} />
+          : <div style={{ fontSize: 15, fontWeight: 600 }}>✈️ {config.name_ar}</div>
+        }
+        <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{config.tagline}</div>
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {NAV.map(({ section, items }) => {
@@ -205,9 +198,9 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
             <div key={section}>
               <div style={{ fontSize: 10, color: "#aaa", padding: "10px 12px 3px", letterSpacing: "0.04em" }}>{section}</div>
               {allowed.map(({ id, label }) => (
-                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "#1D9E75" : "#666", cursor: "pointer", borderRight: page === id ? "2px solid #1D9E75" : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
+                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? config.color_primary : "#666", cursor: "pointer", borderRight: page === id ? `2px solid ${config.color_primary}` : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
                   {label}
-                  {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: "#085041", borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
+                  {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: config.color_accent, borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
                 </div>
               ))}
             </div>
@@ -224,6 +217,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
 }
 
 function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
+  const config = useConfig();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -243,9 +237,12 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#E1F5EE,#f0f9ff)", direction: "rtl", fontFamily: "system-ui,sans-serif" }}>
       <div style={{ background: "white", borderRadius: 16, padding: "40px 32px", width: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.1)" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>✈️</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>نظام الحج</div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>نظام إدارة الحج</div>
+          {config.logo_url
+            ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 56, marginBottom: 8 }} />
+            : <div style={{ fontSize: 48, marginBottom: 8 }}>✈️</div>
+          }
+          <div style={{ fontSize: 20, fontWeight: 700 }}>{config.name_ar}</div>
+          <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{config.tagline}</div>
         </div>
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: "#666", marginBottom: 5 }}>اسم المستخدم</div>
@@ -259,12 +256,11 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
           </div>
         </div>
         {error && <div style={{ fontSize: 12, color: "#c0392b", marginBottom: 10, textAlign: "center", background: "#FBEAF0", padding: "6px 10px", borderRadius: 8 }}>{error}</div>}
-        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#1D9E75", color: "white", border: "none", padding: 12, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 6, opacity: loading ? 0.7 : 1 }}>{loading ? "⏳ جاري التحقق..." : "دخول"}</button>
+        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: config.color_primary, color: "white", border: "none", padding: 12, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 6, opacity: loading ? 0.7 : 1 }}>{loading ? "⏳ جاري التحقق..." : "دخول"}</button>
       </div>
     </div>
   );
 }
-
 function UsersPage({ currentUser }: { currentUser: User }) {
   const [users, setUsers] = useState<User[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -2003,7 +1999,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
       {/* تاب التقارير */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {[["passengers", "👥 الحجاج"], ["flight", "✈️ الطيران"], ["buses", "🚌 الباصات"], ["mina", "⛺ منى"], ["arafa", "🏔 عرفة"], ["hotel", "🏨 الفندق"]].map(([id, label]) => (
-          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "#1D9E75" : "#f5f5f5", color: activeReport === id ? "white" : "#555", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
+          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? config.color_primary : "#f5f5f5", color: activeReport === id ? "white" : "#555", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
         ))}
       </div>
 
@@ -2440,6 +2436,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
 
 
 export default function App() {
+  const config = useConfig();
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try { const s = sessionStorage.getItem("hajj_user"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -2526,7 +2523,7 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ padding: "10px 16px", borderBottom: "0.5px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500 }}>{pageTitles[page]}</div>
-          <div style={{ fontSize: 11, color: "#888" }}>نظام إدارة الحج</div>
+          <div style={{ fontSize: 11, color: "#888" }}>{config.tagline}</div>
         </div>
         <div style={{ flex: 1, overflow: "hidden" }}>{renderPage()}</div>
       </div>
