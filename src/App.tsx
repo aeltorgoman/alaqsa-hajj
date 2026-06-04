@@ -2060,7 +2060,6 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
 
 
 function ReportsPage({ passengers }: { passengers: Passenger[] }) {
-  const config = useConfig();
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
