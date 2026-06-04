@@ -649,6 +649,79 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
 }
 
 
+// ===== دائرة النسبة =====
+function StatRing({ pct, count, total, color, label }: { pct: number; count: number; total: number; color: string; label: string }) {
+  const r = 24, circ = 2 * Math.PI * r;
+  const offset = circ * (1 - pct / 100);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+      <div style={{ position: "relative", width: 62, height: 62 }}>
+        <svg width="62" height="62" viewBox="0 0 62 62">
+          <circle cx="31" cy="31" r={r} fill="none" stroke="#eeeeee" strokeWidth="6" />
+          <circle cx="31" cy="31" r={r} fill="none" stroke={color} strokeWidth="6"
+            strokeLinecap="round"
+            strokeDasharray={circ}
+            strokeDashoffset={offset}
+            transform="rotate(-90 31 31)"
+            style={{ transition: "stroke-dashoffset 0.6s ease" }}
+          />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color }}>{pct}%</div>
+      </div>
+      <div style={{ fontSize: 10, color: "#555", textAlign: "center", lineHeight: 1.4 }}>
+        {label}<br />
+        <span style={{ color: "#aaa", fontSize: 9 }}>{count} / {total}</span>
+      </div>
+    </div>
+  );
+}
+
+// ===== ملخص إحصائي في أعلى صفحة الحجاج =====
+function PassengersStats({ passengers }: { passengers: any[] }) {
+  const total = passengers.length;
+  const males = passengers.filter(p => p.gender === "ذكر").length;
+  const females = passengers.filter(p => p.gender === "أنثى").length;
+
+  // اكتمال المستندات = الصورة + الجواز + البطاقة
+  const docsComplete = (p: any) => !!(p.photo_url && p.passport_url && p.national_id_url);
+
+  // اكتمال البيانات = كل الحقول الأساسية متعباية
+  const DATA_FIELDS = ["name_ar", "name_en", "passport", "national_id", "nat", "dob", "expiry", "gender", "phone"];
+  const dataComplete = (p: any) => DATA_FIELDS.every(f => p[f] && String(p[f]).trim());
+
+  const docsDone = passengers.filter(docsComplete).length;
+  const dataDone = passengers.filter(dataComplete).length;
+  const docPct = total ? Math.round(docsDone / total * 100) : 0;
+  const dataPct = total ? Math.round(dataDone / total * 100) : 0;
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0, background: "#fafafa" }}>
+      {/* بطاقات العدد */}
+      <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 72, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#888", marginBottom: 1 }}>إجمالي الحجاج</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#333", lineHeight: 1 }}>{total}</div>
+      </div>
+      <div style={{ background: "#E6F1FB", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#0C447C", marginBottom: 1 }}>رجال</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#0C447C", lineHeight: 1 }}>{males}</div>
+      </div>
+      <div style={{ background: "#FBEAF0", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#72243E", marginBottom: 1 }}>نساء</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#72243E", lineHeight: 1 }}>{females}</div>
+      </div>
+
+      {/* خط فاصل */}
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 4 }} />
+
+      {/* دوائر النسبة */}
+      <div style={{ display: "flex", gap: 16, marginInlineStart: "auto" }}>
+        <StatRing pct={docPct} count={docsDone} total={total} color="#1D9E75" label="اكتمال المستندات" />
+        <StatRing pct={dataPct} count={dataDone} total={total} color="#185FA5" label="اكتمال البيانات" />
+      </div>
+    </div>
+  );
+}
+
 function PassengersPage({ passengers, setPassengers, initialShowManual }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; initialShowManual?: boolean }) {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
@@ -834,6 +907,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <PassengersStats passengers={passengers} />
         <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
