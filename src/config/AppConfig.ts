@@ -1,0 +1,45 @@
+export interface AppConfig {
+  name_ar: string;
+  name_en: string;
+  tagline: string;
+  logo_url: string | null;
+  color_primary: string;
+  color_accent: string;
+  color_sidebar: string;
+  contact_phone: string;
+  contact_email: string;
+  season_label: string;
+  features: {
+    scan: boolean;
+    buses: boolean;
+    camps_mina: boolean;
+    camps_arafa: boolean;
+    hotel: boolean;
+    reports: boolean;
+    archive: boolean;
+    users: boolean;
+  };
+}
+
+export const DEFAULT_CONFIG: AppConfig = {
+  name_ar: "نظام الحج",
+  name_en: "Hajj System",
+  tagline: "نظام إدارة الحج",
+  logo_url: null,
+  color_primary: "#1D9E75",
+  color_accent: "#085041",
+  color_sidebar: "#f9f9f9",
+  contact_phone: "",
+  contact_email: "",
+  season_label: "موسم الحج",
+  features: {
+    scan: true,
+    buses: true,
+    camps_mina: true,
+    camps_arafa: true,
+    hotel: true,
+    reports: true,
+    archive: true,
+    users: true,
+  },
+};
