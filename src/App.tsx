@@ -158,12 +158,11 @@ const ALL_PERMISSIONS = [
 const ROOM_TYPES = ["مطل", "جانبي", "داخلي", "سويت"] as const;
 const ROOM_COLORS: Record<string, [string, string]> = { "مطل": ["#E6F1FB", "#0C447C"], "جانبي": ["#FAEEDA", "#633806"], "داخلي": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
 const NAV = [
-  { section: "الرئيسية", items: [{ id: "dash", label: "📊 لوحة التحكم" }] },
-  { section: "التسجيل", items: [{ id: "scan", label: "🔍 رفع وثيقة" }, { id: "passengers", label: "🕌 الحجاج" }] },
-  { section: "التنظيم", items: [{ id: "buses", label: "🚌 الباصات" }, { id: "mina", label: "⛺ مخيمات منى" }, { id: "arafa", label: "🏔 مخيمات عرفة" }, { id: "hotel", label: "🏨 الفندق" }] },
-  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير" }] },
-  { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف" }] },
-  { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين" }] },
+  { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
+  { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
+  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير", perm: "view_reports" }] },
+  { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف", perm: "view_archive" }] },
+  { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين", perm: "manage_users" }] },
 ];
 
 function Avatar({ name, gender, size = 32 }: { name: string; gender: string; size?: number }) {
@@ -199,17 +198,21 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
         <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>نظام إدارة الحج</div>
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {NAV.map(({ section, items }) => (
-          <div key={section}>
-            <div style={{ fontSize: 10, color: "#aaa", padding: "10px 12px 3px", letterSpacing: "0.04em" }}>{section}</div>
-            {items.map(({ id, label }) => (
-              <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "#1D9E75" : "#666", cursor: "pointer", borderRight: page === id ? "2px solid #1D9E75" : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
-                {label}
-                {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: "#085041", borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
-              </div>
-            ))}
-          </div>
-        ))}
+        {NAV.map(({ section, items }) => {
+          const allowed = items.filter(it => !it.perm || currentUser.permissions?.[it.perm]);
+          if (allowed.length === 0) return null;
+          return (
+            <div key={section}>
+              <div style={{ fontSize: 10, color: "#aaa", padding: "10px 12px 3px", letterSpacing: "0.04em" }}>{section}</div>
+              {allowed.map(({ id, label }) => (
+                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "#1D9E75" : "#666", cursor: "pointer", borderRight: page === id ? "2px solid #1D9E75" : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
+                  {label}
+                  {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: "#085041", borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
       <div style={{ padding: "10px 12px", borderTop: "0.5px solid #e5e5e5", flexShrink: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 500 }}>{currentUser.name}</div>
@@ -345,6 +348,17 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   const vip = passengers.filter(p => p.services?.bus === "VIP").length;
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+      {/* زرار رفع الوثيقة الكبير */}
+      <div onClick={() => setPage("scan")} style={{ background: "linear-gradient(135deg,#1D9E75,#17836)", borderRadius: 14, padding: "18px 20px", marginBottom: 16, cursor: "pointer", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
+        onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-1px)")}
+        onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>🔍</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: "white" }}>رفع وثيقة حاج جديد</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>اسكان الجواز والبطاقة تلقائياً</div>
+        </div>
+        <span style={{ color: "white", fontSize: 22 }}>←</span>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
         {[["👥 الحجاج", passengers.length, "#111"], ["👨 رجال", males, "#0C447C"], ["👩 نساء", females, "#72243E"], ["⭐ VIP", vip, "#633806"]].map(([l, v, c]) => (
           <div key={l as string} style={{ background: "#f5f5f5", borderRadius: 10, padding: "14px 12px" }}>
@@ -356,7 +370,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
       <div style={{ background: "#f9f9f9", borderRadius: 12, padding: 14, marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>⚡ وصول سريع</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {[["🔍 رفع وثيقة", "scan"], ["👥 قائمة الحجاج", "passengers"], ["🚌 الباصات", "buses"], ["📄 التقارير", "reports"]].map(([l, id]) => (
+          {[["👥 قائمة الحجاج", "passengers"], ["🚌 الباصات", "buses"], ["🏨 الفندق", "hotel"], ["📄 التقارير", "reports"]].map(([l, id]) => (
             <div key={id as string} onClick={() => setPage(id as string)} style={{ padding: "10px 12px", border: "0.5px solid #e5e5e5", borderRadius: 8, cursor: "pointer", fontSize: 12, background: "white" }}
               onMouseEnter={e => (e.currentTarget.style.background = "#E1F5EE")}
               onMouseLeave={e => (e.currentTarget.style.background = "white")}>{l as string}</div>
@@ -1693,6 +1707,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   const [loading, setLoading] = useState(false);
   const [activeReport, setActiveReport] = useState("passengers");
   const [showClose, setShowClose] = useState(false);
+  const [closeStep, setCloseStep] = useState(1);
   const [newSeasonName, setNewSeasonName] = useState("");
   const [closing, setClosing] = useState(false);
 
@@ -1715,7 +1730,6 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
 
   const closeSeason = async () => {
     if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; }
-    if (!confirm(`هتقفل الموسم الحالي وتبدأ موسم ${newSeasonName}؟`)) return;
     setClosing(true);
     // جيب الموسم الحالي
     const { data: current } = await supabase.from("seasons").select("*").is("closed_at", null).single();
@@ -1756,7 +1770,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
         {currentUser.permissions.view_archive && (
           <div style={{ background: "#FAEEDA", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div><div style={{ fontSize: 13, fontWeight: 600 }}>🔒 إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "#888" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
-            <button onClick={() => setShowClose(true)} style={{ background: "#e67e22", color: "white", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
+            <button onClick={() => { setShowClose(true); setCloseStep(1); setNewSeasonName(""); }} style={{ background: "#e67e22", color: "white", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
           </div>
         )}
         <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>المواسم المحفوظة</div>
@@ -1775,16 +1789,62 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
             <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
           </div>
         ))}
-        <Modal show={showClose} onClose={() => setShowClose(false)} title="🔒 إقفال الموسم الحالي" maxWidth={360}>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>البيانات الحالية ستُحفظ في الأرشيف وتبدأ من صفر في الموسم الجديد.</div>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>اسم الموسم الجديد</div>
-            <input style={inp} value={newSeasonName} onChange={e => setNewSeasonName(e.target.value)} placeholder="مثال: 1449" autoFocus />
+        <Modal show={showClose} onClose={() => setShowClose(false)} title="🔒 إقفال الموسم" maxWidth={380}>
+          {/* مؤشر الخطوات */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            {[1, 2, 3].map(s => (
+              <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: closeStep >= s ? "#e67e22" : "#eee" }} />
+            ))}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={closeSeason} disabled={closing} style={{ background: "#e67e22", color: "white", border: "none", padding: "8px 0", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 تأكيد الإقفال"}</button>
-            <button onClick={() => setShowClose(false)} style={btnS()}>إلغاء</button>
-          </div>
+
+          {/* الخطوة 1: تحذير */}
+          {closeStep === 1 && (
+            <>
+              <div style={{ background: "#FBEAF0", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#c0392b", marginBottom: 8 }}>⚠️ تنبيه مهم — إقفال الموسم</div>
+                <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+                  أنت على وشك إقفال الموسم الحالي نهائياً.<br /><br />
+                  سيتم نقل جميع البيانات (الحجاج، الباصات، المخيمات، الغرف) إلى الأرشيف، ولن تتمكن من التعديل عليها بعد ذلك — للعرض فقط.<br /><br />
+                  سيبدأ موسم جديد فارغ تماماً.<br /><br />
+                  <span style={{ fontWeight: 700, color: "#c0392b" }}>هذا الإجراء لا يمكن التراجع عنه.</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setCloseStep(2)} style={{ background: "#e67e22", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>فهمت، التالي ←</button>
+                <button onClick={() => setShowClose(false)} style={btnS()}>إلغاء</button>
+              </div>
+            </>
+          )}
+
+          {/* الخطوة 2: اسم الموسم الجديد */}
+          {closeStep === 2 && (
+            <>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>اكتب اسم الموسم الجديد الذي سيبدأ بعد الإقفال:</div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>اسم الموسم الجديد</div>
+                <input style={inp} value={newSeasonName} onChange={e => setNewSeasonName(e.target.value)} placeholder="مثال: 1449" autoFocus />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; } setCloseStep(3); }} style={{ background: "#e67e22", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>التالي ←</button>
+                <button onClick={() => setCloseStep(1)} style={btnS()}>→ رجوع</button>
+              </div>
+            </>
+          )}
+
+          {/* الخطوة 3: التأكيد النهائي */}
+          {closeStep === 3 && (
+            <>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>تأكيد إقفال الموسم</div>
+                <div style={{ fontSize: 12, color: "#888", lineHeight: 1.6 }}>سيتم إقفال الموسم الحالي نهائياً<br />وبدء موسم <span style={{ fontWeight: 700, color: "#1D9E75" }}>{newSeasonName}</span></div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={closeSeason} disabled={closing} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 إقفال الموسم نهائياً"}</button>
+                <button onClick={() => setCloseStep(2)} disabled={closing} style={btnS()}>→ رجوع</button>
+              </div>
+            </>
+          )}
         </Modal>
       </div>
     );
@@ -2302,7 +2362,7 @@ export default function App() {
   }, []);
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
-  const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
+  const pageTitles: Record<string, string> = { dash: "الرئيسية", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
