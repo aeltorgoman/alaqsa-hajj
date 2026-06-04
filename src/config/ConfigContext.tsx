@@ -41,3 +41,5 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 }
 
 export function useConfig(): AppConfig {
+  return useContext(ConfigContext);
+}
