@@ -1999,7 +1999,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
       {/* تاب التقارير */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {[["passengers", "👥 الحجاج"], ["flight", "✈️ الطيران"], ["buses", "🚌 الباصات"], ["mina", "⛺ منى"], ["arafa", "🏔 عرفة"], ["hotel", "🏨 الفندق"]].map(([id, label]) => (
-          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? config.color_primary : "#f5f5f5", color: activeReport === id ? "white" : "#555", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
+          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "#1D9E75"rimary : "#f5f5f5", color: activeReport === id ? "white" : "#555", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
         ))}
       </div>
 
