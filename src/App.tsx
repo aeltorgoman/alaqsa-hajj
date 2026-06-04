@@ -161,7 +161,8 @@ const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "📊 لوحة التحكم" }] },
   { section: "التسجيل", items: [{ id: "scan", label: "🔍 رفع وثيقة" }, { id: "passengers", label: "🕌 الحجاج" }] },
   { section: "التنظيم", items: [{ id: "buses", label: "🚌 الباصات" }, { id: "mina", label: "⛺ مخيمات منى" }, { id: "arafa", label: "🏔 مخيمات عرفة" }, { id: "hotel", label: "🏨 الفندق" }] },
-  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير" }, { id: "archive", label: "🗄 الأرشيف" }] },
+  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير" }] },
+  { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف" }] },
   { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين" }] },
 ];
 
@@ -192,24 +193,25 @@ const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid
 
 function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
   return (
-    <div style={{ width: 200, background: "#f9f9f9", borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%" }}>
-      <div style={{ padding: "0 12px 12px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 6 }}>
+    <div style={{ width: 200, background: "#f9f9f9", borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
+      <div style={{ padding: "0 12px 12px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 6, flexShrink: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 600 }}>✈️ نظام الحج</div>
         <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>نظام إدارة الحج</div>
       </div>
-      {NAV.map(({ section, items }) => (
-        <div key={section}>
-          <div style={{ fontSize: 10, color: "#aaa", padding: "10px 12px 3px", letterSpacing: "0.04em" }}>{section}</div>
-          {items.map(({ id, label }) => (
-            <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "#1D9E75" : "#666", cursor: "pointer", borderRight: page === id ? "2px solid #1D9E75" : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
-              {label}
-              {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: "#085041", borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
-            </div>
-          ))}
-        </div>
-      ))}
-      <div style={{ flex: 1 }} />
-      <div style={{ padding: "10px 12px", borderTop: "0.5px solid #e5e5e5" }}>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {NAV.map(({ section, items }) => (
+          <div key={section}>
+            <div style={{ fontSize: 10, color: "#aaa", padding: "10px 12px 3px", letterSpacing: "0.04em" }}>{section}</div>
+            {items.map(({ id, label }) => (
+              <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "#1D9E75" : "#666", cursor: "pointer", borderRight: page === id ? "2px solid #1D9E75" : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
+                {label}
+                {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: "#085041", borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: "10px 12px", borderTop: "0.5px solid #e5e5e5", flexShrink: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 500 }}>{currentUser.name}</div>
         <div style={{ fontSize: 10, color: "#888" }}>@{currentUser.username}</div>
         <button onClick={onLogout} style={{ marginTop: 8, width: "100%", background: "#FBEAF0", border: "none", padding: 5, borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>تسجيل خروج</button>
