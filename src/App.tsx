@@ -346,52 +346,64 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   const males = passengers.filter(p => p.gender === "ذكر").length;
   const females = passengers.filter(p => p.gender === "أنثى").length;
   const initials = (name: string) => name.trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleScanFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      sessionStorage.setItem("hajj_scan_file", "pending");
+      setPage("scan");
+    }
+    e.currentTarget.value = "";
+  };
+
   return (
-    <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+    <div style={{ padding: 12, overflowY: "auto", height: "100%" }}>
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleScanFile} />
       {/* زرارين الإضافة */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-        <div onClick={() => setPage("scan")} style={{ background: "#1D9E75", borderRadius: 12, padding: "16px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>📷</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        <div onClick={() => fileRef.current?.click()} style={{ background: "#1D9E75", borderRadius: 10, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📷</div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "white" }}>مسح جواز</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", marginTop: 2 }}>إضافة حاج بالمسح</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "white" }}>مسح جواز</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", marginTop: 1 }}>إضافة بالمسح</div>
           </div>
         </div>
-        <div onClick={() => setPage("manual")} style={{ background: "white", border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "16px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>✏️</div>
+        <div onClick={() => setPage("manual")} style={{ background: "white", border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>✏️</div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500 }}>إضافة يدوي</div>
-            <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>إدخال البيانات يدوياً</div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>إضافة يدوي</div>
+            <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>إدخال يدوي</div>
           </div>
         </div>
       </div>
       {/* الإحصائيات */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
-        <div style={{ background: "#f5f5f5", borderRadius: 8, padding: "14px 12px" }}>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>إجمالي الحجاج</div>
-          <div style={{ fontSize: 28, fontWeight: 500 }}>{passengers.length}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
+        <div style={{ background: "#f5f5f5", borderRadius: 8, padding: "10px 10px" }}>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>إجمالي الحجاج</div>
+          <div style={{ fontSize: 22, fontWeight: 500 }}>{passengers.length}</div>
         </div>
-        <div style={{ background: "#E6F1FB", borderRadius: 8, padding: "14px 12px" }}>
-          <div style={{ fontSize: 12, color: "#0C447C", marginBottom: 4 }}>رجال</div>
-          <div style={{ fontSize: 28, fontWeight: 500, color: "#0C447C" }}>{males}</div>
+        <div style={{ background: "#E6F1FB", borderRadius: 8, padding: "10px 10px" }}>
+          <div style={{ fontSize: 11, color: "#0C447C", marginBottom: 2 }}>رجال</div>
+          <div style={{ fontSize: 22, fontWeight: 500, color: "#0C447C" }}>{males}</div>
         </div>
-        <div style={{ background: "#FBEAF0", borderRadius: 8, padding: "14px 12px" }}>
-          <div style={{ fontSize: 12, color: "#72243E", marginBottom: 4 }}>نساء</div>
-          <div style={{ fontSize: 28, fontWeight: 500, color: "#72243E" }}>{females}</div>
+        <div style={{ background: "#FBEAF0", borderRadius: 8, padding: "10px 10px" }}>
+          <div style={{ fontSize: 11, color: "#72243E", marginBottom: 2 }}>نساء</div>
+          <div style={{ fontSize: 22, fontWeight: 500, color: "#72243E" }}>{females}</div>
         </div>
       </div>
       {/* آخر المضافين */}
       {passengers.length > 0 && (
-        <div style={{ background: "white", border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "14px 16px" }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 16 }}>🕐</span> آخر المضافين
+        <div style={{ background: "white", border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
+            <span>🕐</span> آخر المضافين
           </div>
           {passengers.slice(-5).reverse().map((p, i, arr) => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < arr.length - 1 ? "0.5px solid #f5f5f5" : "none" }}>
-              <div style={{ width: 34, height: 34, borderRadius: "50%", background: p.gender === "ذكر" ? "#E6F1FB" : "#FBEAF0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 500, color: p.gender === "ذكر" ? "#0C447C" : "#72243E", flexShrink: 0 }}>{initials(p.name_ar)}</div>
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < arr.length - 1 ? "0.5px solid #f5f5f5" : "none" }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: p.gender === "ذكر" ? "#E6F1FB" : "#FBEAF0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 500, color: p.gender === "ذكر" ? "#0C447C" : "#72243E", flexShrink: 0 }}>{initials(p.name_ar)}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13 }}>{p.short_ar || p.name_ar}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{p.nat} · {p.passport}</div>
+                <div style={{ fontSize: 12 }}>{p.short_ar || p.name_ar}</div>
+                <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
               </div>
             </div>
           ))}
@@ -420,7 +432,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
   const [idExpiry, setIdExpiry] = useState("");
   // البيانات
   const [form, setForm] = useState({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
-  const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
+  const [services, setServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   // مستندات إضافية (بدون الجواز والبطاقة — هم بيتعاملوا فوق)
   const [docs, setDocs] = useState<{ photo: File | null; contract: File | null }>({ photo: null, contract: null });
 
@@ -518,7 +530,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
 
   const reset = () => {
     setForm({ name_en: "", name_ar: "", short_en: "", short_ar: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", gender: "", phone: "" });
-    setServices({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
+    setServices({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
     setPreviewImg(null); setPassportFile(null); setShowFields(false); setSaved(false); setLocked(false);
     setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setDocs({ photo: null, contract: null });
   };
@@ -686,7 +698,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(initialShowManual || false);
   const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
-  const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
+  const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   const [manualSaving, setManualSaving] = useState(false);
 
   const handleManualSave = async () => {
