@@ -154,7 +154,7 @@ const ALL_PERMISSIONS = [
   { key: "view_archive", label: "عرض الأرشيف" },
 ];
 const ADMIN_PERMS = Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, true]));
-const INIT_USERS: User[] = [{ id: 1, name: "المدير العام", username: "admin", password: "admin123", permissions: ADMIN_PERMS }];
+
 const ROOM_TYPES = ["مطل", "جانبي", "داخلي", "سويت"] as const;
 const ROOM_COLORS: Record<string, [string, string]> = { "مطل": ["#E6F1FB", "#0C447C"], "جانبي": ["#FAEEDA", "#633806"], "داخلي": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
 const NAV = [
