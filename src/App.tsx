@@ -156,7 +156,6 @@ const ALL_PERMISSIONS = [
 
 
 const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
-const ROOM_VIEW_OPTIONS = ["مطلة", "غير مطلة"] as const;
 const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["#E6F1FB", "#0C447C"], "ثلاثية": ["#FAEEDA", "#633806"], "رباعية": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
