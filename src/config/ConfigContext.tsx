@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { supabase } from "../supabase";
-import { AppConfig, DEFAULT_CONFIG } from "./AppConfig";
+import type { AppConfig } from "./AppConfig";
+import { DEFAULT_CONFIG } from "./AppConfig";
 
 const ConfigContext = createContext<AppConfig>(DEFAULT_CONFIG);
 
@@ -14,7 +16,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       .select("*")
       .eq("id", 1)
       .single()
-      .then(({ data, error }) => {
+      .then(({ data, error }: { data: any; error: any }) => {
         if (data && !error) {
           setConfig({ ...DEFAULT_CONFIG, ...data });
         }
