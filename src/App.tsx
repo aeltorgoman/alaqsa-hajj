@@ -161,7 +161,7 @@ const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "📊 لوحة التحكم" }] },
   { section: "التسجيل", items: [{ id: "scan", label: "🔍 رفع وثيقة" }, { id: "passengers", label: "🕌 الحجاج" }] },
   { section: "التنظيم", items: [{ id: "buses", label: "🚌 الباصات" }, { id: "mina", label: "⛺ مخيمات منى" }, { id: "arafa", label: "🏔 مخيمات عرفة" }, { id: "hotel", label: "🏨 الفندق" }] },
-  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير" }] },
+  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير" }, { id: "archive", label: "🗄 الأرشيف" }] },
   { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين" }] },
 ];
 
@@ -219,16 +219,21 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
 }
 
 function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
-  const [users] = useState<User[]>(INIT_USERS);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
-  const handleLogin = () => {
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) { setError(""); onLogin(user); }
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!username || !password) return;
+    setLoading(true); setError("");
+    const { data } = await supabase.from("users").select("*").eq("username", username).eq("password", password).single();
+    if (data) { onLogin(data as User); }
     else setError("اسم المستخدم أو كلمة المرور غلط");
+    setLoading(false);
   };
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#E1F5EE,#f0f9ff)", direction: "rtl", fontFamily: "system-ui,sans-serif" }}>
       <div style={{ background: "white", borderRadius: 16, padding: "40px 32px", width: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.1)" }}>
@@ -249,46 +254,60 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
           </div>
         </div>
         {error && <div style={{ fontSize: 12, color: "#c0392b", marginBottom: 10, textAlign: "center", background: "#FBEAF0", padding: "6px 10px", borderRadius: 8 }}>{error}</div>}
-        <button onClick={handleLogin} style={{ width: "100%", background: "#1D9E75", color: "white", border: "none", padding: 12, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 6 }}>دخول</button>
-        <div style={{ marginTop: 16, padding: 10, background: "#f9f9f9", borderRadius: 8, fontSize: 11, color: "#888" }}>
-          <div style={{ fontWeight: 500, marginBottom: 3, color: "#666" }}>حساب تجريبي:</div>
-          <div>👑 admin / admin123</div>
-        </div>
+        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#1D9E75", color: "white", border: "none", padding: 12, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 6, opacity: loading ? 0.7 : 1 }}>{loading ? "⏳ جاري التحقق..." : "دخول"}</button>
       </div>
     </div>
   );
 }
 
 function UsersPage({ currentUser }: { currentUser: User }) {
-  const [users, setUsers] = useState<User[]>(INIT_USERS);
+  const [users, setUsers] = useState<User[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState({ name: "", username: "", password: "" });
   const [perms, setPerms] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    supabase.from("users").select("*").order("id").then(({ data }: any) => { if (data) setUsers(data); });
+  }, []);
+
   const openAdd = () => { setForm({ name: "", username: "", password: "" }); setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]))); setEditUser(null); setShowAdd(true); };
   const openEdit = (u: User) => { setForm({ name: u.name, username: u.username, password: u.password }); setPerms({ ...u.permissions }); setEditUser(u); setShowAdd(true); };
   const togglePerm = (key: string) => setPerms(prev => ({ ...prev, [key]: !prev[key] }));
   const toggleAll = () => { const allOn = ALL_PERMISSIONS.every(p => perms[p.key]); setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, !allOn]))); };
-  const saveUser = () => {
+
+  const saveUser = async () => {
     if (!form.name || !form.username || !form.password) return;
-    if (editUser) setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...form, permissions: perms } : u));
-    else setUsers(prev => [...prev, { id: Date.now(), ...form, permissions: perms }]);
+    if (editUser) {
+      await supabase.from("users").update({ ...form, permissions: perms }).eq("id", editUser.id);
+      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...form, permissions: perms } : u));
+    } else {
+      const { data } = await supabase.from("users").insert([{ ...form, permissions: perms }]).select();
+      if (data?.[0]) setUsers(prev => [...prev, data[0] as User]);
+    }
     setShowAdd(false);
   };
+
+  const deleteUser = async (id: number) => {
+    if (!confirm("هتمسح المستخدم ده؟")) return;
+    await supabase.from("users").delete().eq("id", id);
+    setUsers(prev => prev.filter(x => x.id !== id));
+  };
+
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
       {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ ...btnP(), width: "100%", marginBottom: 14 }}>+ مستخدم جديد</button>}
       {users.map(u => (
         <div key={u.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.id === 1 ? "#E1F5EE" : "#EEEDFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.id === 1 ? "👑" : "👤"}</div>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "#E1F5EE" : "#EEEDFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.username === "admin" ? "👑" : "👤"}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
             <div style={{ fontSize: 11, color: "#888" }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
           </div>
-          {currentUser.permissions.manage_users && u.id !== 1 && (
+          {currentUser.permissions.manage_users && u.username !== "admin" && (
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => openEdit(u)} style={{ background: "#E6F1FB", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#0C447C" }}>✏️</button>
-              <button onClick={() => setUsers(prev => prev.filter(x => x.id !== u.id))} style={{ background: "#FBEAF0", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+              <button onClick={() => deleteUser(u.id)} style={{ background: "#FBEAF0", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑</button>
             </div>
           )}
         </div>
@@ -743,13 +762,14 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setSelected(null);
   };
   const saveEdit = async (p: Passenger) => {
-    await supabase.from("passengers").update({
+    const { error } = await supabase.from("passengers").update({
       name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
       passport: p.passport, national_id: p.national_id, nat: p.nat,
       dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
       bus: p.services?.bus, flight: p.services?.flight, hotel: p.services?.hotel,
       camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa
     }).eq("id", p.id);
+    if (error) { alert("حصل خطأ في الحفظ!"); return; }
     setPassengers(passengers.map(x => x.id === p.id ? p : x));
     setEditing(null); setSelected(p);
   };
@@ -1664,6 +1684,182 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 }
 
 
+function ArchivePage({ currentUser }: { currentUser: User }) {
+  const [seasons, setSeasons] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any | null>(null);
+  const [data, setData] = useState<{ passengers: Passenger[]; buses: any[]; camps: any[]; rooms: any[] }>({ passengers: [], buses: [], camps: [], rooms: [] });
+  const [loading, setLoading] = useState(false);
+  const [activeReport, setActiveReport] = useState("passengers");
+  const [showClose, setShowClose] = useState(false);
+  const [newSeasonName, setNewSeasonName] = useState("");
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false })
+      .then(({ data: d }: any) => { if (d) setSeasons(d); });
+  }, []);
+
+  const openSeason = async (season: any) => {
+    setSelected(season); setLoading(true); setActiveReport("passengers");
+    const [{ data: p }, { data: b }, { data: c }, { data: r }] = await Promise.all([
+      supabase.from("passengers").select("*").eq("season_id", season.id),
+      supabase.from("buses").select("*").eq("season_id", season.id),
+      supabase.from("camps").select("*").eq("season_id", season.id),
+      supabase.from("rooms").select("*").eq("season_id", season.id),
+    ]);
+    setData({ passengers: (p || []) as Passenger[], buses: b || [], camps: c || [], rooms: r || [] });
+    setLoading(false);
+  };
+
+  const closeSeason = async () => {
+    if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; }
+    if (!confirm(`هتقفل الموسم الحالي وتبدأ موسم ${newSeasonName}؟`)) return;
+    setClosing(true);
+    // جيب الموسم الحالي
+    const { data: current } = await supabase.from("seasons").select("*").is("closed_at", null).single();
+    if (!current) { alert("مفيش موسم مفتوح!"); setClosing(false); return; }
+    // قفّل الموسم الحالي
+    await supabase.from("seasons").update({ closed_at: new Date().toISOString(), closed_by: currentUser.name }).eq("id", current.id);
+    // افتح موسم جديد
+    const { data: newSeason } = await supabase.from("seasons").insert([{ name: newSeasonName.trim() }]).select().single();
+    if (newSeason) {
+      // حدّث season_id للبيانات الحالية (الكل يتنقل للأرشيف)
+      await Promise.all([
+        supabase.from("passengers").update({ season_id: current.id }).is("season_id", null),
+        supabase.from("buses").update({ season_id: current.id }).is("season_id", null),
+        supabase.from("camps").update({ season_id: current.id }).is("season_id", null),
+        supabase.from("rooms").update({ season_id: current.id }).is("season_id", null),
+      ]);
+    }
+    // إضافة الموسم المقفول للقائمة
+    const { data: closedSeasons } = await supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false });
+    if (closedSeasons) setSeasons(closedSeasons);
+    setShowClose(false); setNewSeasonName(""); setClosing(false);
+    alert(`✅ تم إقفال الموسم الحالي وبدأ موسم ${newSeasonName}!`);
+  };
+
+  const getBusPassengers = (busId: number) => data.passengers.filter(p => p.bus_id === busId);
+  const getCampPassengers = (campId: number, key: string) => data.passengers.filter(p => (p as any)[key] === campId);
+  const getRoomPassengers = (roomId: number) => data.passengers.filter(p => p.room_id === roomId);
+
+  const printPassengers = () => {
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<html><head><title>قائمة الحجاج - ${selected?.name}</title><style>body{font-family:Arial;direction:rtl;padding:16px;font-size:10px}h1{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:5px 8px;text-align:right}th{background:#1D9E75;color:white}tr:nth-child(even){background:#f9f9f9}</style></head><body><h1>قائمة الحجاج — موسم ${selected?.name}</h1><table><tr><th>م</th><th>الاسم</th><th>الجواز</th><th>الجنسية</th><th>الجنس</th></tr>${data.passengers.map((p, i) => `<tr><td>${i + 1}</td><td>${p.name_ar}</td><td>${p.passport}</td><td>${p.nat}</td><td>${p.gender}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.close();
+  };
+
+  if (!selected) {
+    return (
+      <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+        {currentUser.permissions.view_archive && (
+          <div style={{ background: "#FAEEDA", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div><div style={{ fontSize: 13, fontWeight: 600 }}>🔒 إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "#888" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
+            <button onClick={() => setShowClose(true)} style={{ background: "#e67e22", color: "white", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>المواسم المحفوظة</div>
+        {seasons.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "3rem", color: "#aaa" }}><div style={{ fontSize: 32, marginBottom: 8 }}>🗄</div><div>لا يوجد مواسم محفوظة بعد</div></div>
+        ) : seasons.map(s => (
+          <div key={s.id} onClick={() => openSeason(s)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: "white" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#f9f9f9"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗄</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {s.name}</div>
+                <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>أُقفل: {new Date(s.closed_at).toLocaleDateString("ar-EG")} · بواسطة {s.closed_by}</div>
+              </div>
+            </div>
+            <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+          </div>
+        ))}
+        <Modal show={showClose} onClose={() => setShowClose(false)} title="🔒 إقفال الموسم الحالي" maxWidth={360}>
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>البيانات الحالية ستُحفظ في الأرشيف وتبدأ من صفر في الموسم الجديد.</div>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>اسم الموسم الجديد</div>
+            <input style={inp} value={newSeasonName} onChange={e => setNewSeasonName(e.target.value)} placeholder="مثال: 1449" autoFocus />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={closeSeason} disabled={closing} style={{ background: "#e67e22", color: "white", border: "none", padding: "8px 0", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 تأكيد الإقفال"}</button>
+            <button onClick={() => setShowClose(false)} style={btnS()}>إلغاء</button>
+          </div>
+        </Modal>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <button onClick={() => setSelected(null)} style={btnS()}>← رجوع</button>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {selected.name}</div>
+          <div style={{ fontSize: 11, color: "#888" }}>{data.passengers.length} حاج · للعرض فقط</div>
+        </div>
+      </div>
+      {/* تاب التقارير */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {[["passengers", "👥 الحجاج"], ["flight", "✈️ الطيران"], ["buses", "🚌 الباصات"], ["mina", "⛺ منى"], ["arafa", "🏔 عرفة"], ["hotel", "🏨 الفندق"]].map(([id, label]) => (
+          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "#1D9E75" : "#f5f5f5", color: activeReport === id ? "white" : "#555", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
+        ))}
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>⏳ جاري التحميل...</div> : (<>
+
+        {activeReport === "passengers" && (
+          <>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["م", "الاسم", "رقم الجواز", "الجنسية", "الجنس"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+              <tbody>{data.passengers.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_ar}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody>
+            </table>
+            <button onClick={printPassengers} style={{ ...btnS(), width: "100%", marginTop: 12 }}>🖨️ طباعة</button>
+          </>
+        )}
+
+        {activeReport === "flight" && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
+            <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+            <tbody>{data.passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_en}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td></tr>)}</tbody>
+          </table>
+        )}
+
+        {activeReport === "buses" && data.buses.map(bus => {
+          const bp = getBusPassengers(bus.id);
+          return (
+            <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px", background: "#f9f9f9", fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} ({bus.type}) · {bp.length} مسافر</div>
+              {bp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "#1D9E75", color: "white" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th></tr></thead><tbody>{bp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td></tr>)}</tbody></table>}
+            </div>
+          );
+        })}
+
+        {(activeReport === "mina" || activeReport === "arafa") && data.camps.filter(c => c.page_type === (activeReport === "mina" ? "منى" : "عرفة")).map(camp => {
+          const key = activeReport === "mina" ? "camp_mina_id" : "camp_arafa_id";
+          const cp = getCampPassengers(camp.id, key);
+          return (
+            <div key={camp.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px", background: "#f9f9f9", fontSize: 13, fontWeight: 500 }}>{activeReport === "mina" ? "⛺" : "🏔"} مخيم {camp.name} — {camp.gender === "ذكر" ? "رجال" : "نساء"} · {cp.length} مسافر</div>
+              {cp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: camp.gender === "ذكر" ? "#0C447C" : "#72243E", color: "white" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th></tr></thead><tbody>{cp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td></tr>)}</tbody></table>}
+            </div>
+          );
+        })}
+
+        {activeReport === "hotel" && data.rooms.map(room => {
+          const rp = getRoomPassengers(room.id);
+          return (
+            <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px", background: "#f9f9f9", fontSize: 13, fontWeight: 500 }}>🛏 غرفة {room.number} {room.floor && `(ط${room.floor})`} · {room.type} · {rp.length} مسافر</div>
+              {rp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "#1D9E75", color: "white" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th></tr></thead><tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody></table>}
+            </div>
+          );
+        })}
+
+      </>)}
+    </div>
+  );
+}
+
+
 function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -2049,12 +2245,14 @@ export default function App() {
   const [passengers, setPassengers] = useState<Passenger[]>([]);
 
   const handleLogin = (user: User) => {
-    sessionStorage.setItem("hajj_user", JSON.stringify(user));
+    const { password: _, ...userWithoutPassword } = user;
+    sessionStorage.setItem("hajj_user", JSON.stringify(userWithoutPassword));
     setCurrentUser(user);
   };
 
   const handleLogout = () => {
     sessionStorage.removeItem("hajj_user");
+    sessionStorage.removeItem("hajj_page");
     setCurrentUser(null);
     setPage("dash");
   };
@@ -2102,7 +2300,7 @@ export default function App() {
   }, []);
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
-  const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", users: "المستخدمين" };
+  const pageTitles: Record<string, string> = { dash: "لوحة التحكم", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
@@ -2113,6 +2311,7 @@ export default function App() {
       case "arafa": return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
       case "hotel": return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
       case "reports": return <ReportsPage passengers={passengers} />;
+      case "archive": return <ArchivePage currentUser={currentUser} />;
       case "users": return <UsersPage currentUser={currentUser} />;
       default: return <Dashboard passengers={passengers} setPage={setPage} />;
     }
@@ -2123,7 +2322,7 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ padding: "10px 16px", borderBottom: "0.5px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500 }}>{pageTitles[page]}</div>
-          <div style={{ fontSize: 11, color: "#888" }}>نظام إدارة الحج · موسم 1447</div>
+          <div style={{ fontSize: 11, color: "#888" }}>نظام إدارة الحج</div>
         </div>
         <div style={{ flex: 1, overflow: "hidden" }}>{renderPage()}</div>
       </div>
