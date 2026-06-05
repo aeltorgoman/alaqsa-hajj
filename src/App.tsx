@@ -122,13 +122,13 @@ interface Passenger {
   rel: string; linked: number;
   bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
   family_id?: string | null;
-  flight_go_id?: number | null; flight_return_id?: number | null; flight_class?: string | null;
+  flight_id?: number | null; flight_class?: string | null;
 }
 interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
 interface Bus { id: number; name: string; type: string; }
 interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
 interface Room { id: number; number: string; floor: string; type: "ثنائية" | "ثلاثية" | "رباعية" | "سويت"; }
-interface Flight { id: number; name: string; airline: string; date: string; time: string; from_airport: string; to_airport: string; }
+interface Flight { id: number; name: string; type: "ذهاب" | "إياب"; airline: string; date: string; time: string; from_airport: string; to_airport: string; }
 
 const ALL_PERMISSIONS = [
   { key: "add_passenger", label: "إضافة حجاج" },
@@ -1205,12 +1205,15 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 
 
 // ===== ملخص صفحة الطيران =====
-function FlightsStats({ passengers }: { passengers: any[] }) {
+function FlightsStats({ flights, passengers }: { flights: Flight[]; passengers: any[] }) {
   const total = passengers.length;
-  const assigned = passengers.filter(p => p.flight_go_id != null && p.flight_return_id != null).length;
-  const partial = passengers.filter(p => (p.flight_go_id != null) !== (p.flight_return_id != null)).length;
-  const noTicket = passengers.filter(p => p.flight_go_id == null && p.flight_return_id == null).length;
-  const firstClass = passengers.filter(p => p.flight_go_id != null && p.flight_class === "درجة أولى").length;
+  const assigned = passengers.filter(p => p.flight_id != null).length;
+  const noTicket = passengers.filter(p => p.flight_id == null).length;
+  const goFlightIds = new Set(flights.filter(f => f.type === "ذهاب").map(f => f.id));
+  const retFlightIds = new Set(flights.filter(f => f.type === "إياب").map(f => f.id));
+  const hasGo = passengers.filter(p => p.flight_id != null && goFlightIds.has(p.flight_id)).length;
+  const hasReturn = passengers.filter(p => p.flight_id != null && retFlightIds.has(p.flight_id)).length;
+  const firstClass = passengers.filter(p => p.flight_id != null && p.flight_class === "درجة أولى").length;
   const pct = total ? Math.round(assigned / total * 100) : 0;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
@@ -1218,18 +1221,22 @@ function FlightsStats({ passengers }: { passengers: any[] }) {
         <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
         <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assigned}</div>
       </div>
-      <div style={{ background: partial > 0 ? "#FFF3E0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: partial > 0 ? "#E65100" : "#888", marginBottom: 1 }}>غير مكتمل</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: partial > 0 ? "#E65100" : "#aaa", lineHeight: 1 }}>{partial}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>درجة أولى ⭐</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{firstClass}</div>
-      </div>
       <div style={{ background: noTicket > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: noTicket > 0 ? "#72243E" : "#888", marginBottom: 1 }}>بدون تذكرة</div>
         <div style={{ fontSize: 22, fontWeight: 700, color: noTicket > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{noTicket}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ background: "#E6F1FB", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#0C447C", marginBottom: 1 }}>ذهاب</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#0C447C", lineHeight: 1 }}>{hasGo}</div>
+      </div>
+      <div style={{ background: "#FBEAF0", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#72243E", marginBottom: 1 }}>إياب</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#72243E", lineHeight: 1 }}>{hasReturn}</div>
+      </div>
+      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>درجة أولى ⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{firstClass}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
         <StatRing pct={pct} count={assigned} total={total} color="#1D9E75" label="نسبة التوزيع" />
@@ -1244,6 +1251,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
   const [flightName, setFlightName] = useState("");
+  const [flightType, setFlightType] = useState<"ذهاب" | "إياب">("ذهاب");
   const [airline, setAirline] = useState("");
   const [flightDate, setFlightDate] = useState("");
   const [flightTime, setFlightTime] = useState("");
@@ -1252,7 +1260,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [nameError, setNameError] = useState("");
   const [showAddP, setShowAddP] = useState(false);
   const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
-  const [addMode, setAddMode] = useState<"go" | "return">("go");
   const [addFlightClass, setAddFlightClass] = useState("عادي");
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
@@ -1261,136 +1268,131 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     supabase.from("flights").select("*").order("created_at").then(({ data }: any) => { if (data) setFlights(data as Flight[]); });
   }, []);
 
-  const getGoPassengers = (flightId: number) => passengers.filter(p => (p as any).flight_go_id === flightId);
-  const getReturnPassengers = (flightId: number) => passengers.filter(p => (p as any).flight_return_id === flightId);
+  const getFlightPassengers = (flightId: number) => passengers.filter(p => (p as any).flight_id === flightId);
   const toggleFlight = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addFlight = async () => {
     if (!flightName.trim()) return;
-    if (flights.some(f => f.name.trim() === flightName.trim())) { setNameError(`رحلة باسم "${flightName}" موجودة بالفعل!`); return; }
+    if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} باسم "${flightName}" موجودة!`); return; }
     setNameError("");
-    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
+    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
       setExpanded(prev => new Set([...prev, newFlight.id]));
-      setFlightName(""); setAirline(""); setFlightDate(""); setFlightTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
+      setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
     }
   };
 
   const deleteFlight = async (id: number) => {
-    if (getGoPassengers(id).length > 0 || getReturnPassengers(id).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
+    if (getFlightPassengers(id).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
     await supabase.from("flights").delete().eq("id", id);
     setFlights(prev => prev.filter(f => f.id !== id));
   };
 
-  const openAddP = (flightId: number, mode: "go" | "return") => {
-    setCurrentFlightId(flightId); setAddMode(mode); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true);
-  };
-
+  const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const confirmAddP = async () => {
-    const field = addMode === "go" ? "flight_go_id" : "flight_return_id";
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [field]: currentFlightId, flight_class: addFlightClass }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [field]: currentFlightId, flight_class: addFlightClass } : p));
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ flight_id: currentFlightId, flight_class: addFlightClass }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, flight_id: currentFlightId, flight_class: addFlightClass } : p));
     setShowAddP(false);
   };
 
-  const removeP = async (pId: number, mode: "go" | "return") => {
-    const field = mode === "go" ? "flight_go_id" : "flight_return_id";
-    await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, [field]: null } : p));
+  const removeP = async (pId: number) => {
+    await supabase.from("passengers").update({ flight_id: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, flight_id: null } : p));
   };
 
   const printFlight = (flight: Flight) => {
-    const go = getGoPassengers(flight.id); const ret = getReturnPassengers(flight.id);
+    const fp = getFlightPassengers(flight.id);
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>${flight.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2,h3{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>✈️ ${flight.name} — ${flight.airline || ""}</h2><p style="text-align:center">${flight.from_airport || ""} ← ${flight.to_airport || ""} | ${flight.date || ""} ${flight.time || ""}</p><h3>رحلة الذهاب (${go.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${go.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><h3>رحلة الإياب (${ret.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${ret.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>${flight.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>✈️ ${flight.name} (${flight.type}) — ${flight.airline || ""}</h2><p style="text-align:center">${flight.from_airport || ""} ← ${flight.to_airport || ""} | ${flight.date || ""} ${flight.time || ""}</p><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${fp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
   const printAll = () => {
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>تقرير الرحلات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2,h3{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.f{page-break-after:always}}</style></head><body><h1>✈️ تقرير الرحلات</h1>${flights.map(flight => { const go = getGoPassengers(flight.id); const ret = getReturnPassengers(flight.id); return `<div class="f"><h2>${flight.name} — ${flight.airline || ""}</h2><p style="text-align:center">${flight.from_airport || ""} ← ${flight.to_airport || ""} | ${flight.date || ""} ${flight.time || ""}</p><h3>ذهاب (${go.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${go.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><h3>إياب (${ret.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${ret.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>تقرير الرحلات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.f{page-break-after:always}}</style></head><body><h1>✈️ تقرير الرحلات</h1>${flights.map(f => { const fp = getFlightPassengers(f.id); return `<div class="f"><h2>${f.name} (${f.type}) — ${f.airline || ""}</h2><p style="text-align:center">${f.from_airport || ""} ← ${f.to_airport || ""} | ${f.date || ""} ${f.time || ""}</p><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${fp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
     w.document.close();
   };
 
   const currentFlight = flights.find(f => f.id === currentFlightId);
-  const availableP = passengers.filter(p => addMode === "go" ? (p as any).flight_go_id == null : (p as any).flight_return_id == null);
+  const availableP = passengers.filter(p => {
+    if (!currentFlight) return false;
+    if ((p as any).flight_id === currentFlightId) return false;
+    if ((p as any).flight_id == null) return true;
+    const existing = flights.find(f => f.id === (p as any).flight_id);
+    return existing?.type !== currentFlight.type;
+  });
   const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
+  const goFlights = flights.filter(f => f.type === "ذهاب");
+  const retFlights = flights.filter(f => f.type === "إياب");
 
-  return (
-    <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <FlightsStats passengers={passengers} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
-        {flights.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
-      </div>
-      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>✈️<br />لا يوجد رحلات بعد</div> :
-        flights.map(flight => {
+  const renderGroup = (groupFlights: Flight[], type: "ذهاب" | "إياب") => (
+    <div style={{ marginBottom: 16 }}>
+      <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "#E6F1FB" : "#FBEAF0", color: type === "ذهاب" ? "#0C447C" : "#72243E", display: "inline-block", marginBottom: 10 }}>
+        {type === "ذهاب" ? "✈ رحلات الذهاب" : "✈ رحلات الإياب"} ({groupFlights.length})
+      </span>
+      {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "#aaa", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
+        groupFlights.map(flight => {
           const isExpanded = expanded.has(flight.id);
-          const go = getGoPassengers(flight.id);
-          const ret = getReturnPassengers(flight.id);
-          const isEmpty = go.length === 0 && ret.length === 0;
+          const fp = getFlightPassengers(flight.id);
           return (
-            <div key={flight.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-              <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: "#f9f9f9", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 20 }}>✈️</span>
+            <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "#B8D4F0" : "#F0B8C8"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+              <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "#F5F9FF" : "#FFF5F8", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <span style={{ fontSize: 18 }}>✈️</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "#888" }}>— {flight.airline}</span>}</div>
                   <div style={{ fontSize: 10, color: "#888" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
                 </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <span style={{ fontSize: 10, background: "#E6F1FB", color: "#0C447C", padding: "2px 8px", borderRadius: 99 }}>ذهاب: {go.length}</span>
-                  <span style={{ fontSize: 10, background: "#FBEAF0", color: "#72243E", padding: "2px 8px", borderRadius: 99 }}>إياب: {ret.length}</span>
-                </div>
+                <span style={{ fontSize: 11, color: "#888" }}>{fp.length} مسافر</span>
                 <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "#f0f0f0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: isEmpty ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: isEmpty ? "pointer" : "not-allowed", color: isEmpty ? "#c0392b" : "#ccc" }}>🗑</button>
+                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: fp.length === 0 ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "#c0392b" : "#ccc" }}>🗑</button>
                 <span style={{ color: "#aaa" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
-                <div style={{ borderTop: "0.5px solid #e5e5e5" }}>
-                  {/* ذهاب */}
-                  <div style={{ padding: "8px 12px", borderBottom: "0.5px solid #f0f0f0" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#0C447C", background: "#E6F1FB", padding: "2px 10px", borderRadius: 99 }}>✈ ذهاب ({go.length})</span>
-                      <button onClick={() => openAddP(flight.id, "go")} style={{ background: "#E1F5EE", border: "none", padding: "3px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
+                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${type === "ذهاب" ? "#B8D4F0" : "#F0B8C8"}` }}>
+                  {fp.length ? fp.map((p, i) => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                      <Avatar name={p.name_ar} gender={p.gender} size={24} />
+                      <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
                     </div>
-                    {go.length ? go.map((p, i) => (
-                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
-                        <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
-                        <Avatar name={p.name_ar} gender={p.gender} size={24} />
-                        <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                        {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
-                        <button onClick={() => removeP(p.id, "go")} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
-                      </div>
-                    )) : <div style={{ textAlign: "center", padding: "6px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
-                  </div>
-                  {/* إياب */}
-                  <div style={{ padding: "8px 12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#72243E", background: "#FBEAF0", padding: "2px 10px", borderRadius: 99 }}>✈ إياب ({ret.length})</span>
-                      <button onClick={() => openAddP(flight.id, "return")} style={{ background: "#E1F5EE", border: "none", padding: "3px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
-                    </div>
-                    {ret.length ? ret.map((p, i) => (
-                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
-                        <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
-                        <Avatar name={p.name_ar} gender={p.gender} size={24} />
-                        <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                        {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
-                        <button onClick={() => removeP(p.id, "return")} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
-                      </div>
-                    )) : <div style={{ textAlign: "center", padding: "6px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
-                  </div>
+                  )) : <div style={{ textAlign: "center", padding: "8px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
               )}
             </div>
           );
         })}
+    </div>
+  );
 
-      {/* Modal إضافة رحلة */}
+  return (
+    <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <FlightsStats flights={flights} passengers={passengers} />
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
+        {flights.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
+      </div>
+      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>✈️<br />لا يوجد رحلات بعد</div> : (
+        <>{renderGroup(goFlights, "ذهاب")}{renderGroup(retFlights, "إياب")}</>
+      )}
+
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="✈️ رحلة جديدة" maxWidth={380}>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الرحلة</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {(["ذهاب", "إياب"] as const).map(t => (
+              <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "#0C447C" : "#72243E") : "#ddd"}`, background: flightType === t ? (t === "ذهاب" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "#0C447C" : "#72243E") : "#666" }}>
+                {t === "ذهاب" ? "✈ ذهاب" : "✈ إياب"}
+              </div>
+            ))}
+          </div>
+        </div>
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم الرحلة</div>
           <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
@@ -1400,7 +1402,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الشركة</div>
           <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="مثال: Qatar Airways" />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
           <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
           <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
@@ -1412,15 +1414,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         </div>
       </Modal>
 
-      {/* Modal إضافة مسافرين */}
-      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`✈️ إضافة مسافرين — ${currentFlight?.name}`}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          {(["go", "return"] as const).map(m => (
-            <div key={m} onClick={() => setAddMode(m)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addMode === m ? (m === "go" ? "#0C447C" : "#72243E") : "#ddd"}`, background: addMode === m ? (m === "go" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addMode === m ? (m === "go" ? "#0C447C" : "#72243E") : "#666" }}>
-              {m === "go" ? "✈ ذهاب" : "✈ إياب"}
-            </div>
-          ))}
-        </div>
+      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`✈️ إضافة — ${currentFlight?.name} (${currentFlight?.type})`}>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           {["عادي", "درجة أولى"].map(cls => (
             <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "#1D9E75" : "#ddd"}`, background: addFlightClass === cls ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "#085041" : "#666" }}>
@@ -2909,7 +2903,7 @@ export default function App() {
     bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
     camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
     family_id: p.family_id || null,
-    flight_go_id: p.flight_go_id || null, flight_return_id: p.flight_return_id || null, flight_class: p.flight_class || null
+    flight_id: p.flight_id || null, flight_class: p.flight_class || null
   });
 
   useEffect(() => {
