@@ -1213,7 +1213,8 @@ function FlightsStats({ flights, passengers }: { flights: Flight[]; passengers: 
   const retFlightIds = new Set(flights.filter(f => f.type === "إياب").map(f => f.id));
   const hasGo = passengers.filter(p => p.flight_id != null && goFlightIds.has(p.flight_id)).length;
   const hasReturn = passengers.filter(p => p.flight_id != null && retFlightIds.has(p.flight_id)).length;
-  const firstClass = passengers.filter(p => p.flight_id != null && p.flight_class === "درجة أولى").length;
+  const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
+  const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
   const pct = total ? Math.round(assigned / total * 100) : 0;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
@@ -1221,22 +1222,18 @@ function FlightsStats({ flights, passengers }: { flights: Flight[]; passengers: 
         <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
         <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assigned}</div>
       </div>
-      <div style={{ background: noTicket > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: noTicket > 0 ? "#72243E" : "#888", marginBottom: 1 }}>بدون تذكرة</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: noTicket > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{noTicket}</div>
+      <div style={{ background: noTicket > 0 ? "#f0f0f0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#888", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#aaa", lineHeight: 1 }}>{noTicket}</div>
       </div>
       <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#E6F1FB", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#0C447C", marginBottom: 1 }}>ذهاب</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#0C447C", lineHeight: 1 }}>{hasGo}</div>
-      </div>
-      <div style={{ background: "#FBEAF0", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#72243E", marginBottom: 1 }}>إياب</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#72243E", lineHeight: 1 }}>{hasReturn}</div>
-      </div>
       <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>درجة أولى ⭐</div>
         <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{firstClass}</div>
+      </div>
+      <div style={{ background: withoutTicket > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: withoutTicket > 0 ? "#72243E" : "#888", marginBottom: 1 }}>بدون تذكرة</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: withoutTicket > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{withoutTicket}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
         <StatRing pct={pct} count={assigned} total={total} color="#1D9E75" label="نسبة التوزيع" />
@@ -1294,8 +1291,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const confirmAddP = async () => {
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ flight_id: currentFlightId, flight_class: addFlightClass }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, flight_id: currentFlightId, flight_class: addFlightClass } : p));
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ flight_id: currentFlightId, flight_class: effectiveClass }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, flight_id: currentFlightId, flight_class: effectiveClass } : p));
     setShowAddP(false);
   };
 
@@ -1325,6 +1322,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     const existing = flights.find(f => f.id === (p as any).flight_id);
     return existing?.type !== currentFlight.type;
   });
+  const allSelectedWantFirst = selectedP.size > 0 && [...selectedP].every(id => passengers.find(p => p.id === id)?.services?.flight === "درجة أولى");
+  const effectiveClass = (!allSelectedWantFirst && addFlightClass === "درجة أولى") ? "عادي" : addFlightClass;
   const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
   const goFlights = flights.filter(f => f.type === "ذهاب");
   const retFlights = flights.filter(f => f.type === "إياب");
@@ -1416,11 +1415,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`✈️ إضافة — ${currentFlight?.name} (${currentFlight?.type})`}>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          {["عادي", "درجة أولى"].map(cls => (
+          {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
             <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "#1D9E75" : "#ddd"}`, background: addFlightClass === cls ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "#085041" : "#666" }}>
               {cls === "درجة أولى" ? "⭐ درجة أولى" : "💺 عادي"}
             </div>
           ))}
+          {!allSelectedWantFirst && selectedP.size > 0 && <div style={{ fontSize: 10, color: "#aaa", alignSelf: "center" }}>درجة أولى متاحة بس للي طلبوها</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
           <span style={{ color: "#aaa" }}>🔍</span>
