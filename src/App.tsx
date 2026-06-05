@@ -1595,7 +1595,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   }, []);
 
   const getBusPassengers = (busId: number) => passengers.filter(p => p.bus_id === busId);
-  const assigned = new Set(passengers.filter(p => p.bus_id != null).map(p => p.id));
 
   const toggleBus = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
@@ -1978,7 +1977,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   }, []);
 
   const getRoomPassengers = (roomId: number) => passengers.filter(p => p.room_id === roomId);
-  const assigned = new Set(passengers.filter(p => p.room_id != null).map(p => p.id));
   const floors = [...new Set(rooms.filter(r => r.floor).map(r => r.floor))].sort();
 
   const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
