@@ -1205,7 +1205,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 
 
 // ===== ملخص صفحة الطيران =====
-function FlightsStats({ flights, passengers }: { flights: Flight[]; passengers: any[] }) {
+function FlightsStats({ passengers }: { passengers: any[] }) {
   const total = passengers.length;
   const assigned = passengers.filter(p => p.flight_id != null).length;
   const noTicket = passengers.filter(p => p.flight_id == null).length;
@@ -1368,7 +1368,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <FlightsStats flights={flights} passengers={passengers} />
+      <FlightsStats passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
         {flights.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
