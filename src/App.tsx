@@ -1312,6 +1312,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   const currentFlight = flights.find(f => f.id === currentFlightId);
   const availableP = passengers.filter(p => {
+    if (p.services?.flight === "بدون") return false;
     if (!currentFlight) return false;
     if ((p as any).flight_id === currentFlightId) return false;
     if ((p as any).flight_id == null) return true;
