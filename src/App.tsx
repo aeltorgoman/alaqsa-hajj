@@ -1209,10 +1209,6 @@ function FlightsStats({ flights, passengers }: { flights: Flight[]; passengers: 
   const total = passengers.length;
   const assigned = passengers.filter(p => p.flight_id != null).length;
   const noTicket = passengers.filter(p => p.flight_id == null).length;
-  const goFlightIds = new Set(flights.filter(f => f.type === "ذهاب").map(f => f.id));
-  const retFlightIds = new Set(flights.filter(f => f.type === "إياب").map(f => f.id));
-  const hasGo = passengers.filter(p => p.flight_id != null && goFlightIds.has(p.flight_id)).length;
-  const hasReturn = passengers.filter(p => p.flight_id != null && retFlightIds.has(p.flight_id)).length;
   const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
   const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
   const pct = total ? Math.round(assigned / total * 100) : 0;
