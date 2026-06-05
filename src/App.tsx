@@ -122,11 +122,13 @@ interface Passenger {
   rel: string; linked: number;
   bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
   family_id?: string | null;
+  flight_go_id?: number | null; flight_return_id?: number | null; flight_class?: string | null;
 }
 interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
 interface Bus { id: number; name: string; type: string; }
 interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
 interface Room { id: number; number: string; floor: string; type: "ثنائية" | "ثلاثية" | "رباعية" | "سويت"; }
+interface Flight { id: number; name: string; airline: string; date: string; time: string; from_airport: string; to_airport: string; }
 
 const ALL_PERMISSIONS = [
   { key: "add_passenger", label: "إضافة حجاج" },
@@ -141,6 +143,7 @@ const ALL_PERMISSIONS = [
   { key: "print_reports", label: "طباعة التقارير" },
   { key: "manage_users", label: "إدارة المستخدمين" },
   { key: "view_archive", label: "عرض الأرشيف" },
+  { key: "manage_flights", label: "إدارة الطيران" },
 ];
 
 const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
@@ -148,7 +151,7 @@ const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["#E6F1F
 
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
-  { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
+  { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "flights", label: "✈️ الطيران", perm: "manage_flights" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
   { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير", perm: "view_reports" }] },
   { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف", perm: "view_archive" }] },
   { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين", perm: "manage_users" }] },
@@ -1201,6 +1204,380 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 }
 
 
+// ===== ملخص صفحة الطيران =====
+function FlightsStats({ passengers }: { passengers: any[] }) {
+  const total = passengers.length;
+  const assigned = passengers.filter(p => p.flight_go_id != null && p.flight_return_id != null).length;
+  const partial = passengers.filter(p => (p.flight_go_id != null) !== (p.flight_return_id != null)).length;
+  const noTicket = passengers.filter(p => p.flight_go_id == null && p.flight_return_id == null).length;
+  const firstClass = passengers.filter(p => p.flight_go_id != null && p.flight_class === "درجة أولى").length;
+  const pct = total ? Math.round(assigned / total * 100) : 0;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
+      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assigned}</div>
+      </div>
+      <div style={{ background: partial > 0 ? "#FFF3E0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: partial > 0 ? "#E65100" : "#888", marginBottom: 1 }}>غير مكتمل</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: partial > 0 ? "#E65100" : "#aaa", lineHeight: 1 }}>{partial}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>درجة أولى ⭐</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{firstClass}</div>
+      </div>
+      <div style={{ background: noTicket > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: noTicket > 0 ? "#72243E" : "#888", marginBottom: 1 }}>بدون تذكرة</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: noTicket > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{noTicket}</div>
+      </div>
+      <div style={{ marginInlineStart: "auto" }}>
+        <StatRing pct={pct} count={assigned} total={total} color="#1D9E75" label="نسبة التوزيع" />
+      </div>
+    </div>
+  );
+}
+
+// ===== صفحة الطيران =====
+function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [expanded, setExpanded] = useState(new Set<number>());
+  const [showAdd, setShowAdd] = useState(false);
+  const [flightName, setFlightName] = useState("");
+  const [airline, setAirline] = useState("");
+  const [flightDate, setFlightDate] = useState("");
+  const [flightTime, setFlightTime] = useState("");
+  const [fromAirport, setFromAirport] = useState("");
+  const [toAirport, setToAirport] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [showAddP, setShowAddP] = useState(false);
+  const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
+  const [addMode, setAddMode] = useState<"go" | "return">("go");
+  const [addFlightClass, setAddFlightClass] = useState("عادي");
+  const [selectedP, setSelectedP] = useState(new Set<number>());
+  const [pSearch, setPSearch] = useState("");
+
+  useEffect(() => {
+    supabase.from("flights").select("*").order("created_at").then(({ data }: any) => { if (data) setFlights(data as Flight[]); });
+  }, []);
+
+  const getGoPassengers = (flightId: number) => passengers.filter(p => (p as any).flight_go_id === flightId);
+  const getReturnPassengers = (flightId: number) => passengers.filter(p => (p as any).flight_return_id === flightId);
+  const toggleFlight = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+
+  const addFlight = async () => {
+    if (!flightName.trim()) return;
+    if (flights.some(f => f.name.trim() === flightName.trim())) { setNameError(`رحلة باسم "${flightName}" موجودة بالفعل!`); return; }
+    setNameError("");
+    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
+    if (!error && data?.[0]) {
+      const newFlight = data[0] as Flight;
+      setFlights(prev => [...prev, newFlight]);
+      setExpanded(prev => new Set([...prev, newFlight.id]));
+      setFlightName(""); setAirline(""); setFlightDate(""); setFlightTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
+    }
+  };
+
+  const deleteFlight = async (id: number) => {
+    if (getGoPassengers(id).length > 0 || getReturnPassengers(id).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
+    await supabase.from("flights").delete().eq("id", id);
+    setFlights(prev => prev.filter(f => f.id !== id));
+  };
+
+  const openAddP = (flightId: number, mode: "go" | "return") => {
+    setCurrentFlightId(flightId); setAddMode(mode); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true);
+  };
+
+  const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+
+  const confirmAddP = async () => {
+    const field = addMode === "go" ? "flight_go_id" : "flight_return_id";
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [field]: currentFlightId, flight_class: addFlightClass }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [field]: currentFlightId, flight_class: addFlightClass } : p));
+    setShowAddP(false);
+  };
+
+  const removeP = async (pId: number, mode: "go" | "return") => {
+    const field = mode === "go" ? "flight_go_id" : "flight_return_id";
+    await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, [field]: null } : p));
+  };
+
+  const printFlight = (flight: Flight) => {
+    const go = getGoPassengers(flight.id); const ret = getReturnPassengers(flight.id);
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<html><head><title>${flight.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2,h3{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>✈️ ${flight.name} — ${flight.airline || ""}</h2><p style="text-align:center">${flight.from_airport || ""} ← ${flight.to_airport || ""} | ${flight.date || ""} ${flight.time || ""}</p><h3>رحلة الذهاب (${go.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${go.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><h3>رحلة الإياب (${ret.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${ret.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.close();
+  };
+
+  const printAll = () => {
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<html><head><title>تقرير الرحلات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2,h3{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.f{page-break-after:always}}</style></head><body><h1>✈️ تقرير الرحلات</h1>${flights.map(flight => { const go = getGoPassengers(flight.id); const ret = getReturnPassengers(flight.id); return `<div class="f"><h2>${flight.name} — ${flight.airline || ""}</h2><p style="text-align:center">${flight.from_airport || ""} ← ${flight.to_airport || ""} | ${flight.date || ""} ${flight.time || ""}</p><h3>ذهاب (${go.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${go.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table><h3>إياب (${ret.length})</h3><table><tr><th>م</th><th>الاسم</th><th>الدرجة</th></tr>${ret.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${(p as any).flight_class || "عادي"}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
+    w.document.close();
+  };
+
+  const currentFlight = flights.find(f => f.id === currentFlightId);
+  const availableP = passengers.filter(p => addMode === "go" ? (p as any).flight_go_id == null : (p as any).flight_return_id == null);
+  const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
+
+  return (
+    <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <FlightsStats passengers={passengers} />
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
+        {flights.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
+      </div>
+      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>✈️<br />لا يوجد رحلات بعد</div> :
+        flights.map(flight => {
+          const isExpanded = expanded.has(flight.id);
+          const go = getGoPassengers(flight.id);
+          const ret = getReturnPassengers(flight.id);
+          const isEmpty = go.length === 0 && ret.length === 0;
+          return (
+            <div key={flight.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+              <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: "#f9f9f9", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <span style={{ fontSize: 20 }}>✈️</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "#888" }}>— {flight.airline}</span>}</div>
+                  <div style={{ fontSize: 10, color: "#888" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <span style={{ fontSize: 10, background: "#E6F1FB", color: "#0C447C", padding: "2px 8px", borderRadius: 99 }}>ذهاب: {go.length}</span>
+                  <span style={{ fontSize: 10, background: "#FBEAF0", color: "#72243E", padding: "2px 8px", borderRadius: 99 }}>إياب: {ret.length}</span>
+                </div>
+                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "#f0f0f0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: isEmpty ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: isEmpty ? "pointer" : "not-allowed", color: isEmpty ? "#c0392b" : "#ccc" }}>🗑</button>
+                <span style={{ color: "#aaa" }}>{isExpanded ? "▲" : "▼"}</span>
+              </div>
+              {isExpanded && (
+                <div style={{ borderTop: "0.5px solid #e5e5e5" }}>
+                  {/* ذهاب */}
+                  <div style={{ padding: "8px 12px", borderBottom: "0.5px solid #f0f0f0" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#0C447C", background: "#E6F1FB", padding: "2px 10px", borderRadius: 99 }}>✈ ذهاب ({go.length})</span>
+                      <button onClick={() => openAddP(flight.id, "go")} style={{ background: "#E1F5EE", border: "none", padding: "3px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
+                    </div>
+                    {go.length ? go.map((p, i) => (
+                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                        <Avatar name={p.name_ar} gender={p.gender} size={24} />
+                        <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
+                        <button onClick={() => removeP(p.id, "go")} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      </div>
+                    )) : <div style={{ textAlign: "center", padding: "6px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
+                  </div>
+                  {/* إياب */}
+                  <div style={{ padding: "8px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#72243E", background: "#FBEAF0", padding: "2px 10px", borderRadius: 99 }}>✈ إياب ({ret.length})</span>
+                      <button onClick={() => openAddP(flight.id, "return")} style={{ background: "#E1F5EE", border: "none", padding: "3px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
+                    </div>
+                    {ret.length ? ret.map((p, i) => (
+                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                        <Avatar name={p.name_ar} gender={p.gender} size={24} />
+                        <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
+                        <button onClick={() => removeP(p.id, "return")} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      </div>
+                    )) : <div style={{ textAlign: "center", padding: "6px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+      {/* Modal إضافة رحلة */}
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="✈️ رحلة جديدة" maxWidth={380}>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم الرحلة</div>
+          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
+          {nameError && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 3 }}>{nameError}</div>}
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الشركة</div>
+          <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="مثال: Qatar Airways" />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
+          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button>
+          <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
+        </div>
+      </Modal>
+
+      {/* Modal إضافة مسافرين */}
+      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`✈️ إضافة مسافرين — ${currentFlight?.name}`}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          {(["go", "return"] as const).map(m => (
+            <div key={m} onClick={() => setAddMode(m)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addMode === m ? (m === "go" ? "#0C447C" : "#72243E") : "#ddd"}`, background: addMode === m ? (m === "go" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addMode === m ? (m === "go" ? "#0C447C" : "#72243E") : "#666" }}>
+              {m === "go" ? "✈ ذهاب" : "✈ إياب"}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          {["عادي", "درجة أولى"].map(cls => (
+            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "#1D9E75" : "#ddd"}`, background: addFlightClass === cls ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "#085041" : "#666" }}>
+              {cls === "درجة أولى" ? "⭐ درجة أولى" : "💺 عادي"}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "#aaa" }}>🔍</span>
+          <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
+        </div>
+        {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "#aaa", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين متاحين</div> :
+          filteredP.map(p => {
+            const isSel = selectedP.has(p.id);
+            const wantsFirst = p.services?.flight === "درجة أولى";
+            return (
+              <div key={p.id} onClick={() => toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: isSel ? "#E1F5EE" : wantsFirst ? "#FFFBEA" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : wantsFirst ? "#F5C842" : "transparent"}` }}>
+                <Avatar name={p.name_ar} gender={p.gender} size={28} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
+                  <div style={{ fontSize: 10, color: "#888" }}>{p.nat}</div>
+                </div>
+                {wantsFirst && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ طلب أولى</span>}
+                {isSel && <span style={{ color: "#1D9E75" }}>✓</span>}
+              </div>
+            );
+          })}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>✓ إضافة ({selectedP.size})</button>
+          <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ===== ملخص صفحة الباصات =====
+function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: any[] }) {
+  const total = passengers.length;
+  const assignedCount = passengers.filter(p => p.bus_id != null).length;
+  const unassigned = total - assignedCount;
+  const normalBuses = buses.filter(b => b.type !== "VIP").length;
+  const vipBuses = buses.filter(b => b.type === "VIP").length;
+  const vipRequested = passengers.filter(p => p.services?.bus === "VIP").length;
+  const pct = total ? Math.round(assignedCount / total * 100) : 0;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
+      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assignedCount}</div>
+      </div>
+      <div style={{ background: unassigned > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: unassigned > 0 ? "#72243E" : "#888", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{unassigned}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#555", marginBottom: 1 }}>باص عادي</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#333", lineHeight: 1 }}>{normalBuses}</div>
+      </div>
+      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>باص VIP ⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{vipBuses}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ background: "#FFFBEA", borderRadius: 10, padding: "7px 12px", minWidth: 70, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#8B6914", marginBottom: 1 }}>طلبوا VIP</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#8B6914", lineHeight: 1 }}>{vipRequested}</div>
+      </div>
+      <div style={{ marginInlineStart: "auto" }}>
+        <StatRing pct={pct} count={assignedCount} total={total} color="#1D9E75" label="نسبة التوزيع" />
+      </div>
+    </div>
+  );
+}
+
+// ===== ملخص صفحة المخيمات =====
+function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passengers: any[]; campIdKey: string }) {
+  const total = passengers.length;
+  const assignedCount = passengers.filter(p => p[campIdKey] != null).length;
+  const unassigned = total - assignedCount;
+  const normalCamps = camps.filter(c => c.type === "عادي").length;
+  const specialCamps = camps.filter(c => c.type === "خاص").length;
+  const maleCamps = camps.filter(c => c.gender === "ذكر").length;
+  const femaleCamps = camps.filter(c => c.gender === "أنثى").length;
+  const pct = total ? Math.round(assignedCount / total * 100) : 0;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
+      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assignedCount}</div>
+      </div>
+      <div style={{ background: unassigned > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: unassigned > 0 ? "#72243E" : "#888", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{unassigned}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#555", marginBottom: 1 }}>عادي</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#333", lineHeight: 1 }}>{normalCamps}</div>
+      </div>
+      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>خاص ⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{specialCamps}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ background: "#E6F1FB", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#0C447C", marginBottom: 1 }}>خيام رجال</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#0C447C", lineHeight: 1 }}>{maleCamps}</div>
+      </div>
+      <div style={{ background: "#FBEAF0", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#72243E", marginBottom: 1 }}>خيام نساء</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#72243E", lineHeight: 1 }}>{femaleCamps}</div>
+      </div>
+      <div style={{ marginInlineStart: "auto" }}>
+        <StatRing pct={pct} count={assignedCount} total={total} color="#1D9E75" label="نسبة التوزيع" />
+      </div>
+    </div>
+  );
+}
+
+// ===== ملخص صفحة الفندق =====
+function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: any[] }) {
+  const total = passengers.length;
+  const assignedCount = passengers.filter(p => p.room_id != null).length;
+  const unassigned = total - assignedCount;
+  const pct = total ? Math.round(assignedCount / total * 100) : 0;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
+      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assignedCount}</div>
+      </div>
+      <div style={{ background: unassigned > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: unassigned > 0 ? "#72243E" : "#888", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{unassigned}</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      {ROOM_TYPES.map(t => {
+        const [bg, clr] = ROOM_COLORS[t];
+        const count = rooms.filter(r => r.type === t).length;
+        const req = passengers.filter(p => p.services?.hotel_type === t).length;
+        return (
+          <div key={t} style={{ background: bg, borderRadius: 10, padding: "5px 10px", minWidth: 56, textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: clr, fontWeight: 600, marginBottom: 1 }}>{t}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: clr, lineHeight: 1 }}>{count}</div>
+            <div style={{ fontSize: 9, color: clr, opacity: 0.75 }}>طلب: {req}</div>
+          </div>
+        );
+      })}
+      <div style={{ marginInlineStart: "auto" }}>
+        <StatRing pct={pct} count={assignedCount} total={total} color="#534AB7" label="نسبة التوزيع" />
+      </div>
+    </div>
+  );
+}
+
 function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [buses, setBuses] = useState<Bus[]>([]);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -1286,11 +1663,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
-        {[["الباصات", buses.length, "#111"], ["موزّعون", assigned.size, "#1D9E75"], ["غير موزّعين", passengers.length - assigned.size, passengers.length - assigned.size > 0 ? "#c0392b" : "#1D9E75"]].map(([l, v, c]) => (
-          <div key={l as string} style={{ background: "#f5f5f5", borderRadius: 8, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#888", marginBottom: 3 }}>{l as string}</div><div style={{ fontSize: 20, fontWeight: 500, color: c as string }}>{v as number}</div></div>
-        ))}
-      </div>
+      <BusesStats buses={buses} passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ باص جديد</button>
         {buses.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
@@ -1517,11 +1890,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
-        {[["المخيمات", camps.length, "#111"], ["رجال", maleCamps.length, "#0C447C"], ["نساء", femaleCamps.length, "#72243E"]].map(([l, v, c]) => (
-          <div key={l as string} style={{ background: "#f5f5f5", borderRadius: 8, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#888", marginBottom: 3 }}>{l as string}</div><div style={{ fontSize: 18, fontWeight: 500, color: c as string }}>{v as number}</div></div>
-        ))}
-      </div>
+      <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ مخيم جديد</button>
         {camps.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
@@ -1715,11 +2084,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 12 }}>
-        {[["الغرف", rooms.length, "#111"], ["موزّعون", assigned.size, "#1D9E75"], ["غير موزّعين", passengers.length - assigned.size, passengers.length - assigned.size > 0 ? "#c0392b" : "#1D9E75"], ["الطوابق", floors.length, "#534AB7"]].map(([l, v, c]) => (
-          <div key={l as string} style={{ background: "#f5f5f5", borderRadius: 8, padding: "10px 12px" }}><div style={{ fontSize: 10, color: "#888", marginBottom: 3 }}>{l as string}</div><div style={{ fontSize: 18, fontWeight: 500, color: c as string }}>{v as number}</div></div>
-        ))}
-      </div>
+      <HotelStats rooms={rooms} passengers={passengers} />
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
         <button onClick={() => setShowAdd(true)} style={btnP({ flex: 1 })}>+ غرفة</button>
         <button onClick={() => setShowRange(true)} style={btnS({ flex: 1 })}>📋 نطاق</button>
@@ -2545,7 +2910,8 @@ export default function App() {
     passport_url: p.passport_url || "",
     bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
     camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
-    family_id: p.family_id || null
+    family_id: p.family_id || null,
+    flight_go_id: p.flight_go_id || null, flight_return_id: p.flight_return_id || null, flight_class: p.flight_class || null
   });
 
   useEffect(() => {
@@ -2575,13 +2941,14 @@ export default function App() {
   }, []);
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
-  const pageTitles: Record<string, string> = { dash: "الرئيسية", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
+  const pageTitles: Record<string, string> = { dash: "الرئيسية", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
       case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} />;
       case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
+      case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
       case "mina": return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
       case "arafa": return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
       case "hotel": return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
