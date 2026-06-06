@@ -230,7 +230,8 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   const handleLogin = async () => {
     if (!username || !password) return;
     setLoading(true); setError("");
-    const { data } = await supabase.rpc("verify_user", {    p_username: username,    p_password: password  });
+    const { data: userData } = await supabase.rpc("verify_user", { p_username: username, p_password: password });
+    const data = userData?.[0] ?? null;
     if (data) { onLogin(data as User); }
     else setError("اسم المستخدم أو كلمة المرور غلط");
     setLoading(false);
@@ -544,17 +545,10 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
     }
   }, []);
 
-  if (saved) return (
-    <div style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16 }}>
-      <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>✅</div>
-      <div style={{ fontSize: 16, fontWeight: 600, color: "#085041" }}>تم حفظ الحاج بنجاح!</div>
-      <div style={{ fontSize: 12, color: "#888" }}>تمت إضافة الحاج إلى قائمة الحجاج</div>
-      <button onClick={() => { reset(); setTimeout(() => document.getElementById("pu")?.click(), 100); }} style={{ ...btnP({ fontSize: 13, padding: "10px 28px" }) }}>➕ إضافة حاج جديد</button>
-    </div>
-  );
 
   return (
-    <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+    <div style={{ padding: 16, overflowY: "auto", height: "100%", position: "relative" }}>
+      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "#1D9E75", color: "white", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}>✅ تم حفظ الحاج بنجاح!</div>}
       {/* رفع جواز السفر */}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 جواز السفر</div>
