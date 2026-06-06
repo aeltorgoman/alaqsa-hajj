@@ -413,7 +413,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
 }
 
 // ===== SCAN PAGE =====
-function ScanPage({ passengers, setPassengers, setPage, returnPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage?: (p: string) => void; returnPage?: string }) {
+function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMsg, setStatusMsg] = useState("");
@@ -3381,7 +3381,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
-      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} returnPage="home" />;
+      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} />;
       case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
