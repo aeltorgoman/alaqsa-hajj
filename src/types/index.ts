@@ -8,13 +8,31 @@ export interface Passenger {
   family_id?: string | null;
   flight_id?: number | null; flight_class?: string | null;
 }
+
 export interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
 export interface Bus { id: number; name: string; type: string; }
 export interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
 export interface Room { id: number; number: string; floor: string; type: "ثنائية" | "ثلاثية" | "رباعية" | "سويت"; }
 export interface Flight { id: number; name: string; type: "ذهاب" | "إياب"; airline: string; date: string; time: string; from_airport: string; to_airport: string; }
 
+export const ALL_PERMISSIONS = [
+  { key: "add_passenger", label: "إضافة حجاج" },
+  { key: "edit_passenger", label: "تعديل حجاج" },
+  { key: "delete_passenger", label: "حذف حجاج" },
+  { key: "view_passengers", label: "عرض الحجاج" },
+  { key: "manage_buses", label: "إدارة الباصات" },
+  { key: "manage_camps", label: "إدارة المخيمات" },
+  { key: "manage_hotel", label: "إدارة الفندق" },
+  { key: "view_reports", label: "عرض التقارير" },
+  { key: "export_reports", label: "تصدير التقارير" },
+  { key: "print_reports", label: "طباعة التقارير" },
+  { key: "manage_users", label: "إدارة المستخدمين" },
+  { key: "view_archive", label: "عرض الأرشيف" },
+  { key: "manage_flights", label: "إدارة الطيران" },
+];
+
 export const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
+
 export const ROOM_COLORS: Record<string, [string, string]> = {
   "ثنائية": ["#E6F1FB", "#0C447C"],
   "ثلاثية": ["#FAEEDA", "#633806"],
