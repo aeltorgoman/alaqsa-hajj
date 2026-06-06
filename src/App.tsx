@@ -413,7 +413,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
 }
 
 // ===== SCAN PAGE =====
-function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage: (p: string) => void }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMsg, setStatusMsg] = useState("");
@@ -524,7 +524,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       if (docs.contract) urls.contract_url = await uploadDoc(docs.contract, pid, "contract");
       if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls).eq("id", pid);
       setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, id_expiry: idExpiry, ...urls } as any]);
-      setSaved(true); setLocked(true);
+      setSaved(true); setLocked(true); setTimeout(() => setPage("dash"), 1500);
     } else alert("حصل خطأ في الحفظ!");
     setUploading(false);
   };
@@ -549,7 +549,7 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
       <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>✅</div>
       <div style={{ fontSize: 16, fontWeight: 600, color: "#085041" }}>تم حفظ الحاج بنجاح!</div>
       <div style={{ fontSize: 12, color: "#888" }}>تمت إضافة الحاج إلى قائمة الحجاج</div>
-      <button onClick={reset} style={{ ...btnP({ fontSize: 13, padding: "10px 28px" }) }}>➕ إضافة حاج جديد</button>
+      <button onClick={() => { reset(); setTimeout(() => document.getElementById("pu")?.click(), 100); }} style={{ ...btnP({ fontSize: 13, padding: "10px 28px" }) }}>➕ إضافة حاج جديد</button>
     </div>
   );
 
@@ -3383,7 +3383,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
-      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} />;
+      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} />;
       case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
