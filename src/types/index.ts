@@ -40,36 +40,3 @@ export const NAV = [
 export const inp = { fontSize: 12, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "7px 10px", width: "100%", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const };
 export const btnP = (extra?: any) => ({ background: "#1D9E75", color: "white", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, ...extra });
 export const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid #ddd", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#333", ...extra });
-export const ALL_PERMISSIONS = [
-  { key: "add_passenger", label: "إضافة حجاج" },
-  { key: "edit_passenger", label: "تعديل حجاج" },
-  { key: "delete_passenger", label: "حذف حجاج" },
-  { key: "view_passengers", label: "عرض الحجاج" },
-  { key: "manage_buses", label: "إدارة الباصات" },
-  { key: "manage_camps", label: "إدارة المخيمات" },
-  { key: "manage_hotel", label: "إدارة الفندق" },
-  { key: "view_reports", label: "عرض التقارير" },
-  { key: "export_reports", label: "تصدير التقارير" },
-  { key: "print_reports", label: "طباعة التقارير" },
-  { key: "manage_users", label: "إدارة المستخدمين" },
-  { key: "view_archive", label: "عرض الأرشيف" },
-  { key: "manage_flights", label: "إدارة الطيران" },
-];
-
-export const NAV = [
-  { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
-  { section: "التنظيم", items: [
-    { id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" },
-    { id: "buses", label: "🚌 الباصات", perm: "manage_buses" },
-    { id: "flights", label: "✈️ الطيران", perm: "manage_flights" },
-    { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" },
-    { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" },
-    { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" },
-  ]},
-  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير", perm: "view_reports" }] },
-  { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف", perm: "view_archive" }] },
-  { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين", perm: "manage_users" }] },
-];
-
-export const inp = { fontSize: 12, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "7px 10px", width: "100%", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const };
-export const btnP = (extra?: any) => ({ background: "#1D9E75", color: "white", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12,
