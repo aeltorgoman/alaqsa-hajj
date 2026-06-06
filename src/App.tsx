@@ -462,12 +462,14 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
           const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
           let parsed: any = {};
           try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
+          const name_en = parsed.name_en || "";
+          const name_ar = parsed.name_ar || "";
           setForm(prev => ({
             ...prev,
-            name_en: parsed.name_en || prev.name_en,
-            name_ar: parsed.name_ar || prev.name_ar,
-            short_en: parsed.short_en || prev.short_en,
-            short_ar: parsed.short_ar || prev.short_ar,
+            name_en: name_en || prev.name_en,
+            name_ar: name_ar || prev.name_ar,
+            short_en: makeShort(name_en || prev.name_en),
+            short_ar: makeShort(name_ar || prev.name_ar),
             passport: parsed.passport || prev.passport,
             nat: parsed.nationality || prev.nat,
             dob: parsed.dob || prev.dob,
