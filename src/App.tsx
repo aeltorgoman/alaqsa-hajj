@@ -230,7 +230,7 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   const handleLogin = async () => {
     if (!username || !password) return;
     setLoading(true); setError("");
-    const { data: userData } = await supabase.rpc("verify_user", {   p_username: username,   p_password: password }); const data = userData?.[0] ?? null;
+    const { data } = await supabase.from("users").select("*").eq("username", username).eq("password", password).single();
     if (data) { onLogin(data as User); }
     else setError("اسم المستخدم أو كلمة المرور غلط");
     setLoading(false);
@@ -350,7 +350,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   const handleScanFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      sessionStorage.setItem("hajj_scan_file", "pending");
+      (window as any).__hajj_pending_scan_file__ = file;
       setPage("scan");
     }
     e.currentTarget.value = "";
@@ -533,6 +533,14 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     setPreviewImg(null); setPassportFile(null); setShowFields(false); setSaved(false); setLocked(false);
     setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setDocs({ photo: null, contract: null });
   };
+
+  useEffect(() => {
+    const pending = (window as any).__hajj_pending_scan_file__;
+    if (pending) {
+      (window as any).__hajj_pending_scan_file__ = null;
+      handleFile(pending);
+    }
+  }, []);
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
