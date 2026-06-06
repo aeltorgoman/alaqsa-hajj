@@ -230,7 +230,7 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   const handleLogin = async () => {
     if (!username || !password) return;
     setLoading(true); setError("");
-    const { data } = await supabase.from("users").select("*").eq("username", username).eq("password", password).single();
+    const { data } = await supabase.rpc("verify_user", {    p_username: username,    p_password: password  });
     if (data) { onLogin(data as User); }
     else setError("اسم المستخدم أو كلمة المرور غلط");
     setLoading(false);
