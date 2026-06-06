@@ -413,7 +413,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
 }
 
 // ===== SCAN PAGE =====
-function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+function ScanPage({ passengers, setPassengers, setPage, returnPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage?: (p: string) => void; returnPage?: string }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMsg, setStatusMsg] = useState("");
@@ -542,10 +542,17 @@ function ScanPage({ passengers, setPassengers }: { passengers: Passenger[]; setP
     }
   }, []);
 
+  if (saved) return (
+    <div style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16 }}>
+      <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>✅</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: "#085041" }}>تم حفظ الحاج بنجاح!</div>
+      <div style={{ fontSize: 12, color: "#888" }}>تمت إضافة الحاج إلى قائمة الحجاج</div>
+      <button onClick={reset} style={{ ...btnP({ fontSize: 13, padding: "10px 28px" }) }}>➕ إضافة حاج جديد</button>
+    </div>
+  );
+
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
-      {saved && <div style={{ background: "#E1F5EE", border: "0.5px solid #5DCAA5", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 12, color: "#085041" }}>✓ تم حفظ الحاج! <button onClick={reset} style={{ marginRight: "auto", ...btnP({ fontSize: 11, padding: "3px 10px" }) }}>➕ حاج جديد</button></div>}
-
       {/* رفع جواز السفر */}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 جواز السفر</div>
@@ -3374,7 +3381,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
-      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} />;
+      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} returnPage="home" />;
       case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
