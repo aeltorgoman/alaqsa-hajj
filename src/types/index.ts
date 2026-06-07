@@ -4,10 +4,8 @@ export interface Passenger {
   gender: string; phone: string;
   services: { bus: string; flight: string; hotel_type: string; hotel_view: string; camp_mina: string; camp_arafa: string; };
   rel: string; linked: number;
-  // وثائق
   photo_url?: string; passport_url?: string; national_id_url?: string;
   contract_url?: string; id_expiry?: string;
-  // توزيع
   bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null;
   room_id?: number | null; family_id?: string | null;
   flight_id?: number | null; flight_class?: string | null;
