@@ -1,15 +1,199 @@
 import { useState, useRef, useEffect } from "react";
+import type React from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { useConfig } from "./config/ConfigContext";
 
-import { Avatar } from "./components/Avatar";
-import { Modal } from "./components/Modal";
-import { makeShort, isExpired, isExpiringSoon, uploadDoc, scanDocument, downloadFile, getStoragePath } from "./utils/helpers";
-import type { Passenger, User, Bus, Camp, Room, Flight } from "./types";
-import { ALL_PERMISSIONS, ROOM_TYPES, ROOM_COLORS, NAV, inp, btnP, btnS } from "./types";
+function makeShort(fullName: string): string {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 3) return parts.join(" ");
+  return [parts[0], parts[1], parts[parts.length - 1]].join(" ");
+}
 
-function Sidebar({ page, setPage, count, currentUser, onLogout }: any) {
+function isExpiringSoon(dateStr: string): boolean {
+  const d = parseDate(dateStr);
+  if (!d) return false;
+  const now = new Date();
+  const sixMonths = new Date();
+  sixMonths.setMonth(sixMonths.getMonth() + 6);
+  return d >= now && d < sixMonths;
+}
+
+function isExpired(dateStr: string): boolean {
+  const d = parseDate(dateStr);
+  if (!d) return false;
+  return d < new Date();
+}
+
+function parseDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  let d: Date | null = null;
+  const parts = dateStr.split(/[\/\-.]/).map(s => s.trim());
+  if (parts.length === 3) {
+    if (parts[0].length === 4) d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    else d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+  }
+  if (!d || isNaN(d.getTime())) return null;
+  return d;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve((e.target?.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function scanDocument(file: File, mode: "passport" | "idcard"): Promise<any> {
+  const base64 = await fileToBase64(file);
+  const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode })
+  });
+  const data = await response.json();
+  const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
+  let parsed: any = {};
+  try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
+  return parsed;
+}
+
+async function downloadFile(url: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = url.split("/").pop() || "file";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch { window.open(url, "_blank"); }
+}
+
+function getStoragePath(url: string): string {
+  const prefix = "/storage/v1/object/public/passengers-docs/";
+  const idx = url.indexOf(prefix);
+  if (idx === -1) return "";
+  return decodeURIComponent(url.slice(idx + prefix.length));
+}
+
+function compressImage(file: File): Promise<Blob> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("image/")) { resolve(file); return; }
+    const isPng = file.type === "image/png";
+    const outputType = isPng ? "image/png" : "image/jpeg";
+    const outputQuality = isPng ? 1 : 0.8;
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1400;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = height * maxDim / width; width = maxDim; }
+        else { width = width * maxDim / height; height = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx && !isPng) {
+        // للـ JPEG نرسم خلفية بيضاء عشان نتجنب الأسود
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+      }
+      ctx?.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => resolve(b || file), outputType, outputQuality);
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadDoc(file: File, passengerId: number, docType: string): Promise<string | null> {
+  const compressed = await compressImage(file);
+  const isPng = file.type === "image/png";
+  const ext = file.type === "application/pdf" ? "pdf" : isPng ? "png" : "jpg";
+  const contentType = file.type === "application/pdf" ? "application/pdf" : isPng ? "image/png" : "image/jpeg";
+  const path = `${passengerId}/${docType}_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("passengers-docs").upload(path, compressed, { upsert: true, contentType });
+  if (error) { console.error("upload error", error); return null; }
+  const { data } = supabase.storage.from("passengers-docs").getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
+interface Passenger {
+  id: number; name_ar: string; name_en: string; short_ar: string; short_en: string;
+  passport: string; national_id: string; nat: string; dob: string; expiry: string;
+  gender: string; phone: string;
+  services: { bus: string; flight: string; hotel_type: string; hotel_view: string; camp_mina: string; camp_arafa: string; };
+  rel: string; linked: number;
+  bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
+  family_id?: string | null;
+  flight_id?: number | null; flight_class?: string | null;
+}
+interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
+interface Bus { id: number; name: string; type: string; }
+interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
+interface Room { id: number; number: string; floor: string; type: "ثنائية" | "ثلاثية" | "رباعية" | "سويت"; }
+interface Flight { id: number; name: string; type: "ذهاب" | "إياب"; airline: string; date: string; time: string; from_airport: string; to_airport: string; }
+
+const ALL_PERMISSIONS = [
+  { key: "add_passenger", label: "إضافة حجاج" },
+  { key: "edit_passenger", label: "تعديل حجاج" },
+  { key: "delete_passenger", label: "حذف حجاج" },
+  { key: "view_passengers", label: "عرض الحجاج" },
+  { key: "manage_buses", label: "إدارة الباصات" },
+  { key: "manage_camps", label: "إدارة المخيمات" },
+  { key: "manage_hotel", label: "إدارة الفندق" },
+  { key: "view_reports", label: "عرض التقارير" },
+  { key: "export_reports", label: "تصدير التقارير" },
+  { key: "print_reports", label: "طباعة التقارير" },
+  { key: "manage_users", label: "إدارة المستخدمين" },
+  { key: "view_archive", label: "عرض الأرشيف" },
+  { key: "manage_flights", label: "إدارة الطيران" },
+];
+
+const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
+const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["#E6F1FB", "#0C447C"], "ثلاثية": ["#FAEEDA", "#633806"], "رباعية": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
+
+const NAV = [
+  { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
+  { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "flights", label: "✈️ الطيران", perm: "manage_flights" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
+  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير", perm: "view_reports" }] },
+  { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف", perm: "view_archive" }] },
+  { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين", perm: "manage_users" }] },
+];
+
+function Avatar({ name, gender, size = 32 }: { name: string; gender: string; size?: number }) {
+  const initials = name.split(" ").slice(0, 2).map(w => w[0] || "").join("");
+  const f = gender === "أنثى";
+  return <div style={{ width: size, height: size, borderRadius: "50%", background: f ? "#FBEAF0" : "#E1F5EE", color: f ? "#72243E" : "#085041", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 500, flexShrink: 0 }}>{initials}</div>;
+}
+
+function Modal({ show, onClose, title, children, maxWidth = 420 }: { show: boolean; onClose: () => void; title: string; children: React.ReactNode; maxWidth?: number; }) {
+  if (!show) return null;
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 12, width: "92%", maxWidth, maxHeight: "88%", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
+        <div style={{ padding: "12px 16px", borderBottom: "0.5px solid #e5e5e5", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>✕</button>
+        </div>
+        <div style={{ padding: "14px 16px" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+const inp = { fontSize: 12, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "7px 10px", width: "100%", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const };
+const btnP = (extra?: any) => ({ background: "#1D9E75", color: "white", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, ...extra });
+const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid #ddd", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#333", ...extra });
+
+function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; }) {
   const config = useConfig();
   return (
     <div style={{ width: 200, background: config.color_sidebar, borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
@@ -170,8 +354,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 }
 
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
-  const males = passengers.filter(p => p.gender === "ذكر").length;
-  const females = passengers.filter(p => p.gender === "أنثى").length;
+  const { males, females } = useMemo(() => ({
+    males: passengers.filter(p => p.gender === "ذكر").length,
+    females: passengers.filter(p => p.gender === "أنثى").length,
+  }), [passengers]);
   const initials = (name: string) => name.trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -306,7 +492,14 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
           }));
           setShowFields(true);
         }, 500);
-      } catch { clearInterval(iv); setLoading(false); setShowFields(true); }
+      } catch (err) {
+        clearInterval(iv);
+        setLoading(false);
+        setShowFields(true);
+        setStatusMsg("❌ فشل في قراءة الجواز");
+        alert("حدث خطأ أثناء تحليل الجواز، يرجى المحاولة مرة أخرى أو إدخال البيانات يدوياً.");
+        console.error("Scan error:", err);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -320,7 +513,10 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
       const parsed = await scanDocument(file, "idcard");
       if (parsed.national_id) setForm(prev => ({ ...prev, national_id: parsed.national_id }));
       if (parsed.id_expiry) setIdExpiry(parsed.id_expiry);
-    } catch {}
+    } catch (err) {
+      alert("فشل في قراءة البطاقة الشخصية، يرجى إدخال البيانات يدوياً.");
+      console.error("ID scan error:", err);
+    }
     setIdScanLoading(false);
   };
 
@@ -343,17 +539,28 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
       hotel_type: services.hotel_type, hotel_view: services.hotel_view, camp_mina: services.camp_mina,
       camp_arafa: services.camp_arafa
     }]).select();
-    if (!error && data && data[0]) {
+    if (error) {
+      console.error("Save error:", error);
+      alert(`❌ فشل في حفظ بيانات الحاج: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      setUploading(false);
+      return;
+    }
+    if (data && data[0]) {
       const pid = data[0].id;
-      const urls: any = {};
-      if (passportFile) urls.passport_url = await uploadDoc(passportFile, pid, "passport_doc");
-      if (idCardFile) urls.national_id_url = await uploadDoc(idCardFile, pid, "idcard");
-      if (docs.photo) urls.photo_url = await uploadDoc(docs.photo, pid, "photo");
-      if (docs.contract) urls.contract_url = await uploadDoc(docs.contract, pid, "contract");
-      if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls).eq("id", pid);
-      setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, id_expiry: idExpiry, ...urls } as any]);
+      const urls: Record<string, string | null> = {};
+      try {
+        if (passportFile) urls.passport_url = await uploadDoc(passportFile, pid, "passport_doc");
+        if (idCardFile) urls.national_id_url = await uploadDoc(idCardFile, pid, "idcard");
+        if (docs.photo) urls.photo_url = await uploadDoc(docs.photo, pid, "photo");
+        if (docs.contract) urls.contract_url = await uploadDoc(docs.contract, pid, "contract");
+        if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls).eq("id", pid);
+      } catch (uploadErr) {
+        console.error("Upload error:", uploadErr);
+        alert("⚠️ تم حفظ البيانات بنجاح لكن فشل رفع بعض الملفات.");
+      }
+      setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, id_expiry: idExpiry, ...urls } as Passenger]);
       setSaved(true); setLocked(true); setTimeout(() => setPage("dash"), 1500);
-    } else alert("حصل خطأ في الحفظ!");
+    }
     setUploading(false);
   };
 
@@ -518,22 +725,23 @@ function StatRing({ pct, count, total, color, label }: { pct: number; count: num
 }
 
 // ===== ملخص إحصائي في أعلى صفحة الحجاج =====
-function PassengersStats({ passengers }: { passengers: any[] }) {
-  const total = passengers.length;
-  const males = passengers.filter(p => p.gender === "ذكر").length;
-  const females = passengers.filter(p => p.gender === "أنثى").length;
-
-  // اكتمال المستندات = الصورة + الجواز + البطاقة
-  const docsComplete = (p: any) => !!(p.photo_url && p.passport_url && p.national_id_url);
-
-  // اكتمال البيانات = كل الحقول الأساسية متعباية
+function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   const DATA_FIELDS = ["name_ar", "name_en", "passport", "national_id", "nat", "dob", "expiry", "gender", "phone"];
-  const dataComplete = (p: any) => DATA_FIELDS.every(f => p[f] && String(p[f]).trim());
 
-  const docsDone = passengers.filter(docsComplete).length;
-  const dataDone = passengers.filter(dataComplete).length;
-  const docPct = total ? Math.round(docsDone / total * 100) : 0;
-  const dataPct = total ? Math.round(dataDone / total * 100) : 0;
+  const stats = useMemo(() => {
+    const total = passengers.length;
+    const males = passengers.filter(p => p.gender === "ذكر").length;
+    const females = passengers.filter(p => p.gender === "أنثى").length;
+    const docsComplete = (p: Passenger) => !!(p.photo_url && p.passport_url && p.national_id_url);
+    const dataComplete = (p: Passenger) => DATA_FIELDS.every(f => (p as any)[f] && String((p as any)[f]).trim());
+    const docsDone = passengers.filter(docsComplete).length;
+    const dataDone = passengers.filter(dataComplete).length;
+    const docPct = total ? Math.round(docsDone / total * 100) : 0;
+    const dataPct = total ? Math.round(dataDone / total * 100) : 0;
+    return { total, males, females, docsDone, dataDone, docPct, dataPct };
+  }, [passengers]);
+
+  const { total, males, females, docsDone, dataDone, docPct, dataPct } = stats;
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0, background: "#fafafa" }}>
@@ -593,7 +801,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
     return (p as any)[key] || "";
   };
 
-  const filtered = passengers.filter(p => {
+  const filtered = useMemo(() => passengers.filter(p => {
     const fullName = `${p.name_ar} ${p.name_en}`;
     const searchMatch = !search || fullName.toLowerCase().includes(search.toLowerCase()) ||
       [p.passport, p.national_id, p.nat, p.phone, p.gender, p.services?.bus].join(" ").toLowerCase().includes(search.toLowerCase());
@@ -603,7 +811,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
       if (!filter) return true;
       return getVal(p, col.key, col.get).toLowerCase().includes(filter.toLowerCase());
     });
-  });
+  }), [passengers, search, colFilters]);
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(initialShowManual || false);
@@ -613,26 +821,32 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 
   const handleManualSave = async () => {
     if (!manualForm.name_ar && !manualForm.name_en) { alert("اكتب الاسم على الأقل!"); return; }
-    const dupP = manualForm.passport && passengers.some((p: any) => p.passport === manualForm.passport);
-    const dupN = manualForm.national_id && passengers.some((p: any) => p.national_id === manualForm.national_id);
+    const dupP = manualForm.passport && passengers.some((p: Passenger) => p.passport === manualForm.passport);
+    const dupN = manualForm.national_id && passengers.some((p: Passenger) => p.national_id === manualForm.national_id);
     if (dupP) { alert("⚠️ رقم الجواز ده مسجل بالفعل!"); return; }
     if (dupN) { alert("⚠️ رقم البطاقة ده مسجل بالفعل!"); return; }
     setManualSaving(true);
     const short_ar = makeShort(manualForm.name_ar);
     const short_en = makeShort(manualForm.name_en);
     const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa }]).select();
-    if (!error && data && data[0]) {
-      setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as any]);
+    if (error) {
+      console.error("Manual save error:", error);
+      alert(`❌ فشل في حفظ البيانات: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      setManualSaving(false);
+      return;
+    }
+    if (data && data[0]) {
+      setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as Passenger]);
       setShowManual(false);
       setManualForm({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
-    } else alert("حصل خطأ في الحفظ!");
+    }
     setManualSaving(false);
   };
 
   const [showVerify, setShowVerify] = useState(false);
   const [verifyData, setVerifyData] = useState<{ passportUrl: string; idUrl: string; passenger: any; updates: any; isQatari: boolean; idMismatch: boolean; } | null>(null);
 
-  const handleDocUpload = async (p: any, docType: string, field: string, file: File) => {
+  const handleDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
     setDocUploading(docType);
     if (docType === "passport_doc") {
       const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "passport")]);
@@ -674,17 +888,17 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
       if (url) {
         await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
         const updated = { ...p, [field]: url };
-        setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+        setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
         setSelected(updated);
       }
       setDocUploading(null);
     }
   };
 
-  const saveDocUpdates = async (p: any, updates: any) => {
+  const saveDocUpdates = async (p: Passenger, updates: Partial<Passenger>) => {
     await supabase.from("passengers").update(updates).eq("id", p.id);
     const updated = { ...p, ...updates };
-    setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+    setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
     setSelected(updated);
   };
 
@@ -694,13 +908,13 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
     setShowVerify(false); setVerifyData(null);
   };
 
-  const handleDocDelete = async (p: any, field: string, url: string) => {
+  const handleDocDelete = async (p: Passenger, field: string, url: string) => {
     if (!confirm("هتمسح المستند ده؟")) return;
     const path = getStoragePath(url);
     if (path) await supabase.storage.from("passengers-docs").remove([path]);
     await supabase.from("passengers").update({ [field]: null }).eq("id", p.id);
     const updated = { ...p, [field]: null };
-    setPassengers(passengers.map((x: any) => x.id === p.id ? updated : x));
+    setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
     setSelected(updated);
   };
   const [showLinkFamily, setShowLinkFamily] = useState(false);
@@ -1043,7 +1257,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 
 
 // ===== ملخص صفحة الطيران =====
-function FlightsStats({ passengers }: { passengers: any[] }) {
+function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const total = passengers.length;
   const assigned = passengers.filter(p => p.flight_id != null).length;
   const noTicket = passengers.filter(p => p.flight_id == null).length;
@@ -1107,6 +1321,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} باسم "${flightName}" موجودة!`); return; }
     setNameError("");
     const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
+    if (error) { alert(`❌ فشل في إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
@@ -1287,14 +1502,18 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 }
 
 // ===== ملخص صفحة الباصات =====
-function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: any[] }) {
-  const total = passengers.length;
-  const assignedCount = passengers.filter(p => p.bus_id != null).length;
-  const unassigned = total - assignedCount;
-  const normalBuses = buses.filter(b => b.type !== "VIP").length;
-  const vipBuses = buses.filter(b => b.type === "VIP").length;
-  const vipRequested = passengers.filter(p => p.services?.bus === "VIP").length;
-  const pct = total ? Math.round(assignedCount / total * 100) : 0;
+function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger[] }) {
+  const stats = useMemo(() => {
+    const total = passengers.length;
+    const assignedCount = passengers.filter(p => p.bus_id != null).length;
+    const unassigned = total - assignedCount;
+    const normalBuses = buses.filter(b => b.type !== "VIP").length;
+    const vipBuses = buses.filter(b => b.type === "VIP").length;
+    const vipRequested = passengers.filter(p => p.services?.bus === "VIP").length;
+    const pct = total ? Math.round(assignedCount / total * 100) : 0;
+    return { total, assignedCount, unassigned, normalBuses, vipBuses, vipRequested, pct };
+  }, [buses, passengers]);
+  const { total, assignedCount, unassigned, normalBuses, vipBuses, vipRequested, pct } = stats;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
       <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
@@ -1327,15 +1546,19 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: any[] }) 
 }
 
 // ===== ملخص صفحة المخيمات =====
-function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passengers: any[]; campIdKey: string }) {
-  const total = passengers.length;
-  const assignedCount = passengers.filter(p => p[campIdKey] != null).length;
-  const unassigned = total - assignedCount;
-  const normalCamps = camps.filter(c => c.type === "عادي").length;
-  const specialCamps = camps.filter(c => c.type === "خاص").length;
-  const maleCamps = camps.filter(c => c.gender === "ذكر").length;
-  const femaleCamps = camps.filter(c => c.gender === "أنثى").length;
-  const pct = total ? Math.round(assignedCount / total * 100) : 0;
+function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: string }) {
+  const stats = useMemo(() => {
+    const total = passengers.length;
+    const assignedCount = passengers.filter(p => (p as any)[campIdKey] != null).length;
+    const unassigned = total - assignedCount;
+    const normalCamps = camps.filter(c => c.type === "عادي").length;
+    const specialCamps = camps.filter(c => c.type === "خاص").length;
+    const maleCamps = camps.filter(c => c.gender === "ذكر").length;
+    const femaleCamps = camps.filter(c => c.gender === "أنثى").length;
+    const pct = total ? Math.round(assignedCount / total * 100) : 0;
+    return { total, assignedCount, unassigned, normalCamps, specialCamps, maleCamps, femaleCamps, pct };
+  }, [camps, passengers, campIdKey]);
+  const { total, assignedCount, unassigned, normalCamps, specialCamps, maleCamps, femaleCamps, pct } = stats;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
       <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
@@ -1372,11 +1595,15 @@ function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passenger
 }
 
 // ===== ملخص صفحة الفندق =====
-function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: any[] }) {
-  const total = passengers.length;
-  const assignedCount = passengers.filter(p => p.room_id != null).length;
-  const unassigned = total - assignedCount;
-  const pct = total ? Math.round(assignedCount / total * 100) : 0;
+function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenger[] }) {
+  const stats = useMemo(() => {
+    const total = passengers.length;
+    const assignedCount = passengers.filter(p => p.room_id != null).length;
+    const unassigned = total - assignedCount;
+    const pct = total ? Math.round(assignedCount / total * 100) : 0;
+    return { total, assignedCount, unassigned, pct };
+  }, [rooms, passengers]);
+  const { total, assignedCount, unassigned, pct } = stats;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
       <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
@@ -1432,6 +1659,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`باص باسم "${busName}" موجود بالفعل!`); return; }
     setNameError("");
     const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType }]).select();
+    if (error) { alert(`❌ فشل في إضافة الباص: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newBus = data[0] as Bus;
       setBuses(prev => [...prev, newBus]);
@@ -1442,7 +1670,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const deleteBus = async (id: number) => {
     if (getBusPassengers(id).length > 0) { alert("مش هينفع تمسح باص فيه مسافرين!"); return; }
-    await supabase.from("buses").delete().eq("id", id);
+    const { error } = await supabase.from("buses").delete().eq("id", id);
+    if (error) { alert(`❌ فشل في حذف الباص: ${error.message}`); return; }
     setBuses(prev => prev.filter(b => b.id !== id));
   };
 
@@ -1456,7 +1685,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && p.bus_id == null && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
     if (familyToAdd.length > 0 && confirm(`هتوضع حجاج بدون أقاربهم!\nهتضيف أقاربهم معاهم؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
       await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", p.id)));
-      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: any) => f.id === p.id) ? { ...p, bus_id: currentBusId } : p));
+      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: Passenger) => f.id === p.id) ? { ...p, bus_id: currentBusId } : p));
     }
     setShowAddP(false);
   };
@@ -1609,6 +1838,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (camps.some(c => c.name.trim() === campName.trim() && c.gender === campGender)) { setNameError(`مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} باسم "${campName}" موجود!`); return; }
     setNameError("");
     const { data, error } = await supabase.from("camps").insert([{ name: campName.trim(), gender: campGender, type: campType, page_type: pageType }]).select();
+    if (error) { alert(`❌ فشل في إضافة المخيم: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       setCamps(prev => [...prev, data[0] as Camp]);
       setExpanded(prev => new Set([...prev, data[0].id]));
@@ -1618,7 +1848,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   const deleteCamp = async (id: number) => {
     if (getCampPassengers(id).length > 0) { alert("أزل المسافرين الأول!"); return; }
-    await supabase.from("camps").delete().eq("id", id);
+    const { error } = await supabase.from("camps").delete().eq("id", id);
+    if (error) { alert(`❌ فشل في حذف المخيم: ${error.message}`); return; }
     setCamps(prev => prev.filter(c => c.id !== id));
   };
 
@@ -1633,7 +1864,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && (p as any)[campIdKey] == null && (isSpecial || p.gender === currentCamp?.gender) && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
     if (familyToAdd.length > 0 && confirm(`هتوضع حجاج بدون أقاربهم!\nهتضيف أقاربهم معاهم؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
       await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ [campIdKey]: currentCampId }).eq("id", p.id)));
-      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: any) => f.id === p.id) ? { ...p, [campIdKey]: currentCampId } : p));
+      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: Passenger) => f.id === p.id) ? { ...p, [campIdKey]: currentCampId } : p));
     }
     setShowAddP(false);
   };
@@ -2055,7 +2286,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   const [seasonToDelete, setSeasonToDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const openDelete = (s: any) => { setSeasonToDelete(s); setDeleteStep(1); setShowDelete(true); };
+  const openDelete = (s: { id: number; name: string; created_at: string }) => { setSeasonToDelete(s); setDeleteStep(1); setShowDelete(true); };
 
   const confirmDelete = async () => {
     if (!seasonToDelete) return;
@@ -2071,7 +2302,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
     setDeleting(false); setShowDelete(false); setSeasonToDelete(null);
   };
 
-  const openSeason = async (season: any) => {
+  const openSeason = async (season: { id: number; name: string; created_at: string }) => {
     setSelected(season); setLoading(true); setActiveReport("passengers");
     const [{ data: p }, { data: b }, { data: c }, { data: r }] = await Promise.all([
       supabase.from("passengers").select("*").eq("season_id", season.id),
@@ -3156,7 +3387,7 @@ export default function App() {
     setPage("dash");
   };
 
-  const mapPassenger = (p: any) => ({
+  const mapPassenger = (p: Record<string, unknown>) => ({
     id: p.id, name_ar: p.name_ar || "", name_en: p.name_en || "",
     short_ar: p.short_ar || "", short_en: p.short_en || "",
     passport: p.passport || "", national_id: p.national_id || "",
