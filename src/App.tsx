@@ -125,16 +125,6 @@ async function uploadDoc(file: File, passengerId: number, docType: string): Prom
   return data?.publicUrl || null;
 }
 
-interface Passenger {
-  id: number; name_ar: string; name_en: string; short_ar: string; short_en: string;
-  passport: string; national_id: string; nat: string; dob: string; expiry: string;
-  gender: string; phone: string;
-  services: { bus: string; flight: string; hotel_type: string; hotel_view: string; camp_mina: string; camp_arafa: string; };
-  rel: string; linked: number;
-  bus_id?: number | null; camp_mina_id?: number | null; camp_arafa_id?: number | null; room_id?: number | null;
-  family_id?: string | null;
-  flight_id?: number | null; flight_class?: string | null;
-}
 interface User { id: number; name: string; username: string; password: string; permissions: Record<string, boolean>; }
 interface Bus { id: number; name: string; type: string; }
 interface Camp { id: number; name: string; gender: "ذكر" | "أنثى"; type: "عادي" | "خاص"; page_type: string; }
