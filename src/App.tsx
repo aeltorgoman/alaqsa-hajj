@@ -862,7 +862,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
       if (p.passport_url) {
         const isQatari = p.nat === "قطري";
         const idMismatch = isQatari && parsed.national_id && p.national_id && parsed.national_id !== p.national_id;
-        setVerifyData({ passportUrl: p.passport_url || "", idUrl: url || p.national_id_url, passenger: p, updates, isQatari, idMismatch: !!idMismatch });
+        setVerifyData({ passportUrl: p.passport_url || "", idUrl: url || p.national_id_url || "", passenger: p, updates, isQatari, idMismatch: !!idMismatch });
         setShowVerify(true);
       } else {
         await saveDocUpdates(p, updates);
