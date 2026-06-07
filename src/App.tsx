@@ -206,6 +206,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
             </div>
           );
         })}
+              </div>
         {/* مفتاح الثيمات */}
         <div style={{ borderTop: "0.5px solid var(--border-sidebar)", marginTop: 8 }}>
           <div onClick={() => setShowThemes(!showThemes)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: "var(--text-sidebar-muted)", cursor: "pointer", transition: "var(--transition)" }}>
@@ -214,7 +215,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
           </div>
           {showThemes && <ThemeSwitcher />}
         </div>
-      </div>
+
       <div style={{ padding: "10px 12px", borderTop: "0.5px solid var(--border-sidebar)", flexShrink: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-sidebar)" }}>{currentUser.name}</div>
         <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)" }}>@{currentUser.username}</div>
