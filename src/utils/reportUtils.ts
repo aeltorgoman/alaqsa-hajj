@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import type { Passenger, Bus, Camp, Room, Flight } from "../types";
+import type { Passenger, Bus, Camp, Room } from "../types";
 
 // ===== قالب HTML الموحد للتقارير =====
 export function makeHTML(title: string, body: string, landscape = false, logoUrl = "", companyName = "النظام") {
