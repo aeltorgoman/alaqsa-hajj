@@ -1,4 +1,3 @@
-import { usePassengers } from "./hooks/usePassengers";
 import { useState, useRef, useEffect, useMemo } from "react";
 import type React from "react";
 import { supabase } from "./supabase";
