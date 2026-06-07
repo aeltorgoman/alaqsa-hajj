@@ -3,6 +3,7 @@ import type React from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { useConfig } from "./config/ConfigContext";
+import { useTheme, ThemeSwitcher } from "./config/ThemeContext";
 import type { Passenger, User, Bus, Camp, Room, Flight } from "./types";
 function makeShort(fullName: string): string {
   if (!fullName) return "";
@@ -155,17 +156,17 @@ const NAV = [
 function Avatar({ name, gender, size = 32 }: { name: string; gender: string; size?: number }) {
   const initials = name.split(" ").slice(0, 2).map(w => w[0] || "").join("");
   const f = gender === "أنثى";
-  return <div style={{ width: size, height: size, borderRadius: "50%", background: f ? "#FBEAF0" : "#E1F5EE", color: f ? "#72243E" : "#085041", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 500, flexShrink: 0 }}>{initials}</div>;
+  return <div style={{ width: size, height: size, borderRadius: "50%", background: f ? "var(--danger-bg)" : "var(--success-bg)", color: f ? "var(--danger)" : "var(--success)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 500, flexShrink: 0 }}>{initials}</div>;
 }
 
 function Modal({ show, onClose, title, children, maxWidth = 420 }: { show: boolean; onClose: () => void; title: string; children: React.ReactNode; maxWidth?: number; }) {
   if (!show) return null;
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 12, width: "92%", maxWidth, maxHeight: "88%", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.15)" }}>
-        <div style={{ padding: "12px 16px", borderBottom: "0.5px solid #e5e5e5", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#888" }}>✕</button>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--bg-card)", borderRadius: "var(--radius-lg)", width: "92%", maxWidth, maxHeight: "88%", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "0.5px solid var(--border)" }}>
+        <div style={{ padding: "12px 16px", borderBottom: "0.5px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "var(--bg-card)", zIndex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{title}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--text-muted)" }}>✕</button>
         </div>
         <div style={{ padding: "14px 16px" }}>{children}</div>
       </div>
@@ -173,20 +174,21 @@ function Modal({ show, onClose, title, children, maxWidth = 420 }: { show: boole
   );
 }
 
-const inp = { fontSize: 12, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "7px 10px", width: "100%", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const };
-const btnP = (extra?: any) => ({ background: "#1D9E75", color: "white", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, ...extra });
-const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid #ddd", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", color: "#333", ...extra });
+const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", padding: "7px 10px", width: "100%", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box" as const, color: "var(--text)" };
+const btnP = (extra?: any) => ({ background: "var(--primary)", color: "var(--text-inverse)", border: "none", padding: "7px 14px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", fontWeight: 500, fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
+const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid var(--border)", padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", color: "var(--text-secondary)", fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
 
 function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; }) {
   const config = useConfig();
+  const [showThemes, setShowThemes] = useState(false);
   return (
-    <div style={{ width: 200, background: config.color_sidebar, borderLeft: "0.5px solid #e5e5e5", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
-      <div style={{ padding: "0 12px 12px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 6, flexShrink: 0 }}>
+    <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
+      <div style={{ padding: "0 12px 12px", borderBottom: "0.5px solid var(--border-sidebar)", marginBottom: 6, flexShrink: 0 }}>
         {config.logo_url
           ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 36, marginBottom: 4 }} />
-          : <div style={{ fontSize: 15, fontWeight: 600 }}>✈️ {config.name_ar}</div>
+          : <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-sidebar)", fontFamily: "var(--font-heading)" }}>✈️ {config.name_ar}</div>
         }
-        <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{config.tagline}</div>
+        <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)", marginTop: 2 }}>{config.tagline}</div>
       </div>
       <div style={{ flex: 1, overflowY: "auto" }}>
         {NAV.map(({ section, items }) => {
@@ -194,21 +196,29 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
           if (allowed.length === 0) return null;
           return (
             <div key={section}>
-              <div style={{ fontSize: 10, color: "#aaa", padding: "10px 12px 3px", letterSpacing: "0.04em" }}>{section}</div>
+              <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)", padding: "10px 12px 3px", letterSpacing: "0.05em" }}>{section}</div>
               {allowed.map(({ id, label }) => (
-                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? config.color_primary : "#666", cursor: "pointer", borderRight: page === id ? `2px solid ${config.color_primary}` : "2px solid transparent", fontWeight: page === id ? 500 : 400, background: page === id ? "white" : "transparent" }}>
+                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "var(--accent-light)" : "var(--text-sidebar)", cursor: "pointer", borderRight: page === id ? "2px solid var(--accent)" : "2px solid transparent", fontWeight: page === id ? 600 : 400, background: page === id ? "var(--bg-sidebar-hover)" : "transparent", transition: "var(--transition)" }}>
                   {label}
-                  {id === "passengers" && count > 0 && <span style={{ background: "#E1F5EE", color: config.color_accent, borderRadius: 99, padding: "0 6px", fontSize: 10, marginRight: "auto" }}>{count}</span>}
+                  {id === "passengers" && count > 0 && <span style={{ background: "var(--accent)", color: "var(--bg-sidebar)", borderRadius: "var(--radius-full)", padding: "0 6px", fontSize: 10, marginRight: "auto", fontWeight: 600 }}>{count}</span>}
                 </div>
               ))}
             </div>
           );
         })}
+        {/* مفتاح الثيمات */}
+        <div style={{ borderTop: "0.5px solid var(--border-sidebar)", marginTop: 8 }}>
+          <div onClick={() => setShowThemes(!showThemes)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: "var(--text-sidebar-muted)", cursor: "pointer", transition: "var(--transition)" }}>
+            🎨 المظهر
+            <span style={{ marginRight: "auto", fontSize: 10 }}>{showThemes ? "▲" : "▼"}</span>
+          </div>
+          {showThemes && <ThemeSwitcher />}
+        </div>
       </div>
-      <div style={{ padding: "10px 12px", borderTop: "0.5px solid #e5e5e5", flexShrink: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 500 }}>{currentUser.name}</div>
-        <div style={{ fontSize: 10, color: "#888" }}>@{currentUser.username}</div>
-        <button onClick={onLogout} style={{ marginTop: 8, width: "100%", background: "#FBEAF0", border: "none", padding: 5, borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>تسجيل خروج</button>
+      <div style={{ padding: "10px 12px", borderTop: "0.5px solid var(--border-sidebar)", flexShrink: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-sidebar)" }}>{currentUser.name}</div>
+        <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)" }}>@{currentUser.username}</div>
+        <button onClick={onLogout} style={{ marginTop: 8, width: "100%", background: "var(--danger-bg)", border: "none", padding: 5, borderRadius: "var(--radius-sm)", fontSize: 11, cursor: "pointer", color: "var(--danger)", transition: "var(--transition)" }}>تسجيل خروج</button>
       </div>
     </div>
   );
@@ -233,29 +243,34 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#E1F5EE,#f0f9ff)", direction: "rtl", fontFamily: "system-ui,sans-serif" }}>
-      <div style={{ background: "white", borderRadius: 16, padding: "40px 32px", width: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.1)" }}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", direction: "rtl", fontFamily: "var(--font-body)" }}>
+      {/* خلفية زخرفية */}
+      <div style={{ position: "fixed", inset: 0, background: "var(--bg)", zIndex: 0 }}>
+        <div style={{ position: "absolute", top: "20%", right: "15%", width: 300, height: 300, borderRadius: "50%", background: "var(--primary)", opacity: 0.06, filter: "blur(60px)" }} />
+        <div style={{ position: "absolute", bottom: "20%", left: "15%", width: 200, height: 200, borderRadius: "50%", background: "var(--accent)", opacity: 0.08, filter: "blur(40px)" }} />
+      </div>
+      <div style={{ position: "relative", zIndex: 1, background: "var(--bg-card)", borderRadius: "var(--radius-xl)", padding: "40px 36px", width: 380, boxShadow: "var(--shadow-xl)", border: "0.5px solid var(--border)" }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
           {config.logo_url
-            ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 56, marginBottom: 8 }} />
-            : <div style={{ fontSize: 48, marginBottom: 8 }}>✈️</div>
+            ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 60, marginBottom: 12 }} />
+            : <div style={{ width: 64, height: 64, borderRadius: "var(--radius-lg)", background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 16px" }}>✈️</div>
           }
-          <div style={{ fontSize: 20, fontWeight: 700 }}>{config.name_ar}</div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>{config.tagline}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-heading)", marginBottom: 6 }}>{config.name_ar}</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{config.tagline}</div>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 5 }}>اسم المستخدم</div>
-          <input style={{ ...inp, border: `1px solid ${error ? "#c0392b" : "#e0e0e0"}` }} value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="أدخل اسم المستخدم" autoFocus />
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, fontWeight: 500 }}>اسم المستخدم</div>
+          <input className="input" style={{ border: `1px solid ${error ? "var(--danger)" : "var(--border)"}` }} value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="أدخل اسم المستخدم" autoFocus />
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 5 }}>كلمة المرور</div>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, fontWeight: 500 }}>كلمة المرور</div>
           <div style={{ position: "relative" }}>
-            <input style={{ ...inp, border: `1px solid ${error ? "#c0392b" : "#e0e0e0"}`, paddingLeft: 36 }} type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" />
-            <button onClick={() => setShowPass(!showPass)} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#aaa" }}>{showPass ? "🙈" : "👁"}</button>
+            <input className="input" style={{ border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`, paddingLeft: 36 }} type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" />
+            <button onClick={() => setShowPass(!showPass)} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 16 }}>{showPass ? "🙈" : "👁"}</button>
           </div>
         </div>
-        {error && <div style={{ fontSize: 12, color: "#c0392b", marginBottom: 10, textAlign: "center", background: "#FBEAF0", padding: "6px 10px", borderRadius: 8 }}>{error}</div>}
-        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: config.color_primary, color: "white", border: "none", padding: 12, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 6, opacity: loading ? 0.7 : 1 }}>{loading ? "⏳ جاري التحقق..." : "دخول"}</button>
+        {error && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 12, textAlign: "center", background: "var(--danger-bg)", padding: "8px 12px", borderRadius: "var(--radius-md)", border: "0.5px solid var(--danger)" }}>{error}</div>}
+        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "var(--primary)", color: "var(--text-inverse)", border: "none", padding: "13px", borderRadius: "var(--radius-md)", fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 8, opacity: loading ? 0.7 : 1, fontFamily: "var(--font-body)", transition: "var(--transition)" }}>{loading ? "⏳ جاري التحقق..." : "دخول"}</button>
       </div>
     </div>
   );
@@ -3433,14 +3448,14 @@ export default function App() {
     }
   };
   return (
-    <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "system-ui,-apple-system,sans-serif", background: "white", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--bg)", overflow: "hidden" }}>
       <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "10px 16px", borderBottom: "0.5px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 500 }}>{pageTitles[page]}</div>
-          <div style={{ fontSize: 11, color: "#888" }}>{config.tagline}</div>
+        <div style={{ padding: "10px 16px", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, background: "var(--bg-topbar)", boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-heading)" }}>{pageTitles[page]}</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{config.season_label}</div>
         </div>
-        <div style={{ flex: 1, overflow: "hidden" }}>{renderPage()}</div>
+        <div style={{ flex: 1, overflow: "hidden", background: "var(--bg)" }}>{renderPage()}</div>
       </div>
     </div>
   );
