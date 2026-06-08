@@ -1,404 +1,565 @@
-/* ============================================
-   نظام الثيمات — حملة الأقصى
-   4 ثيمات: Qatar Heritage, Light, Dark, Green
-   ============================================ */
-
 @import url('https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;600;700&family=Tajawal:wght@300;400;500;700&display=swap');
+
+[data-theme="qatar-heritage"], :root {
+  --em9:#3D0F1E; --em8:#5C1830; --em7:#7D1F3C; --em6:#A32D52; --em5:#C4496E;
+  --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
+  --ivory:#f7f2e7; --ivory2:#f1e9d6; --paper:#fffdf8;
+  --ink:#1b2a25; --muted:#6f7b74; --line:#e7ded0;
+  --mb:#e8eff5; --mf:#13456b;
+  --fb:#f7eaef; --ff:#7a2e45;
+
+  --primary: var(--em7);
+  --primary-light: var(--em6);
+  --primary-dark: var(--em8);
+  --accent: var(--g5);
+  --accent-light: var(--g3);
+  --accent-dark: var(--g6);
+  --bg: var(--ivory);
+  --bg-2: var(--ivory2);
+  --bg-card: var(--paper);
+  --bg-sidebar: var(--em8);
+  --bg-topbar: var(--paper);
+  --bg-input: var(--ivory);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --text-secondary: var(--em7);
+  --text-inverse: #fff;
+  --text-sidebar: #cdddd5;
+  --text-sidebar-muted: rgba(231,205,138,0.65);
+  --border: var(--line);
+  --border-sidebar: rgba(212,172,79,0.22);
+  --male-bg: var(--mb); --male-fg: var(--mf);
+  --female-bg: var(--fb); --female-fg: var(--ff);
+
+  --shadow-sm: 0 1px 3px rgba(92,24,48,0.08);
+  --shadow-md: 0 4px 12px rgba(92,24,48,0.12);
+  --shadow-lg: 0 8px 24px rgba(92,24,48,0.16);
+  --shadow-xl: 0 30px 80px rgba(0,0,0,0.4);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+
+  --font-heading: 'Reem Kufi', serif;
+  --font-body: 'Tajawal', sans-serif;
+  --sidebar-width: 240px;
+  --transition: all 0.16s ease;
+  --pattern-opacity: 0.08;
+
+  --success: #065f46; --success-bg: #d1fae5;
+  --danger: #7a2e45; --danger-bg: var(--fb);
+  --warning: #92400e; --warning-bg: #fef3c7;
+  --info: var(--mf); --info-bg: var(--mb);
+}
+
+[data-theme="qatar-light"] {
+  --em9:#3D0F1E; --em8:#5C1830; --em7:#7D1F3C; --em6:#A32D52; --em5:#C4496E;
+  --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
+  --ivory:#fafafa; --ivory2:#f5f5f5; --paper:#ffffff;
+  --ink:#1b2a25; --muted:#6f7b74; --line:#e8e8e8;
+  --mb:#e8eff5; --mf:#13456b; --fb:#f7eaef; --ff:#7a2e45;
+
+  --primary: var(--em7); --primary-light: var(--em6); --primary-dark: var(--em8);
+  --accent: var(--g5); --accent-light: var(--g3); --accent-dark: var(--g6);
+  --bg: var(--ivory); --bg-2: var(--ivory2); --bg-card: var(--paper);
+  --bg-sidebar: #ffffff; --bg-topbar: var(--paper);
+  --bg-input: var(--ivory); --text: var(--ink); --text-muted: var(--muted);
+  --text-secondary: var(--em7); --text-inverse: #fff;
+  --text-sidebar: var(--em8); --text-sidebar-muted: var(--muted);
+  --border: var(--line); --border-sidebar: var(--line);
+  --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10); --shadow-xl: 0 16px 48px rgba(0,0,0,0.12);
+  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 22px; --radius-full: 9999px;
+  --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
+  --sidebar-width: 240px; --transition: all 0.16s ease; --pattern-opacity: 0.03;
+  --success: #065f46; --success-bg: #d1fae5; --danger: #7a2e45; --danger-bg: var(--fb);
+  --warning: #92400e; --warning-bg: #fef3c7; --info: var(--mf); --info-bg: var(--mb);
+}
+
+[data-theme="dark-heritage"] {
+  --em9:#0a0408; --em8:#120810; --em7:#c8a24b; --em6:#e7cd8a; --em5:#f0dca0;
+  --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
+  --ivory:#0f0a0c; --ivory2:#1a1015; --paper:#111318;
+  --ink:#e8f0eb; --muted:#5a7a65; --line:#1e3028;
+  --mb:#0d1e2a; --mf:#5ba8c9; --fb:#2a0d18; --ff:#e0a0b8;
+
+  --primary: var(--g5); --primary-light: var(--g3); --primary-dark: var(--g6);
+  --accent: #9E2B4E; --accent-light: #C4406A; --accent-dark: #7D1F3C;
+  --bg: var(--ivory); --bg-2: var(--ivory2); --bg-card: var(--paper);
+  --bg-sidebar: #080f0c; --bg-topbar: var(--paper);
+  --bg-input: var(--ivory2); --text: var(--ink); --text-muted: var(--muted);
+  --text-secondary: var(--g3); --text-inverse: #0a0408;
+  --text-sidebar: #cdddd5; --text-sidebar-muted: rgba(231,205,138,0.6);
+  --border: var(--line); --border-sidebar: rgba(200,162,75,0.2);
+  --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4); --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.6); --shadow-xl: 0 30px 80px rgba(0,0,0,0.7);
+  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 22px; --radius-full: 9999px;
+  --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
+  --sidebar-width: 240px; --transition: all 0.16s ease; --pattern-opacity: 0.06;
+  --success: #4CAF82; --success-bg: #0d2a1c; --danger: #e05545; --danger-bg: #2a0d0a;
+  --warning: var(--g3); --warning-bg: #1a1500; --info: #5ba8c9; --info-bg: #0a1e2a;
+}
+
+[data-theme="modern-green"] {
+  --em9:#023020; --em8:#085041; --em7:#1D9E75; --em6:#22b588; --em5:#27cc9b;
+  --g3:#a0d4c0; --g4:#7ab89e; --g5:#1D9E75; --g6:#085041; --g7:#023020;
+  --ivory:#f4f8f6; --ivory2:#ecf5f1; --paper:#ffffff;
+  --ink:#0a1f18; --muted:#6b9e8a; --line:#d4ede4;
+  --mb:#e3eef8; --mf:#0C447C; --fb:#f7eaef; --ff:#7a2e45;
+
+  --primary: var(--em7); --primary-light: var(--em6); --primary-dark: var(--em8);
+  --accent: #0C447C; --accent-light: #1a6bb5; --accent-dark: #082e54;
+  --bg: var(--ivory); --bg-2: var(--ivory2); --bg-card: var(--paper);
+  --bg-sidebar: #085041; --bg-topbar: var(--paper);
+  --bg-input: var(--ivory); --text: var(--ink); --text-muted: var(--muted);
+  --text-secondary: var(--em7); --text-inverse: #fff;
+  --text-sidebar: #e0f5ee; --text-sidebar-muted: rgba(224,245,238,0.6);
+  --border: var(--line); --border-sidebar: rgba(255,255,255,0.1);
+  --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
+  --shadow-sm: 0 1px 3px rgba(8,80,65,0.08); --shadow-md: 0 4px 12px rgba(8,80,65,0.12);
+  --shadow-lg: 0 8px 24px rgba(8,80,65,0.16); --shadow-xl: 0 16px 48px rgba(8,80,65,0.20);
+  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 22px; --radius-full: 9999px;
+  --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
+  --sidebar-width: 240px; --transition: all 0.16s ease; --pattern-opacity: 0.04;
+  --success: #1D9E75; --success-bg: #e1f5ee; --danger: #c0392b; --danger-bg: #fbeae8;
+  --warning: #b8860b; --warning-bg: #fdf5e0; --info: #0C447C; --info-bg: #e3eef8;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { direction: rtl; }
+body { font-family: var(--font-body); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(200,162,75,0.25); border-radius: 99px; }
+
+/* نمط النجمة الثمانية */
+.sidebar-pattern {
+  position: absolute; inset: 0; opacity: var(--pattern-opacity); pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M52,30 L38.3,33.4 L45.6,45.6 L33.4,38.3 L30,52 L26.6,38.3 L14.4,45.6 L21.7,33.4 L8,30 L21.7,26.6 L14.4,14.4 L26.6,21.7 L30,8 L33.4,21.7 L45.6,14.4 L38.3,26.6 Z' fill='none' stroke='%23e7cd8a' stroke-width='1.1'/%3E%3Crect x='27' y='27' width='6' height='6' transform='rotate(45 30 30)' fill='none' stroke='%23e7cd8a' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+/* خط ذهبي */
+.gold-divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+.gold-divider .ln { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--g5), transparent); }
+
+/* زرارات */
+.btn-em { background: linear-gradient(135deg, var(--em7), var(--em6)); color: #fff; border: none; border-radius: var(--radius-md); padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-body); display: inline-flex; align-items: center; gap: 7px; transition: var(--transition); box-shadow: 0 4px 12px rgba(125,31,60,0.22); }
+.btn-em:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(125,31,60,0.28); }
+.btn-out { background: var(--paper); color: var(--em7); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 9px 15px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body); display: inline-flex; align-items: center; gap: 7px; transition: var(--transition); }
+.btn-out:hover { background: var(--ivory); border-color: var(--g5); }
+.btn-gold { width: 100%; margin-top: 22px; font-family: var(--font-heading); font-weight: 600; font-size: 16px; padding: 13px; border-radius: var(--radius-md); cursor: pointer; border: none; color: #3a2c06; background: linear-gradient(180deg, var(--g3), var(--g5)); box-shadow: 0 6px 18px rgba(168,133,47,0.35); transition: var(--transition); }
+.btn-gold:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.btn-gold:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+.btn-sm { border: none; border-radius: 7px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--font-body); display: inline-flex; align-items: center; gap: 4px; transition: var(--transition); }
+.btn-sm.em { background: rgba(125,31,60,0.1); color: var(--em7); }
+.btn-sm.em:hover { background: rgba(125,31,60,0.18); }
+
+/* inputs */
+.field-inp { width: 100%; font-family: var(--font-body); font-size: 14px; padding: 11px 13px; border-radius: var(--radius-md); border: 1px solid var(--line); background: var(--ivory); outline: none; transition: var(--transition); color: var(--ink); box-sizing: border-box; }
+.field-inp:focus { border-color: var(--g5); background: var(--paper); box-shadow: 0 0 0 3px rgba(200,162,75,0.15); }
+.field-inp::placeholder { color: var(--muted); }
+
+/* chips */
+.chip { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 99px; white-space: nowrap; }
+.c-gold { background: rgba(200,162,75,0.12); color: var(--g6); border: 1px solid rgba(200,162,75,0.25); }
+.c-green { background: rgba(163,45,82,0.1); color: var(--em6); border: 1px solid rgba(163,45,82,0.2); }
+.c-male { background: var(--mb); color: var(--mf); }
+.c-fem { background: var(--fb); color: var(--ff); }
+.c-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.c-ok { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+
+/* search */
+.search-bar { display: flex; align-items: center; gap: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 99px; padding: 8px 14px; flex: 1; transition: var(--transition); }
+.search-bar:focus-within { border-color: var(--g5); box-shadow: 0 0 0 3px rgba(200,162,75,0.12); }
+.search-bar input { border: none; background: transparent; font-family: var(--font-body); font-size: 13px; color: var(--ink); flex: 1; outline: none; }
+.search-bar input::placeholder { color: var(--muted); }
+
+/* panel */
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 16px; }
+.panel-head { display: flex; align-items: center; gap: 8px; padding: 13px 18px; border-bottom: 1px solid var(--line); }
+.panel-head svg { color: var(--g6); }
+.panel-head .h { font-family: var(--font-heading); font-size: 15px; font-weight: 500; color: var(--em8); flex: 1; }
+.panel-head .ph-action { font-size: 12px; color: var(--em6); cursor: pointer; font-weight: 600; }
+
+/* progress */
+.prog-wrap { height: 4px; border-radius: 99px; background: var(--ivory2); overflow: hidden; margin-top: 8px; }
+.prog-bar { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--em7), var(--em6)); }
+.prog-bar.gold { background: linear-gradient(90deg, var(--g6), var(--g4)); }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.22s ease; }
 
 /* ============================================
    الثيم الافتراضي: Qatar Heritage
-   بورجوندي غامق + ذهبي + خلفية كريمية
+   زمردي داكن + ذهبي — مستوحى من كسوة الكعبة
    ============================================ */
 [data-theme="qatar-heritage"], :root {
-  /* الألوان الأساسية */
-  --primary:        #7D1F3C;
-  --primary-light:  #9E2B4E;
-  --primary-dark:   #5C1629;
-  --accent:         #C9A84C;
-  --accent-light:   #E2C97E;
-  --accent-dark:    #A8872C;
+  --primary:        #0f5340;
+  --primary-light:  #13674f;
+  --primary-dark:   #0b3b2e;
+  --accent:         #c8a24b;
+  --accent-light:   #e7cd8a;
+  --accent-dark:    #a9852f;
 
-  /* الخلفيات */
-  --bg:             #F5EFE8;
-  --bg-card:        #FFFFFF;
-  --bg-sidebar:     #2C0E1A;
-  --bg-sidebar-hover: #3D1525;
-  --bg-topbar:      #FFFFFF;
-  --bg-input:       #FAF7F4;
-  --bg-hover:       #F0E8DF;
+  --bg:             #f7f2e7;
+  --bg-2:           #f1e9d6;
+  --bg-card:        #fffdf8;
+  --bg-sidebar:     #0b3b2e;
+  --bg-sidebar-hover: rgba(255,255,255,0.06);
+  --bg-topbar:      #fffdf8;
+  --bg-input:       #f7f2e7;
+  --bg-hover:       #f1e9d6;
 
-  /* النصوص */
-  --text:           #1A0A10;
-  --text-secondary: #6B4556;
-  --text-muted:     #9E7A89;
-  --text-inverse:   #FFFFFF;
-  --text-sidebar:   #F5E6EC;
-  --text-sidebar-muted: #C4A0B0;
+  --text:           #1b2a25;
+  --text-secondary: #3d5a4e;
+  --text-muted:     #6f7b74;
+  --text-inverse:   #ffffff;
+  --text-sidebar:   #cdddd5;
+  --text-sidebar-muted: rgba(231,205,138,0.7);
 
-  /* الحدود */
-  --border:         #E8D8DF;
-  --border-strong:  #C9A0B4;
-  --border-sidebar: #4A1E2D;
+  --border:         #e7ded0;
+  --border-strong:  #c8a24b;
+  --border-sidebar: rgba(212,172,79,0.25);
 
-  /* الحالات */
-  --success:        #2D7A5C;
-  --success-bg:     #E8F5EF;
-  --danger:         #C0392B;
-  --danger-bg:      #FBEAE8;
-  --warning:        #B8860B;
-  --warning-bg:     #FDF5E0;
-  --info:           #1A6B8A;
-  --info-bg:        #E3F2F8;
+  --success:        #0f5340;
+  --success-bg:     #e8eff5;
+  --danger:         #c0392b;
+  --danger-bg:      #fbeae8;
+  --warning:        #a9852f;
+  --warning-bg:     #fdf5e0;
+  --info:           #13456b;
+  --info-bg:        #e8eff5;
 
-  /* الظلال */
-  --shadow-sm:      0 1px 3px rgba(125, 31, 60, 0.08);
-  --shadow-md:      0 4px 12px rgba(125, 31, 60, 0.12);
-  --shadow-lg:      0 8px 24px rgba(125, 31, 60, 0.16);
-  --shadow-xl:      0 16px 48px rgba(125, 31, 60, 0.20);
+  --male-bg:        #e8eff5;
+  --male-fg:        #13456b;
+  --female-bg:      #f7eaef;
+  --female-fg:      #7a2e45;
 
-  /* الشكل */
-  --radius-sm:      6px;
-  --radius-md:      10px;
+  --shadow-sm:      0 1px 3px rgba(11,59,46,0.08);
+  --shadow-md:      0 4px 12px rgba(11,59,46,0.12);
+  --shadow-lg:      0 8px 24px rgba(11,59,46,0.16);
+  --shadow-xl:      0 30px 80px rgba(0,0,0,0.3);
+
+  --radius-sm:      9px;
+  --radius-md:      12px;
   --radius-lg:      16px;
-  --radius-xl:      24px;
+  --radius-xl:      22px;
   --radius-full:    9999px;
 
-  /* الخطوط */
   --font-heading:   'Reem Kufi', serif;
   --font-body:      'Tajawal', sans-serif;
 
-  /* الأحجام */
-  --sidebar-width:  220px;
-  --topbar-height:  52px;
+  --sidebar-width:  248px;
+  --topbar-height:  56px;
 
-  /* الحركة */
-  --transition:     all 0.2s ease;
-  --transition-slow: all 0.35s ease;
+  --transition:     all 0.18s ease;
+  --transition-slow: all 0.3s ease;
 
-  /* النمط الإسلامي */
-  --pattern-opacity: 0.04;
-  --pattern-color:  #7D1F3C;
+  --pattern-opacity: 0.08;
 }
 
 /* ============================================
    الثيم الثاني: Qatar Heritage Light
-   نفس الهوية بس أفتح وأكثر حداثة
    ============================================ */
 [data-theme="qatar-light"] {
-  --primary:        #7D1F3C;
-  --primary-light:  #9E2B4E;
-  --primary-dark:   #5C1629;
-  --accent:         #C9A84C;
-  --accent-light:   #E2C97E;
-  --accent-dark:    #A8872C;
+  --primary:        #0f5340;
+  --primary-light:  #13674f;
+  --primary-dark:   #0b3b2e;
+  --accent:         #c8a24b;
+  --accent-light:   #e7cd8a;
+  --accent-dark:    #a9852f;
 
-  --bg:             #FAFAFA;
-  --bg-card:        #FFFFFF;
-  --bg-sidebar:     #FFFFFF;
-  --bg-sidebar-hover: #FFF5F7;
-  --bg-topbar:      #FFFFFF;
-  --bg-input:       #F8F8F8;
-  --bg-hover:       #FDF0F3;
+  --bg:             #fafafa;
+  --bg-2:           #f5f5f5;
+  --bg-card:        #ffffff;
+  --bg-sidebar:     #ffffff;
+  --bg-sidebar-hover: #f0faf6;
+  --bg-topbar:      #ffffff;
+  --bg-input:       #f8f8f8;
+  --bg-hover:       #f0faf6;
 
-  --text:           #1A0A10;
-  --text-secondary: #6B4556;
-  --text-muted:     #9E7A89;
-  --text-inverse:   #FFFFFF;
-  --text-sidebar:   #4A1E2D;
-  --text-sidebar-muted: #9E7A89;
+  --text:           #1b2a25;
+  --text-secondary: #3d5a4e;
+  --text-muted:     #6f7b74;
+  --text-inverse:   #ffffff;
+  --text-sidebar:   #1b2a25;
+  --text-sidebar-muted: #6f7b74;
 
-  --border:         #F0E0E5;
-  --border-strong:  #DDB8C4;
-  --border-sidebar: #F0E0E5;
+  --border:         #e8e8e8;
+  --border-strong:  #0f5340;
+  --border-sidebar: #e8e8e8;
 
-  --success:        #2D7A5C;
-  --success-bg:     #E8F5EF;
-  --danger:         #C0392B;
-  --danger-bg:      #FBEAE8;
-  --warning:        #B8860B;
-  --warning-bg:     #FDF5E0;
-  --info:           #1A6B8A;
-  --info-bg:        #E3F2F8;
+  --success:        #0f5340;
+  --success-bg:     #e8f5ef;
+  --danger:         #c0392b;
+  --danger-bg:      #fbeae8;
+  --warning:        #a9852f;
+  --warning-bg:     #fdf5e0;
+  --info:           #13456b;
+  --info-bg:        #e8eff5;
 
-  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.10);
-  --shadow-xl:      0 16px 48px rgba(0, 0, 0, 0.12);
+  --male-bg:        #e8eff5;
+  --male-fg:        #13456b;
+  --female-bg:      #f7eaef;
+  --female-fg:      #7a2e45;
 
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md:      0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg:      0 8px 24px rgba(0,0,0,0.10);
+  --shadow-xl:      0 16px 48px rgba(0,0,0,0.12);
+
+  --radius-sm:      9px;
+  --radius-md:      12px;
+  --radius-lg:      16px;
+  --radius-xl:      22px;
+  --radius-full:    9999px;
+
+  --font-heading:   'Reem Kufi', serif;
+  --font-body:      'Tajawal', sans-serif;
+
+  --sidebar-width:  248px;
+  --topbar-height:  56px;
+  --transition:     all 0.18s ease;
   --pattern-opacity: 0.03;
-  --pattern-color:  #7D1F3C;
 }
 
 /* ============================================
    الثيم الثالث: Dark Heritage
-   داكن فاخر مع بورجوندي وذهبي
    ============================================ */
 [data-theme="dark-heritage"] {
-  --primary:        #C9A84C;
-  --primary-light:  #E2C97E;
-  --primary-dark:   #A8872C;
-  --accent:         #9E2B4E;
-  --accent-light:   #C4406A;
-  --accent-dark:    #7D1F3C;
+  --primary:        #e7cd8a;
+  --primary-light:  #f0dca0;
+  --primary-dark:   #c8a24b;
+  --accent:         #1c8266;
+  --accent-light:   #239e7e;
+  --accent-dark:    #13674f;
 
-  --bg:             #0F0A0C;
-  --bg-card:        #1A1015;
-  --bg-sidebar:     #130C10;
-  --bg-sidebar-hover: #1F1219;
-  --bg-topbar:      #1A1015;
-  --bg-input:       #231520;
-  --bg-hover:       #1F1219;
+  --bg:             #0a1410;
+  --bg-2:           #0d1a15;
+  --bg-card:        #111f18;
+  --bg-sidebar:     #080f0c;
+  --bg-sidebar-hover: rgba(255,255,255,0.05);
+  --bg-topbar:      #111f18;
+  --bg-input:       #182418;
+  --bg-hover:       #182418;
 
-  --text:           #F5EDE0;
-  --text-secondary: #C4A882;
-  --text-muted:     #7A6050;
-  --text-inverse:   #0F0A0C;
-  --text-sidebar:   #F5EDE0;
-  --text-sidebar-muted: #7A6050;
+  --text:           #e8f0eb;
+  --text-secondary: #a8c4b0;
+  --text-muted:     #5a7a65;
+  --text-inverse:   #0a1410;
+  --text-sidebar:   #cdddd5;
+  --text-sidebar-muted: rgba(231,205,138,0.6);
 
-  --border:         #2A1820;
-  --border-strong:  #3D2030;
-  --border-sidebar: #2A1820;
+  --border:         #1e3028;
+  --border-strong:  #2e5040;
+  --border-sidebar: rgba(200,162,75,0.2);
 
-  --success:        #4CAF82;
-  --success-bg:     #0D2A1C;
-  --danger:         #E05545;
-  --danger-bg:      #2A0D0A;
-  --warning:        #E2C97E;
-  --warning-bg:     #2A2005;
-  --info:           #5BA8C9;
-  --info-bg:        #0A1E2A;
+  --success:        #1c8266;
+  --success-bg:     #0d2a1c;
+  --danger:         #e05545;
+  --danger-bg:      #2a0d0a;
+  --warning:        #e7cd8a;
+  --warning-bg:     #1a1500;
+  --info:           #5ba8c9;
+  --info-bg:        #0a1e2a;
 
-  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg:      0 8px 24px rgba(0, 0, 0, 0.6);
-  --shadow-xl:      0 16px 48px rgba(0, 0, 0, 0.7);
+  --male-bg:        #0d1e2a;
+  --male-fg:        #5ba8c9;
+  --female-bg:      #2a0d18;
+  --female-fg:      #e0a0b8;
 
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:      0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg:      0 8px 24px rgba(0,0,0,0.6);
+  --shadow-xl:      0 30px 80px rgba(0,0,0,0.7);
+
+  --radius-sm:      9px;
+  --radius-md:      12px;
+  --radius-lg:      16px;
+  --radius-xl:      22px;
+  --radius-full:    9999px;
+
+  --font-heading:   'Reem Kufi', serif;
+  --font-body:      'Tajawal', sans-serif;
+
+  --sidebar-width:  248px;
+  --topbar-height:  56px;
+  --transition:     all 0.18s ease;
   --pattern-opacity: 0.06;
-  --pattern-color:  #C9A84C;
 }
 
 /* ============================================
    الثيم الرابع: Modern Green
-   زمردي احترافي نظيف
    ============================================ */
 [data-theme="modern-green"] {
-  --primary:        #1A7A5C;
-  --primary-light:  #229E78;
-  --primary-dark:   #125C44;
+  --primary:        #1D9E75;
+  --primary-light:  #22b588;
+  --primary-dark:   #085041;
   --accent:         #0C447C;
-  --accent-light:   #1A6BB5;
-  --accent-dark:    #082E54;
+  --accent-light:   #1a6bb5;
+  --accent-dark:    #082e54;
 
-  --bg:             #F4F8F6;
-  --bg-card:        #FFFFFF;
-  --bg-sidebar:     #0F3D2E;
-  --bg-sidebar-hover: #1A5C44;
-  --bg-topbar:      #FFFFFF;
-  --bg-input:       #F0F6F4;
-  --bg-hover:       #E8F5F0;
+  --bg:             #f4f8f6;
+  --bg-2:           #ecf5f1;
+  --bg-card:        #ffffff;
+  --bg-sidebar:     #085041;
+  --bg-sidebar-hover: rgba(255,255,255,0.08);
+  --bg-topbar:      #ffffff;
+  --bg-input:       #f0f6f4;
+  --bg-hover:       #e8f5f0;
 
-  --text:           #0A1F18;
-  --text-secondary: #2D6B52;
-  --text-muted:     #6B9E8A;
-  --text-inverse:   #FFFFFF;
-  --text-sidebar:   #E0F5EE;
-  --text-sidebar-muted: #7AB89E;
+  --text:           #0a1f18;
+  --text-secondary: #2d6b52;
+  --text-muted:     #6b9e8a;
+  --text-inverse:   #ffffff;
+  --text-sidebar:   #e0f5ee;
+  --text-sidebar-muted: rgba(224,245,238,0.6);
 
-  --border:         #D4EDE4;
-  --border-strong:  #A0D4C0;
-  --border-sidebar: #1A5C44;
+  --border:         #d4ede4;
+  --border-strong:  #1D9E75;
+  --border-sidebar: rgba(255,255,255,0.1);
 
-  --success:        #1A7A5C;
-  --success-bg:     #E0F5EE;
-  --danger:         #C0392B;
-  --danger-bg:      #FBEAE8;
-  --warning:        #B8860B;
-  --warning-bg:     #FDF5E0;
+  --success:        #1D9E75;
+  --success-bg:     #e1f5ee;
+  --danger:         #c0392b;
+  --danger-bg:      #fbeae8;
+  --warning:        #b8860b;
+  --warning-bg:     #fdf5e0;
   --info:           #0C447C;
-  --info-bg:        #E3EEF8;
+  --info-bg:        #e3eef8;
 
-  --shadow-sm:      0 1px 3px rgba(26, 122, 92, 0.08);
-  --shadow-md:      0 4px 12px rgba(26, 122, 92, 0.12);
-  --shadow-lg:      0 8px 24px rgba(26, 122, 92, 0.16);
-  --shadow-xl:      0 16px 48px rgba(26, 122, 92, 0.20);
+  --male-bg:        #e3eef8;
+  --male-fg:        #0C447C;
+  --female-bg:      #f7eaef;
+  --female-fg:      #7a2e45;
 
-  --pattern-opacity: 0.03;
-  --pattern-color:  #1A7A5C;
+  --shadow-sm:      0 1px 3px rgba(8,80,65,0.08);
+  --shadow-md:      0 4px 12px rgba(8,80,65,0.12);
+  --shadow-lg:      0 8px 24px rgba(8,80,65,0.16);
+  --shadow-xl:      0 16px 48px rgba(8,80,65,0.20);
+
+  --radius-sm:      9px;
+  --radius-md:      12px;
+  --radius-lg:      16px;
+  --radius-xl:      22px;
+  --radius-full:    9999px;
+
+  --font-heading:   'Reem Kufi', serif;
+  --font-body:      'Tajawal', sans-serif;
+
+  --sidebar-width:  248px;
+  --topbar-height:  56px;
+  --transition:     all 0.18s ease;
+  --pattern-opacity: 0.04;
 }
 
 /* ============================================
-   الستايلات العامة المشتركة
+   الستايلات العامة
    ============================================ */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  direction: rtl;
-}
-
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { direction: rtl; }
 body {
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
-  transition: background 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar مخصص */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-full); }
-::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-/* ============================================
-   Classes مساعدة
-   ============================================ */
+/* نمط النجمة الثمانية في الـ Sidebar */
+.sidebar-pattern {
+  position: absolute;
+  inset: 0;
+  opacity: var(--pattern-opacity);
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M52,30 L38.3,33.4 L45.6,45.6 L33.4,38.3 L30,52 L26.6,38.3 L14.4,45.6 L21.7,33.4 L8,30 L21.7,26.6 L14.4,14.4 L26.6,21.7 L30,8 L33.4,21.7 L45.6,14.4 L38.3,26.6 Z' fill='none' stroke='%23e7cd8a' stroke-width='1.1'/%3E%3Crect x='27' y='27' width='6' height='6' transform='rotate(45 30 30)' fill='none' stroke='%23e7cd8a' stroke-width='1'/%3E%3C/svg%3E");
+}
 
-/* الخلفيات */
-.bg-primary    { background: var(--primary) !important; }
-.bg-accent     { background: var(--accent) !important; }
-.bg-card       { background: var(--bg-card) !important; }
-.bg-sidebar    { background: var(--bg-sidebar) !important; }
-.bg-success    { background: var(--success-bg) !important; }
-.bg-danger     { background: var(--danger-bg) !important; }
-.bg-warning    { background: var(--warning-bg) !important; }
-.bg-info       { background: var(--info-bg) !important; }
-
-/* النصوص */
-.text-primary  { color: var(--primary) !important; }
-.text-accent   { color: var(--accent) !important; }
-.text-muted    { color: var(--text-muted) !important; }
-.text-secondary { color: var(--text-secondary) !important; }
-.text-inverse  { color: var(--text-inverse) !important; }
-.text-success  { color: var(--success) !important; }
-.text-danger   { color: var(--danger) !important; }
-.text-warning  { color: var(--warning) !important; }
-
-/* الحدود */
-.border-primary { border-color: var(--primary) !important; }
-.border-default { border-color: var(--border) !important; }
+/* خط ذهبي زخرفي */
+.gold-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.gold-divider .line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
 
 /* الزرارات */
 .btn-primary {
   background: var(--primary);
   color: var(--text-inverse);
   border: none;
-  padding: 8px 16px;
+  padding: 10px 18px;
   border-radius: var(--radius-md);
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
-.btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.btn-primary:active { transform: translateY(0); }
+.btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-.btn-secondary {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  padding: 8px 16px;
+.btn-gold {
+  background: linear-gradient(180deg, var(--accent-light), var(--accent));
+  color: #3a2c06;
+  border: none;
+  padding: 13px;
   border-radius: var(--radius-md);
-  font-family: var(--font-body);
-  font-size: 13px;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
   transition: var(--transition);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  box-shadow: 0 6px 18px rgba(168,133,47,0.35);
 }
-.btn-secondary:hover { border-color: var(--primary); color: var(--primary); background: var(--bg-hover); }
+.btn-gold:hover { filter: brightness(1.05); transform: translateY(-1px); }
 
-.btn-danger {
-  background: var(--danger-bg);
-  color: var(--danger);
-  border: 1px solid transparent;
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  font-family: var(--font-body);
-  font-size: 13px;
-  cursor: pointer;
-  transition: var(--transition);
-}
-.btn-danger:hover { background: var(--danger); color: white; }
-
-/* الـ Inputs */
-.input {
+/* الـ inputs */
+.input-field {
   width: 100%;
-  padding: 8px 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
   color: var(--text);
-  transition: var(--transition);
   outline: none;
+  transition: var(--transition);
 }
-.input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(125, 31, 60, 0.1); background: var(--bg-card); }
-.input::placeholder { color: var(--text-muted); }
+.input-field:focus {
+  border-color: var(--accent);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 3px rgba(200,162,75,0.18);
+}
+.input-field::placeholder { color: var(--text-muted); }
 
 /* الكروت */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
   overflow: hidden;
-}
-.card:hover { box-shadow: var(--shadow-md); }
-
-/* الشارات */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  font-weight: 500;
-}
-.badge-primary { background: var(--bg-hover); color: var(--primary); }
-.badge-success { background: var(--success-bg); color: var(--success); }
-.badge-danger  { background: var(--danger-bg); color: var(--danger); }
-.badge-warning { background: var(--warning-bg); color: var(--warning); }
-
-/* النمط الإسلامي الهندسي في الخلفية */
-.islamic-pattern {
-  position: relative;
-  overflow: hidden;
-}
-.islamic-pattern::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M30 0L37.5 7.5L45 0L37.5 7.5L45 15L37.5 7.5L30 15L22.5 7.5L15 15L22.5 7.5L15 0L22.5 7.5L30 0zM0 30L7.5 22.5L15 30L7.5 37.5L0 30zM60 30L52.5 22.5L45 30L52.5 37.5L60 30zM30 60L37.5 52.5L45 60L37.5 52.5L30 45L22.5 52.5L15 60L22.5 52.5L30 60z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  opacity: var(--pattern-opacity);
-  pointer-events: none;
 }
 
 /* الانتقالات */
-.fade-in {
-  animation: fadeIn 0.3s ease;
-}
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-.slide-in {
-  animation: slideIn 0.25s ease;
-}
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
+.fade-in { animation: fadeIn 0.25s ease; }
