@@ -3,7 +3,7 @@ import type React from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { useConfig } from "./config/ConfigContext";
-import { useTheme, ThemeSwitcher } from "./config/ThemeContext";
+import { ThemeSwitcher } from "./config/ThemeContext";
 import type { Passenger, User, Bus, Camp, Room, Flight } from "./types";
 function makeShort(fullName: string): string {
   if (!fullName) return "";
