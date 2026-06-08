@@ -538,7 +538,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
           </div>
-          {dist.map(({ label, count: distCount, pct, icon }) => (
+          {dist.map(({ label, pct, icon }) => (
             <div key={label} style={{ marginBottom: 9 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
