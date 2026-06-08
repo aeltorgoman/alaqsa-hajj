@@ -454,7 +454,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   const recent = passengers.slice(0, 5);
 
   return (
-    <div style={{ display: "flex", gap: 16, height: "100%", overflow: "hidden", padding: "16px 18px", background: "var(--bg)" }}>
+    <div style={{ display: "flex", gap: 14, height: "100%", overflow: "hidden", padding: "12px 14px", background: "var(--bg)" }}>
       {/* العمود الرئيسي */}
       <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
         {/* أزرار الإضافة */}
@@ -486,22 +486,22 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
           <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
         </div>
 
-        {/* إحصائيات — كروت أصغر وأرقام أكبر */}
+        {/* إحصائيات — خلفيات ملونة جريئة */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
           {[
-            { label: "إجمالي الحجاج", num: passengers.length, sub: `+ ${Math.min(12, passengers.length)} هذا الأسبوع`, bg: "var(--paper)", border: "1px solid var(--line)", iconBg: "rgba(200,162,75,0.12)", clr: "var(--em8)", lbl: "var(--g7)", sub_clr: "var(--g6)", iconClr: "var(--g5)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--mb)", border: "1px solid rgba(19,69,107,0.1)", iconBg: "rgba(19,69,107,0.12)", clr: "var(--mf)", lbl: "var(--mf)", sub_clr: "var(--mf)", iconClr: "var(--mf)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--fb)", border: "1px solid rgba(122,46,69,0.1)", iconBg: "rgba(122,46,69,0.12)", clr: "var(--ff)", lbl: "var(--ff)", sub_clr: "var(--ff)", iconClr: "var(--ff)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-          ].map(({ label, num, sub, bg, border, iconBg, clr, lbl, sub_clr, iconClr, icon }) => (
-            <div key={label} style={{ background: bg, border, borderRadius: "var(--radius-lg)", padding: 14, cursor: "pointer", transition: "var(--transition)" }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.08)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+            { label: "إجمالي الحجاج", num: passengers.length, sub: `+ ${Math.min(12, passengers.length)} هذا الأسبوع`, bg: "linear-gradient(135deg, var(--em7), var(--em8))", iconBg: "rgba(255,255,255,0.15)", clr: "#fff", lbl: "rgba(255,255,255,0.85)", sub_clr: "rgba(255,255,255,0.7)", iconClr: "var(--g3)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(135deg, #1a5fa8, #13456b)", iconBg: "rgba(255,255,255,0.15)", clr: "#fff", lbl: "rgba(255,255,255,0.85)", sub_clr: "rgba(255,255,255,0.7)", iconClr: "rgba(255,255,255,0.9)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(135deg, #c0392b, #922b21)", iconBg: "rgba(255,255,255,0.15)", clr: "#fff", lbl: "rgba(255,255,255,0.85)", sub_clr: "rgba(255,255,255,0.7)", iconClr: "rgba(255,255,255,0.9)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+          ].map(({ label, num, sub, bg, iconBg, clr, lbl, sub_clr, iconClr, icon }) => (
+            <div key={label} style={{ background: bg, borderRadius: "var(--radius-lg)", padding: 14, cursor: "pointer", transition: "var(--transition)", boxShadow: "0 4px 14px rgba(0,0,0,0.15)" }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.15)"; }}>
               <div style={{ width: 34, height: 34, borderRadius: 9, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconClr} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
               </div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: lbl, marginBottom: 4, opacity: 0.8 }}>{label}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: lbl, marginBottom: 4 }}>{label}</div>
               <div style={{ fontFamily: "var(--font-heading)", fontSize: 40, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-              <div style={{ fontSize: 11, marginTop: 5, color: sub_clr, opacity: 0.7 }}>{sub}</div>
+              <div style={{ fontSize: 11, marginTop: 5, color: sub_clr }}>{sub}</div>
             </div>
           ))}
         </div>
@@ -531,7 +531,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
       </div>
 
       {/* اللوحة الجانبية اليسار */}
-      <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+      <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
         {/* نِسب التوزيع */}
         <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", padding: "16px 16px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
