@@ -146,17 +146,53 @@ const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] 
 const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"], "سويت": ["var(--info-bg)", "var(--info)"] };
 
 const NAV = [
-  { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
-  { section: "التنظيم", items: [{ id: "passengers", label: "🕌 الحجاج", perm: "view_passengers" }, { id: "buses", label: "🚌 الباصات", perm: "manage_buses" }, { id: "flights", label: "✈️ الطيران", perm: "manage_flights" }, { id: "mina", label: "⛺ مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "🏔 مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "🏨 الفندق", perm: "manage_hotel" }] },
-  { section: "التقارير", items: [{ id: "reports", label: "📄 التقارير", perm: "view_reports" }] },
-  { section: "الأرشيف", items: [{ id: "archive", label: "🗄 الأرشيف", perm: "view_archive" }] },
-  { section: "الإعدادات", items: [{ id: "users", label: "👥 المستخدمين", perm: "manage_users" }] },
+  { section: "الرئيسية", items: [{ id: "dash", label: "الرئيسية", perm: "" }] },
+  { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "view_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
+  { section: "التقارير", items: [{ id: "reports", label: "التقارير", perm: "view_reports" }] },
+  { section: "الأرشيف", items: [{ id: "archive", label: "الأرشيف", perm: "view_archive" }] },
+  { section: "الإعدادات", items: [{ id: "users", label: "المستخدمين", perm: "manage_users" }] },
 ];
 
+// SVG symbols للأفاتار - حاج وحاجة
+const AVATAR_SVG_DEFS = `
+<svg width="0" height="0" style="position:absolute;overflow:hidden">
+  <defs>
+    <symbol id="avm" viewBox="0 0 128 128">
+      <circle fill="#515570" cx="64" cy="64" r="60"/><circle fill="#6b718e" cx="64" cy="64" r="48"/>
+      <path fill="#fff" d="M34,77.58V106s24.54,3.6,30,3.6S94,106,94,106V77.58C96.55,72.81,31.45,72.81,34,77.58Z"/>
+      <path fill="#fff" d="M64,125.1A59.73,59.73,0,0,0,103.8,110l-2.2-5.41c-1.71-4-6.22-6.64-11.29-6.64H37.69c-5.07,0-9.58,2.66-11.29,6.64L24.2,110A59.73,59.73,0,0,0,64,125.1Z"/>
+      <polygon fill="#a7aece" points="74 100.95 54 100.95 53.22 95.47 74.78 95.47 74 100.95"/>
+      <path fill="#ffbb94" d="M64,95.32A28.31,28.31,0,0,1,35.68,67V54.38a28.32,28.32,0,1,1,56.64,0V67A28.31,28.31,0,0,1,64,95.32Z"/>
+      <path fill="#fff" d="M95,48a31,31,0,0,0-62,0h0v4a181.28,181.28,0,0,1,62,0V48Z"/>
+      <path fill="#393c54" d="M94.69,34.18a252.1,252.1,0,0,0-61.38,0,2.88,2.88,0,0,0-2.52,2.54L30,43.63a2.86,2.86,0,0,0,3.29,3.14,207.69,207.69,0,0,1,61.38,0A2.86,2.86,0,0,0,98,43.63l-.77-6.91A2.88,2.88,0,0,0,94.69,34.18Z"/>
+      <path fill="#fff" d="M32,43,27.24,97.29a4,4,0,0,0,2.19,3.93l8.12,4.06a1,1,0,0,0,1.45-.9V46.5Z"/>
+      <path fill="#fff" d="M96,43l4.76,54.29a4,4,0,0,1-2.19,3.93l-8.12,4.06a1,1,0,0,1-1.45-.9V46.5Z"/>
+      <path fill="#393c54" d="M75,78c-.07-5-6-5.08-11-5.08S53.08,73,53,78h0V94.16a28.48,28.48,0,0,0,22,0V78Z"/>
+    </symbol>
+    <symbol id="avf" viewBox="0 0 128 128">
+      <circle fill="#a7aece" cx="64" cy="64" r="60"/>
+      <path fill="#515570" d="M64,124a59.67,59.67,0,0,0,34.69-11.06l-3.32-9.3A10,10,0,0,0,86,97H42.05a10,10,0,0,0-9.42,6.64l-3.32,9.3A59.67,59.67,0,0,0,64,124Z"/>
+      <path fill="#393c54" d="M64,124a59.77,59.77,0,0,0,41.6-16.79c-2.28-7.34-7.31-21-7.31-24.28V48.32A34.32,34.32,0,0,0,64,14h0A34.31,34.31,0,0,0,29.65,48.32V82.93c0,3.39-4.62,17.82-6.54,25A59.78,59.78,0,0,0,64,124Z"/>
+      <path fill="#ffd8c9" d="M64,91A25,25,0,0,1,39,66V49.52a25,25,0,1,1,50,0V66A25,25,0,0,1,64,91Z"/>
+      <path fill="#393c54" d="M35.67,49.19a28.33,28.33,0,0,1,56.66,0L92,51.48,36,51.75Z"/>
+      <circle fill="#fff" cx="76" cy="58.28" r="3"/><circle fill="#fff" cx="52" cy="58.28" r="3"/>
+      <path fill="#fff" d="M86.42,48.48a118.24,118.24,0,0,0-44.84,0A3.21,3.21,0,0,0,39,51.64V55a105.67,105.67,0,0,1,50,0V51.64A3.21,3.21,0,0,0,86.42,48.48Z"/>
+      <path fill="#393c54" d="M92.36,65.68a28.34,28.34,0,1,1-56.67,0s19.19-1.29,26.16-3.83a6.23,6.23,0,0,1,4.3,0C73.13,64.39,92.36,65.68,92.36,65.68Z"/>
+    </symbol>
+  </defs>
+</svg>`;
+
+function AvatarSVGDefs() {
+  return <div dangerouslySetInnerHTML={{ __html: AVATAR_SVG_DEFS }} />;
+}
+
 function Avatar({ name, gender, size = 32 }: { name: string; gender: string; size?: number }) {
-  const initials = name.split(" ").slice(0, 2).map(w => w[0] || "").join("");
   const f = gender === "أنثى";
-  return <div style={{ width: size, height: size, borderRadius: "50%", background: f ? "var(--danger-bg)" : "var(--success-bg)", color: f ? "var(--danger)" : "var(--success)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 500, flexShrink: 0 }}>{initials}</div>;
+  return (
+    <svg width={size} height={size} style={{ borderRadius: "50%", flexShrink: 0, overflow: "hidden" }}>
+      <use href={f ? "#avf" : "#avm"} width={size} height={size} />
+    </svg>
+  );
 }
 
 function Modal({ show, onClose, title, children, maxWidth = 420 }: { show: boolean; onClose: () => void; title: string; children: React.ReactNode; maxWidth?: number; }) {
@@ -229,7 +265,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
                 <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, fontWeight: 500, color: page === id ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 2, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
                   {page === id && <div style={{ position: "absolute", insetInlineStart: 0, top: "18%", bottom: "18%", width: 3, borderRadius: 99, background: "var(--accent)" }} />}
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={page === id ? "var(--accent-light)" : "var(--text-sidebar)"} strokeWidth="1.7" style={{ flexShrink: 0, opacity: page === id ? 1 : 0.85 }} dangerouslySetInnerHTML={{ __html: NAV_ICONS[id] || NAV_ICONS.dash }} />
-                  {label.replace(/[🏠🕌🚌✈️⛺🏔🏨📄🗄👥]/u, "").trim()}
+                  {label}
                   {id === "passengers" && count > 0 && (
                     <span style={{ marginInlineStart: "auto", background: "rgba(212,172,79,0.2)", color: "var(--accent-light)", fontSize: 11, fontWeight: 700, padding: "1px 9px", borderRadius: 99 }}>{count}</span>
                   )}
@@ -332,7 +368,7 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
           )}
 
           <button onClick={handleLogin} disabled={loading} className="btn-gold" style={{ width: "100%", marginTop: 24, opacity: loading ? 0.7 : 1 }}>
-            {loading ? "⏳ جاري التحقق..." : "دخول"}
+            {loading ? "جاري التحقق..." : "دخول"}
           </button>
 
           <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "var(--text-muted)" }}>
@@ -382,15 +418,15 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ ...btnP(), width: "100%", marginBottom: 14 }}>+ مستخدم جديد</button>}
       {users.map(u => (
         <div key={u.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "var(--success-bg)" : "var(--info-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.username === "admin" ? "👑" : "👤"}</div>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "var(--success-bg)" : "var(--info-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.username === "admin" ? "admin" : "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.8'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>"}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
           </div>
           {currentUser.permissions.manage_users && u.username !== "admin" && (
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => openEdit(u)} style={{ background: "var(--male-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--info)" }}>✏️</button>
-              <button onClick={() => deleteUser(u.id)} style={{ background: "var(--female-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
+              <button onClick={() => openEdit(u)} style={{ background: "var(--male-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--info)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button onClick={() => deleteUser(u.id)} style={{ background: "var(--female-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
             </div>
           )}
         </div>
@@ -403,16 +439,16 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>كلمة المرور</div><input type="password" style={inp} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} /></div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500 }}>الصلاحيات</div>
-          <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--success)", cursor: "pointer" }}>{ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}</div>
+          <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>{ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}</div>
         </div>
         {ALL_PERMISSIONS.map(p => (
-          <div key={p.key} onClick={() => togglePerm(p.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 3, background: perms[p.key] ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${perms[p.key] ? "var(--success)" : "var(--border)"}` }}>
-            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "var(--success)" : "var(--bg-card)", border: `1.5px solid ${perms[p.key] ? "var(--success)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{perms[p.key] && <span style={{ color: "var(--bg-card)", fontSize: 10 }}>✓</span>}</div>
+          <div key={p.key} onClick={() => togglePerm(p.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 3, background: perms[p.key] ? "rgba(125,31,60,.08)" : "var(--bg-2)", border: `0.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}` }}>
+            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{perms[p.key] && <span style={{ color: "var(--bg-card)", fontSize: 10 }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}</div>
             <span style={{ fontSize: 12 }}>{p.label}</span>
           </div>
         ))}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={saveUser} style={{ ...btnP(), flex: 1 }}>✓ حفظ</button>
+          <button onClick={saveUser} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ</button>
           <button onClick={() => setShowAdd(false)} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
@@ -666,13 +702,13 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%", position: "relative" }}>
-      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "var(--bg-card)", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}>✅ تم حفظ الحاج بنجاح!</div>}
+      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "var(--em7)", color: "var(--g3)", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم حفظ الحاج بنجاح!<//div>}
       {/* رفع جواز السفر */}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 جواز السفر</div>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>جواز السفر</div>
         {!previewImg ? (
           <div onClick={() => document.getElementById("pu")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 10, padding: "24px", textAlign: "center", cursor: "pointer", background: "var(--bg-2)" }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>🛂</div>
+            <div style={{ fontSize: 28, marginBottom: 6 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg></div>
             <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 3 }}>ارفع صورة جواز السفر</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>الذكاء الاصطناعي يستخرج البيانات تلقائياً</div>
             <input id="pu" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
@@ -681,7 +717,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <img src={previewImg} style={{ width: 140, height: 100, objectFit: "cover", borderRadius: 8, border: "0.5px solid #e5e5e5" }} />
             <div style={{ flex: 1 }}>
-              {loading ? (<><div style={{ background: "var(--bg-2)", borderRadius: 99, height: 4, overflow: "hidden", marginBottom: 6 }}><div style={{ width: `${progress}%`, height: "100%", background: "var(--success)", borderRadius: 99, transition: "width 0.3s" }} /></div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{statusMsg}</div></>) : <div style={{ fontSize: 11, color: "var(--success)", fontWeight: 500 }}>✓ {statusMsg}</div>}
+              {loading ? (<><div style={{ background: "var(--bg-2)", borderRadius: 99, height: 4, overflow: "hidden", marginBottom: 6 }}><div style={{ width: `${progress}%`, height: "100%", background: "linear-gradient(90deg,var(--em7),var(--em6))", borderRadius: 99, transition: "width 0.3s" }} /></div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{statusMsg}</div></>) : <div style={{ fontSize: 11, color: "var(--em7)", fontWeight: 500 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> {statusMsg}</div>}
               <button onClick={reset} style={{ marginTop: 8, ...btnS({ fontSize: 10, padding: "3px 10px" }) }}>تغيير</button>
             </div>
           </div>
@@ -691,16 +727,16 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
       {showFields && (<>
         {/* البيانات المستخرجة */}
         <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "var(--bg-card)" }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>👤 البيانات <span style={{ fontSize: 10, background: "var(--success-bg)", color: "var(--primary-dark)", padding: "1px 7px", borderRadius: 99 }}>✨ مستخرجة</span></div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>البيانات <span style={{ fontSize: 10, background: "var(--success-bg)", color: "var(--primary-dark)", padding: "1px 7px", borderRadius: 99 }}>مستخرجة</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {([["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]] as [string,string,string][]).map(([l, k, col]) => (
               <div key={k} style={{ gridColumn: col || "auto" }}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
-                <input disabled={locked} style={{ ...inp, borderColor: "var(--success)", background: locked ? "var(--bg-2)" : "var(--success-bg)", color: locked ? "var(--text-muted)" : "rgba(0,0,0,0.7)" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
+                <input disabled={locked} style={{ ...inp, borderColor: "var(--em7)", background: locked ? "var(--bg-2)" : "rgba(125,31,60,.05)", color: locked ? "var(--text-muted)" : "rgba(0,0,0,0.7)" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
               </div>
             ))}
             <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
-              <select disabled={locked} style={{ ...inp, borderColor: "var(--success)", background: locked ? "var(--bg-2)" : "var(--success-bg)" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
+              <select disabled={locked} style={{ ...inp, borderColor: "var(--em7)", background: locked ? "var(--bg-2)" : "rgba(125,31,60,.05)" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
                 <option value="">—</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
               </select>
             </div>
@@ -709,7 +745,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
         {/* البطاقة الشخصية */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🪪 البطاقة الشخصية <span style={{ fontSize: 10, color: "var(--text-muted)" }}>(اختياري)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>البطاقة الشخصية <span style={{ fontSize: 10, color: "var(--text-muted)" }}>(اختياري)</span></div>
           {!idCardPreview ? (
             <div onClick={() => !locked && document.getElementById("id-card-upload")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 8, padding: "14px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: "var(--bg-2)", opacity: locked ? 0.6 : 1 }}>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>ارفع البطاقة لاستخراج الرقم والصلاحية تلقائياً</div>
@@ -719,7 +755,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
               <img src={idCardPreview} style={{ width: 100, height: 65, objectFit: "cover", borderRadius: 6, border: "0.5px solid #e5e5e5" }} />
               <div style={{ flex: 1 }}>
-                {idScanLoading ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>⏳ جاري قراءة البطاقة...</div> : <div style={{ fontSize: 11, color: "var(--success)", fontWeight: 500 }}>✓ تم استخراج البيانات</div>}
+                {idScanLoading ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>جاري قراءة البطاقة...<//div> : <div style={{ fontSize: 11, color: "var(--em7)", fontWeight: 500 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم استخراج البيانات</div>}
                 <button onClick={() => { setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setForm(prev => ({ ...prev, national_id: "" })); }} style={{ marginTop: 6, ...btnS({ fontSize: 10, padding: "2px 8px" }) }}>تغيير</button>
               </div>
             </div>
@@ -736,13 +772,13 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
         {/* الخدمات */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>⭐ الخدمات المطلوبة</div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>الخدمات المطلوبة</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية", "ثلاثية", "رباعية", "سويت"]], ["🪟 إطلالة الغرفة", "hotel_view", ["مطلة", "غير مطلة"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
+            {([["الباص", "bus", ["عادي", "VIP"]], ["الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية", "ثلاثية", "رباعية", "سويت"]], ["إطلالة الغرفة", "hotel_view", ["مطلة", "غير مطلة"]], ["مخيم منى", "camp_mina", ["عادي", "خاص"]], ["مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
               <div key={k}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {opts.map(o => <div key={o} onClick={() => setService(k, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k] === o ? "var(--success)" : "var(--border)"}`, background: (services as any)[k] === o ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k] === o ? "var(--primary-dark)" : "var(--text-muted)", textAlign: "center", fontWeight: (services as any)[k] === o ? 500 : 400 }}>{o}</div>)}
+                  {opts.map(o => <div key={o} onClick={() => setService(k, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k] === o ? "var(--em7)" : "var(--border)"}`, background: (services as any)[k] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center", fontWeight: (services as any)[k] === o ? 500 : 400 }}>{o}</div>)}
                 </div>
               </div>
             ))}
@@ -751,14 +787,14 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
         {/* مستندات إضافية */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>📎 مستندات إضافية <span style={{ fontSize: 10, color: "var(--text-muted)" }}>(اختياري)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>مستندات إضافية <span style={{ fontSize: 10, color: "var(--text-muted)" }}>(اختياري)</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["📷 صورة شخصية", "photo", "image/*"], ["📄 عقد الانتفاق", "contract", "image/*,application/pdf"]] as [string, "photo"|"contract", string][]).map(([label, key, accept]) => (
+            {([["صورة شخصية", "photo", "image/*"], ["عقد الانتفاق", "contract", "image/*,application/pdf"]] as [string, "photo"|"contract", string][]).map(([label, key, accept]) => (
               <div key={key}>
                 <input id={`doc-${key}`} type="file" accept={accept} disabled={locked} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) setDocs(prev => ({ ...prev, [key]: f })); }} />
-                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${docs[key] ? "var(--success)" : "var(--border)"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: docs[key] ? "var(--success-bg)" : "var(--bg-2)", opacity: locked ? 0.6 : 1 }}>
+                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${docs[key] ? "var(--em7)" : "var(--border)"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: docs[key] ? "rgba(125,31,60,.05)" : "var(--bg-2)", opacity: locked ? 0.6 : 1 }}>
                   <div style={{ fontSize: 11, fontWeight: 500, color: docs[key] ? "var(--primary-dark)" : "var(--text-muted)" }}>{label}</div>
-                  <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{docs[key] ? "✓ تم الاختيار" : "اضغط للرفع"}</div>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{docs[key] ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم الاختيار" : "اضغط للرفع"}</div>
                 </div>
               </div>
             ))}
@@ -768,10 +804,10 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
         {/* الأزرار */}
         <div style={{ display: "flex", gap: 8 }}>
           {locked ? (<>
-            <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}>✏️ تعديل</button>
-            <button onClick={reset} style={{ ...btnP(), flex: 1 }}>➕ حاج جديد</button>
+            <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
+            <button onClick={reset} style={{ ...btnP(), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> حاج جديد</button>
           </>) : (<>
-            <button onClick={handleSave} disabled={uploading} style={{ ...btnP(), flex: 1, opacity: uploading ? 0.6 : 1 }}>{uploading ? "⏳ جاري الحفظ..." : "💾 حفظ الحاج"}</button>
+            <button onClick={handleSave} disabled={uploading} style={{ ...btnP(), flex: 1, opacity: uploading ? 0.6 : 1 }}>{uploading ? "جاري الحفظ..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ الحاج"}</button>
             <button onClick={reset} style={btnS()}>مسح</button>
           </>)}
         </div>
@@ -1158,7 +1194,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           ) : (
             <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "max-content", width: "100%" }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
-                <tr style={{ background: "var(--success)", color: "var(--bg-card)" }}>
+                <tr style={{ background: "var(--em7)", color: "var(--g3)" }}>
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
                   {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right" }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
@@ -1180,13 +1216,13 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
                     {COLS.map(col => (
                       <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid #eee", whiteSpace: "nowrap" }}>
                         {getVal(p, col.key, col.get)}
-                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}>⚠️</span>)}
+                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
                       </td>
                     ))}
                     <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "var(--male-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>✏️</button>
-                        <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
+                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "var(--male-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                        <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                       </div>
                     </td>
                   </tr>
@@ -1212,19 +1248,19 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           </div>
           {(isExpired(selected.expiry) || isExpired((selected as any).id_expiry)) ? (
             <div style={{ background: "var(--female-bg)", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--danger)", fontWeight: 700, textAlign: "center" }}>
-              ❌ {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
             </div>
           ) : (isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
             <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--warning)", fontWeight: 600, textAlign: "center" }}>
-              ⚠️ صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
             </div>
           )}
-          {[["🛂 الجواز", selected.passport], ["🪪 البطاقة", selected.national_id], ["🌍 الجنسية", selected.nat], ["⚧ الجنس", selected.gender], ["🎂 الميلاد", selected.dob], ["📅 انتهاء الجواز", selected.expiry], ["📞 التليفون", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
+          {[["الجواز", selected.passport], ["البطاقة", selected.national_id], ["الجنسية", selected.nat], ["الجنس", selected.gender], ["الميلاد", selected.dob], ["انتهاء الجواز", selected.expiry], ["التليفون", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
             <div key={icon as string} style={{ background: "var(--bg-2)", borderRadius: 8, padding: "6px 10px", marginBottom: 4, fontSize: 11 }}>{icon as string} {val as string}</div>
           ))}
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>⭐ الخدمات</div>
-            {[["🚌", "الباص", selected.services?.bus], ["✈️", "الطيران", selected.services?.flight], ["🏨", "الفندق", `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim()], ["⛺", "منى", selected.services?.camp_mina], ["🏔", "عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
+            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>الخدمات</div>
+            {[["الباص", selected.services?.bus], ["الطيران", selected.services?.flight], ["الفندق", `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim()], ["منى", selected.services?.camp_mina], ["عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <span style={{ color: "var(--text-muted)" }}>{icon as string} {label as string}</span>
                 <span style={{ fontWeight: 500, color: (val === "VIP" || val === "درجة أولى" || val === "خاص") ? "var(--warning)" : "var(--text)" }}>{val as string}</span>
@@ -1232,28 +1268,28 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
             ))}
           </div>
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>📎 المستندات</div>
+            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>المستندات</div>
             {([
-              ["📷 صورة شخصية", (selected as any).photo_url, "photo_url", "photo", "image/*"],
-              ["🛂 جواز السفر", (selected as any).passport_url, "passport_url", "passport_doc", "image/*"],
-              ["🪪 البطاقة", (selected as any).national_id_url, "national_id_url", "idcard", "image/*"],
-              ["📄 العقد", (selected as any).contract_url, "contract_url", "contract", "image/*,application/pdf"],
+              ["صورة شخصية", (selected as any).photo_url, "photo_url", "photo", "image/*"],
+              ["جواز السفر", (selected as any).passport_url, "passport_url", "passport_doc", "image/*"],
+              ["البطاقة", (selected as any).national_id_url, "national_id_url", "idcard", "image/*"],
+              ["العقد", (selected as any).contract_url, "contract_url", "contract", "image/*,application/pdf"],
             ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
               <div key={label} style={{ padding: "7px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 11, color: url ? "var(--text)" : "var(--text-muted)" }}>{label}</span>
                   {docUploading === docType ? (
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>⏳ جاري الرفع...</span>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...<//span>
                   ) : url ? (
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => window.open(url, "_blank")} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>👁 عرض</button>
+                      <button onClick={() => window.open(url, "_blank")} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>
                       <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬇️</button>
-                      <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
+                      <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                     </div>
                   ) : (
                     <>
                       <input id={`upload-${docType}`} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
-                      <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬆️ رفع</button>
+                      <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> رفع</button>
                     </>
                   )}
                 </div>
@@ -1263,7 +1299,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           {/* الأقارب */}
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 500 }}>👨‍👩‍👧 الأقارب</div>
+              <div style={{ fontSize: 11, fontWeight: 500 }}>الأقارب</div>
               <button onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ background: "var(--success-bg)", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>+ ربط</button>
             </div>
             {getFamilyMembers(selected).length === 0 ? (
@@ -1282,17 +1318,17 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           </div>
 
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}>✏️ تعديل</button>
-            <button onClick={() => { if (confirm("هتمسح الحاج ده؟")) deleteP(selected.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
+            <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
+            <button onClick={() => { if (confirm("هتمسح الحاج ده؟")) deleteP(selected.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
           </div>
         </div>
       )}
 
       {/* مودال التحقق من الهوية */}
-      <Modal show={showVerify} onClose={() => { setShowVerify(false); setVerifyData(null); }} title="🛡️ تأكيد هوية الحاج" maxWidth={520}>
+      <Modal show={showVerify} onClose={() => { setShowVerify(false); setVerifyData(null); }} title="تأكيد هوية الحاج" maxWidth={520}>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.6 }}>تأكد إن صورة الجواز وصورة البطاقة لنفس الشخص قبل الحفظ</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-          {[["🛂 صورة الجواز", verifyData?.passportUrl], ["🪪 صورة البطاقة", verifyData?.idUrl]].map(([label, url]) => (
+          {[["صورة الجواز", verifyData?.passportUrl], ["صورة البطاقة", verifyData?.idUrl]].map(([label, url]) => (
             <div key={label as string} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, overflow: "hidden" }}>
               <div style={{ background: "var(--bg-2)", padding: "6px 10px", fontSize: 11, fontWeight: 500, borderBottom: "0.5px solid #e5e5e5" }}>{label as string}</div>
               {url ? (
@@ -1305,20 +1341,20 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
         </div>
         {verifyData?.idMismatch && (
           <div style={{ background: "var(--warning-bg)", border: "0.5px solid #e67e22", borderRadius: 8, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <span style={{ fontSize: 16 }}>⚠️</span>
+            <span style={ fontSize: 16 }><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
             <span style={{ fontSize: 12, color: "var(--warning)", lineHeight: 1.6 }}>الرقم الشخصي في البطاقة مختلف عن المسجل في الجواز — تأكد قبل الحفظ</span>
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <button onClick={confirmVerify} style={{ background: "var(--success)", color: "var(--bg-card)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✅ نعم، نفس الشخص — حفظ</button>
-          <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}>❌ لا، مش نفس الشخص</button>
+          <button onClick={confirmVerify} style={{ background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> نعم، نفس الشخص — حفظ</button>
+          <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> لا، مش نفس الشخص</button>
         </div>
       </Modal>
 
-      <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="👨‍👩‍👧 ربط بأقارب">
+      <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="ربط بأقارب">
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>اختر الحاج اللي عايز تربطه بـ {selected?.short_ar}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "var(--text-muted)" }}>🔍</span>
+          <span style={{ color: "var(--text-muted)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg></span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={linkSearch} onChange={e => setLinkSearch(e.target.value)} autoFocus />
         </div>
         <div style={{ maxHeight: 300, overflowY: "auto" }}>
@@ -1348,19 +1384,19 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
               <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div><select style={inp} value={editing.gender} onChange={e => setEditing({ ...editing, gender: e.target.value })}><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
             </div>
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات المطلوبة</div>
+              <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات المطلوبة</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+                {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
                   <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "var(--success)" : "var(--border)"), background: editing.services?.[k as keyof typeof editing.services] === o ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "var(--primary-dark)" : "var(--text-muted)", textAlign: "center" as const }}>{o}</div>)}
+                      {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "var(--em7)" : "var(--border)"), background: editing.services?.[k as keyof typeof editing.services] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center" as const }}>{o}</div>)}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => saveEdit(editing)} style={{ ...btnP(), flex: 1 }}>✓ حفظ</button>
+              <button onClick={() => saveEdit(editing)} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ</button>
               <button onClick={() => setEditing(null)} style={btnS()}>إلغاء</button>
             </div>
           </>
@@ -1368,7 +1404,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
       </Modal>
 
       {/* مودال الإضافة اليدوية */}
-      <Modal show={showManual} onClose={() => setShowManual(false)} title="➕ إضافة حاج يدوياً" maxWidth={460}>
+      <Modal show={showManual} onClose={() => setShowManual(false)} title="إضافة حاج يدوياً" maxWidth={460}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
           {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
@@ -1383,19 +1419,19 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات</div>
+          <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+            {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
               <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "var(--success)" : "var(--border)"}`, background: (manualServices as any)[k] === o ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "var(--primary-dark)" : "var(--text-muted)", textAlign: "center" }}>{o}</div>)}
+                  {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "var(--em7)" : "var(--border)"}`, background: (manualServices as any)[k] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center" }}>{o}</div>)}
                 </div>
               </div>
             ))}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "⏳ جاري الحفظ..." : "💾 حفظ"}</button>
+          <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "جاري الحفظ..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ"}</button>
           <button onClick={() => setShowManual(false)} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
@@ -1416,7 +1452,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
       <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assigned}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assigned}</div>
       </div>
       <div style={{ background: noTicket > 0 ? "var(--bg-2)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
@@ -1432,7 +1468,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
         <div style={{ fontSize: 20, fontWeight: 700, color: withoutTicket > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{withoutTicket}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assigned} total={total} color="var(--success)" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assigned} total={total} color="var(--em7)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1529,7 +1565,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const renderGroup = (groupFlights: Flight[], type: "ذهاب" | "إياب") => (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)", color: type === "ذهاب" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
-        {type === "ذهاب" ? "✈ رحلات الذهاب" : "✈ رحلات الإياب"} ({groupFlights.length})
+        {type === "ذهاب" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الذهاب" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الإياب"} ({groupFlights.length})
       </span>
       {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
         groupFlights.map(flight => {
@@ -1538,15 +1574,15 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           return (
             <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 18 }}>✈️</span>
+                <span style={ fontSize: 18 }><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg></span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
                 </div>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{fp.length} مسافر</span>
-                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: fp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
+                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: fp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                 <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
@@ -1573,19 +1609,19 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       <FlightsStats passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
-        {flights.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
+        {flights.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
-      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>✈️<br />لا يوجد رحلات بعد</div> : (
+      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg><br />لا يوجد رحلات بعد</div> : (
         <>{renderGroup(goFlights, "ذهاب")}{renderGroup(retFlights, "إياب")}</>
       )}
 
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="✈️ رحلة جديدة" maxWidth={380}>
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="رحلة جديدة" maxWidth={380}>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الرحلة</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذهاب", "إياب"] as const).map(t => (
               <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
-                {t === "ذهاب" ? "✈ ذهاب" : "✈ إياب"}
+                {t === "ذهاب" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> ذهاب" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> إياب"}
               </div>
             ))}
           </div>
@@ -1606,22 +1642,22 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button>
+          <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
           <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
 
-      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`✈️ إضافة — ${currentFlight?.name} (${currentFlight?.type})`}>
+      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة — ${currentFlight?.name} (${currentFlight?.type})`}>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
-            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "var(--success)" : "var(--border)"}`, background: addFlightClass === cls ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "var(--primary-dark)" : "var(--text-muted)" }}>
-              {cls === "درجة أولى" ? "⭐ درجة أولى" : "💺 عادي"}
+            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "var(--em7)" : "var(--border)"}`, background: addFlightClass === cls ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "var(--em7)" : "var(--text-muted)" }}>
+              {cls === "درجة أولى" ? "درجة أولى" : "عادي"}
             </div>
           ))}
           {!allSelectedWantFirst && selectedP.size > 0 && <div style={{ fontSize: 10, color: "var(--text-muted)", alignSelf: "center" }}>درجة أولى متاحة بس للي طلبوها</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "var(--text-muted)" }}>🔍</span>
+          <span style={{ color: "var(--text-muted)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg></span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين متاحين</div> :
@@ -1629,19 +1665,19 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             const isSel = selectedP.has(p.id);
             const wantsFirst = p.services?.flight === "درجة أولى";
             return (
-              <div key={p.id} onClick={() => toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: isSel ? "var(--success-bg)" : wantsFirst ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : wantsFirst ? "var(--accent)" : "transparent"}` }}>
+              <div key={p.id} onClick={() => toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : wantsFirst ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : wantsFirst ? "var(--accent)" : "transparent"}` }}>
                 <Avatar name={p.name_ar} gender={p.gender} size={28} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat}</div>
                 </div>
                 {wantsFirst && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ طلب أولى</span>}
-                {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
+                {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
               </div>
             );
           })}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>✓ إضافة ({selectedP.size})</button>
+          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button>
           <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
@@ -1666,7 +1702,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
       <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assignedCount}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assignedCount}</div>
       </div>
       <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
@@ -1687,7 +1723,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
         <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{vipRequested}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="var(--success)" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assignedCount} total={total} color="var(--em7)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1711,7 +1747,7 @@ function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passenger
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
       <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assignedCount}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assignedCount}</div>
       </div>
       <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
@@ -1736,7 +1772,7 @@ function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passenger
         <div style={{ fontSize: 20, fontWeight: 700, color: "var(--female-fg)", lineHeight: 1 }}>{femaleCamps}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="var(--success)" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assignedCount} total={total} color="var(--em7)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1756,7 +1792,7 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
       <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assignedCount}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assignedCount}</div>
       </div>
       <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
         <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
@@ -1853,13 +1889,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const printBus = (bus: Bus) => {
     const bp = getBusPassengers(bus.id);
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>${bus.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>🚌 ${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>${bus.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
   const printAll = () => {
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>تقرير الباصات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.bus{page-break-after:always}}</style></head><body><h1>🚌 تقرير الباصات</h1>${buses.map(bus => { const bp = getBusPassengers(bus.id); return `<div class="bus"><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>تقرير الباصات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.bus{page-break-after:always}}</style></head><body><h1>تقرير الباصات</h1>${buses.map(bus => { const bp = getBusPassengers(bus.id); return `<div class="bus"><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
     w.document.close();
   };
 
@@ -1871,9 +1907,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       <BusesStats buses={buses} passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ باص جديد</button>
-        {buses.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
+        {buses.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
-      {!buses.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>🚌<br />لا يوجد باصات بعد</div> :
+      {!buses.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg><br />لا يوجد باصات بعد</div> :
         buses.map(bus => {
           const isExpanded = expanded.has(bus.id);
           const bp = getBusPassengers(bus.id);
@@ -1881,14 +1917,14 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           return (
             <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 18 }}>🚌</span>
+                <span style={ fontSize: 18 }><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg></span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "⭐ VIP" : "عادي"}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); printBus(bus); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} style={{ background: bp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <button onClick={e => { e.stopPropagation(); printBus(bus); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
+                <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} style={{ background: bp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                 <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
@@ -1911,7 +1947,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             </div>
           );
         })}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="🚌 إضافة باص جديد" maxWidth={340}>
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="إضافة باص جديد" maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>اسم الباص</div>
           <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={busName} onChange={e => { setBusName(e.target.value); setNameError(""); }} placeholder="مثال: باص 1" autoFocus onKeyDown={e => e.key === "Enter" && addBus()} />
@@ -1920,17 +1956,17 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الباص</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--success)" : "var(--border)"}`, background: busType === t ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--primary-dark)" : "var(--text-muted)" }}>{t === "VIP" ? "⭐ VIP" : "🚌 عادي"}</div>)}
+            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--em7)" : "var(--border)"}`, background: busType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--em7)" : "var(--text-muted)" }}>{t === "VIP" ? "⭐ VIP" : "عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addBus} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button>
+          <button onClick={addBus} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
           <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — ${currentBus?.name}`}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "var(--text-muted)" }}>🔍</span>
+          <span style={{ color: "var(--text-muted)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg></span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
@@ -1938,16 +1974,16 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           const isInBus = p.bus_id === currentBusId;
           const isSel = selectedP.has(p.id);
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "var(--success-bg)" : p.services?.bus === "VIP" ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : p.services?.bus === "VIP" ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
+            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : p.services?.bus === "VIP" ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : p.services?.bus === "VIP" ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? "✓ في هذا الباص" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في هذا الباص" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
               {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
-              {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
+              {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
             </div>
           );
         })}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>✓ إضافة ({selectedP.size})</button>
+          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button>
           <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
@@ -1971,7 +2007,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
   const serviceKey = pageType === "منى" ? "camp_mina" : "camp_arafa";
-  const icon = pageType === "منى" ? "⛺" : "🏔";
+  const icon = pageType === "منى" ? "tent" : "mountain";
 
   useEffect(() => {
     supabase.from("camps").select("*").eq("page_type", pageType).order("created_at").then(({ data }: any) => { if (data) setCamps(data as Camp[]); });
@@ -2054,7 +2090,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "var(--male-bg)" : "var(--female-bg)", color: gender === "ذكر" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
-        {gender === "ذكر" ? "👨 رجال" : "👩 نساء"} ({groupCamps.length})
+        {gender === "ذكر" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> رجال" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> نساء"} ({groupCamps.length})
       </span>
       {groupCamps.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div> :
         groupCamps.map(camp => {
@@ -2070,9 +2106,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                   <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", color: isSpecial ? "var(--warning)" : "var(--text-muted)" }}>{isSpecial ? "⭐ خاص" : "عادي"}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{cp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); openAddP(camp.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteCamp(camp.id); }} style={{ background: cp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: cp.length === 0 ? "pointer" : "not-allowed", color: cp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
+                <button onClick={e => { e.stopPropagation(); openAddP(camp.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteCamp(camp.id); }} style={{ background: cp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: cp.length === 0 ? "pointer" : "not-allowed", color: cp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                 <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
@@ -2100,7 +2136,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ مخيم جديد</button>
-        {camps.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
+        {camps.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
       {!camps.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>{icon}</div>لا يوجد مخيمات بعد</div> : (<>{renderGroup(maleCamps, "ذكر")}{renderGroup(femaleCamps, "أنثى")}</>)}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title={`${icon} مخيم جديد`} maxWidth={340}>
@@ -2112,23 +2148,23 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الجنس</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>{g === "ذكر" ? "👨 رجال" : "👩 نساء"}</div>)}
+            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>{g === "ذكر" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> رجال" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> نساء"}</div>)}
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الخيمة</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["عادي", "خاص"] as const).map(t => <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "var(--success)" : "var(--border)"}`, background: campType === t ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "var(--primary-dark)" : "var(--text-muted)" }}>{t === "خاص" ? "⭐ خاص" : "🏕 عادي"}</div>)}
+            {(["عادي", "خاص"] as const).map(t => <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "var(--em7)" : "var(--border)"}`, background: campType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "var(--em7)" : "var(--text-muted)" }}>{t === "خاص" ? "خاص" : "عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addCamp} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button>
+          <button onClick={addCamp} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
           <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة ${currentCamp?.gender === "ذكر" ? "رجال" : "نساء"} — مخيم ${currentCamp?.name}`}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "var(--text-muted)" }}>🔍</span>
+          <span style={{ color: "var(--text-muted)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg></span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين</div> :
@@ -2138,16 +2174,16 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
             const isSel = selectedP.has(p.id);
             const wantsSpecial = (p.services as any)[serviceKey] === "خاص";
             return (
-              <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "var(--success-bg)" : wantsSpecial ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : wantsSpecial ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
+              <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : wantsSpecial ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : wantsSpecial ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
                 <Avatar name={p.name_ar} gender={p.gender} size={28} />
-                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInCamp ? "✓ في المخيم" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInCamp ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في المخيم" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
                 {wantsSpecial && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
-                {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
+                {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
               </div>
             );
           })}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>✓ إضافة ({selectedP.size})</button>
+          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button>
           <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
@@ -2274,7 +2310,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       const [bg] = ROOM_COLORS[room.type] || ["var(--bg-2)"];
       return `<div style="margin-bottom:12px"><div style="background:${bg};padding:5px 10px;border:1px solid #ddd;border-bottom:none;font-size:11px;font-weight:bold;display:flex;justify-content:space-between"><span>${room.type}</span><span>${room.number}${room.floor ? ` (طابق ${room.floor})` : ""}</span></div><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f5"><th style="padding:4px 8px;border:1px solid #ddd;text-align:center;width:28px">م</th><th style="padding:4px 8px;border:1px solid #ddd;text-align:right">الاسم</th></tr>${rp.map((p, i) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;text-align:center">${i + 1}</td><td style="padding:4px 8px;border:1px solid #ddd">${p.short_ar}</td></tr>`).join("")}</table></div>`;
     };
-    w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>🏨 تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
@@ -2293,12 +2329,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       <HotelStats rooms={rooms} passengers={passengers} />
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
         <button onClick={() => setShowAdd(true)} style={btnP({ flex: 1 })}>+ غرفة</button>
-        <button onClick={() => setShowRange(true)} style={btnS({ flex: 1 })}>📋 نطاق</button>
-        <button onClick={() => fileRef.current?.click()} style={btnS({ flex: 1 })}>📊 Excel</button>
-        {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS({ flex: 1 })}>🖨️ طباعة</button>}
+        <button onClick={() => setShowRange(true)} style={btnS({ flex: 1 })}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> نطاق</button>
+        <button onClick={() => fileRef.current?.click()} style={btnS({ flex: 1 })}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> Excel</button>
+        {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS({ flex: 1 })}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>}
         <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
       </div>
-      {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> : (
+      {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg></div>لا يوجد غرف بعد</div> : (
         <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
           {rooms.map(room => {
           const isExpanded = expanded.has(room.id);
@@ -2307,13 +2343,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           return (
             <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleRoom(room.id)} style={{ padding: "9px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: typeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>🛏</div>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: typeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>ط{room.floor}</span>} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: typeBg, color: typeClr }}>{room.type}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: rp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: rp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                 <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
@@ -2324,7 +2360,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
                       <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "var(--bg-2)", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "var(--text-muted)" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "var(--warning)" }}>⚠️</span>}
+                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "var(--warning)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>}
                       <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
                       <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                     </div>
@@ -2336,7 +2372,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           })}
         </div>
       )}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="🛏 غرفة جديدة" maxWidth={340}>
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="غرفة جديدة" maxWidth={340}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "var(--danger)" : "var(--border)" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 10, color: "var(--danger)", marginTop: 3 }}>{numberError}</div>}</div>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} placeholder="مثال: 16" /></div>
@@ -2347,9 +2383,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRoomType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${roomType === t ? clr : "var(--border)"}`, background: roomType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: roomType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
+        <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
-      <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="📋 إضافة نطاق غرف" maxWidth={360}>
+      <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="إضافة نطاق غرف" maxWidth={360}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} /></div>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} /></div>
@@ -2362,12 +2398,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRangeType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${rangeType === t ? clr : "var(--border)"}`, background: rangeType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: rangeType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
           </div>
         </div>
-        {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--success)", marginBottom: 10, background: "var(--success-bg)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
-        <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
+        {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--em7)", marginBottom: 10, background: "rgba(125,31,60,.06)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
+        <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — غرفة ${currentRoom?.number}`}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "var(--text-muted)" }}>🔍</span>
+          <span style={{ color: "var(--text-muted)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg></span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
@@ -2376,20 +2412,20 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           const isSel = selectedP.has(p.id);
           const [reqBg, reqClr] = ROOM_COLORS[p.services.hotel_type] || ["var(--bg-2)", "var(--text-muted)"];
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "var(--success-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
+            <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInRoom ? "✓ في الغرفة" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInRoom ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في الغرفة" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
               <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: reqBg, color: reqClr }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-              {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
+              {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
             </div>
           );
         })}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>✓ إضافة ({selectedP.size})</button><button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button></div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button><button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button></div>
       </Modal>
-      <Modal show={showPrint} onClose={() => setShowPrint(false)} title="🖨️ خيارات الطباعة" maxWidth={340}>
+      <Modal show={showPrint} onClose={() => setShowPrint(false)} title="خيارات الطباعة" maxWidth={340}>
         {[["all", "طباعة كل الغرف"], ["floor", "طباعة دور معين"], ["type", "طباعة نوع معين"]].map(([val, label]) => (
-          <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${printFilter === val ? "var(--success)" : "var(--border)"}` }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", background: printFilter === val ? "var(--success)" : "var(--bg-card)", border: `2px solid ${printFilter === val ? "var(--success)" : "var(--border)"}` }} />
+          <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "rgba(125,31,60,.08)" : "var(--bg-2)", border: `0.5px solid ${printFilter === val ? "var(--em7)" : "var(--border)"}` }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", background: printFilter === val ? "var(--em7)" : "var(--bg-card)", border: `2px solid ${printFilter === val ? "var(--em7)" : "var(--border)"}` }} />
             <span style={{ fontSize: 12 }}>{label}</span>
           </div>
         ))}
@@ -2397,7 +2433,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر الطابق</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "var(--success)" : "var(--border)"}`, background: printFloor === f ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "var(--primary-dark)" : "var(--text-muted)" }}>طابق {f}</div>)}
+              {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "var(--em7)" : "var(--border)"}`, background: printFloor === f ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "var(--em7)" : "var(--text-muted)" }}>طابق {f}</div>)}
             </div>
           </div>
         )}
@@ -2409,7 +2445,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             </div>
           </div>
         )}
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button onClick={handlePrint} style={{ ...btnP(), flex: 1 }}>🖨️ طباعة</button><button onClick={() => setShowPrint(false)} style={btnS()}>إلغاء</button></div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button onClick={handlePrint} style={{ ...btnP(), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button><button onClick={() => setShowPrint(false)} style={btnS()}>إلغاء</button></div>
       </Modal>
     </div>
   );
@@ -2506,18 +2542,18 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
       <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
         {currentUser.permissions.view_archive && (
           <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div><div style={{ fontSize: 13, fontWeight: 600 }}>🔒 إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
+            <div><div style={{ fontSize: 13, fontWeight: 600 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
             <button onClick={() => { setShowClose(true); setCloseStep(1); setNewSeasonName(""); }} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
           </div>
         )}
         <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>المواسم المحفوظة</div>
         {seasons.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}><div style={{ fontSize: 32, marginBottom: 8 }}>🗄</div><div>لا يوجد مواسم محفوظة بعد</div></div>
+          <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}><div style={{ fontSize: 32, marginBottom: 8 }}><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg></div><div>لا يوجد مواسم محفوظة بعد</div></div>
         ) : seasons.map(s => (
           <div key={s.id} onClick={() => openSeason(s)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-card)" }}
             onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--success-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗄</div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--success-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg></div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {s.name}</div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>أُقفل: {new Date(s.closed_at).toLocaleDateString("ar-EG")} · بواسطة {s.closed_by}</div>
@@ -2525,13 +2561,13 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {currentUser.permissions.view_archive && (
-                <button onClick={e => { e.stopPropagation(); openDelete(s); }} style={{ background: "var(--female-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}>🗑 مسح</button>
+                <button onClick={e => { e.stopPropagation(); openDelete(s); }} style={{ background: "var(--female-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg> مسح</button>
               )}
               <span style={{ color: "var(--border)", fontSize: 18 }}>›</span>
             </div>
           </div>
         ))}
-        <Modal show={showClose} onClose={() => setShowClose(false)} title="🔒 إقفال الموسم" maxWidth={380}>
+        <Modal show={showClose} onClose={() => setShowClose(false)} title="<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم" maxWidth={380}>
           {/* مؤشر الخطوات */}
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             {[1, 2, 3].map(s => (
@@ -2543,7 +2579,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           {closeStep === 1 && (
             <>
               <div style={{ background: "var(--female-bg)", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}>⚠️ تنبيه مهم — إقفال الموسم</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> تنبيه مهم — إقفال الموسم</div>
                 <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7 }}>
                   أنت على وشك إقفال الموسم الحالي نهائياً.<br /><br />
                   سيتم نقل جميع البيانات (الحجاج، الباصات، المخيمات، الغرف) إلى الأرشيف، ولن تتمكن من التعديل عليها بعد ذلك — للعرض فقط.<br /><br />
@@ -2577,25 +2613,25 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           {closeStep === 3 && (
             <>
               <div style={{ textAlign: "center", marginBottom: 16 }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div>
+                <div style={{ fontSize: 40, marginBottom: 10 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>تأكيد إقفال الموسم</div>
-                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>سيتم إقفال الموسم الحالي نهائياً<br />وبدء موسم <span style={{ fontWeight: 700, color: "var(--success)" }}>{newSeasonName}</span></div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>سيتم إقفال الموسم الحالي نهائياً<br />وبدء موسم <span style={{ fontWeight: 700, color: "var(--em7)" }}>{newSeasonName}</span></div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={closeSeason} disabled={closing} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 إقفال الموسم نهائياً"}</button>
+                <button onClick={closeSeason} disabled={closing} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "جاري الإقفال..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم نهائياً"}</button>
                 <button onClick={() => setCloseStep(2)} disabled={closing} style={btnS()}>→ رجوع</button>
               </div>
             </>
           )}
         </Modal>
-        <Modal show={showDelete} onClose={() => setShowDelete(false)} title="🗑 مسح موسم من الأرشيف" maxWidth={380}>
+        <Modal show={showDelete} onClose={() => setShowDelete(false)} title="مسح موسم من الأرشيف" maxWidth={380}>
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             {[1, 2, 3].map(s => <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: deleteStep >= s ? "var(--danger)" : "var(--border)" }} />)}
           </div>
           {deleteStep === 1 && (
             <>
               <div style={{ background: "var(--female-bg)", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}>⚠️ تحذير — مسح موسم من الأرشيف</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> تحذير — مسح موسم من الأرشيف</div>
                 <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7 }}>
                   أنت على وشك مسح موسم <span style={{ fontWeight: 700 }}>{seasonToDelete?.name}</span> نهائياً من الأرشيف.<br /><br />
                   سيتم مسح جميع البيانات المرتبطة بهذا الموسم (الحجاج، الباصات، المخيمات، الغرف) بشكل كامل.<br /><br />
@@ -2620,12 +2656,12 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           {deleteStep === 3 && (
             <>
               <div style={{ textAlign: "center", marginBottom: 16 }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>🗑</div>
+                <div style={{ fontSize: 40, marginBottom: 10 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>تأكيد المسح النهائي</div>
                 <div style={{ fontSize: 12, color: "var(--text-muted)" }}>سيتم مسح موسم <span style={{ fontWeight: 700, color: "var(--danger)" }}>{seasonToDelete?.name}</span> وكل بياناته نهائياً</div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={confirmDelete} disabled={deleting} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "⏳ جاري المسح..." : "🗑 مسح نهائي"}</button>
+                <button onClick={confirmDelete} disabled={deleting} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "جاري المسح..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg> مسح نهائي"}</button>
                 <button onClick={() => setDeleteStep(2)} disabled={deleting} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -2638,7 +2674,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <button onClick={() => setSelected(null)} style={btnS()}>← رجوع</button>
+        <button onClick={() => setSelected(null)} style={btnS()}>رجوع</button>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {selected.name}</div>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{data.passengers.length} حاج · للعرض فقط</div>
@@ -2646,26 +2682,26 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
       </div>
       {/* تاب التقارير */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {[["passengers", "👥 الحجاج"], ["flight", "✈️ الطيران"], ["buses", "🚌 الباصات"], ["mina", "⛺ منى"], ["arafa", "🏔 عرفة"], ["hotel", "🏨 الفندق"]].map(([id, label]) => (
-          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "var(--success)" : "var(--bg-2)", color: activeReport === id ? "white" : "var(--text-muted)", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
+        {[["passengers", "الحجاج"], ["flight", "الطيران"], ["buses", "الباصات"], ["mina", "منى"], ["arafa", "عرفة"], ["hotel", "الفندق"]].map(([id, label]) => (
+          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "var(--em7)" : "var(--bg-2)", color: activeReport === id ? "var(--text-inverse)" : "var(--text-muted)", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
         ))}
       </div>
 
-      {loading ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> : (<>
+      {loading ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>جاري التحميل...</div> : (<>
 
         {activeReport === "passengers" && (
           <>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-              <thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}>{["م", "الاسم", "رقم الجواز", "الجنسية", "الجنس"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+              <thead><tr style={{ background: "var(--em7)", color: "var(--g3)" }}>{["م", "الاسم", "رقم الجواز", "الجنسية", "الجنس"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
               <tbody>{data.passengers.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_ar}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody>
             </table>
-            <button onClick={printPassengers} style={{ ...btnS(), width: "100%", marginTop: 12 }}>🖨️ طباعة</button>
+            <button onClick={printPassengers} style={{ ...btnS(), width: "100%", marginTop: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>
           </>
         )}
 
         {activeReport === "flight" && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
-            <thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}>{["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ background: "var(--em7)", color: "var(--g3)" }}>{["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
             <tbody>{data.passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_en}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td></tr>)}</tbody>
           </table>
         )}
@@ -2674,8 +2710,8 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           const bp = getBusPassengers(bus.id);
           return (
             <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} ({bus.type}) · {bp.length} مسافر</div>
-              {bp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th></tr></thead><tbody>{bp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td></tr>)}</tbody></table>}
+              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>{bus.name} ({bus.type}) · {bp.length} مسافر</div>
+              {bp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "var(--em7)", color: "var(--g3)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th></tr></thead><tbody>{bp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td></tr>)}</tbody></table>}
             </div>
           );
         })}
@@ -2685,7 +2721,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           const cp = getCampPassengers(camp.id, key);
           return (
             <div key={camp.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>{activeReport === "mina" ? "⛺" : "🏔"} مخيم {camp.name} — {camp.gender === "ذكر" ? "رجال" : "نساء"} · {cp.length} مسافر</div>
+              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>{activeReport === "mina" ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>` : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`} مخيم {camp.name} — {camp.gender === "ذكر" ? "رجال" : "نساء"} · {cp.length} مسافر</div>
               {cp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: camp.gender === "ذكر" ? "var(--info)" : "var(--female-fg)", color: "var(--bg-card)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th></tr></thead><tbody>{cp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td></tr>)}</tbody></table>}
             </div>
           );
@@ -2695,8 +2731,8 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           const rp = getRoomPassengers(room.id);
           return (
             <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>🛏 غرفة {room.number} {room.floor && `(ط${room.floor})`} · {room.type} · {rp.length} مسافر</div>
-              {rp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th></tr></thead><tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody></table>}
+              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>غرفة {room.number} {room.floor && `(ط${room.floor})`} · {room.type} · {rp.length} مسافر</div>
+              {rp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "var(--em7)", color: "var(--g3)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th></tr></thead><tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody></table>}
             </div>
           );
         })}
@@ -2943,7 +2979,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
         `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`
       ).join("");
       return `<div class="page-break">
-        <div class="section-title">🚌 ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
+        <div class="section-title">${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
         <table><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th></tr>${rows}</table>
       </div>`;
     }).join("");
@@ -2969,7 +3005,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-    const icon = pageType === "منى" ? "⛺" : "🏔";
+    const icon = pageType === "منى" ? "tent" : "mountain";
     const pageCamps = camps.filter(c => c.page_type === pageType);
     const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
@@ -3083,10 +3119,10 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     onView, onExcel, onPDF, onPrint
   }: { onView?: () => void; onExcel: () => void; onPDF: () => void; onPrint: () => void }) => (
     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-      {onView && <button onClick={onView} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}>👁 عرض</button>}
+      {onView && <button onClick={onView} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
       <button onClick={onExcel} style={{ ...btnP({ flex: 1, minWidth: 80 }) }}>⬇️ Excel</button>
-      <button onClick={onPDF} style={{ background: "var(--info)", color: "var(--bg-card)", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, flex: 1, minWidth: 80 }}>📄 PDF</button>
-      <button onClick={onPrint} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}>🖨️ طباعة</button>
+      <button onClick={onPDF} style={{ background: "var(--info)", color: "var(--bg-card)", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, flex: 1, minWidth: 80 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>
+      <button onClick={onPrint} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>
     </div>
   );
 
@@ -3094,12 +3130,12 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   // قائمة التقارير
   // ============================================================
   const reports = [
-    { id: "passengers_report", name: "تقرير الحجاج", icon: "👥", desc: "كشف بيانات الحجاج", color: "var(--success-bg)" },
-    { id: "flight", name: "تقرير الطيران", icon: "✈️", desc: "خطوط الطيران والرحلات", color: "var(--male-bg)" },
-    { id: "buses", name: "تقرير الباصات", icon: "🚌", desc: "توزيع المسافرين على الباصات", color: "var(--info-bg)" },
-    { id: "mina", name: "تقرير منى", icon: "⛺", desc: "مخيمات منى", color: "var(--success-bg)" },
-    { id: "arafa", name: "تقرير عرفة", icon: "🏔", desc: "مخيمات عرفة", color: "var(--warning-bg)" },
-    { id: "hotel", name: "تقرير الفندق", icon: "🏨", desc: "توزيع الغرف", color: "var(--female-bg)" },
+    { id: "passengers_report", name: "تقرير الحجاج", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, desc: "كشف بيانات الحجاج", color: "var(--success-bg)" },
+    { id: "flight", name: "تقرير الطيران", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg>`, desc: "خطوط الطيران والرحلات", color: "var(--male-bg)" },
+    { id: "buses", name: "تقرير الباصات", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>`, desc: "توزيع المسافرين على الباصات", color: "var(--info-bg)" },
+    { id: "mina", name: "تقرير منى", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات منى", color: "var(--success-bg)" },
+    { id: "arafa", name: "تقرير عرفة", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات عرفة", color: "var(--warning-bg)" },
+    { id: "hotel", name: "تقرير الفندق", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/></svg>`, desc: "توزيع الغرف", color: "var(--female-bg)" },
   ];
 
   // ============================================================
@@ -3123,7 +3159,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                   <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
                     <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--success-bg)", color: "var(--primary-dark)" }}>Excel</span>
                     <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--male-bg)", color: "var(--info)" }}>PDF</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)" }}>🖨️</span>
+                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
                   </div>
                 </div>
               </div>
@@ -3132,25 +3168,25 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
         </>
       ) : (
         <div>
-          <button onClick={() => setActiveReport(null)} style={{ ...btnS(), marginBottom: 14 }}>← رجوع</button>
+          <button onClick={() => setActiveReport(null)} style={{ ...btnS(), marginBottom: 14 }}>رجوع</button>
 
           {/* ===== تقرير الحجاج ===== */}
           {activeReport === "passengers_report" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>👥 تقرير الحجاج</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الحجاج</div>
               <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>اختر الأعمدة</div>
-                  <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--success)", cursor: "pointer" }}>
+                  <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
                     {selectedCols.length === ALL_COLS.length ? "إلغاء الكل" : "تحديد الكل"}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                   {ALL_COLS.map(col => (
                     <div key={col.key} onClick={() => toggleCol(col.key)}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${selectedCols.includes(col.key) ? "var(--success)" : "var(--border)"}` }}>
-                      <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "var(--success)" : "var(--bg-card)", border: `1.5px solid ${selectedCols.includes(col.key) ? "var(--success)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {selectedCols.includes(col.key) && <span style={{ color: "var(--bg-card)", fontSize: 10 }}>✓</span>}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${selectedCols.includes(col.key) ? "var(--em7)" : "var(--border)"}` }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${selectedCols.includes(col.key) ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {selectedCols.includes(col.key) && <span style={{ color: "var(--bg-card)", fontSize: 10 }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
                       </div>
                       <span style={{ fontSize: 11 }}>{col.label}</span>
                     </div>
@@ -3169,12 +3205,12 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {/* ===== تقرير الطيران ===== */}
           {activeReport === "flight" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>✈️ تقرير الطيران</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الطيران</div>
               {!flightSubReport ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
-                    { id: "airline", icon: "📋", name: "تقرير خطوط الطيران", desc: "كشف الحجاج لإرساله لشركة الطيران" },
-                    { id: "per_flight", icon: "🛫", name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
+                    { id: "airline", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`, name: "تقرير خطوط الطيران", desc: "كشف الحجاج لإرساله لشركة الطيران" },
+                    { id: "per_flight", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg>`, name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
                   ].map(sub => (
                     <div key={sub.id} onClick={() => setFlightSubReport(sub.id as any)}
                       style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
@@ -3190,12 +3226,12 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                 </div>
               ) : (
                 <>
-                  <button onClick={() => setFlightSubReport(null)} style={{ ...btnS(), marginBottom: 14, fontSize: 11 }}>← رجوع للطيران</button>
+                  <button onClick={() => setFlightSubReport(null)} style={{ ...btnS(), marginBottom: 14, fontSize: 11 }}>رجوع للطيران</button>
 
                   {/* خطوط الطيران */}
                   {flightSubReport === "airline" && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>📋 تقرير خطوط الطيران</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>تقرير خطوط الطيران</div>
                       <div style={{ overflowX: "auto", marginBottom: 12 }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
                           <thead>
@@ -3231,8 +3267,8 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                   {/* كل رحلة */}
                   {flightSubReport === "per_flight" && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>🛫 تقرير كل رحلة</div>
-                      {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> تقرير كل رحلة</div>
+                      {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                         flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
                         flights.map(flight => {
                           const fp = passengers.filter(p => p.flight_id === flight.id);
@@ -3241,10 +3277,10 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                               <div style={{ background: "var(--male-bg)", padding: "10px 14px", borderBottom: "0.5px solid #dce8f8" }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--info)" }}>{flight.name} — {flight.type}</div>
                                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                                  <span>🏢 {flight.airline}</span>
-                                  <span>📅 {flight.date}</span>
+                                  <span style={{display:"flex",alignItems:"center",gap:4}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> {flight.airline}</span>
+                                  <span style={{display:"flex",alignItems:"center",gap:4}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {flight.date}</span>
                                   <span>⏰ {flight.time}</span>
-                                  <span>🛫 {flight.from_airport} → {flight.to_airport}</span>
+                                  <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> {flight.from_airport} → {flight.to_airport}</span>
                                   <span style={{ color: "var(--info)", fontWeight: 500 }}>{fp.length} حاج</span>
                                 </div>
                               </div>
@@ -3290,8 +3326,8 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {/* ===== تقرير الباصات ===== */}
           {activeReport === "buses" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>🚌 تقرير الباصات</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
                 <>
                   {buses.map(bus => {
@@ -3299,7 +3335,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                     return (
                       <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
                         <div style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>⭐ VIP</span>}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>⭐ VIP</span>}</div>
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                         </div>
                         {bp.length > 0 && (
@@ -3332,8 +3368,8 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {/* ===== تقرير منى ===== */}
           {activeReport === "mina" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>⛺ تقرير مخيمات منى</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
@@ -3343,7 +3379,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                     return (
                       <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
                         <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>⛺ مخيم {camp.name}
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>مخيم {camp.name}
                             <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
                             <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
@@ -3380,8 +3416,8 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {/* ===== تقرير عرفة ===== */}
           {activeReport === "arafa" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>🏔 تقرير مخيمات عرفة</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
@@ -3391,7 +3427,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                     return (
                       <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
                         <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>🏔 مخيم {camp.name}
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>مخيم {camp.name}
                             <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
                             <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
@@ -3428,7 +3464,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {/* ===== تقرير الفندق ===== */}
           {activeReport === "hotel" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>🏨 تقرير الفندق</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الفندق</div>
               {/* فلتر الطباعة */}
               <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>نطاق التقرير</div>
@@ -3465,7 +3501,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                 )}
               </div>
 
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
                 <>
                   {getFilteredRooms().map(room => {
@@ -3583,6 +3619,10 @@ export default function App() {
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
   const pageTitles: Record<string, string> = { dash: "الرئيسية", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
+  // صفحات full-height (بتستخدم كل المساحة)
+  const FULL_PAGES = ["passengers", "manual", "buses", "flights", "mina", "arafa", "hotel"];
+  const isFull = FULL_PAGES.includes(page);
+
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
@@ -3600,14 +3640,33 @@ export default function App() {
     }
   };
   return (
-    <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--bg)", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
+      <AvatarSVGDefs />
       <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "10px 16px", borderBottom: "0.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, background: "var(--bg-topbar)", boxShadow: "var(--shadow-sm)" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-heading)" }}>{pageTitles[page]}</div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{config.season_label}</div>
+        {/* Topbar */}
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, background: "var(--paper)", boxShadow: "var(--shadow-sm)" }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 500, fontSize: 19, color: "var(--em8)" }}>{pageTitles[page]}</div>
+            <div style={{ fontSize: 11, color: "var(--g7)", letterSpacing: "1px" }}>{config.season_label}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={() => setPage("scan")} style={{ background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", padding: "7px 13px", borderRadius: 10, fontSize: 12, cursor: "pointer", fontWeight: 600, fontFamily: "var(--font-body)", display: "inline-flex", alignItems: "center", gap: 6, transition: "var(--transition)" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+              رفع وثيقة
+            </button>
+          </div>
         </div>
-        <div style={{ flex: 1, overflow: "hidden", background: "var(--bg)" }}>{renderPage()}</div>
+        {/* محتوى الصفحة */}
+        {isFull ? (
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
+        ) : (
+          <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
+            <div style={{ maxWidth: page === "dash" ? 1100 : page === "scan" ? 620 : 900, margin: "0 auto", padding: "20px 20px" }}>
+              {renderPage()}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
