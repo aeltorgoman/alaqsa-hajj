@@ -499,9 +499,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background 0.14s" }}
               onMouseEnter={e => (e.currentTarget.style.background = "var(--ivory)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-              <div style={{ width: 38, height: 38, borderRadius: "50%", background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
-                {(p.name_ar || "").split(" ").slice(0, 2).map((w: string) => w[0] || "").join("")}
-              </div>
+              <Avatar name={p.name_ar} gender={p.gender} size={38} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.nat} · {p.passport}</div>
@@ -1122,8 +1120,8 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
                   onMouseEnter={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
                   onMouseLeave={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "transparent"; }}>
                   {/* الأفاتار */}
-                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)", flexShrink: 0, border: selected?.id === p.id ? "2px solid var(--g5)" : "2px solid transparent" }}>
-                    {(p.name_ar || "؟").split(" ").slice(0,2).map((w: string) => w[0] || "").join("")}
+                  <div style={{ borderRadius: "50%", flexShrink: 0, border: selected?.id === p.id ? "2px solid var(--g5)" : "2px solid transparent", lineHeight: 0 }}>
+                    <Avatar name={p.name_ar} gender={p.gender} size={38} />
                   </div>
                   {/* الاسم والبيانات */}
                   <div style={{ flex: 1, minWidth: 0 }}>
