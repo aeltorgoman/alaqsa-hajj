@@ -427,7 +427,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   );
 }
 
-function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
+function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
   const config = useConfig();
   const { males, females } = useMemo(() => ({
     males: passengers.filter(p => p.gender === "ذكر").length,
@@ -486,22 +486,22 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
           <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
         </div>
 
-        {/* إحصائيات — خلفيات ملونة جريئة */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+        {/* إحصائيات — ألوان الصورة */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
           {[
-            { label: "إجمالي الحجاج", num: passengers.length, sub: `+ ${Math.min(12, passengers.length)} هذا الأسبوع`, bg: "linear-gradient(135deg, var(--em7), var(--em8))", iconBg: "rgba(255,255,255,0.15)", clr: "#fff", lbl: "rgba(255,255,255,0.85)", sub_clr: "rgba(255,255,255,0.7)", iconClr: "var(--g3)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(135deg, #1a5fa8, #13456b)", iconBg: "rgba(255,255,255,0.15)", clr: "#fff", lbl: "rgba(255,255,255,0.85)", sub_clr: "rgba(255,255,255,0.7)", iconClr: "rgba(255,255,255,0.9)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(135deg, #c0392b, #922b21)", iconBg: "rgba(255,255,255,0.15)", clr: "#fff", lbl: "rgba(255,255,255,0.85)", sub_clr: "rgba(255,255,255,0.7)", iconClr: "rgba(255,255,255,0.9)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-          ].map(({ label, num, sub, bg, iconBg, clr, lbl, sub_clr, iconClr, icon }) => (
-            <div key={label} style={{ background: bg, borderRadius: "var(--radius-lg)", padding: 14, cursor: "pointer", transition: "var(--transition)", boxShadow: "0 4px 14px rgba(0,0,0,0.15)" }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)"; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.15)"; }}>
-              <div style={{ width: 34, height: 34, borderRadius: 9, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconClr} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+            { label: "الحجاج", num: passengers.length, sub: `+${Math.min(12,passengers.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,#5C1830,#7D1F3C)", shadow: "rgba(92,24,48,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#1e4db7,#2563eb)", shadow: "rgba(30,77,183,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#c2410c,#ea580c)", shadow: "rgba(194,65,12,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+          ].map(({ label, num, sub, bg, shadow, icon }) => (
+            <div key={label} style={{ background: bg, borderRadius: 14, padding: "12px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}` }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.filter = "brightness(1.05)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.filter = "none"; }}>
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
               </div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: lbl, marginBottom: 4 }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 40, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-              <div style={{ fontSize: 11, marginTop: 5, color: sub_clr }}>{sub}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginBottom: 2 }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: 44, fontWeight: 700, lineHeight: 1, color: "#fff" }}>{num}</div>
+              <div style={{ fontSize: 10, marginTop: 4, color: "rgba(255,255,255,0.65)" }}>{sub}</div>
             </div>
           ))}
         </div>
@@ -531,42 +531,42 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
       </div>
 
       {/* اللوحة الجانبية اليسار */}
-      <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
-        {/* نِسب التوزيع */}
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", padding: "16px 16px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
+      <div style={{ width: 210, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        {/* نِسب التوزيع — مضغوطة */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 13px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
           </div>
           {dist.map(({ label, count, pct, icon }) => (
-            <div key={label} style={{ marginBottom: 13 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--em7)" }}>{pct}٪</span>
+            <div key={label} style={{ marginBottom: 9 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--em7)" }}>{pct}٪</span>
               </div>
-              <div style={{ height: 5, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--em7), var(--em6))", width: `${pct}%`, transition: "width 0.6s ease" }} />
+              <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
+                <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,var(--em7),var(--em6))", width: `${pct}%`, transition: "width 0.6s ease" }} />
               </div>
-              <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>{count} من {passengers.length}</div>
             </div>
           ))}
         </div>
 
-        {/* بطاقة الحساب */}
-        <div style={{ background: "linear-gradient(135deg, var(--em8), var(--em7))", borderRadius: "var(--radius-lg)", padding: 16, color: "var(--text-inverse)", marginTop: "auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        {/* بطاقة المستخدم والموسم */}
+        <div style={{ background: "linear-gradient(145deg,var(--em8),var(--em7))", borderRadius: 14, padding: "13px 14px", color: "#fff", marginTop: "auto" }}>
+          {/* الموسم */}
+          <div style={{ fontSize: 10, color: "var(--g3)", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>الموسم الحالي</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 10 }}>{config.season_label}</div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.12)", marginBottom: 10 }} />
+          {/* المستخدم */}
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.season_label}</div>
-              <div style={{ fontSize: 11, color: "var(--g3)" }}>الموسم الحالي</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>@{currentUser.username}</div>
             </div>
-          </div>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.12)", margin: "4px 0 12px" }} />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", lineHeight: 1.7 }}>
-            إجمالي الحجاج المسجّلين: <span style={{ fontWeight: 700, color: "var(--g3)" }}>{passengers.length}</span>
           </div>
         </div>
       </div>
@@ -3654,7 +3654,7 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
+      case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
       case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} />;
       case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
