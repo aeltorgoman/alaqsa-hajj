@@ -828,28 +828,62 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   const { total, males, females, docsDone, dataDone, docPct, dataPct } = stats;
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0, background: "var(--bg-2)" }}>
-      {/* بطاقات العدد */}
-      <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 72, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>إجمالي الحجاج</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{total}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      {/* كارت الإجمالي */}
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: 14, position: "relative", overflow: "hidden", cursor: "default", transition: "var(--transition)" }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(200,162,75,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--g7)", marginBottom: 3, opacity: 0.8 }}>إجمالي الحجاج</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--em8)" }}>{total}</div>
+        <div style={{ fontSize: 11, marginTop: 4, color: "var(--g6)", opacity: 0.7 }}>الموسم الحالي</div>
       </div>
-      <div style={{ background: "var(--male-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--info)", marginBottom: 1 }}>رجال</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--info)", lineHeight: 1 }}>{males}</div>
+      {/* كارت الرجال */}
+      <div style={{ background: "var(--mb)", border: "1px solid rgba(19,69,107,.1)", borderRadius: 14, padding: 14, transition: "var(--transition)" }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(19,69,107,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mf)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--mf)", marginBottom: 3, opacity: 0.8 }}>رجال</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--mf)" }}>{males}</div>
+        <div style={{ fontSize: 11, marginTop: 4, color: "var(--mf)", opacity: 0.7 }}>{total ? Math.round(males/total*100) : 0}٪ من الإجمالي</div>
       </div>
-      <div style={{ background: "var(--female-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--female-fg)", marginBottom: 1 }}>نساء</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--female-fg)", lineHeight: 1 }}>{females}</div>
+      {/* كارت النساء */}
+      <div style={{ background: "var(--fb)", border: "1px solid rgba(122,46,69,.1)", borderRadius: 14, padding: 14, transition: "var(--transition)" }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(122,46,69,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ff)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ff)", marginBottom: 3, opacity: 0.8 }}>نساء</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--ff)" }}>{females}</div>
+        <div style={{ fontSize: 11, marginTop: 4, color: "var(--ff)", opacity: 0.7 }}>{total ? Math.round(females/total*100) : 0}٪ من الإجمالي</div>
       </div>
-
-      {/* خط فاصل */}
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 4 }} />
-
-      {/* دوائر النسبة */}
-      <div style={{ display: "flex", gap: 16, marginInlineStart: "auto" }}>
-        <StatRing pct={docPct} count={docsDone} total={total} color="var(--success)" label="اكتمال المستندات" />
-        <StatRing pct={dataPct} count={dataDone} total={total} color="var(--info)" label="اكتمال البيانات" />
+      {/* كارت اكتمال البيانات */}
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: 14, transition: "var(--transition)" }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(125,31,60,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--g7)", marginBottom: 6, opacity: 0.8 }}>اكتمال المستندات</div>
+        <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden", marginBottom: 4 }}>
+          <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--em7), var(--em6))", width: `${docPct}%`, transition: "width 0.6s ease" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--muted)" }}>
+          <span>{docsDone} من {total}</span><span style={{ fontWeight: 700, color: "var(--em7)" }}>{docPct}٪</span>
+        </div>
+        <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden", margin: "8px 0 4px" }}>
+          <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--mf), rgba(19,69,107,.5))", width: `${dataPct}%`, transition: "width 0.6s ease" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--muted)" }}>
+          <span>{dataDone} مكتمل</span><span style={{ fontWeight: 700, color: "var(--mf)" }}>{dataPct}٪</span>
+        </div>
       </div>
     </div>
   );
@@ -1047,49 +1081,79 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <PassengersStats passengers={passengers} />
-        <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0 }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
-              <span style={{ color: "var(--text-muted)" }}>🔍</span>
-              <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث بالاسم الكامل أو أي معلومة..." />
-              {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--text-muted)" }}>✕</span>}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 99, padding: "8px 14px", transition: "var(--transition)" }}
+              onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--g5)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(200,162,75,.12)"; }}
+              onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--line)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)", color: "var(--ink)" }} placeholder="ابحث بالاسم أو الجواز أو أي معلومة..." />
+              {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>✕</span>}
             </div>
-            <div style={{ display: "flex", border: "0.5px solid #ddd", borderRadius: 8, overflow: "hidden" }}>
-              <div onClick={() => setViewMode("list")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "list" ? "var(--success)" : "var(--bg-card)", color: viewMode === "list" ? "white" : "var(--text-muted)" }}>☰ قائمة</div>
-              <div onClick={() => setViewMode("table")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "table" ? "var(--success)" : "var(--bg-card)", color: viewMode === "table" ? "white" : "var(--text-muted)" }}>⊞ جدول</div>
+            <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+              <div onClick={() => setViewMode("list")} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "list" ? "var(--em7)" : "var(--paper)", color: viewMode === "list" ? "var(--g3)" : "var(--muted)", fontWeight: viewMode === "list" ? 600 : 400, transition: "var(--transition)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </div>
+              <div onClick={() => setViewMode("table")} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "table" ? "var(--em7)" : "var(--paper)", color: viewMode === "table" ? "var(--g3)" : "var(--muted)", fontWeight: viewMode === "table" ? 600 : 400, transition: "var(--transition)", borderRight: "1px solid var(--line)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+              </div>
             </div>
+            <button onClick={() => setShowManual(true)} style={{ background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", border: "none", padding: "8px 14px", borderRadius: 10, fontSize: 12, cursor: "pointer", fontWeight: 700, fontFamily: "var(--font-body)", display: "inline-flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(125,31,60,.22)", transition: "var(--transition)" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              إضافة
+            </button>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{filtered.length} من {passengers.length} حاج</div>
-            <button onClick={() => setShowManual(true)} style={{ ...btnP({ fontSize: 10, padding: "3px 8px" }) }}>➕ إضافة يدوي</button>
-          </div>
+          <div style={{ fontSize: 11, color: "var(--muted)" }}>{filtered.length} من {passengers.length} حاج</div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {viewMode === "list" ? (
-            <div style={{ padding: "8px 10px" }}>
-              {filtered.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>لا توجد نتائج</div> :
-                filtered.map(p => (
-                  <div key={p.id} onClick={() => setSelected(p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, marginBottom: 3, cursor: "pointer", background: selected?.id === p.id ? "var(--success-bg)" : "transparent", border: `0.5px solid ${selected?.id === p.id ? "var(--success)" : "transparent"}` }}>
-                    <Avatar name={p.name_ar} gender={p.gender} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
-                        {p.short_ar || p.name_ar}
-                        {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ color: "var(--danger)", fontSize: 11 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ color: "var(--warning)", fontSize: 11 }}>⚠️</span>}
-                        {p.family_id && <span title="مرتبط بأقارب" style={{ fontSize: 10 }}>👨‍👩‍👧</span>}
-                      </div>
-                      <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} · {p.passport}</div>
-                      <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
-                        <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--female-bg)" : "var(--male-bg)", color: p.gender === "أنثى" ? "var(--female-fg)" : "var(--info)" }}>{p.gender}</span>
-                        {p.services?.bus === "VIP" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)" }}>⭐ VIP</span>}
-                        {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "var(--info-bg)", color: "var(--info)" }}>✈️ أولى</span>}
-                      </div>
+            <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, margin: "12px 14px", overflow: "hidden" }}>
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا توجد نتائج</div>
+              ) : filtered.map(p => (
+                <div key={p.id} onClick={() => setSelected(p)}
+                  style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background .14s", background: selected?.id === p.id ? "var(--ivory)" : "transparent" }}
+                  onMouseEnter={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
+                  onMouseLeave={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "transparent"; }}>
+                  {/* الأفاتار */}
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)", flexShrink: 0, border: selected?.id === p.id ? "2px solid var(--g5)" : "2px solid transparent" }}>
+                    {(p.name_ar || "؟").split(" ").slice(0,2).map((w: string) => w[0] || "").join("")}
+                  </div>
+                  {/* الاسم والبيانات */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", display: "flex", alignItems: "center", gap: 5 }}>
+                      {p.short_ar || p.name_ar}
+                      {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "var(--danger-bg)", color: "var(--danger)" }}>منتهي</span>
+                      )}
+                      {!isExpired(p.expiry) && (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "var(--warning-bg)", color: "var(--warning)" }}>قريب</span>
+                      )}
                     </div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "var(--male-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>✏️</button>
-                      <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{p.nat} · {p.passport}{p.phone ? ` · ${p.phone}` : ""}</div>
+                  </div>
+                  {/* الشيبس */}
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)" }}>{p.gender === "أنثى" ? "أنثى" : "ذكر"}</span>
+                    {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "rgba(200,162,75,.12)", color: "var(--g6)", border: "1px solid rgba(200,162,75,.25)" }}>VIP</span>}
+                    {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--info-bg)", color: "var(--info)" }}>أولى</span>}
+                    {p.family_id && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "rgba(125,31,60,.08)", color: "var(--em7)" }}>أسرة</span>}
+                  </div>
+                  {/* الأزرار */}
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    <div onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </div>
+                    <div onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "var(--fb)"; e.currentTarget.style.color = "var(--ff)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                     </div>
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
           ) : (
             <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "max-content", width: "100%" }}>
@@ -2234,8 +2298,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS({ flex: 1 })}>🖨️ طباعة</button>}
         <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
       </div>
-      {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> :
-        rooms.map(room => {
+      {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> : (
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
+          {rooms.map(room => {
           const isExpanded = expanded.has(room.id);
           const rp = getRoomPassengers(room.id);
           const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
@@ -2268,7 +2333,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               )}
             </div>
           );
-        })}
+          })}
+        </div>
+      )}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="🛏 غرفة جديدة" maxWidth={340}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "var(--danger)" : "var(--border)" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 10, color: "var(--danger)", marginTop: 3 }}>{numberError}</div>}</div>
