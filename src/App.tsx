@@ -193,7 +193,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
     dash: `<path d="M3 11l9-8 9 8M5 10v10h14V10"/>`,
     passengers: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
     buses: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>`,
-    flights: `<path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/>`,
+    flights: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,
     mina: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,
     arafa: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,
     hotel: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>`,
@@ -493,7 +493,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
             { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#2F78C5,#4A90D9)", shadow: "rgba(47,120,197,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
             { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#D4820F,#E8951A)", shadow: "rgba(212,130,15,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
           ].map(({ label, num, sub, bg, shadow, icon }) => (
-            <div key={label} style={{ background: bg, borderRadius: 14, padding: "12px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}` }}
+            <div key={label} style={{ background: bg, borderRadius: 14, padding: "12px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}`, border: `2px solid ${shadow}` }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.filter = "brightness(1.05)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.filter = "none"; }}>
               <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
@@ -893,46 +893,46 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   const { total, males, females, docsDone, dataDone, docPct, dataPct } = stats;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
       {/* كارت الإجمالي */}
-      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: 14, position: "relative", overflow: "hidden", cursor: "default", transition: "var(--transition)" }}
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", position: "relative", overflow: "hidden", cursor: "default", transition: "var(--transition)" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(200,162,75,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(200,162,75,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--g7)", marginBottom: 3, opacity: 0.8 }}>إجمالي الحجاج</div>
-        <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--em8)" }}>{total}</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--em8)" }}>{total}</div>
         <div style={{ fontSize: 11, marginTop: 4, color: "var(--g6)", opacity: 0.7 }}>الموسم الحالي</div>
       </div>
       {/* كارت الرجال */}
-      <div style={{ background: "var(--mb)", border: "1px solid rgba(19,69,107,.1)", borderRadius: 14, padding: 14, transition: "var(--transition)" }}
+      <div style={{ background: "var(--mb)", border: "1px solid rgba(19,69,107,.1)", borderRadius: 10, padding: "8px 10px", transition: "var(--transition)" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(19,69,107,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(19,69,107,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mf)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </div>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--mf)", marginBottom: 3, opacity: 0.8 }}>رجال</div>
-        <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--mf)" }}>{males}</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--mf)" }}>{males}</div>
         <div style={{ fontSize: 11, marginTop: 4, color: "var(--mf)", opacity: 0.7 }}>{total ? Math.round(males/total*100) : 0}٪ من الإجمالي</div>
       </div>
       {/* كارت النساء */}
-      <div style={{ background: "var(--fb)", border: "1px solid rgba(122,46,69,.1)", borderRadius: 14, padding: 14, transition: "var(--transition)" }}
+      <div style={{ background: "var(--fb)", border: "1px solid rgba(122,46,69,.1)", borderRadius: 10, padding: "8px 10px", transition: "var(--transition)" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(122,46,69,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,46,69,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ff)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </div>
         <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ff)", marginBottom: 3, opacity: 0.8 }}>نساء</div>
-        <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: "var(--ff)" }}>{females}</div>
+        <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--ff)" }}>{females}</div>
         <div style={{ fontSize: 11, marginTop: 4, color: "var(--ff)", opacity: 0.7 }}>{total ? Math.round(females/total*100) : 0}٪ من الإجمالي</div>
       </div>
       {/* كارت اكتمال البيانات */}
-      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: 14, transition: "var(--transition)" }}
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", transition: "var(--transition)" }}
         onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(125,31,60,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(125,31,60,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </div>
         </div>
