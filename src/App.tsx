@@ -443,7 +443,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         </div>
         {ALL_PERMISSIONS.map(p => (
           <div key={p.key} onClick={() => togglePerm(p.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 3, background: perms[p.key] ? "rgba(125,31,60,.08)" : "var(--bg-2)", border: `0.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}` }}>
-            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{perms[p.key] && <span style={{ color: "var(--bg-card)", fontSize: 10 }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}</div>
+            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{perms[p.key] && <span style={{ color: "var(--bg-card)", fontSize: 10 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}</div>
             <span style={{ fontSize: 12 }}>{p.label}</span>
           </div>
         ))}
@@ -702,7 +702,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%", position: "relative" }}>
-      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "var(--em7)", color: "var(--g3)", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم حفظ الحاج بنجاح!<//div>}
+      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "var(--em7)", color: "var(--g3)", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم حفظ الحاج بنجاح!</div>}
       {/* رفع جواز السفر */}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>جواز السفر</div>
@@ -755,7 +755,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
               <img src={idCardPreview} style={{ width: 100, height: 65, objectFit: "cover", borderRadius: 6, border: "0.5px solid #e5e5e5" }} />
               <div style={{ flex: 1 }}>
-                {idScanLoading ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>جاري قراءة البطاقة...<//div> : <div style={{ fontSize: 11, color: "var(--em7)", fontWeight: 500 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم استخراج البيانات</div>}
+                {idScanLoading ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>جاري قراءة البطاقة...</div> : <div style={{ fontSize: 11, color: "var(--em7)", fontWeight: 500 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم استخراج البيانات</div>}
                 <button onClick={() => { setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setForm(prev => ({ ...prev, national_id: "" })); }} style={{ marginTop: 6, ...btnS({ fontSize: 10, padding: "2px 8px" }) }}>تغيير</button>
               </div>
             </div>
@@ -794,7 +794,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
                 <input id={`doc-${key}`} type="file" accept={accept} disabled={locked} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) setDocs(prev => ({ ...prev, [key]: f })); }} />
                 <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${docs[key] ? "var(--em7)" : "var(--border)"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: docs[key] ? "rgba(125,31,60,.05)" : "var(--bg-2)", opacity: locked ? 0.6 : 1 }}>
                   <div style={{ fontSize: 11, fontWeight: 500, color: docs[key] ? "var(--primary-dark)" : "var(--text-muted)" }}>{label}</div>
-                  <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{docs[key] ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم الاختيار" : "اضغط للرفع"}</div>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{docs[key] ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم الاختيار</> : "اضغط للرفع"}</div>
                 </div>
               </div>
             ))}
@@ -807,7 +807,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
             <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
             <button onClick={reset} style={{ ...btnP(), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> حاج جديد</button>
           </>) : (<>
-            <button onClick={handleSave} disabled={uploading} style={{ ...btnP(), flex: 1, opacity: uploading ? 0.6 : 1 }}>{uploading ? "جاري الحفظ..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ الحاج"}</button>
+            <button onClick={handleSave} disabled={uploading} style={{ ...btnP(), flex: 1, opacity: uploading ? 0.6 : 1 }}>{uploading ? "جاري الحفظ..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ الحاج</>}</button>
             <button onClick={reset} style={btnS()}>مسح</button>
           </>)}
         </div>
@@ -1216,7 +1216,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
                     {COLS.map(col => (
                       <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid #eee", whiteSpace: "nowrap" }}>
                         {getVal(p, col.key, col.get)}
-                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
+                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
                       </td>
                     ))}
                     <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center" }}>
@@ -1279,7 +1279,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 11, color: url ? "var(--text)" : "var(--text-muted)" }}>{label}</span>
                   {docUploading === docType ? (
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...<//span>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...</span>
                   ) : url ? (
                     <div style={{ display: "flex", gap: 4 }}>
                       <button onClick={() => window.open(url, "_blank")} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>
@@ -1341,7 +1341,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
         </div>
         {verifyData?.idMismatch && (
           <div style={{ background: "var(--warning-bg)", border: "0.5px solid #e67e22", borderRadius: 8, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
-            <span style={ fontSize: 16 }><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+            <span style={{ fontSize: 16 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
             <span style={{ fontSize: 12, color: "var(--warning)", lineHeight: 1.6 }}>الرقم الشخصي في البطاقة مختلف عن المسجل في الجواز — تأكد قبل الحفظ</span>
           </div>
         )}
@@ -1431,7 +1431,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "جاري الحفظ..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ"}</button>
+          <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "جاري الحفظ..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ</>}</button>
           <button onClick={() => setShowManual(false)} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
@@ -1565,7 +1565,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const renderGroup = (groupFlights: Flight[], type: "ذهاب" | "إياب") => (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)", color: type === "ذهاب" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
-        {type === "ذهاب" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الذهاب" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الإياب"} ({groupFlights.length})
+        {type === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الإياب</>} ({groupFlights.length})
       </span>
       {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
         groupFlights.map(flight => {
@@ -1574,7 +1574,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           return (
             <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={ fontSize: 18 }><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg></span>
+                <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg></span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
@@ -1611,7 +1611,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
         {flights.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
-      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg><br />لا يوجد رحلات بعد</div> : (
+      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg><br />لا يوجد رحلات بعد</div> : (
         <>{renderGroup(goFlights, "ذهاب")}{renderGroup(retFlights, "إياب")}</>
       )}
 
@@ -1621,7 +1621,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذهاب", "إياب"] as const).map(t => (
               <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
-                {t === "ذهاب" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> ذهاب" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> إياب"}
+                {t === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> ذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> إياب</>}
               </div>
             ))}
           </div>
@@ -1672,7 +1672,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat}</div>
                 </div>
                 {wantsFirst && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ طلب أولى</span>}
-                {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+                {isSel && <span style={{ color: "var(--em7)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
               </div>
             );
           })}
@@ -1917,7 +1917,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           return (
             <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={ fontSize: 18 }><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg></span>
+                <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg></span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "⭐ VIP" : "عادي"}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
@@ -1976,9 +1976,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           return (
             <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : p.services?.bus === "VIP" ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : p.services?.bus === "VIP" ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في هذا الباص" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في هذا الباص</> : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
               {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
-              {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+              {isSel && <span style={{ color: "var(--em7)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
             </div>
           );
         })}
@@ -2090,7 +2090,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "var(--male-bg)" : "var(--female-bg)", color: gender === "ذكر" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
-        {gender === "ذكر" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> رجال" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> نساء"} ({groupCamps.length})
+        {gender === "ذكر" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> رجال</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> نساء</>} ({groupCamps.length})
       </span>
       {groupCamps.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div> :
         groupCamps.map(camp => {
@@ -2148,7 +2148,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الجنس</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>{g === "ذكر" ? "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> رجال" : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> نساء"}</div>)}
+            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>{g === "ذكر" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> رجال</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> نساء</>}</div>)}
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
@@ -2176,9 +2176,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
             return (
               <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : wantsSpecial ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : wantsSpecial ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
                 <Avatar name={p.name_ar} gender={p.gender} size={28} />
-                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInCamp ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في المخيم" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInCamp ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في المخيم</> : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
                 {wantsSpecial && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
-                {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+                {isSel && <span style={{ color: "var(--em7)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
               </div>
             );
           })}
@@ -2343,7 +2343,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           return (
             <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleRoom(room.id)} style={{ padding: "9px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: typeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg></div>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: typeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>ط{room.floor}</span>} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: typeBg, color: typeClr }}>{room.type}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.length} مسافر</div>
@@ -2360,7 +2360,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
                       <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "var(--bg-2)", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "var(--text-muted)" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "var(--warning)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>}
+                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>}
                       <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
                       <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                     </div>
@@ -2414,9 +2414,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           return (
             <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInRoom ? "<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في الغرفة" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInRoom ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في الغرفة</> : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
               <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: reqBg, color: reqClr }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-              {isSel && <span style={{ color: "var(--em7)" }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+              {isSel && <span style={{ color: "var(--em7)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
             </div>
           );
         })}
@@ -2553,7 +2553,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           <div key={s.id} onClick={() => openSeason(s)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-card)" }}
             onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--success-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg></div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--success-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg></div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {s.name}</div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>أُقفل: {new Date(s.closed_at).toLocaleDateString("ar-EG")} · بواسطة {s.closed_by}</div>
@@ -2567,7 +2567,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
             </div>
           </div>
         ))}
-        <Modal show={showClose} onClose={() => setShowClose(false)} title="<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم" maxWidth={380}>
+        <Modal show={showClose} onClose={() => setShowClose(false)} title="إقفال الموسم" maxWidth={380}>
           {/* مؤشر الخطوات */}
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             {[1, 2, 3].map(s => (
@@ -2618,7 +2618,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
                 <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>سيتم إقفال الموسم الحالي نهائياً<br />وبدء موسم <span style={{ fontWeight: 700, color: "var(--em7)" }}>{newSeasonName}</span></div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={closeSeason} disabled={closing} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "جاري الإقفال..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم نهائياً"}</button>
+                <button onClick={closeSeason} disabled={closing} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "جاري الإقفال..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم نهائياً</>}</button>
                 <button onClick={() => setCloseStep(2)} disabled={closing} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -2661,7 +2661,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
                 <div style={{ fontSize: 12, color: "var(--text-muted)" }}>سيتم مسح موسم <span style={{ fontWeight: 700, color: "var(--danger)" }}>{seasonToDelete?.name}</span> وكل بياناته نهائياً</div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={confirmDelete} disabled={deleting} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "جاري المسح..." : "<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg> مسح نهائي"}</button>
+                <button onClick={confirmDelete} disabled={deleting} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "جاري المسح..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg> مسح نهائي</>}</button>
                 <button onClick={() => setDeleteStep(2)} disabled={deleting} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -3186,7 +3186,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                     <div key={col.key} onClick={() => toggleCol(col.key)}
                       style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${selectedCols.includes(col.key) ? "var(--em7)" : "var(--border)"}` }}>
                       <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${selectedCols.includes(col.key) ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {selectedCols.includes(col.key) && <span style={{ color: "var(--bg-card)", fontSize: 10 }><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+                        {selectedCols.includes(col.key) && <span style={{ color: "var(--bg-card)", fontSize: 10 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
                       </div>
                       <span style={{ fontSize: 11 }}>{col.label}</span>
                     </div>
