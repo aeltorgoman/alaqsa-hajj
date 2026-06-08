@@ -103,7 +103,7 @@ function compressImage(file: File): Promise<Blob> {
       const ctx = canvas.getContext("2d");
       if (ctx && !isPng) {
         // للـ JPEG نرسم خلفية بيضاء عشان نتجنب الأسود
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "var(--text-inverse)";
         ctx.fillRect(0, 0, width, height);
       }
       ctx?.drawImage(img, 0, 0, width, height);
@@ -143,7 +143,7 @@ const ALL_PERMISSIONS = [
 ];
 
 const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
-const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["#E6F1FB", "#0C447C"], "ثلاثية": ["#FAEEDA", "#633806"], "رباعية": ["#E1F5EE", "#085041"], "سويت": ["#EEEDFE", "#3C3489"] };
+const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"], "سويت": ["var(--info-bg)", "var(--info)"] };
 
 const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "🏠 الرئيسية", perm: "" }] },
@@ -209,7 +209,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
             <circle cx="22" cy="19.5" r="4.5"/>
           </svg>
           <div>
-            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, color: "#fff", lineHeight: 1.2 }}>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, color: "var(--text-inverse)", lineHeight: 1.2 }}>
               {config.logo_url ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 32 }} /> : config.name_ar}
             </div>
             <div style={{ fontSize: 11, color: "var(--accent-light)", letterSpacing: "1px", marginTop: 2 }}>{config.tagline}</div>
@@ -226,7 +226,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
             <div key={section}>
               <div style={{ fontSize: 11, color: "var(--text-sidebar-muted)", padding: "14px 10px 6px", letterSpacing: "0.08em" }}>{section}</div>
               {allowed.map(({ id, label }) => (
-                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, fontWeight: 500, color: page === id ? "#fff" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 2, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
+                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, fontWeight: 500, color: page === id ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 2, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
                   {page === id && <div style={{ position: "absolute", insetInlineStart: 0, top: "18%", bottom: "18%", width: 3, borderRadius: 99, background: "var(--accent)" }} />}
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={page === id ? "var(--accent-light)" : "var(--text-sidebar)"} strokeWidth="1.7" style={{ flexShrink: 0, opacity: page === id ? 1 : 0.85 }} dangerouslySetInnerHTML={{ __html: NAV_ICONS[id] || NAV_ICONS.dash }} />
                   {label.replace(/[🏠🕌🚌✈️⛺🏔🏨📄🗄👥]/u, "").trim()}
@@ -252,9 +252,9 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
 
       {/* الفوتر */}
       <div style={{ position: "relative", zIndex: 2, padding: "14px 16px", borderTop: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "#fff" }}>{currentUser.name}</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-inverse)" }}>{currentUser.name}</div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>@{currentUser.username}</div>
-        <button onClick={onLogout} style={{ marginTop: 10, width: "100%", background: "rgba(228,108,108,0.14)", color: "#f0b9b9", border: "none", padding: 7, borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", transition: "var(--transition)" }}>تسجيل خروج</button>
+        <button onClick={onLogout} style={{ marginTop: 10, width: "100%", background: "rgba(228,108,108,0.14)", color: "var(--danger-bg)", border: "none", padding: 7, borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", transition: "var(--transition)" }}>تسجيل خروج</button>
       </div>
     </div>
   );
@@ -382,32 +382,32 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ ...btnP(), width: "100%", marginBottom: 14 }}>+ مستخدم جديد</button>}
       {users.map(u => (
         <div key={u.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "#E1F5EE" : "#EEEDFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.username === "admin" ? "👑" : "👤"}</div>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "var(--success-bg)" : "var(--info-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.username === "admin" ? "👑" : "👤"}</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
-            <div style={{ fontSize: 11, color: "#888" }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
           </div>
           {currentUser.permissions.manage_users && u.username !== "admin" && (
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => openEdit(u)} style={{ background: "#E6F1FB", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#0C447C" }}>✏️</button>
-              <button onClick={() => deleteUser(u.id)} style={{ background: "#FBEAF0", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+              <button onClick={() => openEdit(u)} style={{ background: "var(--male-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--info)" }}>✏️</button>
+              <button onClick={() => deleteUser(u.id)} style={{ background: "var(--female-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
             </div>
           )}
         </div>
       ))}
       <Modal show={showAdd} onClose={() => setShowAdd(false)} title={editUser ? "تعديل مستخدم" : "مستخدم جديد"}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 3 }}>الاسم</div><input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 3 }}>اسم المستخدم</div><input style={inp} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>الاسم</div><input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم المستخدم</div><input style={inp} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} /></div>
         </div>
-        <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: "#666", marginBottom: 3 }}>كلمة المرور</div><input type="password" style={inp} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} /></div>
+        <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>كلمة المرور</div><input type="password" style={inp} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} /></div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500 }}>الصلاحيات</div>
-          <div onClick={toggleAll} style={{ fontSize: 11, color: "#1D9E75", cursor: "pointer" }}>{ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}</div>
+          <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--success)", cursor: "pointer" }}>{ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}</div>
         </div>
         {ALL_PERMISSIONS.map(p => (
-          <div key={p.key} onClick={() => togglePerm(p.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 3, background: perms[p.key] ? "#E1F5EE" : "#f9f9f9", border: `0.5px solid ${perms[p.key] ? "#5DCAA5" : "#e5e5e5"}` }}>
-            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "#1D9E75" : "white", border: `1.5px solid ${perms[p.key] ? "#1D9E75" : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{perms[p.key] && <span style={{ color: "white", fontSize: 10 }}>✓</span>}</div>
+          <div key={p.key} onClick={() => togglePerm(p.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 3, background: perms[p.key] ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${perms[p.key] ? "var(--success)" : "var(--border)"}` }}>
+            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "var(--success)" : "var(--bg-card)", border: `1.5px solid ${perms[p.key] ? "var(--success)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{perms[p.key] && <span style={{ color: "var(--bg-card)", fontSize: 10 }}>✓</span>}</div>
             <span style={{ fontSize: 12 }}>{p.label}</span>
           </div>
         ))}
@@ -433,7 +433,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
     <div style={{ overflowY: "auto", height: "100%", padding: "18px 20px", background: "var(--bg)" }}>
       {/* أزرار الإضافة */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-        <div onClick={() => setPage("scan")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "#fff", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
+        <div onClick={() => setPage("scan")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
           <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
           </div>
@@ -666,22 +666,22 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%", position: "relative" }}>
-      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "#1D9E75", color: "white", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}>✅ تم حفظ الحاج بنجاح!</div>}
+      {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "var(--success)", color: "var(--bg-card)", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}>✅ تم حفظ الحاج بنجاح!</div>}
       {/* رفع جواز السفر */}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🛂 جواز السفر</div>
         {!previewImg ? (
-          <div onClick={() => document.getElementById("pu")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 10, padding: "24px", textAlign: "center", cursor: "pointer", background: "#f9f9f9" }}>
+          <div onClick={() => document.getElementById("pu")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 10, padding: "24px", textAlign: "center", cursor: "pointer", background: "var(--bg-2)" }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>🛂</div>
             <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 3 }}>ارفع صورة جواز السفر</div>
-            <div style={{ fontSize: 11, color: "#888" }}>الذكاء الاصطناعي يستخرج البيانات تلقائياً</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>الذكاء الاصطناعي يستخرج البيانات تلقائياً</div>
             <input id="pu" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
           </div>
         ) : (
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
             <img src={previewImg} style={{ width: 140, height: 100, objectFit: "cover", borderRadius: 8, border: "0.5px solid #e5e5e5" }} />
             <div style={{ flex: 1 }}>
-              {loading ? (<><div style={{ background: "#f0f0f0", borderRadius: 99, height: 4, overflow: "hidden", marginBottom: 6 }}><div style={{ width: `${progress}%`, height: "100%", background: "#1D9E75", borderRadius: 99, transition: "width 0.3s" }} /></div><div style={{ fontSize: 11, color: "#888" }}>{statusMsg}</div></>) : <div style={{ fontSize: 11, color: "#1D9E75", fontWeight: 500 }}>✓ {statusMsg}</div>}
+              {loading ? (<><div style={{ background: "var(--bg-2)", borderRadius: 99, height: 4, overflow: "hidden", marginBottom: 6 }}><div style={{ width: `${progress}%`, height: "100%", background: "var(--success)", borderRadius: 99, transition: "width 0.3s" }} /></div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{statusMsg}</div></>) : <div style={{ fontSize: 11, color: "var(--success)", fontWeight: 500 }}>✓ {statusMsg}</div>}
               <button onClick={reset} style={{ marginTop: 8, ...btnS({ fontSize: 10, padding: "3px 10px" }) }}>تغيير</button>
             </div>
           </div>
@@ -690,17 +690,17 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
       {showFields && (<>
         {/* البيانات المستخرجة */}
-        <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "#FAFFFD" }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>👤 البيانات <span style={{ fontSize: 10, background: "#E1F5EE", color: "#085041", padding: "1px 7px", borderRadius: 99 }}>✨ مستخرجة</span></div>
+        <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "var(--bg-card)" }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>👤 البيانات <span style={{ fontSize: 10, background: "var(--success-bg)", color: "var(--primary-dark)", padding: "1px 7px", borderRadius: 99 }}>✨ مستخرجة</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {([["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]] as [string,string,string][]).map(([l, k, col]) => (
               <div key={k} style={{ gridColumn: col || "auto" }}>
-                <div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l}</div>
-                <input disabled={locked} style={{ ...inp, borderColor: "#5DCAA5", background: locked ? "#f5f5f5" : "#E1F5EE", color: locked ? "#666" : "#000" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
+                <input disabled={locked} style={{ ...inp, borderColor: "var(--success)", background: locked ? "var(--bg-2)" : "var(--success-bg)", color: locked ? "var(--text-muted)" : "rgba(0,0,0,0.7)" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
               </div>
             ))}
-            <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div>
-              <select disabled={locked} style={{ ...inp, borderColor: "#5DCAA5", background: locked ? "#f5f5f5" : "#E1F5EE" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
+            <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
+              <select disabled={locked} style={{ ...inp, borderColor: "var(--success)", background: locked ? "var(--bg-2)" : "var(--success-bg)" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
                 <option value="">—</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
               </select>
             </div>
@@ -709,26 +709,26 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
         {/* البطاقة الشخصية */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🪪 البطاقة الشخصية <span style={{ fontSize: 10, color: "#888" }}>(اختياري)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>🪪 البطاقة الشخصية <span style={{ fontSize: 10, color: "var(--text-muted)" }}>(اختياري)</span></div>
           {!idCardPreview ? (
-            <div onClick={() => !locked && document.getElementById("id-card-upload")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 8, padding: "14px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: "#f9f9f9", opacity: locked ? 0.6 : 1 }}>
-              <div style={{ fontSize: 11, color: "#666" }}>ارفع البطاقة لاستخراج الرقم والصلاحية تلقائياً</div>
+            <div onClick={() => !locked && document.getElementById("id-card-upload")?.click()} style={{ border: "1.5px dashed #ddd", borderRadius: 8, padding: "14px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: "var(--bg-2)", opacity: locked ? 0.6 : 1 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>ارفع البطاقة لاستخراج الرقم والصلاحية تلقائياً</div>
               <input id="id-card-upload" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleIdCard(e.target.files[0])} />
             </div>
           ) : (
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
               <img src={idCardPreview} style={{ width: 100, height: 65, objectFit: "cover", borderRadius: 6, border: "0.5px solid #e5e5e5" }} />
               <div style={{ flex: 1 }}>
-                {idScanLoading ? <div style={{ fontSize: 11, color: "#888" }}>⏳ جاري قراءة البطاقة...</div> : <div style={{ fontSize: 11, color: "#1D9E75", fontWeight: 500 }}>✓ تم استخراج البيانات</div>}
+                {idScanLoading ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>⏳ جاري قراءة البطاقة...</div> : <div style={{ fontSize: 11, color: "var(--success)", fontWeight: 500 }}>✓ تم استخراج البيانات</div>}
                 <button onClick={() => { setIdCardFile(null); setIdCardPreview(null); setIdExpiry(""); setForm(prev => ({ ...prev, national_id: "" })); }} style={{ marginTop: 6, ...btnS({ fontSize: 10, padding: "2px 8px" }) }}>تغيير</button>
               </div>
             </div>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-            <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>رقم البطاقة</div>
+            <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>رقم البطاقة</div>
               <input disabled={locked} style={{ ...inp }} value={form.national_id} onChange={e => setField("national_id", e.target.value)} placeholder="يتعبى تلقائياً من البطاقة" />
             </div>
-            <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>انتهاء البطاقة</div>
+            <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>انتهاء البطاقة</div>
               <input disabled={locked} style={{ ...inp }} value={idExpiry} onChange={e => setIdExpiry(e.target.value)} placeholder="DD/MM/YYYY" />
             </div>
           </div>
@@ -740,9 +740,9 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {([["🚌 الباص", "bus", ["عادي", "VIP"]], ["✈️ الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية", "ثلاثية", "رباعية", "سويت"]], ["🪟 إطلالة الغرفة", "hotel_view", ["مطلة", "غير مطلة"]], ["⛺ مخيم منى", "camp_mina", ["عادي", "خاص"]], ["🏔 مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
               <div key={k}>
-                <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {opts.map(o => <div key={o} onClick={() => setService(k, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k] === o ? "#1D9E75" : "#ddd"}`, background: (services as any)[k] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k] === o ? "#085041" : "#666", textAlign: "center", fontWeight: (services as any)[k] === o ? 500 : 400 }}>{o}</div>)}
+                  {opts.map(o => <div key={o} onClick={() => setService(k, o)} style={{ flex: 1, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${(services as any)[k] === o ? "var(--success)" : "var(--border)"}`, background: (services as any)[k] === o ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 10, color: (services as any)[k] === o ? "var(--primary-dark)" : "var(--text-muted)", textAlign: "center", fontWeight: (services as any)[k] === o ? 500 : 400 }}>{o}</div>)}
                 </div>
               </div>
             ))}
@@ -751,14 +751,14 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
         {/* مستندات إضافية */}
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>📎 مستندات إضافية <span style={{ fontSize: 10, color: "#888" }}>(اختياري)</span></div>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>📎 مستندات إضافية <span style={{ fontSize: 10, color: "var(--text-muted)" }}>(اختياري)</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {([["📷 صورة شخصية", "photo", "image/*"], ["📄 عقد الانتفاق", "contract", "image/*,application/pdf"]] as [string, "photo"|"contract", string][]).map(([label, key, accept]) => (
               <div key={key}>
                 <input id={`doc-${key}`} type="file" accept={accept} disabled={locked} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) setDocs(prev => ({ ...prev, [key]: f })); }} />
-                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${docs[key] ? "#1D9E75" : "#ddd"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: docs[key] ? "#E1F5EE" : "#f9f9f9", opacity: locked ? 0.6 : 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: docs[key] ? "#085041" : "#666" }}>{label}</div>
-                  <div style={{ fontSize: 9, color: "#999", marginTop: 3 }}>{docs[key] ? "✓ تم الاختيار" : "اضغط للرفع"}</div>
+                <div onClick={() => !locked && document.getElementById(`doc-${key}`)?.click()} style={{ border: `1.5px dashed ${docs[key] ? "var(--success)" : "var(--border)"}`, borderRadius: 8, padding: "12px 6px", textAlign: "center", cursor: locked ? "not-allowed" : "pointer", background: docs[key] ? "var(--success-bg)" : "var(--bg-2)", opacity: locked ? 0.6 : 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: docs[key] ? "var(--primary-dark)" : "var(--text-muted)" }}>{label}</div>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 3 }}>{docs[key] ? "✓ تم الاختيار" : "اضغط للرفع"}</div>
                 </div>
               </div>
             ))}
@@ -768,7 +768,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
         {/* الأزرار */}
         <div style={{ display: "flex", gap: 8 }}>
           {locked ? (<>
-            <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "#E6F1FB", color: "#0C447C" }), flex: 1 }}>✏️ تعديل</button>
+            <button onClick={() => setLocked(false)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}>✏️ تعديل</button>
             <button onClick={reset} style={{ ...btnP(), flex: 1 }}>➕ حاج جديد</button>
           </>) : (<>
             <button onClick={handleSave} disabled={uploading} style={{ ...btnP(), flex: 1, opacity: uploading ? 0.6 : 1 }}>{uploading ? "⏳ جاري الحفظ..." : "💾 حفظ الحاج"}</button>
@@ -789,7 +789,7 @@ function StatRing({ pct, count, total, color, label }: { pct: number; count: num
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
       <div style={{ position: "relative", width: 62, height: 62 }}>
         <svg width="62" height="62" viewBox="0 0 62 62">
-          <circle cx="31" cy="31" r={r} fill="none" stroke="#eeeeee" strokeWidth="6" />
+          <circle cx="31" cy="31" r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
           <circle cx="31" cy="31" r={r} fill="none" stroke={color} strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={circ}
@@ -800,9 +800,9 @@ function StatRing({ pct, count, total, color, label }: { pct: number; count: num
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color }}>{pct}%</div>
       </div>
-      <div style={{ fontSize: 10, color: "#555", textAlign: "center", lineHeight: 1.4 }}>
+      <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.4 }}>
         {label}<br />
-        <span style={{ color: "#aaa", fontSize: 9 }}>{count} / {total}</span>
+        <span style={{ color: "var(--text-muted)", fontSize: 9 }}>{count} / {total}</span>
       </div>
     </div>
   );
@@ -828,28 +828,28 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   const { total, males, females, docsDone, dataDone, docPct, dataPct } = stats;
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0, background: "#fafafa" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0, background: "var(--bg-2)" }}>
       {/* بطاقات العدد */}
-      <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 72, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#888", marginBottom: 1 }}>إجمالي الحجاج</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#333", lineHeight: 1 }}>{total}</div>
+      <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 72, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>إجمالي الحجاج</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{total}</div>
       </div>
-      <div style={{ background: "#E6F1FB", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#0C447C", marginBottom: 1 }}>رجال</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#0C447C", lineHeight: 1 }}>{males}</div>
+      <div style={{ background: "var(--male-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--info)", marginBottom: 1 }}>رجال</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--info)", lineHeight: 1 }}>{males}</div>
       </div>
-      <div style={{ background: "#FBEAF0", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#72243E", marginBottom: 1 }}>نساء</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#72243E", lineHeight: 1 }}>{females}</div>
+      <div style={{ background: "var(--female-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 64, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--female-fg)", marginBottom: 1 }}>نساء</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--female-fg)", lineHeight: 1 }}>{females}</div>
       </div>
 
       {/* خط فاصل */}
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 4 }} />
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 4 }} />
 
       {/* دوائر النسبة */}
       <div style={{ display: "flex", gap: 16, marginInlineStart: "auto" }}>
-        <StatRing pct={docPct} count={docsDone} total={total} color="#1D9E75" label="اكتمال المستندات" />
-        <StatRing pct={dataPct} count={dataDone} total={total} color="#185FA5" label="اكتمال البيانات" />
+        <StatRing pct={docPct} count={docsDone} total={total} color="var(--success)" label="اكتمال المستندات" />
+        <StatRing pct={dataPct} count={dataDone} total={total} color="var(--info)" label="اكتمال البيانات" />
       </div>
     </div>
   );
@@ -1049,44 +1049,44 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
         <PassengersStats passengers={passengers} />
         <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", flexShrink: 0 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
-              <span style={{ color: "#aaa" }}>🔍</span>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #e0e0e0", borderRadius: 8, padding: "6px 10px" }}>
+              <span style={{ color: "var(--text-muted)" }}>🔍</span>
               <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث بالاسم الكامل أو أي معلومة..." />
-              {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "#aaa" }}>✕</span>}
+              {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--text-muted)" }}>✕</span>}
             </div>
             <div style={{ display: "flex", border: "0.5px solid #ddd", borderRadius: 8, overflow: "hidden" }}>
-              <div onClick={() => setViewMode("list")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "list" ? "#1D9E75" : "white", color: viewMode === "list" ? "white" : "#666" }}>☰ قائمة</div>
-              <div onClick={() => setViewMode("table")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "table" ? "#1D9E75" : "white", color: viewMode === "table" ? "white" : "#666" }}>⊞ جدول</div>
+              <div onClick={() => setViewMode("list")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "list" ? "var(--success)" : "var(--bg-card)", color: viewMode === "list" ? "white" : "var(--text-muted)" }}>☰ قائمة</div>
+              <div onClick={() => setViewMode("table")} style={{ padding: "6px 12px", cursor: "pointer", fontSize: 12, background: viewMode === "table" ? "var(--success)" : "var(--bg-card)", color: viewMode === "table" ? "white" : "var(--text-muted)" }}>⊞ جدول</div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 11, color: "#888" }}>{filtered.length} من {passengers.length} حاج</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{filtered.length} من {passengers.length} حاج</div>
             <button onClick={() => setShowManual(true)} style={{ ...btnP({ fontSize: 10, padding: "3px 8px" }) }}>➕ إضافة يدوي</button>
           </div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {viewMode === "list" ? (
             <div style={{ padding: "8px 10px" }}>
-              {filtered.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>لا توجد نتائج</div> :
+              {filtered.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>لا توجد نتائج</div> :
                 filtered.map(p => (
-                  <div key={p.id} onClick={() => setSelected(p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, marginBottom: 3, cursor: "pointer", background: selected?.id === p.id ? "#E1F5EE" : "transparent", border: `0.5px solid ${selected?.id === p.id ? "#5DCAA5" : "transparent"}` }}>
+                  <div key={p.id} onClick={() => setSelected(p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, marginBottom: 3, cursor: "pointer", background: selected?.id === p.id ? "var(--success-bg)" : "transparent", border: `0.5px solid ${selected?.id === p.id ? "var(--success)" : "transparent"}` }}>
                     <Avatar name={p.name_ar} gender={p.gender} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
                         {p.short_ar || p.name_ar}
-                        {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ color: "#c0392b", fontSize: 11 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ color: "#e67e22", fontSize: 11 }}>⚠️</span>}
+                        {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ color: "var(--danger)", fontSize: 11 }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ color: "var(--warning)", fontSize: 11 }}>⚠️</span>}
                         {p.family_id && <span title="مرتبط بأقارب" style={{ fontSize: 10 }}>👨‍👩‍👧</span>}
                       </div>
-                      <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} · {p.passport}</div>
                       <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
-                        <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: p.gender === "أنثى" ? "#FBEAF0" : "#E6F1FB", color: p.gender === "أنثى" ? "#72243E" : "#0C447C" }}>{p.gender}</span>
-                        {p.services?.bus === "VIP" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "#FAEEDA", color: "#633806" }}>⭐ VIP</span>}
-                        {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "#EEEDFE", color: "#3C3489" }}>✈️ أولى</span>}
+                        <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--female-bg)" : "var(--male-bg)", color: p.gender === "أنثى" ? "var(--female-fg)" : "var(--info)" }}>{p.gender}</span>
+                        {p.services?.bus === "VIP" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)" }}>⭐ VIP</span>}
+                        {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: "var(--info-bg)", color: "var(--info)" }}>✈️ أولى</span>}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "#E6F1FB", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>✏️</button>
-                      <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "#FBEAF0", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+                      <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "var(--male-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>✏️</button>
+                      <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
                     </div>
                   </div>
                 ))}
@@ -1094,12 +1094,12 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           ) : (
             <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "max-content", width: "100%" }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
-                <tr style={{ background: "#1D9E75", color: "white" }}>
+                <tr style={{ background: "var(--success)", color: "var(--bg-card)" }}>
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
                   {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right" }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
                 </tr>
-                <tr style={{ background: "#f0f0f0" }}>
+                <tr style={{ background: "var(--bg-2)" }}>
                   <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
                   {COLS.map(col => (
                     <td key={col.key} style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}>
@@ -1111,18 +1111,18 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
               </thead>
               <tbody>
                 {filtered.map((p, i) => (
-                  <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: "pointer", background: selected?.id === p.id ? "#E1F5EE" : i % 2 === 0 ? "white" : "#fafafa" }}>
-                    <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                  <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: "pointer", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "white" : "var(--bg-2)" }}>
+                    <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
                     {COLS.map(col => (
                       <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid #eee", whiteSpace: "nowrap" }}>
                         {getVal(p, col.key, col.get)}
-                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "#c0392b" }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "#e67e22" }}>⚠️</span>)}
+                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}>❌</span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}>⚠️</span>)}
                       </td>
                     ))}
                     <td style={{ padding: "6px 10px", border: "0.5px solid #eee", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "#E6F1FB", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>✏️</button>
-                        <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "#FBEAF0", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "var(--male-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>✏️</button>
+                        <button onClick={e => { e.stopPropagation(); if (confirm("هتمسح الحاج ده؟")) deleteP(p.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
                       </div>
                     </td>
                   </tr>
@@ -1137,33 +1137,33 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
         <div style={{ width: 280, borderRight: "0.5px solid #e5e5e5", overflowY: "auto", padding: 12, flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 600 }}>ملف الحاج</div>
-            <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 16 }}>✕</button>
+            <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 16 }}>✕</button>
           </div>
-          <div style={{ textAlign: "center", marginBottom: 12, background: "#f9f9f9", borderRadius: 10, padding: 12 }}>
+          <div style={{ textAlign: "center", marginBottom: 12, background: "var(--bg-2)", borderRadius: 10, padding: 12 }}>
             {(selected as any).photo_url ? (
               <img src={(selected as any).photo_url} alt={selected.name_ar} style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", margin: "0 auto", display: "block", border: "2px solid #5DCAA5" }} />
             ) : <Avatar name={selected.name_ar} gender={selected.gender} size={48} />}
             <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>{selected.name_ar}</div>
-            <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{selected.name_en}</div>
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{selected.name_en}</div>
           </div>
           {(isExpired(selected.expiry) || isExpired((selected as any).id_expiry)) ? (
-            <div style={{ background: "#FBEAF0", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#c0392b", fontWeight: 700, textAlign: "center" }}>
+            <div style={{ background: "var(--female-bg)", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--danger)", fontWeight: 700, textAlign: "center" }}>
               ❌ {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
             </div>
           ) : (isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
-            <div style={{ background: "#FAEEDA", border: "1px solid #e67e22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "#a85318", fontWeight: 600, textAlign: "center" }}>
+            <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--warning)", fontWeight: 600, textAlign: "center" }}>
               ⚠️ صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
             </div>
           )}
           {[["🛂 الجواز", selected.passport], ["🪪 البطاقة", selected.national_id], ["🌍 الجنسية", selected.nat], ["⚧ الجنس", selected.gender], ["🎂 الميلاد", selected.dob], ["📅 انتهاء الجواز", selected.expiry], ["📞 التليفون", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
-            <div key={icon as string} style={{ background: "#f9f9f9", borderRadius: 8, padding: "6px 10px", marginBottom: 4, fontSize: 11 }}>{icon as string} {val as string}</div>
+            <div key={icon as string} style={{ background: "var(--bg-2)", borderRadius: 8, padding: "6px 10px", marginBottom: 4, fontSize: 11 }}>{icon as string} {val as string}</div>
           ))}
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>⭐ الخدمات</div>
             {[["🚌", "الباص", selected.services?.bus], ["✈️", "الطيران", selected.services?.flight], ["🏨", "الفندق", `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim()], ["⛺", "منى", selected.services?.camp_mina], ["🏔", "عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
               <div key={label as string} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                <span style={{ color: "#888" }}>{icon as string} {label as string}</span>
-                <span style={{ fontWeight: 500, color: (val === "VIP" || val === "درجة أولى" || val === "خاص") ? "#633806" : "#333" }}>{val as string}</span>
+                <span style={{ color: "var(--text-muted)" }}>{icon as string} {label as string}</span>
+                <span style={{ fontWeight: 500, color: (val === "VIP" || val === "درجة أولى" || val === "خاص") ? "var(--warning)" : "var(--text)" }}>{val as string}</span>
               </div>
             ))}
           </div>
@@ -1177,19 +1177,19 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
             ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
               <div key={label} style={{ padding: "7px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 11, color: url ? "#333" : "#bbb" }}>{label}</span>
+                  <span style={{ fontSize: 11, color: url ? "var(--text)" : "var(--text-muted)" }}>{label}</span>
                   {docUploading === docType ? (
-                    <span style={{ fontSize: 10, color: "#888" }}>⏳ جاري الرفع...</span>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>⏳ جاري الرفع...</span>
                   ) : url ? (
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => window.open(url, "_blank")} style={{ background: "#E6F1FB", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#0C447C" }}>👁 عرض</button>
-                      <button onClick={() => downloadFile(url)} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#085041" }}>⬇️</button>
-                      <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "#FBEAF0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+                      <button onClick={() => window.open(url, "_blank")} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>👁 عرض</button>
+                      <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬇️</button>
+                      <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
                     </div>
                   ) : (
                     <>
                       <input id={`upload-${docType}`} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
-                      <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#085041" }}>⬆️ رفع</button>
+                      <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬆️ رفع</button>
                     </>
                   )}
                 </div>
@@ -1200,10 +1200,10 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 500 }}>👨‍👩‍👧 الأقارب</div>
-              <button onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ background: "#E1F5EE", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "#085041" }}>+ ربط</button>
+              <button onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ background: "var(--success-bg)", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>+ ربط</button>
             </div>
             {getFamilyMembers(selected).length === 0 ? (
-              <div style={{ fontSize: 10, color: "#aaa" }}>لا يوجد أقارب مرتبطين</div>
+              <div style={{ fontSize: 10, color: "var(--text-muted)" }}>لا يوجد أقارب مرتبطين</div>
             ) : (
               getFamilyMembers(selected).map(fm => (
                 <div key={fm.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: "0.5px solid #f5f5f5" }}>
@@ -1211,63 +1211,63 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
                     <Avatar name={fm.name_ar} gender={fm.gender} size={24} />
                     <span style={{ fontSize: 11 }}>{fm.short_ar || fm.name_ar}</span>
                   </div>
-                  <button onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط مع هذا الشخص" style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                  <button onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط مع هذا الشخص" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                 </div>
               ))
             )}
           </div>
 
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "#E6F1FB", color: "#0C447C" }), flex: 1 }}>✏️ تعديل</button>
-            <button onClick={() => { if (confirm("هتمسح الحاج ده؟")) deleteP(selected.id); }} style={{ background: "#FBEAF0", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑</button>
+            <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}>✏️ تعديل</button>
+            <button onClick={() => { if (confirm("هتمسح الحاج ده؟")) deleteP(selected.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}>🗑</button>
           </div>
         </div>
       )}
 
       {/* مودال التحقق من الهوية */}
       <Modal show={showVerify} onClose={() => { setShowVerify(false); setVerifyData(null); }} title="🛡️ تأكيد هوية الحاج" maxWidth={520}>
-        <p style={{ fontSize: 12, color: "#888", margin: "0 0 14px", lineHeight: 1.6 }}>تأكد إن صورة الجواز وصورة البطاقة لنفس الشخص قبل الحفظ</p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.6 }}>تأكد إن صورة الجواز وصورة البطاقة لنفس الشخص قبل الحفظ</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
           {[["🛂 صورة الجواز", verifyData?.passportUrl], ["🪪 صورة البطاقة", verifyData?.idUrl]].map(([label, url]) => (
             <div key={label as string} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, overflow: "hidden" }}>
-              <div style={{ background: "#f5f5f5", padding: "6px 10px", fontSize: 11, fontWeight: 500, borderBottom: "0.5px solid #e5e5e5" }}>{label as string}</div>
+              <div style={{ background: "var(--bg-2)", padding: "6px 10px", fontSize: 11, fontWeight: 500, borderBottom: "0.5px solid #e5e5e5" }}>{label as string}</div>
               {url ? (
                 <img src={url as string} alt={label as string} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
               ) : (
-                <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: "#ccc", fontSize: 12 }}>لم يتم الرفع</div>
+                <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--border)", fontSize: 12 }}>لم يتم الرفع</div>
               )}
             </div>
           ))}
         </div>
         {verifyData?.idMismatch && (
-          <div style={{ background: "#FAEEDA", border: "0.5px solid #e67e22", borderRadius: 8, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <div style={{ background: "var(--warning-bg)", border: "0.5px solid #e67e22", borderRadius: 8, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
             <span style={{ fontSize: 16 }}>⚠️</span>
-            <span style={{ fontSize: 12, color: "#633806", lineHeight: 1.6 }}>الرقم الشخصي في البطاقة مختلف عن المسجل في الجواز — تأكد قبل الحفظ</span>
+            <span style={{ fontSize: 12, color: "var(--warning)", lineHeight: 1.6 }}>الرقم الشخصي في البطاقة مختلف عن المسجل في الجواز — تأكد قبل الحفظ</span>
           </div>
         )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <button onClick={confirmVerify} style={{ background: "#1D9E75", color: "white", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✅ نعم، نفس الشخص — حفظ</button>
-          <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "#FBEAF0", color: "#c0392b", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}>❌ لا، مش نفس الشخص</button>
+          <button onClick={confirmVerify} style={{ background: "var(--success)", color: "var(--bg-card)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✅ نعم، نفس الشخص — حفظ</button>
+          <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}>❌ لا، مش نفس الشخص</button>
         </div>
       </Modal>
 
       <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="👨‍👩‍👧 ربط بأقارب">
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 10 }}>اختر الحاج اللي عايز تربطه بـ {selected?.short_ar}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "#aaa" }}>🔍</span>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>اختر الحاج اللي عايز تربطه بـ {selected?.short_ar}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "var(--text-muted)" }}>🔍</span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={linkSearch} onChange={e => setLinkSearch(e.target.value)} autoFocus />
         </div>
         <div style={{ maxHeight: 300, overflowY: "auto" }}>
           {passengers.filter(p => selected && p.id !== selected.id && (!linkSearch || p.name_ar.includes(linkSearch) || p.short_ar.includes(linkSearch))).map(p => (
             <div key={p.id} onClick={() => selected && handleLinkFamily(selected, p)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: "transparent" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#E1F5EE"}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--success-bg)"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
-                <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.gender}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} · {p.gender}</div>
               </div>
-              {p.family_id && <span style={{ fontSize: 9, background: "#E1F5EE", color: "#085041", padding: "1px 5px", borderRadius: 99 }}>عنده أقارب</span>}
+              {p.family_id && <span style={{ fontSize: 9, background: "var(--success-bg)", color: "var(--primary-dark)", padding: "1px 5px", borderRadius: 99 }}>عنده أقارب</span>}
             </div>
           ))}
         </div>
@@ -1279,17 +1279,17 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
               {[["الاسم بالعربي", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["المختصر عربي", "short_ar"], ["المختصر إنجليزي", "short_en"], ["رقم الجواز", "passport"], ["الرقم الشخصي", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"]].map(([l, k]) => (
-                <div key={k as string}><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l as string}</div><input style={inp} value={(editing as any)[k as string] || ""} onChange={e => setEditing({ ...editing, [k as string]: e.target.value })} /></div>
+                <div key={k as string}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l as string}</div><input style={inp} value={(editing as any)[k as string] || ""} onChange={e => setEditing({ ...editing, [k as string]: e.target.value })} /></div>
               ))}
-              <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div><select style={inp} value={editing.gender} onChange={e => setEditing({ ...editing, gender: e.target.value })}><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
+              <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div><select style={inp} value={editing.gender} onChange={e => setEditing({ ...editing, gender: e.target.value })}><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات المطلوبة</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
-                  <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
+                  <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "#1D9E75" : "#ddd"), background: editing.services?.[k as keyof typeof editing.services] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "#085041" : "#666", textAlign: "center" as const }}>{o}</div>)}
+                      {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "var(--success)" : "var(--border)"), background: editing.services?.[k as keyof typeof editing.services] === o ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "var(--primary-dark)" : "var(--text-muted)", textAlign: "center" as const }}>{o}</div>)}
                     </div>
                   </div>
                 ))}
@@ -1305,14 +1305,14 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 
       {/* مودال الإضافة اليدوية */}
       <Modal show={showManual} onClose={() => setShowManual(false)} title="➕ إضافة حاج يدوياً" maxWidth={460}>
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
           {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
-            <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>{l}</div>
+            <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
               <input style={inp} value={(manualForm as any)[k]} onChange={e => setManualForm(prev => ({ ...prev, [k]: e.target.value }))} />
             </div>
           ))}
-          <div><div style={{ fontSize: 10, color: "#666", marginBottom: 3 }}>الجنس</div>
+          <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
             <select style={inp} value={manualForm.gender} onChange={e => setManualForm(prev => ({ ...prev, gender: e.target.value }))}>
               <option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
             </select>
@@ -1322,9 +1322,9 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>⭐ الخدمات</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {([["🚌 الباص", "bus", ["عادي","VIP"]], ["✈️ الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["🏨 نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["⛺ منى", "camp_mina", ["عادي","خاص"]], ["🏔 عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
-              <div key={k}><div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>{l}</div>
+              <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "#1D9E75" : "#ddd"}`, background: (manualServices as any)[k] === o ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "#085041" : "#666", textAlign: "center" }}>{o}</div>)}
+                  {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "var(--success)" : "var(--border)"}`, background: (manualServices as any)[k] === o ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "var(--primary-dark)" : "var(--text-muted)", textAlign: "center" }}>{o}</div>)}
                 </div>
               </div>
             ))}
@@ -1349,26 +1349,26 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
   const pct = total ? Math.round(assigned / total * 100) : 0;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
-      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assigned}</div>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
+      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assigned}</div>
       </div>
-      <div style={{ background: noTicket > 0 ? "#f0f0f0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#888", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#aaa", lineHeight: 1 }}>{noTicket}</div>
+      <div style={{ background: noTicket > 0 ? "var(--bg-2)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-muted)", lineHeight: 1 }}>{noTicket}</div>
       </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>درجة أولى ⭐</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{firstClass}</div>
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
+      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>درجة أولى ⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{firstClass}</div>
       </div>
-      <div style={{ background: withoutTicket > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: withoutTicket > 0 ? "#72243E" : "#888", marginBottom: 1 }}>بدون تذكرة</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: withoutTicket > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{withoutTicket}</div>
+      <div style={{ background: withoutTicket > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: withoutTicket > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>بدون تذكرة</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: withoutTicket > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{withoutTicket}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assigned} total={total} color="#1D9E75" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assigned} total={total} color="var(--success)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1464,38 +1464,38 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   const renderGroup = (groupFlights: Flight[], type: "ذهاب" | "إياب") => (
     <div style={{ marginBottom: 16 }}>
-      <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "#E6F1FB" : "#FBEAF0", color: type === "ذهاب" ? "#0C447C" : "#72243E", display: "inline-block", marginBottom: 10 }}>
+      <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)", color: type === "ذهاب" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
         {type === "ذهاب" ? "✈ رحلات الذهاب" : "✈ رحلات الإياب"} ({groupFlights.length})
       </span>
-      {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "#aaa", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
+      {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
         groupFlights.map(flight => {
           const isExpanded = expanded.has(flight.id);
           const fp = getFlightPassengers(flight.id);
           return (
-            <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "#B8D4F0" : "#F0B8C8"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-              <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "#F5F9FF" : "#FFF5F8", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+              <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 18 }}>✈️</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "#888" }}>— {flight.airline}</span>}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
                 </div>
-                <span style={{ fontSize: 11, color: "#888" }}>{fp.length} مسافر</span>
-                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "#f0f0f0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: fp.length === 0 ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "#c0392b" : "#ccc" }}>🗑</button>
-                <span style={{ color: "#aaa" }}>{isExpanded ? "▲" : "▼"}</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{fp.length} مسافر</span>
+                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
+                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: fp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
-                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${type === "ذهاب" ? "#B8D4F0" : "#F0B8C8"}` }}>
+                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}` }}>
                   {fp.length ? fp.map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
-                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                     </div>
-                  )) : <div style={{ textAlign: "center", padding: "8px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
+                  )) : <div style={{ textAlign: "center", padding: "8px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
               )}
             </div>
@@ -1511,35 +1511,35 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
         {flights.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
       </div>
-      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>✈️<br />لا يوجد رحلات بعد</div> : (
+      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>✈️<br />لا يوجد رحلات بعد</div> : (
         <>{renderGroup(goFlights, "ذهاب")}{renderGroup(retFlights, "إياب")}</>
       )}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="✈️ رحلة جديدة" maxWidth={380}>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الرحلة</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الرحلة</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذهاب", "إياب"] as const).map(t => (
-              <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "#0C447C" : "#72243E") : "#ddd"}`, background: flightType === t ? (t === "ذهاب" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "#0C447C" : "#72243E") : "#666" }}>
+              <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
                 {t === "ذهاب" ? "✈ ذهاب" : "✈ إياب"}
               </div>
             ))}
           </div>
         </div>
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم الرحلة</div>
-          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
-          {nameError && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 3 }}>{nameError}</div>}
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الرحلة</div>
+          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
+          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{nameError}</div>}
         </div>
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الشركة</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الشركة</div>
           <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="مثال: Qatar Airways" />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button>
@@ -1550,29 +1550,29 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`✈️ إضافة — ${currentFlight?.name} (${currentFlight?.type})`}>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
-            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "#1D9E75" : "#ddd"}`, background: addFlightClass === cls ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "#085041" : "#666" }}>
+            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "var(--success)" : "var(--border)"}`, background: addFlightClass === cls ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "var(--primary-dark)" : "var(--text-muted)" }}>
               {cls === "درجة أولى" ? "⭐ درجة أولى" : "💺 عادي"}
             </div>
           ))}
-          {!allSelectedWantFirst && selectedP.size > 0 && <div style={{ fontSize: 10, color: "#aaa", alignSelf: "center" }}>درجة أولى متاحة بس للي طلبوها</div>}
+          {!allSelectedWantFirst && selectedP.size > 0 && <div style={{ fontSize: 10, color: "var(--text-muted)", alignSelf: "center" }}>درجة أولى متاحة بس للي طلبوها</div>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "#aaa" }}>🔍</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "var(--text-muted)" }}>🔍</span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
-        {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "#aaa", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين متاحين</div> :
+        {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين متاحين</div> :
           filteredP.map(p => {
             const isSel = selectedP.has(p.id);
             const wantsFirst = p.services?.flight === "درجة أولى";
             return (
-              <div key={p.id} onClick={() => toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: isSel ? "#E1F5EE" : wantsFirst ? "#FFFBEA" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : wantsFirst ? "#F5C842" : "transparent"}` }}>
+              <div key={p.id} onClick={() => toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: isSel ? "var(--success-bg)" : wantsFirst ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : wantsFirst ? "var(--accent)" : "transparent"}` }}>
                 <Avatar name={p.name_ar} gender={p.gender} size={28} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
-                  <div style={{ fontSize: 10, color: "#888" }}>{p.nat}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat}</div>
                 </div>
-                {wantsFirst && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ طلب أولى</span>}
-                {isSel && <span style={{ color: "#1D9E75" }}>✓</span>}
+                {wantsFirst && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ طلب أولى</span>}
+                {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
               </div>
             );
           })}
@@ -1599,31 +1599,31 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
   }, [buses, passengers]);
   const { total, assignedCount, unassigned, normalBuses, vipBuses, vipRequested, pct } = stats;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
-      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assignedCount}</div>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
+      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assignedCount}</div>
       </div>
-      <div style={{ background: unassigned > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: unassigned > 0 ? "#72243E" : "#888", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{unassigned}</div>
+      <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{unassigned}</div>
       </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#555", marginBottom: 1 }}>باص عادي</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#333", lineHeight: 1 }}>{normalBuses}</div>
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
+      <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>باص عادي</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{normalBuses}</div>
       </div>
-      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>باص VIP ⭐</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{vipBuses}</div>
+      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>باص VIP ⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{vipBuses}</div>
       </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#FFFBEA", borderRadius: 10, padding: "7px 12px", minWidth: 70, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#8B6914", marginBottom: 1 }}>طلبوا VIP</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#8B6914", lineHeight: 1 }}>{vipRequested}</div>
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
+      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 70, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>طلبوا VIP</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{vipRequested}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="#1D9E75" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assignedCount} total={total} color="var(--success)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1644,35 +1644,35 @@ function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passenger
   }, [camps, passengers, campIdKey]);
   const { total, assignedCount, unassigned, normalCamps, specialCamps, maleCamps, femaleCamps, pct } = stats;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
-      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assignedCount}</div>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
+      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assignedCount}</div>
       </div>
-      <div style={{ background: unassigned > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: unassigned > 0 ? "#72243E" : "#888", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{unassigned}</div>
+      <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{unassigned}</div>
       </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#f0f0f0", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#555", marginBottom: 1 }}>عادي</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#333", lineHeight: 1 }}>{normalCamps}</div>
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
+      <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>عادي</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{normalCamps}</div>
       </div>
-      <div style={{ background: "#FAEEDA", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#633806", marginBottom: 1 }}>خاص ⭐</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#633806", lineHeight: 1 }}>{specialCamps}</div>
+      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>خاص ⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{specialCamps}</div>
       </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
-      <div style={{ background: "#E6F1FB", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#0C447C", marginBottom: 1 }}>خيام رجال</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#0C447C", lineHeight: 1 }}>{maleCamps}</div>
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
+      <div style={{ background: "var(--male-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--info)", marginBottom: 1 }}>خيام رجال</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--info)", lineHeight: 1 }}>{maleCamps}</div>
       </div>
-      <div style={{ background: "#FBEAF0", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#72243E", marginBottom: 1 }}>خيام نساء</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#72243E", lineHeight: 1 }}>{femaleCamps}</div>
+      <div style={{ background: "var(--female-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--female-fg)", marginBottom: 1 }}>خيام نساء</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--female-fg)", lineHeight: 1 }}>{femaleCamps}</div>
       </div>
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="#1D9E75" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assignedCount} total={total} color="var(--success)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1689,16 +1689,16 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
   }, [rooms, passengers]);
   const { total, assignedCount, unassigned, pct } = stats;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "#fafafa" }}>
-      <div style={{ background: "#E1F5EE", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "#085041", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#1D9E75", lineHeight: 1 }}>{assignedCount}</div>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
+      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--success)", lineHeight: 1 }}>{assignedCount}</div>
       </div>
-      <div style={{ background: unassigned > 0 ? "#FBEAF0" : "#f0f0f0", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: unassigned > 0 ? "#72243E" : "#888", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "#c0392b" : "#aaa", lineHeight: 1 }}>{unassigned}</div>
+      <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
+        <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{unassigned}</div>
       </div>
-      <div style={{ width: 1, height: 44, background: "#e5e5e5", marginInline: 2 }} />
+      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
       {ROOM_TYPES.map(t => {
         const [bg, clr] = ROOM_COLORS[t];
         const count = rooms.filter(r => r.type === t).length;
@@ -1712,7 +1712,7 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
         );
       })}
       <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="#534AB7" label="نسبة التوزيع" />
+        <StatRing pct={pct} count={assignedCount} total={total} color="var(--info)" label="نسبة التوزيع" />
       </div>
     </div>
   );
@@ -1809,39 +1809,39 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ باص جديد</button>
         {buses.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
       </div>
-      {!buses.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}>🚌<br />لا يوجد باصات بعد</div> :
+      {!buses.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>🚌<br />لا يوجد باصات بعد</div> :
         buses.map(bus => {
           const isExpanded = expanded.has(bus.id);
           const bp = getBusPassengers(bus.id);
           const isVIP = bus.type === "VIP";
           return (
-            <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "#F5C842" : "#e5e5e5"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-              <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "#FFFBEA" : "#f9f9f9", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+              <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 18 }}>🚌</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "#FAEEDA" : "#EEEDFE", color: isVIP ? "#633806" : "#3C3489" }}>{isVIP ? "⭐ VIP" : "عادي"}</span></div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{bp.length} مسافر</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "⭐ VIP" : "عادي"}</span></div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); printBus(bus); }} style={{ background: "#f0f0f0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} style={{ background: bp.length === 0 ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "#c0392b" : "#ccc" }}>🗑</button>
-                <span style={{ color: "#aaa" }}>{isExpanded ? "▲" : "▼"}</span>
+                <button onClick={e => { e.stopPropagation(); printBus(bus); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
+                <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} style={{ background: bp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
-                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${isVIP ? "#F5C842" : "#e5e5e5"}` }}>
+                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}` }}>
                   {bp.length ? bp.map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 4px", borderRadius: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
-                      <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
+                      {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
+                      <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
                         <option value="">نقل لـ...</option>
                         {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
-                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                     </div>
-                  )) : <div style={{ textAlign: "center", padding: "10px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
+                  )) : <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
               )}
             </div>
@@ -1849,14 +1849,14 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         })}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="🚌 إضافة باص جديد" maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>اسم الباص</div>
-          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={busName} onChange={e => { setBusName(e.target.value); setNameError(""); }} placeholder="مثال: باص 1" autoFocus onKeyDown={e => e.key === "Enter" && addBus()} />
-          {nameError && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>{nameError}</div>}
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>اسم الباص</div>
+          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={busName} onChange={e => { setBusName(e.target.value); setNameError(""); }} placeholder="مثال: باص 1" autoFocus onKeyDown={e => e.key === "Enter" && addBus()} />
+          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
         </div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الباص</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الباص</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "#1D9E75" : "#ddd"}`, background: busType === t ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "#085041" : "#666" }}>{t === "VIP" ? "⭐ VIP" : "🚌 عادي"}</div>)}
+            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--success)" : "var(--border)"}`, background: busType === t ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--primary-dark)" : "var(--text-muted)" }}>{t === "VIP" ? "⭐ VIP" : "🚌 عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -1865,8 +1865,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
       </Modal>
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — ${currentBus?.name}`}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "#aaa" }}>🔍</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "var(--text-muted)" }}>🔍</span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
@@ -1874,11 +1874,11 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           const isInBus = p.bus_id === currentBusId;
           const isSel = selectedP.has(p.id);
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "#E1F5EE" : p.services?.bus === "VIP" ? "#FFFBEA" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : p.services?.bus === "VIP" ? "#F5C842" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
+            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "var(--success-bg)" : p.services?.bus === "VIP" ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : p.services?.bus === "VIP" ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "#888" }}>{isInBus ? "✓ في هذا الباص" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
-              {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
-              {isSel && <span style={{ color: "#1D9E75" }}>✓</span>}
+              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? "✓ في هذا الباص" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+              {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
+              {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
             </div>
           );
         })}
@@ -1971,13 +1971,13 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const printCamp = (camp: Camp) => {
     const cp = getCampPassengers(camp.id);
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>مخيم ${camp.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:${camp.gender === "ذكر" ? "#0C447C" : "#72243E"};color:white}</style></head><body><h2>${icon} مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"} (${camp.type})</h2><table><tr><th>م</th><th>الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>مخيم ${camp.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:${camp.gender === "ذكر" ? "var(--info)" : "var(--female-fg)"};color:white}</style></head><body><h2>${icon} مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"} (${camp.type})</h2><table><tr><th>م</th><th>الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
   const printAll = () => {
     const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>مخيمات ${pageType}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}@media print{.c{page-break-after:always}}</style></head><body><h1>${icon} مخيمات ${pageType}</h1>${camps.map(camp => { const cp = getCampPassengers(camp.id); return `<div class="c"><h2 style="background:${camp.gender === "ذكر" ? "#0C447C" : "#72243E"};color:white;padding:8px;border-radius:6px">مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"}</h2><table><tr><th style="background:#555;color:white">م</th><th style="background:#555;color:white">الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>مخيمات ${pageType}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}@media print{.c{page-break-after:always}}</style></head><body><h1>${icon} مخيمات ${pageType}</h1>${camps.map(camp => { const cp = getCampPassengers(camp.id); return `<div class="c"><h2 style="background:${camp.gender === "ذكر" ? "var(--info)" : "var(--female-fg)"};color:white;padding:8px;border-radius:6px">مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"}</h2><table><tr><th style="background:#555;color:white">م</th><th style="background:#555;color:white">الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();</script></body></html>`);
     w.document.close();
   };
 
@@ -1989,40 +1989,40 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => (
     <div style={{ marginBottom: 16 }}>
-      <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "#E6F1FB" : "#FBEAF0", color: gender === "ذكر" ? "#0C447C" : "#72243E", display: "inline-block", marginBottom: 10 }}>
+      <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "var(--male-bg)" : "var(--female-bg)", color: gender === "ذكر" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
         {gender === "ذكر" ? "👨 رجال" : "👩 نساء"} ({groupCamps.length})
       </span>
-      {groupCamps.length === 0 ? <div style={{ fontSize: 11, color: "#aaa", padding: "6px 0" }}>لا يوجد مخيمات بعد</div> :
+      {groupCamps.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div> :
         groupCamps.map(camp => {
           const isExpanded = expanded.has(camp.id);
           const cp = getCampPassengers(camp.id);
           const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
           const isSpecial = camp.type === "خاص";
           return (
-            <div key={camp.id} style={{ border: `0.5px solid ${isSpecial ? "#F5C842" : "#e5e5e5"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-              <div onClick={() => toggleCamp(camp.id)} style={{ padding: "9px 12px", background: isSpecial ? "#FFFBEA" : "#f9f9f9", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <div key={camp.id} style={{ border: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+              <div onClick={() => toggleCamp(camp.id)} style={{ padding: "9px 12px", background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 18 }}>{icon}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "#FAEEDA" : "#f0f0f0", color: isSpecial ? "#633806" : "#555" }}>{isSpecial ? "⭐ خاص" : "عادي"}</span></div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{cp.length} مسافر</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", color: isSpecial ? "var(--warning)" : "var(--text-muted)" }}>{isSpecial ? "⭐ خاص" : "عادي"}</span></div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{cp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "#f0f0f0", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
-                <button onClick={e => { e.stopPropagation(); openAddP(camp.id); }} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteCamp(camp.id); }} style={{ background: cp.length === 0 ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: cp.length === 0 ? "pointer" : "not-allowed", color: cp.length === 0 ? "#c0392b" : "#ccc" }}>🗑</button>
-                <span style={{ color: "#aaa" }}>{isExpanded ? "▲" : "▼"}</span>
+                <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>🖨️</button>
+                <button onClick={e => { e.stopPropagation(); openAddP(camp.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteCamp(camp.id); }} style={{ background: cp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: cp.length === 0 ? "pointer" : "not-allowed", color: cp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
-                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${isSpecial ? "#F5C842" : "#e5e5e5"}` }}>
+                <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}` }}>
                   {cp.length ? cp.map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 4px", borderRadius: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
-                      {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
-                      {sameCamps.length > 0 && <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{sameCamps.map(c => <option key={c.id} value={c.id}>مخيم {c.name}</option>)}</select>}
-                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
+                      {sameCamps.length > 0 && <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{sameCamps.map(c => <option key={c.id} value={c.id}>مخيم {c.name}</option>)}</select>}
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                     </div>
-                  )) : <div style={{ textAlign: "center", padding: "10px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
+                  )) : <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
               )}
             </div>
@@ -2038,23 +2038,23 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ مخيم جديد</button>
         {camps.length > 0 && <button onClick={printAll} style={btnS()}>🖨️ طباعة الكل</button>}
       </div>
-      {!camps.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>{icon}</div>لا يوجد مخيمات بعد</div> : (<>{renderGroup(maleCamps, "ذكر")}{renderGroup(femaleCamps, "أنثى")}</>)}
+      {!camps.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>{icon}</div>لا يوجد مخيمات بعد</div> : (<>{renderGroup(maleCamps, "ذكر")}{renderGroup(femaleCamps, "أنثى")}</>)}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title={`${icon} مخيم جديد`} maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم / اسم المخيم</div>
-          <input style={{ ...inp, borderColor: nameError ? "#c0392b" : "#ddd" }} value={campName} onChange={e => { setCampName(e.target.value); setNameError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
-          {nameError && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>{nameError}</div>}
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم / اسم المخيم</div>
+          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={campName} onChange={e => { setCampName(e.target.value); setNameError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
+          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
         </div>
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>الجنس</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الجنس</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "#0C447C" : "#72243E") : "#ddd"}`, background: campGender === g ? (g === "ذكر" ? "#E6F1FB" : "#FBEAF0") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "#0C447C" : "#72243E") : "#666" }}>{g === "ذكر" ? "👨 رجال" : "👩 نساء"}</div>)}
+            {(["ذكر", "أنثى"] as const).map(g => <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>{g === "ذكر" ? "👨 رجال" : "👩 نساء"}</div>)}
           </div>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الخيمة</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الخيمة</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {(["عادي", "خاص"] as const).map(t => <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "#1D9E75" : "#ddd"}`, background: campType === t ? "#E1F5EE" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "#085041" : "#666" }}>{t === "خاص" ? "⭐ خاص" : "🏕 عادي"}</div>)}
+            {(["عادي", "خاص"] as const).map(t => <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "var(--success)" : "var(--border)"}`, background: campType === t ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "var(--primary-dark)" : "var(--text-muted)" }}>{t === "خاص" ? "⭐ خاص" : "🏕 عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -2063,22 +2063,22 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         </div>
       </Modal>
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة ${currentCamp?.gender === "ذكر" ? "رجال" : "نساء"} — مخيم ${currentCamp?.name}`}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "#aaa" }}>🔍</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "var(--text-muted)" }}>🔍</span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
-        {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "#aaa", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين</div> :
+        {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين</div> :
           filteredP.map(p => {
             const isInCamp = (p as any)[campIdKey] === currentCampId;
             const isAssigned = (p as any)[campIdKey] != null && !isInCamp;
             const isSel = selectedP.has(p.id);
             const wantsSpecial = (p.services as any)[serviceKey] === "خاص";
             return (
-              <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "#E1F5EE" : wantsSpecial ? "#FFFBEA" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : wantsSpecial ? "#F5C842" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
+              <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "var(--success-bg)" : wantsSpecial ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : wantsSpecial ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
                 <Avatar name={p.name_ar} gender={p.gender} size={28} />
-                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "#888" }}>{isInCamp ? "✓ في المخيم" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
-                {wantsSpecial && <span style={{ fontSize: 9, background: "#FAEEDA", color: "#633806", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
-                {isSel && <span style={{ color: "#1D9E75" }}>✓</span>}
+                <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInCamp ? "✓ في المخيم" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+                {wantsSpecial && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ خاص</span>}
+                {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
               </div>
             );
           })}
@@ -2207,7 +2207,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const left = roomsToPrint.slice(0, half), right = roomsToPrint.slice(half);
     const renderRoom = (room: Room) => {
       const rp = getRoomPassengers(room.id);
-      const [bg] = ROOM_COLORS[room.type] || ["#f5f5f5"];
+      const [bg] = ROOM_COLORS[room.type] || ["var(--bg-2)"];
       return `<div style="margin-bottom:12px"><div style="background:${bg};padding:5px 10px;border:1px solid #ddd;border-bottom:none;font-size:11px;font-weight:bold;display:flex;justify-content:space-between"><span>${room.type}</span><span>${room.number}${room.floor ? ` (طابق ${room.floor})` : ""}</span></div><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f5"><th style="padding:4px 8px;border:1px solid #ddd;text-align:center;width:28px">م</th><th style="padding:4px 8px;border:1px solid #ddd;text-align:right">الاسم</th></tr>${rp.map((p, i) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;text-align:center">${i + 1}</td><td style="padding:4px 8px;border:1px solid #ddd">${p.short_ar}</td></tr>`).join("")}</table></div>`;
     };
     w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>🏨 تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();</script></body></html>`);
@@ -2234,36 +2234,36 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS({ flex: 1 })}>🖨️ طباعة</button>}
         <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
       </div>
-      {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> :
+      {!rooms.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>🏨</div>لا يوجد غرف بعد</div> :
         rooms.map(room => {
           const isExpanded = expanded.has(room.id);
           const rp = getRoomPassengers(room.id);
-          const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["#f5f5f5", "#333"];
+          const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
           return (
             <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-              <div onClick={() => toggleRoom(room.id)} style={{ padding: "9px 12px", background: "#f9f9f9", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <div onClick={() => toggleRoom(room.id)} style={{ padding: "9px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: typeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>🛏</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "#888" }}>ط{room.floor}</span>} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: typeBg, color: typeClr }}>{room.type}</span></div>
-                  <div style={{ fontSize: 11, color: "#888" }}>{rp.length} مسافر</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>ط{room.floor}</span>} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: typeBg, color: typeClr }}>{room.type}</span></div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ background: "#E1F5EE", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "#085041" }}>+ إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: rp.length === 0 ? "#FBEAF0" : "#f5f5f5", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "#c0392b" : "#ccc" }}>🗑</button>
-                <span style={{ color: "#aaa" }}>{isExpanded ? "▲" : "▼"}</span>
+                <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}>+ إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: rp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--danger)" : "var(--border)" }}>🗑</button>
+                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
               </div>
               {isExpanded && (
                 <div style={{ padding: "8px 12px", borderTop: "0.5px solid #e5e5e5" }}>
                   {rp.length ? rp.map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 4px", borderRadius: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 10, color: "#aaa", width: 18, textAlign: "center" }}>{i + 1}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
-                      <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "#f0f0f0", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "#555" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "#e67e22" }}>⚠️</span>}
-                      <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
-                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 12 }}>✕</button>
+                      <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "var(--bg-2)", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "var(--text-muted)" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
+                      {p.services.hotel_type !== room.type && <span style={{ fontSize: 9, color: "var(--warning)" }}>⚠️</span>}
+                      <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}><option value="">نقل لـ...</option>{rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}</select>
+                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
                     </div>
-                  )) : <div style={{ textAlign: "center", padding: "10px", color: "#aaa", fontSize: 11 }}>لا يوجد مسافرون</div>}
+                  )) : <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
               )}
             </div>
@@ -2271,49 +2271,49 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         })}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="🛏 غرفة جديدة" maxWidth={340}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "#c0392b" : "#ddd" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 10, color: "#c0392b", marginTop: 3 }}>{numberError}</div>}</div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} placeholder="مثال: 16" /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "var(--danger)" : "var(--border)" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 10, color: "var(--danger)", marginTop: 3 }}>{numberError}</div>}</div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} placeholder="مثال: 16" /></div>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الغرفة</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الغرفة</div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRoomType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${roomType === t ? clr : "#ddd"}`, background: roomType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: roomType === t ? clr : "#666" }}>{t}</div>; })}
+            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRoomType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${roomType === t ? clr : "var(--border)"}`, background: roomType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: roomType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
       <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="📋 إضافة نطاق غرف" maxWidth={360}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} /></div>
-          <div><div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} /></div>
         </div>
-        {rangeError && <div style={{ fontSize: 11, color: "#c0392b", marginBottom: 8 }}>{rangeError}</div>}
+        {rangeError && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{rangeError}</div>}
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>نوع الغرف</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الغرف</div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRangeType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${rangeType === t ? clr : "#ddd"}`, background: rangeType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: rangeType === t ? clr : "#666" }}>{t}</div>; })}
+            {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRangeType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${rangeType === t ? clr : "var(--border)"}`, background: rangeType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: rangeType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
           </div>
         </div>
-        {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "#1D9E75", marginBottom: 10, background: "#E1F5EE", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
+        {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--success)", marginBottom: 10, background: "var(--success-bg)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
         <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}>✓ إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
       </Modal>
       <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — غرفة ${currentRoom?.number}`}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f5f5f5", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "#aaa" }}>🔍</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          <span style={{ color: "var(--text-muted)" }}>🔍</span>
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
           const isInRoom = p.room_id === currentRoomId;
           const isAssigned = p.room_id != null && !isInRoom;
           const isSel = selectedP.has(p.id);
-          const [reqBg, reqClr] = ROOM_COLORS[p.services.hotel_type] || ["#f0f0f0", "#555"];
+          const [reqBg, reqClr] = ROOM_COLORS[p.services.hotel_type] || ["var(--bg-2)", "var(--text-muted)"];
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "#E1F5EE" : "transparent", border: `0.5px solid ${isSel ? "#5DCAA5" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
+            <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "var(--success-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--success)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "#888" }}>{isInRoom ? "✓ في الغرفة" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInRoom ? "✓ في الغرفة" : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
               <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: reqBg, color: reqClr }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-              {isSel && <span style={{ color: "#1D9E75" }}>✓</span>}
+              {isSel && <span style={{ color: "var(--success)" }}>✓</span>}
             </div>
           );
         })}
@@ -2321,24 +2321,24 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       </Modal>
       <Modal show={showPrint} onClose={() => setShowPrint(false)} title="🖨️ خيارات الطباعة" maxWidth={340}>
         {[["all", "طباعة كل الغرف"], ["floor", "طباعة دور معين"], ["type", "طباعة نوع معين"]].map(([val, label]) => (
-          <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "#E1F5EE" : "#f9f9f9", border: `0.5px solid ${printFilter === val ? "#5DCAA5" : "#e5e5e5"}` }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", background: printFilter === val ? "#1D9E75" : "white", border: `2px solid ${printFilter === val ? "#1D9E75" : "#ccc"}` }} />
+          <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${printFilter === val ? "var(--success)" : "var(--border)"}` }}>
+            <div style={{ width: 16, height: 16, borderRadius: "50%", background: printFilter === val ? "var(--success)" : "var(--bg-card)", border: `2px solid ${printFilter === val ? "var(--success)" : "var(--border)"}` }} />
             <span style={{ fontSize: 12 }}>{label}</span>
           </div>
         ))}
         {printFilter === "floor" && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>اختر الطابق</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر الطابق</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "#1D9E75" : "#ddd"}`, background: printFloor === f ? "#E1F5EE" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "#085041" : "#666" }}>طابق {f}</div>)}
+              {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "var(--success)" : "var(--border)"}`, background: printFloor === f ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "var(--primary-dark)" : "var(--text-muted)" }}>طابق {f}</div>)}
             </div>
           </div>
         )}
         {printFilter === "type" && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#666", marginBottom: 6 }}>اختر نوع الغرفة</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر نوع الغرفة</div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setPrintType(t)} style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${printType === t ? clr : "#ddd"}`, background: printType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: printType === t ? clr : "#666" }}>{t}</div>; })}
+              {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setPrintType(t)} style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${printType === t ? clr : "var(--border)"}`, background: printType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: printType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
             </div>
           </div>
         )}
@@ -2438,29 +2438,29 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
     return (
       <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
         {currentUser.permissions.view_archive && (
-          <div style={{ background: "#FAEEDA", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div><div style={{ fontSize: 13, fontWeight: 600 }}>🔒 إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "#888" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
-            <button onClick={() => { setShowClose(true); setCloseStep(1); setNewSeasonName(""); }} style={{ background: "#e67e22", color: "white", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
+          <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div><div style={{ fontSize: 13, fontWeight: 600 }}>🔒 إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
+            <button onClick={() => { setShowClose(true); setCloseStep(1); setNewSeasonName(""); }} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
           </div>
         )}
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>المواسم المحفوظة</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>المواسم المحفوظة</div>
         {seasons.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "3rem", color: "#aaa" }}><div style={{ fontSize: 32, marginBottom: 8 }}>🗄</div><div>لا يوجد مواسم محفوظة بعد</div></div>
+          <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}><div style={{ fontSize: 32, marginBottom: 8 }}>🗄</div><div>لا يوجد مواسم محفوظة بعد</div></div>
         ) : seasons.map(s => (
-          <div key={s.id} onClick={() => openSeason(s)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: "white" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#f9f9f9"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+          <div key={s.id} onClick={() => openSeason(s)} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-card)" }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗄</div>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--success-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🗄</div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {s.name}</div>
-                <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>أُقفل: {new Date(s.closed_at).toLocaleDateString("ar-EG")} · بواسطة {s.closed_by}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>أُقفل: {new Date(s.closed_at).toLocaleDateString("ar-EG")} · بواسطة {s.closed_by}</div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {currentUser.permissions.view_archive && (
-                <button onClick={e => { e.stopPropagation(); openDelete(s); }} style={{ background: "#FBEAF0", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "#c0392b" }}>🗑 مسح</button>
+                <button onClick={e => { e.stopPropagation(); openDelete(s); }} style={{ background: "var(--female-bg)", border: "none", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}>🗑 مسح</button>
               )}
-              <span style={{ color: "#ccc", fontSize: 18 }}>›</span>
+              <span style={{ color: "var(--border)", fontSize: 18 }}>›</span>
             </div>
           </div>
         ))}
@@ -2468,24 +2468,24 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           {/* مؤشر الخطوات */}
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             {[1, 2, 3].map(s => (
-              <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: closeStep >= s ? "#e67e22" : "#eee" }} />
+              <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: closeStep >= s ? "var(--warning)" : "var(--border)" }} />
             ))}
           </div>
 
           {/* الخطوة 1: تحذير */}
           {closeStep === 1 && (
             <>
-              <div style={{ background: "#FBEAF0", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#c0392b", marginBottom: 8 }}>⚠️ تنبيه مهم — إقفال الموسم</div>
-                <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+              <div style={{ background: "var(--female-bg)", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}>⚠️ تنبيه مهم — إقفال الموسم</div>
+                <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7 }}>
                   أنت على وشك إقفال الموسم الحالي نهائياً.<br /><br />
                   سيتم نقل جميع البيانات (الحجاج، الباصات، المخيمات، الغرف) إلى الأرشيف، ولن تتمكن من التعديل عليها بعد ذلك — للعرض فقط.<br /><br />
                   سيبدأ موسم جديد فارغ تماماً.<br /><br />
-                  <span style={{ fontWeight: 700, color: "#c0392b" }}>هذا الإجراء لا يمكن التراجع عنه.</span>
+                  <span style={{ fontWeight: 700, color: "var(--danger)" }}>هذا الإجراء لا يمكن التراجع عنه.</span>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setCloseStep(2)} style={{ background: "#e67e22", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>فهمت، التالي ←</button>
+                <button onClick={() => setCloseStep(2)} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>فهمت، التالي ←</button>
                 <button onClick={() => setShowClose(false)} style={btnS()}>إلغاء</button>
               </div>
             </>
@@ -2494,13 +2494,13 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           {/* الخطوة 2: اسم الموسم الجديد */}
           {closeStep === 2 && (
             <>
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>اكتب اسم الموسم الجديد الذي سيبدأ بعد الإقفال:</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>اكتب اسم الموسم الجديد الذي سيبدأ بعد الإقفال:</div>
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>اسم الموسم الجديد</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>اسم الموسم الجديد</div>
                 <input style={inp} value={newSeasonName} onChange={e => setNewSeasonName(e.target.value)} placeholder="مثال: 1449" autoFocus />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; } setCloseStep(3); }} style={{ background: "#e67e22", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>التالي ←</button>
+                <button onClick={() => { if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; } setCloseStep(3); }} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>التالي ←</button>
                 <button onClick={() => setCloseStep(1)} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -2512,10 +2512,10 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
               <div style={{ textAlign: "center", marginBottom: 16 }}>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>تأكيد إقفال الموسم</div>
-                <div style={{ fontSize: 12, color: "#888", lineHeight: 1.6 }}>سيتم إقفال الموسم الحالي نهائياً<br />وبدء موسم <span style={{ fontWeight: 700, color: "#1D9E75" }}>{newSeasonName}</span></div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>سيتم إقفال الموسم الحالي نهائياً<br />وبدء موسم <span style={{ fontWeight: 700, color: "var(--success)" }}>{newSeasonName}</span></div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={closeSeason} disabled={closing} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 إقفال الموسم نهائياً"}</button>
+                <button onClick={closeSeason} disabled={closing} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: closing ? 0.6 : 1 }}>{closing ? "⏳ جاري الإقفال..." : "🔒 إقفال الموسم نهائياً"}</button>
                 <button onClick={() => setCloseStep(2)} disabled={closing} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -2523,29 +2523,29 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
         </Modal>
         <Modal show={showDelete} onClose={() => setShowDelete(false)} title="🗑 مسح موسم من الأرشيف" maxWidth={380}>
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-            {[1, 2, 3].map(s => <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: deleteStep >= s ? "#c0392b" : "#eee" }} />)}
+            {[1, 2, 3].map(s => <div key={s} style={{ flex: 1, height: 4, borderRadius: 99, background: deleteStep >= s ? "var(--danger)" : "var(--border)" }} />)}
           </div>
           {deleteStep === 1 && (
             <>
-              <div style={{ background: "#FBEAF0", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#c0392b", marginBottom: 8 }}>⚠️ تحذير — مسح موسم من الأرشيف</div>
-                <div style={{ fontSize: 12, color: "#444", lineHeight: 1.7 }}>
+              <div style={{ background: "var(--female-bg)", border: "1px solid #e74c3c", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}>⚠️ تحذير — مسح موسم من الأرشيف</div>
+                <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7 }}>
                   أنت على وشك مسح موسم <span style={{ fontWeight: 700 }}>{seasonToDelete?.name}</span> نهائياً من الأرشيف.<br /><br />
                   سيتم مسح جميع البيانات المرتبطة بهذا الموسم (الحجاج، الباصات، المخيمات، الغرف) بشكل كامل.<br /><br />
-                  <span style={{ fontWeight: 700, color: "#c0392b" }}>هذا الإجراء لا يمكن التراجع عنه.</span>
+                  <span style={{ fontWeight: 700, color: "var(--danger)" }}>هذا الإجراء لا يمكن التراجع عنه.</span>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setDeleteStep(2)} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>فهمت، التالي ←</button>
+                <button onClick={() => setDeleteStep(2)} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>فهمت، التالي ←</button>
                 <button onClick={() => setShowDelete(false)} style={btnS()}>إلغاء</button>
               </div>
             </>
           )}
           {deleteStep === 2 && (
             <>
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 16, lineHeight: 1.6 }}>هل أنت متأكد 100% إنك عايز تمسح موسم <span style={{ fontWeight: 700, color: "#c0392b" }}>{seasonToDelete?.name}</span> وكل بياناته؟</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, lineHeight: 1.6 }}>هل أنت متأكد 100% إنك عايز تمسح موسم <span style={{ fontWeight: 700, color: "var(--danger)" }}>{seasonToDelete?.name}</span> وكل بياناته؟</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setDeleteStep(3)} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>نعم، متأكد — التالي ←</button>
+                <button onClick={() => setDeleteStep(3)} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>نعم، متأكد — التالي ←</button>
                 <button onClick={() => setDeleteStep(1)} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -2555,10 +2555,10 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
               <div style={{ textAlign: "center", marginBottom: 16 }}>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>🗑</div>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>تأكيد المسح النهائي</div>
-                <div style={{ fontSize: 12, color: "#888" }}>سيتم مسح موسم <span style={{ fontWeight: 700, color: "#c0392b" }}>{seasonToDelete?.name}</span> وكل بياناته نهائياً</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>سيتم مسح موسم <span style={{ fontWeight: 700, color: "var(--danger)" }}>{seasonToDelete?.name}</span> وكل بياناته نهائياً</div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={confirmDelete} disabled={deleting} style={{ background: "#c0392b", color: "white", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "⏳ جاري المسح..." : "🗑 مسح نهائي"}</button>
+                <button onClick={confirmDelete} disabled={deleting} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1, opacity: deleting ? 0.6 : 1 }}>{deleting ? "⏳ جاري المسح..." : "🗑 مسح نهائي"}</button>
                 <button onClick={() => setDeleteStep(2)} disabled={deleting} style={btnS()}>→ رجوع</button>
               </div>
             </>
@@ -2574,23 +2574,23 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
         <button onClick={() => setSelected(null)} style={btnS()}>← رجوع</button>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600 }}>موسم {selected.name}</div>
-          <div style={{ fontSize: 11, color: "#888" }}>{data.passengers.length} حاج · للعرض فقط</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{data.passengers.length} حاج · للعرض فقط</div>
         </div>
       </div>
       {/* تاب التقارير */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {[["passengers", "👥 الحجاج"], ["flight", "✈️ الطيران"], ["buses", "🚌 الباصات"], ["mina", "⛺ منى"], ["arafa", "🏔 عرفة"], ["hotel", "🏨 الفندق"]].map(([id, label]) => (
-          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "#1D9E75" : "#f5f5f5", color: activeReport === id ? "white" : "#555", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
+          <div key={id} onClick={() => setActiveReport(id)} style={{ padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, background: activeReport === id ? "var(--success)" : "var(--bg-2)", color: activeReport === id ? "white" : "var(--text-muted)", fontWeight: activeReport === id ? 500 : 400 }}>{label}</div>
         ))}
       </div>
 
-      {loading ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>⏳ جاري التحميل...</div> : (<>
+      {loading ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> : (<>
 
         {activeReport === "passengers" && (
           <>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-              <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["م", "الاسم", "رقم الجواز", "الجنسية", "الجنس"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
-              <tbody>{data.passengers.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_ar}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody>
+              <thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}>{["م", "الاسم", "رقم الجواز", "الجنسية", "الجنس"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "right", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+              <tbody>{data.passengers.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_ar}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody>
             </table>
             <button onClick={printPassengers} style={{ ...btnS(), width: "100%", marginTop: 12 }}>🖨️ طباعة</button>
           </>
@@ -2598,8 +2598,8 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
 
         {activeReport === "flight" && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
-            <thead><tr style={{ background: "#1D9E75", color: "white" }}>{["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
-            <tbody>{data.passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_en}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td></tr>)}</tbody>
+            <thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}>{["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER"].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+            <tbody>{data.passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_en}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td><td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td></tr>)}</tbody>
           </table>
         )}
 
@@ -2607,8 +2607,8 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           const bp = getBusPassengers(bus.id);
           return (
             <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "#f9f9f9", fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} ({bus.type}) · {bp.length} مسافر</div>
-              {bp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "#1D9E75", color: "white" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th></tr></thead><tbody>{bp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td></tr>)}</tbody></table>}
+              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} ({bus.type}) · {bp.length} مسافر</div>
+              {bp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th></tr></thead><tbody>{bp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td></tr>)}</tbody></table>}
             </div>
           );
         })}
@@ -2618,8 +2618,8 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           const cp = getCampPassengers(camp.id, key);
           return (
             <div key={camp.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "#f9f9f9", fontSize: 13, fontWeight: 500 }}>{activeReport === "mina" ? "⛺" : "🏔"} مخيم {camp.name} — {camp.gender === "ذكر" ? "رجال" : "نساء"} · {cp.length} مسافر</div>
-              {cp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: camp.gender === "ذكر" ? "#0C447C" : "#72243E", color: "white" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th></tr></thead><tbody>{cp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td></tr>)}</tbody></table>}
+              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>{activeReport === "mina" ? "⛺" : "🏔"} مخيم {camp.name} — {camp.gender === "ذكر" ? "رجال" : "نساء"} · {cp.length} مسافر</div>
+              {cp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: camp.gender === "ذكر" ? "var(--info)" : "var(--female-fg)", color: "var(--bg-card)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th></tr></thead><tbody>{cp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td></tr>)}</tbody></table>}
             </div>
           );
         })}
@@ -2628,8 +2628,8 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
           const rp = getRoomPassengers(room.id);
           return (
             <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "#f9f9f9", fontSize: 13, fontWeight: 500 }}>🛏 غرفة {room.number} {room.floor && `(ط${room.floor})`} · {room.type} · {rp.length} مسافر</div>
-              {rp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "#1D9E75", color: "white" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th></tr></thead><tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody></table>}
+              <div style={{ padding: "8px 12px", background: "var(--bg-2)", fontSize: 13, fontWeight: 500 }}>🛏 غرفة {room.number} {room.floor && `(ط${room.floor})`} · {room.type} · {rp.length} مسافر</div>
+              {rp.length > 0 && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ background: "var(--success)", color: "var(--bg-card)" }}><th style={{ padding: "5px 10px" }}>م</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th><th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th></tr></thead><tbody>{rp.map((p, i) => <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}><td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center" }}>{i + 1}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td><td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td></tr>)}</tbody></table>}
             </div>
           );
         })}
@@ -2907,7 +2907,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
-      const headerColor = isMale ? "#0C447C" : "#72243E";
+      const headerColor = isMale ? "var(--info)" : "var(--female-fg)";
       // عمودين جنب بعض
       const half = Math.ceil(cp.length / 2);
       const col1 = cp.slice(0, half);
@@ -2975,7 +2975,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     const col3 = filtered.filter((_, i) => i % 3 === 2);
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id);
-      const [bg, clr] = ROOM_COLORS[room.type] || ["#f5f5f5", "#333"];
+      const [bg, clr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
       return `<div style="margin-bottom:10px;break-inside:avoid">
         <div style="background:${bg};color:${clr};padding:4px 8px;border:1px solid ${clr}33;border-bottom:none;font-size:10px;font-weight:700;display:flex;justify-content:space-between;border-radius:4px 4px 0 0">
           <span>${room.type}</span><span>غرفة ${room.number}${room.floor ? ` (ط${room.floor})` : ""}</span>
@@ -3018,7 +3018,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
       {onView && <button onClick={onView} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}>👁 عرض</button>}
       <button onClick={onExcel} style={{ ...btnP({ flex: 1, minWidth: 80 }) }}>⬇️ Excel</button>
-      <button onClick={onPDF} style={{ background: "#0C447C", color: "white", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, flex: 1, minWidth: 80 }}>📄 PDF</button>
+      <button onClick={onPDF} style={{ background: "var(--info)", color: "var(--bg-card)", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, flex: 1, minWidth: 80 }}>📄 PDF</button>
       <button onClick={onPrint} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}>🖨️ طباعة</button>
     </div>
   );
@@ -3027,12 +3027,12 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   // قائمة التقارير
   // ============================================================
   const reports = [
-    { id: "passengers_report", name: "تقرير الحجاج", icon: "👥", desc: "كشف بيانات الحجاج", color: "#E1F5EE" },
-    { id: "flight", name: "تقرير الطيران", icon: "✈️", desc: "خطوط الطيران والرحلات", color: "#E6F1FB" },
-    { id: "buses", name: "تقرير الباصات", icon: "🚌", desc: "توزيع المسافرين على الباصات", color: "#EEEDFE" },
-    { id: "mina", name: "تقرير منى", icon: "⛺", desc: "مخيمات منى", color: "#E1F5EE" },
-    { id: "arafa", name: "تقرير عرفة", icon: "🏔", desc: "مخيمات عرفة", color: "#FAEEDA" },
-    { id: "hotel", name: "تقرير الفندق", icon: "🏨", desc: "توزيع الغرف", color: "#FBEAF0" },
+    { id: "passengers_report", name: "تقرير الحجاج", icon: "👥", desc: "كشف بيانات الحجاج", color: "var(--success-bg)" },
+    { id: "flight", name: "تقرير الطيران", icon: "✈️", desc: "خطوط الطيران والرحلات", color: "var(--male-bg)" },
+    { id: "buses", name: "تقرير الباصات", icon: "🚌", desc: "توزيع المسافرين على الباصات", color: "var(--info-bg)" },
+    { id: "mina", name: "تقرير منى", icon: "⛺", desc: "مخيمات منى", color: "var(--success-bg)" },
+    { id: "arafa", name: "تقرير عرفة", icon: "🏔", desc: "مخيمات عرفة", color: "var(--warning-bg)" },
+    { id: "hotel", name: "تقرير الفندق", icon: "🏨", desc: "توزيع الغرف", color: "var(--female-bg)" },
   ];
 
   // ============================================================
@@ -3042,21 +3042,21 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       {!activeReport ? (
         <>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>اختر التقرير</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>اختر التقرير</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {reports.map(r => (
               <div key={r.id} onClick={() => { setActiveReport(r.id); setFlightSubReport(null); }}
-                style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "white" }}
-                onMouseEnter={e => e.currentTarget.style.background = "#f9f9f9"}
+                style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "var(--bg-card)" }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
                 onMouseLeave={e => e.currentTarget.style.background = "white"}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{r.icon}</div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
-                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{r.desc}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{r.desc}</div>
                   <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#E1F5EE", color: "#085041" }}>Excel</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#E6F1FB", color: "#0C447C" }}>PDF</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#f0f0f0", color: "#555" }}>🖨️</span>
+                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--success-bg)", color: "var(--primary-dark)" }}>Excel</span>
+                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--male-bg)", color: "var(--info)" }}>PDF</span>
+                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)" }}>🖨️</span>
                   </div>
                 </div>
               </div>
@@ -3074,23 +3074,23 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
               <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>اختر الأعمدة</div>
-                  <div onClick={toggleAll} style={{ fontSize: 11, color: "#1D9E75", cursor: "pointer" }}>
+                  <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--success)", cursor: "pointer" }}>
                     {selectedCols.length === ALL_COLS.length ? "إلغاء الكل" : "تحديد الكل"}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                   {ALL_COLS.map(col => (
                     <div key={col.key} onClick={() => toggleCol(col.key)}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "#E1F5EE" : "#f9f9f9", border: `0.5px solid ${selectedCols.includes(col.key) ? "#5DCAA5" : "#e5e5e5"}` }}>
-                      <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "#1D9E75" : "white", border: `1.5px solid ${selectedCols.includes(col.key) ? "#1D9E75" : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {selectedCols.includes(col.key) && <span style={{ color: "white", fontSize: 10 }}>✓</span>}
+                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${selectedCols.includes(col.key) ? "var(--success)" : "var(--border)"}` }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "var(--success)" : "var(--bg-card)", border: `1.5px solid ${selectedCols.includes(col.key) ? "var(--success)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {selectedCols.includes(col.key) && <span style={{ color: "var(--bg-card)", fontSize: 10 }}>✓</span>}
                       </div>
                       <span style={{ fontSize: 11 }}>{col.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: "#888", marginBottom: 8 }}>{passengers.length} حاج · {activeCols.length} عمود</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>{passengers.length} حاج · {activeCols.length} عمود</div>
               <ExportButtons
                 onExcel={exportPassengersXLSX}
                 onPDF={() => downloadPDF(getPassengersHTML(), "تقرير_الحجاج.html")}
@@ -3110,13 +3110,13 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                     { id: "per_flight", icon: "🛫", name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
                   ].map(sub => (
                     <div key={sub.id} onClick={() => setFlightSubReport(sub.id as any)}
-                      style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "white" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#f9f9f9"}
+                      style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
                       onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "#E6F1FB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{sub.icon}</div>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--male-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{sub.icon}</div>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{sub.name}</div>
-                        <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{sub.desc}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{sub.desc}</div>
                       </div>
                     </div>
                   ))}
@@ -3132,7 +3132,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                       <div style={{ overflowX: "auto", marginBottom: 12 }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
                           <thead>
-                            <tr style={{ background: "#0C447C", color: "white" }}>
+                            <tr style={{ background: "var(--info)", color: "var(--bg-card)" }}>
                               {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"].map(h =>
                                 <th key={h} style={{ padding: "8px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
                               )}
@@ -3140,7 +3140,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                           </thead>
                           <tbody>
                             {passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => (
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f5f8ff" }}>
+                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--info-bg)" }}>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_en}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td>
@@ -3165,26 +3165,26 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                   {flightSubReport === "per_flight" && (
                     <>
                       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>🛫 تقرير كل رحلة</div>
-                      {loading ? <div style={{ textAlign: "center", color: "#aaa" }}>⏳ جاري التحميل...</div> :
-                        flights.length === 0 ? <div style={{ textAlign: "center", color: "#aaa", padding: "2rem" }}>لا يوجد رحلات</div> :
+                      {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+                        flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
                         flights.map(flight => {
                           const fp = passengers.filter(p => p.flight_id === flight.id);
                           return (
                             <div key={flight.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 12, overflow: "hidden" }}>
-                              <div style={{ background: "#E6F1FB", padding: "10px 14px", borderBottom: "0.5px solid #dce8f8" }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: "#0C447C" }}>{flight.name} — {flight.type}</div>
-                                <div style={{ fontSize: 11, color: "#555", marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                              <div style={{ background: "var(--male-bg)", padding: "10px 14px", borderBottom: "0.5px solid #dce8f8" }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--info)" }}>{flight.name} — {flight.type}</div>
+                                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
                                   <span>🏢 {flight.airline}</span>
                                   <span>📅 {flight.date}</span>
                                   <span>⏰ {flight.time}</span>
                                   <span>🛫 {flight.from_airport} → {flight.to_airport}</span>
-                                  <span style={{ color: "#0C447C", fontWeight: 500 }}>{fp.length} حاج</span>
+                                  <span style={{ color: "var(--info)", fontWeight: 500 }}>{fp.length} حاج</span>
                                 </div>
                               </div>
                               {fp.length > 0 && (
                                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
                                   <thead>
-                                    <tr style={{ background: "#0C447C", color: "white" }}>
+                                    <tr style={{ background: "var(--info)", color: "var(--bg-card)" }}>
                                       {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER", "CLASS"].map(h =>
                                         <th key={h} style={{ padding: "5px 10px", textAlign: "left" }}>{h}</th>
                                       )}
@@ -3192,7 +3192,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                                   </thead>
                                   <tbody>
                                     {fp.map((p, i) => (
-                                      <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f5f8ff" }}>
+                                      <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--info-bg)" }}>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{i + 1}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.name_en}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat === "قطري" ? "QAT" : "EGY"}</td>
@@ -3224,26 +3224,26 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {activeReport === "buses" && (
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>🚌 تقرير الباصات</div>
-              {loading ? <div style={{ textAlign: "center", color: "#aaa" }}>⏳ جاري التحميل...</div> :
-                buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>لا يوجد باصات</div> :
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+                buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
                 <>
                   {buses.map(bus => {
                     const bp = passengers.filter(p => p.bus_id === bus.id);
                     return (
                       <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "8px 12px", background: bus.type === "VIP" ? "#FFFBEA" : "#f9f9f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "#FAEEDA", color: "#633806", padding: "1px 6px", borderRadius: 99 }}>⭐ VIP</span>}</div>
-                          <div style={{ fontSize: 11, color: "#888" }}>{bp.length} مسافر</div>
+                        <div style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>🚌 {bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>⭐ VIP</span>}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                         </div>
                         {bp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: "#0C447C", color: "white" }}>
+                            <thead><tr style={{ background: "var(--info)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>اسم الحاج / الحاجة</th>
                             </tr></thead>
                             <tbody>{bp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f5f8ff" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--info-bg)" }}>
+                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td>
                               </tr>
                             )}</tbody>
@@ -3266,31 +3266,31 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {activeReport === "mina" && (
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>⛺ تقرير مخيمات منى</div>
-              {loading ? <div style={{ textAlign: "center", color: "#aaa" }}>⏳ جاري التحميل...</div> :
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
-                  <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>لا يوجد مخيمات</div> :
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
                   {camps.filter(c => c.page_type === "منى").map(camp => {
                     const cp = passengers.filter(p => p.camp_mina_id === camp.id);
                     const isMale = camp.gender === "ذكر";
                     return (
-                      <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "#F5C842" : "#e5e5e5"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "#FFFBEA" : "#f9f9f9", display: "flex", justifyContent: "space-between" }}>
+                      <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between" }}>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>⛺ مخيم {camp.name}
-                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "#E6F1FB" : "#FBEAF0", color: isMale ? "#0C447C" : "#72243E", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
-                            <span style={{ fontSize: 10, color: "#888" }}>({camp.type}) · {cp.length} مسافر</span>
+                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
                         </div>
                         {cp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: isMale ? "#0C447C" : "#72243E", color: "white" }}>
+                            <thead><tr style={{ background: isMale ? "var(--info)" : "var(--female-fg)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th>
                             </tr></thead>
                             <tbody>{cp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}>
+                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td>
                               </tr>
@@ -3314,31 +3314,31 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
           {activeReport === "arafa" && (
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>🏔 تقرير مخيمات عرفة</div>
-              {loading ? <div style={{ textAlign: "center", color: "#aaa" }}>⏳ جاري التحميل...</div> :
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
-                  <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>لا يوجد مخيمات</div> :
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
                   {camps.filter(c => c.page_type === "عرفة").map(camp => {
                     const cp = passengers.filter(p => p.camp_arafa_id === camp.id);
                     const isMale = camp.gender === "ذكر";
                     return (
-                      <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "#F5C842" : "#e5e5e5"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "#FFFBEA" : "#f9f9f9", display: "flex", justifyContent: "space-between" }}>
+                      <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between" }}>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>🏔 مخيم {camp.name}
-                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "#E6F1FB" : "#FBEAF0", color: isMale ? "#0C447C" : "#72243E", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
-                            <span style={{ fontSize: 10, color: "#888" }}>({camp.type}) · {cp.length} مسافر</span>
+                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
                         </div>
                         {cp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: isMale ? "#0C447C" : "#72243E", color: "white" }}>
+                            <thead><tr style={{ background: isMale ? "var(--info)" : "var(--female-fg)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th>
                             </tr></thead>
                             <tbody>{cp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--bg-2)" }}>
+                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat}</td>
                               </tr>
@@ -3368,7 +3368,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                   {[["all", "كل الغرف"], ["floor", "دور معين"], ["type", "نوع معين"]].map(([val, label]) => (
                     <div key={val} onClick={() => setHotelPrintFilter(val as any)}
-                      style={{ flex: 1, minWidth: 80, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${hotelPrintFilter === val ? "#0C447C" : "#ddd"}`, background: hotelPrintFilter === val ? "#E6F1FB" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: hotelPrintFilter === val ? "#0C447C" : "#666" }}>
+                      style={{ flex: 1, minWidth: 80, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${hotelPrintFilter === val ? "var(--info)" : "var(--border)"}`, background: hotelPrintFilter === val ? "var(--male-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: hotelPrintFilter === val ? "var(--info)" : "var(--text-muted)" }}>
                       {label}
                     </div>
                   ))}
@@ -3377,7 +3377,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {floors.map(f => (
                       <div key={f} onClick={() => setHotelPrintFloor(f)}
-                        style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${hotelPrintFloor === f ? "#0C447C" : "#ddd"}`, background: hotelPrintFloor === f ? "#E6F1FB" : "transparent", cursor: "pointer", fontSize: 12, color: hotelPrintFloor === f ? "#0C447C" : "#666" }}>
+                        style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${hotelPrintFloor === f ? "var(--info)" : "var(--border)"}`, background: hotelPrintFloor === f ? "var(--male-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: hotelPrintFloor === f ? "var(--info)" : "var(--text-muted)" }}>
                         طابق {f}
                       </div>
                     ))}
@@ -3389,7 +3389,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                       const [bg, clr] = ROOM_COLORS[t];
                       return (
                         <div key={t} onClick={() => setHotelPrintType(t)}
-                          style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${hotelPrintType === t ? clr : "#ddd"}`, background: hotelPrintType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: hotelPrintType === t ? clr : "#666" }}>
+                          style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${hotelPrintType === t ? clr : "var(--border)"}`, background: hotelPrintType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: hotelPrintType === t ? clr : "var(--text-muted)" }}>
                           {t}
                         </div>
                       );
@@ -3398,30 +3398,30 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                 )}
               </div>
 
-              {loading ? <div style={{ textAlign: "center", color: "#aaa" }}>⏳ جاري التحميل...</div> :
-                rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "#aaa" }}>لا يوجد غرف</div> :
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>⏳ جاري التحميل...</div> :
+                rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
                 <>
                   {getFilteredRooms().map(room => {
                     const rp = passengers.filter(p => p.room_id === room.id);
-                    const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["#f5f5f5", "#333"];
+                    const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
                     return (
                       <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "7px 12px", background: "#f9f9f9", display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ padding: "7px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: typeBg, color: typeClr }}>{room.type}</span>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "#888" }}>ط{room.floor}</span>}</div>
-                          <div style={{ fontSize: 11, color: "#888", marginRight: "auto" }}>{rp.length} مسافر</div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>ط{room.floor}</span>}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginRight: "auto" }}>{rp.length} مسافر</div>
                         </div>
                         {rp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: "#0C447C", color: "white" }}>
+                            <thead><tr style={{ background: "var(--info)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th>
                               <th style={{ padding: "5px 10px", textAlign: "right" }}>طلب</th>
                             </tr></thead>
                             <tbody>{rp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "#f5f8ff" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "#888" }}>{i + 1}</td>
+                              <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--info-bg)" }}>
+                                <td style={{ padding: "5px 10px", border: "0.5px solid #eee", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.short_ar || p.name_ar}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender}</td>
                                 <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.services?.hotel_type} {p.services?.hotel_view}</td>
