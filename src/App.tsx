@@ -157,15 +157,12 @@ const NAV = [
 
 
 
-function Avatar({ name = "", gender, size = 32 }: { name?: string; gender: string; size?: number }) {
+function Avatar({ gender, size = 32 }: { name?: string; gender: string; size?: number }) {
   const f = gender === "أنثى";
-  const initials = name.split(" ").filter(Boolean).slice(0, 2).map(w => w[0] || "").join("") || (f ? "أ" : "م");
-  const bg = f ? "var(--fb)" : "var(--mb)";
-  const color = f ? "var(--ff)" : "var(--mf)";
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: bg, color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, flexShrink: 0, fontFamily: "var(--font-heading)" }}>
-      {initials}
-    </div>
+    <svg width={size} height={size} viewBox="0 0 128 128" style={{ borderRadius: "50%", flexShrink: 0, overflow: "hidden" }}>
+      <use href={f ? "#avf" : "#avm"} />
+    </svg>
   );
 }
 
@@ -214,9 +211,8 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
       {/* الهيدر */}
       <div style={{ position: "relative", zIndex: 2, padding: "22px 20px 18px", borderBottom: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <svg width="42" height="42" viewBox="0 0 44 44" fill="none" stroke="var(--accent)" strokeWidth="1.6" style={{ flexShrink: 0 }}>
-            <path d="M22 3 L26.5 8.5 L33.5 8 L33 15 L38.5 19.5 L33 24 L33.5 31 L26.5 30.5 L22 36 L17.5 30.5 L10.5 31 L11 24 L5.5 19.5 L11 15 L10.5 8 L17.5 8.5 Z"/>
-            <circle cx="22" cy="19.5" r="4.5"/>
+          <svg width="42" height="110" viewBox="0 0 96 118" style={{ flexShrink: 0 }}>
+            <use href="#brand-mark" />
           </svg>
           <div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, color: "var(--text-inverse)", lineHeight: 1.2 }}>
