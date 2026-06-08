@@ -211,8 +211,9 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
       {/* الهيدر */}
       <div style={{ position: "relative", zIndex: 2, padding: "22px 20px 18px", borderBottom: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <svg width="42" height="110" viewBox="0 0 96 118" style={{ flexShrink: 0 }}>
-            <use href="#brand-mark" />
+          <svg width="40" height="40" viewBox="0 0 44 44" fill="none" stroke="var(--accent)" strokeWidth="1.6" style={{ flexShrink: 0 }}>
+            <path d="M22 3 L26.5 8.5 L33.5 8 L33 15 L38.5 19.5 L33 24 L33.5 31 L26.5 30.5 L22 36 L17.5 30.5 L10.5 31 L11 24 L5.5 19.5 L11 15 L10.5 8 L17.5 8.5 Z"/>
+            <circle cx="22" cy="19.5" r="4.5" fill="var(--accent)" stroke="none"/>
           </svg>
           <div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, color: "var(--text-inverse)", lineHeight: 1.2 }}>
@@ -427,88 +428,148 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 }
 
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
-  const { males, females, vip } = useMemo(() => ({
+  const config = useConfig();
+  const { males, females } = useMemo(() => ({
     males: passengers.filter(p => p.gender === "ذكر").length,
     females: passengers.filter(p => p.gender === "أنثى").length,
-    vip: passengers.filter(p => p.services?.bus === "VIP").length,
   }), [passengers]);
+
+  // نِسب التوزيع
+  const total = passengers.length || 1;
+  const dist = useMemo(() => {
+    const busCount = passengers.filter(p => (p as any).bus_id != null).length;
+    const minaCount = passengers.filter(p => (p as any).camp_mina_id != null).length;
+    const arafaCount = passengers.filter(p => (p as any).camp_arafa_id != null).length;
+    const hotelCount = passengers.filter(p => (p as any).room_id != null).length;
+    const flightCount = passengers.filter(p => (p as any).flight_id != null).length;
+    return [
+      { label: "الباصات", count: busCount, pct: Math.round(busCount / total * 100), icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
+      { label: "مخيمات منى", count: minaCount, pct: Math.round(minaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
+      { label: "مخيمات عرفة", count: arafaCount, pct: Math.round(arafaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
+      { label: "الفندق", count: hotelCount, pct: Math.round(hotelCount / total * 100), icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
+      { label: "الطيران", count: flightCount, pct: Math.round(flightCount / total * 100), icon: `<path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/>` },
+    ];
+  }, [passengers, total]);
 
   const recent = passengers.slice(0, 5);
 
   return (
-    <div style={{ overflowY: "auto", height: "100%", padding: "18px 20px", background: "var(--bg)" }}>
-      {/* أزرار الإضافة */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
-        <div onClick={() => setPage("scan")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
-          <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>مسح جواز</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>إضافة بالمسح الذكي</div>
-          </div>
-        </div>
-        <div onClick={() => setPage("manual")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
-          <div style={{ width: 42, height: 42, borderRadius: 11, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>إضافة يدوي</div>
-            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>إدخال بيانات يدوياً</div>
-          </div>
-        </div>
-      </div>
-
-      {/* خط ذهبي */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 0 18px" }}>
-        <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--g5)" strokeWidth="1.3"><path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/></svg>
-        <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
-      </div>
-
-      {/* إحصائيات */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-        {[
-          { label: "إجمالي الحجاج", num: passengers.length, sub: `+ ${Math.min(12, passengers.length)} هذا الأسبوع`, bg: "var(--paper)", iconBg: "rgba(200,162,75,0.12)", clr: "var(--em8)", lbl: "var(--g7)", sub_clr: "var(--g6)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-          { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--mb)", iconBg: "rgba(19,69,107,0.12)", clr: "var(--mf)", lbl: "var(--mf)", sub_clr: "var(--mf)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-          { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--fb)", iconBg: "rgba(122,46,69,0.12)", clr: "var(--ff)", lbl: "var(--ff)", sub_clr: "var(--ff)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-          { label: "VIP", num: vip, sub: `${passengers.length ? Math.round(vip/passengers.length*100) : 0}٪ يطلبون VIP`, bg: "linear-gradient(135deg,rgba(200,162,75,0.08),rgba(200,162,75,0.03))", iconBg: "rgba(200,162,75,0.15)", clr: "var(--g6)", lbl: "var(--g7)", sub_clr: "var(--g7)", icon: `<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>` },
-        ].map(({ label, num, sub, bg, iconBg, clr, lbl, sub_clr, icon }) => (
-          <div key={label} style={{ background: bg, borderRadius: "var(--radius-lg)", padding: 16, cursor: "pointer", transition: "var(--transition)" }}
-            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.08)"; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="1.8" dangerouslySetInnerHTML={{ __html: icon }} />
+    <div style={{ display: "flex", gap: 16, height: "100%", overflow: "hidden", padding: "16px 18px", background: "var(--bg)" }}>
+      {/* العمود الرئيسي */}
+      <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+        {/* أزرار الإضافة */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          <div onClick={() => setPage("scan")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: lbl, marginBottom: 3, opacity: 0.8 }}>{label}</div>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-            <div style={{ fontSize: 11, marginTop: 4, color: sub_clr, opacity: 0.7 }}>{sub}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>مسح جواز</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>إضافة بالمسح الذكي</div>
+            </div>
           </div>
-        ))}
-      </div>
+          <div onClick={() => setPage("manual")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>إضافة يدوي</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>إدخال بيانات يدوياً</div>
+            </div>
+          </div>
+        </div>
 
-      {/* آخر المضافين */}
-      {recent.length > 0 && (
-        <div className="panel">
-          <div className="panel-head">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-            <div className="h">آخر المضافين</div>
-            <span className="ph-action" onClick={() => setPage("passengers")}>عرض الكل</span>
-          </div>
-          {recent.map(p => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background 0.14s" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--ivory)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-              <Avatar name={p.name_ar} gender={p.gender} size={38} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.nat} · {p.passport}</div>
+        {/* خط ذهبي */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 0 14px" }}>
+          <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--g5)" strokeWidth="1.3"><path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/></svg>
+          <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
+        </div>
+
+        {/* إحصائيات — كروت أصغر وأرقام أكبر */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+          {[
+            { label: "إجمالي الحجاج", num: passengers.length, sub: `+ ${Math.min(12, passengers.length)} هذا الأسبوع`, bg: "var(--paper)", border: "1px solid var(--line)", iconBg: "rgba(200,162,75,0.12)", clr: "var(--em8)", lbl: "var(--g7)", sub_clr: "var(--g6)", iconClr: "var(--g5)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--mb)", border: "1px solid rgba(19,69,107,0.1)", iconBg: "rgba(19,69,107,0.12)", clr: "var(--mf)", lbl: "var(--mf)", sub_clr: "var(--mf)", iconClr: "var(--mf)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--fb)", border: "1px solid rgba(122,46,69,0.1)", iconBg: "rgba(122,46,69,0.12)", clr: "var(--ff)", lbl: "var(--ff)", sub_clr: "var(--ff)", iconClr: "var(--ff)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+          ].map(({ label, num, sub, bg, border, iconBg, clr, lbl, sub_clr, iconClr, icon }) => (
+            <div key={label} style={{ background: bg, border, borderRadius: "var(--radius-lg)", padding: 14, cursor: "pointer", transition: "var(--transition)" }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.08)"; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={iconClr} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
               </div>
-              {p.services?.bus === "VIP" && <span className="chip c-gold">⭐ VIP</span>}
+              <div style={{ fontSize: 11, fontWeight: 600, color: lbl, marginBottom: 4, opacity: 0.8 }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: 40, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+              <div style={{ fontSize: 11, marginTop: 5, color: sub_clr, opacity: 0.7 }}>{sub}</div>
             </div>
           ))}
         </div>
-      )}
+
+        {/* آخر المضافين */}
+        {recent.length > 0 && (
+          <div className="panel">
+            <div className="panel-head">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <div className="h">آخر المضافين</div>
+              <span className="ph-action" onClick={() => setPage("passengers")}>عرض الكل</span>
+            </div>
+            {recent.map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background 0.14s" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "var(--ivory)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                <Avatar name={p.name_ar} gender={p.gender} size={38} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.nat} · {p.passport}</div>
+                </div>
+                {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 99, background: "rgba(200,162,75,.12)", color: "var(--g6)", border: "1px solid rgba(200,162,75,.25)" }}>VIP</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* اللوحة الجانبية اليسار */}
+      <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+        {/* نِسب التوزيع */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: "var(--radius-lg)", padding: "16px 16px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
+          </div>
+          {dist.map(({ label, count, pct, icon }) => (
+            <div key={label} style={{ marginBottom: 13 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--em7)" }}>{pct}٪</span>
+              </div>
+              <div style={{ height: 5, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
+                <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--em7), var(--em6))", width: `${pct}%`, transition: "width 0.6s ease" }} />
+              </div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>{count} من {passengers.length}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* بطاقة الحساب */}
+        <div style={{ background: "linear-gradient(135deg, var(--em8), var(--em7))", borderRadius: "var(--radius-lg)", padding: 16, color: "var(--text-inverse)", marginTop: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{config.season_label}</div>
+              <div style={{ fontSize: 11, color: "var(--g3)" }}>الموسم الحالي</div>
+            </div>
+          </div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.12)", margin: "4px 0 12px" }} />
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", lineHeight: 1.7 }}>
+            إجمالي الحجاج المسجّلين: <span style={{ fontWeight: 700, color: "var(--g3)" }}>{passengers.length}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3588,7 +3649,7 @@ export default function App() {
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
   const pageTitles: Record<string, string> = { dash: "الرئيسية", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
   // صفحات full-height (بتستخدم كل المساحة)
-  const FULL_PAGES = ["passengers", "manual", "buses", "flights", "mina", "arafa", "hotel"];
+  const FULL_PAGES = ["dash", "passengers", "manual", "buses", "flights", "mina", "arafa", "hotel"];
   const isFull = FULL_PAGES.includes(page);
 
   const renderPage = () => {
@@ -3616,12 +3677,6 @@ export default function App() {
           <div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 500, fontSize: 19, color: "var(--em8)" }}>{pageTitles[page]}</div>
             <div style={{ fontSize: 11, color: "var(--g7)", letterSpacing: "1px" }}>{config.season_label}</div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => setPage("scan")} style={{ background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", padding: "7px 13px", borderRadius: 10, fontSize: 12, cursor: "pointer", fontWeight: 600, fontFamily: "var(--font-body)", display: "inline-flex", alignItems: "center", gap: 6, transition: "var(--transition)" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
-              رفع وثيقة
-            </button>
           </div>
         </div>
         {/* محتوى الصفحة */}
