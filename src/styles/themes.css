@@ -226,8 +226,8 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --border-strong:  #c8a24b;
   --border-sidebar: rgba(212,172,79,0.25);
 
-  --success:        #0f5340;
-  --success-bg:     #e8eff5;
+  --success:        #7D1F3C;
+  --success-bg:     rgba(125,31,60,0.08);
   --danger:         #c0392b;
   --danger-bg:      #fbeae8;
   --warning:        #a9852f;
@@ -294,8 +294,8 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --border-strong:  #0f5340;
   --border-sidebar: #e8e8e8;
 
-  --success:        #0f5340;
-  --success-bg:     #e8f5ef;
+  --success:        #7D1F3C;
+  --success-bg:     rgba(125,31,60,0.08);
   --danger:         #c0392b;
   --danger-bg:      #fbeae8;
   --warning:        #a9852f;
@@ -359,8 +359,8 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --border-strong:  #2e5040;
   --border-sidebar: rgba(200,162,75,0.2);
 
-  --success:        #1c8266;
-  --success-bg:     #0d2a1c;
+  --success:        #7D1F3C;
+  --success-bg:     rgba(125,31,60,0.08);
   --danger:         #e05545;
   --danger-bg:      #2a0d0a;
   --warning:        #e7cd8a;
