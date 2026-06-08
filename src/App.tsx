@@ -186,12 +186,15 @@ function AvatarSVGDefs() {
   return <div dangerouslySetInnerHTML={{ __html: AVATAR_SVG_DEFS }} />;
 }
 
-function Avatar({ gender, size = 32 }: { name?: string; gender: string; size?: number }) {
+function Avatar({ name = "", gender, size = 32 }: { name?: string; gender: string; size?: number }) {
   const f = gender === "أنثى";
+  const initials = name.split(" ").filter(Boolean).slice(0, 2).map(w => w[0] || "").join("") || (f ? "أ" : "م");
+  const bg = f ? "var(--fb)" : "var(--mb)";
+  const color = f ? "var(--ff)" : "var(--mf)";
   return (
-    <svg width={size} height={size} style={{ borderRadius: "50%", flexShrink: 0, overflow: "hidden" }}>
-      <use href={f ? "#avf" : "#avm"} width={size} height={size} />
-    </svg>
+    <div style={{ width: size, height: size, borderRadius: "50%", background: bg, color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, flexShrink: 0, fontFamily: "var(--font-heading)" }}>
+      {initials}
+    </div>
   );
 }
 
@@ -3641,7 +3644,6 @@ export default function App() {
   };
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
-      <AvatarSVGDefs />
       <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Topbar */}
