@@ -186,7 +186,7 @@ function AvatarSVGDefs() {
   return <div dangerouslySetInnerHTML={{ __html: AVATAR_SVG_DEFS }} />;
 }
 
-function Avatar({ name, gender, size = 32 }: { name: string; gender: string; size?: number }) {
+function Avatar({ gender, size = 32 }: { name?: string; gender: string; size?: number }) {
   const f = gender === "أنثى";
   return (
     <svg width={size} height={size} style={{ borderRadius: "50%", flexShrink: 0, overflow: "hidden" }}>
