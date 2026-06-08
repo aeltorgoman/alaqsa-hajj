@@ -191,16 +191,16 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
 
   const NAV_ICONS: Record<string, string> = {
     dash: `<path d="M3 11l9-8 9 8M5 10v10h14V10"/>`,
-    passengers: `<path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>`,
-    buses: `<rect x="3" y="5" width="18" height="11" rx="2"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M3 11h18"/>`,
-    flights: `<path d="M22 2L11 13M22 2L15 22l-4-9-9-4 19-7z"/>`,
-    mina: `<path d="M12 3L3 20h18L12 3z"/><path d="M12 9v11"/>`,
-    arafa: `<path d="M3 20l5-9 4 5 3-4 6 8z"/><circle cx="17" cy="6" r="2.2"/>`,
-    hotel: `<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 8h2M14 8h2M8 12h2M14 12h2M8 16h8"/>`,
-    reports: `<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h6M9 17h6"/>`,
+    passengers: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+    buses: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>`,
+    flights: `<path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/>`,
+    mina: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,
+    arafa: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,
+    hotel: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>`,
+    reports: `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>`,
     archive: `<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/>`,
-    users: `<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5M15 20c0-2 1.5-3.5 3.5-3.5"/>`,
-    scan: `<path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>`,
+    users: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
+    scan: `<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>`,
   };
 
   return (
@@ -489,9 +489,9 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
         {/* إحصائيات — ألوان الصورة */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
           {[
-            { label: "الحجاج", num: passengers.length, sub: `+${Math.min(12,passengers.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,#5C1830,#7D1F3C)", shadow: "rgba(92,24,48,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#1e4db7,#2563eb)", shadow: "rgba(30,77,183,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#c2410c,#ea580c)", shadow: "rgba(194,65,12,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "الحجاج", num: passengers.length, sub: `+${Math.min(12,passengers.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,#21867A,#2A9D8F)", shadow: "rgba(33,134,122,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#2F78C5,#4A90D9)", shadow: "rgba(47,120,197,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#D4820F,#E8951A)", shadow: "rgba(212,130,15,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
           ].map(({ label, num, sub, bg, shadow, icon }) => (
             <div key={label} style={{ background: bg, borderRadius: 14, padding: "12px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}` }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.filter = "brightness(1.05)"; }}
