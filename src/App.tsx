@@ -3,7 +3,7 @@ import type React from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import { useConfig } from "./config/ConfigContext";
-import { ThemeSwitcher } from "./config/ThemeContext";
+import { useTheme, ThemeSwitcher } from "./config/ThemeContext";
 import type { Passenger, User, Bus, Camp, Room, Flight } from "./types";
 function makeShort(fullName: string): string {
   if (!fullName) return "";
@@ -181,45 +181,80 @@ const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid
 function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; }) {
   const config = useConfig();
   const [showThemes, setShowThemes] = useState(false);
+
+  const NAV_ICONS: Record<string, string> = {
+    dash: `<path d="M3 11l9-8 9 8M5 10v10h14V10"/>`,
+    passengers: `<path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>`,
+    buses: `<rect x="3" y="5" width="18" height="11" rx="2"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M3 11h18"/>`,
+    flights: `<path d="M22 2L11 13M22 2L15 22l-4-9-9-4 19-7z"/>`,
+    mina: `<path d="M12 3L3 20h18L12 3z"/><path d="M12 9v11"/>`,
+    arafa: `<path d="M3 20l5-9 4 5 3-4 6 8z"/><circle cx="17" cy="6" r="2.2"/>`,
+    hotel: `<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 8h2M14 8h2M8 12h2M14 12h2M8 16h8"/>`,
+    reports: `<path d="M6 3h9l5 5v13H6z"/><path d="M14 3v6h6M9 13h6M9 17h6"/>`,
+    archive: `<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/>`,
+    users: `<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5M15 20c0-2 1.5-3.5 3.5-3.5"/>`,
+    scan: `<path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>`,
+  };
+
   return (
-    <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", padding: "12px 0", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden" }}>
-      <div style={{ padding: "0 12px 12px", borderBottom: "0.5px solid var(--border-sidebar)", marginBottom: 6, flexShrink: 0 }}>
-        {config.logo_url
-          ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 36, marginBottom: 4 }} />
-          : <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-sidebar)", fontFamily: "var(--font-heading)" }}>✈️ {config.name_ar}</div>
-        }
-        <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)", marginTop: 2 }}>{config.tagline}</div>
+    <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative" }}>
+      {/* نمط النجمة الثمانية */}
+      <div className="sidebar-pattern" />
+
+      {/* الهيدر */}
+      <div style={{ position: "relative", zIndex: 2, padding: "22px 20px 18px", borderBottom: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <svg width="42" height="42" viewBox="0 0 44 44" fill="none" stroke="var(--accent)" strokeWidth="1.6" style={{ flexShrink: 0 }}>
+            <path d="M22 3 L26.5 8.5 L33.5 8 L33 15 L38.5 19.5 L33 24 L33.5 31 L26.5 30.5 L22 36 L17.5 30.5 L10.5 31 L11 24 L5.5 19.5 L11 15 L10.5 8 L17.5 8.5 Z"/>
+            <circle cx="22" cy="19.5" r="4.5"/>
+          </svg>
+          <div>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, color: "#fff", lineHeight: 1.2 }}>
+              {config.logo_url ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 32 }} /> : config.name_ar}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--accent-light)", letterSpacing: "1px", marginTop: 2 }}>{config.tagline}</div>
+          </div>
+        </div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto" }}>
+
+      {/* القائمة */}
+      <div style={{ position: "relative", zIndex: 2, flex: 1, overflowY: "auto", padding: "10px 12px" }}>
         {NAV.map(({ section, items }) => {
           const allowed = items.filter(it => !it.perm || currentUser.permissions?.[it.perm]);
           if (allowed.length === 0) return null;
           return (
             <div key={section}>
-              <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)", padding: "10px 12px 3px", letterSpacing: "0.05em" }}>{section}</div>
+              <div style={{ fontSize: 11, color: "var(--text-sidebar-muted)", padding: "14px 10px 6px", letterSpacing: "0.08em" }}>{section}</div>
               {allowed.map(({ id, label }) => (
-                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: page === id ? "var(--accent-light)" : "var(--text-sidebar)", cursor: "pointer", borderRight: page === id ? "2px solid var(--accent)" : "2px solid transparent", fontWeight: page === id ? 600 : 400, background: page === id ? "var(--bg-sidebar-hover)" : "transparent", transition: "var(--transition)" }}>
-                  {label}
-                  {id === "passengers" && count > 0 && <span style={{ background: "var(--accent)", color: "var(--bg-sidebar)", borderRadius: "var(--radius-full)", padding: "0 6px", fontSize: 10, marginRight: "auto", fontWeight: 600 }}>{count}</span>}
+                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, fontWeight: 500, color: page === id ? "#fff" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 2, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
+                  {page === id && <div style={{ position: "absolute", insetInlineStart: 0, top: "18%", bottom: "18%", width: 3, borderRadius: 99, background: "var(--accent)" }} />}
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={page === id ? "var(--accent-light)" : "var(--text-sidebar)"} strokeWidth="1.7" style={{ flexShrink: 0, opacity: page === id ? 1 : 0.85 }} dangerouslySetInnerHTML={{ __html: NAV_ICONS[id] || NAV_ICONS.dash }} />
+                  {label.replace(/[🏠🕌🚌✈️⛺🏔🏨📄🗄👥]/u, "").trim()}
+                  {id === "passengers" && count > 0 && (
+                    <span style={{ marginInlineStart: "auto", background: "rgba(212,172,79,0.2)", color: "var(--accent-light)", fontSize: 11, fontWeight: 700, padding: "1px 9px", borderRadius: 99 }}>{count}</span>
+                  )}
                 </div>
               ))}
             </div>
           );
         })}
-              </div>
+
         {/* مفتاح الثيمات */}
-        <div style={{ borderTop: "0.5px solid var(--border-sidebar)", marginTop: 8 }}>
-          <div onClick={() => setShowThemes(!showThemes)} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", fontSize: 12, color: "var(--text-sidebar-muted)", cursor: "pointer", transition: "var(--transition)" }}>
-            🎨 المظهر
-            <span style={{ marginRight: "auto", fontSize: 10 }}>{showThemes ? "▲" : "▼"}</span>
+        <div style={{ borderTop: "1px solid var(--border-sidebar)", marginTop: 8 }}>
+          <div onClick={() => setShowThemes(!showThemes)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, color: "var(--text-sidebar-muted)", cursor: "pointer", transition: "var(--transition)", marginTop: 4 }}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/><path d="M3 12h18"/></svg>
+            المظهر
+            <span style={{ marginInlineStart: "auto", fontSize: 10 }}>{showThemes ? "▲" : "▼"}</span>
           </div>
           {showThemes && <ThemeSwitcher />}
         </div>
+      </div>
 
-      <div style={{ padding: "10px 12px", borderTop: "0.5px solid var(--border-sidebar)", flexShrink: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-sidebar)" }}>{currentUser.name}</div>
-        <div style={{ fontSize: 10, color: "var(--text-sidebar-muted)" }}>@{currentUser.username}</div>
-        <button onClick={onLogout} style={{ marginTop: 8, width: "100%", background: "var(--danger-bg)", border: "none", padding: 5, borderRadius: "var(--radius-sm)", fontSize: 11, cursor: "pointer", color: "var(--danger)", transition: "var(--transition)" }}>تسجيل خروج</button>
+      {/* الفوتر */}
+      <div style={{ position: "relative", zIndex: 2, padding: "14px 16px", borderTop: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "#fff" }}>{currentUser.name}</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>@{currentUser.username}</div>
+        <button onClick={onLogout} style={{ marginTop: 10, width: "100%", background: "rgba(228,108,108,0.14)", color: "#f0b9b9", border: "none", padding: 7, borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", transition: "var(--transition)" }}>تسجيل خروج</button>
       </div>
     </div>
   );
@@ -244,34 +279,66 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", direction: "rtl", fontFamily: "var(--font-body)" }}>
-      {/* خلفية زخرفية */}
-      <div style={{ position: "fixed", inset: 0, background: "var(--bg)", zIndex: 0 }}>
-        <div style={{ position: "absolute", top: "20%", right: "15%", width: 300, height: 300, borderRadius: "50%", background: "var(--primary)", opacity: 0.06, filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", bottom: "20%", left: "15%", width: 200, height: 200, borderRadius: "50%", background: "var(--accent)", opacity: 0.08, filter: "blur(40px)" }} />
-      </div>
-      <div style={{ position: "relative", zIndex: 1, background: "var(--bg-card)", borderRadius: "var(--radius-xl)", padding: "40px 36px", width: 380, boxShadow: "var(--shadow-xl)", border: "0.5px solid var(--border)" }}>
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          {config.logo_url
-            ? <img src={config.logo_url} alt={config.name_ar} style={{ height: 60, marginBottom: 12 }} />
-            : <div style={{ width: 64, height: 64, borderRadius: "var(--radius-lg)", background: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 16px" }}>✈️</div>
-          }
-          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-heading)", marginBottom: 6 }}>{config.name_ar}</div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{config.tagline}</div>
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, fontWeight: 500 }}>اسم المستخدم</div>
-          <input className="input" style={{ border: `1px solid ${error ? "var(--danger)" : "var(--border)"}` }} value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="أدخل اسم المستخدم" autoFocus />
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, fontWeight: 500 }}>كلمة المرور</div>
-          <div style={{ position: "relative" }}>
-            <input className="input" style={{ border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`, paddingLeft: 36 }} type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" />
-            <button onClick={() => setShowPass(!showPass)} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 16 }}>{showPass ? "🙈" : "👁"}</button>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-sidebar)", direction: "rtl", fontFamily: "var(--font-body)", position: "relative", overflow: "hidden" }}>
+      {/* نمط النجمة الثمانية */}
+      <div className="sidebar-pattern" style={{ opacity: 0.1 }} />
+
+      {/* الكارد */}
+      <div style={{ position: "relative", zIndex: 2, width: "100%", maxWidth: 380, background: "var(--bg-card)", borderRadius: "var(--radius-xl)", padding: 6, boxShadow: "var(--shadow-xl)", border: "1px solid var(--accent-dark)" }}>
+        <div style={{ border: "1px solid var(--accent-light)", borderRadius: "calc(var(--radius-xl) - 4px)", padding: "38px 30px" }}>
+
+          {/* الشعار */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
+            <svg width="96" height="118" viewBox="0 0 96 118" style={{ marginBottom: 8 }}>
+              <path d="M8 116 V52 C8 26 28 6 48 6 C68 6 88 26 88 52 V116" fill="none" stroke="var(--accent)" strokeWidth="2.5"/>
+              <path d="M15 116 V52 C15 30 31 13 48 13 C65 13 81 30 81 52 V116" fill="none" stroke="var(--accent-light)" strokeWidth="1"/>
+              <g transform="translate(48,58) scale(1.05)">
+                <path d="M22,0 L8.3,3.4 L15.6,15.6 L3.4,8.3 L0,22 L-3.4,8.3 L-15.6,15.6 L-8.3,3.4 L-22,0 L-8.3,-3.4 L-15.6,-15.6 L-3.4,-8.3 L0,-22 L3.4,-8.3 L15.6,-15.6 L8.3,-3.4 Z" fill="none" stroke="var(--primary-dark)" strokeWidth="2"/>
+                <circle r="4.5" fill="var(--accent)"/>
+              </g>
+            </svg>
+            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 30, color: "var(--primary-dark)", letterSpacing: "0.5px" }}>
+              {config.name_ar}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--accent-dark)", letterSpacing: "2px", marginTop: 2 }}>
+              {config.tagline}
+            </div>
+          </div>
+
+          {/* خط ذهبي */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 20px" }}>
+            <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,transparent,var(--accent),transparent)" }} />
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--accent)" strokeWidth="1.4"><path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/></svg>
+            <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg,transparent,var(--accent),transparent)" }} />
+          </div>
+
+          {/* الحقول */}
+          <div style={{ marginTop: 16 }}>
+            <label style={{ display: "block", fontSize: 13, color: "var(--primary)", marginBottom: 6, fontWeight: 500 }}>اسم المستخدم</label>
+            <input className="input-field" style={{ border: `1px solid ${error ? "var(--danger)" : "var(--border)"}` }} value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="أدخل اسم المستخدم" autoFocus />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <label style={{ display: "block", fontSize: 13, color: "var(--primary)", marginBottom: 6, fontWeight: 500 }}>كلمة المرور</label>
+            <div style={{ position: "relative" }}>
+              <input className="input-field" style={{ border: `1px solid ${error ? "var(--danger)" : "var(--border)"}`, paddingLeft: 36 }} type={showPass ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="••••••••" />
+              <button onClick={() => setShowPass(!showPass)} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--danger)", textAlign: "center", background: "var(--danger-bg)", padding: "8px 12px", borderRadius: "var(--radius-md)" }}>{error}</div>
+          )}
+
+          <button onClick={handleLogin} disabled={loading} className="btn-gold" style={{ width: "100%", marginTop: 24, opacity: loading ? 0.7 : 1 }}>
+            {loading ? "⏳ جاري التحقق..." : "دخول"}
+          </button>
+
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "var(--text-muted)" }}>
+            {config.name_ar} · دولة قطر
           </div>
         </div>
-        {error && <div style={{ fontSize: 12, color: "var(--danger)", marginBottom: 12, textAlign: "center", background: "var(--danger-bg)", padding: "8px 12px", borderRadius: "var(--radius-md)", border: "0.5px solid var(--danger)" }}>{error}</div>}
-        <button onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "var(--primary)", color: "var(--text-inverse)", border: "none", padding: "13px", borderRadius: "var(--radius-md)", fontSize: 14, cursor: "pointer", fontWeight: 600, marginTop: 8, opacity: loading ? 0.7 : 1, fontFamily: "var(--font-body)", transition: "var(--transition)" }}>{loading ? "⏳ جاري التحقق..." : "دخول"}</button>
       </div>
     </div>
   );
@@ -354,70 +421,86 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 }
 
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
-  const { males, females } = useMemo(() => ({
+  const { males, females, vip } = useMemo(() => ({
     males: passengers.filter(p => p.gender === "ذكر").length,
     females: passengers.filter(p => p.gender === "أنثى").length,
+    vip: passengers.filter(p => p.services?.bus === "VIP").length,
   }), [passengers]);
-  const initials = (name: string) => name.trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("");
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleScanFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      (window as any).__hajj_pending_scan_file__ = file;
-      setPage("scan");
-    }
-    e.currentTarget.value = "";
-  };
+  const recent = passengers.slice(0, 5);
 
   return (
-    <div style={{ padding: 12, overflowY: "auto", height: "100%" }}>
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleScanFile} />
-      {/* زرارين الإضافة */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-        <div onClick={() => fileRef.current?.click()} style={{ background: "#1D9E75", borderRadius: 10, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📷</div>
+    <div style={{ overflowY: "auto", height: "100%", padding: "18px 20px", background: "var(--bg)" }}>
+      {/* أزرار الإضافة */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+        <div onClick={() => setPage("scan")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "#fff", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
+          <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+          </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "white" }}>مسح جواز</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", marginTop: 1 }}>إضافة بالمسح</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>مسح جواز</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>إضافة بالمسح الذكي</div>
           </div>
         </div>
-        <div onClick={() => setPage("manual")} style={{ background: "white", border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>✏️</div>
+        <div onClick={() => setPage("manual")} style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
+          <div style={{ width: 42, height: 42, borderRadius: 11, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
+          </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>إضافة يدوي</div>
-            <div style={{ fontSize: 10, color: "#888", marginTop: 1 }}>إدخال يدوي</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>إضافة يدوي</div>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>إدخال بيانات يدوياً</div>
           </div>
         </div>
       </div>
-      {/* الإحصائيات */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
-        <div style={{ background: "#f5f5f5", borderRadius: 8, padding: "10px 10px" }}>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>إجمالي الحجاج</div>
-          <div style={{ fontSize: 22, fontWeight: 500 }}>{passengers.length}</div>
-        </div>
-        <div style={{ background: "#E6F1FB", borderRadius: 8, padding: "10px 10px" }}>
-          <div style={{ fontSize: 11, color: "#0C447C", marginBottom: 2 }}>رجال</div>
-          <div style={{ fontSize: 22, fontWeight: 500, color: "#0C447C" }}>{males}</div>
-        </div>
-        <div style={{ background: "#FBEAF0", borderRadius: 8, padding: "10px 10px" }}>
-          <div style={{ fontSize: 11, color: "#72243E", marginBottom: 2 }}>نساء</div>
-          <div style={{ fontSize: 22, fontWeight: 500, color: "#72243E" }}>{females}</div>
-        </div>
+
+      {/* خط ذهبي */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 0 18px" }}>
+        <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--g5)" strokeWidth="1.3"><path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/></svg>
+        <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg, transparent, var(--g5), transparent)" }} />
       </div>
+
+      {/* إحصائيات */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+        {[
+          { label: "إجمالي الحجاج", num: passengers.length, sub: `+ ${Math.min(12, passengers.length)} هذا الأسبوع`, bg: "var(--paper)", iconBg: "rgba(200,162,75,0.12)", clr: "var(--em8)", lbl: "var(--g7)", sub_clr: "var(--g6)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+          { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--mb)", iconBg: "rgba(19,69,107,0.12)", clr: "var(--mf)", lbl: "var(--mf)", sub_clr: "var(--mf)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+          { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "var(--fb)", iconBg: "rgba(122,46,69,0.12)", clr: "var(--ff)", lbl: "var(--ff)", sub_clr: "var(--ff)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+          { label: "VIP", num: vip, sub: `${passengers.length ? Math.round(vip/passengers.length*100) : 0}٪ يطلبون VIP`, bg: "linear-gradient(135deg,rgba(200,162,75,0.08),rgba(200,162,75,0.03))", iconBg: "rgba(200,162,75,0.15)", clr: "var(--g6)", lbl: "var(--g7)", sub_clr: "var(--g7)", icon: `<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>` },
+        ].map(({ label, num, sub, bg, iconBg, clr, lbl, sub_clr, icon }) => (
+          <div key={label} style={{ background: bg, borderRadius: "var(--radius-lg)", padding: 16, cursor: "pointer", transition: "var(--transition)" }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.08)"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="1.8" dangerouslySetInnerHTML={{ __html: icon }} />
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: lbl, marginBottom: 3, opacity: 0.8 }}>{label}</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 30, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: sub_clr, opacity: 0.7 }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
       {/* آخر المضافين */}
-      {passengers.length > 0 && (
-        <div style={{ background: "white", border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "12px 14px" }}>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}>
-            <span>🕐</span> آخر المضافين
+      {recent.length > 0 && (
+        <div className="panel">
+          <div className="panel-head">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <div className="h">آخر المضافين</div>
+            <span className="ph-action" onClick={() => setPage("passengers")}>عرض الكل</span>
           </div>
-          {passengers.slice(-5).reverse().map((p, i, arr) => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < arr.length - 1 ? "0.5px solid #f5f5f5" : "none" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: p.gender === "ذكر" ? "#E6F1FB" : "#FBEAF0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 500, color: p.gender === "ذكر" ? "#0C447C" : "#72243E", flexShrink: 0 }}>{initials(p.name_ar)}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12 }}>{p.short_ar || p.name_ar}</div>
-                <div style={{ fontSize: 10, color: "#888" }}>{p.nat} · {p.passport}</div>
+          {recent.map(p => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background 0.14s" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--ivory)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+              <div style={{ width: 38, height: 38, borderRadius: "50%", background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                {(p.name_ar || "").split(" ").slice(0, 2).map((w: string) => w[0] || "").join("")}
               </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.nat} · {p.passport}</div>
+              </div>
+              {p.services?.bus === "VIP" && <span className="chip c-gold">⭐ VIP</span>}
             </div>
           ))}
         </div>
@@ -425,6 +508,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
     </div>
   );
 }
+
 
 // ===== SCAN PAGE =====
 function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage: (p: string) => void }) {
