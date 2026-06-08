@@ -531,41 +531,41 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
       </div>
 
       {/* اللوحة الجانبية اليسار */}
-      <div style={{ width: 210, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
-        {/* نِسب التوزيع — مضغوطة */}
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 13px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 12, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
+      <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        {/* نِسب التوزيع */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
           </div>
           {dist.map(({ label, pct, icon }) => (
-            <div key={label} style={{ marginBottom: 9 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--em7)" }}>{pct}٪</span>
+            <div key={label} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: "rgba(125,31,60,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--em7)", fontFamily: "var(--font-heading)" }}>{pct}٪</span>
               </div>
-              <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,var(--em7),var(--em6))", width: `${pct}%`, transition: "width 0.6s ease" }} />
+              <div style={{ height: 5, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
+                <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,var(--em7),var(--em6))", width: `${pct || 2}%`, transition: "width 0.8s ease" }} />
               </div>
             </div>
           ))}
         </div>
 
         {/* بطاقة المستخدم والموسم */}
-        <div style={{ background: "linear-gradient(145deg,var(--em8),var(--em7))", borderRadius: 14, padding: "13px 14px", color: "#fff", marginTop: "auto" }}>
-          {/* الموسم */}
-          <div style={{ fontSize: 10, color: "var(--g3)", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>الموسم الحالي</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 10 }}>{config.season_label}</div>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.12)", marginBottom: 10 }} />
-          {/* المستخدم */}
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div style={{ background: "linear-gradient(145deg,var(--em8),var(--em7))", borderRadius: 14, padding: "14px 16px", color: "#fff" }}>
+          <div style={{ fontSize: 10, color: "var(--g3)", letterSpacing: "0.06em", marginBottom: 3, fontWeight: 600, textTransform: "uppercase" }}>الموسم الحالي</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 12 }}>{config.season_label}</div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.15)", marginBottom: 12 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>@{currentUser.username}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 1 }}>@{currentUser.username}</div>
             </div>
           </div>
         </div>
