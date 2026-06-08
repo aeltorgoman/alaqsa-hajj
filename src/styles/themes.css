@@ -199,9 +199,9 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
    زمردي داكن + ذهبي — مستوحى من كسوة الكعبة
    ============================================ */
 [data-theme="qatar-heritage"], :root {
-  --primary:        #0f5340;
-  --primary-light:  #13674f;
-  --primary-dark:   #0b3b2e;
+  --primary:        #7D1F3C;
+  --primary-light:  #A32D52;
+  --primary-dark:   #5C1830;
   --accent:         #c8a24b;
   --accent-light:   #e7cd8a;
   --accent-dark:    #a9852f;
@@ -209,14 +209,14 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --bg:             #f7f2e7;
   --bg-2:           #f1e9d6;
   --bg-card:        #fffdf8;
-  --bg-sidebar:     #0b3b2e;
+  --bg-sidebar:     #5C1830;
   --bg-sidebar-hover: rgba(255,255,255,0.06);
   --bg-topbar:      #fffdf8;
   --bg-input:       #f7f2e7;
   --bg-hover:       #f1e9d6;
 
   --text:           #1b2a25;
-  --text-secondary: #3d5a4e;
+  --text-secondary: #7D1F3C;
   --text-muted:     #6f7b74;
   --text-inverse:   #ffffff;
   --text-sidebar:   #cdddd5;
@@ -240,9 +240,9 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --female-bg:      #f7eaef;
   --female-fg:      #7a2e45;
 
-  --shadow-sm:      0 1px 3px rgba(11,59,46,0.08);
-  --shadow-md:      0 4px 12px rgba(11,59,46,0.12);
-  --shadow-lg:      0 8px 24px rgba(11,59,46,0.16);
+  --shadow-sm:      0 1px 3px rgba(92,24,48,0.08);
+  --shadow-md:      0 4px 12px rgba(92,24,48,0.12);
+  --shadow-lg:      0 8px 24px rgba(92,24,48,0.16);
   --shadow-xl:      0 30px 80px rgba(0,0,0,0.3);
 
   --radius-sm:      9px;
@@ -267,9 +267,9 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
    الثيم الثاني: Qatar Heritage Light
    ============================================ */
 [data-theme="qatar-light"] {
-  --primary:        #0f5340;
-  --primary-light:  #13674f;
-  --primary-dark:   #0b3b2e;
+  --primary:        #7D1F3C;
+  --primary-light:  #A32D52;
+  --primary-dark:   #5C1830;
   --accent:         #c8a24b;
   --accent-light:   #e7cd8a;
   --accent-dark:    #a9852f;
@@ -277,22 +277,22 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --bg:             #fafafa;
   --bg-2:           #f5f5f5;
   --bg-card:        #ffffff;
-  --bg-sidebar:     #ffffff;
-  --bg-sidebar-hover: #f0faf6;
+  --bg-sidebar:     #5C1830;
+  --bg-sidebar-hover: rgba(255,255,255,0.06);
   --bg-topbar:      #ffffff;
   --bg-input:       #f8f8f8;
-  --bg-hover:       #f0faf6;
+  --bg-hover:       #fdf0f3;
 
   --text:           #1b2a25;
-  --text-secondary: #3d5a4e;
+  --text-secondary: #7D1F3C;
   --text-muted:     #6f7b74;
   --text-inverse:   #ffffff;
-  --text-sidebar:   #1b2a25;
-  --text-sidebar-muted: #6f7b74;
+  --text-sidebar:   #cdddd5;
+  --text-sidebar-muted: rgba(231,205,138,0.65);
 
   --border:         #e8e8e8;
-  --border-strong:  #0f5340;
-  --border-sidebar: #e8e8e8;
+  --border-strong:  #7D1F3C;
+  --border-sidebar: rgba(212,172,79,0.22);
 
   --success:        #7D1F3C;
   --success-bg:     rgba(125,31,60,0.08);
@@ -337,7 +337,7 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   --primary-dark:   #c8a24b;
   --accent:         #1c8266;
   --accent-light:   #239e7e;
-  --accent-dark:    #13674f;
+  --accent-dark:    #a9852f;
 
   --bg:             #0a1410;
   --bg-2:           #0d1a15;
