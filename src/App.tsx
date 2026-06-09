@@ -185,7 +185,7 @@ const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid 
 const btnP = (extra?: any) => ({ background: "var(--primary)", color: "var(--text-inverse)", border: "none", padding: "7px 14px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", fontWeight: 500, fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
 const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid var(--border)", padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", color: "var(--text-secondary)", fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
 
-function Sidebar({ page, setPage, count, currentUser }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; }) {
+function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void }) {
   const config = useConfig();
   const [showThemes, setShowThemes] = useState(false);
 
@@ -257,6 +257,13 @@ function Sidebar({ page, setPage, count, currentUser }: { page: string; setPage:
         </div>
       </div>
 
+      {/* تسجيل الخروج */}
+      <div style={{ padding: "10px 12px", borderTop: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
+        <button onClick={onLogout} style={{ width: "100%", background: "rgba(228,108,108,0.14)", color: "rgba(255,200,200,0.9)", border: "none", padding: "7px 0", borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "var(--transition)" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          تسجيل خروج
+        </button>
+      </div>
     </div>
   );
 }
@@ -1222,7 +1229,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                   <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
                   {COLS.map(col => (
                     <td key={col.key} style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}>
-                      <input value={colFilters[col.key] || ""} onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))} style={{ ...inp, padding: "2px 6px", fontSize: 10, minWidth: 60 }} placeholder="فلتر..." />
+                      <input value={filters[col.key] || ""} onChange={e => setFilter(col.key, e.target.value)} style={{ ...inp, padding: "2px 6px", fontSize: 10, minWidth: 60 }} placeholder="فلتر..." />
                     </td>
                   ))}
                   <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
@@ -3642,7 +3649,7 @@ export default function App() {
   };
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
-      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} />
+      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* محتوى الصفحة */}
         {isFull ? (
