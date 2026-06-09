@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { Avatar } from "./Avatar";
