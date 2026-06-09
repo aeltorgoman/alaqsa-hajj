@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, User } from "../types";
 import { Modal } from "./Modal";
-import { btnP, btnS, inp } from "../utils";
+import { btnS, inp } from "../utils";
 
 function ArchivePage({ currentUser }: { currentUser: User }) {
   const [seasons, setSeasons] = useState<any[]>([]);
