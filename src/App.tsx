@@ -1092,6 +1092,24 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
     setPassengers(passengers.filter(p => p.id !== id));
     setSelected(null);
   };
+
+  const moveP_order = async (p: Passenger, direction: "up" | "down") => {
+    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const idx = sorted.findIndex((x: Passenger) => x.id === p.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const other = sorted[swapIdx] as any;
+    const myOrder = (p as any).sort_order || 0;
+    const otherOrder = other.sort_order || 0;
+    await Promise.all([
+      supabase.from("passengers").update({ sort_order: otherOrder }).eq("id", p.id),
+      supabase.from("passengers").update({ sort_order: myOrder }).eq("id", other.id),
+    ]);
+    setPassengers((passengers as any[]).map((x: any) =>
+      x.id === p.id ? { ...x, sort_order: otherOrder } :
+      x.id === other.id ? { ...x, sort_order: myOrder } : x
+    ) as Passenger[]);
+  };
   const saveEdit = async (p: Passenger) => {
     const { error } = await supabase.from("passengers").update({
       name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
