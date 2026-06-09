@@ -847,31 +847,6 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
 
 // ===== دائرة النسبة =====
-function StatRing({ pct, count, total, color, label }: { pct: number; count: number; total: number; color: string; label: string }) {
-  const r = 24, circ = 2 * Math.PI * r;
-  const offset = circ * (1 - pct / 100);
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-      <div style={{ position: "relative", width: 62, height: 62 }}>
-        <svg width="62" height="62" viewBox="0 0 62 62">
-          <circle cx="31" cy="31" r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
-          <circle cx="31" cy="31" r={r} fill="none" stroke={color} strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={circ}
-            strokeDashoffset={offset}
-            transform="rotate(-90 31 31)"
-            style={{ transition: "stroke-dashoffset 0.6s ease" }}
-          />
-        </svg>
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color }}>{pct}%</div>
-      </div>
-      <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.4 }}>
-        {label}<br />
-        <span style={{ color: "var(--text-muted)", fontSize: 9 }}>{count} / {total}</span>
-      </div>
-    </div>
-  );
-}
 
 // ===== ملخص إحصائي في أعلى صفحة الحجاج =====
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
