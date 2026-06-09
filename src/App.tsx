@@ -1178,7 +1178,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
             <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, margin: "12px 14px", overflow: "hidden" }}>
               {filtered.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا توجد نتائج</div>
-              ) : filtered.map(p => (
+              ) : filtered.map((p, idx) => (
                 <div key={p.id} onClick={() => setSelected(p)}
                   style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background .14s", background: selected?.id === p.id ? "var(--ivory)" : "transparent" }}
                   onMouseEnter={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
@@ -1658,8 +1658,16 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
+                <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingFlightId(flight.id); }}>
+                  {editingFlightId === flight.id ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+                      <input defaultValue={flight.name} id={`fn-${flight.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 130 }} autoFocus
+                        onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("flights").update({ name: v }).eq("id", flight.id); setFlights(flights.map(f => f.id === flight.id ? { ...f, name: v } : f)); } setEditingFlightId(null); } if (e.key === "Escape") setEditingFlightId(null); }} />
+                      <button onClick={() => { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("flights").update({ name: v }).eq("id", flight.id); setFlights(flights.map(f => f.id === flight.id ? { ...f, name: v } : f)); } setEditingFlightId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
+                  )}
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
                 </div>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{fp.length} مسافر</span>
@@ -2181,7 +2189,17 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
               <div onClick={() => toggleCamp(camp.id)} style={{ padding: "9px 12px", background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ display:"flex", alignItems:"center" }} dangerouslySetInnerHTML={{ __html: icon }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", color: isSpecial ? "var(--warning)" : "var(--text-muted)" }}>{isSpecial ? "خاص" : "عادي"}</span></div>
+                  <div onDoubleClick={e => { e.stopPropagation(); setEditingCampId(camp.id); }}>
+                    {editingCampId === camp.id ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+                        <input defaultValue={camp.name} id={`cn-${camp.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 110 }} autoFocus
+                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`cn-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("camps").update({ name: v }).eq("id", camp.id); setCamps(camps.map(c => c.id === camp.id ? { ...c, name: v } : c)); } setEditingCampId(null); } if (e.key === "Escape") setEditingCampId(null); }} />
+                        <button onClick={() => { const v = (document.getElementById(`cn-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("camps").update({ name: v }).eq("id", camp.id); setCamps(camps.map(c => c.id === camp.id ? { ...c, name: v } : c)); } setEditingCampId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", color: isSpecial ? "var(--warning)" : "var(--text-muted)" }}>{isSpecial ? "خاص" : "عادي"}</span></div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{cp.length} مسافر</div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
