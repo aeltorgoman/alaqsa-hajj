@@ -257,11 +257,6 @@ function Sidebar({ page, setPage, count, currentUser }: { page: string; setPage:
         </div>
       </div>
 
-      {/* الفوتر */}
-      <div style={{ position: "relative", zIndex: 2, padding: "10px 16px", borderTop: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-inverse)" }}>{currentUser.name}</div>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>@{currentUser.username}</div>
-      </div>
     </div>
   );
 }
