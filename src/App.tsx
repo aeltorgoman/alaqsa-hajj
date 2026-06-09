@@ -386,9 +386,9 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
-      {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ ...btnP(), width: "100%", marginBottom: 14 }}>+ مستخدم جديد</button>}
+      {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", marginBottom: 14, background: "linear-gradient(135deg,var(--em7),var(--em6))", color: "#fff", border: "none", padding: "10px 0", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> مستخدم جديد</button>}
       {users.map(u => (
-        <div key={u.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+        <div key={u.id} style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10, background: "var(--paper)" }}>
           <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "rgba(200,162,75,0.15)" : "var(--mb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {u.username === "admin"
               ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -396,8 +396,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
             }
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{u.name}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
           </div>
           {currentUser.permissions.manage_users && u.username !== "admin" && (
             <div style={{ display: "flex", gap: 6 }}>
@@ -561,18 +561,22 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
 
         {/* بطاقة المستخدم والموسم */}
         <div style={{ background: "linear-gradient(145deg,var(--em8),var(--em7))", borderRadius: 14, padding: "14px 16px", color: "#fff" }}>
-          <div style={{ fontSize: 10, color: "var(--g3)", letterSpacing: "0.06em", marginBottom: 3, fontWeight: 600, textTransform: "uppercase" }}>الموسم الحالي</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 12 }}>{config.season_label}</div>
-          <div style={{ height: 1, background: "rgba(255,255,255,0.15)", marginBottom: 12 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div style={{ fontSize: 10, color: "var(--g3)", letterSpacing: "0.06em", marginBottom: 3, fontWeight: 600 }}>الموسم الحالي</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 10 }}>{config.season_label}</div>
+          <div style={{ height: 1, background: "rgba(255,255,255,0.15)", marginBottom: 10 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 1 }}>@{currentUser.username}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentUser.name}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>@{currentUser.username}</div>
             </div>
           </div>
+          <button onClick={onLogout} style={{ width: "100%", background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.9)", border: "1px solid rgba(255,255,255,0.2)", padding: "6px 0", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", transition: "var(--transition)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            تسجيل خروج
+          </button>
         </div>
       </div>
     </div>
@@ -1127,6 +1131,17 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <PassengersStats passengers={passengers} />
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
+          {/* أزرار الإضافة */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <div onClick={() => setPage("scan")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, cursor: "pointer", background: "linear-gradient(135deg,var(--em7),var(--em6))", color: "#fff", transition: "var(--transition)" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>مسح جواز</span>
+            </div>
+            <div onClick={() => setShowManual(true)} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", transition: "var(--transition)" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>إضافة يدوي</span>
+            </div>
+          </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 99, padding: "8px 14px", transition: "var(--transition)" }}
               onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--g5)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(200,162,75,.12)"; }}
@@ -1468,10 +1483,10 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
       {cards.map(({ label, num, sub, border, clr, bg }) => (
-        <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-          <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
         </div>
       ))}
     </div>
@@ -1710,10 +1725,10 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
       {cards.map(({ label, num, sub, border, clr, bg }) => (
-        <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-          <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
         </div>
       ))}
     </div>
@@ -1742,10 +1757,10 @@ function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: C
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
       {cards.map(({ label, num, sub, border, clr, bg }) => (
-        <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-          <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
         </div>
       ))}
     </div>
@@ -1783,10 +1798,10 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
       {/* الصف الأول — الإحصائيات */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px 8px" }}>
         {cards.map(({ label, num, sub, border, clr, bg }) => (
-          <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-            <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+          <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
           </div>
         ))}
       </div>
@@ -1997,7 +2012,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
   const serviceKey = pageType === "منى" ? "camp_mina" : "camp_arafa";
-  const icon = pageType === "منى" ? "tent" : "mountain";
+  const icon = pageType === "منى" ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>` : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>`;
 
   useEffect(() => {
     supabase.from("camps").select("*").eq("page_type", pageType).order("created_at").then(({ data }: any) => { if (data) setCamps(data as Camp[]); });
@@ -2995,7 +3010,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-    const icon = pageType === "منى" ? "tent" : "mountain";
+    const icon = pageType === "منى" ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>` : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>`;
     const pageCamps = camps.filter(c => c.page_type === pageType);
     const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
@@ -3633,19 +3648,13 @@ export default function App() {
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
       <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Topbar */}
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, background: "var(--paper)", boxShadow: "var(--shadow-sm)" }}>
-          <div>
-            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 500, fontSize: 19, color: "var(--em8)" }}>{pageTitles[page]}</div>
-            <div style={{ fontSize: 11, color: "var(--g7)", letterSpacing: "1px" }}>{config.season_label}</div>
-          </div>
-        </div>
         {/* محتوى الصفحة */}
         {isFull ? (
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
         ) : (
           <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
-            <div style={{ maxWidth: page === "dash" ? 1100 : page === "scan" ? 620 : 900, margin: "0 auto", padding: "20px 20px" }}>
+            <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: "20px" }}>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--em8)", marginBottom: 16 }}>{pageTitles[page]}</div>
               {renderPage()}
             </div>
           </div>
