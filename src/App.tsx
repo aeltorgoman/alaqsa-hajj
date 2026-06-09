@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
-import { useConfig } from "./config/ConfigContext";
 import type { Passenger, User } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
