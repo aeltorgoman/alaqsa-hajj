@@ -1473,32 +1473,27 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const total = passengers.length;
   const assigned = passengers.filter(p => p.flight_id != null).length;
-  const noTicket = passengers.filter(p => p.flight_id == null).length;
+  const unassigned = passengers.filter(p => p.flight_id == null).length;
   const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
   const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
-  const pct = total ? Math.round(assigned / total * 100) : 0;
+
+  const cards = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
+    { label: "موزّعون", num: assigned, sub: `${total ? Math.round(assigned/total*100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
+    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
+    { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass/total*100) : 0}٪ من الإجمالي`, border: "#E8951A", clr: "#E8951A", bg: "rgba(232,149,26,0.05)" },
+    { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", border: withoutTicket > 0 ? "#7a2e45" : "#ccc", clr: withoutTicket > 0 ? "var(--ff)" : "var(--muted)", bg: withoutTicket > 0 ? "var(--fb)" : "var(--paper)" },
+  ];
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
-      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assigned}</div>
-      </div>
-      <div style={{ background: noTicket > 0 ? "var(--bg-2)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-muted)", lineHeight: 1 }}>{noTicket}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
-      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>درجة أولى ⭐</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{firstClass}</div>
-      </div>
-      <div style={{ background: withoutTicket > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 12px", minWidth: 62, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: withoutTicket > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>بدون تذكرة</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: withoutTicket > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{withoutTicket}</div>
-      </div>
-      <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assigned} total={total} color="var(--em7)" label="نسبة التوزيع" />
-      </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      {cards.map(({ label, num, sub, border, clr, bg }) => (
+        <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1609,10 +1604,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
                 </div>
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{fp.length} مسافر</span>
-                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
-                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} style={{ background: fp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
+                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} title="طباعة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
+                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} title="إضافة مسافر" style={{ height: 30, padding: "0 12px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(125,31,60,0.08)", border: "1px solid rgba(125,31,60,0.2)", cursor: "pointer", color: "var(--em7)", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.15)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(125,31,60,0.08)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} title="حذف الرحلة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
               </div>
               {isExpanded && (
                 <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}` }}>
@@ -1637,7 +1632,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <FlightsStats passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ رحلة جديدة</button>
+        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> رحلة جديدة</button>
         {flights.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
       {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg><br />لا يوجد رحلات بعد</div> : (
@@ -1720,89 +1715,59 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
     const total = passengers.length;
     const assignedCount = passengers.filter(p => p.bus_id != null).length;
     const unassigned = total - assignedCount;
-    const normalBuses = buses.filter(b => b.type !== "VIP").length;
-    const vipBuses = buses.filter(b => b.type === "VIP").length;
     const vipRequested = passengers.filter(p => p.services?.bus === "VIP").length;
-    const pct = total ? Math.round(assignedCount / total * 100) : 0;
-    return { total, assignedCount, unassigned, normalBuses, vipBuses, vipRequested, pct };
+    return { total, assignedCount, unassigned, vipRequested };
   }, [buses, passengers]);
-  const { total, assignedCount, unassigned, normalBuses, vipBuses, vipRequested, pct } = stats;
+  const { total, assignedCount, unassigned, vipRequested } = stats;
+
+  const cards = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
+    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount/total*100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
+    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
+    { label: "طالبين VIP", num: vipRequested, sub: `${total ? Math.round(vipRequested/total*100) : 0}٪ من الإجمالي`, border: "#E8951A", clr: "#E8951A", bg: "rgba(232,149,26,0.05)" },
+  ];
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
-      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assignedCount}</div>
-      </div>
-      <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{unassigned}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
-      <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>باص عادي</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{normalBuses}</div>
-      </div>
-      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 60, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>باص VIP ⭐</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{vipBuses}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
-      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 70, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>طلبوا VIP</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{vipRequested}</div>
-      </div>
-      <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="var(--em7)" label="نسبة التوزيع" />
-      </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      {cards.map(({ label, num, sub, border, clr, bg }) => (
+        <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+        </div>
+      ))}
     </div>
   );
 }
 
+
 // ===== ملخص صفحة المخيمات =====
-function CampsStats({ camps, passengers, campIdKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: string }) {
+function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: string; campServiceKey: string }) {
   const stats = useMemo(() => {
     const total = passengers.length;
     const assignedCount = passengers.filter(p => (p as any)[campIdKey] != null).length;
     const unassigned = total - assignedCount;
-    const normalCamps = camps.filter(c => c.type === "عادي").length;
-    const specialCamps = camps.filter(c => c.type === "خاص").length;
-    const maleCamps = camps.filter(c => c.gender === "ذكر").length;
-    const femaleCamps = camps.filter(c => c.gender === "أنثى").length;
-    const pct = total ? Math.round(assignedCount / total * 100) : 0;
-    return { total, assignedCount, unassigned, normalCamps, specialCamps, maleCamps, femaleCamps, pct };
-  }, [camps, passengers, campIdKey]);
-  const { total, assignedCount, unassigned, normalCamps, specialCamps, maleCamps, femaleCamps, pct } = stats;
+    const specialRequested = passengers.filter(p => (p.services as any)?.[campServiceKey] === "خاص").length;
+    return { total, assignedCount, unassigned, specialRequested };
+  }, [camps, passengers, campIdKey, campServiceKey]);
+  const { total, assignedCount, unassigned, specialRequested } = stats;
+
+  const cards = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
+    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount/total*100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
+    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
+    { label: "طالبين خاص", num: specialRequested, sub: `${total ? Math.round(specialRequested/total*100) : 0}٪ من الإجمالي`, border: "#E8951A", clr: "#E8951A", bg: "rgba(232,149,26,0.05)" },
+  ];
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
-      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assignedCount}</div>
-      </div>
-      <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{unassigned}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
-      <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1 }}>عادي</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{normalCamps}</div>
-      </div>
-      <div style={{ background: "var(--warning-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--warning)", marginBottom: 1 }}>خاص ⭐</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--warning)", lineHeight: 1 }}>{specialCamps}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
-      <div style={{ background: "var(--male-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--info)", marginBottom: 1 }}>خيام رجال</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--info)", lineHeight: 1 }}>{maleCamps}</div>
-      </div>
-      <div style={{ background: "var(--female-bg)", borderRadius: 10, padding: "7px 12px", minWidth: 58, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--female-fg)", marginBottom: 1 }}>خيام نساء</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "var(--female-fg)", lineHeight: 1 }}>{femaleCamps}</div>
-      </div>
-      <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="var(--em7)" label="نسبة التوزيع" />
-      </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      {cards.map(({ label, num, sub, border, clr, bg }) => (
+        <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1813,39 +1778,55 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
     const total = passengers.length;
     const assignedCount = passengers.filter(p => p.room_id != null).length;
     const unassigned = total - assignedCount;
-    const pct = total ? Math.round(assignedCount / total * 100) : 0;
-    return { total, assignedCount, unassigned, pct };
+    const viewRequested = passengers.filter(p => p.services?.hotel_view === "مطلة").length;
+    return { total, assignedCount, unassigned, viewRequested };
   }, [rooms, passengers]);
-  const { total, assignedCount, unassigned, pct } = stats;
+  const { total, assignedCount, unassigned, viewRequested } = stats;
+
+  // أنواع الغرف
+  const roomTypes = ROOM_TYPES.map(t => ({
+    type: t,
+    count: rooms.filter(r => r.type === t).length,
+    requested: passengers.filter(p => p.services?.hotel_type === t).length,
+    colors: ROOM_COLORS[t],
+  })).filter(r => r.count > 0 || r.requested > 0);
+
+  const cards = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
+    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount/total*100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
+    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
+    { label: "طالبين مطل", num: viewRequested, sub: `${total ? Math.round(viewRequested/total*100) : 0}٪ من الإجمالي`, border: "#4A90D9", clr: "#4A90D9", bg: "rgba(74,144,217,0.05)" },
+  ];
+
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "0.5px solid #e5e5e5", marginBottom: 12, background: "var(--bg-2)" }}>
-      <div style={{ background: "var(--success-bg)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: "var(--primary-dark)", marginBottom: 1 }}>موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--em7)", lineHeight: 1 }}>{assignedCount}</div>
-      </div>
-      <div style={{ background: unassigned > 0 ? "var(--female-bg)" : "var(--bg-2)", borderRadius: 10, padding: "7px 14px", minWidth: 68, textAlign: "center" }}>
-        <div style={{ fontSize: 9, color: unassigned > 0 ? "var(--female-fg)" : "var(--text-muted)", marginBottom: 1 }}>غير موزّع</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: unassigned > 0 ? "var(--danger)" : "var(--text-muted)", lineHeight: 1 }}>{unassigned}</div>
-      </div>
-      <div style={{ width: 1, height: 44, background: "var(--border)", marginInline: 2 }} />
-      {ROOM_TYPES.map(t => {
-        const [bg, clr] = ROOM_COLORS[t];
-        const count = rooms.filter(r => r.type === t).length;
-        const req = passengers.filter(p => p.services?.hotel_type === t).length;
-        return (
-          <div key={t} style={{ background: bg, borderRadius: 10, padding: "5px 10px", minWidth: 56, textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: clr, fontWeight: 600, marginBottom: 1 }}>{t}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: clr, lineHeight: 1 }}>{count}</div>
-            <div style={{ fontSize: 9, color: clr, opacity: 0.75 }}>طلب: {req}</div>
+    <div style={{ borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      {/* الصف الأول — الإحصائيات */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px 8px" }}>
+        {cards.map(({ label, num, sub, border, clr, bg }) => (
+          <div key={label} style={{ background: bg, border: "1px solid var(--line)", borderRight: `3px solid ${border}`, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+            <div style={{ fontSize: 10, marginTop: 4, color: "var(--muted)" }}>{sub}</div>
           </div>
-        );
-      })}
-      <div style={{ marginInlineStart: "auto" }}>
-        <StatRing pct={pct} count={assignedCount} total={total} color="var(--info)" label="نسبة التوزيع" />
+        ))}
       </div>
+      {/* الصف الثاني — أنواع الغرف */}
+      {roomTypes.length > 0 && (
+        <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", alignItems: "center" }}>
+          <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600, marginLeft: 4 }}>الغرف:</span>
+          {roomTypes.map(({ type, count, requested, colors }) => (
+            <div key={type} style={{ display: "flex", alignItems: "center", gap: 5, background: colors[0], border: `1px solid ${colors[1]}22`, borderRadius: 7, padding: "4px 10px" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: colors[1] }}>{type}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: colors[1], fontFamily: "var(--font-heading)" }}>{count}</span>
+              <span style={{ fontSize: 10, color: colors[1], opacity: 0.7 }}>/ طلب {requested}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -1935,7 +1916,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <BusesStats buses={buses} passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ باص جديد</button>
+        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> باص جديد</button>
         {buses.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
       {!buses.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg><br />لا يوجد باصات بعد</div> :
@@ -1948,13 +1929,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg></span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "⭐ VIP" : "عادي"}</span></div>
+                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "VIP" : "عادي"}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                 </div>
-                <button onClick={e => { e.stopPropagation(); printBus(bus); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
-                <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} style={{ background: bp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
+                <button onClick={e => { e.stopPropagation(); printBus(bus); }} title="طباعة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
+                <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} title="إضافة مسافر" style={{ height: 30, padding: "0 12px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(125,31,60,0.08)", border: "1px solid rgba(125,31,60,0.2)", cursor: "pointer", color: "var(--em7)", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.15)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(125,31,60,0.08)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} title="حذف الباص" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: bp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${bp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
               </div>
               {isExpanded && (
                 <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}` }}>
@@ -1963,7 +1944,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
                       <Avatar name={p.name_ar} gender={p.gender} size={24} />
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
+                      {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>VIP</span>}
                       <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
                         <option value="">نقل لـ...</option>
                         {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -1985,7 +1966,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الباص</div>
           <div style={{ display: "flex", gap: 8 }}>
-            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--em7)" : "var(--border)"}`, background: busType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--em7)" : "var(--text-muted)" }}>{t === "VIP" ? "⭐ VIP" : "عادي"}</div>)}
+            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--em7)" : "var(--border)"}`, background: busType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--em7)" : "var(--text-muted)" }}>{t === "VIP" ? "VIP" : "عادي"}</div>)}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -2006,7 +1987,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : p.services?.bus === "VIP" ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : p.services?.bus === "VIP" ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
               <Avatar name={p.name_ar} gender={p.gender} size={28} />
               <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في هذا الباص</> : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
-              {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ VIP</span>}
+              {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>VIP</span>}
               {isSel && <span style={{ color: "var(--em7)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
             </div>
           );
@@ -2136,9 +2117,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{cp.length} مسافر</div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
-                <button onClick={e => { e.stopPropagation(); openAddP(camp.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteCamp(camp.id); }} style={{ background: cp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: cp.length === 0 ? "pointer" : "not-allowed", color: cp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
+                <button onClick={e => { e.stopPropagation(); openAddP(camp.id); }} title="إضافة مسافر" style={{ height: 30, padding: "0 12px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(125,31,60,0.08)", border: "1px solid rgba(125,31,60,0.2)", cursor: "pointer", color: "var(--em7)", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.15)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(125,31,60,0.08)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
+                <button onClick={e => { e.stopPropagation(); deleteCamp(camp.id); }} title="حذف الخيمة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: cp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${cp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, cursor: cp.length === 0 ? "pointer" : "not-allowed", color: cp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
               </div>
               {isExpanded && (
                 <div style={{ padding: "8px 12px", borderTop: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}` }}>
@@ -2162,9 +2143,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} />
+      <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} campServiceKey={pageType === "منى" ? "camp_mina" : "camp_arafa"} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => setShowAdd(true)} style={{ ...btnP(), flex: 1 }}>+ مخيم جديد</button>
+        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> مخيم جديد</button>
         {camps.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
       {!camps.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ fontSize: 32, marginBottom: 8 }}>{icon}</div>لا يوجد مخيمات بعد</div> : (<>{renderGroup(maleCamps, "ذكر")}{renderGroup(femaleCamps, "أنثى")}</>)}
@@ -2357,7 +2338,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <HotelStats rooms={rooms} passengers={passengers} />
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-        <button onClick={() => setShowAdd(true)} style={btnP({ flex: 1 })}>+ غرفة</button>
+        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> غرفة جديدة</button>
         <button onClick={() => setShowRange(true)} style={btnS({ flex: 1 })}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> نطاق</button>
         <button onClick={() => fileRef.current?.click()} style={btnS({ flex: 1 })}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> Excel</button>
         {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS({ flex: 1 })}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>}
@@ -2379,7 +2360,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 </div>
                 <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
                 <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: rp.length === 0 ? "var(--female-bg)" : "var(--bg-2)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 11, cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--danger)" : "var(--border)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                <span style={{ color: "var(--text-muted)" }}>{isExpanded ? "▲" : "▼"}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
               </div>
               {isExpanded && (
                 <div style={{ padding: "8px 12px", borderTop: "0.5px solid #e5e5e5" }}>
@@ -3364,7 +3345,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                     return (
                       <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
                         <div style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>⭐ VIP</span>}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>VIP</span>}</div>
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                         </div>
                         {bp.length > 0 && (
