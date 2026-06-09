@@ -389,7 +389,12 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ ...btnP(), width: "100%", marginBottom: 14 }}>+ مستخدم جديد</button>}
       {users.map(u => (
         <div key={u.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "var(--success-bg)" : "var(--info-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{u.username === "admin" ? "admin" : "<svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.8'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>"}</div>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "rgba(200,162,75,0.15)" : "var(--mb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {u.username === "admin"
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mf)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            }
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
@@ -3137,7 +3142,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                 style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "var(--bg-card)" }}
                 onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
                 onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: r.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{r.icon}</div>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: r.color, display: "flex", alignItems: "center", justifyContent: "center" }} dangerouslySetInnerHTML={{ __html: r.icon }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{r.desc}</div>
@@ -3201,7 +3206,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                       style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
                       onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
                       onMouseLeave={e => e.currentTarget.style.background = "white"}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--male-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{sub.icon}</div>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--male-bg)", display: "flex", alignItems: "center", justifyContent: "center" }} dangerouslySetInnerHTML={{ __html: sub.icon }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{sub.name}</div>
                         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{sub.desc}</div>
