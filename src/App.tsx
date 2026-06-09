@@ -451,7 +451,7 @@ function Dashboard({ passengers, setPage, currentUser, onLogout }: { passengers:
       { label: "مخيمات منى", count: minaCount, pct: Math.round(minaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
       { label: "مخيمات عرفة", count: arafaCount, pct: Math.round(arafaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
       { label: "الفندق", count: hotelCount, pct: Math.round(hotelCount / total * 100), icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
-      { label: "الطيران", count: flightCount, pct: Math.round(flightCount / total * 100), icon: `<path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/>` },
+      { label: "الطيران", count: flightCount, pct: Math.round(flightCount / total * 100), icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
     ];
   }, [passengers, total]);
 
@@ -875,64 +875,21 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
   const { total, males, females, docsDone, dataDone, docPct, dataPct } = stats;
 
+  const cards = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
+    { label: "رجال", num: males, sub: `${total ? Math.round(males/total*100) : 0}٪ من الإجمالي`, border: "#4A90D9", clr: "#4A90D9", bg: "var(--mb)" },
+    { label: "نساء", num: females, sub: `${total ? Math.round(females/total*100) : 0}٪ من الإجمالي`, border: "#db2777", clr: "#db2777", bg: "var(--fb)" },
+    { label: "اكتمال المستندات", num: `${docPct}٪`, sub: `${docsDone} من ${total}`, border: "var(--em7)", clr: "var(--em7)", bg: "var(--paper)" },
+  ];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
-      {/* كارت الإجمالي */}
-      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", position: "relative", overflow: "hidden", cursor: "default", transition: "var(--transition)" }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(200,162,75,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      {cards.map(({ label, num, sub, border, clr, bg }) => (
+        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
         </div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--g7)", marginBottom: 3, opacity: 0.8 }}>إجمالي الحجاج</div>
-        <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--em8)" }}>{total}</div>
-        <div style={{ fontSize: 11, marginTop: 4, color: "var(--g6)", opacity: 0.7 }}>الموسم الحالي</div>
-      </div>
-      {/* كارت الرجال */}
-      <div style={{ background: "var(--mb)", border: "1px solid rgba(19,69,107,.1)", borderRadius: 10, padding: "8px 10px", transition: "var(--transition)" }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(19,69,107,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mf)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--mf)", marginBottom: 3, opacity: 0.8 }}>رجال</div>
-        <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--mf)" }}>{males}</div>
-        <div style={{ fontSize: 11, marginTop: 4, color: "var(--mf)", opacity: 0.7 }}>{total ? Math.round(males/total*100) : 0}٪ من الإجمالي</div>
-      </div>
-      {/* كارت النساء */}
-      <div style={{ background: "var(--fb)", border: "1px solid rgba(122,46,69,.1)", borderRadius: 10, padding: "8px 10px", transition: "var(--transition)" }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(122,46,69,.12)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ff)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ff)", marginBottom: 3, opacity: 0.8 }}>نساء</div>
-        <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--ff)" }}>{females}</div>
-        <div style={{ fontSize: 11, marginTop: 4, color: "var(--ff)", opacity: 0.7 }}>{total ? Math.round(females/total*100) : 0}٪ من الإجمالي</div>
-      </div>
-      {/* كارت اكتمال البيانات */}
-      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 10px", transition: "var(--transition)" }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,.08)"; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(125,31,60,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          </div>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--g7)", marginBottom: 6, opacity: 0.8 }}>اكتمال المستندات</div>
-        <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden", marginBottom: 4 }}>
-          <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--em7), var(--em6))", width: `${docPct}%`, transition: "width 0.6s ease" }} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--muted)" }}>
-          <span>{docsDone} من {total}</span><span style={{ fontWeight: 700, color: "var(--em7)" }}>{docPct}٪</span>
-        </div>
-        <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden", margin: "8px 0 4px" }}>
-          <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--mf), rgba(19,69,107,.5))", width: `${dataPct}%`, transition: "width 0.6s ease" }} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--muted)" }}>
-          <span>{dataDone} مكتمل</span><span style={{ fontWeight: 700, color: "var(--mf)" }}>{dataPct}٪</span>
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
@@ -1157,10 +1114,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
               </div>
             </div>
-            <button onClick={() => setShowManual(true)} style={{ background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", border: "none", padding: "8px 14px", borderRadius: 10, fontSize: 12, cursor: "pointer", fontWeight: 700, fontFamily: "var(--font-body)", display: "inline-flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(125,31,60,.22)", transition: "var(--transition)" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              إضافة
-            </button>
+
           </div>
           <div style={{ fontSize: 11, color: "var(--muted)" }}>{filtered.length} من {passengers.length} حاج</div>
         </div>
@@ -1583,7 +1537,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const renderGroup = (groupFlights: Flight[], type: "ذهاب" | "إياب") => (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)", color: type === "ذهاب" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
-        {type === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> رحلات الإياب</>} ({groupFlights.length})
+        {type === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> رحلات الذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> رحلات الإياب</>} ({groupFlights.length})
       </span>
       {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
         groupFlights.map(flight => {
@@ -1592,7 +1546,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           return (
             <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg></span>
+                <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
@@ -1629,7 +1583,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> رحلة جديدة</button>
         {flights.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
-      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg><br />لا يوجد رحلات بعد</div> : (
+      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg><br />لا يوجد رحلات بعد</div> : (
         <>{renderGroup(goFlights, "ذهاب")}{renderGroup(retFlights, "إياب")}</>
       )}
 
@@ -1639,7 +1593,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذهاب", "إياب"] as const).map(t => (
               <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
-                {t === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> ذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> إياب</>}
+                {t === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> ذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> إياب</>}
               </div>
             ))}
           </div>
@@ -3135,7 +3089,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
   // ============================================================
   const reports = [
     { id: "passengers_report", name: "تقرير الحجاج", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, desc: "كشف بيانات الحجاج", color: "var(--success-bg)" },
-    { id: "flight", name: "تقرير الطيران", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg>`, desc: "خطوط الطيران والرحلات", color: "var(--male-bg)" },
+    { id: "flight", name: "تقرير الطيران", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`, desc: "خطوط الطيران والرحلات", color: "var(--male-bg)" },
     { id: "buses", name: "تقرير الباصات", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>`, desc: "توزيع المسافرين على الباصات", color: "var(--info-bg)" },
     { id: "mina", name: "تقرير منى", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات منى", color: "var(--success-bg)" },
     { id: "arafa", name: "تقرير عرفة", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات عرفة", color: "var(--warning-bg)" },
@@ -3214,7 +3168,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
                     { id: "airline", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`, name: "تقرير خطوط الطيران", desc: "كشف الحجاج لإرساله لشركة الطيران" },
-                    { id: "per_flight", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg>`, name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
+                    { id: "per_flight", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`, name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
                   ].map(sub => (
                     <div key={sub.id} onClick={() => setFlightSubReport(sub.id as any)}
                       style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
@@ -3271,7 +3225,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                   {/* كل رحلة */}
                   {flightSubReport === "per_flight" && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> تقرير كل رحلة</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
                       {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                         flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
                         flights.map(flight => {
@@ -3284,7 +3238,7 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
                                   <span style={{display:"flex",alignItems:"center",gap:4}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> {flight.airline}</span>
                                   <span style={{display:"flex",alignItems:"center",gap:4}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {flight.date}</span>
                                   <span>⏰ {flight.time}</span>
-                                  <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4.5 1.5-4.5 1.5L6 8 0 9.7l3.3 3.3-1.2 5.6L6 17l1.4 3.8L12 18l2 2z"/></svg> {flight.from_airport} → {flight.to_airport}</span>
+                                  <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> {flight.from_airport} → {flight.to_airport}</span>
                                   <span style={{ color: "var(--info)", fontWeight: 500 }}>{fp.length} حاج</span>
                                 </div>
                               </div>
