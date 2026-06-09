@@ -185,7 +185,7 @@ const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid 
 const btnP = (extra?: any) => ({ background: "var(--primary)", color: "var(--text-inverse)", border: "none", padding: "7px 14px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", fontWeight: 500, fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
 const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid var(--border)", padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", color: "var(--text-secondary)", fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
 
-function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; }) {
+function Sidebar({ page, setPage, count, currentUser }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; }) {
   const config = useConfig();
   const [showThemes, setShowThemes] = useState(false);
 
@@ -3644,7 +3644,7 @@ export default function App() {
   };
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
-      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} />
+      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* محتوى الصفحة */}
         {isFull ? (
