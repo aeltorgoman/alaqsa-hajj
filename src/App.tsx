@@ -258,10 +258,9 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
       </div>
 
       {/* الفوتر */}
-      <div style={{ position: "relative", zIndex: 2, padding: "14px 16px", borderTop: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-inverse)" }}>{currentUser.name}</div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>@{currentUser.username}</div>
-        <button onClick={onLogout} style={{ marginTop: 10, width: "100%", background: "rgba(228,108,108,0.14)", color: "var(--danger-bg)", border: "none", padding: 7, borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", transition: "var(--transition)" }}>تسجيل خروج</button>
+      <div style={{ position: "relative", zIndex: 2, padding: "10px 16px", borderTop: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-inverse)" }}>{currentUser.name}</div>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>@{currentUser.username}</div>
       </div>
     </div>
   );
@@ -2106,9 +2105,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
           return (
             <div key={camp.id} style={{ border: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleCamp(camp.id)} style={{ padding: "9px 12px", background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 18 }}>{icon}</span>
+                <span style={{ display:"flex", alignItems:"center" }} dangerouslySetInnerHTML={{ __html: icon }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", color: isSpecial ? "var(--warning)" : "var(--text-muted)" }}>{isSpecial ? "⭐ خاص" : "عادي"}</span></div>
+                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>مخيم {camp.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", color: isSpecial ? "var(--warning)" : "var(--text-muted)" }}>{isSpecial ? "خاص" : "عادي"}</span></div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{cp.length} مسافر</div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); printCamp(camp); }} style={{ background: "var(--bg-2)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
