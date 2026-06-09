@@ -858,22 +858,18 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
 // ===== ملخص إحصائي في أعلى صفحة الحجاج =====
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
-  const DATA_FIELDS = ["name_ar", "name_en", "passport", "national_id", "nat", "dob", "expiry", "gender", "phone"];
 
   const stats = useMemo(() => {
     const total = passengers.length;
     const males = passengers.filter(p => p.gender === "ذكر").length;
     const females = passengers.filter(p => p.gender === "أنثى").length;
     const docsComplete = (p: Passenger) => !!(p.photo_url && p.passport_url && p.national_id_url);
-    const dataComplete = (p: Passenger) => DATA_FIELDS.every(f => (p as any)[f] && String((p as any)[f]).trim());
     const docsDone = passengers.filter(docsComplete).length;
-    const dataDone = passengers.filter(dataComplete).length;
     const docPct = total ? Math.round(docsDone / total * 100) : 0;
-    const dataPct = total ? Math.round(dataDone / total * 100) : 0;
-    return { total, males, females, docsDone, dataDone, docPct, dataPct };
+    return { total, males, females, docsDone, docPct };
   }, [passengers]);
 
-  const { total, males, females, docsDone, dataDone, docPct, dataPct } = stats;
+  const { total, males, females, docsDone, docPct } = stats;
 
   const cards = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
