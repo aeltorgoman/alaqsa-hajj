@@ -231,9 +231,9 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
           if (allowed.length === 0) return null;
           return (
             <div key={section}>
-              <div style={{ fontSize: 11, color: "var(--text-sidebar-muted)", padding: "14px 10px 6px", letterSpacing: "0.08em" }}>{section}</div>
+              <div style={{ fontSize: 11, color: "var(--text-sidebar-muted)", padding: "8px 10px 4px", letterSpacing: "0.08em" }}>{section}</div>
               {allowed.map(({ id, label }) => (
-                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, fontWeight: 500, color: page === id ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 2, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
+                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 500, color: page === id ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 1, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
                   {page === id && <div style={{ position: "absolute", insetInlineStart: 0, top: "18%", bottom: "18%", width: 3, borderRadius: 99, background: "var(--accent)" }} />}
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={page === id ? "var(--accent-light)" : "var(--text-sidebar)"} strokeWidth="1.7" style={{ flexShrink: 0, opacity: page === id ? 1 : 0.85 }} dangerouslySetInnerHTML={{ __html: NAV_ICONS[id] || NAV_ICONS.dash }} />
                   {label}
@@ -960,6 +960,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
   [passengers, search, filters]);
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
+  const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
   const [showManual, setShowManual] = useState(initialShowManual || false);
   const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
   const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
@@ -1182,9 +1183,11 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                   style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background .14s", background: selected?.id === p.id ? "var(--ivory)" : "transparent" }}
                   onMouseEnter={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
                   onMouseLeave={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "transparent"; }}>
+                  {/* رقم تسلسلي */}
+                  <div style={{ width: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{idx + 1}</div>
                   {/* الأفاتار */}
                   <div style={{ borderRadius: "50%", flexShrink: 0, border: selected?.id === p.id ? "2px solid var(--g5)" : "2px solid transparent", lineHeight: 0 }}>
-                    <Avatar name={p.name_ar} gender={p.gender} size={38} />
+                    <Avatar name={p.name_ar} gender={p.gender} size={36} />
                   </div>
                   {/* الاسم والبيانات */}
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -1328,7 +1331,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                     <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...</span>
                   ) : url ? (
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => window.open(url, "_blank")} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>
+                      <button onClick={() => setDocViewer({ url, label })} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>
                       <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬇️</button>
                       <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                     </div>
@@ -1450,6 +1453,44 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
       </Modal>
 
       {/* مودال الإضافة اليدوية */}
+      {/* مودال عارض المستند */}
+      {docViewer && (
+        <div onClick={() => setDocViewer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 14, padding: 16, maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>{docViewer.label}</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => downloadFile(docViewer.url)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 7, background: "var(--ivory2)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--ink)" }}>تحميل</button>
+                <button onClick={() => setDocViewer(null)} style={{ fontSize: 16, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1 }}>✕</button>
+              </div>
+            </div>
+            {docViewer.url.endsWith(".pdf") || docViewer.url.includes("pdf") ? (
+              <iframe src={docViewer.url} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
+            ) : (
+              <img src={docViewer.url} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
+            )}
+          </div>
+        </div>
+      )}
+      {/* مودال عارض المستند */}
+      {docViewer && (
+        <div onClick={() => setDocViewer(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 14, padding: 16, maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)", fontSize: 14 }}>{docViewer.label}</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => downloadFile(docViewer.url)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 7, background: "var(--ivory2)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--ink)" }}>تحميل</button>
+                <button onClick={() => setDocViewer(null)} style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1 }}>✕</button>
+              </div>
+            </div>
+            {docViewer.url.toLowerCase().includes("pdf") ? (
+              <iframe src={docViewer.url} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
+            ) : (
+              <img src={docViewer.url} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
+            )}
+          </div>
+        </div>
+      )}
       <Modal show={showManual} onClose={() => setShowManual(false)} title="إضافة حاج يدوياً" maxWidth={460}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
@@ -1518,6 +1559,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 // ===== صفحة الطيران =====
 function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
   const [flightName, setFlightName] = useState("");
@@ -1847,6 +1889,7 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
 
 function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [buses, setBuses] = useState<Bus[]>([]);
+  const [editingBusId, setEditingBusId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
@@ -1946,7 +1989,14 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg></span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "VIP" : "عادي"}</span></div>
+                  {editingBusId === bus.id ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+                      <input defaultValue={bus.name} id={`bus-name-${bus.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 120 }} onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-name-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} autoFocus />
+                      <button onClick={() => { const v = (document.getElementById(`bus-name-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }} onDoubleClick={e => { e.stopPropagation(); setEditingBusId(bus.id); }}>{bus.name} <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "VIP" : "عادي"}</span></div>
+                  )}
                   <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); printBus(bus); }} title="طباعة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
@@ -2021,6 +2071,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
 function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [camps, setCamps] = useState<Camp[]>([]);
+  const [editingCampId, setEditingCampId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
@@ -2221,6 +2272,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
 function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
   const [showRange, setShowRange] = useState(false);
@@ -3614,12 +3666,13 @@ export default function App() {
     bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
     camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
     family_id: p.family_id || null,
-    flight_id: p.flight_id || null, flight_class: p.flight_class || null
+    flight_id: p.flight_id || null, flight_class: p.flight_class || null,
+    sort_order: p.sort_order || 0
   });
 
   useEffect(() => {
     const loadPassengers = async () => {
-      const { data, error } = await supabase.from("passengers").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("passengers").select("*").order("sort_order", { ascending: true }).order("id", { ascending: true });
       if (!error && data) setPassengers(data.map(mapPassenger) as any);
     };
     loadPassengers();
