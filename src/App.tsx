@@ -363,11 +363,12 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const saveUser = async () => {
     if (!form.name || !form.username || !form.password) return;
     if (editUser) {
-      await supabase.from("users").update({ ...form, permissions: perms }).eq("id", editUser.id);
+      await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
       setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...form, permissions: perms } : u));
     } else {
-      const { data } = await supabase.from("users").insert([{ ...form, permissions: perms }]).select();
-      if (data?.[0]) setUsers(prev => [...prev, data[0] as User]);
+      await supabase.rpc("create_user", { p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
+      const { data } = await supabase.from("users").select("*").order("id");
+      if (data) setUsers(data as User[]);
     }
     setShowAdd(false);
   };
@@ -890,7 +891,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
-  const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  
 
   const COLS = [
     { key: "name_ar", label: "الاسم بالعربي" },
@@ -915,17 +916,41 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
     return (p as any)[key] || "";
   };
 
-  const filtered = useMemo(() => passengers.filter(p => {
-    const fullName = `${p.name_ar} ${p.name_en}`;
-    const searchMatch = !search || fullName.toLowerCase().includes(search.toLowerCase()) ||
-      [p.passport, p.national_id, p.nat, p.phone, p.gender, p.services?.bus].join(" ").toLowerCase().includes(search.toLowerCase());
-    if (!searchMatch) return false;
-    return COLS.every(col => {
-      const filter = colFilters[col.key];
-      if (!filter) return true;
-      return getVal(p, col.key, col.get).toLowerCase().includes(filter.toLowerCase());
-    });
-  }), [passengers, search, colFilters]);
+  // فلتر متعدد
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const setFilter = (key: string, val: string) => setFilters(prev => val ? { ...prev, [key]: val } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
+
+  const QUICK_FILTERS = [
+    { key: "gender", label: "الجنس", opts: ["ذكر", "أنثى"] },
+    { key: "bus", label: "الباص", opts: ["عادي", "VIP", "بدون"] },
+    { key: "flight", label: "الطيران", opts: ["عادي", "درجة أولى", "بدون"] },
+    { key: "hotel_type", label: "نوع الغرفة", opts: ["ثنائية", "ثلاثية", "رباعية", "سويت"] },
+    { key: "hotel_view", label: "الإطلالة", opts: ["مطلة", "غير مطلة"] },
+    { key: "camp_mina", label: "منى", opts: ["عادي", "خاص", "بدون"] },
+    { key: "camp_arafa", label: "عرفة", opts: ["عادي", "خاص", "بدون"] },
+    { key: "nat", label: "الجنسية", opts: [...new Set(passengers.map(p => p.nat).filter(Boolean))] },
+  ];
+
+  const filtered = useMemo(() => passengers
+    .filter(p => {
+      const fullName = `${p.name_ar} ${p.name_en}`;
+      if (search && !fullName.toLowerCase().includes(search.toLowerCase()) &&
+        ![p.passport, p.national_id, p.nat, p.phone, p.gender].join(" ").toLowerCase().includes(search.toLowerCase())) return false;
+      for (const [key, val] of Object.entries(filters)) {
+        if (!val) continue;
+        const pval = key === "bus" ? p.services?.bus :
+                     key === "flight" ? p.services?.flight :
+                     key === "hotel_type" ? p.services?.hotel_type :
+                     key === "hotel_view" ? p.services?.hotel_view :
+                     key === "camp_mina" ? p.services?.camp_mina :
+                     key === "camp_arafa" ? p.services?.camp_arafa :
+                     (p as any)[key];
+        if (pval !== val) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => ((a as any).sort_order || 0) - ((b as any).sort_order || 0)),
+  [passengers, search, filters]);
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(initialShowManual || false);
@@ -1107,7 +1132,20 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
               </div>
             </div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted)" }}>{filtered.length} من {passengers.length} حاج</div>
+          {/* فلاتر سريعة */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+            {QUICK_FILTERS.map(({ key, label, opts }) => (
+              <select key={key} value={filters[key] || ""} onChange={e => setFilter(key, e.target.value)}
+                style={{ fontSize: 11, padding: "4px 8px", borderRadius: 99, border: `1.5px solid ${filters[key] ? "var(--em7)" : "var(--line)"}`, background: filters[key] ? "rgba(125,31,60,0.06)" : "var(--paper)", color: filters[key] ? "var(--em7)" : "var(--muted)", fontFamily: "var(--font-body)", cursor: "pointer", outline: "none" }}>
+                <option value="">{label}</option>
+                {opts.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ))}
+            {Object.keys(filters).length > 0 && (
+              <button onClick={() => setFilters({})} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--danger)", background: "var(--fb)", color: "var(--ff)", cursor: "pointer", fontFamily: "var(--font-body)" }}>مسح الفلاتر ✕</button>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {passengers.length} حاج</div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {viewMode === "list" ? (
@@ -1144,7 +1182,20 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                     {p.family_id && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "rgba(125,31,60,.08)", color: "var(--em7)" }}>أسرة</span>}
                   </div>
                   {/* الأزرار */}
-                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                    {/* ترتيب ↑↓ */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <div onClick={e => { e.stopPropagation(); moveP_order(p, "up"); }} style={{ width: 22, height: 14, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+                      </div>
+                      <div onClick={e => { e.stopPropagation(); moveP_order(p, "down"); }} style={{ width: 22, height: 14, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </div>
+                    </div>
                     <div onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
@@ -1242,6 +1293,8 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
               ["جواز السفر", (selected as any).passport_url, "passport_url", "passport_doc", "image/*"],
               ["البطاقة", (selected as any).national_id_url, "national_id_url", "idcard", "image/*"],
               ["العقد", (selected as any).contract_url, "contract_url", "contract", "image/*,application/pdf"],
+              ["تذكرة الطيران", (selected as any).flight_ticket_url, "flight_ticket_url", "flight_ticket", "image/*,application/pdf"],
+              ["تصريح الحاج", (selected as any).hajj_permit_url, "hajj_permit_url", "hajj_permit", "image/*,application/pdf"],
             ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
               <div key={label} style={{ padding: "7px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
