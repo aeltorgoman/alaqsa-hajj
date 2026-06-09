@@ -432,7 +432,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   );
 }
 
-function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
+function Dashboard({ passengers, setPage, currentUser, onLogout }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User; onLogout: () => void }) {
   const config = useConfig();
   const { males, females } = useMemo(() => ({
     males: passengers.filter(p => p.gender === "ذكر").length,
@@ -938,7 +938,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-function PassengersPage({ passengers, setPassengers, initialShowManual }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; initialShowManual?: boolean }) {
+function PassengersPage({ passengers, setPassengers, initialShowManual, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; initialShowManual?: boolean; setPage?: (p: string) => void }) {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -1133,7 +1133,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
           {/* أزرار الإضافة */}
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <div onClick={() => setPage("scan")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, cursor: "pointer", background: "linear-gradient(135deg,var(--em7),var(--em6))", color: "#fff", transition: "var(--transition)" }}>
+            <div onClick={() => setPage?.("scan")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, cursor: "pointer", background: "linear-gradient(135deg,var(--em7),var(--em6))", color: "#fff", transition: "var(--transition)" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
               <span style={{ fontSize: 12, fontWeight: 700 }}>مسح جواز</span>
             </div>
@@ -3557,7 +3557,6 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
 
 
 export default function App() {
-  const config = useConfig();
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try { const s = sessionStorage.getItem("hajj_user"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -3630,9 +3629,9 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
+      case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />;
       case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} />;
-      case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
+      case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} setPage={setPage} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
       case "mina": return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
@@ -3641,7 +3640,7 @@ export default function App() {
       case "reports": return <ReportsPage passengers={passengers} />;
       case "archive": return <ArchivePage currentUser={currentUser} />;
       case "users": return <UsersPage currentUser={currentUser} />;
-      default: return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser} />;
+      default: return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser} onLogout={handleLogout} />;
     }
   };
   return (
