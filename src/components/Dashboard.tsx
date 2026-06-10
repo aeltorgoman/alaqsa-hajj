@@ -3,7 +3,7 @@ import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 
-function Dashboard({ passengers, setPage, currentUser, onLogout }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User; onLogout: () => void }) {
+function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
   const config = useConfig();
   const { males, females } = useMemo(() => ({
     males: passengers.filter(p => p.gender === "ذكر").length,
