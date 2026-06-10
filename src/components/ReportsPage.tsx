@@ -5,7 +5,8 @@ import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { makeHTML, printInPage, downloadPDF, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 
-function ReportsPage({ passengers }: { passengers: Passenger[] }) {
+function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] }) {
+  const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   const config = useConfig();
   const logoUrl = config.logo_url || "";
 
