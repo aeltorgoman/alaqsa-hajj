@@ -491,15 +491,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                   {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right" }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
                 </tr>
-                <tr style={{ background: "var(--bg-2)" }}>
-                  <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
-                  {COLS.map(col => (
-                    <td key={col.key} style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}>
-                      <input value={filters[col.key] || ""} onChange={e => setFilter(col.key, e.target.value)} style={{ ...inp, padding: "2px 6px", fontSize: 10, minWidth: 60 }} placeholder="فلتر..." />
-                    </td>
-                  ))}
-                  <td style={{ padding: "4px 6px", border: "0.5px solid #ddd" }}></td>
-                </tr>
+
               </thead>
               <tbody>
                 {filtered.map((p, i) => (
