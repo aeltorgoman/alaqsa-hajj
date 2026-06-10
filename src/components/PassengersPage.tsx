@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
@@ -256,6 +256,72 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
       x.id === other.id ? { ...x, sort_order: myOrder } : x
     ) as Passenger[]);
   };
+
+  // ===== Drag & Drop =====
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const dragFromId = useRef<number | null>(null);
+  const dragToId = useRef<number | null>(null);
+
+  const handleDragStart = (pId: number) => { dragFromId.current = pId; setDraggingId(pId); };
+  const handleDragOver = (e: React.DragEvent, pId: number) => { e.preventDefault(); dragToId.current = pId; setDragOverId(pId); };
+  const handleDragEnd = () => { setDraggingId(null); setDragOverId(null); dragFromId.current = null; dragToId.current = null; };
+
+  const handleDrop = async () => {
+    const fromId = dragFromId.current;
+    const toId = dragToId.current;
+    setDraggingId(null); setDragOverId(null);
+    dragFromId.current = null; dragToId.current = null;
+    if (!fromId || !toId || fromId === toId) return;
+    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const fromIdx = sorted.findIndex(p => p.id === fromId);
+    const toIdx = sorted.findIndex(p => p.id === toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const newOrder = [...sorted];
+    const [moved] = newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, moved);
+    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
+    setPassengers(passengers.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
+    await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
+  };
+
+  // ===== رتب حسب العائلة =====
+  const sortByFamily = async () => {
+    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const result: Passenger[] = [];
+    const visited = new Set<number>();
+    for (const p of sorted) {
+      if (visited.has(p.id)) continue;
+      visited.add(p.id);
+      result.push(p);
+      if (p.family_id) {
+        const family = sorted.filter(x => x.family_id === p.family_id && x.id !== p.id && !visited.has(x.id));
+        family.forEach(f => { visited.add(f.id); result.push(f); });
+      }
+    }
+    const updates = result.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
+    setPassengers(passengers.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
+    await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
+  };
+
+  // ===== تغيير الرقم يدوياً =====
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const [editingOrderVal, setEditingOrderVal] = useState("");
+
+  const applyOrderChange = async (p: Passenger, newNum: number) => {
+    setEditingOrderId(null);
+    if (!newNum || newNum < 1) return;
+    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const currentIdx = sorted.findIndex(x => x.id === p.id);
+    const targetIdx = Math.min(newNum - 1, sorted.length - 1);
+    if (currentIdx === targetIdx) return;
+    const newOrder = [...sorted];
+    const [moved] = newOrder.splice(currentIdx, 1);
+    newOrder.splice(targetIdx, 0, moved);
+    const updates = newOrder.map((x, i) => ({ id: x.id, sort_order: (i + 1) * 10 }));
+    setPassengers(passengers.map(x => { const u = updates.find(y => y.id === x.id); return u ? { ...x, sort_order: u.sort_order } : x; }));
+    await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
+  };
   const saveEdit = async (p: Passenger) => {
     const { error } = await supabase.from("passengers").update({
       name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
@@ -293,6 +359,13 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
               يدوي
             </div>
+            {/* رتب حسب العائلة */}
+            <div onClick={sortByFamily} title="رتب حسب العائلة" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--em7)"; e.currentTarget.style.color = "var(--em7)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--muted)"; }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              أسر
+            </div>
             {/* list/table toggle */}
             <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
               <div onClick={() => setViewMode("list")} style={{ padding: "8px 10px", cursor: "pointer", background: viewMode === "list" ? "var(--em7)" : "var(--paper)", color: viewMode === "list" ? "var(--g3)" : "var(--muted)", transition: "var(--transition)" }}>
@@ -324,12 +397,39 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
               {filtered.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا توجد نتائج</div>
               ) : filtered.map((p, idx) => (
-                <div key={p.id} onClick={() => setSelected(p)}
-                  style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", transition: "background .14s", background: selected?.id === p.id ? "var(--ivory)" : "transparent" }}
-                  onMouseEnter={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
-                  onMouseLeave={e => { if (selected?.id !== p.id) e.currentTarget.style.background = "transparent"; }}>
-                  {/* رقم تسلسلي */}
-                  <div style={{ width: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0 }}>{idx + 1}</div>
+                <div key={p.id}
+                  draggable
+                  onDragStart={() => handleDragStart(p.id)}
+                  onDragOver={e => handleDragOver(e, p.id)}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => setSelected(p)}
+                  style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "grab", transition: "background .14s", background: draggingId === p.id ? "rgba(125,31,60,0.06)" : dragOverId === p.id ? "rgba(125,31,60,0.03)" : selected?.id === p.id ? "var(--ivory)" : "transparent", border: dragOverId === p.id ? "1px solid var(--em7)" : "none", opacity: draggingId === p.id ? 0.5 : 1 }}
+                  onMouseEnter={e => { if (selected?.id !== p.id && draggingId !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
+                  onMouseLeave={e => { if (selected?.id !== p.id && draggingId !== p.id) e.currentTarget.style.background = "transparent"; }}>
+                  {/* أيقونة السحب */}
+                  <span style={{ color: "var(--muted)", flexShrink: 0, cursor: "grab" }}>
+                    <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>
+                  </span>
+                  {/* رقم تسلسلي قابل للتعديل */}
+                  {editingOrderId === p.id ? (
+                    <input
+                      autoFocus
+                      type="number"
+                      value={editingOrderVal}
+                      onChange={e => setEditingOrderVal(e.target.value)}
+                      onBlur={() => applyOrderChange(p, parseInt(editingOrderVal))}
+                      onKeyDown={e => { if (e.key === "Enter") applyOrderChange(p, parseInt(editingOrderVal)); if (e.key === "Escape") setEditingOrderId(null); e.stopPropagation(); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ width: 36, fontSize: 11, textAlign: "center", border: "1.5px solid var(--em7)", borderRadius: 6, padding: "2px 4px", outline: "none", flexShrink: 0 }}
+                    />
+                  ) : (
+                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String(idx + 1)); }} style={{ width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
+                      {idx + 1}
+                    </div>
+                  )}
                   {/* الأفاتار */}
                   <div style={{ borderRadius: "50%", flexShrink: 0, border: selected?.id === p.id ? "2px solid var(--g5)" : "2px solid transparent", lineHeight: 0 }}>
                     <Avatar name={p.name_ar} gender={p.gender} size={36} />
