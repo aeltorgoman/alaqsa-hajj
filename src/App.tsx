@@ -87,7 +87,7 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />;
+      case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
       case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} />;
       case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} setPage={setPage} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
@@ -98,7 +98,7 @@ export default function App() {
       case "reports": return <ReportsPage passengers={passengers} />;
       case "archive": return <ArchivePage currentUser={currentUser} />;
       case "users": return <UsersPage currentUser={currentUser} />;
-      default: return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser} onLogout={handleLogout} />;
+      default: return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser} />;
     }
   };
 
