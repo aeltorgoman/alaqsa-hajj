@@ -307,11 +307,15 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           const isInBus = p.bus_id === currentBusId;
           const isSel = selectedP.has(p.id);
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : p.services?.bus === "VIP" ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : p.services?.bus === "VIP" ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
-              <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}><div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div><div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInBus ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> في هذا الباص</> : isAssigned ? "موزّع" : "غير موزّع"}</div></div>
+            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", opacity: isAssigned ? 0.4 : 1 }}>
+              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : isInBus ? "var(--info)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                {isInBus && !isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              </div>
+              <span style={{ fontSize: 12, flex: 1, color: isInBus ? "var(--info)" : "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
               {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>VIP</span>}
-              {isSel && <span style={{ color: "var(--em7)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+              {isAssigned && <span style={{ fontSize: 9, color: "var(--muted)" }}>موزّع</span>}
             </div>
           );
         })}
