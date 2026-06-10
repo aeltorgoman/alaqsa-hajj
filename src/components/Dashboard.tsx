@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
@@ -28,11 +28,13 @@ function Dashboard({ passengers, setPage, currentUser, onLogout }: { passengers:
 
   const recent = passengers.slice(0, 5);
 
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div style={{ display: "flex", gap: 14, height: "100%", overflow: "hidden", padding: "12px 14px", background: "var(--bg)" }}>
       <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-          <div onClick={() => setPage("scan")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
+          <div onClick={() => scanInputRef.current?.click()} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "linear-gradient(135deg, var(--em7), var(--em6))", color: "var(--text-inverse)", boxShadow: "0 8px 24px rgba(125,31,60,0.25)", transition: "var(--transition)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
             </div>
@@ -41,6 +43,13 @@ function Dashboard({ passengers, setPage, currentUser, onLogout }: { passengers:
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>إضافة بالمسح الذكي</div>
             </div>
           </div>
+          <input ref={scanInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            (window as any).__hajj_pending_scan_file__ = file;
+            setPage("scan");
+            e.target.value = "";
+          }} />
           <div onClick={() => setPage("manual")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
