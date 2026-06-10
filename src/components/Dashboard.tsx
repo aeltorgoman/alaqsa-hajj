@@ -139,10 +139,7 @@ function Dashboard({ passengers, setPage, currentUser, onLogout }: { passengers:
               <div style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>@{currentUser.username}</div>
             </div>
           </div>
-          <button onClick={onLogout} style={{ width: "100%", background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.9)", border: "1px solid rgba(255,255,255,0.2)", padding: "6px 0", borderRadius: 8, fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", transition: "var(--transition)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            تسجيل خروج
-          </button>
+
         </div>
       </div>
     </div>
