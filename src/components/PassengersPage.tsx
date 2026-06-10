@@ -135,6 +135,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
     setManualSaving(false);
   };
 
+  const [permitConfirm, setPermitConfirm] = useState<{ url: string; field: string; passenger: Passenger; idNum: string } | null>(null);
   const [showVerify, setShowVerify] = useState(false);
   const [verifyData, setVerifyData] = useState<{ passportUrl: string; idUrl: string; passenger: any; updates: any; isQatari: boolean; idMismatch: boolean; } | null>(null);
 
@@ -174,6 +175,32 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
         setShowVerify(true);
       } else {
         await saveDocUpdates(p, updates);
+      }
+    } else if (docType === "hajj_permit") {
+      // OCR تصريح السفر — يقرأ رقم البطاقة ويدور على الحاج
+      const [url, parsed] = await Promise.all([
+        uploadDoc(file, p.id, docType),
+        scanDocument(file, "hajj_permit")
+      ]);
+      setDocUploading(null);
+      if (url) {
+        // دور على الحاج بالبطاقة أو الجواز
+        const idNum = parsed.national_id || parsed.passport || "";
+        const matched = idNum
+          ? passengers.find(x => x.national_id === idNum || x.passport === idNum)
+          : null;
+
+        if (matched) {
+          // طلع رسالة تأكيد
+          setPermitConfirm({ url, field, passenger: matched, idNum });
+        } else {
+          // مش لاقي حاج → ارفع على الحاج الحالي بدون تأكيد
+          await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
+          const updated = { ...p, [field]: url };
+          setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
+          setSelected(updated);
+          if (idNum) alert(`⚠️ قرأ رقم "${idNum}" بس مش موجود في القائمة — تم الرفع على ${p.short_ar || p.name_ar}`);
+        }
       }
     } else {
       const url = await uploadDoc(file, p.id, docType);
@@ -642,6 +669,42 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
           <button onClick={confirmVerify} style={{ background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> نعم، نفس الشخص — حفظ</button>
           <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> لا، مش نفس الشخص</button>
         </div>
+      </Modal>
+
+      {/* مودال تأكيد تصريح السفر */}
+      <Modal show={!!permitConfirm} onClose={() => setPermitConfirm(null)} title="تأكيد تصريح السفر" maxWidth={380}>
+        {permitConfirm && (
+          <>
+            <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>قرأ الذكاء الاصطناعي من التصريح:</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--em7)", marginBottom: 4 }}>{permitConfirm.idNum}</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>ووجد الحاج:</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, background: "var(--paper)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
+                <Avatar name={permitConfirm.passenger.name_ar} gender={permitConfirm.passenger.gender} size={36} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{permitConfirm.passenger.short_ar || permitConfirm.passenger.name_ar}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{permitConfirm.passenger.nat} · {permitConfirm.passenger.national_id || permitConfirm.passenger.passport}</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>هل تأكد إن التصريح ده بتاع هذا الحاج؟</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={async () => {
+                const { passenger, url, field } = permitConfirm;
+                await supabase.from("passengers").update({ [field]: url }).eq("id", passenger.id);
+                const updated = { ...passenger, [field]: url };
+                setPassengers(passengers.map((x: Passenger) => x.id === passenger.id ? updated : x));
+                setSelected(updated);
+                setPermitConfirm(null);
+              }} style={{ flex: 1, background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> نعم، حفظ
+              </button>
+              <button onClick={() => setPermitConfirm(null)} style={{ flex: 1, background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> إلغاء
+              </button>
+            </div>
+          </>
+        )}
       </Modal>
 
       <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="ربط بأقارب">
