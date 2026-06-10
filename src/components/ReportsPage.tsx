@@ -776,26 +776,28 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
               {passengers.filter(p => (p as any).passport_url).length === 0 ? (
                 <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد حجاج رُفعت جوازاتهم بعد</div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                  {passengers.filter(p => (p as any).passport_url).map(p => (
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
+                  {passengers.filter(p => (p as any).passport_url).map((p, i) => (
                     <div key={p.id} onClick={() => setPassportSelectedIds(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
-                      style={{ border: `2px solid ${passportSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
-                      {passportSelectedIds.has(p.id) && (
-                        <div style={{ position: "absolute", top: 6, right: 6, width: 20, height: 20, borderRadius: "50%", background: "var(--em7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        </div>
-                      )}
-                      <img src={(p as any).passport_url} alt={p.short_ar} style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
-                      <div style={{ padding: "6px 8px", background: passportSelectedIds.has(p.id) ? "rgba(125,31,60,0.06)" : "var(--paper)" }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
-                        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.passport || "—"}</div>
+                      style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: "0.5px solid var(--line)", cursor: "pointer", background: passportSelectedIds.has(p.id) ? "rgba(125,31,60,0.05)" : "transparent", transition: "background 0.1s" }}>
+                      {/* Checkbox */}
+                      <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${passportSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, background: passportSelectedIds.has(p.id) ? "var(--em7)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.1s" }}>
+                        {passportSelectedIds.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                       </div>
+                      {/* رقم */}
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", width: 24, flexShrink: 0 }}>{i + 1}</span>
+                      {/* الاسم */}
+                      <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                      {/* الجواز */}
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{p.passport || "—"}</span>
+                      {/* الجنس */}
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)" }}>{p.gender === "أنثى" ? "أنثى" : "ذكر"}</span>
                     </div>
                   ))}
                 </div>
               )}
               {passengers.filter(p => !(p as any).passport_url).length > 0 && (
-                <div style={{ marginTop: 16, padding: "10px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
+                <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 6 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                   {passengers.filter(p => !(p as any).passport_url).length} حاج مش عندهم صورة جواز مرفوعة
                 </div>
