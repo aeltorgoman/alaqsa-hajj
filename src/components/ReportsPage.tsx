@@ -747,69 +747,62 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
               }
             </>
           )}
-          )}
 
           {/* ===== طباعة الجوازات ===== */}
-          {activeReport === "passports" && (() => {
-            const withPassport = passengers.filter(p => (p as any).passport_url);
-            const withoutPassport = passengers.filter(p => !(p as any).passport_url);
-            const toggleAll = () => setPassportSelectedIds(prev => prev.size === withPassport.length ? new Set() : new Set(withPassport.map(p => p.id)));
-            const toggle = (id: number) => setPassportSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-            const printSelected = () => {
-              const toprint = withPassport.filter(p => passportSelectedIds.has(p.id));
-              if (!toprint.length) { alert("اختار جوازات أولاً!"); return; }
-              const w = window.open("", "_blank"); if (!w) return;
-              const imgs = toprint.map(p => `
-                <div style="break-inside:avoid;margin-bottom:20px;border:1px solid #ddd;border-radius:8px;overflow:hidden">
-                  <div style="background:#7D1F3C;color:#e7cd8a;padding:6px 12px;font-size:12px;font-weight:700;direction:rtl">${p.short_ar || p.name_ar} — ${p.passport || "—"}</div>
-                  <img src="${(p as any).passport_url}" style="width:100%;max-height:280px;object-fit:contain;display:block" />
-                </div>`).join("");
-              w.document.write(`<html><head><title>جوازات السفر</title><style>body{font-family:Arial;padding:16px;margin:0}@media print{@page{margin:10mm}}</style></head><body><h2 style="text-align:center;color:#7D1F3C;margin-bottom:16px">جوازات السفر (${toprint.length})</h2><div style="columns:2;column-gap:16px">${imgs}</div><script>window.print();<\/script></body></html>`);
-              w.document.close();
-            };
-            return (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>طباعة الجوازات</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={toggleAll} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer" }}>
-                      {passportSelectedIds.size === withPassport.length ? "إلغاء الكل" : "تحديد الكل"}
-                    </button>
-                    <button onClick={printSelected} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 99, background: "var(--em7)", color: "var(--g3)", border: "none", cursor: "pointer", fontWeight: 600 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                      طباعة ({passportSelectedIds.size})
-                    </button>
-                  </div>
+          {activeReport === "passports" && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>طباعة الجوازات</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => {
+                    const withPassport = passengers.filter(p => (p as any).passport_url);
+                    setPassportSelectedIds(prev => prev.size === withPassport.length ? new Set() : new Set(withPassport.map(p => p.id)));
+                  }} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer" }}>
+                    {passportSelectedIds.size === passengers.filter(p => (p as any).passport_url).length ? "إلغاء الكل" : "تحديد الكل"}
+                  </button>
+                  <button onClick={() => {
+                    const toprint = passengers.filter(p => (p as any).passport_url && passportSelectedIds.has(p.id));
+                    if (!toprint.length) { alert("اختار جوازات أولاً!"); return; }
+                    const w = window.open("", "_blank"); if (!w) return;
+                    const imgs = toprint.map(p => `<div style="break-inside:avoid;margin-bottom:20px;border:1px solid #ddd;border-radius:8px;overflow:hidden"><div style="background:#7D1F3C;color:#e7cd8a;padding:6px 12px;font-size:12px;font-weight:700;direction:rtl">${p.short_ar || p.name_ar} — ${p.passport || "—"}</div><img src="${(p as any).passport_url}" style="width:100%;max-height:280px;object-fit:contain;display:block" /></div>`).join("");
+                    w.document.write(`<html><head><title>جوازات السفر</title><style>body{font-family:Arial;padding:16px;margin:0}@media print{@page{margin:10mm}}</style></head><body><h2 style="text-align:center;color:#7D1F3C;margin-bottom:16px">جوازات السفر (${toprint.length})</h2><div style="columns:2;column-gap:16px">${imgs}</div><script>window.print();<\/script></body></html>`);
+                    w.document.close();
+                  }} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 99, background: "var(--em7)", color: "var(--g3)", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    طباعة ({passportSelectedIds.size})
+                  </button>
                 </div>
-                {withPassport.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد حجاج رُفعت جوازاتهم بعد</div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                    {withPassport.map(p => (
-                      <div key={p.id} onClick={() => toggle(p.id)} style={{ border: `2px solid ${passportSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
-                        {passportSelectedIds.has(p.id) && (
-                          <div style={{ position: "absolute", top: 6, right: 6, width: 20, height: 20, borderRadius: "50%", background: "var(--em7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                          </div>
-                        )}
-                        <img src={(p as any).passport_url} alt={p.short_ar} style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
-                        <div style={{ padding: "6px 8px", background: passportSelectedIds.has(p.id) ? "rgba(125,31,60,0.06)" : "var(--paper)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
-                          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.passport || "—"}</div>
+              </div>
+              {passengers.filter(p => (p as any).passport_url).length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد حجاج رُفعت جوازاتهم بعد</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
+                  {passengers.filter(p => (p as any).passport_url).map(p => (
+                    <div key={p.id} onClick={() => setPassportSelectedIds(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
+                      style={{ border: `2px solid ${passportSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, borderRadius: 10, overflow: "hidden", cursor: "pointer", position: "relative", transition: "border-color 0.15s" }}>
+                      {passportSelectedIds.has(p.id) && (
+                        <div style={{ position: "absolute", top: 6, right: 6, width: 20, height: 20, borderRadius: "50%", background: "var(--em7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </div>
+                      )}
+                      <img src={(p as any).passport_url} alt={p.short_ar} style={{ width: "100%", height: 110, objectFit: "cover", display: "block" }} />
+                      <div style={{ padding: "6px 8px", background: passportSelectedIds.has(p.id) ? "rgba(125,31,60,0.06)" : "var(--paper)" }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.passport || "—"}</div>
                       </div>
-                    ))}
-                  </div>
-                )}
-                {withoutPassport.length > 0 && (
-                  <div style={{ marginTop: 16, padding: "10px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 6 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    {withoutPassport.length} حاج مش عندهم صورة جواز مرفوعة
-                  </div>
-                )}
-              </>
-            );
-          })()}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {passengers.filter(p => !(p as any).passport_url).length > 0 && (
+                <div style={{ marginTop: 16, padding: "10px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 6 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  {passengers.filter(p => !(p as any).passport_url).length} حاج مش عندهم صورة جواز مرفوعة
+                </div>
+              )}
+            </>
+          )}
+
         </div>
       )}
     </div>
