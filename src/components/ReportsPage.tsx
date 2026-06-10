@@ -37,12 +37,16 @@ function ReportsPage({ passengers }: { passengers: Passenger[] }) {
     { key: "dob", label: "تاريخ الميلاد", get: (p: Passenger) => p.dob },
     { key: "expiry", label: "انتهاء الجواز", get: (p: Passenger) => p.expiry },
     { key: "phone", label: "التليفون", get: (p: Passenger) => p.phone },
-    { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
+    { key: "bus", label: "نوع الباص", get: (p: Passenger) => p.services?.bus },
+    { key: "bus_name", label: "رقم الباص", get: (p: Passenger) => buses.find(b => b.id === (p as any).bus_id)?.name || "" },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
     { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
     { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
-    { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
-    { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
+    { key: "room_number", label: "رقم الغرفة", get: (p: Passenger) => rooms.find(r => r.id === (p as any).room_id)?.number || "" },
+    { key: "camp_mina", label: "منى (نوع)", get: (p: Passenger) => p.services?.camp_mina },
+    { key: "camp_mina_name", label: "مخيم منى", get: (p: Passenger) => camps.find(c => c.id === (p as any).camp_mina_id)?.name || "" },
+    { key: "camp_arafa", label: "عرفة (نوع)", get: (p: Passenger) => p.services?.camp_arafa },
+    { key: "camp_arafa_name", label: "مخيم عرفة", get: (p: Passenger) => camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "" },
   ];
   const [selectedCols, setSelectedCols] = useState<string[]>(ALL_COLS.map(c => c.key));
   const toggleCol = (key: string) => setSelectedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
