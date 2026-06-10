@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
@@ -43,6 +43,15 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
+  const [metaBuses, setMetaBuses] = useState<any[]>([]);
+  const [metaRooms, setMetaRooms] = useState<any[]>([]);
+  const [metaCamps, setMetaCamps] = useState<any[]>([]);
+
+  useEffect(() => {
+    supabase.from("buses").select("id,name").then(({ data }) => { if (data) setMetaBuses(data); });
+    supabase.from("rooms").select("id,number").then(({ data }) => { if (data) setMetaRooms(data); });
+    supabase.from("camps").select("id,name,page_type").then(({ data }) => { if (data) setMetaCamps(data); });
+  }, []);
   
 
   const COLS = [
@@ -482,11 +491,15 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{p.nat} · {p.passport}{p.phone ? ` · ${p.phone}` : ""}</div>
                   </div>
                   {/* الشيبس */}
-                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0, flexWrap: "wrap", maxWidth: 200, justifyContent: "flex-end" }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)" }}>{p.gender === "أنثى" ? "أنثى" : "ذكر"}</span>
                     {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "rgba(200,162,75,.12)", color: "var(--g6)", border: "1px solid rgba(200,162,75,.25)" }}>VIP</span>}
                     {p.services?.flight === "درجة أولى" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--info-bg)", color: "var(--info)" }}>أولى</span>}
                     {p.family_id && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "rgba(125,31,60,.08)", color: "var(--em7)" }}>أسرة</span>}
+                    {(p as any).bus_id != null && metaBuses.find(b => b.id === (p as any).bus_id) && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "var(--info-bg)", color: "var(--info)", fontWeight: 600 }}>باص {metaBuses.find(b => b.id === (p as any).bus_id)?.name}</span>}
+                    {(p as any).room_id != null && metaRooms.find(r => r.id === (p as any).room_id) && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "var(--fb)", color: "var(--ff)", fontWeight: 600 }}>غ {metaRooms.find(r => r.id === (p as any).room_id)?.number}</span>}
+                    {(p as any).camp_mina_id != null && metaCamps.find(c => c.id === (p as any).camp_mina_id) && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "rgba(29,158,117,0.1)", color: "#1D9E75", fontWeight: 600 }}>منى {metaCamps.find(c => c.id === (p as any).camp_mina_id)?.name}</span>}
+                    {(p as any).camp_arafa_id != null && metaCamps.find(c => c.id === (p as any).camp_arafa_id) && <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", fontWeight: 600 }}>عرفة {metaCamps.find(c => c.id === (p as any).camp_arafa_id)?.name}</span>}
                   </div>
                   {/* الأزرار */}
                   <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
