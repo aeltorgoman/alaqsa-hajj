@@ -351,14 +351,15 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
           const isSel = selectedP.has(p.id);
           const wantsSpecial = (p.services as any)[serviceKey] === "خاص";
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : wantsSpecial ? "var(--warning-bg)" : "transparent", border: `0.5px solid ${isSel ? "var(--em7)" : wantsSpecial ? "var(--accent)" : "transparent"}`, opacity: isAssigned ? 0.4 : 1 }}>
-              <Avatar name={p.name_ar} gender={p.gender} size={28} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12, fontWeight: 500 }}>{p.short_ar || p.name_ar}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isInCamp ? "في هذا المخيم" : isAssigned ? "موزّع" : "غير موزّع"}</div>
+            <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", opacity: isAssigned ? 0.4 : 1 }}>
+              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : isInCamp ? "var(--info)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                {isInCamp && !isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
+              <span style={{ fontSize: 12, flex: 1, color: isInCamp ? "var(--info)" : "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
               {wantsSpecial && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
-              {isSel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              {isAssigned && <span style={{ fontSize: 9, color: "var(--muted)" }}>موزّع</span>}
             </div>
           );
         })}
