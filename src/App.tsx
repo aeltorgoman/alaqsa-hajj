@@ -4,7 +4,6 @@ import type { Passenger, User } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
 import { Dashboard } from "./components/Dashboard";
-import { ScanPage } from "./components/ScanPage";
 import { PassengersPage } from "./components/PassengersPage";
 import { BusesPage } from "./components/BusesPage";
 import { FlightsPage } from "./components/FlightsPage";
@@ -81,15 +80,14 @@ export default function App() {
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
 
-  const pageTitles: Record<string, string> = { dash: "الرئيسية", scan: "رفع وثيقة", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
+  const pageTitles: Record<string, string> = { dash: "الرئيسية", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
   const FULL_PAGES = ["dash", "passengers", "manual", "buses", "flights", "mina", "arafa", "hotel"];
   const isFull = FULL_PAGES.includes(page);
 
   const renderPage = () => {
     switch (page) {
       case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
-      case "scan": return <ScanPage passengers={passengers} setPassengers={setPassengers} setPage={setPage} />;
-      case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} setPage={setPage} />;
+      case "passengers": case "manual": return <PassengersPage passengers={passengers} setPassengers={setPassengers} initialShowManual={page === "manual"} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
       case "mina": return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
