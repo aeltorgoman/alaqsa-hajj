@@ -27,6 +27,26 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const [flightSubReport, setFlightSubReport] = useState<"airline" | "per_flight" | null>(null);
   const [passportSelectedIds, setPassportSelectedIds] = useState<Set<number>>(new Set());
 
+  // ===== WhatsApp State =====
+  const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
+  const [waPhoneId, setWaPhoneId] = useState(() => localStorage.getItem("wa_phone_id") || "");
+  const [waTemplate, setWaTemplate] = useState(() => localStorage.getItem("wa_template") ||
+`السلام عليكم {الاسم}،
+تفاصيل رحلتك:
+🚌 الباص: {الباص}
+✈️ الرحلة: {الرحلة}
+🏨 الغرفة: {الغرفة}
+⛺ مخيم منى: {منى}
+⛺ مخيم عرفة: {عرفة}
+بارك الله في حجكم`);
+  const [waSendDocs, setWaSendDocs] = useState({ permit: true, ticket: true });
+  const [waSending, setWaSending] = useState(false);
+  const [waResults, setWaResults] = useState<{ name: string; phone: string; status: "success" | "error" | "pending" }[]>([]);
+  const [waShowSettings, setWaShowSettings] = useState(false);
+  const [waSelectedIds, setWaSelectedIds] = useState<Set<number>>(new Set());
+  const [waSelectMode, setWaSelectMode] = useState<"all" | "select">("all");
+  const [waTestPhone, setWaTestPhone] = useState("");
+
   // الأعمدة لتقرير الحجاج
   const ALL_COLS = [
     { key: "name_ar", label: "الاسم بالعربي", get: (p: Passenger) => p.name_ar },
@@ -344,6 +364,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     { id: "arafa", name: "تقرير عرفة", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات عرفة", color: "var(--warning-bg)" },
     { id: "hotel", name: "تقرير الفندق", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/></svg>`, desc: "توزيع الغرف", color: "var(--female-bg)" },
     { id: "passports", name: "طباعة الجوازات", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/></svg>`, desc: "طباعة صور جوازات الحجاج", color: "rgba(125,31,60,0.08)" },
+    { id: "whatsapp", name: "رسائل WhatsApp", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`, desc: "إرسال رسائل مخصصة للحجاج", color: "rgba(37,211,102,0.1)" },
   ];
 
   // ============================================================
@@ -817,3 +838,232 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
 }
 
 export { ReportsPage };
+          {activeReport === "whatsapp" && (() => {
+            const sendList = waSelectMode === "all"
+              ? passengers.filter(p => p.phone)
+              : passengers.filter(p => p.phone && waSelectedIds.has(p.id));
+
+            const buildText = (p: Passenger) => waTemplate
+              .replace("{الاسم}", p.short_ar || p.name_ar)
+              .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
+              .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.flight_number || "—")
+              .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
+              .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
+              .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
+
+            const sendMessages = async (list: Passenger[]) => {
+              if (!waToken || !waPhoneId) { alert("ضبط API Token و Phone ID الأول!"); return; }
+              setWaSending(true);
+              setWaResults(list.map(p => ({ name: p.short_ar || p.name_ar, phone: p.phone, status: "pending" })));
+
+              for (let i = 0; i < list.length; i++) {
+                const p = list[i];
+                try {
+                  // ١. بعت الرسالة النصية
+                  const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "text", text: { body: buildText(p) } })
+                  });
+
+                  if (res.ok) {
+                    // ٢. بعت التصريح لو موجود ومختار
+                    if (waSendDocs.permit && (p as any).hajj_permit_url) {
+                      const path = (p as any).hajj_permit_url.split("/passengers-docs/")[1]?.split("?")[0];
+                      if (path) {
+                        const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, 60 * 60 * 24 * 30);
+                        if (data?.signedUrl) {
+                          await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
+                            method: "POST",
+                            headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تصريح السفر" } })
+                          });
+                        }
+                      }
+                    }
+                    // ٣. بعت التذكرة لو موجودة ومختارة
+                    if (waSendDocs.ticket && (p as any).flight_ticket_url) {
+                      const path = (p as any).flight_ticket_url.split("/passengers-docs/")[1]?.split("?")[0];
+                      if (path) {
+                        const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, 60 * 60 * 24 * 30);
+                        if (data?.signedUrl) {
+                          await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
+                            method: "POST",
+                            headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تذكرة الطيران" } })
+                          });
+                        }
+                      }
+                    }
+                    setWaResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: "success" } : r));
+                  } else {
+                    setWaResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: "error" } : r));
+                  }
+                } catch {
+                  setWaResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: "error" } : r));
+                }
+                await new Promise(r => setTimeout(r, 400));
+              }
+              setWaSending(false);
+            };
+
+            return (
+              <>
+                {/* إعدادات API */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 9, height: 9, borderRadius: "50%", background: waToken && waPhoneId ? "#25D366" : "#ccc" }} />
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{waToken && waPhoneId ? "API متصل ✓" : "API غير مضبوط"}</span>
+                    </div>
+                    <button onClick={() => setWaShowSettings(p => !p)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
+                      {waShowSettings ? "إخفاء" : "إعدادات API"}
+                    </button>
+                  </div>
+                  {waShowSettings && (
+                    <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>API Token</div>
+                        <input value={waToken} onChange={e => { setWaToken(e.target.value); localStorage.setItem("wa_token", e.target.value); }} placeholder="EAAxxxxx..." style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 11, fontFamily: "monospace", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Phone Number ID</div>
+                        <input value={waPhoneId} onChange={e => { setWaPhoneId(e.target.value); localStorage.setItem("wa_phone_id", e.target.value); }} placeholder="1234567890" style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 11, fontFamily: "monospace", boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* نص الرسالة */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>نص الرسالة</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, lineHeight: 2 }}>
+                    {["{الاسم}", "{الباص}", "{الرحلة}", "{الغرفة}", "{منى}", "{عرفة}"].map(v => (
+                      <code key={v} onClick={() => setWaTemplate(t => t + v)} style={{ background: "var(--bg-2)", padding: "2px 7px", borderRadius: 4, marginLeft: 4, fontSize: 10, cursor: "pointer" }} title="اضغط للإضافة">{v}</code>
+                    ))}
+                  </div>
+                  <textarea value={waTemplate} onChange={e => { setWaTemplate(e.target.value); localStorage.setItem("wa_template", e.target.value); }}
+                    style={{ width: "100%", minHeight: 150, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12, fontFamily: "var(--font-body)", resize: "vertical", lineHeight: 1.8, boxSizing: "border-box", direction: "rtl" }} />
+                </div>
+
+                {/* المرفقات */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>المرفقات</div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    {[{ key: "permit", label: "تصريح السفر", field: "hajj_permit_url" }, { key: "ticket", label: "تذكرة الطيران", field: "flight_ticket_url" }].map(doc => (
+                      <div key={doc.key} onClick={() => setWaSendDocs(p => ({ ...p, [doc.key]: !p[doc.key as keyof typeof p] }))}
+                        style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${(waSendDocs as any)[doc.key] ? "#25D366" : "var(--line)"}`, background: (waSendDocs as any)[doc.key] ? "rgba(37,211,102,0.06)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${(waSendDocs as any)[doc.key] ? "#25D366" : "var(--line)"}`, background: (waSendDocs as any)[doc.key] ? "#25D366" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {(waSendDocs as any)[doc.key] && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
+                        <span style={{ fontSize: 12 }}>{doc.label}</span>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: "auto" }}>
+                          {passengers.filter(p => (p as any)[doc.field]).length} حاج
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* اختيار المرسل إليهم */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>المرسل إليهم</div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    {(["all", "select"] as const).map(m => (
+                      <div key={m} onClick={() => setWaSelectMode(m)}
+                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1.5px solid ${waSelectMode === m ? "var(--em7)" : "var(--line)"}`, background: waSelectMode === m ? "rgba(125,31,60,0.06)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: waSelectMode === m ? "var(--em7)" : "var(--text-muted)" }}>
+                        {m === "all" ? `الكل (${passengers.filter(p => p.phone).length} حاج)` : "اختيار معين"}
+                      </div>
+                    ))}
+                  </div>
+                  {waSelectMode === "select" && (
+                    <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8 }}>
+                      {passengers.filter(p => p.phone).map(p => (
+                        <div key={p.id} onClick={() => setWaSelectedIds(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "0.5px solid var(--line)", cursor: "pointer", background: waSelectedIds.has(p.id) ? "rgba(125,31,60,0.05)" : "transparent" }}>
+                          <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${waSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, background: waSelectedIds.has(p.id) ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {waSelectedIds.has(p.id) && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                          </div>
+                          <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* معاينة */}
+                {passengers[0] && (
+                  <div style={{ background: "rgba(37,211,102,0.05)", border: "1px solid rgba(37,211,102,0.2)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: "#128C7E", fontWeight: 600, marginBottom: 8 }}>معاينة — {passengers[0].short_ar || passengers[0].name_ar}</div>
+                    <div style={{ fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.8, direction: "rtl" }}>{buildText(passengers[0])}</div>
+                    {(waSendDocs.permit || waSendDocs.ticket) && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: "#128C7E" }}>
+                        {waSendDocs.permit && <div>📎 تصريح السفر (مرفق منفصل)</div>}
+                        {waSendDocs.ticket && <div>📎 تذكرة الطيران (مرفق منفصل)</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Test Send */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>🧪 Test Send</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={waTestPhone} onChange={e => setWaTestPhone(e.target.value)} placeholder="رقم الموبايل (مع كود الدولة مثل 9745xxxxxxxx)" style={{ flex: 1, padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12, fontFamily: "var(--font-body)" }} />
+                    <button onClick={async () => {
+                      if (!waTestPhone) { alert("ادخل رقم تليفون!"); return; }
+                      if (!waToken || !waPhoneId) { alert("ضبط API الأول!"); return; }
+                      const testP = passengers[0];
+                      if (!testP) { alert("مفيش حجاج!"); return; }
+                      await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
+                        method: "POST",
+                        headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
+                        body: JSON.stringify({ messaging_product: "whatsapp", to: waTestPhone.replace(/\D/g, ""), type: "text", text: { body: buildText(testP) } })
+                      });
+                      alert("✅ تم الإرسال التجريبي!");
+                    }} style={{ padding: "7px 14px", borderRadius: 8, background: "var(--info-bg)", color: "var(--info)", border: "1px solid var(--info)", fontSize: 12, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+                      إرسال تجريبي
+                    </button>
+                  </div>
+                </div>
+
+                {/* Send To All */}
+                <button disabled={waSending} onClick={() => {
+                  if (!sendList.length) { alert("مفيش حجاج مختارين أو عندهم رقم!"); return; }
+                  if (!confirm(`هتبعت ${sendList.length} رسالة — متأكد؟`)) return;
+                  sendMessages(sendList);
+                }} style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: waSending ? "var(--bg-2)" : "#25D366", color: waSending ? "var(--text-muted)" : "white", border: "none", fontSize: 13, fontWeight: 700, cursor: waSending ? "not-allowed" : "pointer", fontFamily: "var(--font-body)", marginBottom: 12 }}>
+                  {waSending ? "جاري الإرسال..." : `📤 Send To All — ${sendList.length} حاج`}
+                </button>
+
+                {/* نتائج */}
+                {waResults.length > 0 && (
+                  <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", fontSize: 12, fontWeight: 600, display: "flex", gap: 14 }}>
+                      <span style={{ color: "#25D366" }}>✓ {waResults.filter(r => r.status === "success").length} نجح</span>
+                      <span style={{ color: "var(--danger)" }}>✗ {waResults.filter(r => r.status === "error").length} فشل</span>
+                      <span style={{ color: "var(--text-muted)" }}>⏳ {waResults.filter(r => r.status === "pending").length} منتظر</span>
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                      {waResults.map((r, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderBottom: "0.5px solid var(--line)" }}>
+                          <span style={{ color: r.status === "success" ? "#25D366" : r.status === "error" ? "var(--danger)" : "var(--text-muted)" }}>
+                            {r.status === "success" ? "✓" : r.status === "error" ? "✗" : "⏳"}
+                          </span>
+                          <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
+                          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{r.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {passengers.filter(p => !p.phone).length > 0 && (
+                  <div style={{ marginTop: 12, padding: "8px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
+                    ⚠️ {passengers.filter(p => !p.phone).length} حاج مش عندهم رقم — مش هيتبعتلهم
+                  </div>
+                )}
+              </>
+            );
+          })()}
