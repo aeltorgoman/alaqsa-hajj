@@ -909,7 +909,41 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             <div style={{ width: 320, flexShrink: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>📋 صورة الجواز</span>
-                {!manualScanning && <button onClick={() => { setManualPassportImg(null); setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" }); }} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>تغيير</button>}
+                {!manualScanning && (
+                  <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
+                    تغيير
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      // مسح البيانات والصورة القديمة
+                      setManualPassportImg(null);
+                      setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+                      setManualScanning(true);
+                      const reader = new FileReader();
+                      reader.onload = async ev => {
+                        setManualPassportImg(ev.target?.result as string);
+                        try {
+                          const parsed = await scanDocument(file, "passport");
+                          setManualForm(prev => ({
+                            ...prev,
+                            name_en: parsed.name_en || prev.name_en,
+                            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+                            name_ar: parsed.name_ar || prev.name_ar,
+                            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+                            passport: parsed.passport || prev.passport,
+                            nat: parsed.nationality || prev.nat,
+                            dob: parsed.dob || prev.dob,
+                            expiry: parsed.expiry || prev.expiry,
+                            gender: parsed.gender || prev.gender,
+                          }));
+                        } catch { /* تجاهل */ }
+                        setManualScanning(false);
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = "";
+                    }} />
+                  </label>
+                )}
               </div>
               <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
                 <img src={manualPassportImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 400, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
