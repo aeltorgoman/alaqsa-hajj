@@ -309,7 +309,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {rooms.map(room => {
               const isExpanded = expanded.has(room.id);
               const rp = getRoomPassengers(room.id);
-              const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
               // تحديد نوع الغرفة من عدد الحجاج
               const getRoomLabel = (count: number) => {
                 if (count === 0) return "فارغة";
