@@ -869,37 +869,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
       )}
       <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" }); }} title={manualPassportImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={manualPassportImg ? 820 : 460}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</span>
-          {!manualPassportImg && (
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 10px", borderRadius: 99, background: "rgba(125,31,60,0.08)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontWeight: 600 }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
-              {manualScanning ? "جاري المسح..." : "مسح الجواز"}
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setManualScanning(true);
-                const reader = new FileReader();
-                reader.onload = async ev => {
-                  const dataUrl = ev.target?.result as string;
-                  setManualPassportImg(dataUrl);
-                  try {
-                    const { scanDocument } = await import("../utils");
-                    const parsed = await scanDocument(file, "passport");
-                    if (parsed.name_en) setManualForm(prev => ({ ...prev, name_en: parsed.name_en, short_en: makeShort(parsed.name_en) }));
-                    if (parsed.name_ar) setManualForm(prev => ({ ...prev, name_ar: parsed.name_ar, short_ar: makeShort(parsed.name_ar) }));
-                    if (parsed.passport) setManualForm(prev => ({ ...prev, passport: parsed.passport }));
-                    if (parsed.nationality) setManualForm(prev => ({ ...prev, nat: parsed.nationality }));
-                    if (parsed.dob) setManualForm(prev => ({ ...prev, dob: parsed.dob }));
-                    if (parsed.expiry) setManualForm(prev => ({ ...prev, expiry: parsed.expiry }));
-                    if (parsed.gender) setManualForm(prev => ({ ...prev, gender: parsed.gender }));
-                  } catch { /* تجاهل الخطأ */ }
-                  setManualScanning(false);
-                };
-                reader.readAsDataURL(file);
-                e.target.value = "";
-              }} />
-            </label>
-          )}
+          <span>{manualPassportImg || manualScanning ? "راجع البيانات المستخرجة وعدّل لو محتاج" : "أدخل البيانات — المستندات تقدر ترفعها بعدين من ملف الحاج"}</span>
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           {/* البيانات */}
@@ -939,7 +909,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             <div style={{ width: 320, flexShrink: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>📋 صورة الجواز</span>
-                {!manualScanning && <button onClick={() => setManualPassportImg(null)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>تغيير</button>}
+                {!manualScanning && <button onClick={() => { setManualPassportImg(null); setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" }); }} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>تغيير</button>}
               </div>
               <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
                 <img src={manualPassportImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 400, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
