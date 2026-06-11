@@ -192,7 +192,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   const currentCamp = camps.find(c => c.id === currentCampId);
   const genderPool = currentCamp?.type === "خاص" ? passengers : passengers.filter(p => p.gender === currentCamp?.gender);
-  const filteredP = genderPool.filter(p => !pSearch || p.name_ar.includes(pSearch));
+  const filteredP = genderPool
+    .filter(p => (p as any)[campIdKey] == null && (!pSearch || p.name_ar.includes(pSearch)))
+    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   const maleCamps = camps.filter(c => c.gender === "ذكر");
   const femaleCamps = camps.filter(c => c.gender === "أنثى");
 
@@ -346,20 +348,16 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
-          const isAssigned = (p as any)[campIdKey] != null && (p as any)[campIdKey] !== currentCampId;
-          const isInCamp = (p as any)[campIdKey] === currentCampId;
           const isSel = selectedP.has(p.id);
           const wantsSpecial = (p.services as any)[serviceKey] === "خاص";
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInCamp && toggleSelectP(p.id)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: isAssigned || isInCamp ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", opacity: isAssigned ? 0.4 : 1 }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : isInCamp ? "var(--info)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div key={p.id} onClick={() => toggleSelectP(p.id)}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
+              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                {isInCamp && !isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
-              <span style={{ fontSize: 12, flex: 1, color: isInCamp ? "var(--info)" : "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
+              <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
               {wantsSpecial && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
-              {isAssigned && <span style={{ fontSize: 9, color: "var(--muted)" }}>موزّع</span>}
             </div>
           );
         })}
