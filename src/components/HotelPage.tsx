@@ -19,16 +19,35 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
     const assignedCount = passengers.filter(p => p.room_id != null).length;
     const unassigned = total - assignedCount;
     const viewRequested = passengers.filter(p => p.services?.hotel_view === "مطلة").length;
-    return { total, assignedCount, unassigned, viewRequested };
-  }, [rooms, passengers]);
-  const { total, assignedCount, unassigned, viewRequested } = stats;
 
-  const roomTypes = ROOM_TYPES.map(t => ({
-    type: t,
-    count: rooms.filter(r => r.type === t).length,
-    requested: passengers.filter(p => p.services?.hotel_type === t).length,
-    colors: ROOM_COLORS[t],
-  })).filter(r => r.count > 0 || r.requested > 0);
+    // حساب نوع الغرفة من عدد الحجاج
+    const getRoomLabel = (count: number) => {
+      if (count === 0) return "فارغة";
+      if (count === 1) return "فردية";
+      if (count === 2) return "ثنائية";
+      if (count === 3) return "ثلاثية";
+      if (count === 4) return "رباعية";
+      return `${count} أشخاص`;
+    };
+
+    const roomOccupancy: Record<string, number> = {};
+    rooms.forEach(r => {
+      const count = passengers.filter(p => p.room_id === r.id).length;
+      const label = getRoomLabel(count);
+      roomOccupancy[label] = (roomOccupancy[label] || 0) + 1;
+    });
+
+    return { total, assignedCount, unassigned, viewRequested, roomOccupancy };
+  }, [rooms, passengers]);
+  const { total, assignedCount, unassigned, viewRequested, roomOccupancy } = stats;
+
+  const occupancyColors: Record<string, [string, string]> = {
+    "فارغة": ["#f5f5f5", "#999"],
+    "فردية": ["rgba(74,144,217,0.1)", "#4A90D9"],
+    "ثنائية": ["rgba(42,157,143,0.1)", "#2A9D8F"],
+    "ثلاثية": ["rgba(125,31,60,0.08)", "var(--em7)"],
+    "رباعية": ["rgba(232,149,26,0.1)", "#E8951A"],
+  };
 
   const cards = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
@@ -48,16 +67,21 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
           </div>
         ))}
       </div>
-      {roomTypes.length > 0 && (
-        <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", alignItems: "center" }}>
+      {Object.keys(roomOccupancy).length > 0 && (
+        <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600, marginLeft: 4 }}>الغرف:</span>
-          {roomTypes.map(({ type, count, requested, colors }) => (
-            <div key={type} style={{ display: "flex", alignItems: "center", gap: 5, background: colors[0], border: `1px solid ${colors[1]}22`, borderRadius: 7, padding: "4px 10px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: colors[1] }}>{type}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: colors[1], fontFamily: "var(--font-heading)" }}>{count}</span>
-              <span style={{ fontSize: 10, color: colors[1], opacity: 0.7 }}>/ طلب {requested}</span>
-            </div>
-          ))}
+          {Object.entries(roomOccupancy).filter(([k]) => k !== "فارغة").map(([label, count]) => {
+            const [bg, clr] = occupancyColors[label] || ["var(--bg-2)", "var(--text)"];
+            return (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, background: bg, borderRadius: 7, padding: "4px 10px" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: clr }}>{label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: clr, fontFamily: "var(--font-heading)" }}>{count}</span>
+              </div>
+            );
+          })}
+          {roomOccupancy["فارغة"] > 0 && (
+            <span style={{ fontSize: 10, color: "var(--muted)" }}>({roomOccupancy["فارغة"]} فارغة)</span>
+          )}
         </div>
       )}
     </div>
@@ -75,12 +99,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [showPrint, setShowPrint] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [roomFloor, setRoomFloor] = useState("");
-  const [roomType, setRoomType] = useState<Room["type"]>("ثنائية");
+  const [roomView, setRoomView] = useState<"مطلة" | "غير مطلة">("غير مطلة");
   const [numberError, setNumberError] = useState("");
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeFloor, setRangeFloor] = useState("");
-  const [rangeType, setRangeType] = useState<Room["type"]>("ثنائية");
+  const [rangeView, setRangeView] = useState<"مطلة" | "غير مطلة">("غير مطلة");
   const [rangeError, setRangeError] = useState("");
   const [currentRoomId, setCurrentRoomId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
@@ -110,11 +134,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!roomNumber.trim()) return;
     if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
     setNumberError("");
-    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: roomType }]).select();
+    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "فردية", view: roomView }]).select();
     if (!error && data?.[0]) {
       setRooms(prev => [...prev, data[0] as Room]);
       setExpanded(prev => new Set([...prev, data[0].id]));
-      setRoomNumber(""); setRoomFloor(""); setRoomType("ثنائية"); setShowAdd(false);
+      setRoomNumber(""); setRoomFloor(""); setRoomView("غير مطلة"); setShowAdd(false);
     }
   };
 
@@ -124,13 +148,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const existingNums = new Set(rooms.map(r => r.number));
     const newRooms = [];
     for (let n = from; n <= to; n++) {
-      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: rangeType });
+      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "فردية", view: rangeView });
     }
     if (newRooms.length === 0) { setRangeError("كل الغرف في هذا النطاق موجودة بالفعل!"); return; }
     setRangeError("");
     const { data, error } = await supabase.from("rooms").insert(newRooms).select();
     if (!error && data) setRooms(prev => [...prev, ...data as Room[]]);
-    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeType("ثنائية"); setShowRange(false);
+    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeView("غير مطلة"); setShowRange(false);
   };
 
   const handleExcel = (file: File) => {
@@ -267,7 +291,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> غرفة جديدة
           </button>
-          <button onClick={() => setShowRange(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> نطاق غرف</button>
+          <button onClick={() => setShowRange(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> نطاق غرف</button>
           <button onClick={() => fileRef.current?.click()} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> استيراد Excel</button>
           {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>}
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
@@ -374,9 +398,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} /></div>
           </div>
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الغرفة</div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRoomType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${roomType === t ? clr : "var(--border)"}`, background: roomType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: roomType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الإطلالة</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["مطلة", "غير مطلة"] as const).map(v => (
+                <div key={v} onClick={() => setRoomView(v)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${roomView === v ? "var(--info)" : "var(--border)"}`, background: roomView === v ? "rgba(74,144,217,0.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: roomView === v ? "var(--info)" : "var(--text-muted)" }}>{v}</div>
+              ))}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
@@ -391,9 +417,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           </div>
           {rangeError && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{rangeError}</div>}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الغرف</div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setRangeType(t)} style={{ flex: 1, minWidth: "45%", padding: 7, borderRadius: 8, border: `1.5px solid ${rangeType === t ? clr : "var(--border)"}`, background: rangeType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: rangeType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الإطلالة</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["مطلة", "غير مطلة"] as const).map(v => (
+                <div key={v} onClick={() => setRangeView(v)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${rangeView === v ? "var(--info)" : "var(--border)"}`, background: rangeView === v ? "rgba(74,144,217,0.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: rangeView === v ? "var(--info)" : "var(--text-muted)" }}>{v}</div>
+              ))}
             </div>
           </div>
           {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--em7)", marginBottom: 10, background: "rgba(125,31,60,.06)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
