@@ -173,21 +173,34 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
       </div>
 
       {showFields && (<>
-        <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "var(--bg-card)" }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>البيانات <span style={{ fontSize: 10, background: "var(--success-bg)", color: "var(--primary-dark)", padding: "1px 7px", borderRadius: 99 }}>مستخرجة</span></div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]] as [string,string,string][]).map(([l, k, col]) => (
-              <div key={k} style={{ gridColumn: col || "auto" }}>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
-                <input disabled={locked} style={{ ...inp, borderColor: "var(--em7)", background: locked ? "var(--bg-2)" : "rgba(125,31,60,.05)", color: locked ? "var(--text-muted)" : "rgba(0,0,0,0.7)" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
+        <div style={{ display: "grid", gridTemplateColumns: previewImg ? "1fr 1fr" : "1fr", gap: 12, marginBottom: 12, alignItems: "start" }}>
+          {/* البيانات */}
+          <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, padding: "12px 14px", background: "var(--bg-card)" }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>البيانات <span style={{ fontSize: 10, background: "var(--success-bg)", color: "var(--primary-dark)", padding: "1px 7px", borderRadius: 99 }}>مستخرجة</span></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {([["الاسم بالإنجليزي", "name_en", "1/-1"], ["الاسم بالعربي", "name_ar", "1/-1"], ["المختصر إنجليزي", "short_en", ""], ["المختصر عربي", "short_ar", ""], ["رقم الجواز", "passport", ""], ["الجنسية", "nat", ""], ["التليفون", "phone", ""], ["تاريخ الميلاد", "dob", ""], ["انتهاء الجواز", "expiry", ""]] as [string,string,string][]).map(([l, k, col]) => (
+                <div key={k} style={{ gridColumn: col || "auto" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
+                  <input disabled={locked} style={{ ...inp, borderColor: "var(--em7)", background: locked ? "var(--bg-2)" : "rgba(125,31,60,.05)", color: locked ? "var(--text-muted)" : "rgba(0,0,0,0.7)" }} value={(form as any)[k]} onChange={e => setField(k, e.target.value)} />
+                </div>
+              ))}
+              <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
+                <select disabled={locked} style={{ ...inp, borderColor: "var(--em7)", background: locked ? "var(--bg-2)" : "rgba(125,31,60,.05)" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
+                  <option value="">—</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
+                </select>
               </div>
-            ))}
-            <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
-              <select disabled={locked} style={{ ...inp, borderColor: "var(--em7)", background: locked ? "var(--bg-2)" : "rgba(125,31,60,.05)" }} value={form.gender} onChange={e => setField("gender", e.target.value)}>
-                <option value="">—</option><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
-              </select>
             </div>
           </div>
+
+          {/* صورة الجواز للمراجعة */}
+          {previewImg && (
+            <div style={{ border: "0.5px solid #5DCAA5", borderRadius: 12, overflow: "hidden", position: "sticky", top: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, padding: "8px 12px", background: "var(--success-bg)", color: "var(--primary-dark)" }}>
+                📋 صورة الجواز — للمراجعة
+              </div>
+              <img src={previewImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 340 }} />
+            </div>
+          )}
         </div>
 
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
