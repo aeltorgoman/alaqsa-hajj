@@ -151,7 +151,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
   const [showManual, setShowManual] = useState(initialShowManual || false);
-  const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+  const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
   const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   const [manualSaving, setManualSaving] = useState(false);
   const [manualPassportImg, setManualPassportImg] = useState<string | null>(null);
@@ -176,7 +176,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
     if (data && data[0]) {
       setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as Passenger]);
       setShowManual(false);
-      setManualForm({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+      setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
     }
     setManualSaving(false);
   };
