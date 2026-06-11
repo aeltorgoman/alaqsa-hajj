@@ -47,11 +47,10 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
             const file = e.target.files?.[0];
             if (!file) return;
             (window as any).__hajj_pending_scan_file__ = file;
-            (window as any).__hajj_open_manual__ = true;
-            setPage("manual");
+            setPage("passengers");
             e.target.value = "";
           }} />
-          <div onClick={() => setPage("manual")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
+          <div onClick={() => setPage("passengers")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
             </div>
