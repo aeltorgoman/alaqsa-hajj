@@ -869,7 +869,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           </div>
         </div>
       )}
-      <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); }} title={manualPassportImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={manualPassportImg ? 820 : 460}>
+      <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" }); }} title={manualPassportImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={manualPassportImg ? 820 : 460}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</span>
           {!manualPassportImg && (
