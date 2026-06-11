@@ -208,13 +208,14 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       </span>
       {groupCamps.length === 0
         ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div>
-        : groupCamps.map(camp => {
+        : <div style={{ display: pageType === "منى" ? "grid" : "block", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        {groupCamps.map(camp => {
           const isExpanded = expanded.has(camp.id);
           const cp = getCampPassengers(camp.id);
           const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
           const isSpecial = camp.type === "خاص";
           return (
-            <div key={camp.id} style={{ border: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+            <div key={camp.id} style={{ border: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: pageType === "منى" ? 0 : 8, overflow: "hidden" }}>
               {/* Header */}
               <div onClick={() => toggleCamp(camp.id)} style={{ padding: "9px 12px", background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <IconSvg />
@@ -290,6 +291,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
             </div>
           );
         })}
+        </div>
     </div>
   );
 
