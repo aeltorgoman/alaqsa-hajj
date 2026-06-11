@@ -38,7 +38,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-function PassengersPage({ passengers, setPassengers, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage?: (p: string) => void }) {
+function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
