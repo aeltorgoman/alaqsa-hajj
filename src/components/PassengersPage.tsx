@@ -72,7 +72,9 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           setManualForm(prev => ({
             ...prev,
             name_en: parsed.name_en || prev.name_en,
+            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
             name_ar: parsed.name_ar || prev.name_ar,
+            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
             passport: parsed.passport || prev.passport,
             nat: parsed.nationality || prev.nat,
             dob: parsed.dob || prev.dob,
@@ -885,8 +887,8 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
                   try {
                     const { scanDocument } = await import("../utils");
                     const parsed = await scanDocument(file, "passport");
-                    if (parsed.name_en) setManualForm(prev => ({ ...prev, name_en: parsed.name_en }));
-                    if (parsed.name_ar) setManualForm(prev => ({ ...prev, name_ar: parsed.name_ar }));
+                    if (parsed.name_en) setManualForm(prev => ({ ...prev, name_en: parsed.name_en, short_en: makeShort(parsed.name_en) }));
+                    if (parsed.name_ar) setManualForm(prev => ({ ...prev, name_ar: parsed.name_ar, short_ar: makeShort(parsed.name_ar) }));
                     if (parsed.passport) setManualForm(prev => ({ ...prev, passport: parsed.passport }));
                     if (parsed.nationality) setManualForm(prev => ({ ...prev, nat: parsed.nationality }));
                     if (parsed.dob) setManualForm(prev => ({ ...prev, dob: parsed.dob }));
@@ -905,7 +907,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
           {/* البيانات */}
           <div style={{ flex: 1 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-              {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
+              {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["المختصر عربي", "short_ar"], ["المختصر إنجليزي", "short_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
                 <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
                   <input style={inp} value={(manualForm as any)[k]} onChange={e => setManualForm(prev => ({ ...prev, [k]: e.target.value }))} />
                 </div>
@@ -939,9 +941,17 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
             <div style={{ width: 320, flexShrink: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>📋 صورة الجواز</span>
-                <button onClick={() => setManualPassportImg(null)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>تغيير</button>
+                {!manualScanning && <button onClick={() => setManualPassportImg(null)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>تغيير</button>}
               </div>
-              <img src={manualPassportImg} style={{ width: "100%", borderRadius: 10, border: "1px solid var(--line)", objectFit: "contain", maxHeight: 400 }} />
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
+                <img src={manualPassportImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 400, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
+                {manualScanning && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                    <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
