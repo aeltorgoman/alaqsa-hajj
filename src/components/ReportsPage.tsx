@@ -923,7 +923,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                     {waTemplate
                       .replace("{الاسم}", passengers[0].short_ar || passengers[0].name_ar)
                       .replace("{الباص}", buses.find(b => b.id === (passengers[0] as any).bus_id)?.name || "—")
-                      .replace("{الرحلة}", flights.find(f => f.id === passengers[0].flight_id)?.flight_number || "—")
+                      .replace("{الرحلة}", flights.find(f => f.id === passengers[0].flight_id)?.name || "—")
                       .replace("{الغرفة}", rooms.find(r => r.id === (passengers[0] as any).room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === (passengers[0] as any).camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === (passengers[0] as any).camp_arafa_id)?.name || "—")
@@ -951,7 +951,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
                       .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
-                      .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.flight_number || "—")
+                      .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.name || "—")
                       .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
@@ -983,7 +983,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
                       .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
-                      .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.flight_number || "—")
+                      .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.name || "—")
                       .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
