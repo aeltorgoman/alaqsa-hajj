@@ -305,18 +305,24 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             لا يوجد غرف بعد
           </div>
         ) : (
-          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {rooms.map(room => {
               const isExpanded = expanded.has(room.id);
               const rp = getRoomPassengers(room.id);
               const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
+              // تحديد نوع الغرفة من عدد الحجاج
+              const getRoomLabel = (count: number) => {
+                if (count === 0) return "فارغة";
+                if (count === 1) return "فردية";
+                if (count === 2) return "ثنائية";
+                if (count === 3) return "ثلاثية";
+                if (count === 4) return "رباعية";
+                return `${count} أشخاص`;
+              };
               return (
-                <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
+                <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>
                   {/* Header */}
-                  <div onClick={() => toggleRoom(room.id)} style={{ padding: "9px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 8, background: typeBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={typeClr} strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
-                    </div>
+                  <div onClick={() => toggleRoom(room.id)} style={{ padding: "8px 10px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                     <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingRoomId(room.id); }}>
                       {editingRoomId === room.id ? (
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
@@ -325,17 +331,17 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                           <button onClick={() => { const v = (document.getElementById(`rn-${room.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("rooms").update({ number: v }).eq("id", room.id); setRooms(rooms.map(r => r.id === room.id ? { ...r, number: v } : r)); } setEditingRoomId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
                         </div>
                       ) : (
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>
                           غرفة {room.number}
-                          {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 4 }}>ط{room.floor}</span>}
-                          <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: typeBg, color: typeClr, marginRight: 6 }}>{room.type}</span>
+                          {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 3 }}>ط{room.floor}</span>}
                         </div>
                       )}
                     </div>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.length} مسافر</span>
-                    <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ ...btnS(), background: "rgba(125,31,60,0.08)", borderColor: "var(--em7)", color: "var(--em7)" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-                    <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: "none", border: `1px solid ${rp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, borderRadius: 6, padding: "4px 7px", cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                    <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)", border: "1px solid var(--line)" }}>{getRoomLabel(rp.length)}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.length} 👤</span>
+                    <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ ...btnS(), background: "rgba(125,31,60,0.08)", borderColor: "var(--em7)", color: "var(--em7)", padding: "3px 6px" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                    <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: "none", border: `1px solid ${rp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, borderRadius: 6, padding: "3px 6px", cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--ff)" : "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
 
                   {/* Passengers list with Drag & Drop */}
