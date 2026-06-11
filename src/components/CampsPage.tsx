@@ -198,7 +198,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const maleCamps = camps.filter(c => c.gender === "ذكر");
   const femaleCamps = camps.filter(c => c.gender === "أنثى");
 
-  const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => (
+  const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => {
+    return (
     <div style={{ marginBottom: 16 }}>
       <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "var(--male-bg)" : "var(--female-bg)", color: gender === "ذكر" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
         {gender === "ذكر"
@@ -292,8 +293,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
           );
         })}
         </div>
+      }
     </div>
-  );
+    );
+  };
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
