@@ -157,7 +157,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   {fp.length ? fp.map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px", borderRadius: 6, marginBottom: 2 }}>
                       <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
-                      <Avatar name={p.name_ar} gender={p.gender} size={24} />
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
                       {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
                       <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
