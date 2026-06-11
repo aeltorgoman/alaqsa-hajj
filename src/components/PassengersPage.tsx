@@ -38,7 +38,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-function PassengersPage({ passengers, setPassengers, initialShowManual }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; initialShowManual?: boolean }) {
+function PassengersPage({ passengers, setPassengers, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage?: (p: string) => void }) {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -56,10 +56,8 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
   // استقبال scan من Dashboard
   useEffect(() => {
     const file = (window as any).__hajj_pending_scan_file__;
-    const openManual = (window as any).__hajj_open_manual__;
-    if (file && openManual) {
+    if (file) {
       (window as any).__hajj_pending_scan_file__ = null;
-      (window as any).__hajj_open_manual__ = false;
       setShowManual(true);
       setManualPassportImg(null);
       setManualScanning(true);
@@ -150,7 +148,7 @@ function PassengersPage({ passengers, setPassengers, initialShowManual }: { pass
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
-  const [showManual, setShowManual] = useState(initialShowManual || false);
+  const [showManual, setShowManual] = useState(false);
   const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
   const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   const [manualSaving, setManualSaving] = useState(false);
