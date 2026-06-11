@@ -119,6 +119,8 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
   const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
   const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
   const [manualSaving, setManualSaving] = useState(false);
+  const [manualPassportImg, setManualPassportImg] = useState<string | null>(null);
+  const [manualScanning, setManualScanning] = useState(false);
 
   const handleManualSave = async () => {
     if (!manualForm.name_ar && !manualForm.name_en) { alert("اكتب الاسم على الأقل!"); return; }
@@ -811,35 +813,83 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
           </div>
         </div>
       )}
-      <Modal show={showManual} onClose={() => setShowManual(false)} title="إضافة حاج يدوياً" maxWidth={460}>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-          {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
-            <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
-              <input style={inp} value={(manualForm as any)[k]} onChange={e => setManualForm(prev => ({ ...prev, [k]: e.target.value }))} />
-            </div>
-          ))}
-          <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
-            <select style={inp} value={manualForm.gender} onChange={e => setManualForm(prev => ({ ...prev, gender: e.target.value }))}>
-              <option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
-            </select>
-          </div>
+      <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); }} title="إضافة حاج يدوياً" maxWidth={manualPassportImg ? 820 : 460}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>أدخل البيانات يدوياً — المستندات تقدر ترفعها بعدين من ملف الحاج</span>
+          {!manualPassportImg && (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 10px", borderRadius: 99, background: "rgba(125,31,60,0.08)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontWeight: 600 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+              {manualScanning ? "جاري المسح..." : "مسح الجواز"}
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setManualScanning(true);
+                const reader = new FileReader();
+                reader.onload = async ev => {
+                  const dataUrl = ev.target?.result as string;
+                  setManualPassportImg(dataUrl);
+                  try {
+                    const { scanDocument } = await import("../utils");
+                    const parsed = await scanDocument(file, "passport");
+                    if (parsed.name_en) setManualForm(prev => ({ ...prev, name_en: parsed.name_en }));
+                    if (parsed.name_ar) setManualForm(prev => ({ ...prev, name_ar: parsed.name_ar }));
+                    if (parsed.passport) setManualForm(prev => ({ ...prev, passport: parsed.passport }));
+                    if (parsed.nationality) setManualForm(prev => ({ ...prev, nat: parsed.nationality }));
+                    if (parsed.dob) setManualForm(prev => ({ ...prev, dob: parsed.dob }));
+                    if (parsed.expiry) setManualForm(prev => ({ ...prev, expiry: parsed.expiry }));
+                    if (parsed.gender) setManualForm(prev => ({ ...prev, gender: parsed.gender }));
+                  } catch { /* تجاهل الخطأ */ }
+                  setManualScanning(false);
+                };
+                reader.readAsDataURL(file);
+                e.target.value = "";
+              }} />
+            </label>
+          )}
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
-              <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "var(--em7)" : "var(--border)"}`, background: (manualServices as any)[k] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center" }}>{o}</div>)}
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          {/* البيانات */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+              {([["الاسم بالعربي *", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["رقم الجواز", "passport"], ["رقم البطاقة", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"], ["انتهاء البطاقة", "id_expiry"]] as [string,string][]).map(([l, k]) => (
+                <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l}</div>
+                  <input style={inp} value={(manualForm as any)[k]} onChange={e => setManualForm(prev => ({ ...prev, [k]: e.target.value }))} />
                 </div>
+              ))}
+              <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
+                <select style={inp} value={manualForm.gender} onChange={e => setManualForm(prev => ({ ...prev, gender: e.target.value }))}>
+                  <option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
+                </select>
               </div>
-            ))}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+                  <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "var(--em7)" : "var(--border)"}`, background: (manualServices as any)[k] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center" }}>{o}</div>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "جاري الحفظ..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ</>}</button>
+              <button onClick={() => { setShowManual(false); setManualPassportImg(null); }} style={btnS()}>إلغاء</button>
+            </div>
           </div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "جاري الحفظ..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ</>}</button>
-          <button onClick={() => setShowManual(false)} style={btnS()}>إلغاء</button>
+
+          {/* صورة الجواز */}
+          {manualPassportImg && (
+            <div style={{ width: 320, flexShrink: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>📋 صورة الجواز</span>
+                <button onClick={() => setManualPassportImg(null)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>تغيير</button>
+              </div>
+              <img src={manualPassportImg} style={{ width: "100%", borderRadius: 10, border: "1px solid var(--line)", objectFit: "contain", maxHeight: 400 }} />
+            </div>
+          )}
         </div>
       </Modal>
     </div>
