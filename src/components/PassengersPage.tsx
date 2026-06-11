@@ -52,6 +52,39 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
     supabase.from("rooms").select("id,number").then(({ data }) => { if (data) setMetaRooms(data); });
     supabase.from("camps").select("id,name,page_type").then(({ data }) => { if (data) setMetaCamps(data); });
   }, []);
+
+  // استقبال scan من Dashboard
+  useEffect(() => {
+    const file = (window as any).__hajj_pending_scan_file__;
+    const openManual = (window as any).__hajj_open_manual__;
+    if (file && openManual) {
+      (window as any).__hajj_pending_scan_file__ = null;
+      (window as any).__hajj_open_manual__ = false;
+      setShowManual(true);
+      setManualPassportImg(null);
+      setManualScanning(true);
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const dataUrl = ev.target?.result as string;
+        setManualPassportImg(dataUrl);
+        try {
+          const parsed = await scanDocument(file, "passport");
+          setManualForm(prev => ({
+            ...prev,
+            name_en: parsed.name_en || prev.name_en,
+            name_ar: parsed.name_ar || prev.name_ar,
+            passport: parsed.passport || prev.passport,
+            nat: parsed.nationality || prev.nat,
+            dob: parsed.dob || prev.dob,
+            expiry: parsed.expiry || prev.expiry,
+            gender: parsed.gender || prev.gender,
+          }));
+        } catch { /* تجاهل */ }
+        setManualScanning(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  }, []);
   
 
   const COLS = [
@@ -387,16 +420,37 @@ function PassengersPage({ passengers, setPassengers, initialShowManual, setPage 
               <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)", color: "var(--ink)" }} placeholder="ابحث..." />
               {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>✕</span>}
             </div>
-            {/* مسح جواز — بيفتح file picker مباشرة */}
+            {/* مسح جواز — بيفتح modal الإضافة مباشرة */}
             <div onClick={() => document.getElementById("scan-input-btn")?.click()} title="مسح جواز" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontSize: 11, fontWeight: 700, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
               مسح
             </div>
-            <input id="scan-input-btn" type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+            <input id="scan-input-btn" type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
               const file = e.target.files?.[0];
               if (!file) return;
-              (window as any).__hajj_pending_scan_file__ = file;
-              setPage?.("scan");
+              setShowManual(true);
+              setManualPassportImg(null);
+              setManualScanning(true);
+              const reader = new FileReader();
+              reader.onload = async ev => {
+                const dataUrl = ev.target?.result as string;
+                setManualPassportImg(dataUrl);
+                try {
+                  const parsed = await scanDocument(file, "passport");
+                  setManualForm(prev => ({
+                    ...prev,
+                    name_en: parsed.name_en || prev.name_en,
+                    name_ar: parsed.name_ar || prev.name_ar,
+                    passport: parsed.passport || prev.passport,
+                    nat: parsed.nationality || prev.nat,
+                    dob: parsed.dob || prev.dob,
+                    expiry: parsed.expiry || prev.expiry,
+                    gender: parsed.gender || prev.gender,
+                  }));
+                } catch { /* تجاهل */ }
+                setManualScanning(false);
+              };
+              reader.readAsDataURL(file);
               e.target.value = "";
             }} />
             {/* إضافة يدوي */}
