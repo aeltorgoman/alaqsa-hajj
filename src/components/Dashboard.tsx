@@ -47,7 +47,8 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
             const file = e.target.files?.[0];
             if (!file) return;
             (window as any).__hajj_pending_scan_file__ = file;
-            setPage("scan");
+            (window as any).__hajj_open_manual__ = true;
+            setPage("manual");
             e.target.value = "";
           }} />
           <div onClick={() => setPage("manual")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: "var(--radius-lg)", cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", transition: "var(--transition)" }}>
