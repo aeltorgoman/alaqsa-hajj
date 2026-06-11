@@ -179,7 +179,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const currentBus = buses.find(b => b.id === currentBusId);
-  const filteredP = passengers.filter(p => !pSearch || p.name_ar.includes(pSearch));
+  const filteredP = passengers
+    .filter(p => p.bus_id == null && (!pSearch || p.name_ar.includes(pSearch)))
+    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
@@ -303,19 +305,15 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
         </div>
         {filteredP.map(p => {
-          const isAssigned = p.bus_id != null && p.bus_id !== currentBusId;
-          const isInBus = p.bus_id === currentBusId;
           const isSel = selectedP.has(p.id);
           return (
-            <div key={p.id} onClick={() => !isAssigned && !isInBus && toggleSelectP(p.id)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: isAssigned || isInBus ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", opacity: isAssigned ? 0.4 : 1 }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : isInBus ? "var(--info)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div key={p.id} onClick={() => toggleSelectP(p.id)}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
+              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                {isInBus && !isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
-              <span style={{ fontSize: 12, flex: 1, color: isInBus ? "var(--info)" : "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
+              <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
               {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>VIP</span>}
-              {isAssigned && <span style={{ fontSize: 9, color: "var(--muted)" }}>موزّع</span>}
             </div>
           );
         })}
