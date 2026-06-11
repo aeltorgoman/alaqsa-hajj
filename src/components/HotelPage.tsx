@@ -249,7 +249,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const currentRoom = rooms.find(r => r.id === currentRoomId);
-  const filteredP = passengers.filter(p => !pSearch || p.name_ar.includes(pSearch));
+  const filteredP = passengers
+    .filter(p => p.room_id == null && (!pSearch || p.name_ar.includes(pSearch)))
+    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   const getFilteredRoomsForPrint = () => {
     if (printFilter === "floor") return rooms.filter(r => r.floor === printFloor);
     if (printFilter === "type") return rooms.filter(r => r.type === printType);
@@ -405,19 +407,15 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
           </div>
           {filteredP.map(p => {
-            const isInRoom = p.room_id === currentRoomId;
-            const isAssigned = p.room_id != null && !isInRoom;
             const isSel = selectedP.has(p.id);
             return (
-              <div key={p.id} onClick={() => !isAssigned && !isInRoom && toggleSelectP(p.id)}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: isAssigned || isInRoom ? "not-allowed" : "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent", opacity: isAssigned ? 0.4 : 1 }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : isInRoom ? "var(--info)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div key={p.id} onClick={() => toggleSelectP(p.id)}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                  {isInRoom && !isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
-                <span style={{ fontSize: 12, flex: 1, color: isInRoom ? "var(--info)" : "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
-                <span style={{ fontSize: 9, color: "var(--muted)" }}>{p.services.hotel_type}</span>
-                {isAssigned && <span style={{ fontSize: 9, color: "var(--muted)" }}>موزّع</span>}
+                <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{p.services.hotel_type}</span>
               </div>
             );
           })}
