@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, downloadPDF, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 
 function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] }) {
   const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
@@ -23,11 +23,24 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // تحديد عناصر التقرير (لطباعة عنصر واحد بس أو أكثر)
+  const [selectedBusIds, setSelectedBusIds] = useState<Set<number>>(new Set());
+  const [selectedFlightIds, setSelectedFlightIds] = useState<Set<number>>(new Set());
+  const [selectedMinaCampIds, setSelectedMinaCampIds] = useState<Set<number>>(new Set());
+  const [selectedArafaCampIds, setSelectedArafaCampIds] = useState<Set<number>>(new Set());
+  const [selectedFloors, setSelectedFloors] = useState<Set<string>>(new Set());
+  const floorKey = (r: Room) => r.floor ? String(r.floor) : "بدون طابق";
+
   // تقرير الفندق — فلتر الطباعة
-  const [hotelPrintFilter, setHotelPrintFilter] = useState<"all" | "floor" | "type">("all");
-  const [hotelPrintFloor, setHotelPrintFloor] = useState("");
+  const [hotelPrintFilter, setHotelPrintFilter] = useState<"all" | "type">("all");
   const [hotelPrintType, setHotelPrintType] = useState<string>("");
-  const floors = [...new Set(rooms.map(r => r.floor).filter(Boolean))].sort();
+  const floorItems = [...new Set(rooms.map(r => floorKey(r)))]
+    .sort((a, b) => {
+      if (a === "بدون طابق") return 1;
+      if (b === "بدون طابق") return -1;
+      return Number(a) - Number(b);
+    })
+    .map(f => ({ id: f, label: f === "بدون طابق" ? f : `طابق ${f}` }));
 
   // تقرير الطيران — نوع التقرير الفرعي
   const [flightSubReport, setFlightSubReport] = useState<"airline" | "per_flight" | null>(null);
@@ -89,10 +102,17 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
         supabase.from("rooms").select("*").order("number"),
         supabase.from("flights").select("*").order("date"),
       ]);
-      if (b) setBuses(b as Bus[]);
-      if (c) setCamps(c as Camp[]);
-      if (r) setRooms(r as Room[]);
-      if (f) setFlights(f as Flight[]);
+      if (b) { setBuses(b as Bus[]); setSelectedBusIds(new Set((b as Bus[]).map(x => x.id))); }
+      if (c) {
+        setCamps(c as Camp[]);
+        setSelectedMinaCampIds(new Set((c as Camp[]).filter(x => x.page_type === "منى").map(x => x.id)));
+        setSelectedArafaCampIds(new Set((c as Camp[]).filter(x => x.page_type === "عرفة").map(x => x.id)));
+      }
+      if (r) {
+        setRooms(r as Room[]);
+        setSelectedFloors(new Set((r as Room[]).map(x => x.floor ? String(x.floor) : "بدون طابق")));
+      }
+      if (f) { setFlights(f as Flight[]); setSelectedFlightIds(new Set((f as Flight[]).map(x => x.id))); }
       setLoading(false);
     };
     load();
@@ -168,7 +188,8 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // تقرير الطيران — كل رحلة
   // ============================================================
   const getPerFlightHTML = () => {
-    const sections = flights.map(flight => {
+    const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
+    const sections = selFlights.map(flight => {
       const fp = passengers.filter(p => p.flight_id === flight.id);
       const rows = fp.map((p, i) => {
         const nat = p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat;
@@ -178,9 +199,9 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       }).join("");
       return `
         <div class="page-break">
-          <div style="background:#f0f4ff;border:1px solid #0C447C;border-radius:8px;padding:12px 16px;margin-bottom:14px;direction:rtl">
-            <div style="font-size:16px;font-weight:700;color:#0C447C;margin-bottom:8px">${flight.name} — ${flight.type}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:10px">
+          <div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
+            <div style="font-size:20px;font-weight:700;color:${primaryColor};margin-bottom:10px">${flight.name} — ${flight.type}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
               <div><span style="color:#888">الخط:</span> ${flight.airline}</div>
               <div><span style="color:#888">التاريخ:</span> ${flight.date}</div>
               <div><span style="color:#888">الوقت:</span> ${flight.time}</div>
@@ -196,8 +217,9 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   };
 
   const exportPerFlightXLSX = () => {
+    const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
     const wb = XLSX.utils.book_new();
-    flights.forEach(flight => {
+    selFlights.forEach(flight => {
       const fp = passengers.filter(p => p.flight_id === flight.id);
       const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
       const info = [["الرحلة:", flight.name], ["الخط:", flight.airline], ["التاريخ:", flight.date], ["الوقت:", flight.time], ["من:", flight.from_airport], ["إلى:", flight.to_airport], []];
@@ -214,9 +236,9 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       XLSX.utils.book_append_sheet(wb, ws, flight.name.slice(0, 31));
     });
     addSummarySheet(wb, XLSX, "تقرير الرحلات", companyName, [
-      ["إجمالي عدد الرحلات", flights.length],
-      ["إجمالي عدد الحجاج", passengers.filter(p => p.flight_id).length],
-      ...flights.map(f => [f.name, passengers.filter(p => p.flight_id === f.id).length]),
+      ["إجمالي عدد الرحلات", selFlights.length],
+      ["إجمالي عدد الحجاج", passengers.filter(p => selFlights.some(f => f.id === p.flight_id)).length],
+      ...selFlights.map(f => [f.name, passengers.filter(p => p.flight_id === f.id).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الرحلات.xlsx");
   };
@@ -225,7 +247,8 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // تقرير الباصات
   // ============================================================
   const getBusesHTML = () => {
-    const sections = buses.map(bus => {
+    const selBuses = buses.filter(b => selectedBusIds.has(b.id));
+    const sections = selBuses.map(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
       const rows = bp.map((p, i) =>
         `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`
@@ -239,9 +262,10 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   };
 
   const exportBusesXLSX = () => {
+    const selBuses = buses.filter(b => selectedBusIds.has(b.id));
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
-    buses.forEach(bus => {
+    selBuses.forEach(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
       const title = `${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر`;
       const aoa: any[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
@@ -259,9 +283,9 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       XLSX.utils.book_append_sheet(wb, ws, n);
     });
     addSummarySheet(wb, XLSX, "تقرير الباصات", companyName, [
-      ["إجمالي عدد الباصات", buses.length],
-      ["إجمالي عدد المسافرين", passengers.filter(p => p.bus_id).length],
-      ...buses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, passengers.filter(p => p.bus_id === b.id).length]),
+      ["إجمالي عدد الباصات", selBuses.length],
+      ["إجمالي عدد المسافرين", passengers.filter(p => selBuses.some(b => b.id === p.bus_id)).length],
+      ...selBuses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, passengers.filter(p => p.bus_id === b.id).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الباصات.xlsx");
   };
@@ -272,7 +296,8 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const campLogoHtml = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName || "ح").trim().charAt(0)}</span>`;
-    const pageCamps = camps.filter(c => c.page_type === pageType);
+    const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
+    const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
     const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
@@ -317,7 +342,8 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-    const pageCamps = camps.filter(c => c.page_type === pageType);
+    const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
+    const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
     pageCamps.forEach(camp => {
@@ -357,9 +383,9 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // تقرير الفندق
   // ============================================================
   const getFilteredRooms = () => {
-    if (hotelPrintFilter === "floor") return rooms.filter(r => r.floor === hotelPrintFloor);
-    if (hotelPrintFilter === "type") return rooms.filter(r => r.type === hotelPrintType);
-    return rooms;
+    let r = rooms.filter(rm => selectedFloors.has(floorKey(rm)));
+    if (hotelPrintFilter === "type") r = r.filter(rm => rm.type === hotelPrintType);
+    return r;
   };
 
   const getHotelHTML = () => {
@@ -371,12 +397,12 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id);
       const [bg, clr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
-      return `<div style="margin-bottom:10px;break-inside:avoid">
-        <div style="background:${bg};color:${clr};padding:4px 8px;border:1px solid ${clr}33;border-bottom:none;font-size:10px;font-weight:700;display:flex;justify-content:space-between;border-radius:4px 4px 0 0">
+      return `<div style="margin-bottom:12px;break-inside:avoid">
+        <div style="background:${bg};color:${clr};padding:6px 10px;border:1px solid ${clr}33;border-bottom:none;font-size:13px;font-weight:700;display:flex;justify-content:space-between;border-radius:4px 4px 0 0">
           <span>${room.type}</span><span>غرفة ${room.number}${room.floor ? ` (ط${room.floor})` : ""}</span>
         </div>
         <table style="margin:0">
-          <tr style="background:#f0f4ff"><th style="text-align:center;width:20px;background:#0C447C">م</th><th style="background:#0C447C">الاسم</th></tr>
+          <tr><th style="text-align:center;width:24px;background:${primaryColor}">م</th><th style="background:${primaryColor}">الاسم</th></tr>
           ${rp.map((p, i) => `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`).join("")}
         </table>
       </div>`;
@@ -386,7 +412,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       <div>${col2.map(renderRoomBlock).join("")}</div>
       <div>${col3.map(renderRoomBlock).join("")}</div>
     </div>`;
-    const subtitle = hotelPrintFilter === "floor" ? ` — الطابق ${hotelPrintFloor}` : hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
+    const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     return mkHTML(`تقرير الفندق${subtitle}`, body, true);
   };
 
@@ -426,7 +452,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       usedNames.add(n);
       XLSX.utils.book_append_sheet(wb, ws, n);
     });
-    const subtitle = hotelPrintFilter === "floor" ? ` — الطابق ${hotelPrintFloor}` : hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
+    const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     addSummarySheet(wb, XLSX, `تقرير الفندق${subtitle}`, companyName, [
       ["إجمالي عدد الغرف", filtered.length],
       ["إجمالي عدد النزلاء", passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id)).length],
@@ -448,6 +474,44 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       <button onClick={onPrint} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>
     </div>
   );
+
+  // ============================================================
+  // اختيار عناصر التقرير (طباعة عنصر واحد أو أكثر بدل الكل)
+  // ============================================================
+  const SelectionPanel = ({
+    title, items, selected, setSelected
+  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<any>; setSelected: (s: Set<any>) => void }) => {
+    const allSelected = items.length > 0 && items.every(it => selected.has(it.id));
+    return (
+      <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
+          <div onClick={() => setSelected(allSelected ? new Set() : new Set(items.map(i => i.id)))} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
+            {allSelected ? "إلغاء الكل" : "تحديد الكل"}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {items.map(it => {
+            const checked = selected.has(it.id);
+            return (
+              <div key={it.id} onClick={() => {
+                const next = new Set(selected);
+                if (next.has(it.id)) next.delete(it.id); else next.add(it.id);
+                setSelected(next);
+              }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${checked ? "var(--em7)" : "var(--border)"}`, background: checked ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: checked ? "var(--em7)" : "var(--text-muted)" }}>
+                <div style={{ width: 14, height: 14, borderRadius: 4, background: checked ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${checked ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {checked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                {it.label}
+              </div>
+            );
+          })}
+        </div>
+        {items.length > 0 && !allSelected && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>سيشمل التقرير فقط العناصر المحددة ({[...selected].length} من {items.length})</div>}
+      </div>
+    );
+  };
+
 
   // ============================================================
   // قائمة التقارير
@@ -521,7 +585,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>{passengers.length} حاج · {activeCols.length} عمود</div>
               <ExportButtons
                 onExcel={exportPassengersXLSX}
-                onPDF={() => downloadPDF(getPassengersHTML(), "تقرير_الحجاج.html")}
+                onPDF={() => printInPage(getPassengersHTML())}
                 onPrint={() => printInPage(getPassengersHTML())}
               />
             </>
@@ -583,7 +647,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                       </div>
                       <ExportButtons
                         onExcel={exportAirlineXLSX}
-                        onPDF={() => downloadPDF(getAirlineHTML(), "flight_list.html")}
+                        onPDF={() => printInPage(getAirlineHTML())}
                         onPrint={() => printInPage(getAirlineHTML())}
                       />
                     </>
@@ -593,6 +657,14 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                   {flightSubReport === "per_flight" && (
                     <>
                       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
+                      {!loading && flights.length > 0 && (
+                        <SelectionPanel
+                          title="الرحلات المطلوبة في التقرير"
+                          items={flights.map(f => ({ id: f.id, label: `${f.name} — ${f.type}` }))}
+                          selected={selectedFlightIds}
+                          setSelected={(s) => setSelectedFlightIds(s as Set<number>)}
+                        />
+                      )}
                       {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                         flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
                         flights.map(flight => {
@@ -638,7 +710,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                       }
                       <ExportButtons
                         onExcel={exportPerFlightXLSX}
-                        onPDF={() => downloadPDF(getPerFlightHTML(), "تقرير_الرحلات.html")}
+                        onPDF={() => printInPage(getPerFlightHTML())}
                         onPrint={() => printInPage(getPerFlightHTML())}
                       />
                     </>
@@ -655,6 +727,12 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
                 <>
+                  <SelectionPanel
+                    title="الباصات المطلوبة في التقرير"
+                    items={buses.map(b => ({ id: b.id, label: `${b.name}${b.type === "VIP" ? " ⭐" : ""}` }))}
+                    selected={selectedBusIds}
+                    setSelected={(s) => setSelectedBusIds(s as Set<number>)}
+                  />
                   {buses.map(bus => {
                     const bp = passengers.filter(p => p.bus_id === bus.id);
                     return (
@@ -682,7 +760,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                   })}
                   <ExportButtons
                     onExcel={exportBusesXLSX}
-                    onPDF={() => downloadPDF(getBusesHTML(), "تقرير_الباصات.html")}
+                    onPDF={() => printInPage(getBusesHTML())}
                     onPrint={() => printInPage(getBusesHTML())}
                   />
                 </>
@@ -698,6 +776,12 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                 camps.filter(c => c.page_type === "منى").length === 0 ?
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
+                  <SelectionPanel
+                    title="مخيمات منى المطلوبة في التقرير"
+                    items={camps.filter(c => c.page_type === "منى").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
+                    selected={selectedMinaCampIds}
+                    setSelected={(s) => setSelectedMinaCampIds(s as Set<number>)}
+                  />
                   {camps.filter(c => c.page_type === "منى").map(camp => {
                     const cp = passengers.filter(p => p.camp_mina_id === camp.id);
                     const isMale = camp.gender === "ذكر";
@@ -730,7 +814,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                   })}
                   <ExportButtons
                     onExcel={() => exportCampsXLSX("منى")}
-                    onPDF={() => downloadPDF(getCampsHTML("منى"), "تقرير_مخيمات_منى.html")}
+                    onPDF={() => printInPage(getCampsHTML("منى"))}
                     onPrint={() => printInPage(getCampsHTML("منى"))}
                   />
                 </>
@@ -746,6 +830,12 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
+                  <SelectionPanel
+                    title="مخيمات عرفة المطلوبة في التقرير"
+                    items={camps.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
+                    selected={selectedArafaCampIds}
+                    setSelected={(s) => setSelectedArafaCampIds(s as Set<number>)}
+                  />
                   {camps.filter(c => c.page_type === "عرفة").map(camp => {
                     const cp = passengers.filter(p => p.camp_arafa_id === camp.id);
                     const isMale = camp.gender === "ذكر";
@@ -778,7 +868,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                   })}
                   <ExportButtons
                     onExcel={() => exportCampsXLSX("عرفة")}
-                    onPDF={() => downloadPDF(getCampsHTML("عرفة"), "تقرير_مخيمات_عرفة.html")}
+                    onPDF={() => printInPage(getCampsHTML("عرفة"))}
                     onPrint={() => printInPage(getCampsHTML("عرفة"))}
                   />
                 </>
@@ -794,23 +884,13 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
               <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>نطاق التقرير</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  {[["all", "كل الغرف"], ["floor", "دور معين"], ["type", "نوع معين"]].map(([val, label]) => (
+                  {[["all", "كل الغرف"], ["type", "نوع معين"]].map(([val, label]) => (
                     <div key={val} onClick={() => setHotelPrintFilter(val as any)}
                       style={{ flex: 1, minWidth: 80, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${hotelPrintFilter === val ? "var(--info)" : "var(--border)"}`, background: hotelPrintFilter === val ? "var(--male-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: hotelPrintFilter === val ? "var(--info)" : "var(--text-muted)" }}>
                       {label}
                     </div>
                   ))}
                 </div>
-                {hotelPrintFilter === "floor" && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {floors.map(f => (
-                      <div key={f} onClick={() => setHotelPrintFloor(f)}
-                        style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${hotelPrintFloor === f ? "var(--info)" : "var(--border)"}`, background: hotelPrintFloor === f ? "var(--male-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: hotelPrintFloor === f ? "var(--info)" : "var(--text-muted)" }}>
-                        طابق {f}
-                      </div>
-                    ))}
-                  </div>
-                )}
                 {hotelPrintFilter === "type" && (
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {ROOM_TYPES.map(t => {
@@ -825,6 +905,13 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                   </div>
                 )}
               </div>
+
+              <SelectionPanel
+                title="الأدوار المطلوبة في التقرير"
+                items={floorItems}
+                selected={selectedFloors}
+                setSelected={(s) => setSelectedFloors(s as Set<string>)}
+              />
 
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
@@ -862,7 +949,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                   })}
                   <ExportButtons
                     onExcel={exportHotelXLSX}
-                    onPDF={() => downloadPDF(getHotelHTML(), "تقرير_الفندق.html")}
+                    onPDF={() => printInPage(getHotelHTML())}
                     onPrint={() => printInPage(getHotelHTML())}
                   />
                 </>
