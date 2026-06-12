@@ -3,7 +3,8 @@ import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, inp, btnP, btnS } from "../utils";
+import { useConfig } from "../config/ConfigContext";
+import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, inp, btnP, btnS } from "../utils";
 
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
@@ -39,6 +40,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 }
 
 function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const config = useConfig();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -145,6 +147,16 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     })
     .sort((a, b) => ((a as any).sort_order || 0) - ((b as any).sort_order || 0)),
   [passengers, search, filters]);
+
+  // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
+  const printList = () => {
+    const rows = filtered.map((p, i) =>
+      `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.passport || "—"}</td><td>${p.nat}</td><td>${p.gender}</td><td>${p.phone || "—"}</td></tr>`
+    ).join("");
+    const body = `<table><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th><th>رقم الجواز</th><th>الجنسية</th><th>الجنس</th><th>التليفون</th></tr>${rows}</table>`;
+    const html = makeHTML("كشف الحجاج", body, false, config.logo_url || "", config.name_ar || "حملة الأقصى", config.tagline || "", config.color_primary || "#6B1F3A", config.color_accent || "#0C447C");
+    printInPage(html);
+  };
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
@@ -464,6 +476,13 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
               onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--muted)"; }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               أسر
+            </div>
+            {/* طباعة */}
+            <div onClick={printList} title="طباعة" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--em7)"; e.currentTarget.style.color = "var(--em7)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--muted)"; }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              طباعة
             </div>
             {/* list/table toggle */}
             <div style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
