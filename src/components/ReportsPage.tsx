@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, downloadPDF, freezeHeaderRow, addSummarySheet, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, printInPage, downloadPDF, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 
 function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] }) {
   const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
@@ -239,17 +239,25 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   };
 
   const exportBusesXLSX = () => {
-    const rows: any[][] = [["اسم الباص", "النوع", "م", "اسم الحاج", "الجنس", "الجنسية"]];
+    const wb = XLSX.utils.book_new();
+    const usedNames = new Set<string>();
     buses.forEach(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      bp.forEach((p, i) => rows.push([bus.name, bus.type, i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
-      if (bp.length === 0) rows.push([bus.name, bus.type, "", "لا يوجد مسافرون", "", ""]);
+      const title = `${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر`;
+      const aoa: any[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
+      bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
+      if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 4 }, { wch: 30 }, { wch: 8 }, { wch: 12 }];
+      styleTitleRow(ws, 0, 4, primaryColor);
+      styleHeaderRow(ws, 1, 4, primaryColor);
+      freezeHeaderRow(ws, 2);
+      let name = safeSheetName(`${bus.name}${bus.type === "VIP" ? " VIP" : ""}`);
+      let n = name, i = 2;
+      while (usedNames.has(n)) { n = safeSheetName(`${name} ${i++}`); }
+      usedNames.add(n);
+      XLSX.utils.book_append_sheet(wb, ws, n);
     });
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{ wch: 15 }, { wch: 8 }, { wch: 4 }, { wch: 25 }, { wch: 8 }, { wch: 10 }];
-    freezeHeaderRow(ws);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "الباصات");
     addSummarySheet(wb, XLSX, "تقرير الباصات", companyName, [
       ["إجمالي عدد الباصات", buses.length],
       ["إجمالي عدد المسافرين", passengers.filter(p => p.bus_id).length],
@@ -310,17 +318,33 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const pageCamps = camps.filter(c => c.page_type === pageType);
-    const rows: any[][] = [["المخيم", "النوع", "الجنس", "م", "اسم الحاج", "الجنسية"]];
+    const wb = XLSX.utils.book_new();
+    const usedNames = new Set<string>();
     pageCamps.forEach(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
-      cp.forEach((p, i) => rows.push([camp.name, camp.type, camp.gender === "ذكر" ? "رجال" : "نساء", i + 1, p.short_ar || p.name_ar, p.nat]));
-      if (cp.length === 0) rows.push([camp.name, camp.type, camp.gender === "ذكر" ? "رجال" : "نساء", "", "لا يوجد مسافرون", ""]);
+      const isMale = camp.gender === "ذكر";
+      const half = Math.ceil(cp.length / 2);
+      const col1 = cp.slice(0, half);
+      const col2 = cp.slice(half);
+      const maxRows = Math.max(col1.length, col2.length);
+      const title = `مخيم ${isMale ? "رجال" : "نساء"} ${camp.name} — ${camp.type} — ${cp.length} مسافر`;
+      const aoa: any[][] = [[title], ["م", "اسم الحاج", "م", "اسم الحاج"]];
+      for (let i = 0; i < maxRows; i++) {
+        const p1 = col1[i], p2 = col2[i];
+        aoa.push([p1 ? i + 1 : "", p1 ? (p1.short_ar || p1.name_ar) : "", p2 ? half + i + 1 : "", p2 ? (p2.short_ar || p2.name_ar) : ""]);
+      }
+      if (cp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 4 }, { wch: 28 }, { wch: 4 }, { wch: 28 }];
+      styleTitleRow(ws, 0, 4, primaryColor);
+      styleHeaderRow(ws, 1, 4, primaryColor);
+      freezeHeaderRow(ws, 2);
+      let name = safeSheetName(camp.name);
+      let n = name, i = 2;
+      while (usedNames.has(n)) { n = safeSheetName(`${name} ${i++}`); }
+      usedNames.add(n);
+      XLSX.utils.book_append_sheet(wb, ws, n);
     });
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{ wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 4 }, { wch: 30 }, { wch: 15 }];
-    freezeHeaderRow(ws);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `مخيمات ${pageType}`);
     addSummarySheet(wb, XLSX, `تقرير مخيمات ${pageType}`, companyName, [
       ["إجمالي عدد المخيمات", pageCamps.length],
       ["إجمالي عدد الحجاج", passengers.filter(p => (p as any)[campIdKey]).length],
@@ -368,17 +392,40 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
 
   const exportHotelXLSX = () => {
     const filtered = getFilteredRooms();
-    const rows: any[][] = [["رقم الغرفة", "الطابق", "النوع", "م", "اسم الحاج", "الجنس", "طلب الحاج"]];
+    const floors = new Map<string, Room[]>();
     filtered.forEach(room => {
-      const rp = passengers.filter(p => p.room_id === room.id);
-      rp.forEach((p, i) => rows.push([room.number, room.floor || "—", room.type, i + 1, p.short_ar || p.name_ar, p.gender, `${p.services?.hotel_type} ${p.services?.hotel_view}`]));
-      if (rp.length === 0) rows.push([room.number, room.floor || "—", room.type, "", "لا يوجد مسافرون", "", ""]);
+      const key = room.floor ? String(room.floor) : "بدون طابق";
+      if (!floors.has(key)) floors.set(key, []);
+      floors.get(key)!.push(room);
     });
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws["!cols"] = [{ wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 4 }, { wch: 30 }, { wch: 8 }, { wch: 16 }];
-    freezeHeaderRow(ws);
+    const floorKeys = [...floors.keys()].sort((a, b) => {
+      if (a === "بدون طابق") return 1;
+      if (b === "بدون طابق") return -1;
+      return Number(a) - Number(b);
+    });
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "الفندق");
+    const usedNames = new Set<string>();
+    floorKeys.forEach(key => {
+      const floorRooms = floors.get(key)!;
+      const guestCount = floorRooms.reduce((s, r) => s + passengers.filter(p => p.room_id === r.id).length, 0);
+      const title = `${key === "بدون طابق" ? key : `الطابق ${key}`} — ${floorRooms.length} غرفة — ${guestCount} نزيل`;
+      const aoa: any[][] = [[title], ["رقم الغرفة", "النوع", "م", "اسم الحاج", "الجنس", "طلب الحاج"]];
+      floorRooms.forEach(room => {
+        const rp = passengers.filter(p => p.room_id === room.id);
+        rp.forEach((p, i) => aoa.push([room.number, room.type, i + 1, p.short_ar || p.name_ar, p.gender, `${p.services?.hotel_type} ${p.services?.hotel_view}`]));
+        if (rp.length === 0) aoa.push([room.number, room.type, "", "لا يوجد مسافرون", "", ""]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 10 }, { wch: 10 }, { wch: 4 }, { wch: 30 }, { wch: 8 }, { wch: 16 }];
+      styleTitleRow(ws, 0, 6, primaryColor);
+      styleHeaderRow(ws, 1, 6, primaryColor);
+      freezeHeaderRow(ws, 2);
+      let name = safeSheetName(key === "بدون طابق" ? key : `الطابق ${key}`);
+      let n = name, i = 2;
+      while (usedNames.has(n)) { n = safeSheetName(`${name} ${i++}`); }
+      usedNames.add(n);
+      XLSX.utils.book_append_sheet(wb, ws, n);
+    });
     const subtitle = hotelPrintFilter === "floor" ? ` — الطابق ${hotelPrintFloor}` : hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     addSummarySheet(wb, XLSX, `تقرير الفندق${subtitle}`, companyName, [
       ["إجمالي عدد الغرف", filtered.length],
