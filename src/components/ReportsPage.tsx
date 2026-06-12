@@ -3,12 +3,18 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, downloadPDF, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, printInPage, downloadPDF, freezeHeaderRow, addSummarySheet, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 
 function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] }) {
   const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   const config = useConfig();
   const logoUrl = config.logo_url || "";
+  const companyName = config.name_ar || "حملة الأقصى";
+  const tagline = config.tagline || "";
+  const primaryColor = config.color_primary || "#6B1F3A";
+  const accentColor = config.color_accent || "#0C447C";
+  const mkHTML = (title: string, body: string, landscape = false) =>
+    makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor);
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -100,7 +106,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`
     ).join("");
     const body = `<table><tr><th style="text-align:center;width:30px">م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>${rows}</table>`;
-    return makeHTML("كشف الحجاج", body, true, logoUrl);
+    return mkHTML("كشف الحجاج", body, true);
   };
 
   const exportPassengersXLSX = () => {
@@ -108,8 +114,15 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const rows = passengers.map((p, i) => [i + 1, ...activeCols.map(c => c.get(p) || "")]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws["!cols"] = [{ wch: 4 }, ...activeCols.map(c => ({ wch: Math.max(c.label.length + 2, 15) }))];
+    freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
+    addSummarySheet(wb, XLSX, "كشف الحجاج", companyName, [
+      ["إجمالي عدد الحجاج", passengers.length],
+      ["عدد الرجال", passengers.filter(p => p.gender === "ذكر").length],
+      ["عدد النساء", passengers.filter(p => p.gender === "أنثى").length],
+      ["عدد الأعمدة المعروضة", activeCols.length],
+    ]);
     XLSX.writeFile(wb, "تقرير_الحجاج.xlsx");
   };
 
@@ -125,7 +138,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
     const body = `<table style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
-    return makeHTML("Pilgrims Flight List", body, true, logoUrl);
+    return mkHTML("Pilgrims Flight List", body, true);
   };
 
   const exportAirlineXLSX = () => {
@@ -140,8 +153,14 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws["!cols"] = [{ wch: 5 }, { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
+    freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Flight List");
+    addSummarySheet(wb, XLSX, "Pilgrims Flight List", companyName, [
+      ["إجمالي عدد الحجاج", list.length],
+      ["درجة أولى", list.filter(p => p.flight_class === "درجة أولى").length],
+      ["درجة اقتصادية", list.filter(p => p.flight_class !== "درجة أولى").length],
+    ]);
     XLSX.writeFile(wb, "flight_list.xlsx");
   };
 
@@ -173,7 +192,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
           <table style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>
         </div>`;
     }).join("");
-    return makeHTML("تقرير الرحلات", sections, true, logoUrl);
+    return mkHTML("تقرير الرحلات", sections, true);
   };
 
   const exportPerFlightXLSX = () => {
@@ -191,8 +210,14 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       ]);
       const ws = XLSX.utils.aoa_to_sheet([...info, headers, ...rows]);
       ws["!cols"] = [{ wch: 5 }, { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
+      freezeHeaderRow(ws, info.length + 1);
       XLSX.utils.book_append_sheet(wb, ws, flight.name.slice(0, 31));
     });
+    addSummarySheet(wb, XLSX, "تقرير الرحلات", companyName, [
+      ["إجمالي عدد الرحلات", flights.length],
+      ["إجمالي عدد الحجاج", passengers.filter(p => p.flight_id).length],
+      ...flights.map(f => [f.name, passengers.filter(p => p.flight_id === f.id).length]),
+    ]);
     XLSX.writeFile(wb, "تقرير_الرحلات.xlsx");
   };
 
@@ -210,7 +235,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
         <table><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th></tr>${rows}</table>
       </div>`;
     }).join("");
-    return makeHTML("تقرير الباصات", sections, false, logoUrl);
+    return mkHTML("تقرير الباصات", sections, false);
   };
 
   const exportBusesXLSX = () => {
@@ -222,8 +247,14 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws["!cols"] = [{ wch: 15 }, { wch: 8 }, { wch: 4 }, { wch: 25 }, { wch: 8 }, { wch: 10 }];
+    freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الباصات");
+    addSummarySheet(wb, XLSX, "تقرير الباصات", companyName, [
+      ["إجمالي عدد الباصات", buses.length],
+      ["إجمالي عدد المسافرين", passengers.filter(p => p.bus_id).length],
+      ...buses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, passengers.filter(p => p.bus_id === b.id).length]),
+    ]);
     XLSX.writeFile(wb, "تقرير_الباصات.xlsx");
   };
 
@@ -270,7 +301,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
         </table>
       </div>`;
     }).join("");
-    return makeHTML(`مخيمات ${pageType}`, sections, false, logoUrl);
+    return mkHTML(`مخيمات ${pageType}`, sections, false);
   };
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
@@ -283,8 +314,15 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       if (cp.length === 0) rows.push([camp.name, camp.type, camp.gender === "ذكر" ? "رجال" : "نساء", "", "لا يوجد مسافرون", ""]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{ wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 4 }, { wch: 30 }, { wch: 15 }];
+    freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `مخيمات ${pageType}`);
+    addSummarySheet(wb, XLSX, `تقرير مخيمات ${pageType}`, companyName, [
+      ["إجمالي عدد المخيمات", pageCamps.length],
+      ["إجمالي عدد الحجاج", passengers.filter(p => (p as any)[campIdKey]).length],
+      ...pageCamps.map(c => [`${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})`, passengers.filter(p => (p as any)[campIdKey] === c.id).length]),
+    ]);
     XLSX.writeFile(wb, `تقرير_مخيمات_${pageType}.xlsx`);
   };
 
@@ -322,7 +360,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       <div>${col3.map(renderRoomBlock).join("")}</div>
     </div>`;
     const subtitle = hotelPrintFilter === "floor" ? ` — الطابق ${hotelPrintFloor}` : hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
-    return makeHTML(`تقرير الفندق${subtitle}`, body, true, logoUrl);
+    return mkHTML(`تقرير الفندق${subtitle}`, body, true);
   };
 
   const exportHotelXLSX = () => {
@@ -334,8 +372,16 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       if (rp.length === 0) rows.push([room.number, room.floor || "—", room.type, "", "لا يوجد مسافرون", "", ""]);
     });
     const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = [{ wch: 10 }, { wch: 8 }, { wch: 10 }, { wch: 4 }, { wch: 30 }, { wch: 8 }, { wch: 16 }];
+    freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الفندق");
+    const subtitle = hotelPrintFilter === "floor" ? ` — الطابق ${hotelPrintFloor}` : hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
+    addSummarySheet(wb, XLSX, `تقرير الفندق${subtitle}`, companyName, [
+      ["إجمالي عدد الغرف", filtered.length],
+      ["إجمالي عدد النزلاء", passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id)).length],
+      ...ROOM_TYPES.map(t => [`غرف ${t}`, filtered.filter(r => r.type === t).length]),
+    ]);
     XLSX.writeFile(wb, "تقرير_الفندق.xlsx");
   };
 
