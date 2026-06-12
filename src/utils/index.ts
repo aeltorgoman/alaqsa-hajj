@@ -139,8 +139,8 @@ export function makeHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
-  // نقشة إسلامية ذهبية خفيفة كخلفية للصفحة (نجمة ثمانية مكررة)
-  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><g fill='#D4A017' fill-opacity='0.14'><path d='M50 8 L62 38 L92 50 L62 62 L50 92 L38 62 L8 50 L38 38 Z'/></g><g fill='none' stroke='#D4A017' stroke-width='1' stroke-opacity='0.12'><circle cx='0' cy='0' r='22'/><circle cx='100' cy='0' r='22'/><circle cx='0' cy='100' r='22'/><circle cx='100' cy='100' r='22'/></g></svg>`;
+  // نقشة إسلامية ذهبية خفيفة جدًا كخلفية للصفحة
+  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'><g fill='#D4A017' fill-opacity='0.045'><path d='M30 6 L36 24 L54 30 L36 36 L30 54 L24 36 L6 30 L24 24 Z'/></g></svg>`;
   const patternURL = `data:image/svg+xml,${encodeURIComponent(patternSVG)}`;
   const headerHTML = noHeader ? "" : `<div class="doc-header">
   <div class="brand">
@@ -161,8 +161,8 @@ export function makeHTML(
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  html { background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 100px 100px; }
-  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 15px; color: #1c1c1c; background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 100px 100px; }
+  html { background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 60px 60px; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 15px; color: #1c1c1c; background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 60px 60px; }
   .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 6px; }
   .doc-header .brand { display: flex; align-items: center; gap: 14px; }
   .doc-header .logo-box { width: 104px; height: 104px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 42px; font-weight: 700; flex-shrink: 0; }
@@ -181,8 +181,8 @@ export function makeHTML(
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
   th { background: ${primaryColor}; color: #fff; padding: 10px 14px; text-align: right; font-size: 15px; font-weight: 600; }
-  td { border: 0.5px solid #e4e4e4; padding: 9px 14px; text-align: right; background: #fff; font-size: 15px; white-space: nowrap; }
-  tr:nth-child(even) td { background: #f7f7fa; }
+  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 9px 14px; text-align: right; background: transparent; font-size: 15px; white-space: nowrap; }
+  tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 18px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
   .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
