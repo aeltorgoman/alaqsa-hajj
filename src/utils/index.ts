@@ -120,34 +120,62 @@ export async function uploadDoc(file: File, passengerId: number, docType: string
   return data?.publicUrl || null;
 }
 
-export function makeHTML(title: string, body: string, landscape = false, logoUrl = "") {
+export function makeHTML(
+  title: string,
+  body: string,
+  landscape = false,
+  logoUrl = "",
+  companyName = "حملة الأقصى",
+  tagline = "",
+  primaryColor = "#6B1F3A",
+  accentColor = "#0C447C"
+) {
+  const initial = (companyName || "ح").trim().charAt(0);
   const logoHtml = logoUrl
-    ? `<img src="${logoUrl}" style="height:60px;object-fit:contain" />`
-    : `<div style="width:60px;height:60px;background:#0C447C;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:24px">✈️</div>`;
+    ? `<img src="${logoUrl}" alt="logo" />`
+    : `<span>${initial}</span>`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${title}</title>
 <style>
-  @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 12mm; }
+  @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 10px; color: #222; }
-  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 2px solid #0C447C; padding-bottom: 10px; }
-  .page-title { font-size: 20px; font-weight: 700; color: #0C447C; text-align: center; flex: 1; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 10px; color: #1c1c1c; }
+  .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 10px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 4px; }
+  .doc-header .brand { display: flex; align-items: center; gap: 10px; }
+  .doc-header .logo-box { width: 52px; height: 52px; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 22px; font-weight: 700; flex-shrink: 0; }
+  .doc-header .logo-box img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .doc-header .company-name { font-size: 14px; font-weight: 700; color: ${primaryColor}; }
+  .doc-header .tagline { font-size: 9px; color: #888; margin-top: 2px; }
+  .doc-header .meta { text-align: left; font-size: 9px; color: #999; line-height: 1.6; }
+  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 9px 0; border-radius: 8px; font-size: 16px; font-weight: 700; margin: 12px 0 14px; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  th { background: #0C447C; color: white; padding: 7px 10px; text-align: right; font-size: 10px; }
-  td { border: 0.5px solid #ddd; padding: 6px 10px; text-align: right; }
-  tr:nth-child(even) td { background: #f5f8ff; }
-  .section-title { font-size: 14px; font-weight: 700; color: #0C447C; margin: 14px 0 6px; text-align: center; }
+  th { background: ${primaryColor}; color: #fff; padding: 7px 10px; text-align: right; font-size: 10px; font-weight: 600; }
+  td { border: 0.5px solid #e4e4e4; padding: 6px 10px; text-align: right; }
+  tr:nth-child(even) td { background: #f7f7fa; }
+  .section-title { font-size: 13px; font-weight: 700; color: ${primaryColor}; margin: 14px 0 6px; text-align: center; padding: 6px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
-  .footer { text-align: center; color: #aaa; font-size: 9px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 6px; }
+  .footer { text-align: center; color: #aaa; font-size: 8px; margin-top: 18px; border-top: 0.5px solid #eee; padding-top: 6px; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
-<div class="page-header">
-  ${logoHtml}
-  <div class="page-title">${title}</div>
-  ${logoHtml}
+<div class="doc-header">
+  <div class="brand">
+    <div class="logo-box">${logoHtml}</div>
+    <div>
+      <div class="company-name">${companyName}</div>
+      ${tagline ? `<div class="tagline">${tagline}</div>` : ""}
+    </div>
+  </div>
+  <div class="meta">
+    <div>تاريخ الإصدار: ${dateStr}</div>
+    <div>الساعة: ${timeStr}</div>
+  </div>
 </div>
+<div class="doc-title-bar">${title}</div>
 ${body}
-<div class="footer">حملة الأقصى — تقرير ${title}</div>
+<div class="footer">${companyName}${tagline ? " — " + tagline : ""} · تقرير ${title}</div>
 </body></html>`;
 }
 
@@ -172,6 +200,36 @@ export function downloadPDF(html: string, filename: string) {
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ===== تثبيت صف العنوان (Freeze Header Row) =====
+export function freezeHeaderRow(ws: import("xlsx").WorkSheet, rows = 1) {
+  (ws as any)["!views"] = [{ state: "frozen", xSplit: 0, ySplit: rows, topLeftCell: `A${rows + 1}`, activePane: "bottomLeft" }];
+}
+
+// ===== إضافة شيت ملخص في أول الملف =====
+export function addSummarySheet(
+  wb: import("xlsx").WorkBook,
+  XLSXLib: typeof import("xlsx"),
+  reportTitle: string,
+  companyName: string,
+  stats: (string | number)[][],
+  sheetName = "ملخص"
+) {
+  const now = new Date();
+  const aoa: (string | number)[][] = [
+    [companyName],
+    [reportTitle],
+    [`تاريخ الإصدار: ${now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" })}`],
+    [],
+    ["البيان", "القيمة"],
+    ...stats,
+  ];
+  const ws = XLSXLib.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 30 }, { wch: 16 }];
+  XLSXLib.utils.book_append_sheet(wb, ws, sheetName);
+  // نقل شيت الملخص لأول الملف
+  wb.SheetNames.unshift(wb.SheetNames.pop() as string);
 }
 
 export const ALL_PERMISSIONS = [
