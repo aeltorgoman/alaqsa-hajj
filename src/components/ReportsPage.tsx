@@ -44,7 +44,9 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
 
   // تقرير الطيران — نوع التقرير الفرعي
   const [flightSubReport, setFlightSubReport] = useState<"airline" | "per_flight" | null>(null);
-  const [passportSelectedIds, setPassportSelectedIds] = useState<Set<number>>(new Set());
+  const [docType, setDocType] = useState<"passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url">("passport_url");
+  const [docSelected, setDocSelected] = useState<Record<string, Set<number>>>({});
+  const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
 
   // ===== WhatsApp State =====
   const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
@@ -126,7 +128,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`
     ).join("");
     const body = `<table><tr><th style="text-align:center;width:30px">م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>${rows}</table>`;
-    return mkHTML("كشف الحجاج", body, true);
+    return mkHTML("كشف الحجاج", body, activeCols.length > 5);
   };
 
   const exportPassengersXLSX = () => {
@@ -192,10 +194,8 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const sections = selFlights.map(flight => {
       const fp = passengers.filter(p => p.flight_id === flight.id);
       const rows = fp.map((p, i) => {
-        const nat = p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat;
-        const gender = p.gender === "ذكر" ? "MR." : "MRS.";
-        const cls = p.flight_class === "درجة أولى" ? "FIRST CLASS" : "";
-        return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
+        const cls = p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية";
+        return `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${p.gender}</td><td>${cls}</td></tr>`;
       }).join("");
       return `
         <div class="page-break">
@@ -210,7 +210,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
               <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
             </div>
           </div>
-          <table style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>
+          <table><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>
         </div>`;
     }).join("");
     return mkHTML("تقرير الرحلات", sections, true);
@@ -221,17 +221,14 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const wb = XLSX.utils.book_new();
     selFlights.forEach(flight => {
       const fp = passengers.filter(p => p.flight_id === flight.id);
-      const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
+      const headers = ["م", "اسم الحاج / الحاجة", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"];
       const info = [["الرحلة:", flight.name], ["الخط:", flight.airline], ["التاريخ:", flight.date], ["الوقت:", flight.time], ["من:", flight.from_airport], ["إلى:", flight.to_airport], []];
       const rows = fp.map((p, i) => [
-        i + 1, p.name_en,
-        p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat,
-        p.passport, p.phone || "—",
-        p.gender === "ذكر" ? "MR." : "MRS.",
-        p.flight_class === "درجة أولى" ? "FIRST CLASS" : ""
+        i + 1, p.short_ar || p.name_ar, p.nat, p.passport, p.phone || "—", p.gender,
+        p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية"
       ]);
       const ws = XLSX.utils.aoa_to_sheet([...info, headers, ...rows]);
-      ws["!cols"] = [{ wch: 5 }, { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
+      ws["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 12 }];
       freezeHeaderRow(ws, info.length + 1);
       XLSX.utils.book_append_sheet(wb, ws, flight.name.slice(0, 31));
     });
@@ -244,18 +241,46 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   };
 
   // ============================================================
+  // عرض قائمة أسماء: عمود واحد لو أقل من 20، وعمودين لو 20 فأكثر
+  // ============================================================
+  const renderNamesTable = (items: Passenger[], nameLabel = "اسم الحاج") => {
+    if (items.length === 0) {
+      return `<table><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr><tr><td></td><td>لا يوجد مسافرون</td></tr></table>`;
+    }
+    if (items.length < 20) {
+      const rows = items.map((p, i) => `<tr><td style="text-align:center;width:40px">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`).join("");
+      return `<table><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr>${rows}</table>`;
+    }
+    const half = Math.ceil(items.length / 2);
+    const col1 = items.slice(0, half);
+    const col2 = items.slice(half);
+    const maxRows = Math.max(col1.length, col2.length);
+    let rows = "";
+    for (let i = 0; i < maxRows; i++) {
+      const p1 = col1[i], p2 = col2[i];
+      rows += `<tr>
+        <td style="text-align:center;width:30px">${p1 ? i + 1 : ""}</td>
+        <td>${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
+        <td style="text-align:center;width:30px;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
+        <td>${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
+      </tr>`;
+    }
+    return `<table>
+      <tr><th style="text-align:center;width:30px">م</th><th>${nameLabel}</th><th style="text-align:center;width:30px">م</th><th>${nameLabel}</th></tr>
+      ${rows}
+    </table>`;
+  };
+
+  // ============================================================
   // تقرير الباصات
   // ============================================================
   const getBusesHTML = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
     const sections = selBuses.map(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      const rows = bp.map((p, i) =>
-        `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`
-      ).join("");
       return `<div class="page-break">
-        <div class="section-title">${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
-        <table><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th></tr>${rows}</table>
+        <div class="section-title">باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر</div>
+        ${renderNamesTable(bp, "اسم الحاج / الحاجة")}
       </div>`;
     }).join("");
     return mkHTML("تقرير الباصات", sections, false);
@@ -267,7 +292,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const usedNames = new Set<string>();
     selBuses.forEach(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      const title = `${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر`;
+      const title = `باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر`;
       const aoa: any[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
       bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
       if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
@@ -301,40 +326,16 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
-      // عمودين جنب بعض
-      const half = Math.ceil(cp.length / 2);
-      const col1 = cp.slice(0, half);
-      const col2 = cp.slice(half);
-      const maxRows = Math.max(col1.length, col2.length);
-      let tableRows = "";
-      for (let i = 0; i < maxRows; i++) {
-        const p1 = col1[i];
-        const p2 = col2[i];
-        tableRows += `<tr>
-          <td style="text-align:center;width:30px">${p1 ? i + 1 : ""}</td>
-          <td>${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
-          <td style="text-align:center;width:30px;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
-          <td>${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
-        </tr>`;
-      }
       return `<div class="page-break">
         <div class="camp-header">
           <div class="camp-logo">${campLogoHtml}</div>
           <div class="camp-title-box">
-            <div class="camp-title">مخيم ${isMale ? "رجال" : "نساء"} ${camp.name}</div>
-            <div class="camp-subtitle">${camp.type} · ${cp.length} مسافر</div>
+            <div class="camp-title">مخيم ${pageType} ${camp.name}</div>
+            <div class="camp-subtitle">${isMale ? "رجال" : "نساء"} · ${camp.type} · ${cp.length} مسافر</div>
           </div>
           <div class="camp-logo">${campLogoHtml}</div>
         </div>
-        <table class="camp-table">
-          <tr>
-            <th style="text-align:center;width:30px">م</th>
-            <th>اسم الحاج</th>
-            <th style="text-align:center;width:30px">م</th>
-            <th>اسم الحاج</th>
-          </tr>
-          ${tableRows}
-        </table>
+        ${renderNamesTable(cp, "اسم الحاج")}
       </div>`;
     }).join("");
     return mkHTML(`مخيمات ${pageType}`, sections, false, true);
@@ -353,7 +354,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       const col1 = cp.slice(0, half);
       const col2 = cp.slice(half);
       const maxRows = Math.max(col1.length, col2.length);
-      const title = `مخيم ${isMale ? "رجال" : "نساء"} ${camp.name} — ${camp.type} — ${cp.length} مسافر`;
+      const title = `مخيم ${pageType} ${camp.name} — ${isMale ? "رجال" : "نساء"} · ${camp.type} — ${cp.length} مسافر`;
       const aoa: any[][] = [[title], ["م", "اسم الحاج", "م", "اسم الحاج"]];
       for (let i = 0; i < maxRows; i++) {
         const p1 = col1[i], p2 = col2[i];
@@ -514,6 +515,46 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
 
 
   // ============================================================
+  // طباعة المستندات (جواز / بطاقة / تصريح / تذكرة)
+  // ============================================================
+  const DOC_TYPES: { key: "passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url"; label: string }[] = [
+    { key: "passport_url", label: "جواز السفر" },
+    { key: "national_id_url", label: "البطاقة الشخصية" },
+    { key: "hajj_permit_url", label: "التصريح" },
+    { key: "flight_ticket_url", label: "تذكرة الطيران" },
+  ];
+  const docTypeLabel = DOC_TYPES.find(d => d.key === docType)?.label || "";
+  const docList = passengers.filter(p => (p as any)[docType]);
+  const docSelectedIds = docSelected[docType] || new Set<number>();
+  const toggleDocSelected = (id: number) => setDocSelected(prev => {
+    const cur = new Set(prev[docType] || []);
+    if (cur.has(id)) cur.delete(id); else cur.add(id);
+    return { ...prev, [docType]: cur };
+  });
+  const printDocuments = () => {
+    const toPrint = docList.filter(p => docSelectedIds.has(p.id));
+    if (!toPrint.length) { alert("اختار حجاج أولاً!"); return; }
+    const cols = docPerPage === 4 ? 2 : 1;
+    const rows = docPerPage === 1 ? 1 : 2;
+    const pages: Passenger[][] = [];
+    for (let i = 0; i < toPrint.length; i += docPerPage) pages.push(toPrint.slice(i, i + docPerPage));
+    const pagesHTML = pages.map(pg => `
+      <div style="page-break-after:always;height:100vh;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:10px;padding:10px;box-sizing:border-box">
+        ${pg.map(p => `
+          <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
+            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}</div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
+              <img src="${(p as any)[docType]}" style="max-width:100%;max-height:100%;object-fit:contain" />
+            </div>
+          </div>`).join("")}
+      </div>`).join("");
+    const w = window.open("", "_blank"); if (!w) return;
+    w.document.write(`<html><head><title>${docTypeLabel}</title><style>body{font-family:Tajawal,Arial;margin:0;direction:rtl}@media print{@page{margin:8mm}}</style></head><body>${pagesHTML}<script>window.print();<\/script></body></html>`);
+    w.document.close();
+  };
+
+
+  // ============================================================
   // قائمة التقارير
   // ============================================================
   const reports = [
@@ -523,7 +564,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     { id: "mina", name: "تقرير منى", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات منى", color: "var(--success-bg)" },
     { id: "arafa", name: "تقرير عرفة", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>`, desc: "مخيمات عرفة", color: "var(--warning-bg)" },
     { id: "hotel", name: "تقرير الفندق", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/></svg>`, desc: "توزيع الغرف", color: "var(--female-bg)" },
-    { id: "passports", name: "طباعة الجوازات", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/></svg>`, desc: "طباعة صور جوازات الحجاج", color: "rgba(125,31,60,0.08)" },
+    { id: "documents", name: "طباعة المستندات", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/></svg>`, desc: "طباعة جواز / بطاقة / تصريح / تذكرة", color: "rgba(125,31,60,0.08)" },
     { id: "whatsapp", name: "رسائل WhatsApp", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`, desc: "إرسال رسائل مخصصة للحجاج", color: "rgba(37,211,102,0.1)" },
   ];
 
@@ -957,58 +998,72 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
             </>
           )}
 
-          {/* ===== طباعة الجوازات ===== */}
-          {activeReport === "passports" && (
+          {/* ===== طباعة المستندات ===== */}
+          {activeReport === "documents" && (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>طباعة الجوازات</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => {
-                    const withPassport = passengers.filter(p => (p as any).passport_url);
-                    setPassportSelectedIds(prev => prev.size === withPassport.length ? new Set() : new Set(withPassport.map(p => p.id)));
-                  }} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer" }}>
-                    {passportSelectedIds.size === passengers.filter(p => (p as any).passport_url).length ? "إلغاء الكل" : "تحديد الكل"}
-                  </button>
-                  <button onClick={() => {
-                    const toprint = passengers.filter(p => (p as any).passport_url && passportSelectedIds.has(p.id));
-                    if (!toprint.length) { alert("اختار جوازات أولاً!"); return; }
-                    const w = window.open("", "_blank"); if (!w) return;
-                    const imgs = toprint.map(p => `<div style="break-inside:avoid;margin-bottom:20px;border:1px solid #ddd;border-radius:8px;overflow:hidden"><div style="background:#7D1F3C;color:#e7cd8a;padding:6px 12px;font-size:12px;font-weight:700;direction:rtl">${p.short_ar || p.name_ar} — ${p.passport || "—"}</div><img src="${(p as any).passport_url}" style="width:100%;max-height:280px;object-fit:contain;display:block" /></div>`).join("");
-                    w.document.write(`<html><head><title>جوازات السفر</title><style>body{font-family:Arial;padding:16px;margin:0}@media print{@page{margin:10mm}}</style></head><body><h2 style="text-align:center;color:#7D1F3C;margin-bottom:16px">جوازات السفر (${toprint.length})</h2><div style="columns:2;column-gap:16px">${imgs}</div><script>window.print();<\/script></body></html>`);
-                    w.document.close();
-                  }} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 99, background: "var(--em7)", color: "var(--g3)", border: "none", cursor: "pointer", fontWeight: 600 }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    طباعة ({passportSelectedIds.size})
-                  </button>
-                </div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>طباعة المستندات</div>
+
+              {/* نوع المستند */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                {DOC_TYPES.map(d => (
+                  <div key={d.key} onClick={() => setDocType(d.key)}
+                    style={{ flex: 1, minWidth: 90, padding: "8px 10px", borderRadius: 8, border: `1.5px solid ${docType === d.key ? "var(--em7)" : "var(--border)"}`, background: docType === d.key ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: docType === d.key ? "var(--em7)" : "var(--text-muted)" }}>
+                    {d.label} ({passengers.filter(p => (p as any)[d.key]).length})
+                  </div>
+                ))}
               </div>
-              {passengers.filter(p => (p as any).passport_url).length === 0 ? (
-                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد حجاج رُفعت جوازاتهم بعد</div>
+
+              {/* عدد المستندات في الصفحة */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>عدد المستندات في الصفحة:</div>
+                {[1, 2, 4].map(n => (
+                  <div key={n} onClick={() => setDocPerPage(n as 1 | 2 | 4)}
+                    style={{ padding: "6px 16px", borderRadius: 8, border: `1.5px solid ${docPerPage === n ? "var(--info)" : "var(--border)"}`, background: docPerPage === n ? "var(--male-bg)" : "transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: docPerPage === n ? "var(--info)" : "var(--text-muted)" }}>
+                    {n}
+                  </div>
+                ))}
+              </div>
+
+              {docList.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد حجاج عندهم {docTypeLabel} مرفوع</div>
               ) : (
-                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
-                  {passengers.filter(p => (p as any).passport_url).map((p, i) => (
-                    <div key={p.id} onClick={() => setPassportSelectedIds(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
-                      style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: "0.5px solid var(--line)", cursor: "pointer", background: passportSelectedIds.has(p.id) ? "rgba(125,31,60,0.05)" : "transparent", transition: "background 0.1s" }}>
-                      {/* Checkbox */}
-                      <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${passportSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, background: passportSelectedIds.has(p.id) ? "var(--em7)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.1s" }}>
-                        {passportSelectedIds.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                      </div>
-                      {/* رقم */}
-                      <span style={{ fontSize: 11, color: "var(--text-muted)", width: 24, flexShrink: 0 }}>{i + 1}</span>
-                      {/* الاسم */}
-                      <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {/* الجواز */}
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{p.passport || "—"}</span>
-                      {/* الجنس */}
-                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)" }}>{p.gender === "أنثى" ? "أنثى" : "ذكر"}</span>
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500 }}>{docTypeLabel} ({docList.length})</div>
+                    <div onClick={() => setDocSelected(prev => ({ ...prev, [docType]: docSelectedIds.size === docList.length ? new Set() : new Set(docList.map(p => p.id)) }))} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
+                      {docSelectedIds.size === docList.length ? "إلغاء الكل" : "تحديد الكل"}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                  <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
+                    {docList.map((p, i) => (
+                      <div key={p.id} onClick={() => toggleDocSelected(p.id)}
+                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderBottom: "0.5px solid var(--line)", cursor: "pointer", background: docSelectedIds.has(p.id) ? "rgba(125,31,60,0.05)" : "transparent", transition: "background 0.1s" }}>
+                        {/* Checkbox */}
+                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${docSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, background: docSelectedIds.has(p.id) ? "var(--em7)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.1s" }}>
+                          {docSelectedIds.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
+                        {/* رقم */}
+                        <span style={{ fontSize: 11, color: "var(--text-muted)", width: 24, flexShrink: 0 }}>{i + 1}</span>
+                        {/* الاسم */}
+                        <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        {/* الجواز */}
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{p.passport || "—"}</span>
+                        {/* الجنس */}
+                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: p.gender === "أنثى" ? "var(--fb)" : "var(--mb)", color: p.gender === "أنثى" ? "var(--ff)" : "var(--mf)" }}>{p.gender === "أنثى" ? "أنثى" : "ذكر"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={printDocuments} style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "var(--em7)", color: "var(--g3)", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    طباعة ({docSelectedIds.size})
+                  </button>
+                </>
               )}
-              {passengers.filter(p => !(p as any).passport_url).length > 0 && (
+
+              {passengers.filter(p => !(p as any)[docType]).length > 0 && (
                 <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 6 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  {passengers.filter(p => !(p as any).passport_url).length} حاج مش عندهم صورة جواز مرفوعة
+                  {passengers.filter(p => !(p as any)[docType]).length} حاج مش عندهم {docTypeLabel} مرفوع
                 </div>
               )}
             </>
