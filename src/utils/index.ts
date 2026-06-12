@@ -139,8 +139,8 @@ export function makeHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
-  // نقشة إسلامية ذهبية خفيفة كخلفية للصفحة
-  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90' viewBox='0 0 90 90'><g fill='none' stroke='#D4A017' stroke-width='1.2' stroke-opacity='0.16'><path d='M45 6 L54 24 L73 24 L58 36 L65 56 L45 44 L25 56 L32 36 L17 24 L36 24 Z'/><circle cx='45' cy='45' r='3'/><path d='M0 45 H90 M45 0 V90' stroke-opacity='0.05'/></g></svg>`;
+  // نقشة إسلامية ذهبية خفيفة كخلفية للصفحة (نجمة ثمانية مكررة)
+  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><g fill='#D4A017' fill-opacity='0.14'><path d='M50 8 L62 38 L92 50 L62 62 L50 92 L38 62 L8 50 L38 38 Z'/></g><g fill='none' stroke='#D4A017' stroke-width='1' stroke-opacity='0.12'><circle cx='0' cy='0' r='22'/><circle cx='100' cy='0' r='22'/><circle cx='0' cy='100' r='22'/><circle cx='100' cy='100' r='22'/></g></svg>`;
   const patternURL = `data:image/svg+xml,${encodeURIComponent(patternSVG)}`;
   const headerHTML = noHeader ? "" : `<div class="doc-header">
   <div class="brand">
@@ -161,7 +161,8 @@ export function makeHTML(
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 15px; color: #1c1c1c; background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 90px 90px; }
+  html { background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 100px 100px; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 15px; color: #1c1c1c; background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 100px 100px; }
   .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 6px; }
   .doc-header .brand { display: flex; align-items: center; gap: 14px; }
   .doc-header .logo-box { width: 104px; height: 104px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 42px; font-weight: 700; flex-shrink: 0; }
@@ -180,12 +181,12 @@ export function makeHTML(
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
   th { background: ${primaryColor}; color: #fff; padding: 10px 14px; text-align: right; font-size: 15px; font-weight: 600; }
-  td { border: 0.5px solid #e4e4e4; padding: 9px 14px; text-align: right; background: #fff; font-size: 15px; }
+  td { border: 0.5px solid #e4e4e4; padding: 9px 14px; text-align: right; background: #fff; font-size: 15px; white-space: nowrap; }
   tr:nth-child(even) td { background: #f7f7fa; }
   .section-title { font-size: 18px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
   .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; } }
 </style></head><body>
 ${headerHTML}
 ${body}
@@ -297,7 +298,7 @@ export const NAV = [
   { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "view_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
   { section: "التقارير", items: [{ id: "reports", label: "التقارير", perm: "view_reports" }] },
   { section: "الأرشيف", items: [{ id: "archive", label: "الأرشيف", perm: "view_archive" }] },
-  { section: "الإعدادات", items: [{ id: "users", label: "المستخدمين", perm: "manage_users" }] },
+  { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }] },
 ];
 
 export const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", padding: "7px 10px", width: "100%", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box" as const, color: "var(--text)" };
