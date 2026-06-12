@@ -13,8 +13,8 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const tagline = config.tagline || "";
   const primaryColor = config.color_primary || "#6B1F3A";
   const accentColor = config.color_accent || "#0C447C";
-  const mkHTML = (title: string, body: string, landscape = false) =>
-    makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor);
+  const mkHTML = (title: string, body: string, landscape = false, noHeader = false) =>
+    makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader);
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -263,12 +263,11 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-    const icon = pageType === "منى" ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>` : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>`;
+    const campLogoHtml = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName || "ح").trim().charAt(0)}</span>`;
     const pageCamps = camps.filter(c => c.page_type === pageType);
     const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
-      const headerColor = isMale ? "var(--info)" : "var(--female-fg)";
       // عمودين جنب بعض
       const half = Math.ceil(cp.length / 2);
       const col1 = cp.slice(0, half);
@@ -281,27 +280,31 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
         tableRows += `<tr>
           <td style="text-align:center;width:30px">${p1 ? i + 1 : ""}</td>
           <td>${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
-          <td style="text-align:center;width:30px;border-right:2px solid #0C447C">${p2 ? half + i + 1 : ""}</td>
+          <td style="text-align:center;width:30px;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
           <td>${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
         </tr>`;
       }
       return `<div class="page-break">
-        <div style="text-align:center;margin-bottom:12px">
-          <div style="font-size:22px;font-weight:700;color:${headerColor}">${icon} مخيم ${isMale ? "رجال" : "نساء"} ${camp.name}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">${camp.type} · ${cp.length} مسافر</div>
+        <div class="camp-header">
+          <div class="camp-logo">${campLogoHtml}</div>
+          <div class="camp-title-box">
+            <div class="camp-title">مخيم ${isMale ? "رجال" : "نساء"} ${camp.name}</div>
+            <div class="camp-subtitle">${camp.type} · ${cp.length} مسافر</div>
+          </div>
+          <div class="camp-logo">${campLogoHtml}</div>
         </div>
-        <table>
+        <table class="camp-table">
           <tr>
-            <th style="text-align:center;width:30px;background:${headerColor}">م</th>
-            <th style="background:${headerColor}">اسم الحاج</th>
-            <th style="text-align:center;width:30px;background:${headerColor}">م</th>
-            <th style="background:${headerColor}">اسم الحاج</th>
+            <th style="text-align:center;width:30px">م</th>
+            <th>اسم الحاج</th>
+            <th style="text-align:center;width:30px">م</th>
+            <th>اسم الحاج</th>
           </tr>
           ${tableRows}
         </table>
       </div>`;
     }).join("");
-    return mkHTML(`مخيمات ${pageType}`, sections, false);
+    return mkHTML(`مخيمات ${pageType}`, sections, false, true);
   };
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
