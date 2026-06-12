@@ -161,28 +161,28 @@ export function makeHTML(
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 13px; color: #1c1c1c; background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 90px 90px; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 15px; color: #1c1c1c; background-color: #FBF6EC; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 90px 90px; }
   .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 6px; }
   .doc-header .brand { display: flex; align-items: center; gap: 14px; }
-  .doc-header .logo-box { width: 84px; height: 84px; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 34px; font-weight: 700; flex-shrink: 0; }
+  .doc-header .logo-box { width: 104px; height: 104px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 42px; font-weight: 700; flex-shrink: 0; }
   .doc-header .logo-box img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
   .doc-header .company-name { font-size: 20px; font-weight: 700; color: ${primaryColor}; }
-  .doc-header .tagline { font-size: 12px; color: #888; margin-top: 3px; }
+  .doc-header .tagline { font-size: 13px; color: #888; margin-top: 3px; }
   .doc-header .meta { text-align: left; font-size: 11px; color: #999; line-height: 1.7; }
-  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 12px 0; border-radius: 8px; font-size: 22px; font-weight: 700; margin: 14px 0 16px; }
+  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 12px 0; border-radius: 8px; font-size: 24px; font-weight: 700; margin: 14px 0 16px; }
   .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-  .camp-header .camp-logo { width: 110px; height: 110px; border-radius: 50%; border: 4px solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
+  .camp-header .camp-logo { width: 135px; height: 135px; border-radius: 50%; border: 5px solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
-  .camp-header .camp-logo span { font-size: 40px; font-weight: 800; color: ${primaryColor}; }
+  .camp-header .camp-logo span { font-size: 50px; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
-  .camp-header .camp-title { font-size: 34px; font-weight: 800; color: #1c1c1c; }
-  .camp-header .camp-subtitle { font-size: 13px; color: #888; margin-top: 5px; }
+  .camp-header .camp-title { font-size: 38px; font-weight: 800; color: #1c1c1c; }
+  .camp-header .camp-subtitle { font-size: 15px; color: #888; margin-top: 5px; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  th { background: ${primaryColor}; color: #fff; padding: 9px 12px; text-align: right; font-size: 13px; font-weight: 600; }
-  td { border: 0.5px solid #e4e4e4; padding: 8px 12px; text-align: right; background: #fff; }
+  th { background: ${primaryColor}; color: #fff; padding: 10px 14px; text-align: right; font-size: 15px; font-weight: 600; }
+  td { border: 0.5px solid #e4e4e4; padding: 9px 14px; text-align: right; background: #fff; font-size: 15px; }
   tr:nth-child(even) td { background: #f7f7fa; }
-  .section-title { font-size: 16px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
+  .section-title { font-size: 18px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
   .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
