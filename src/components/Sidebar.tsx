@@ -26,14 +26,15 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
     <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative" }}>
       <div className="sidebar-pattern" />
       <div style={{ position: "relative", zIndex: 2, padding: "22px 20px 18px", borderBottom: "1px solid var(--border-sidebar)", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10 }}>
           {!config.logo_url && <svg width="40" height="40" viewBox="0 0 44 44" fill="none" stroke="var(--accent)" strokeWidth="1.6" style={{ flexShrink: 0 }}>
             <path d="M22 3 L26.5 8.5 L33.5 8 L33 15 L38.5 19.5 L33 24 L33.5 31 L26.5 30.5 L22 36 L17.5 30.5 L10.5 31 L11 24 L5.5 19.5 L11 15 L10.5 8 L17.5 8.5 Z"/>
             <circle cx="22" cy="19.5" r="4.5" fill="var(--accent)" stroke="none"/>
           </svg>}
+          {config.logo_url && <img src={config.logo_url} alt={config.name_ar} style={{ width: 76, height: 76, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />}
           <div>
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 600, fontSize: 19, color: "var(--text-inverse)", lineHeight: 1.2 }}>
-              {config.logo_url ? <img src={config.logo_url} alt={config.name_ar} style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} /> : config.name_ar}
+              {config.name_ar}
             </div>
             <div style={{ fontSize: 11, color: "var(--accent-light)", letterSpacing: "1px", marginTop: 2 }}>{config.tagline}</div>
           </div>
