@@ -128,7 +128,8 @@ export function makeHTML(
   companyName = "حملة الأقصى",
   tagline = "",
   primaryColor = "#6B1F3A",
-  accentColor = "#0C447C"
+  accentColor = "#0C447C",
+  noHeader = false
 ) {
   const initial = (companyName || "ح").trim().charAt(0);
   const logoHtml = logoUrl
@@ -137,6 +138,20 @@ export function makeHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+  const headerHTML = noHeader ? "" : `<div class="doc-header">
+  <div class="brand">
+    <div class="logo-box">${logoHtml}</div>
+    <div>
+      <div class="company-name">${companyName}</div>
+      ${tagline ? `<div class="tagline">${tagline}</div>` : ""}
+    </div>
+  </div>
+  <div class="meta">
+    <div>تاريخ الإصدار: ${dateStr}</div>
+    <div>الساعة: ${timeStr}</div>
+  </div>
+</div>
+<div class="doc-title-bar">${title}</div>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${title}</title>
 <style>
@@ -151,6 +166,14 @@ export function makeHTML(
   .doc-header .tagline { font-size: 9px; color: #888; margin-top: 2px; }
   .doc-header .meta { text-align: left; font-size: 9px; color: #999; line-height: 1.6; }
   .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 9px 0; border-radius: 8px; font-size: 16px; font-weight: 700; margin: 12px 0 14px; }
+  .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .camp-header .camp-logo { width: 76px; height: 76px; border-radius: 50%; border: 3px solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
+  .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
+  .camp-header .camp-logo span { font-size: 28px; font-weight: 800; color: ${primaryColor}; }
+  .camp-header .camp-title-box { flex: 1; text-align: center; }
+  .camp-header .camp-title { font-size: 26px; font-weight: 800; color: #1c1c1c; }
+  .camp-header .camp-subtitle { font-size: 11px; color: #888; margin-top: 4px; }
+  .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
   th { background: ${primaryColor}; color: #fff; padding: 7px 10px; text-align: right; font-size: 10px; font-weight: 600; }
   td { border: 0.5px solid #e4e4e4; padding: 6px 10px; text-align: right; }
@@ -160,20 +183,7 @@ export function makeHTML(
   .footer { text-align: center; color: #aaa; font-size: 8px; margin-top: 18px; border-top: 0.5px solid #eee; padding-top: 6px; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style></head><body>
-<div class="doc-header">
-  <div class="brand">
-    <div class="logo-box">${logoHtml}</div>
-    <div>
-      <div class="company-name">${companyName}</div>
-      ${tagline ? `<div class="tagline">${tagline}</div>` : ""}
-    </div>
-  </div>
-  <div class="meta">
-    <div>تاريخ الإصدار: ${dateStr}</div>
-    <div>الساعة: ${timeStr}</div>
-  </div>
-</div>
-<div class="doc-title-bar">${title}</div>
+${headerHTML}
 ${body}
 <div class="footer">${companyName}${tagline ? " — " + tagline : ""} · تقرير ${title}</div>
 </body></html>`;
