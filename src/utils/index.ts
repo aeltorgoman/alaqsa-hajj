@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 
 export function makeShort(fullName: string): string {
@@ -215,6 +216,33 @@ export function downloadPDF(html: string, filename: string) {
 // ===== تثبيت صف العنوان (Freeze Header Row) =====
 export function freezeHeaderRow(ws: import("xlsx").WorkSheet, rows = 1) {
   (ws as any)["!views"] = [{ state: "frozen", xSplit: 0, ySplit: rows, topLeftCell: `A${rows + 1}`, activePane: "bottomLeft" }];
+}
+
+// ===== تنسيق صف عنوان رئيسي (دمج + خلفية ملوّنة) =====
+export function styleTitleRow(ws: import("xlsx").WorkSheet, rowIndex: number, colCount: number, primaryColor: string) {
+  const rgb = primaryColor.replace("#", "");
+  if (!ws["!merges"]) ws["!merges"] = [];
+  ws["!merges"]!.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: colCount - 1 } });
+  for (let c = 0; c < colCount; c++) {
+    const addr = XLSX.utils.encode_cell({ r: rowIndex, c });
+    if (!ws[addr]) ws[addr] = { t: "s", v: "" };
+    (ws[addr] as any).s = { fill: { fgColor: { rgb } }, font: { color: { rgb: "FFFFFF" }, bold: true, sz: 13 }, alignment: { horizontal: "center", vertical: "center" } };
+  }
+}
+
+// ===== تنسيق صف رؤوس الأعمدة (خلفية ملوّنة + خط أبيض) =====
+export function styleHeaderRow(ws: import("xlsx").WorkSheet, rowIndex: number, colCount: number, primaryColor: string) {
+  const rgb = primaryColor.replace("#", "");
+  for (let c = 0; c < colCount; c++) {
+    const addr = XLSX.utils.encode_cell({ r: rowIndex, c });
+    if (!ws[addr]) continue;
+    (ws[addr] as any).s = { fill: { fgColor: { rgb } }, font: { color: { rgb: "FFFFFF" }, bold: true }, alignment: { horizontal: "center", vertical: "center" } };
+  }
+}
+
+// ===== اسم شيت صالح (حد 31 حرف وبدون رموز ممنوعة) =====
+export function safeSheetName(name: string): string {
+  return (name || "ورقة").replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31) || "ورقة";
 }
 
 // ===== إضافة شيت ملخص في أول الملف =====
