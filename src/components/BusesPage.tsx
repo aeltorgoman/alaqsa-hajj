@@ -3,7 +3,8 @@ import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { inp, btnP, btnS } from "../utils";
+import { useConfig } from "../config/ConfigContext";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -45,6 +46,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
 
 // ===== صفحة الباصات =====
 function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const config = useConfig();
   const [buses, setBuses] = useState<Bus[]>([]);
   const [editingBusId, setEditingBusId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -165,17 +167,20 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     dragPassengerId.current = null; dragOverPassengerId.current = null;
   };
 
+  const branding = { logoUrl: config.logo_url || "", companyName: config.name_ar || "حملة الأقصى", tagline: config.tagline || "", primaryColor: config.color_primary || "#6B1F3A", accentColor: config.color_accent || "#0C447C" };
+
   const printBus = (bus: Bus) => {
     const bp = getBusPassengers(bus.id);
-    const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>${bus.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1D9E75;color:white}</style></head><body><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();<\/script></body></html>`);
-    w.document.close();
+    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", branding.primaryColor), branding);
+    printInPage(makeHTML("تقرير الباصات", section, false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
   };
 
   const printAll = () => {
-    const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>تقرير الباصات</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}th{background:#1D9E75;color:white}@media print{.bus{page-break-after:always}}</style></head><body><h1>تقرير الباصات</h1>${buses.map(bus => { const bp = getBusPassengers(bus.id); return `<div class="bus"><h2>${bus.name} ${bus.type === "VIP" ? "(VIP)" : ""}</h2><table><tr><th>م</th><th>الاسم</th></tr>${bp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();<\/script></body></html>`);
-    w.document.close();
+    const sections = buses.map(bus => {
+      const bp = getBusPassengers(bus.id);
+      return makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", branding.primaryColor), branding);
+    });
+    printInPage(makeHTML("تقرير الباصات", joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
   };
 
   const currentBus = buses.find(b => b.id === currentBusId);
