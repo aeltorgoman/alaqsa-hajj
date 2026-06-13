@@ -4,7 +4,7 @@ import { ThemeSwitcher } from "../config/ThemeContext";
 import type { User } from "../types";
 import { NAV } from "../utils";
 
-function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void }) {
+function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; onReportsClick?: () => void }) {
   const config = useConfig();
   const [showThemes, setShowThemes] = useState(false);
 
@@ -48,7 +48,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout }: { page: string
             <div key={section}>
               <div style={{ fontSize: 11, color: "var(--text-sidebar-muted)", padding: "8px 10px 4px", letterSpacing: "0.08em" }}>{section}</div>
               {allowed.map(({ id, label }) => (
-                <div key={id} onClick={() => setPage(id)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 500, color: page === id ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 1, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
+                <div key={id} onClick={() => { setPage(id); if (id === "reports") onReportsClick?.(); }} style={{ display: "flex", alignItems: "center", gap: 11, padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 500, color: page === id ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 1, position: "relative", background: page === id ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)" }}>
                   {page === id && <div style={{ position: "absolute", insetInlineStart: 0, top: "18%", bottom: "18%", width: 3, borderRadius: 99, background: "var(--accent)" }} />}
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={page === id ? "var(--accent-light)" : "var(--text-sidebar)"} strokeWidth="1.7" style={{ flexShrink: 0, opacity: page === id ? 1 : 0.85 }} dangerouslySetInnerHTML={{ __html: NAV_ICONS[id] || NAV_ICONS.dash }} />
                   {label}
