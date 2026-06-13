@@ -279,7 +279,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const sections = selBuses.map(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
       return `<div class="page-break">
-        <div class="section-title">باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر</div>
+        <div class="section-title">باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
         ${renderNamesTable(bp, "اسم الحاج / الحاجة")}
       </div>`;
     }).join("");
@@ -292,7 +292,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const usedNames = new Set<string>();
     selBuses.forEach(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      const title = `باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""} — ${bp.length} مسافر`;
+      const title = `باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`;
       const aoa: any[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
       bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
       if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
@@ -331,7 +331,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
           <div class="camp-logo">${campLogoHtml}</div>
           <div class="camp-title-box">
             <div class="camp-title">مخيم ${pageType} ${camp.name}</div>
-            <div class="camp-subtitle">${isMale ? "رجال" : "نساء"} · ${camp.type} · ${cp.length} مسافر</div>
+            <div class="camp-subtitle">${isMale ? "رجال" : "نساء"}</div>
           </div>
           <div class="camp-logo">${campLogoHtml}</div>
         </div>
@@ -354,7 +354,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
       const col1 = cp.slice(0, half);
       const col2 = cp.slice(half);
       const maxRows = Math.max(col1.length, col2.length);
-      const title = `مخيم ${pageType} ${camp.name} — ${isMale ? "رجال" : "نساء"} · ${camp.type} — ${cp.length} مسافر`;
+      const title = `مخيم ${pageType} ${camp.name} — ${isMale ? "رجال" : "نساء"}`;
       const aoa: any[][] = [[title], ["م", "اسم الحاج", "م", "اسم الحاج"]];
       for (let i = 0; i < maxRows; i++) {
         const p1 = col1[i], p2 = col2[i];
