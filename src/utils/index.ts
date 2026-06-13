@@ -139,8 +139,8 @@ export function makeHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
-  // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية رفيعة
-  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='#D4A017' stroke-width='1' stroke-opacity='0.10'><path d='M40 4 L52 18 L68 12 L62 28 L76 40 L62 52 L68 68 L52 62 L40 76 L28 62 L12 68 L18 52 L4 40 L18 28 L12 12 L28 18 Z'/><path d='M40 4 L40 76 M4 40 L76 40 M12 12 L68 68 M68 12 L12 68'/></g></svg>`;
+  // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح
+  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><g fill='none' stroke='#D4A017' stroke-width='1.4' stroke-opacity='0.20'><path d='M60 6 L78 27 L102 18 L93 42 L114 60 L93 78 L102 102 L78 93 L60 114 L42 93 L18 102 L27 78 L6 60 L27 42 L18 18 L42 27 Z'/><path d='M60 6 L60 114 M6 60 L114 60 M18 18 L102 102 M102 18 L18 102'/></g></svg>`;
   const patternURL = `data:image/svg+xml,${encodeURIComponent(patternSVG)}`;
   const headerHTML = noHeader ? "" : `<div class="doc-header">
   <div class="brand">
@@ -161,27 +161,27 @@ export function makeHTML(
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 80px 80px; }
-  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 17px; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 80px 80px; }
+  html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 120px 120px; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 20px; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 120px 120px; }
   .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 6px; }
   .doc-header .brand { display: flex; align-items: center; gap: 14px; }
-  .doc-header .logo-box { width: 104px; height: 104px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 42px; font-weight: 700; flex-shrink: 0; }
+  .doc-header .logo-box { width: 130px; height: 130px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 52px; font-weight: 700; flex-shrink: 0; }
   .doc-header .logo-box img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
   .doc-header .company-name { font-size: 22px; font-weight: 700; color: ${primaryColor}; }
   .doc-header .tagline { font-size: 13px; color: #888; margin-top: 3px; }
   .doc-header .meta { text-align: left; font-size: 11px; color: #999; line-height: 1.7; }
   .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 12px 0; border-radius: 8px; font-size: 27px; font-weight: 700; margin: 14px 0 16px; }
   .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-  .camp-header .camp-logo { width: 135px; height: 135px; border-radius: 50%; border: 5px solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
+  .camp-header .camp-logo { width: 165px; height: 165px; border-radius: 50%; border: 6px solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
-  .camp-header .camp-logo span { font-size: 50px; font-weight: 800; color: ${primaryColor}; }
+  .camp-header .camp-logo span { font-size: 62px; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
   .camp-header .camp-title { font-size: 38px; font-weight: 800; color: #1c1c1c; }
   .camp-header .camp-subtitle { font-size: 17px; color: #888; margin-top: 5px; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  th { background: ${primaryColor}; color: #fff; padding: 11px 16px; text-align: right; font-size: 17px; font-weight: 600; }
-  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 10px 16px; text-align: right; background: transparent; font-size: 17px; white-space: nowrap; }
+  th { background: ${primaryColor}; color: #fff; padding: 12px 18px; text-align: right; font-size: 20px; font-weight: 600; }
+  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 11px 18px; text-align: right; background: transparent; font-size: 20px; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
