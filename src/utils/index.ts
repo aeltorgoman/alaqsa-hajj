@@ -184,6 +184,7 @@ export function makeHTML(
   td { border: 0.5px solid rgba(0,0,0,0.08); padding: 18px 22px; text-align: right; background: transparent; font-size: 34px; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
+  .wide-table th, .wide-table td { font-size: 16px; padding: 8px 10px; }
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
   .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
