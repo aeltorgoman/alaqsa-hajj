@@ -176,12 +176,12 @@ export function makeHTML(
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
   .camp-header .camp-logo span { font-size: 62px; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
-  .camp-header .camp-title { font-size: 50px; font-weight: 800; color: #1c1c1c; }
+  .camp-header .camp-title { font-size: 66px; font-weight: 800; color: #1c1c1c; }
   .camp-header .camp-subtitle { font-size: 17px; color: #888; margin-top: 5px; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  th { background: ${primaryColor}; color: #fff; padding: 15px 20px; text-align: right; font-size: 28px; font-weight: 600; }
-  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 15px 20px; text-align: right; background: transparent; font-size: 28px; white-space: nowrap; }
+  th { background: ${primaryColor}; color: #fff; padding: 18px 22px; text-align: right; font-size: 34px; font-weight: 600; }
+  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 18px 22px; text-align: right; background: transparent; font-size: 34px; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
