@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, makeFlightSectionHTML, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 
 // ============================================================
 // تحويل الجنسية لكود إنجليزي موحّد لتقرير خطوط الطيران
@@ -61,9 +61,14 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const accentColor = config.color_accent || "#0C447C";
   const mkHTML = (title: string, body: string, landscape = false, noHeader = false) =>
     makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader);
-  const sectionLogoHtml = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName || "ح").trim().charAt(0)}</span>`;
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const toggleExpandedItem = (id: number) => setExpandedItems(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
   const togglePanel = (key: string) => setOpenPanels(prev => {
     const next = new Set(prev);
@@ -227,7 +232,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       const cls = p.flight_class === "درجة أولى" ? "FIRST CLASS" : "";
       return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
-    const body = `<table class="wide-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
+    const body = `<table class="wide-table ltr-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
     return mkHTML("Pilgrims Flight List", body, true);
   };
 
@@ -259,28 +264,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   const getPerFlightHTML = () => {
     const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
-    const sections = selFlights.map((flight, idx) => {
+    const sections = selFlights.map(flight => {
       const fp = passengers.filter(p => p.flight_id === flight.id);
-      const rows = fp.map((p, i) => {
-        const cls = p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية";
-        return `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${p.gender}</td><td>${cls}</td></tr>`;
-      }).join("");
-      return `
-        <div class="${idx > 0 ? "page-break-before" : ""}">          <div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
-            <div style="font-size:20px;font-weight:700;color:${primaryColor};margin-bottom:10px">${flight.name} — ${flight.type}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
-              <div><span style="color:#888">الخط:</span> ${flight.airline}</div>
-              <div><span style="color:#888">التاريخ:</span> ${flight.date}</div>
-              <div><span style="color:#888">الوقت:</span> ${flight.time}</div>
-              <div><span style="color:#888">من:</span> ${flight.from_airport}</div>
-              <div><span style="color:#888">إلى:</span> ${flight.to_airport}</div>
-              <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
-            </div>
-          </div>
-          <table class="wide-table"><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>
-        </div>`;
-    }).join("");
-    return mkHTML("تقرير الرحلات", sections, true);
+      return makeFlightSectionHTML(flight, fp, { logoUrl, companyName, tagline, primaryColor, accentColor });
+    });
+    return mkHTML("تقرير الرحلات", joinSections(sections), true);
   };
 
   const exportPerFlightXLSX = () => {
@@ -310,53 +298,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   // عرض قائمة أسماء: عمود واحد لو أقل من 20، وعمودين لو 20 فأكثر
   // ============================================================
-  const renderNamesTable = (items: Passenger[], nameLabel = "اسم الحاج") => {
-    if (items.length === 0) {
-      return `<table style="width:60%;margin:0 auto"><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr><tr><td></td><td>لا يوجد مسافرون</td></tr></table>`;
-    }
-    if (items.length <= 20) {
-      const rows = items.map((p, i) => `<tr><td style="text-align:center;width:40px">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`).join("");
-      return `<table style="width:60%;margin:0 auto"><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr>${rows}</table>`;
-    }
-    const half = Math.ceil(items.length / 2);
-    const col1 = items.slice(0, half);
-    const col2 = items.slice(half);
-    const maxRows = Math.max(col1.length, col2.length);
-    let rows = "";
-    for (let i = 0; i < maxRows; i++) {
-      const p1 = col1[i], p2 = col2[i];
-      rows += `<tr>
-        <td style="text-align:center;width:30px">${p1 ? i + 1 : ""}</td>
-        <td>${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
-        <td style="text-align:center;width:30px;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
-        <td>${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
-      </tr>`;
-    }
-    return `<table>
-      <tr><th style="text-align:center;width:30px">م</th><th>${nameLabel}</th><th style="text-align:center;width:30px">م</th><th>${nameLabel}</th></tr>
-      ${rows}
-    </table>`;
-  };
-
-  // ============================================================
   // تقرير الباصات
   // ============================================================
   const getBusesHTML = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
-    const sections = selBuses.map((bus, idx) => {
+    const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
+    const sections = selBuses.map(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      return `<div class="${idx > 0 ? "page-break-before" : ""}">
-        <div class="camp-header">
-          <div class="camp-logo">${sectionLogoHtml}</div>
-          <div class="camp-title-box">
-            <div class="camp-title">باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
-          </div>
-          <div class="camp-logo">${sectionLogoHtml}</div>
-        </div>
-        ${renderNamesTable(bp, "اسم الحاج / الحاجة")}
-      </div>`;
-    }).join("");
-    return mkHTML("تقرير الباصات", sections, false, true);
+      return makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
+    });
+    return mkHTML("تقرير الباصات", joinSections(sections), false, true);
   };
 
   const exportBusesXLSX = () => {
@@ -395,22 +346,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
     const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
-    const sections = pageCamps.map((camp, idx) => {
+    const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
+    const sections = pageCamps.map(camp => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
-      return `<div class="${idx > 0 ? "page-break-before" : ""}">
-        <div class="camp-header">
-          <div class="camp-logo">${sectionLogoHtml}</div>
-          <div class="camp-title-box">
-            <div class="camp-title">مخيم ${pageType} ${camp.name}</div>
-            <div class="camp-subtitle">${isMale ? "رجال" : "نساء"}</div>
-          </div>
-          <div class="camp-logo">${sectionLogoHtml}</div>
-        </div>
-        ${renderNamesTable(cp, "اسم الحاج")}
-      </div>`;
-    }).join("");
-    return mkHTML(`مخيمات ${pageType}`, sections, false, true);
+      return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
+    });
+    return mkHTML(`مخيمات ${pageType}`, joinSections(sections), false, true);
   };
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
@@ -864,13 +806,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   />
                   {buses.map(bus => {
                     const bp = passengers.filter(p => p.bus_id === bus.id);
+                    const isOpen = expandedItems.has(bus.id);
                     return (
                       <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>VIP</span>}</div>
+                        <div onClick={() => toggleExpandedItem(bus.id)} style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>{bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>VIP</span>}</div>
+                          </div>
                           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
                         </div>
-                        {bp.length > 0 && (
+                        {isOpen && bp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                             <thead><tr style={{ background: "var(--info)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
@@ -915,15 +861,18 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {camps.filter(c => c.page_type === "منى").map(camp => {
                     const cp = passengers.filter(p => p.camp_mina_id === camp.id);
                     const isMale = camp.gender === "ذكر";
+                    const isOpen = expandedItems.has(camp.id);
                     return (
                       <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>مخيم {camp.name}
+                        <div onClick={() => toggleExpandedItem(camp.id)} style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", cursor: "pointer" }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
+                            مخيم {camp.name}
                             <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
                             <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
                         </div>
-                        {cp.length > 0 && (
+                        {isOpen && cp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                             <thead><tr style={{ background: isMale ? "var(--info)" : "var(--female-fg)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
@@ -970,15 +919,18 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {camps.filter(c => c.page_type === "عرفة").map(camp => {
                     const cp = passengers.filter(p => p.camp_arafa_id === camp.id);
                     const isMale = camp.gender === "ذكر";
+                    const isOpen = expandedItems.has(camp.id);
                     return (
                       <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>مخيم {camp.name}
+                        <div onClick={() => toggleExpandedItem(camp.id)} style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", cursor: "pointer" }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
+                            مخيم {camp.name}
                             <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)", marginRight: 6 }}>{isMale ? "رجال" : "نساء"}</span>
                             <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
                         </div>
-                        {cp.length > 0 && (
+                        {isOpen && cp.length > 0 && (
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                             <thead><tr style={{ background: isMale ? "var(--info)" : "var(--female-fg)", color: "var(--bg-card)" }}>
                               <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
