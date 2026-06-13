@@ -1,10 +1,11 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { useConfig } from "../config/ConfigContext";
-import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, inp, btnP, btnS } from "../utils";
+import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, inp, btnP, btnS } from "../utils";
 
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
@@ -153,9 +154,26 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     const rows = filtered.map((p, i) =>
       `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.passport || "—"}</td><td>${p.nat}</td><td>${p.gender}</td><td>${p.phone || "—"}</td></tr>`
     ).join("");
-    const body = `<table><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th><th>رقم الجواز</th><th>الجنسية</th><th>الجنس</th><th>التليفون</th></tr>${rows}</table>`;
+    const body = `<table class="wide-table"><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th><th>رقم الجواز</th><th>الجنسية</th><th>الجنس</th><th>التليفون</th></tr>${rows}</table>`;
     const html = makeHTML("كشف الحجاج", body, false, config.logo_url || "", config.name_ar || "حملة الأقصى", config.tagline || "", config.color_primary || "#6B1F3A", config.color_accent || "#0C447C");
     printInPage(html);
+  };
+
+  // ===== تصدير كشف الحجاج الحالي إكسيل (بعد البحث/الفلاتر) =====
+  const exportExcel = () => {
+    const headers = ["م", "اسم الحاج / الحاجة", "الاسم بالإنجليزي", "رقم الجواز", "الجنسية", "الجنس", "التليفون"];
+    const rows = filtered.map((p, i) => [i + 1, p.short_ar || p.name_ar, p.name_en || "", p.passport || "—", p.nat, p.gender, p.phone || "—"]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = [{ wch: 4 }, { wch: 28 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 14 }];
+    freezeHeaderRow(ws);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
+    addSummarySheet(wb, XLSX, "كشف الحجاج", config.name_ar || "حملة الأقصى", [
+      ["إجمالي عدد الحجاج", filtered.length],
+      ["عدد الرجال", filtered.filter(p => p.gender === "ذكر").length],
+      ["عدد النساء", filtered.filter(p => p.gender === "أنثى").length],
+    ]);
+    XLSX.writeFile(wb, "كشف_الحجاج.xlsx");
   };
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
@@ -476,6 +494,13 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
               onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--muted)"; }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               أسر
+            </div>
+            {/* تصدير إكسيل */}
+            <div onClick={exportExcel} title="تصدير إكسيل" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--em7)"; e.currentTarget.style.color = "var(--em7)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--muted)"; }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/></svg>
+              إكسيل
             </div>
             {/* طباعة */}
             <div onClick={printList} title="طباعة" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}
