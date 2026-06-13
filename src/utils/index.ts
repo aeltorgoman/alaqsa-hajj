@@ -139,8 +139,8 @@ export function makeHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
-  // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح
-  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'><g fill='none' stroke='#D4A017' stroke-width='1.4' stroke-opacity='0.20'><path d='M60 6 L78 27 L102 18 L93 42 L114 60 L93 78 L102 102 L78 93 L60 114 L42 93 L18 102 L27 78 L6 60 L27 42 L18 18 L42 27 Z'/><path d='M60 6 L60 114 M6 60 L114 60 M18 18 L102 102 M102 18 L18 102'/></g></svg>`;
+  // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح (حوالي 5 نقشات في الصف)
+  const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><g fill='none' stroke='#D4A017' stroke-width='1.6' stroke-opacity='0.26'><path d='M70 7 L91 32 L119 21 L108 49 L133 70 L108 91 L119 119 L91 108 L70 133 L49 108 L21 119 L32 91 L7 70 L32 49 L21 21 L49 32 Z'/><path d='M70 7 L70 133 M7 70 L133 70 M21 21 L119 119 M119 21 L21 119'/></g></svg>`;
   const patternURL = `data:image/svg+xml,${encodeURIComponent(patternSVG)}`;
   const headerHTML = noHeader ? "" : `<div class="doc-header">
   <div class="brand">
@@ -161,8 +161,8 @@ export function makeHTML(
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 120px 120px; }
-  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 20px; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 120px 120px; }
+  html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 20px; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
   .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 6px; }
   .doc-header .brand { display: flex; align-items: center; gap: 14px; }
   .doc-header .logo-box { width: 130px; height: 130px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 52px; font-weight: 700; flex-shrink: 0; }
@@ -176,12 +176,12 @@ export function makeHTML(
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
   .camp-header .camp-logo span { font-size: 62px; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
-  .camp-header .camp-title { font-size: 38px; font-weight: 800; color: #1c1c1c; }
+  .camp-header .camp-title { font-size: 50px; font-weight: 800; color: #1c1c1c; }
   .camp-header .camp-subtitle { font-size: 17px; color: #888; margin-top: 5px; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  th { background: ${primaryColor}; color: #fff; padding: 14px 20px; text-align: right; font-size: 26px; font-weight: 600; }
-  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 14px 20px; text-align: right; background: transparent; font-size: 26px; white-space: nowrap; }
+  th { background: ${primaryColor}; color: #fff; padding: 15px 20px; text-align: right; font-size: 28px; font-weight: 600; }
+  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 15px 20px; text-align: right; background: transparent; font-size: 28px; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
