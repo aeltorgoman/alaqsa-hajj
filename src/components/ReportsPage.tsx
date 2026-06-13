@@ -15,6 +15,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const accentColor = config.color_accent || "#0C447C";
   const mkHTML = (title: string, body: string, landscape = false, noHeader = false) =>
     makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader);
+  const sectionLogoHtml = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName || "ح").trim().charAt(0)}</span>`;
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -191,15 +192,14 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // ============================================================
   const getPerFlightHTML = () => {
     const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
-    const sections = selFlights.map(flight => {
+    const sections = selFlights.map((flight, idx) => {
       const fp = passengers.filter(p => p.flight_id === flight.id);
       const rows = fp.map((p, i) => {
         const cls = p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية";
         return `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${p.gender}</td><td>${cls}</td></tr>`;
       }).join("");
       return `
-        <div class="page-break">
-          <div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
+        <div class="${idx > 0 ? "page-break-before" : ""}">          <div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
             <div style="font-size:20px;font-weight:700;color:${primaryColor};margin-bottom:10px">${flight.name} — ${flight.type}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
               <div><span style="color:#888">الخط:</span> ${flight.airline}</div>
@@ -276,14 +276,20 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // ============================================================
   const getBusesHTML = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
-    const sections = selBuses.map(bus => {
+    const sections = selBuses.map((bus, idx) => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      return `<div class="page-break">
-        <div class="section-title">باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
+      return `<div class="${idx > 0 ? "page-break-before" : ""}">
+        <div class="camp-header">
+          <div class="camp-logo">${sectionLogoHtml}</div>
+          <div class="camp-title-box">
+            <div class="camp-title">باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}</div>
+          </div>
+          <div class="camp-logo">${sectionLogoHtml}</div>
+        </div>
         ${renderNamesTable(bp, "اسم الحاج / الحاجة")}
       </div>`;
     }).join("");
-    return mkHTML("تقرير الباصات", sections, false);
+    return mkHTML("تقرير الباصات", sections, false, true);
   };
 
   const exportBusesXLSX = () => {
@@ -320,20 +326,19 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-    const campLogoHtml = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName || "ح").trim().charAt(0)}</span>`;
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
     const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
-    const sections = pageCamps.map(camp => {
+    const sections = pageCamps.map((camp, idx) => {
       const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
-      return `<div class="page-break">
+      return `<div class="${idx > 0 ? "page-break-before" : ""}">
         <div class="camp-header">
-          <div class="camp-logo">${campLogoHtml}</div>
+          <div class="camp-logo">${sectionLogoHtml}</div>
           <div class="camp-title-box">
             <div class="camp-title">مخيم ${pageType} ${camp.name}</div>
             <div class="camp-subtitle">${isMale ? "رجال" : "نساء"}</div>
           </div>
-          <div class="camp-logo">${campLogoHtml}</div>
+          <div class="camp-logo">${sectionLogoHtml}</div>
         </div>
         ${renderNamesTable(cp, "اسم الحاج")}
       </div>`;
