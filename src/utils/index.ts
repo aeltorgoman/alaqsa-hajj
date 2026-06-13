@@ -180,11 +180,12 @@ export function makeHTML(
   .camp-header .camp-subtitle { font-size: 17px; color: #888; margin-top: 5px; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  th { background: ${primaryColor}; color: #fff; padding: 12px 18px; text-align: right; font-size: 20px; font-weight: 600; }
-  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 11px 18px; text-align: right; background: transparent; font-size: 20px; white-space: nowrap; }
+  th { background: ${primaryColor}; color: #fff; padding: 14px 20px; text-align: right; font-size: 26px; font-weight: 600; }
+  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 14px 20px; text-align: right; background: transparent; font-size: 26px; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .page-break { page-break-after: always; }
+  .page-break-before { page-break-before: always; }
   .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
   @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; } }
 </style></head><body>
