@@ -185,6 +185,7 @@ export function makeHTML(
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .wide-table th, .wide-table td { font-size: 16px; padding: 8px 10px; }
+  .ltr-table th, .ltr-table td { text-align: left; }
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
   .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
@@ -194,6 +195,92 @@ ${headerHTML}
 ${body}
 <div class="footer">${companyName}${tagline ? " — " + tagline : ""} · تقرير ${title}</div>
 </body></html>`;
+}
+
+// ============================================================
+// دوال موحّدة لتوليد أقسام التقارير (مستخدمة في صفحة التقارير وصفحات التنظيم)
+// ============================================================
+export interface ReportBranding {
+  logoUrl?: string;
+  companyName?: string;
+  tagline?: string;
+  primaryColor?: string;
+  accentColor?: string;
+}
+type NameItem = { short_ar?: string; name_ar: string };
+
+// شعار القسم (دائرة بصورة اللوجو أو حرف اسم الشركة)
+export function sectionLogoHtml(b: ReportBranding): string {
+  const companyName = b.companyName || "حملة الأقصى";
+  return b.logoUrl ? `<img src="${b.logoUrl}" alt="logo" />` : `<span>${companyName.trim().charAt(0)}</span>`;
+}
+
+// عرض قائمة أسماء: عمود واحد لو 20 أو أقل، وعمودين لو أكتر
+export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحاج", primaryColor = "#6B1F3A"): string {
+  if (items.length === 0) {
+    return `<table style="width:60%;margin:0 auto"><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr><tr><td></td><td>لا يوجد مسافرون</td></tr></table>`;
+  }
+  if (items.length <= 20) {
+    const rows = items.map((p, i) => `<tr><td style="text-align:center;width:40px">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`).join("");
+    return `<table style="width:60%;margin:0 auto"><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr>${rows}</table>`;
+  }
+  const half = Math.ceil(items.length / 2);
+  const col1 = items.slice(0, half);
+  const col2 = items.slice(half);
+  const maxRows = Math.max(col1.length, col2.length);
+  let rows = "";
+  for (let i = 0; i < maxRows; i++) {
+    const p1 = col1[i], p2 = col2[i];
+    rows += `<tr>
+      <td style="text-align:center;width:30px">${p1 ? i + 1 : ""}</td>
+      <td>${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
+      <td style="text-align:center;width:30px;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
+      <td>${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
+    </tr>`;
+  }
+  return `<table>
+    <tr><th style="text-align:center;width:30px">م</th><th>${nameLabel}</th><th style="text-align:center;width:30px">م</th><th>${nameLabel}</th></tr>
+    ${rows}
+  </table>`;
+}
+
+// قسم بشعارين (يمين/شمال) وعنوان كبير في الوسط + جدول أسماء — مستخدم لكل باص/مخيم
+export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTML: string, b: ReportBranding): string {
+  const logo = sectionLogoHtml(b);
+  return `<div class="camp-header">
+    <div class="camp-logo">${logo}</div>
+    <div class="camp-title-box">
+      <div class="camp-title">${title}</div>
+      ${subtitle ? `<div class="camp-subtitle">${subtitle}</div>` : ""}
+    </div>
+    <div class="camp-logo">${logo}</div>
+  </div>${namesHTML}`;
+}
+
+// تجميع أقسام متعددة مع فاصل صفحة قبل كل قسم إلا الأول
+export function joinSections(sections: string[]): string {
+  return sections.map((s, idx) => `<div class="${idx > 0 ? "page-break-before" : ""}">${s}</div>`).join("");
+}
+
+// قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)
+export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string })[], b: ReportBranding): string {
+  const primaryColor = b.primaryColor || "#6B1F3A";
+  const rows = fp.map((p, i) => {
+    const cls = p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية";
+    return `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.nat || ""}</td><td>${p.passport || ""}</td><td>${p.phone || "—"}</td><td>${p.gender || ""}</td><td>${cls}</td></tr>`;
+  }).join("");
+  return `<div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
+    <div style="font-size:20px;font-weight:700;color:${primaryColor};margin-bottom:10px">${flight.name}${flight.type ? ` — ${flight.type}` : ""}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+      <div><span style="color:#888">الخط:</span> ${flight.airline || "—"}</div>
+      <div><span style="color:#888">التاريخ:</span> ${flight.date || "—"}</div>
+      <div><span style="color:#888">الوقت:</span> ${flight.time || "—"}</div>
+      <div><span style="color:#888">من:</span> ${flight.from_airport || "—"}</div>
+      <div><span style="color:#888">إلى:</span> ${flight.to_airport || "—"}</div>
+      <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
+    </div>
+  </div>
+  <table class="wide-table"><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>`;
 }
 
 export function printInPage(html: string) {
