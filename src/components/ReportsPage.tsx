@@ -247,7 +247,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     if (items.length === 0) {
       return `<table><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr><tr><td></td><td>لا يوجد مسافرون</td></tr></table>`;
     }
-    if (items.length < 20) {
+    if (items.length <= 25) {
       const rows = items.map((p, i) => `<tr><td style="text-align:center;width:40px">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`).join("");
       return `<table><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr>${rows}</table>`;
     }
