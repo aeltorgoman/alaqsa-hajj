@@ -3,7 +3,11 @@ import { supabase } from "../supabase";
 import type { Passenger, Camp } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { inp, btnP, btnS } from "../utils";
+import { useConfig } from "../config/ConfigContext";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+
+// ===== ألوان أيقونات المخيمات (دورة ألوان) =====
+const CAMP_ICON_COLORS = ["#7D1F3C", "#0C447C", "#2A9D8F", "#E8951A", "#8B3A6B", "#5C7C2E", "#B5651D", "#3F51B5"];
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -45,6 +49,7 @@ function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: C
 
 // ===== صفحة المخيمات =====
 function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const config = useConfig();
   const [camps, setCamps] = useState<Camp[]>([]);
   const [editingCampId, setEditingCampId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -177,17 +182,22 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     dragPassengerId.current = null; dragOverPassengerId.current = null;
   };
 
+  const branding = { logoUrl: config.logo_url || "", companyName: config.name_ar || "حملة الأقصى", tagline: config.tagline || "", primaryColor: config.color_primary || "#6B1F3A", accentColor: config.color_accent || "#0C447C" };
+
   const printCamp = (camp: Camp) => {
     const cp = getCampPassengers(camp.id);
-    const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>مخيم ${camp.name}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h2{text-align:center}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:${camp.gender === "ذكر" ? "#0C447C" : "#8B3A6B"};color:white}</style></head><body><h2>${iconTitle} — مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"} (${camp.type})</h2><table><tr><th>م</th><th>الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table><script>window.print();<\/script></body></html>`);
-    w.document.close();
+    const isMale = camp.gender === "ذكر";
+    const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", branding.primaryColor), branding);
+    printInPage(makeHTML(`مخيمات ${pageType}`, section, false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
   };
 
   const printAll = () => {
-    const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>مخيمات ${pageType}</title><style>body{font-family:Arial;direction:rtl;padding:20px}h1,h2{text-align:center}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #ccc;padding:7px;text-align:right}@media print{.c{page-break-after:always}}</style></head><body><h1>${iconTitle}</h1>${camps.map(camp => { const cp = getCampPassengers(camp.id); return `<div class="c"><h2 style="background:${camp.gender === "ذكر" ? "#0C447C" : "#8B3A6B"};color:white;padding:8px;border-radius:6px">مخيم ${camp.name} — ${camp.gender === "ذكر" ? "رجال" : "نساء"}</h2><table><tr><th style="background:#555;color:white">م</th><th style="background:#555;color:white">الاسم</th></tr>${cp.map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td></tr>`).join("")}</table></div>`; }).join("")}<script>window.print();<\/script></body></html>`);
-    w.document.close();
+    const sections = camps.map(camp => {
+      const cp = getCampPassengers(camp.id);
+      const isMale = camp.gender === "ذكر";
+      return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", branding.primaryColor), branding);
+    });
+    printInPage(makeHTML(`مخيمات ${pageType}`, joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
   };
 
   const currentCamp = camps.find(c => c.id === currentCampId);
@@ -210,16 +220,19 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       {groupCamps.length === 0
         ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div>
         : <div style={{ display: pageType === "منى" ? "grid" : "block", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        {groupCamps.map(camp => {
+        {groupCamps.map((camp, idx) => {
           const isExpanded = expanded.has(camp.id);
           const cp = getCampPassengers(camp.id);
           const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
           const isSpecial = camp.type === "خاص";
+          const campColor = CAMP_ICON_COLORS[idx % CAMP_ICON_COLORS.length];
           return (
             <div key={camp.id} style={{ border: `0.5px solid ${isSpecial ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: pageType === "منى" ? 0 : 8, overflow: "hidden" }}>
               {/* Header */}
               <div onClick={() => toggleCamp(camp.id)} style={{ padding: "9px 12px", background: isSpecial ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <IconSvg />
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: campColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconSvg />
+                </div>
                 <div style={{ flex: 1 }}>
                   {editingCampId === camp.id ? (
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
