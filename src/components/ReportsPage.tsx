@@ -5,7 +5,53 @@ import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 
-function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] }) {
+// ============================================================
+// تحويل الجنسية لكود إنجليزي موحّد لتقرير خطوط الطيران
+// ============================================================
+const NAT_CODE_MAP: Record<string, string> = {
+  "قطري": "QAT", "قطرية": "QAT",
+  "سعودي": "KSA", "سعودية": "KSA",
+  "اماراتي": "UAE", "إماراتي": "UAE", "اماراتية": "UAE", "إماراتية": "UAE",
+  "كويتي": "KWT", "كويتية": "KWT",
+  "بحريني": "BHR", "بحرينية": "BHR",
+  "عماني": "OMN", "عمانية": "OMN", "عُماني": "OMN",
+  "مصري": "EGY", "مصرية": "EGY",
+  "يمني": "YEM", "يمنية": "YEM",
+  "سوري": "SYR", "سورية": "SYR",
+  "لبناني": "LBN", "لبنانية": "LBN",
+  "اردني": "JOR", "أردني": "JOR", "اردنية": "JOR", "أردنية": "JOR",
+  "فلسطيني": "PLE", "فلسطينية": "PLE",
+  "عراقي": "IRQ", "عراقية": "IRQ",
+  "سوداني": "SDN", "سودانية": "SDN",
+  "ليبي": "LBY", "ليبية": "LBY",
+  "تونسي": "TUN", "تونسية": "TUN",
+  "جزائري": "ALG", "جزائرية": "ALG",
+  "مغربي": "MAR", "مغربية": "MAR",
+  "هندي": "IND", "هندية": "IND",
+  "باكستاني": "PAK", "باكستانية": "PAK",
+  "بنغلاديشي": "BAN", "بنغلاديشية": "BAN",
+  "فلبيني": "PHI", "فلبينية": "PHI",
+  "نيبالي": "NEP", "نيبالية": "NEP",
+  "سريلانكي": "SRI", "سريلانكية": "SRI",
+};
+const NAT_EN_PATTERNS: [RegExp, string][] = [
+  [/qatar/i, "QAT"], [/saudi/i, "KSA"], [/emirat|uae/i, "UAE"], [/kuwait/i, "KWT"],
+  [/bahrain/i, "BHR"], [/oman/i, "OMN"], [/egypt/i, "EGY"], [/yemen/i, "YEM"],
+  [/syria/i, "SYR"], [/lebanon|lebanes/i, "LBN"], [/jordan/i, "JOR"], [/palestin/i, "PLE"],
+  [/iraq/i, "IRQ"], [/sudan/i, "SDN"], [/liby/i, "LBY"], [/tunis/i, "TUN"],
+  [/algeri/i, "ALG"], [/morocc/i, "MAR"], [/india/i, "IND"], [/pakistan/i, "PAK"],
+  [/banglades/i, "BAN"], [/philippin/i, "PHI"], [/nepal/i, "NEP"], [/sri ?lank/i, "SRI"],
+];
+function natCode(nat: string | undefined | null): string {
+  const v = (nat || "").trim();
+  if (!v) return "—";
+  if (NAT_CODE_MAP[v]) return NAT_CODE_MAP[v];
+  for (const [re, code] of NAT_EN_PATTERNS) if (re.test(v)) return code;
+  // غير معروفة: أول 3 حروف بالإنجليزي لو متاحة، وإلا القيمة الأصلية
+  return /^[A-Za-z]/.test(v) ? v.slice(0, 3).toUpperCase() : v;
+}
+
+function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
   const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   const config = useConfig();
   const logoUrl = config.logo_url || "";
@@ -18,6 +64,18 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const sectionLogoHtml = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName || "ح").trim().charAt(0)}</span>`;
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
+  const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
+  const togglePanel = (key: string) => setOpenPanels(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  // الرجوع لقائمة التقارير لو ضغط المستخدم على "التقارير" في القايمة الجانبية وهو بالفعل داخل تقرير
+  useEffect(() => {
+    if (resetKey !== undefined) setActiveReport(null);
+  }, [resetKey]);
+
   const [buses, setBuses] = useState<Bus[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -105,17 +163,26 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
         supabase.from("rooms").select("*").order("number"),
         supabase.from("flights").select("*").order("date"),
       ]);
-      if (b) { setBuses(b as Bus[]); setSelectedBusIds(new Set((b as Bus[]).map(x => x.id))); }
+      if (b) {
+        const validBuses = (b as Bus[]).filter(x => x.type || passengers.some(p => p.bus_id === x.id));
+        setBuses(validBuses);
+        setSelectedBusIds(new Set(validBuses.map(x => x.id)));
+      }
       if (c) {
-        setCamps(c as Camp[]);
-        setSelectedMinaCampIds(new Set((c as Camp[]).filter(x => x.page_type === "منى").map(x => x.id)));
-        setSelectedArafaCampIds(new Set((c as Camp[]).filter(x => x.page_type === "عرفة").map(x => x.id)));
+        const validCamps = (c as Camp[]).filter(x => x.type || passengers.some(p => (p as any).camp_mina_id === x.id || (p as any).camp_arafa_id === x.id));
+        setCamps(validCamps);
+        setSelectedMinaCampIds(new Set(validCamps.filter(x => x.page_type === "منى").map(x => x.id)));
+        setSelectedArafaCampIds(new Set(validCamps.filter(x => x.page_type === "عرفة").map(x => x.id)));
       }
       if (r) {
         setRooms(r as Room[]);
         setSelectedFloors(new Set((r as Room[]).map(x => x.floor ? String(x.floor) : "بدون طابق")));
       }
-      if (f) { setFlights(f as Flight[]); setSelectedFlightIds(new Set((f as Flight[]).map(x => x.id))); }
+      if (f) {
+        const validFlights = (f as Flight[]).filter(x => x.type || passengers.some(p => p.flight_id === x.id));
+        setFlights(validFlights);
+        setSelectedFlightIds(new Set(validFlights.map(x => x.id)));
+      }
       setLoading(false);
     };
     load();
@@ -128,7 +195,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const rows = passengers.map((p, i) =>
       `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`
     ).join("");
-    const body = `<table><tr><th style="text-align:center;width:30px">م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>${rows}</table>`;
+    const body = `<table class="wide-table"><tr><th style="text-align:center;width:30px">م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>${rows}</table>`;
     return mkHTML("كشف الحجاج", body, activeCols.length > 5);
   };
 
@@ -155,12 +222,12 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   const getAirlineHTML = () => {
     const list = passengers.filter(p => p.services?.flight !== "بدون");
     const rows = list.map((p, i) => {
-      const nat = p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat;
+      const nat = natCode(p.nat);
       const gender = p.gender === "ذكر" ? "MR." : "MRS.";
       const cls = p.flight_class === "درجة أولى" ? "FIRST CLASS" : "";
       return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
-    const body = `<table style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
+    const body = `<table class="wide-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
     return mkHTML("Pilgrims Flight List", body, true);
   };
 
@@ -169,7 +236,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
     const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
       i + 1, p.name_en,
-      p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat,
+      natCode(p.nat),
       p.passport, p.phone || "—",
       p.gender === "ذكر" ? "MR." : "MRS.",
       p.flight_class === "درجة أولى" ? "FIRST CLASS" : ""
@@ -210,7 +277,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
               <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
             </div>
           </div>
-          <table><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>
+          <table class="wide-table"><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>
         </div>`;
     }).join("");
     return mkHTML("تقرير الرحلات", sections, true);
@@ -485,35 +552,46 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
   // اختيار عناصر التقرير (طباعة عنصر واحد أو أكثر بدل الكل)
   // ============================================================
   const SelectionPanel = ({
-    title, items, selected, setSelected
-  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<any>; setSelected: (s: Set<any>) => void }) => {
+    title, items, selected, setSelected, panelKey
+  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<any>; setSelected: (s: Set<any>) => void; panelKey: string }) => {
     const allSelected = items.length > 0 && items.every(it => selected.has(it.id));
+    const open = openPanels.has(panelKey);
     return (
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
-          <div onClick={() => setSelected(allSelected ? new Set() : new Set(items.map(i => i.id)))} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
-            {allSelected ? "إلغاء الكل" : "تحديد الكل"}
+        <div onClick={() => togglePanel(panelKey)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: open ? 8 : 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
+            <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
+            {!open && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>({allSelected ? "الكل" : `${[...selected].length} من ${items.length}`})</div>}
           </div>
+          {open && (
+            <div onClick={e => { e.stopPropagation(); setSelected(allSelected ? new Set() : new Set(items.map(i => i.id))); }} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
+              {allSelected ? "إلغاء الكل" : "تحديد الكل"}
+            </div>
+          )}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {items.map(it => {
-            const checked = selected.has(it.id);
-            return (
-              <div key={it.id} onClick={() => {
-                const next = new Set(selected);
-                if (next.has(it.id)) next.delete(it.id); else next.add(it.id);
-                setSelected(next);
-              }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${checked ? "var(--em7)" : "var(--border)"}`, background: checked ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: checked ? "var(--em7)" : "var(--text-muted)" }}>
-                <div style={{ width: 14, height: 14, borderRadius: 4, background: checked ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${checked ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {checked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                </div>
-                {it.label}
-              </div>
-            );
-          })}
-        </div>
-        {items.length > 0 && !allSelected && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>سيشمل التقرير فقط العناصر المحددة ({[...selected].length} من {items.length})</div>}
+        {open && (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {items.map(it => {
+                const checked = selected.has(it.id);
+                return (
+                  <div key={it.id} onClick={() => {
+                    const next = new Set(selected);
+                    if (next.has(it.id)) next.delete(it.id); else next.add(it.id);
+                    setSelected(next);
+                  }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${checked ? "var(--em7)" : "var(--border)"}`, background: checked ? "var(--success-bg)" : "transparent", cursor: "pointer", fontSize: 12, color: checked ? "var(--em7)" : "var(--text-muted)" }}>
+                    <div style={{ width: 14, height: 14, borderRadius: 4, background: checked ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${checked ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {checked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>
+                    {it.label}
+                  </div>
+                );
+              })}
+            </div>
+            {items.length > 0 && !allSelected && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>سيشمل التقرير فقط العناصر المحددة ({[...selected].length} من {items.length})</div>}
+          </>
+        )}
       </div>
     );
   };
@@ -602,8 +680,11 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
           </div>
         </>
       ) : (
-        <div>
-          <button onClick={() => setActiveReport(null)} style={{ ...btnS(), marginBottom: 14 }}>رجوع</button>
+        <div style={{ textAlign: "right" }}>
+          <button onClick={() => setActiveReport(null)} style={{ ...btnS(), display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            رجوع
+          </button>
 
           {/* ===== تقرير الحجاج ===== */}
           {activeReport === "passengers_report" && (
@@ -681,7 +762,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                               <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--info-bg)" }}>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{i + 1}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee", fontWeight: 500 }}>{p.name_en}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.nat === "قطري" ? "QAT" : p.nat === "مصري" ? "EGY" : p.nat}</td>
+                                <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{natCode(p.nat)}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.passport}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.phone || "—"}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid #eee" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
@@ -708,6 +789,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                           title="الرحلات المطلوبة في التقرير"
                           items={flights.map(f => ({ id: f.id, label: `${f.name} — ${f.type}` }))}
                           selected={selectedFlightIds}
+                          panelKey="flights"
                           setSelected={(s) => setSelectedFlightIds(s as Set<number>)}
                         />
                       )}
@@ -741,7 +823,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                                       <tr key={p.id} style={{ background: i % 2 === 0 ? "white" : "var(--info-bg)" }}>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{i + 1}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.name_en}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.nat === "قطري" ? "QAT" : "EGY"}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{natCode(p.nat)}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.passport}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid #eee" }}>{p.flight_class === "درجة أولى" ? "⭐ FIRST" : ""}</td>
@@ -775,6 +857,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                 <>
                   <SelectionPanel
                     title="الباصات المطلوبة في التقرير"
+                    panelKey="buses"
                     items={buses.map(b => ({ id: b.id, label: `${b.name}${b.type === "VIP" ? " ⭐" : ""}` }))}
                     selected={selectedBusIds}
                     setSelected={(s) => setSelectedBusIds(s as Set<number>)}
@@ -824,6 +907,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                 <>
                   <SelectionPanel
                     title="مخيمات منى المطلوبة في التقرير"
+                    panelKey="mina"
                     items={camps.filter(c => c.page_type === "منى").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
                     selected={selectedMinaCampIds}
                     setSelected={(s) => setSelectedMinaCampIds(s as Set<number>)}
@@ -878,6 +962,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
                 <>
                   <SelectionPanel
                     title="مخيمات عرفة المطلوبة في التقرير"
+                    panelKey="arafa"
                     items={camps.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
                     selected={selectedArafaCampIds}
                     setSelected={(s) => setSelectedArafaCampIds(s as Set<number>)}
@@ -954,6 +1039,7 @@ function ReportsPage({ passengers: rawPassengers }: { passengers: Passenger[] })
 
               <SelectionPanel
                 title="الأدوار المطلوبة في التقرير"
+                panelKey="hotel"
                 items={floorItems}
                 selected={selectedFloors}
                 setSelected={(s) => setSelectedFloors(s as Set<string>)}
