@@ -186,7 +186,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const currentBus = buses.find(b => b.id === currentBusId);
   const filteredP = passengers
     .filter(p => p.bus_id == null && (!pSearch || p.name_ar.includes(pSearch)))
-    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+    .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
