@@ -99,12 +99,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [showPrint, setShowPrint] = useState(false);
   const [roomNumber, setRoomNumber] = useState("");
   const [roomFloor, setRoomFloor] = useState("");
-  const [roomView, setRoomView] = useState<"مطلة" | "غير مطلة">("غير مطلة");
   const [numberError, setNumberError] = useState("");
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeFloor, setRangeFloor] = useState("");
-  const [rangeView, setRangeView] = useState<"مطلة" | "غير مطلة">("غير مطلة");
   const [rangeError, setRangeError] = useState("");
   const [currentRoomId, setCurrentRoomId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
@@ -134,7 +132,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!roomNumber.trim()) { setNumberError("اكتب رقم الغرفة!"); return; }
     if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
     setNumberError("");
-    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية", view: roomView }]).select();
+    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية" }]).select();
     if (error) {
       alert(`❌ فشل في إضافة الغرفة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
       return;
@@ -142,7 +140,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (data?.[0]) {
       setRooms(prev => [...prev, data[0] as Room]);
       setExpanded(prev => new Set([...prev, data[0].id]));
-      setRoomNumber(""); setRoomFloor(""); setRoomView("غير مطلة"); setShowAdd(false);
+      setRoomNumber(""); setRoomFloor(""); setShowAdd(false);
     }
   };
 
@@ -152,7 +150,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const existingNums = new Set(rooms.map(r => r.number));
     const newRooms = [];
     for (let n = from; n <= to; n++) {
-      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "ثنائية", view: rangeView });
+      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "ثنائية" });
     }
     if (newRooms.length === 0) { setRangeError("كل الغرف في هذا النطاق موجودة بالفعل!"); return; }
     setRangeError("");
@@ -162,7 +160,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       return;
     }
     if (data) setRooms(prev => [...prev, ...data as Room[]]);
-    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeView("غير مطلة"); setShowRange(false);
+    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setShowRange(false);
   };
 
   const handleExcel = (file: File) => {
@@ -413,14 +411,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "var(--danger)" : "var(--border)" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{numberError}</div>}</div>
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} /></div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الإطلالة</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {(["مطلة", "غير مطلة"] as const).map(v => (
-                <div key={v} onClick={() => setRoomView(v)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${roomView === v ? "var(--info)" : "var(--border)"}`, background: roomView === v ? "rgba(74,144,217,0.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: roomView === v ? "var(--info)" : "var(--text-muted)" }}>{v}</div>
-              ))}
-            </div>
-          </div>
           <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
         </Modal>
 
@@ -432,14 +422,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} /></div>
           </div>
           {rangeError && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{rangeError}</div>}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الإطلالة</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {(["مطلة", "غير مطلة"] as const).map(v => (
-                <div key={v} onClick={() => setRangeView(v)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${rangeView === v ? "var(--info)" : "var(--border)"}`, background: rangeView === v ? "rgba(74,144,217,0.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: rangeView === v ? "var(--info)" : "var(--text-muted)" }}>{v}</div>
-              ))}
-            </div>
-          </div>
           {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--em7)", marginBottom: 10, background: "rgba(125,31,60,.06)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
           <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
         </Modal>
