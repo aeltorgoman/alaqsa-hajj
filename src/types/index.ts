@@ -38,6 +38,7 @@ export interface Passenger {
   flight_class?: string;
   season_id?: number | null;
   sort_order?: number;
+  created_at?: string;
   services: {
     bus: string;
     flight: string;
