@@ -13,16 +13,20 @@ async function saveSortOrder(items: { id: number; sort_order: number }[]) {
   ));
 }
 
+// رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id — كل واحد مستقل عن التاني
+const flightField = (type?: string): "flight_id" | "return_flight_id" => type === "إياب" ? "return_flight_id" : "flight_id";
+
 function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const total = passengers.length;
-  const assigned = passengers.filter(p => p.flight_id != null).length;
-  const unassigned = passengers.filter(p => p.flight_id == null).length;
-  const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
   const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
+  const needsFlight = total - withoutTicket;
+  const assigned = passengers.filter(p => p.flight_id != null).length;
+  const unassigned = passengers.filter(p => p.flight_id == null && p.services?.flight !== "بدون").length;
+  const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
 
   const cards = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
-    { label: "موزّعون", num: assigned, sub: `${total ? Math.round(assigned/total*100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
+    { label: "موزّعون", num: assigned, sub: `${needsFlight ? Math.round(assigned/needsFlight*100) : 0}٪ من المحتاجين`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
     { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
     { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass/total*100) : 0}٪ من الإجمالي`, border: "#E8951A", clr: "#E8951A", bg: "rgba(232,149,26,0.05)" },
     { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", border: withoutTicket > 0 ? "#7a2e45" : "#ccc", clr: withoutTicket > 0 ? "var(--ff)" : "var(--muted)", bg: withoutTicket > 0 ? "var(--fb)" : "var(--paper)" },
@@ -73,18 +77,21 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     supabase.from("flights").select("*").order("created_at").then(({ data }: any) => { if (data) setFlights(data as Flight[]); });
   }, []);
 
-  const getFlightPassengers = (flightId: number) => passengers.filter(p => (p as any).flight_id === flightId).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+  const getFlightPassengers = (flight: Flight) => {
+    const field = flightField(flight.type);
+    return passengers.filter(p => (p as any)[field] === flight.id).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+  };
   const toggleFlight = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   // ===== Drag & Drop لترتيب الحجاج =====
   const handleDragStart = (pId: number) => { dragPassengerId.current = pId; setDraggingId(pId); };
   const handleDragOver = (e: DragEvent, pId: number) => { e.preventDefault(); dragOverPassengerId.current = pId; setDragOverId(pId); };
   const handleDragEnd = () => { setDraggingId(null); setDragOverId(null); dragPassengerId.current = null; dragOverPassengerId.current = null; };
-  const handleDrop = async (flightId: number) => {
+  const handleDrop = async (flight: Flight) => {
     const fromId = dragPassengerId.current;
     const toId = dragOverPassengerId.current;
     if (!fromId || !toId || fromId === toId) { handleDragEnd(); return; }
-    const fp = getFlightPassengers(flightId);
+    const fp = getFlightPassengers(flight);
     const fromIdx = fp.findIndex(p => p.id === fromId);
     const toIdx = fp.findIndex(p => p.id === toId);
     if (fromIdx === -1 || toIdx === -1) { handleDragEnd(); return; }
@@ -114,7 +121,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const addFlight = async () => {
-    if (!flightName.trim()) return;
+    if (!flightName.trim()) { setNameError("اكتب رقم/اسم الرحلة!"); return; }
     if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} باسم "${flightName}" موجودة!`); return; }
     setNameError("");
     const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
@@ -127,46 +134,47 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     }
   };
 
-  const deleteFlight = async (id: number) => {
-    if (getFlightPassengers(id).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
-    await supabase.from("flights").delete().eq("id", id);
-    setFlights(prev => prev.filter(f => f.id !== id));
+  const deleteFlight = async (flight: Flight) => {
+    if (getFlightPassengers(flight).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
+    await supabase.from("flights").delete().eq("id", flight.id);
+    setFlights(prev => prev.filter(f => f.id !== flight.id));
   };
 
   const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const confirmAddP = async () => {
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ flight_id: currentFlightId, flight_class: effectiveClass }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, flight_id: currentFlightId, flight_class: effectiveClass } : p));
+    const field = flightField(currentFlight?.type);
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [field]: currentFlightId, flight_class: effectiveClass }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [field]: currentFlightId, flight_class: effectiveClass } : p));
     setShowAddP(false);
   };
 
-  const removeP = async (pId: number) => {
-    await supabase.from("passengers").update({ flight_id: null }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, flight_id: null } : p));
+  const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
+    await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, [field]: null } : p));
   };
 
   const branding = { logoUrl: config.logo_url || "", companyName: config.name_ar || "حملة الأقصى", tagline: config.tagline || "", primaryColor: config.color_primary || "#6B1F3A", accentColor: config.color_accent || "#0C447C" };
 
   const printFlight = (flight: Flight) => {
-    const fp = getFlightPassengers(flight.id);
-    printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), true, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor));
+    const fp = getFlightPassengers(flight);
+    printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor));
   };
 
   const printAll = () => {
-    const sections = flights.map(f => makeFlightSectionHTML(f, getFlightPassengers(f.id), branding));
-    printInPage(makeHTML("تقرير الرحلات", joinSections(sections), true, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
+    const sections = flights.map(f => makeFlightSectionHTML(f, getFlightPassengers(f), branding));
+    printInPage(makeHTML("تقرير الرحلات", joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
   };
 
   const currentFlight = flights.find(f => f.id === currentFlightId);
+  const currentField = flightField(currentFlight?.type);
   const availableP = passengers.filter(p => {
     if (p.services?.flight === "بدون") return false;
     if (!currentFlight) return false;
-    if ((p as any).flight_id === currentFlightId) return false;
-    if ((p as any).flight_id == null) return true;
-    const existing = flights.find(f => f.id === (p as any).flight_id);
-    return existing?.type !== currentFlight.type;
+    const val = (p as any)[currentField];
+    if (val === currentFlightId) return false; // already in this flight
+    return val == null; // مفيش رحلة من نفس النوع متخصصة له بعد
   });
   const allSelectedWantFirst = selectedP.size > 0 && [...selectedP].every(id => passengers.find(p => p.id === id)?.services?.flight === "درجة أولى");
   const effectiveClass = (!allSelectedWantFirst && addFlightClass === "درجة أولى") ? "عادي" : addFlightClass;
@@ -182,7 +190,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
         groupFlights.map((flight, idx) => {
           const isExpanded = expanded.has(flight.id);
-          const fp = getFlightPassengers(flight.id);
+          const fp = getFlightPassengers(flight);
           const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length] || FLIGHT_ICON_COLORS[type];
           return (
             <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
@@ -206,14 +214,14 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 <button onClick={e => { e.stopPropagation(); openEditFlight(flight); }} title="تعديل بيانات الرحلة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
                 <button onClick={e => { e.stopPropagation(); printFlight(flight); }} title="طباعة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
                 <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} title="إضافة مسافر" style={{ height: 30, padding: "0 12px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(125,31,60,0.08)", border: "1px solid rgba(125,31,60,0.2)", cursor: "pointer", color: "var(--em7)", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.15)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(125,31,60,0.08)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight.id); }} title="حذف الرحلة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight); }} title="حذف الرحلة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
               </div>
               {isExpanded && (
                 <div
                   style={{ padding: "8px 12px", borderTop: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}` }}
                   onDragOver={e => e.preventDefault()}
-                  onDrop={() => handleDrop(flight.id)}
+                  onDrop={() => handleDrop(flight)}
                 >
                   {fp.length ? fp.map((p, i) => (
                     <div
@@ -240,8 +248,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       </span>
                       <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                       <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>⭐ أولى</span>}
-                      <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
+                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>⭐ أولى</span>}
+                      <button onClick={() => removeP(p.id, flightField(type))} title="إزالة من الرحلة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
                     </div>
                   )) : <div style={{ textAlign: "center", padding: "8px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>}
                 </div>
@@ -325,7 +333,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                {wantsFirst && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>أولى</span>}
+                {wantsFirst && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>أولى</span>}
               </div>
             );
           })}
