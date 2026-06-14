@@ -53,6 +53,12 @@ function natCode(nat: string | undefined | null): string {
 
 function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
   const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+  // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
+  const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
+  // الحجاج المرتبطين برحلة معينة — ذهاب عبر flight_id، إياب عبر return_flight_id (مستقلين)
+  const passengersOfFlight = (flight: Flight) => passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id);
+  // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
+  const flightNameFor = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || flights.find(f => f.id === p.return_flight_id)?.name || "—";
   const config = useConfig();
   const logoUrl = config.logo_url || "";
   const companyName = config.name_ar || "حملة الأقصى";
@@ -69,7 +75,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const [openPanels, setOpenPanels] = useState<Set<string>>(new Set(["flights", "buses", "mina", "arafa", "hotel"]));
+  const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
   const togglePanel = (key: string) => setOpenPanels(prev => {
     const next = new Set(prev);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -184,7 +190,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         setSelectedFloors(new Set((r as Room[]).map(x => x.floor ? String(x.floor) : "بدون طابق")));
       }
       if (f) {
-        const validFlights = (f as Flight[]).filter(x => x.type || passengers.some(p => p.flight_id === x.id));
+        const validFlights = (f as Flight[]).filter(x => x.type || passengers.some(p => p.flight_id === x.id || p.return_flight_id === x.id));
         setFlights(validFlights);
         setSelectedFlightIds(new Set(validFlights.map(x => x.id)));
       }
@@ -229,7 +235,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const rows = list.map((p, i) => {
       const nat = natCode(p.nat);
       const gender = p.gender === "ذكر" ? "MR." : "MRS.";
-      const cls = p.flight_class === "درجة أولى" ? "FIRST CLASS" : "";
+      const cls = wantsFirstClass(p) ? "FIRST CLASS" : "";
       return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
     const body = `<table class="flight-table ltr-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
@@ -244,7 +250,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       natCode(p.nat),
       p.passport, p.phone || "—",
       p.gender === "ذكر" ? "MR." : "MRS.",
-      p.flight_class === "درجة أولى" ? "FIRST CLASS" : ""
+      wantsFirstClass(p) ? "FIRST CLASS" : ""
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws["!cols"] = [{ wch: 5 }, { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
@@ -253,8 +259,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     XLSX.utils.book_append_sheet(wb, ws, "Flight List");
     addSummarySheet(wb, XLSX, "Pilgrims Flight List", companyName, [
       ["إجمالي عدد الحجاج", list.length],
-      ["درجة أولى", list.filter(p => p.flight_class === "درجة أولى").length],
-      ["درجة اقتصادية", list.filter(p => p.flight_class !== "درجة أولى").length],
+      ["درجة أولى", list.filter(p => wantsFirstClass(p)).length],
+      ["درجة اقتصادية", list.filter(p => !wantsFirstClass(p)).length],
     ]);
     XLSX.writeFile(wb, "flight_list.xlsx");
   };
@@ -265,7 +271,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const getPerFlightHTML = () => {
     const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
     const sections = selFlights.map(flight => {
-      const fp = passengers.filter(p => p.flight_id === flight.id);
+      const fp = passengersOfFlight(flight);
       return makeFlightSectionHTML(flight, fp, { logoUrl, companyName, tagline, primaryColor, accentColor });
     });
     return mkHTML("تقرير الرحلات", joinSections(sections), false);
@@ -275,12 +281,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
     const wb = XLSX.utils.book_new();
     selFlights.forEach(flight => {
-      const fp = passengers.filter(p => p.flight_id === flight.id);
+      const fp = passengersOfFlight(flight);
       const headers = ["م", "اسم الحاج / الحاجة", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"];
       const info = [["الرحلة:", flight.name], ["الخط:", flight.airline], ["التاريخ:", flight.date], ["الوقت:", flight.time], ["من:", flight.from_airport], ["إلى:", flight.to_airport], []];
       const rows = fp.map((p, i) => [
         i + 1, p.short_ar || p.name_ar, p.nat, p.passport, p.phone || "—", p.gender,
-        p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية"
+        wantsFirstClass(p) ? "درجة أولى" : "اقتصادية"
       ]);
       const ws = XLSX.utils.aoa_to_sheet([...info, headers, ...rows]);
       ws["!cols"] = [{ wch: 5 }, { wch: 30 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 8 }, { wch: 12 }];
@@ -289,8 +295,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     });
     addSummarySheet(wb, XLSX, "تقرير الرحلات", companyName, [
       ["إجمالي عدد الرحلات", selFlights.length],
-      ["إجمالي عدد الحجاج", passengers.filter(p => selFlights.some(f => f.id === p.flight_id)).length],
-      ...selFlights.map(f => [f.name, passengers.filter(p => p.flight_id === f.id).length]),
+      ["إجمالي عدد الحجاج", selFlights.reduce((sum, f) => sum + passengersOfFlight(f).length, 0)],
+      ...selFlights.map(f => [f.name, passengersOfFlight(f).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الرحلات.xlsx");
   };
@@ -494,15 +500,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // اختيار عناصر التقرير (طباعة عنصر واحد أو أكثر بدل الكل)
   // ============================================================
   const SelectionPanel = ({
-    title, items, selected, setSelected, panelKey
-  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<any>; setSelected: (s: Set<any>) => void; panelKey: string }) => {
+    title, items, selected, setSelected, panelKey, alwaysOpen
+  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<any>; setSelected: (s: Set<any>) => void; panelKey: string; alwaysOpen?: boolean }) => {
     const allSelected = items.length > 0 && items.every(it => selected.has(it.id));
-    const open = openPanels.has(panelKey);
+    const open = alwaysOpen || openPanels.has(panelKey);
     return (
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-        <div onClick={() => togglePanel(panelKey)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", marginBottom: open ? 8 : 0 }}>
+        <div onClick={() => !alwaysOpen && togglePanel(panelKey)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: alwaysOpen ? "default" : "pointer", marginBottom: open ? 8 : 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
+            {!alwaysOpen && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>}
             <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
             {!open && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>({allSelected ? "الكل" : `${[...selected].length} من ${items.length}`})</div>}
           </div>
@@ -708,7 +714,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                                 <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.passport}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.phone || "—"}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.flight_class === "درجة أولى" ? "⭐ FIRST" : ""}</td>
+                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{wantsFirstClass(p) ? "⭐ FIRST" : ""}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -732,13 +738,14 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                           items={flights.map(f => ({ id: f.id, label: `${f.name} — ${f.type}` }))}
                           selected={selectedFlightIds}
                           panelKey="flights"
+                          alwaysOpen
                           setSelected={(s) => setSelectedFlightIds(s as Set<number>)}
                         />
                       )}
                       {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                         flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
                         flights.map((flight, idx) => {
-                          const fp = passengers.filter(p => p.flight_id === flight.id);
+                          const fp = passengersOfFlight(flight);
                           const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
                           return (
                             <div key={flight.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 12, overflow: "hidden" }}>
@@ -775,7 +782,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                                         <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.passport}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.phone || "—"}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية"}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{wantsFirstClass(p) ? "درجة أولى" : "اقتصادية"}</td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -1232,7 +1239,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     {waTemplate
                       .replace("{الاسم}", passengers[0].short_ar || passengers[0].name_ar)
                       .replace("{الباص}", buses.find(b => b.id === (passengers[0] as any).bus_id)?.name || "—")
-                      .replace("{الرحلة}", flights.find(f => f.id === passengers[0].flight_id)?.name || "—")
+                      .replace("{الرحلة}", flightNameFor(passengers[0]))
                       .replace("{الغرفة}", rooms.find(r => r.id === (passengers[0] as any).room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === (passengers[0] as any).camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === (passengers[0] as any).camp_arafa_id)?.name || "—")
@@ -1260,7 +1267,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
                       .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
-                      .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.name || "—")
+                      .replace("{الرحلة}", flightNameFor(p))
                       .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
@@ -1292,7 +1299,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
                       .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
-                      .replace("{الرحلة}", flights.find(f => f.id === p.flight_id)?.name || "—")
+                      .replace("{الرحلة}", flightNameFor(p))
                       .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
