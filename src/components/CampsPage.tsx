@@ -204,7 +204,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const genderPool = currentCamp?.type === "خاص" ? passengers : passengers.filter(p => p.gender === currentCamp?.gender);
   const filteredP = genderPool
     .filter(p => (p as any)[campIdKey] == null && (!pSearch || p.name_ar.includes(pSearch)))
-    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+    .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
   const maleCamps = camps.filter(c => c.gender === "ذكر");
   const femaleCamps = camps.filter(c => c.gender === "أنثى");
 
