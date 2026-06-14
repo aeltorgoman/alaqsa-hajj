@@ -27,14 +27,18 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       <div style={{ position: "relative", zIndex: 2, width: "100%", maxWidth: 380, background: "var(--bg-card)", borderRadius: "var(--radius-xl)", padding: 6, boxShadow: "var(--shadow-xl)", border: "1px solid var(--accent-dark)" }}>
         <div style={{ border: "1px solid var(--accent-light)", borderRadius: "calc(var(--radius-xl) - 4px)", padding: "38px 30px" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-            <svg width="96" height="118" viewBox="0 0 96 118" style={{ marginBottom: 8 }}>
-              <path d="M8 116 V52 C8 26 28 6 48 6 C68 6 88 26 88 52 V116" fill="none" stroke="var(--accent)" strokeWidth="2.5"/>
-              <path d="M15 116 V52 C15 30 31 13 48 13 C65 13 81 30 81 52 V116" fill="none" stroke="var(--accent-light)" strokeWidth="1"/>
-              <g transform="translate(48,58) scale(1.05)">
-                <path d="M22,0 L8.3,3.4 L15.6,15.6 L3.4,8.3 L0,22 L-3.4,8.3 L-15.6,15.6 L-8.3,3.4 L-22,0 L-8.3,-3.4 L-15.6,-15.6 L-3.4,-8.3 L0,-22 L3.4,-8.3 L15.6,-15.6 L8.3,-3.4 Z" fill="none" stroke="var(--primary-dark)" strokeWidth="2"/>
-                <circle r="4.5" fill="var(--accent)"/>
-              </g>
-            </svg>
+            {config.logo_url ? (
+              <img src={config.logo_url} alt={config.name_ar} style={{ width: 76, height: 76, borderRadius: "50%", objectFit: "cover", marginBottom: 8, border: "2px solid var(--accent-light)" }} />
+            ) : (
+              <svg width="96" height="118" viewBox="0 0 96 118" style={{ marginBottom: 8 }}>
+                <path d="M8 116 V52 C8 26 28 6 48 6 C68 6 88 26 88 52 V116" fill="none" stroke="var(--accent)" strokeWidth="2.5"/>
+                <path d="M15 116 V52 C15 30 31 13 48 13 C65 13 81 30 81 52 V116" fill="none" stroke="var(--accent-light)" strokeWidth="1"/>
+                <g transform="translate(48,58) scale(1.05)">
+                  <path d="M22,0 L8.3,3.4 L15.6,15.6 L3.4,8.3 L0,22 L-3.4,8.3 L-15.6,15.6 L-8.3,3.4 L-22,0 L-8.3,-3.4 L-15.6,-15.6 L-3.4,-8.3 L0,-22 L3.4,-8.3 L15.6,-15.6 L8.3,-3.4 Z" fill="none" stroke="var(--primary-dark)" strokeWidth="2"/>
+                  <circle r="4.5" fill="var(--accent)"/>
+                </g>
+              </svg>
+            )}
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 30, color: "var(--primary-dark)", letterSpacing: "0.5px" }}>
               {config.name_ar}
             </div>
