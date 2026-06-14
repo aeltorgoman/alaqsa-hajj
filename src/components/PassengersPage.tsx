@@ -63,6 +63,8 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
       (window as any).__hajj_pending_scan_file__ = null;
       setShowManual(true);
       setManualPassportImg(null);
+      setManualForm(DEFAULT_MANUAL_FORM);
+      setManualServices(DEFAULT_MANUAL_SERVICES);
       setManualScanning(true);
       const reader = new FileReader();
       reader.onload = async ev => {
@@ -179,8 +181,10 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
   const [showManual, setShowManual] = useState(false);
-  const [manualForm, setManualForm] = useState({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
-  const [manualServices, setManualServices] = useState({ bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" });
+  const DEFAULT_MANUAL_FORM = { name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" };
+  const DEFAULT_MANUAL_SERVICES = { bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" };
+  const [manualForm, setManualForm] = useState(DEFAULT_MANUAL_FORM);
+  const [manualServices, setManualServices] = useState(DEFAULT_MANUAL_SERVICES);
   const [manualSaving, setManualSaving] = useState(false);
   const [manualPassportImg, setManualPassportImg] = useState<string | null>(null);
   const [manualScanning, setManualScanning] = useState(false);
@@ -204,7 +208,8 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     if (data && data[0]) {
       setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as Passenger]);
       setShowManual(false);
-      setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+      setManualForm(DEFAULT_MANUAL_FORM);
+      setManualServices(DEFAULT_MANUAL_SERVICES);
     }
     setManualSaving(false);
   };
@@ -484,7 +489,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
               e.target.value = "";
             }} />
             {/* إضافة يدوي */}
-            <div onClick={() => setShowManual(true)} title="إضافة يدوي" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
+            <div onClick={() => { setManualForm(DEFAULT_MANUAL_FORM); setManualServices(DEFAULT_MANUAL_SERVICES); setManualPassportImg(null); setShowManual(true); }} title="إضافة يدوي" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
               يدوي
             </div>
@@ -911,7 +916,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
           </div>
         </div>
       )}
-      <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" }); }} title={manualPassportImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={manualPassportImg ? 820 : 460}>
+      <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); setManualForm(DEFAULT_MANUAL_FORM); setManualServices(DEFAULT_MANUAL_SERVICES); }} title={manualPassportImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={manualPassportImg ? 820 : 460}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>{manualPassportImg || manualScanning ? "راجع البيانات المستخرجة وعدّل لو محتاج" : "أدخل البيانات — المستندات تقدر ترفعها بعدين من ملف الحاج"}</span>
         </div>
@@ -961,7 +966,8 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
                       if (!file) return;
                       // مسح البيانات والصورة القديمة
                       setManualPassportImg(null);
-                      setManualForm({ name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" });
+                      setManualForm(DEFAULT_MANUAL_FORM);
+                      setManualServices(DEFAULT_MANUAL_SERVICES);
                       setManualScanning(true);
                       const reader = new FileReader();
                       reader.onload = async ev => {
