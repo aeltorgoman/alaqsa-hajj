@@ -4,7 +4,7 @@ import type { Passenger, Bus } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE, VIP_ICON_COLOR } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -203,17 +203,18 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
           <br />لا يوجد باصات بعد
         </div>
-      ) : buses.map(bus => {
+      ) : buses.map((bus, idx) => {
         const isExpanded = expanded.has(bus.id);
         const bp = getBusPassengers(bus.id);
         const isVIP = bus.type === "VIP";
+        const busColor = isVIP ? VIP_ICON_COLOR : ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
         return (
           <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
             {/* Header */}
             <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <span style={{ fontSize: 18 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
-              </span>
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: busColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+              </div>
               <div style={{ flex: 1 }}>
                 {editingBusId === bus.id ? (
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
