@@ -264,10 +264,11 @@ export function joinSections(sections: string[]): string {
 }
 
 // قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)
-export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string })[], b: ReportBranding): string {
+export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string; services?: { flight?: string } })[], b: ReportBranding): string {
   const primaryColor = b.primaryColor || "#6B1F3A";
   const rows = fp.map((p, i) => {
-    const cls = p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية";
+    const wantsFirst = p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
+    const cls = wantsFirst ? "درجة أولى" : "اقتصادية";
     return `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.nat || ""}</td><td>${p.passport || ""}</td><td>${p.phone || "—"}</td><td>${p.gender || ""}</td><td>${cls}</td></tr>`;
   }).join("");
   return `<div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
