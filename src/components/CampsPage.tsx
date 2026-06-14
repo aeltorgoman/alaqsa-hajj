@@ -4,10 +4,10 @@ import type { Passenger, Camp } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE } from "../utils";
 
-// ===== ألوان أيقونات المخيمات (دورة ألوان) =====
-const CAMP_ICON_COLORS = ["#7D1F3C", "#0C447C", "#2A9D8F", "#E8951A", "#8B3A6B", "#5C7C2E", "#B5651D", "#3F51B5"];
+// ===== ألوان أيقونات المخيمات (دورة ألوان موحّدة) =====
+const CAMP_ICON_COLORS = ICON_COLOR_CYCLE;
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
