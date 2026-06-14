@@ -56,8 +56,8 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--g3)" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>مسح جواز</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>إضافة بالمسح الذكي</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>مسح مستند</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>جواز / بطاقة / تصريح حج</div>
             </div>
           </div>
           <input ref={scanInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
