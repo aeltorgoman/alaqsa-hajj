@@ -61,33 +61,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
     const file = (window as any).__hajj_pending_scan_file__;
     if (file) {
       (window as any).__hajj_pending_scan_file__ = null;
-      setShowManual(true);
-      setManualPassportImg(null);
-      setManualForm(DEFAULT_MANUAL_FORM);
-      setManualServices(DEFAULT_MANUAL_SERVICES);
-      setManualScanning(true);
-      const reader = new FileReader();
-      reader.onload = async ev => {
-        const dataUrl = ev.target?.result as string;
-        setManualPassportImg(dataUrl);
-        try {
-          const parsed = await scanDocument(file, "passport");
-          setManualForm(prev => ({
-            ...prev,
-            name_en: parsed.name_en || prev.name_en,
-            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
-            name_ar: parsed.name_ar || prev.name_ar,
-            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
-            passport: parsed.passport || prev.passport,
-            nat: parsed.nationality || prev.nat,
-            dob: parsed.dob || prev.dob,
-            expiry: parsed.expiry || prev.expiry,
-            gender: parsed.gender || prev.gender,
-          }));
-        } catch { /* تجاهل */ }
-        setManualScanning(false);
-      };
-      reader.readAsDataURL(file);
+      runUnifiedScan(file);
     }
   }, []);
   
@@ -187,7 +161,91 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
   const [manualServices, setManualServices] = useState(DEFAULT_MANUAL_SERVICES);
   const [manualSaving, setManualSaving] = useState(false);
   const [manualPassportImg, setManualPassportImg] = useState<string | null>(null);
+  const [manualPassportFile, setManualPassportFile] = useState<File | null>(null);
+  const [manualIdImg, setManualIdImg] = useState<string | null>(null);
+  const [manualIdFile, setManualIdFile] = useState<File | null>(null);
   const [manualScanning, setManualScanning] = useState(false);
+  const [autoScanning, setAutoScanning] = useState(false);
+
+  const resetManualModal = () => {
+    setManualPassportImg(null); setManualPassportFile(null);
+    setManualIdImg(null); setManualIdFile(null);
+    setManualForm(DEFAULT_MANUAL_FORM);
+    setManualServices(DEFAULT_MANUAL_SERVICES);
+  };
+
+  // مسح موحّد: يتعرف على نوع المستند (جواز / بطاقة / تصريح حج) ويتصرف تلقائيًا
+  const runUnifiedScan = async (file: File) => {
+    setAutoScanning(true);
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      const dataUrl = ev.target?.result as string;
+      try {
+        const parsed = await scanDocument(file, "auto");
+        if (parsed.doc_type === "hajj_permit") {
+          // تصريح حج — دور على الحاج المطابق واحفظ مباشرة في ملفه
+          const idNum = parsed.national_id || parsed.passport || "";
+          const nameVal = parsed.name_ar || parsed.name_en || "";
+          const matched = passengers.find(p =>
+            (idNum && (p.national_id === idNum || p.passport === idNum)) ||
+            (!idNum && nameVal && (p.name_ar === nameVal || p.name_en === nameVal || p.short_ar === nameVal))
+          );
+          if (matched) {
+            const url = await uploadDoc(file, matched.id, "hajj_permit");
+            if (url) {
+              await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", matched.id);
+              const updated = { ...matched, hajj_permit_url: url } as Passenger;
+              setPassengers(passengers.map(x => x.id === matched.id ? updated : x));
+              alert(`✅ تم حفظ التصريح في ملف ${matched.short_ar || matched.name_ar}`);
+            } else {
+              alert("❌ فشل رفع الملف، حاول مرة أخرى");
+            }
+          } else {
+            alert("⚠️ لم يتم العثور على حاج مطابق لهذا التصريح — تأكد من البيانات أو ارفعه من ملف الحاج مباشرة");
+          }
+        } else if (parsed.doc_type === "idcard") {
+          resetManualModal();
+          setManualIdImg(dataUrl); setManualIdFile(file);
+          setManualForm(prev => ({
+            ...prev,
+            national_id: parsed.national_id || prev.national_id,
+            id_expiry: parsed.id_expiry || prev.id_expiry,
+            name_ar: parsed.name_ar || prev.name_ar,
+            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+            name_en: parsed.name_en || prev.name_en,
+            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+            nat: parsed.nationality || prev.nat,
+            dob: parsed.dob || prev.dob,
+            gender: parsed.gender || prev.gender,
+          }));
+          setShowManual(true);
+        } else {
+          // جواز سفر (الافتراضي)
+          resetManualModal();
+          setManualPassportImg(dataUrl); setManualPassportFile(file);
+          setManualForm(prev => ({
+            ...prev,
+            name_en: parsed.name_en || prev.name_en,
+            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+            name_ar: parsed.name_ar || prev.name_ar,
+            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+            passport: parsed.passport || prev.passport,
+            nat: parsed.nationality || prev.nat,
+            dob: parsed.dob || prev.dob,
+            expiry: parsed.expiry || prev.expiry,
+            gender: parsed.gender || prev.gender,
+          }));
+          setShowManual(true);
+        }
+      } catch {
+        // فشل القراءة — افتح مودال الإضافة اليدوي فاضي
+        resetManualModal();
+        setShowManual(true);
+      }
+      setAutoScanning(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleManualSave = async () => {
     if (!manualForm.name_ar && !manualForm.name_en) { alert("اكتب الاسم على الأقل!"); return; }
@@ -206,10 +264,22 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       return;
     }
     if (data && data[0]) {
-      setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at } as Passenger]);
+      const newId = data[0].id;
+      const docUpdates: any = {};
+      if (manualPassportFile) {
+        const url = await uploadDoc(manualPassportFile, newId, "passport_doc");
+        if (url) docUpdates.passport_url = url;
+      }
+      if (manualIdFile) {
+        const url = await uploadDoc(manualIdFile, newId, "idcard");
+        if (url) docUpdates.national_id_url = url;
+      }
+      if (Object.keys(docUpdates).length > 0) {
+        await supabase.from("passengers").update(docUpdates).eq("id", newId);
+      }
+      setPassengers([...passengers, { id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger]);
       setShowManual(false);
-      setManualForm(DEFAULT_MANUAL_FORM);
-      setManualServices(DEFAULT_MANUAL_SERVICES);
+      resetManualModal();
     }
     setManualSaving(false);
   };
@@ -447,6 +517,14 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+      {autoScanning && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}>
+          <div style={{ background: "var(--paper)", borderRadius: 14, padding: "24px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, border: "3px solid rgba(125,31,60,0.2)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--em7)" }}>جاري قراءة المستند...</span>
+          </div>
+        </div>
+      )}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <PassengersStats passengers={passengers} />
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
@@ -459,41 +537,19 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
               <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)", color: "var(--ink)" }} placeholder="ابحث..." />
               {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>✕</span>}
             </div>
-            {/* مسح جواز — بيفتح modal الإضافة مباشرة */}
-            <div onClick={() => document.getElementById("scan-input-btn")?.click()} title="مسح جواز" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontSize: 11, fontWeight: 700, transition: "var(--transition)", flexShrink: 0 }}>
+            {/* مسح موحّد — جواز/بطاقة/تصريح حج، بيتعرف على النوع ويتصرف تلقائيًا */}
+            <div onClick={() => document.getElementById("scan-input-btn")?.click()} title="مسح جواز / بطاقة / تصريح حج" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontSize: 11, fontWeight: 700, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
               مسح
             </div>
             <input id="scan-input-btn" type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
               const file = e.target.files?.[0];
               if (!file) return;
-              setShowManual(true);
-              setManualPassportImg(null);
-              setManualScanning(true);
-              const reader = new FileReader();
-              reader.onload = async ev => {
-                const dataUrl = ev.target?.result as string;
-                setManualPassportImg(dataUrl);
-                try {
-                  const parsed = await scanDocument(file, "passport");
-                  setManualForm(prev => ({
-                    ...prev,
-                    name_en: parsed.name_en || prev.name_en,
-                    name_ar: parsed.name_ar || prev.name_ar,
-                    passport: parsed.passport || prev.passport,
-                    nat: parsed.nationality || prev.nat,
-                    dob: parsed.dob || prev.dob,
-                    expiry: parsed.expiry || prev.expiry,
-                    gender: parsed.gender || prev.gender,
-                  }));
-                } catch { /* تجاهل */ }
-                setManualScanning(false);
-              };
-              reader.readAsDataURL(file);
+              runUnifiedScan(file);
               e.target.value = "";
             }} />
             {/* إضافة يدوي */}
-            <div onClick={() => { setManualForm(DEFAULT_MANUAL_FORM); setManualServices(DEFAULT_MANUAL_SERVICES); setManualPassportImg(null); setShowManual(true); }} title="إضافة يدوي" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
+            <div onClick={() => { resetManualModal(); setShowManual(true); }} title="إضافة يدوي" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
               يدوي
             </div>
@@ -926,9 +982,9 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           </div>
         </div>
       )}
-      <Modal show={showManual} onClose={() => { setShowManual(false); setManualPassportImg(null); setManualForm(DEFAULT_MANUAL_FORM); setManualServices(DEFAULT_MANUAL_SERVICES); }} title={manualPassportImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={manualPassportImg ? 820 : 460}>
+      <Modal show={showManual} onClose={() => { setShowManual(false); resetManualModal(); }} title={manualPassportImg || manualIdImg || manualScanning ? "إضافة بالمسح الذكي" : "إضافة حاج يدوياً"} maxWidth={(manualPassportImg || manualIdImg) ? 820 : 460}>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>{manualPassportImg || manualScanning ? "راجع البيانات المستخرجة وعدّل لو محتاج" : "أدخل البيانات — المستندات تقدر ترفعها بعدين من ملف الحاج"}</span>
+          <span>{manualPassportImg || manualIdImg || manualScanning ? "راجع البيانات المستخرجة وعدّل لو محتاج" : "أدخل البيانات — المستندات تقدر ترفعها بعدين من ملف الحاج"}</span>
         </div>
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           {/* البيانات */}
@@ -959,61 +1015,135 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={handleManualSave} disabled={manualSaving} style={{ ...btnP(), flex: 1, opacity: manualSaving ? 0.6 : 1 }}>{manualSaving ? "جاري الحفظ..." : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ</>}</button>
-              <button onClick={() => { setShowManual(false); setManualPassportImg(null); }} style={btnS()}>إلغاء</button>
+              <button onClick={() => { setShowManual(false); resetManualModal(); }} style={btnS()}>إلغاء</button>
             </div>
           </div>
 
-          {/* صورة الجواز */}
-          {manualPassportImg && (
-            <div style={{ width: 320, flexShrink: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>📋 صورة الجواز</span>
-                {!manualScanning && (
-                  <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
-                    تغيير
-                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      // مسح البيانات والصورة القديمة
-                      setManualPassportImg(null);
-                      setManualForm(DEFAULT_MANUAL_FORM);
-                      setManualServices(DEFAULT_MANUAL_SERVICES);
-                      setManualScanning(true);
-                      const reader = new FileReader();
-                      reader.onload = async ev => {
-                        setManualPassportImg(ev.target?.result as string);
-                        try {
-                          const parsed = await scanDocument(file, "passport");
-                          setManualForm(prev => ({
-                            ...prev,
-                            name_en: parsed.name_en || prev.name_en,
-                            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
-                            name_ar: parsed.name_ar || prev.name_ar,
-                            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
-                            passport: parsed.passport || prev.passport,
-                            nat: parsed.nationality || prev.nat,
-                            dob: parsed.dob || prev.dob,
-                            expiry: parsed.expiry || prev.expiry,
-                            gender: parsed.gender || prev.gender,
-                          }));
-                        } catch { /* تجاهل */ }
-                        setManualScanning(false);
-                      };
-                      reader.readAsDataURL(file);
-                      e.target.value = "";
-                    }} />
-                  </label>
-                )}
-              </div>
-              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
-                <img src={manualPassportImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 400, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
-                {manualScanning && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                    <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+          {/* صور المستندات (الجواز / البطاقة) */}
+          {(manualPassportImg || manualIdImg) && (
+            <div style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* صورة الجواز */}
+              {manualPassportImg && (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>📋 صورة الجواز</span>
+                    {!manualScanning && (
+                      <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
+                        تغيير
+                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setManualPassportImg(null); setManualPassportFile(null);
+                          setManualScanning(true);
+                          const reader = new FileReader();
+                          reader.onload = async ev => {
+                            setManualPassportImg(ev.target?.result as string);
+                            setManualPassportFile(file);
+                            try {
+                              const parsed = await scanDocument(file, "passport");
+                              setManualForm(prev => ({
+                                ...prev,
+                                name_en: parsed.name_en || prev.name_en,
+                                short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+                                name_ar: parsed.name_ar || prev.name_ar,
+                                short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+                                passport: parsed.passport || prev.passport,
+                                nat: parsed.nationality || prev.nat,
+                                dob: parsed.dob || prev.dob,
+                                expiry: parsed.expiry || prev.expiry,
+                                gender: parsed.gender || prev.gender,
+                              }));
+                            } catch { /* تجاهل */ }
+                            setManualScanning(false);
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
                   </div>
-                )}
-              </div>
+                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
+                    <img src={manualPassportImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 260, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
+                    {manualScanning && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* صورة البطاقة الشخصية */}
+              {manualIdImg ? (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>🪪 صورة البطاقة الشخصية</span>
+                    {!manualScanning && (
+                      <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
+                        تغيير
+                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setManualIdImg(null); setManualIdFile(null);
+                          setManualScanning(true);
+                          const reader = new FileReader();
+                          reader.onload = async ev => {
+                            setManualIdImg(ev.target?.result as string);
+                            setManualIdFile(file);
+                            try {
+                              const parsed = await scanDocument(file, "idcard");
+                              setManualForm(prev => ({
+                                ...prev,
+                                national_id: parsed.national_id || prev.national_id,
+                                id_expiry: parsed.id_expiry || prev.id_expiry,
+                              }));
+                            } catch { /* تجاهل */ }
+                            setManualScanning(false);
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
+                    <img src={manualIdImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 260, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
+                    {manualScanning && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1.5px dashed var(--line)", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", background: "var(--bg-2)" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  + إضافة صورة البطاقة الشخصية (اختياري)
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setManualScanning(true);
+                    const reader = new FileReader();
+                    reader.onload = async ev => {
+                      setManualIdImg(ev.target?.result as string);
+                      setManualIdFile(file);
+                      try {
+                        const parsed = await scanDocument(file, "idcard");
+                        setManualForm(prev => ({
+                          ...prev,
+                          national_id: parsed.national_id || prev.national_id,
+                          id_expiry: parsed.id_expiry || prev.id_expiry,
+                        }));
+                      } catch { /* تجاهل */ }
+                      setManualScanning(false);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }} />
+                </label>
+              )}
             </div>
           )}
         </div>
