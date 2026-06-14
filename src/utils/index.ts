@@ -382,6 +382,14 @@ export const ALL_PERMISSIONS = [
 export const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
 export const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"], "سويت": ["var(--info-bg)", "var(--info)"] };
 
+// ============================================================
+// أيقونات ملوّنة موحّدة (باصات/مخيمات/غرف/رحلات) — صفحات التنظيم وصفحة التقارير
+// ============================================================
+export const ICON_COLOR_CYCLE = ["#7D1F3C", "#0C447C", "#2A9D8F", "#E8951A", "#8B3A6B", "#5C7C2E", "#B5651D", "#3F51B5"];
+export const VIP_ICON_COLOR = "#B5651D";
+export const ROOM_ICON_COLORS: Record<string, string> = { "ثنائية": "#0C447C", "ثلاثية": "#E8951A", "رباعية": "#2A9D8F", "سويت": "#7D1F3C", "فردية": "#5C7C2E", "فارغة": "#999999" };
+export const FLIGHT_ICON_COLORS: Record<string, string> = { "ذهاب": "#0C447C", "إياب": "#8B3A6B" };
+
 export const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "الرئيسية", perm: "" }] },
   { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "view_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
