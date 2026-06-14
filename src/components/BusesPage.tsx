@@ -75,7 +75,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const toggleBus = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addBus = async () => {
-    if (!busName.trim()) return;
+    if (!busName.trim()) { setNameError("اكتب اسم الباص!"); return; }
     if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`باص باسم "${busName}" موجود بالفعل!`); return; }
     setNameError("");
     const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType }]).select();
@@ -269,12 +269,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
                     <Avatar name={p.name_ar} gender={p.gender} size={24} />
                     <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                    {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>VIP</span>}
+                    {p.services?.bus === "VIP" && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
                     <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
                       <option value="">نقل لـ...</option>
                       {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
-                    <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
+                    <button onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
                   </div>
                 )) : (
                   <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>
@@ -319,7 +319,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
               <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-              {p.services?.bus === "VIP" && <span style={{ fontSize: 9, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 5px", borderRadius: 99 }}>VIP</span>}
+              {p.services?.bus === "VIP" && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
             </div>
           );
         })}
