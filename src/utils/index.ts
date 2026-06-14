@@ -35,6 +35,23 @@ export function parseDate(dateStr: string): Date | null {
   return d;
 }
 
+// وقت نسبي (منذ X) — يُستخدم لعرض وقت إضافة الحاج في "آخر المضافين"
+export function timeAgo(isoString?: string | null): string {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "";
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 60) return "الآن";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `منذ ${diffMin} دقيقة`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `منذ ${diffHour} ساعة`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 30) return `منذ ${diffDay} يوم`;
+  const diffMonth = Math.floor(diffDay / 30);
+  return `منذ ${diffMonth} شهر`;
+}
+
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
