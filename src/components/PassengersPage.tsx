@@ -7,6 +7,15 @@ import { Modal } from "./Modal";
 import { useConfig } from "../config/ConfigContext";
 import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
+// تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
+function nameMatches(a?: string | null, b?: string | null): boolean {
+  const norm = (s?: string | null) => (s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const wa = norm(a), wb = norm(b);
+  if (!wa.length || !wb.length) return false;
+  const common = wa.filter(w => wb.includes(w)).length;
+  return common >= Math.min(2, Math.min(wa.length, wb.length));
+}
+
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
   const stats = useMemo(() => {
@@ -166,6 +175,8 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
   const [manualIdFile, setManualIdFile] = useState<File | null>(null);
   const [manualScanning, setManualScanning] = useState(false);
   const [autoScanning, setAutoScanning] = useState(false);
+  const [idMatchCandidates, setIdMatchCandidates] = useState<Passenger[] | null>(null);
+  const [pendingIdScan, setPendingIdScan] = useState<{ file: File; dataUrl: string; parsed: any } | null>(null);
 
   const resetManualModal = () => {
     setManualPassportImg(null); setManualPassportFile(null);
@@ -204,21 +215,20 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
             alert("⚠️ لم يتم العثور على حاج مطابق لهذا التصريح — تأكد من البيانات أو ارفعه من ملف الحاج مباشرة");
           }
         } else if (parsed.doc_type === "idcard") {
-          resetManualModal();
-          setManualIdImg(dataUrl); setManualIdFile(file);
-          setManualForm(prev => ({
-            ...prev,
-            national_id: parsed.national_id || prev.national_id,
-            id_expiry: parsed.id_expiry || prev.id_expiry,
-            name_ar: parsed.name_ar || prev.name_ar,
-            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
-            name_en: parsed.name_en || prev.name_en,
-            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
-            nat: parsed.nationality || prev.nat,
-            dob: parsed.dob || prev.dob,
-            gender: parsed.gender || prev.gender,
-          }));
-          setShowManual(true);
+          // بطاقة شخصية — دايمًا تأكيد قبل الربط أو فتح الإضافة (تجنب الدبلكيت)
+          const idNum = parsed.national_id || "";
+          const nameAr = parsed.name_ar || "";
+          const nameEn = parsed.name_en || "";
+          let candidates: Passenger[] = [];
+          if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
+          if (candidates.length === 0 && (nameAr || nameEn)) {
+            candidates = passengers.filter(p =>
+              (nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
+              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn)))
+            );
+          }
+          setPendingIdScan({ file, dataUrl, parsed });
+          setIdMatchCandidates(candidates);
         } else {
           // جواز سفر (الافتراضي)
           resetManualModal();
@@ -245,6 +255,54 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       setAutoScanning(false);
     };
     reader.readAsDataURL(file);
+  };
+
+  // ربط صورة البطاقة بحاج موجود بالفعل (بدل إضافته كحاج جديد)
+  const linkIdToExisting = async (passenger: Passenger) => {
+    if (!pendingIdScan) return;
+    const { file, parsed } = pendingIdScan;
+    setAutoScanning(true);
+    const url = await uploadDoc(file, passenger.id, "idcard");
+    if (url) {
+      const updates: any = { national_id_url: url };
+      if (!passenger.national_id && parsed.national_id) updates.national_id = parsed.national_id;
+      if (!(passenger as any).id_expiry && parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
+      if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
+      await supabase.from("passengers").update(updates).eq("id", passenger.id);
+      const updated = { ...passenger, ...updates } as Passenger;
+      setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+      alert(`✅ تم ربط البطاقة بملف ${passenger.short_ar || passenger.name_ar}`);
+    } else {
+      alert("❌ فشل رفع الملف، حاول مرة أخرى");
+    }
+    setAutoScanning(false);
+    setIdMatchCandidates(null); setPendingIdScan(null);
+  };
+
+  // البطاقة لحاج جديد — افتح مودال الإضافة مع بيانات البطاقة
+  const proceedIdAsNew = () => {
+    if (!pendingIdScan) return;
+    const { dataUrl, file, parsed } = pendingIdScan;
+    resetManualModal();
+    setManualIdImg(dataUrl); setManualIdFile(file);
+    setManualForm(prev => ({
+      ...prev,
+      national_id: parsed.national_id || prev.national_id,
+      id_expiry: parsed.id_expiry || prev.id_expiry,
+      name_ar: parsed.name_ar || prev.name_ar,
+      short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+      name_en: parsed.name_en || prev.name_en,
+      short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+      nat: parsed.nationality || prev.nat,
+      dob: parsed.dob || prev.dob,
+      gender: parsed.gender || prev.gender,
+    }));
+    setShowManual(true);
+    setIdMatchCandidates(null); setPendingIdScan(null);
+  };
+
+  const cancelIdScan = () => {
+    setIdMatchCandidates(null); setPendingIdScan(null);
   };
 
   const handleManualSave = async () => {
@@ -522,6 +580,27 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: "24px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
             <div style={{ width: 36, height: 36, border: "3px solid rgba(125,31,60,0.2)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--em7)" }}>جاري قراءة المستند...</span>
+          </div>
+        </div>
+      )}
+      {idMatchCandidates !== null && pendingIdScan && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 350, padding: 16 }}>
+          <div style={{ background: "var(--paper)", borderRadius: 14, padding: 18, maxWidth: 380, width: "100%", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>تأكيد البطاقة الشخصية</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
+              {idMatchCandidates.length > 0 ? "وجدنا حجاج بنفس الاسم/الرقم — هل ده هو؟" : "مفيش حد بنفس الاسم في القائمة"}
+            </div>
+            {idMatchCandidates.map(p => (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", marginBottom: 6, background: "var(--bg-2)" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} {p.passport ? `· ${p.passport}` : ""}</div>
+                </div>
+                <button onClick={() => linkIdToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>ده هو</button>
+              </div>
+            ))}
+            <button onClick={proceedIdAsNew} style={{ ...btnS(), width: "100%", marginTop: 6, fontWeight: 600 }}>لا، ده حاج جديد → فتح الإضافة</button>
+            <button onClick={cancelIdScan} style={{ width: "100%", marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: "4px 0" }}>إلغاء</button>
           </div>
         </div>
       )}
