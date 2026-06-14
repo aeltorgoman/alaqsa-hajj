@@ -110,6 +110,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [printFilter, setPrintFilter] = useState<"all" | "floor" | "type">("all");
   const [printFloor, setPrintFloor] = useState("");
   const [printType, setPrintType] = useState<Room["type"]>("ثنائية");
+  const [filterFloor, setFilterFloor] = useState("الكل");
+  const [filterType, setFilterType] = useState("الكل");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Drag state
@@ -281,7 +283,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const currentRoom = rooms.find(r => r.id === currentRoomId);
   const filteredP = passengers
     .filter(p => p.room_id == null && (!pSearch || p.name_ar.includes(pSearch)))
-    .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+    .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
   const getFilteredRoomsForPrint = () => {
     if (printFilter === "floor") return rooms.filter(r => r.floor === printFloor);
     if (printFilter === "type") return rooms.filter(r => r.type === printType);
@@ -303,6 +305,21 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
         </div>
 
+        {rooms.length > 0 && (
+          <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>الطابق:</span>
+              <div onClick={() => setFilterFloor("الكل")} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterFloor === "الكل" ? "var(--em7)" : "var(--border)"}`, background: filterFloor === "الكل" ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterFloor === "الكل" ? "var(--em7)" : "var(--text-muted)" }}>الكل</div>
+              {floors.map(f => <div key={f} onClick={() => setFilterFloor(f)} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterFloor === f ? "var(--em7)" : "var(--border)"}`, background: filterFloor === f ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterFloor === f ? "var(--em7)" : "var(--text-muted)" }}>ط{f}</div>)}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>النوع:</span>
+              <div onClick={() => setFilterType("الكل")} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterType === "الكل" ? "var(--em7)" : "var(--border)"}`, background: filterType === "الكل" ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterType === "الكل" ? "var(--em7)" : "var(--text-muted)" }}>الكل</div>
+              {ROOM_TYPES.map(t => <div key={t} onClick={() => setFilterType(t)} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterType === t ? "var(--em7)" : "var(--border)"}`, background: filterType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterType === t ? "var(--em7)" : "var(--text-muted)" }}>{t}</div>)}
+            </div>
+          </div>
+        )}
+
         {!rooms.length ? (
           <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>
@@ -310,9 +327,18 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             </div>
             لا يوجد غرف بعد
           </div>
-        ) : (
+        ) : (() => {
+          const filteredRooms = rooms.filter(r => (filterFloor === "الكل" || r.floor === filterFloor) && (filterType === "الكل" || r.type === filterType));
+          if (filteredRooms.length === 0) {
+            return (
+              <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
+                لا توجد غرف مطابقة للفلتر
+              </div>
+            );
+          }
+          return (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {rooms.map(room => {
+            {filteredRooms.map(room => {
               const isExpanded = expanded.has(room.id);
               const rp = getRoomPassengers(room.id);
               // تحديد نوع الغرفة من عدد الحجاج
@@ -403,7 +429,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               );
             })}
           </div>
-        )}
+          );
+        })()}
 
         {/* Modal غرفة جديدة */}
         <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="غرفة جديدة" maxWidth={340}>
