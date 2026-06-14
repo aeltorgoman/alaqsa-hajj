@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
+import { timeAgo } from "../utils";
 
 function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
   const config = useConfig();
@@ -18,15 +19,31 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
     const hotelCount = passengers.filter(p => (p as any).room_id != null).length;
     const flightCount = passengers.filter(p => (p as any).flight_id != null).length;
     return [
-      { label: "الباصات", count: busCount, pct: Math.round(busCount / total * 100), icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
-      { label: "مخيمات منى", count: minaCount, pct: Math.round(minaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
-      { label: "مخيمات عرفة", count: arafaCount, pct: Math.round(arafaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
-      { label: "الفندق", count: hotelCount, pct: Math.round(hotelCount / total * 100), icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
-      { label: "الطيران", count: flightCount, pct: Math.round(flightCount / total * 100), icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
+      { label: "الباصات", page: "buses", count: busCount, pct: Math.round(busCount / total * 100), icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
+      { label: "مخيمات منى", page: "mina", count: minaCount, pct: Math.round(minaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
+      { label: "مخيمات عرفة", page: "arafa", count: arafaCount, pct: Math.round(arafaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
+      { label: "الفندق", page: "hotel", count: hotelCount, pct: Math.round(hotelCount / total * 100), icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
+      { label: "الطيران", page: "flights", count: flightCount, pct: Math.round(flightCount / total * 100), icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
     ];
   }, [passengers, total]);
 
-  const recent = passengers.slice(0, 5);
+  // تنبيهات سريعة — أرقام تحتاج مراجعة من الأدمن
+  const alerts = useMemo(() => {
+    const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
+    const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
+    const vipBus = passengers.filter(p => p.services?.bus === "VIP").length;
+    const noHotel = passengers.filter(p => p.room_id == null).length;
+    const noBus = passengers.filter(p => p.bus_id == null).length;
+    return [
+      { label: "بدون تذكرة طيران", count: withoutTicket, page: "flights", color: "#7a2e45", bg: "var(--fb)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
+      { label: "طالبين درجة أولى", count: firstClass, page: "flights", color: "#E8951A", bg: "rgba(232,149,26,0.08)", icon: `<path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/>` },
+      { label: "VIP في الباصات", count: vipBus, page: "buses", color: "#8B3A6B", bg: "rgba(139,58,107,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
+      { label: "بدون غرفة بالفندق", count: noHotel, page: "hotel", color: "#c0392b", bg: "rgba(192,57,43,0.08)", icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
+      { label: "بدون باص", count: noBus, page: "buses", color: "#c0392b", bg: "rgba(192,57,43,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
+    ].filter(a => a.count > 0);
+  }, [passengers]);
+
+  const recent = [...passengers].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 5);
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,6 +116,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
                   <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.nat} · {p.passport}</div>
                 </div>
+                {p.created_at && <span style={{ fontSize: 10, color: "var(--muted)", flexShrink: 0 }}>{timeAgo(p.created_at)}</span>}
                 {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 99, background: "rgba(200,162,75,.12)", color: "var(--g6)", border: "1px solid rgba(200,162,75,.25)" }}>VIP</span>}
               </div>
             ))}
@@ -106,25 +124,58 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
         )}
       </div>
       <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", flex: 1 }}>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
           </div>
-          {dist.map(({ label, pct, icon }) => (
-            <div key={label} style={{ marginBottom: 12 }}>
+          {dist.map(({ label, page, pct, icon }) => {
+            const isLow = pct < 30;
+            const barGradient = isLow ? "linear-gradient(90deg,#c0392b,#e67e22)" : "linear-gradient(90deg,var(--em7),var(--em6))";
+            const pctColor = isLow ? "#c0392b" : "var(--em7)";
+            return (
+            <div key={label} onClick={() => setPage(page)} style={{ marginBottom: 12, cursor: "pointer" }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = "0.75"; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }}>
                 <div style={{ width: 26, height: 26, borderRadius: 7, background: "rgba(125,31,60,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--em7)", fontFamily: "var(--font-heading)" }}>{pct}٪</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: pctColor, fontFamily: "var(--font-heading)" }}>{pct}٪</span>
               </div>
               <div style={{ height: 5, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,var(--em7),var(--em6))", width: `${pct || 2}%`, transition: "width 0.8s ease" }} />
+                <div style={{ height: "100%", borderRadius: 99, background: barGradient, width: `${pct || 2}%`, transition: "width 0.8s ease" }} />
               </div>
             </div>
-          ))}
+            );
+          })}
+        </div>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>تنبيهات سريعة</div>
+          </div>
+          {alerts.length === 0 ? (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--muted)", textAlign: "center", padding: "10px 0" }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>كل شيء متوزّع</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {alerts.map(({ label, count, page, color, bg, icon }) => (
+                <div key={label} onClick={() => setPage(page)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 8px", borderRadius: 10, cursor: "pointer", background: bg, transition: "var(--transition)" }}
+                  onMouseEnter={e => { e.currentTarget.style.filter = "brightness(0.97)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                  </div>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color, fontFamily: "var(--font-heading)" }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ background: "linear-gradient(145deg,var(--em8),var(--em7))", borderRadius: 14, padding: "14px 16px", color: "#fff" }}>
           <div style={{ fontSize: 10, color: "var(--g3)", letterSpacing: "0.06em", marginBottom: 3, fontWeight: 600 }}>الموسم الحالي</div>
