@@ -1,333 +1,466 @@
-import { useState, useEffect, useRef } from "react";
-import type { DragEvent } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
-import type { Passenger, Flight } from "../types";
+import type { Passenger, Room } from "../types";
+import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, ICON_COLOR_CYCLE, FLIGHT_ICON_COLORS } from "../utils";
+import { ROOM_TYPES, ROOM_COLORS, ROOM_ICON_COLORS, inp, btnP, btnS } from "../utils";
 
-// ===== دالة حفظ ترتيب الحجاج =====
+// ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
   await Promise.all(items.map(item =>
     supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
   ));
 }
 
-// رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id — كل واحد مستقل عن التاني
-const flightField = (type?: string): "flight_id" | "return_flight_id" => type === "إياب" ? "return_flight_id" : "flight_id";
+// ===== إحصائيات الفندق =====
+function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenger[] }) {
+  const stats = useMemo(() => {
+    const total = passengers.length;
+    const assignedCount = passengers.filter(p => p.room_id != null).length;
+    const unassigned = total - assignedCount;
+    const viewRequested = passengers.filter(p => p.services?.hotel_view === "مطلة").length;
 
-function FlightsStats({ passengers }: { passengers: Passenger[] }) {
-  const total = passengers.length;
-  const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
-  const needsFlight = total - withoutTicket;
-  const assigned = passengers.filter(p => p.flight_id != null).length;
-  const unassigned = passengers.filter(p => p.flight_id == null && p.services?.flight !== "بدون").length;
-  const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
+    // حساب نوع الغرفة من عدد الحجاج
+    const getRoomLabel = (count: number) => {
+      if (count === 0) return "فارغة";
+      if (count === 1) return "فردية";
+      if (count === 2) return "ثنائية";
+      if (count === 3) return "ثلاثية";
+      if (count === 4) return "رباعية";
+      return `${count} أشخاص`;
+    };
+
+    const roomOccupancy: Record<string, number> = {};
+    rooms.forEach(r => {
+      const count = passengers.filter(p => p.room_id === r.id).length;
+      const label = getRoomLabel(count);
+      roomOccupancy[label] = (roomOccupancy[label] || 0) + 1;
+    });
+
+    return { total, assignedCount, unassigned, viewRequested, roomOccupancy };
+  }, [rooms, passengers]);
+  const { total, assignedCount, unassigned, viewRequested, roomOccupancy } = stats;
+
+  const occupancyColors: Record<string, [string, string]> = {
+    "فارغة": ["#f5f5f5", "#999"],
+    "فردية": ["rgba(74,144,217,0.1)", "#4A90D9"],
+    "ثنائية": ["rgba(42,157,143,0.1)", "#2A9D8F"],
+    "ثلاثية": ["rgba(125,31,60,0.08)", "var(--em7)"],
+    "رباعية": ["rgba(232,149,26,0.1)", "#E8951A"],
+  };
 
   const cards = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
-    { label: "موزّعون", num: assigned, sub: `${needsFlight ? Math.round(assigned/needsFlight*100) : 0}٪ من المحتاجين`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
+    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
     { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
-    { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass/total*100) : 0}٪ من الإجمالي`, border: "#E8951A", clr: "#E8951A", bg: "rgba(232,149,26,0.05)" },
-    { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", border: withoutTicket > 0 ? "#7a2e45" : "#ccc", clr: withoutTicket > 0 ? "var(--ff)" : "var(--muted)", bg: withoutTicket > 0 ? "var(--fb)" : "var(--paper)" },
+    { label: "طالبين مطل", num: viewRequested, sub: `${total ? Math.round(viewRequested / total * 100) : 0}٪ من الإجمالي`, border: "#4A90D9", clr: "#4A90D9", bg: "rgba(74,144,217,0.05)" },
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
-      {cards.map(({ label, num, sub, border, clr, bg }) => (
-        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
+    <div style={{ borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px 8px" }}>
+        {cards.map(({ label, num, sub, border, clr, bg }) => (
+          <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
+            <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
+          </div>
+        ))}
+      </div>
+      {Object.keys(roomOccupancy).length > 0 && (
+        <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600, marginLeft: 4 }}>الغرف:</span>
+          {Object.entries(roomOccupancy).filter(([k]) => k !== "فارغة").map(([label, count]) => {
+            const [bg, clr] = occupancyColors[label] || ["var(--bg-2)", "var(--text)"];
+            return (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, background: bg, borderRadius: 7, padding: "4px 10px" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: clr }}>{label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: clr, fontFamily: "var(--font-heading)" }}>{count}</span>
+              </div>
+            );
+          })}
+          {roomOccupancy["فارغة"] > 0 && (
+            <span style={{ fontSize: 10, color: "var(--muted)" }}>({roomOccupancy["فارغة"]} فارغة)</span>
+          )}
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
-// ===== صفحة الطيران =====
-function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
-  const config = useConfig();
-  const [flights, setFlights] = useState<Flight[]>([]);
-  const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
-  const [editFlightModal, setEditFlightModal] = useState<Flight | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", from_airport: "", to_airport: "" });
+// ===== صفحة الفندق =====
+function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
-  // ترتيب الحجاج بالسحب
+  const [showAdd, setShowAdd] = useState(false);
+  const [showRange, setShowRange] = useState(false);
+  const [showAddP, setShowAddP] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
+  const [roomNumber, setRoomNumber] = useState("");
+  const [roomFloor, setRoomFloor] = useState("");
+  const [numberError, setNumberError] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [rangeFloor, setRangeFloor] = useState("");
+  const [rangeError, setRangeError] = useState("");
+  const [currentRoomId, setCurrentRoomId] = useState<number | null>(null);
+  const [selectedP, setSelectedP] = useState(new Set<number>());
+  const [pSearch, setPSearch] = useState("");
+  const [printFilter, setPrintFilter] = useState<"all" | "floor" | "type">("all");
+  const [printFloor, setPrintFloor] = useState("");
+  const [printType, setPrintType] = useState<Room["type"]>("ثنائية");
+  const [filterFloor, setFilterFloor] = useState("الكل");
+  const [filterType, setFilterType] = useState("الكل");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Drag state
   const dragPassengerId = useRef<number | null>(null);
   const dragOverPassengerId = useRef<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [flightName, setFlightName] = useState("");
-  const [flightType, setFlightType] = useState<"ذهاب" | "إياب">("ذهاب");
-  const [airline, setAirline] = useState("");
-  const [flightDate, setFlightDate] = useState("");
-  const [flightTime, setFlightTime] = useState("");
-  const [fromAirport, setFromAirport] = useState("");
-  const [toAirport, setToAirport] = useState("");
-  const [nameError, setNameError] = useState("");
-  const [showAddP, setShowAddP] = useState(false);
-  const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
-  const [addFlightClass, setAddFlightClass] = useState("عادي");
-  const [selectedP, setSelectedP] = useState(new Set<number>());
-  const [pSearch, setPSearch] = useState("");
 
   useEffect(() => {
-    supabase.from("flights").select("*").order("created_at").then(({ data }: any) => { if (data) setFlights(data as Flight[]); });
+    supabase.from("rooms").select("*").order("number").then(({ data }: any) => { if (data) setRooms(data as Room[]); });
   }, []);
 
-  const getFlightPassengers = (flight: Flight) => {
-    const field = flightField(flight.type);
-    return passengers.filter(p => (p as any)[field] === flight.id).sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
-  };
-  const toggleFlight = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const getRoomPassengers = (roomId: number) =>
+    passengers.filter(p => p.room_id === roomId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-  // ===== Drag & Drop لترتيب الحجاج =====
-  const handleDragStart = (pId: number) => { dragPassengerId.current = pId; setDraggingId(pId); };
-  const handleDragOver = (e: DragEvent, pId: number) => { e.preventDefault(); dragOverPassengerId.current = pId; setDragOverId(pId); };
-  const handleDragEnd = () => { setDraggingId(null); setDragOverId(null); dragPassengerId.current = null; dragOverPassengerId.current = null; };
-  const handleDrop = async (flight: Flight) => {
-    const fromId = dragPassengerId.current;
-    const toId = dragOverPassengerId.current;
-    if (!fromId || !toId || fromId === toId) { handleDragEnd(); return; }
-    const fp = getFlightPassengers(flight);
-    const fromIdx = fp.findIndex(p => p.id === fromId);
-    const toIdx = fp.findIndex(p => p.id === toId);
-    if (fromIdx === -1 || toIdx === -1) { handleDragEnd(); return; }
-    const newOrder = [...fp];
-    const [moved] = newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, moved);
-    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
-    setPassengers(passengers.map(p => {
-      const upd = updates.find(u => u.id === p.id);
-      return upd ? { ...p, sort_order: upd.sort_order } : p;
-    }));
-    await saveSortOrder(updates);
-    handleDragEnd();
-  };
+  const floors = [...new Set(rooms.filter(r => r.floor).map(r => r.floor))].sort();
+  const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
-  // ===== تعديل بيانات الرحلة كاملة =====
-  const openEditFlight = (flight: Flight) => {
-    setEditFlightModal(flight);
-    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
-  };
-  const saveEditFlight = async () => {
-    if (!editFlightModal) return;
-    const upd = { name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(), date: editForm.date, time: editForm.time, from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim() };
-    await supabase.from("flights").update(upd).eq("id", editFlightModal.id);
-    setFlights(flights.map(f => f.id === editFlightModal.id ? { ...f, ...upd } : f));
-    setEditFlightModal(null);
-  };
-
-  const addFlight = async () => {
-    if (!flightName.trim()) { setNameError("اكتب رقم/اسم الرحلة!"); return; }
-    if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} باسم "${flightName}" موجودة!`); return; }
-    setNameError("");
-    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
-    if (error) { alert(`❌ فشل في إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
-    if (!error && data?.[0]) {
-      const newFlight = data[0] as Flight;
-      setFlights(prev => [...prev, newFlight]);
-      setExpanded(prev => new Set([...prev, newFlight.id]));
-      setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
+  const addRoom = async () => {
+    if (!roomNumber.trim()) { setNumberError("اكتب رقم الغرفة!"); return; }
+    if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
+    setNumberError("");
+    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية" }]).select();
+    if (error) {
+      alert(`❌ فشل في إضافة الغرفة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      return;
+    }
+    if (data?.[0]) {
+      setRooms(prev => [...prev, data[0] as Room]);
+      setExpanded(prev => new Set([...prev, data[0].id]));
+      setRoomNumber(""); setRoomFloor(""); setShowAdd(false);
     }
   };
 
-  const deleteFlight = async (flight: Flight) => {
-    if (getFlightPassengers(flight).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
-    await supabase.from("flights").delete().eq("id", flight.id);
-    setFlights(prev => prev.filter(f => f.id !== flight.id));
+  const addRange = async () => {
+    const from = parseInt(rangeFrom), to = parseInt(rangeTo);
+    if (!from || !to || from > to) { setRangeError("تأكد من الأرقام"); return; }
+    const existingNums = new Set(rooms.map(r => r.number));
+    const newRooms = [];
+    for (let n = from; n <= to; n++) {
+      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "ثنائية" });
+    }
+    if (newRooms.length === 0) { setRangeError("كل الغرف في هذا النطاق موجودة بالفعل!"); return; }
+    setRangeError("");
+    const { data, error } = await supabase.from("rooms").insert(newRooms).select();
+    if (error) {
+      setRangeError(`❌ فشل في الإضافة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      return;
+    }
+    if (data) setRooms(prev => [...prev, ...data as Room[]]);
+    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setShowRange(false);
   };
 
-  const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
+  const handleExcel = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split("\n").slice(1);
+      const existingNums = new Set(rooms.map(r => r.number));
+      const newRooms: any[] = [];
+      lines.forEach(line => {
+        const parts = line.split(",");
+        if (parts.length >= 2) {
+          const num = parts[0]?.trim(), type = parts[1]?.trim() as Room["type"], floor = parts[2]?.trim() || "";
+          if (num && !existingNums.has(num) && (ROOM_TYPES as readonly string[]).includes(type)) newRooms.push({ number: num, floor, type });
+        }
+      });
+      if (newRooms.length > 0) {
+        const { data, error } = await supabase.from("rooms").insert(newRooms).select();
+        if (!error && data) setRooms(prev => [...prev, ...data as Room[]]);
+      } else alert("لم يتم إضافة غرف. تأكد من شكل الملف.");
+    };
+    reader.readAsText(file);
+  };
+
+  const deleteRoom = async (id: number) => {
+    if (getRoomPassengers(id).length > 0) { alert("أزل المسافرين الأول!"); return; }
+    await supabase.from("rooms").delete().eq("id", id);
+    setRooms(prev => prev.filter(r => r.id !== id));
+  };
+
+  const openAddP = (roomId: number) => { setCurrentRoomId(roomId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const confirmAddP = async () => {
-    const field = flightField(currentFlight?.type);
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [field]: currentFlightId, flight_class: effectiveClass }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [field]: currentFlightId, flight_class: effectiveClass } : p));
+    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ room_id: currentRoomId }).eq("id", id)));
+    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, room_id: currentRoomId } : p));
     setShowAddP(false);
   };
 
-  const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
-    await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, [field]: null } : p));
+  const removeP = async (pId: number) => {
+    await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: null } : p));
   };
 
-  const branding = { logoUrl: config.logo_url || "", companyName: config.name_ar || "حملة الأقصى", tagline: config.tagline || "", primaryColor: config.color_primary || "#6B1F3A", accentColor: config.color_accent || "#0C447C" };
-
-  const printFlight = (flight: Flight) => {
-    const fp = getFlightPassengers(flight);
-    printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor));
+  const moveP = async (pId: number, toId: string) => {
+    if (!toId) return;
+    const newRoomId = parseInt(toId);
+    await supabase.from("passengers").update({ room_id: newRoomId }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: newRoomId } : p));
   };
 
-  const printAll = () => {
-    const sections = flights.map(f => makeFlightSectionHTML(f, getFlightPassengers(f), branding));
-    printInPage(makeHTML("تقرير الرحلات", joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
+  // ===== Drag & Drop handlers =====
+  const handleDragStart = (pId: number) => {
+    dragPassengerId.current = pId;
+    setDraggingId(pId);
   };
 
-  const currentFlight = flights.find(f => f.id === currentFlightId);
-  const currentField = flightField(currentFlight?.type);
-  const availableP = passengers.filter(p => {
-    if (p.services?.flight === "بدون") return false;
-    if (!currentFlight) return false;
-    const val = (p as any)[currentField];
-    if (val === currentFlightId) return false; // already in this flight
-    return val == null; // مفيش رحلة من نفس النوع متخصصة له بعد
-  });
-  const allSelectedWantFirst = selectedP.size > 0 && [...selectedP].every(id => passengers.find(p => p.id === id)?.services?.flight === "درجة أولى");
-  const effectiveClass = (!allSelectedWantFirst && addFlightClass === "درجة أولى") ? "عادي" : addFlightClass;
-  const filteredP = availableP
-    .filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch))
+  const handleDragOver = (e: React.DragEvent, pId: number) => {
+    e.preventDefault();
+    dragOverPassengerId.current = pId;
+    setDragOverId(pId);
+  };
+
+  const handleDrop = async (roomId: number) => {
+    const fromId = dragPassengerId.current;
+    const toId = dragOverPassengerId.current;
+    if (!fromId || !toId || fromId === toId) {
+      setDraggingId(null); setDragOverId(null);
+      dragPassengerId.current = null; dragOverPassengerId.current = null;
+      return;
+    }
+    const rp = getRoomPassengers(roomId);
+    const fromIdx = rp.findIndex(p => p.id === fromId);
+    const toIdx = rp.findIndex(p => p.id === toId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const newOrder = [...rp];
+    const [moved] = newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, moved);
+
+    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
+    const updatedPassengers = passengers.map(p => {
+      const upd = updates.find(u => u.id === p.id);
+      return upd ? { ...p, sort_order: upd.sort_order } : p;
+    });
+    setPassengers(updatedPassengers);
+    await saveSortOrder(updates);
+
+    setDraggingId(null); setDragOverId(null);
+    dragPassengerId.current = null; dragOverPassengerId.current = null;
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null); setDragOverId(null);
+    dragPassengerId.current = null; dragOverPassengerId.current = null;
+  };
+
+  const doPrint = (roomsToPrint: Room[]) => {
+    const w = window.open("", "_blank"); if (!w) return;
+    const half = Math.ceil(roomsToPrint.length / 2);
+    const left = roomsToPrint.slice(0, half), right = roomsToPrint.slice(half);
+    const renderRoom = (room: Room) => {
+      const rp = getRoomPassengers(room.id);
+      const [bg] = ROOM_COLORS[room.type] || ["#f5f5f5"];
+      return `<div style="margin-bottom:12px"><div style="background:${bg};padding:5px 10px;border:1px solid #ddd;border-bottom:none;font-size:11px;font-weight:bold;display:flex;justify-content:space-between"><span>${room.type}</span><span>${room.number}${room.floor ? ` (طابق ${room.floor})` : ""}</span></div><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f5"><th style="padding:4px 8px;border:1px solid #ddd;text-align:center;width:28px">م</th><th style="padding:4px 8px;border:1px solid #ddd;text-align:right">الاسم</th></tr>${rp.map((p, i) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;text-align:center">${i + 1}</td><td style="padding:4px 8px;border:1px solid #ddd">${p.short_ar}</td></tr>`).join("")}</table></div>`;
+    };
+    w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();<\/script></body></html>`);
+    w.document.close();
+  };
+
+  const handlePrint = () => {
+    let r = rooms;
+    if (printFilter === "floor") r = rooms.filter(x => x.floor === printFloor);
+    else if (printFilter === "type") r = rooms.filter(x => x.type === printType);
+    doPrint(r); setShowPrint(false);
+  };
+
+  const currentRoom = rooms.find(r => r.id === currentRoomId);
+  const filteredP = passengers
+    .filter(p => p.room_id == null && (!pSearch || p.name_ar.includes(pSearch)))
     .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
-  const goFlights = flights.filter(f => f.type === "ذهاب");
-  const retFlights = flights.filter(f => f.type === "إياب");
-
-  const renderGroup = (groupFlights: Flight[], type: "ذهاب" | "إياب") => (
-    <div style={{ marginBottom: 16 }}>
-      <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 99, background: type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)", color: type === "ذهاب" ? "var(--info)" : "var(--female-fg)", display: "inline-block", marginBottom: 10 }}>
-        {type === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> رحلات الذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> رحلات الإياب</>} ({groupFlights.length})
-      </span>
-      {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
-        groupFlights.map((flight, idx) => {
-          const isExpanded = expanded.has(flight.id);
-          const fp = getFlightPassengers(flight);
-          const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length] || FLIGHT_ICON_COLORS[type];
-          return (
-            <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-              <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: flightColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
-                </div>
-                <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingFlightId(flight.id); }}>
-                  {editingFlightId === flight.id ? (
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                      <input defaultValue={flight.name} id={`fn-${flight.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 130 }} autoFocus
-                        onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("flights").update({ name: v }).eq("id", flight.id); setFlights(flights.map(f => f.id === flight.id ? { ...f, name: v } : f)); } setEditingFlightId(null); } if (e.key === "Escape") setEditingFlightId(null); }} />
-                      <button onClick={() => { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("flights").update({ name: v }).eq("id", flight.id); setFlights(flights.map(f => f.id === flight.id ? { ...f, name: v } : f)); } setEditingFlightId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{flight.name} {flight.airline && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>— {flight.airline}</span>}</div>
-                  )}
-                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{flight.from_airport} {flight.to_airport ? `← ${flight.to_airport}` : ""} {flight.date ? `| ${flight.date}` : ""} {flight.time || ""}</div>
-                </div>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{fp.length} مسافر</span>
-                <button onClick={e => { e.stopPropagation(); openEditFlight(flight); }} title="تعديل بيانات الرحلة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
-                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} title="طباعة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.color = "var(--muted)"; }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
-                <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} title="إضافة مسافر" style={{ height: 30, padding: "0 12px", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(125,31,60,0.08)", border: "1px solid rgba(125,31,60,0.2)", cursor: "pointer", color: "var(--em7)", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.15)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(125,31,60,0.08)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> إضافة</button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight); }} title="حذف الرحلة" style={{ width: 30, height: 30, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-              </div>
-              {isExpanded && (
-                <div
-                  style={{ padding: "8px 12px", borderTop: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}` }}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={() => handleDrop(flight)}
-                >
-                  {fp.length ? fp.map((p, i) => (
-                    <div
-                      key={p.id}
-                      draggable
-                      onDragStart={() => handleDragStart(p.id)}
-                      onDragOver={e => handleDragOver(e, p.id)}
-                      onDragEnd={handleDragEnd}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6,
-                        padding: "4px", borderRadius: 6, marginBottom: 2,
-                        background: draggingId === p.id ? "rgba(125,31,60,0.08)" : dragOverId === p.id ? "rgba(125,31,60,0.04)" : "transparent",
-                        border: `1px solid ${dragOverId === p.id ? "var(--em7)" : "transparent"}`,
-                        cursor: "grab", transition: "background 0.15s",
-                        opacity: draggingId === p.id ? 0.5 : 1,
-                      }}
-                    >
-                      <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
-                          <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
-                          <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
-                        </svg>
-                      </span>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                      <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>⭐ أولى</span>}
-                      <button onClick={() => removeP(p.id, flightField(type))} title="إزالة من الرحلة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
-                    </div>
-                  )) : <div style={{ textAlign: "center", padding: "8px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>}
-                </div>
-              )}
-            </div>
-          );
-        })}
-    </div>
-  );
+  const getFilteredRoomsForPrint = () => {
+    if (printFilter === "floor") return rooms.filter(r => r.floor === printFloor);
+    if (printFilter === "type") return rooms.filter(r => r.type === printType);
+    return rooms;
+  };
 
   return (
-    <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <FlightsStats passengers={passengers} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> رحلة جديدة</button>
-        {flights.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
-      </div>
-      {!flights.length ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg><br />لا يوجد رحلات بعد</div> : (
-        <>{renderGroup(goFlights, "ذهاب")}{renderGroup(retFlights, "إياب")}</>
-      )}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <HotelStats rooms={rooms} passengers={passengers} />
+      <div style={{ padding: 14, overflowY: "auto", flex: 1 }}>
+        {/* أزرار التحكم */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> غرفة جديدة
+          </button>
+          <button onClick={() => setShowRange(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> نطاق غرف</button>
+          <button onClick={() => fileRef.current?.click()} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> استيراد Excel</button>
+          {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>}
+          <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
+        </div>
 
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="رحلة جديدة" maxWidth={380}>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الرحلة</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["ذهاب", "إياب"] as const).map(t => (
-              <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
-                {t === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> ذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> إياب</>}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الرحلة</div>
-          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
-          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{nameError}</div>}
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الشركة</div>
-          <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="مثال: Qatar Airways" />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
-          <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
-        </div>
-      </Modal>
-
-      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة — ${currentFlight?.name} (${currentFlight?.type})`}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
-            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "var(--em7)" : "var(--border)"}`, background: addFlightClass === cls ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "var(--em7)" : "var(--text-muted)" }}>
-              {cls === "درجة أولى" ? "درجة أولى" : "عادي"}
+        {rooms.length > 0 && (
+          <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>الطابق:</span>
+              <div onClick={() => setFilterFloor("الكل")} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterFloor === "الكل" ? "var(--em7)" : "var(--border)"}`, background: filterFloor === "الكل" ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterFloor === "الكل" ? "var(--em7)" : "var(--text-muted)" }}>الكل</div>
+              {floors.map(f => <div key={f} onClick={() => setFilterFloor(f)} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterFloor === f ? "var(--em7)" : "var(--border)"}`, background: filterFloor === f ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterFloor === f ? "var(--em7)" : "var(--text-muted)" }}>ط{f}</div>)}
             </div>
-          ))}
-          {!allSelectedWantFirst && selectedP.size > 0 && <div style={{ fontSize: 10, color: "var(--text-muted)", alignSelf: "center" }}>درجة أولى متاحة بس للي طلبوها</div>}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", flex: 1 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>النوع:</span>
+              <div onClick={() => setFilterType("الكل")} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterType === "الكل" ? "var(--em7)" : "var(--border)"}`, background: filterType === "الكل" ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterType === "الكل" ? "var(--em7)" : "var(--text-muted)" }}>الكل</div>
+              {ROOM_TYPES.map(t => <div key={t} onClick={() => setFilterType(t)} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterType === t ? "var(--em7)" : "var(--border)"}`, background: filterType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterType === t ? "var(--em7)" : "var(--text-muted)" }}>{t}</div>)}
+            </div>
+          </div>
+        )}
+
+        {!rooms.length ? (
+          <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
+            </div>
+            لا يوجد غرف بعد
+          </div>
+        ) : (() => {
+          const filteredRooms = rooms.filter(r => (filterFloor === "الكل" || r.floor === filterFloor) && (filterType === "الكل" || r.type === filterType));
+          if (filteredRooms.length === 0) {
+            return (
+              <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
+                لا توجد غرف مطابقة للفلتر
+              </div>
+            );
+          }
+          return (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {filteredRooms.map(room => {
+              const isExpanded = expanded.has(room.id);
+              const rp = getRoomPassengers(room.id);
+              // تحديد نوع الغرفة من عدد الحجاج
+              const getRoomLabel = (count: number) => {
+                if (count === 0) return "فارغة";
+                if (count === 1) return "فردية";
+                if (count === 2) return "ثنائية";
+                if (count === 3) return "ثلاثية";
+                if (count === 4) return "رباعية";
+                return `${count} أشخاص`;
+              };
+              return (
+                <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>
+                  {/* Header */}
+                  <div onClick={() => toggleRoom(room.id)} style={{ padding: "8px 10px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 8, background: ROOM_ICON_COLORS[room.type] || "#999", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                    </div>
+                    <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingRoomId(room.id); }}>
+                      {editingRoomId === room.id ? (
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+                          <input defaultValue={room.number} id={`rn-${room.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 80 }} autoFocus
+                            onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`rn-${room.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("rooms").update({ number: v }).eq("id", room.id); setRooms(rooms.map(r => r.id === room.id ? { ...r, number: v } : r)); } setEditingRoomId(null); } if (e.key === "Escape") setEditingRoomId(null); }} />
+                          <button onClick={() => { const v = (document.getElementById(`rn-${room.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("rooms").update({ number: v }).eq("id", room.id); setRooms(rooms.map(r => r.id === room.id ? { ...r, number: v } : r)); } setEditingRoomId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>
+                          غرفة {room.number}
+                          {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 3 }}>ط{room.floor}</span>}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)", border: "1px solid var(--line)" }}>{getRoomLabel(rp.length)}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: 3 }}>{rp.length} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                    <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ ...btnS(), background: "rgba(125,31,60,0.08)", borderColor: "var(--em7)", color: "var(--em7)", padding: "3px 6px" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                    <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: "none", border: `1px solid ${rp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, borderRadius: 6, padding: "3px 6px", cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--ff)" : "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+
+                  {/* Passengers list with Drag & Drop */}
+                  {isExpanded && (
+                    <div
+                      style={{ padding: "8px 12px", borderTop: "0.5px solid #e5e5e5" }}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={() => handleDrop(room.id)}
+                    >
+                      {rp.length ? rp.map((p, i) => (
+                        <div
+                          key={p.id}
+                          draggable
+                          onDragStart={() => handleDragStart(p.id)}
+                          onDragOver={e => handleDragOver(e, p.id)}
+                          onDragEnd={handleDragEnd}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 7,
+                            padding: "5px 4px", borderRadius: 6, marginBottom: 2,
+                            background: draggingId === p.id ? "rgba(125,31,60,0.08)" : dragOverId === p.id ? "rgba(125,31,60,0.04)" : "transparent",
+                            border: `1px solid ${dragOverId === p.id ? "var(--em7)" : "transparent"}`,
+                            cursor: "grab", transition: "background 0.15s",
+                            opacity: draggingId === p.id ? 0.5 : 1,
+                          }}
+                        >
+                          {/* أيقونة السحب */}
+                          <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
+                              <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
+                              <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
+                            </svg>
+                          </span>
+                          <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
+                          <Avatar name={p.name_ar} gender={p.gender} size={24} />
+                          <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
+                          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "var(--bg-2)", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "var(--text-muted)" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
+                          {p.services.hotel_type !== room.type && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
+                          <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
+                            <option value="">نقل لـ...</option>
+                            {rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}
+                          </select>
+                          <button onClick={() => removeP(p.id)} title="إزالة من الغرفة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
+                        </div>
+                      )) : (
+                        <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          );
+        })()}
+
+        {/* Modal غرفة جديدة */}
+        <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="غرفة جديدة" maxWidth={340}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "var(--danger)" : "var(--border)" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{numberError}</div>}</div>
+            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} /></div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
+        </Modal>
+
+        {/* Modal نطاق غرف */}
+        <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="إضافة نطاق غرف" maxWidth={360}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} /></div>
+            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} /></div>
+            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} /></div>
+          </div>
+          {rangeError && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{rangeError}</div>}
+          {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--em7)", marginBottom: 10, background: "rgba(125,31,60,.06)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
+          <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
+        </Modal>
+
+        {/* Modal إضافة مسافرين */}
+        <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — غرفة ${currentRoom?.number}`}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg>
             <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
           </div>
-          <button onClick={() => setSelectedP(prev => prev.size === filteredP.length ? new Set() : new Set(filteredP.map(p => p.id)))}
-            style={{ fontSize: 11, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer", whiteSpace: "nowrap" }}>
-            {selectedP.size === filteredP.length ? "إلغاء الكل" : "تحديد الكل"}
-          </button>
-        </div>
-        {filteredP.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين متاحين</div> :
-          filteredP.map(p => {
+          {filteredP.map(p => {
             const isSel = selectedP.has(p.id);
-            const wantsFirst = p.services?.flight === "درجة أولى";
             return (
               <div key={p.id} onClick={() => toggleSelectP(p.id)}
                 style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
@@ -335,49 +468,45 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                {wantsFirst && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>أولى</span>}
+                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{p.services.hotel_type}</span>
               </div>
             );
           })}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button>
-          <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
-        </div>
-      </Modal>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button><button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button></div>
+        </Modal>
 
-      <Modal show={!!editFlightModal} onClose={() => setEditFlightModal(null)} title="تعديل بيانات الرحلة" maxWidth={380}>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الرحلة</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["ذهاب", "إياب"] as const).map(t => (
-              <div key={t} onClick={() => setEditForm(p => ({ ...p, type: t }))} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: editForm.type === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
-                {t === "ذهاب" ? "ذهاب" : "إياب"}
+        {/* Modal الطباعة */}
+        <Modal show={showPrint} onClose={() => setShowPrint(false)} title="خيارات الطباعة" maxWidth={340}>
+          {[["all", "طباعة كل الغرف"], ["floor", "طباعة دور معين"], ["type", "طباعة نوع معين"]].map(([val, label]) => (
+            <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "rgba(125,31,60,.08)" : "var(--bg-2)", border: `0.5px solid ${printFilter === val ? "var(--em7)" : "var(--border)"}` }}>
+              <div style={{ width: 16, height: 16, borderRadius: "50%", background: printFilter === val ? "var(--em7)" : "var(--bg-card)", border: `2px solid ${printFilter === val ? "var(--em7)" : "var(--border)"}` }} />
+              <span style={{ fontSize: 12 }}>{label}</span>
+            </div>
+          ))}
+          {printFilter === "floor" && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر الطابق</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "var(--em7)" : "var(--border)"}`, background: printFloor === f ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "var(--em7)" : "var(--text-muted)" }}>{f}</div>)}
               </div>
-            ))}
+            </div>
+          )}
+          {printFilter === "type" && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر النوع</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setPrintType(t)} style={{ flex: 1, padding: 7, borderRadius: 8, border: `1.5px solid ${printType === t ? clr : "var(--border)"}`, background: printType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: printType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
+              </div>
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+            سيتم طباعة {getFilteredRoomsForPrint().length} غرفة
           </div>
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الرحلة</div>
-          <input style={inp} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: QR501" />
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الشركة</div>
-          <input style={inp} value={editForm.airline} onChange={e => setEditForm(p => ({ ...p, airline: e.target.value }))} placeholder="مثال: Qatar Airways" />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من</div><input style={inp} value={editForm.from_airport} onChange={e => setEditForm(p => ({ ...p, from_airport: e.target.value }))} placeholder="الدوحة DOH" /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={editForm.to_airport} onChange={e => setEditForm(p => ({ ...p, to_airport: e.target.value }))} placeholder="جدة JED" /></div>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={saveEditFlight} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ</button>
-          <button onClick={() => setEditFlightModal(null)} style={btnS()}>إلغاء</button>
-        </div>
-      </Modal>
+          <div style={{ display: "flex", gap: 8 }}><button onClick={handlePrint} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button><button onClick={() => setShowPrint(false)} style={btnS()}>إلغاء</button></div>
+        </Modal>
+      </div>
     </div>
   );
 }
 
-
-export { FlightsStats, FlightsPage };
+export { HotelStats, HotelPage };
