@@ -131,7 +131,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addRoom = async () => {
-    if (!roomNumber.trim()) return;
+    if (!roomNumber.trim()) { setNumberError("اكتب رقم الغرفة!"); return; }
     if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
     setNumberError("");
     const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية", view: roomView }]).select();
@@ -394,7 +394,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                             <option value="">نقل لـ...</option>
                             {rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}
                           </select>
-                          <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
+                          <button onClick={() => removeP(p.id)} title="إزالة من الغرفة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
                         </div>
                       )) : (
                         <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>
