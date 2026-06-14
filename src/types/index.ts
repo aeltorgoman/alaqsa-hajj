@@ -34,6 +34,7 @@ export interface Passenger {
   camp_mina_id?: number | null;
   camp_arafa_id?: number | null;
   flight_id?: number | null;
+  return_flight_id?: number | null;
   flight_class?: string;
   season_id?: number | null;
   sort_order?: number;
