@@ -134,8 +134,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!roomNumber.trim()) return;
     if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
     setNumberError("");
-    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "فردية", view: roomView }]).select();
-    if (!error && data?.[0]) {
+    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية", view: roomView }]).select();
+    if (error) {
+      alert(`❌ فشل في إضافة الغرفة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      return;
+    }
+    if (data?.[0]) {
       setRooms(prev => [...prev, data[0] as Room]);
       setExpanded(prev => new Set([...prev, data[0].id]));
       setRoomNumber(""); setRoomFloor(""); setRoomView("غير مطلة"); setShowAdd(false);
@@ -148,12 +152,16 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const existingNums = new Set(rooms.map(r => r.number));
     const newRooms = [];
     for (let n = from; n <= to; n++) {
-      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "فردية", view: rangeView });
+      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "ثنائية", view: rangeView });
     }
     if (newRooms.length === 0) { setRangeError("كل الغرف في هذا النطاق موجودة بالفعل!"); return; }
     setRangeError("");
     const { data, error } = await supabase.from("rooms").insert(newRooms).select();
-    if (!error && data) setRooms(prev => [...prev, ...data as Room[]]);
+    if (error) {
+      setRangeError(`❌ فشل في الإضافة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      return;
+    }
+    if (data) setRooms(prev => [...prev, ...data as Room[]]);
     setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setRangeView("غير مطلة"); setShowRange(false);
   };
 
@@ -340,7 +348,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       )}
                     </div>
                     <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)", border: "1px solid var(--line)" }}>{getRoomLabel(rp.length)}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{rp.length} 👤</span>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: 3 }}>{rp.length} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
                     <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ ...btnS(), background: "rgba(125,31,60,0.08)", borderColor: "var(--em7)", color: "var(--em7)", padding: "3px 6px" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
                     <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: "none", border: `1px solid ${rp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, borderRadius: 6, padding: "3px 6px", cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--ff)" : "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
