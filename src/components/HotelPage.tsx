@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { ROOM_TYPES, ROOM_COLORS, inp, btnP, btnS } from "../utils";
+import { ROOM_TYPES, ROOM_COLORS, ROOM_ICON_COLORS, inp, btnP, btnS } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -322,6 +322,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>
                   {/* Header */}
                   <div onClick={() => toggleRoom(room.id)} style={{ padding: "8px 10px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 8, background: ROOM_ICON_COLORS[room.type] || "#999", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                    </div>
                     <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingRoomId(room.id); }}>
                       {editingRoomId === room.id ? (
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
