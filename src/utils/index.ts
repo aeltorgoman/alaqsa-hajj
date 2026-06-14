@@ -61,7 +61,7 @@ export function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export async function scanDocument(file: File, mode: "passport" | "idcard" | "hajj_permit"): Promise<any> {
+export async function scanDocument(file: File, mode: "passport" | "idcard" | "hajj_permit" | "auto"): Promise<any> {
   const base64 = await fileToBase64(file);
   const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
     method: "POST",
