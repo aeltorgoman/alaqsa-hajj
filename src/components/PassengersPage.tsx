@@ -1,11 +1,11 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
-import type { Passenger } from "../types";
+import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { useConfig } from "../config/ConfigContext";
-import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, inp, btnP, btnS } from "../utils";
+import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
@@ -40,7 +40,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+function PassengersPage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User }) {
   const config = useConfig();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
@@ -198,7 +198,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     setManualSaving(true);
     const short_ar = makeShort(manualForm.name_ar);
     const short_en = makeShort(manualForm.name_en);
-    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa }]).select();
+    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa, created_by: currentUser?.name || null }]).select();
     if (error) {
       console.error("Manual save error:", error);
       alert(`❌ فشل في حفظ البيانات: ${error.message || "يرجى المحاولة مرة أخرى"}`);
@@ -206,7 +206,7 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
       return;
     }
     if (data && data[0]) {
-      setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1 } as Passenger]);
+      setPassengers([...passengers, { id: data[0].id, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at } as Passenger]);
       setShowManual(false);
       setManualForm(DEFAULT_MANUAL_FORM);
       setManualServices(DEFAULT_MANUAL_SERVICES);
@@ -429,16 +429,20 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
     await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
   const saveEdit = async (p: Passenger) => {
+    const updated_at = new Date().toISOString();
+    const updated_by = currentUser?.name || null;
     const { error } = await supabase.from("passengers").update({
       name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
       passport: p.passport, national_id: p.national_id, nat: p.nat,
       dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
       bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
-      camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa
+      camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
+      updated_by, updated_at
     }).eq("id", p.id);
     if (error) { alert("حصل خطأ في الحفظ!"); return; }
-    setPassengers(passengers.map(x => x.id === p.id ? p : x));
-    setEditing(null); setSelected(p);
+    const updatedP = { ...p, updated_by, updated_at };
+    setPassengers(passengers.map(x => x.id === p.id ? updatedP : x));
+    setEditing(null); setSelected(updatedP);
   };
 
   return (
@@ -755,6 +759,12 @@ function PassengersPage({ passengers, setPassengers }: { passengers: Passenger[]
             )}
           </div>
 
+          {(selected.created_by || selected.updated_by) && (
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 10, padding: "0 2px", lineHeight: 1.6 }}>
+              {selected.created_by && <div>أُضيف بواسطة: {selected.created_by}{selected.created_at && ` · ${timeAgo(selected.created_at)}`}</div>}
+              {selected.updated_by && <div>آخر تعديل: {selected.updated_by}{selected.updated_at && ` · ${timeAgo(selected.updated_at)}`}</div>}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
             <button onClick={() => { if (confirm("هتمسح الحاج ده؟")) deleteP(selected.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
