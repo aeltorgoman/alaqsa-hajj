@@ -69,7 +69,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const [openPanels, setOpenPanels] = useState<Set<string>>(new Set());
+  const [openPanels, setOpenPanels] = useState<Set<string>>(new Set(["flights", "buses", "mina", "arafa", "hotel"]));
   const togglePanel = (key: string) => setOpenPanels(prev => {
     const next = new Set(prev);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -232,8 +232,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       const cls = p.flight_class === "درجة أولى" ? "FIRST CLASS" : "";
       return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
-    const body = `<table class="wide-table ltr-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
-    return mkHTML("Pilgrims Flight List", body, true);
+    const body = `<table class="flight-table ltr-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
+    return mkHTML("Pilgrims Flight List", body, false);
   };
 
   const exportAirlineXLSX = () => {
@@ -268,7 +268,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       const fp = passengers.filter(p => p.flight_id === flight.id);
       return makeFlightSectionHTML(flight, fp, { logoUrl, companyName, tagline, primaryColor, accentColor });
     });
-    return mkHTML("تقرير الرحلات", joinSections(sections), true);
+    return mkHTML("تقرير الرحلات", joinSections(sections), false);
   };
 
   const exportPerFlightXLSX = () => {
@@ -758,23 +758,24 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                                 </div>
                               </div>
                               {fp.length > 0 && (
-                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                                   <thead>
                                     <tr style={{ background: primaryColor, color: "#fff" }}>
-                                      {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "GENDER", "CLASS"].map(h =>
-                                        <th key={h} style={{ padding: "5px 10px", textAlign: "left" }}>{h}</th>
+                                      {["م", "اسم الحاج / الحاجة", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"].map(h =>
+                                        <th key={h} style={{ padding: "5px 10px", textAlign: "right" }}>{h}</th>
                                       )}
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {fp.map((p, i) => (
                                       <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{i + 1}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.name_en}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{natCode(p.nat)}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)", textAlign: "center" }}>{i + 1}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.short_ar || p.name_ar}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.nat}</td>
                                         <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.passport}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.flight_class === "درجة أولى" ? "⭐ FIRST" : ""}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.phone || "—"}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender}</td>
+                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.flight_class === "درجة أولى" ? "درجة أولى" : "اقتصادية"}</td>
                                       </tr>
                                     ))}
                                   </tbody>
