@@ -4,7 +4,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, ICON_COLOR_CYCLE, FLIGHT_ICON_COLORS } from "../utils";
 
 // ===== دالة حفظ ترتيب الحجاج =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -180,13 +180,16 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         {type === "ذهاب" ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> رحلات الذهاب</> : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> رحلات الإياب</>} ({groupFlights.length})
       </span>
       {groupFlights.length === 0 ? <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>لا يوجد رحلات بعد</div> :
-        groupFlights.map(flight => {
+        groupFlights.map((flight, idx) => {
           const isExpanded = expanded.has(flight.id);
           const fp = getFlightPassengers(flight.id);
+          const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length] || FLIGHT_ICON_COLORS[type];
           return (
             <div key={flight.id} style={{ border: `0.5px solid ${type === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
               <div onClick={() => toggleFlight(flight.id)} style={{ padding: "10px 12px", background: type === "ذهاب" ? "var(--info-bg)" : "var(--female-bg)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <span style={{ fontSize: 18 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: flightColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                </div>
                 <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingFlightId(flight.id); }}>
                   {editingFlightId === flight.id ? (
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
