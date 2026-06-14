@@ -185,6 +185,7 @@ export function makeHTML(
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
   .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
   .wide-table th, .wide-table td { font-size: 16px; padding: 8px 10px; }
+  .flight-table th, .flight-table td { font-size: 20px; padding: 10px 14px; white-space: nowrap; }
   .ltr-table th, .ltr-table td { text-align: left; }
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
@@ -280,7 +281,7 @@ export function makeFlightSectionHTML(flight: { name: string; type?: string; air
       <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
     </div>
   </div>
-  <table class="wide-table"><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>`;
+  <table class="flight-table"><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>`;
 }
 
 export function printInPage(html: string) {
