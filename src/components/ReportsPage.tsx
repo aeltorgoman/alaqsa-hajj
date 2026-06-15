@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, makeFlightSectionHTML, ROOM_COLORS, ROOM_TYPES, ROOM_ICON_COLORS, ICON_COLOR_CYCLE, VIP_ICON_COLOR, btnP, btnS } from "../utils";
+import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
 // تحويل الجنسية لكود إنجليزي موحّد لتقرير خطوط الطيران
@@ -52,6 +53,7 @@ function natCode(nat: string | undefined | null): string {
 }
 
 function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
+  const { alert: alertState, showAlert } = useAlert();
   const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
@@ -566,7 +568,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   });
   const printDocuments = () => {
     const toPrint = docList.filter(p => docSelectedIds.has(p.id));
-    if (!toPrint.length) { alert("اختار حجاج أولاً!"); return; }
+    if (!toPrint.length) { showAlert("warning", "يرجى تحديد حاج واحد على الأقل"); return; }
     const cols = docPerPage === 4 ? 2 : 1;
     const rows = docPerPage === 1 ? 1 : 2;
     const pages: Passenger[][] = [];
@@ -606,6 +608,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {!activeReport ? (
         <>
           <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>اختر التقرير</div>
@@ -1268,9 +1271,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 <div style={{ display: "flex", gap: 8 }}>
                   <input value={waTestPhone} onChange={e => setWaTestPhone(e.target.value)} placeholder="رقم الموبايل مع كود الدولة (مثال: 97450000000)" style={{ flex: 1, padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12, fontFamily: "var(--font-body)" }} />
                   <button onClick={async () => {
-                    if (!waTestPhone) { alert("ادخل رقم!"); return; }
-                    if (!waToken || !waPhoneId) { alert("ضبط API الأول!"); return; }
-                    if (!passengers[0]) { alert("مفيش حجاج!"); return; }
+                    if (!waTestPhone) { showAlert("warning", "يرجى إدخال رقم الهاتف"); return; }
+                    if (!waToken || !waPhoneId) { showAlert("warning", "يرجى ضبط إعدادات API أولًا"); return; }
+                    if (!passengers[0]) { showAlert("warning", "لا يوجد حجاج في القائمة"); return; }
                     const p = passengers[0];
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
@@ -1284,7 +1287,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
                       body: JSON.stringify({ messaging_product: "whatsapp", to: waTestPhone.replace(/\D/g, ""), type: "text", text: { body: text } })
                     });
-                    alert(res.ok ? "✅ تم الإرسال التجريبي!" : "❌ فشل الإرسال — تأكد من API");
+                    showAlert(res.ok ? "success" : "error", res.ok ? "تم الإرسال التجريبي بنجاح" : "فشل الإرسال — يرجى التحقق من إعدادات API");
                   }} style={{ padding: "7px 14px", borderRadius: 8, background: "var(--info-bg)", color: "var(--info)", border: "1px solid var(--info)", fontSize: 12, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
                     إرسال تجريبي
                   </button>
@@ -1296,9 +1299,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 const sendList = waSelectMode === "all"
                   ? passengers.filter(p => p.phone)
                   : passengers.filter(p => p.phone && waSelectedIds.has(p.id));
-                if (!sendList.length) { alert("مفيش حجاج مختارين أو عندهم رقم!"); return; }
-                if (!waToken || !waPhoneId) { alert("ضبط API الأول!"); return; }
-                if (!confirm(`هتبعت ${sendList.length} رسالة — متأكد؟`)) return;
+                if (!sendList.length) { showAlert("warning", "لا يوجد حجاج محددون أو لديهم رقم هاتف"); return; }
+                if (!waToken || !waPhoneId) { showAlert("warning", "يرجى ضبط إعدادات API أولًا"); return; }
+                if (!confirm(`سيتم إرسال ${sendList.length} رسالة — هل أنت متأكد؟`)) return;
                 setWaSending(true);
                 setWaResults(sendList.map(p => ({ name: p.short_ar || p.name_ar, phone: p.phone, status: "pending" as const })));
                 for (let i = 0; i < sendList.length; i++) {
@@ -1353,34 +1356,4 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", fontSize: 12, fontWeight: 600, display: "flex", gap: 14 }}>
                     <span style={{ color: "#25D366" }}>✓ {waResults.filter(r => r.status === "success").length} نجح</span>
                     <span style={{ color: "var(--danger)" }}>✗ {waResults.filter(r => r.status === "error").length} فشل</span>
-                    <span style={{ color: "var(--text-muted)" }}>⏳ {waResults.filter(r => r.status === "pending").length} منتظر</span>
-                  </div>
-                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                    {waResults.map((r, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderBottom: "0.5px solid var(--line)" }}>
-                        <span style={{ color: r.status === "success" ? "#25D366" : r.status === "error" ? "var(--danger)" : "var(--text-muted)" }}>
-                          {r.status === "success" ? "✓" : r.status === "error" ? "✗" : "⏳"}
-                        </span>
-                        <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
-                        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{r.phone}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {passengers.filter(p => !p.phone).length > 0 && (
-                <div style={{ marginTop: 12, padding: "8px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
-                  ⚠️ {passengers.filter(p => !p.phone).length} حاج مش عندهم رقم — مش هيتبعتلهم
-                </div>
-              )}
-            </>
-          )}
-
-        </div>
-      )}
-    </div>
-  );
-}
-
-export { ReportsPage };
+                    <span style={{ color: "var(--text-muted)" }}>⏳ {waResults.filter(r => r.
