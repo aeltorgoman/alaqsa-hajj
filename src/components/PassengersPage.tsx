@@ -17,6 +17,15 @@ function nameMatches(a?: string | null, b?: string | null): boolean {
   return common >= Math.min(2, Math.min(wa.length, wb.length));
 }
 
+// مطابقة مشددة: الاسم الأول متطابق + نفس شرط الكلمتين المشتركتين أعلاه — تقلل المرشحين الخاطئين بشكل كبير
+function strongNameMatch(a?: string | null, b?: string | null): boolean {
+  const norm = (s?: string | null) => (s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const wa = norm(a), wb = norm(b);
+  if (!wa.length || !wb.length) return false;
+  if (wa[0] !== wb[0]) return false;
+  return nameMatches(a, b);
+}
+
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
   const stats = useMemo(() => {
@@ -197,17 +206,12 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       try {
         const parsed = await scanDocument(file, "auto");
         if (parsed.doc_type === "hajj_permit") {
-          // تصريح حج — دور على الحاج المطابق وأظهر تأكيد قبل الحفظ
-          const idNum = parsed.national_id || parsed.passport || "";
-          const nameVal = parsed.name_ar || parsed.name_en || "";
+          // تصريح حج — يتطلب تطابقًا تامًا في رقم البطاقة أو رقم الجواز فقط (بدون مطابقة بالاسم)
+          const permitId = parsed.national_id || "";
+          const permitPassport = parsed.passport || "";
           let candidates: Passenger[] = [];
-          if (idNum) candidates = passengers.filter(p => p.national_id === idNum || p.passport === idNum);
-          if (candidates.length === 0 && nameVal) {
-            candidates = passengers.filter(p =>
-              nameMatches(p.name_ar, nameVal) || nameMatches(p.short_ar, nameVal) ||
-              nameMatches(p.name_en, nameVal) || nameMatches(p.short_en, nameVal)
-            );
-          }
+          if (permitId) candidates = passengers.filter(p => p.national_id === permitId);
+          if (candidates.length === 0 && permitPassport) candidates = passengers.filter(p => p.passport === permitPassport);
           setPendingDocScan({ file, dataUrl, parsed, docKind: "hajj_permit" });
           setDocMatchCandidates(candidates);
         } else if (parsed.doc_type === "idcard") {
@@ -215,28 +219,46 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           const idNum = parsed.national_id || "";
           const nameAr = parsed.name_ar || "";
           const nameEn = parsed.name_en || "";
+          if (idNum) {
+            const exactId = passengers.find(p => p.national_id === idNum);
+            if (exactId && (exactId as any).national_id_url) {
+              showAlert("warning", `هذه البطاقة مسجَّلة بالفعل في ملف ${exactId.short_ar || exactId.name_ar}`);
+              setAutoScanning(false);
+              return;
+            }
+          }
           let candidates: Passenger[] = [];
           if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
           if (candidates.length === 0 && (nameAr || nameEn)) {
             candidates = passengers.filter(p =>
               (!parsed.gender || p.gender === parsed.gender) &&
-              ((nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
-              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn))))
+              ((nameAr && (strongNameMatch(p.name_ar, nameAr) || strongNameMatch(p.short_ar, nameAr))) ||
+              (nameEn && (strongNameMatch(p.name_en, nameEn) || strongNameMatch(p.short_en, nameEn))))
             );
           }
+          setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard" });
           setDocMatchCandidates(candidates);
         } else {
-          // جواز سفر — تحقق أولًا من وجود حاج مطابق (لتجنب التكرار) قبل فتح الإضافة
+          // جواز سفر — تحقق أولًا من تكرار رقم الجواز نفسه، ثم من وجود حاج مطابق قبل فتح الإضافة
+          const passportNum = parsed.passport || "";
           const idNum = parsed.national_id || "";
           const nameAr = parsed.name_ar || "";
           const nameEn = parsed.name_en || "";
+          if (passportNum) {
+            const exactPassport = passengers.find(p => p.passport === passportNum);
+            if (exactPassport) {
+              showAlert("warning", `هذا الجواز مسجَّل بالفعل في ملف ${exactPassport.short_ar || exactPassport.name_ar}`);
+              setAutoScanning(false);
+              return;
+            }
+          }
           let candidates: Passenger[] = [];
           if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
           if (candidates.length === 0 && (nameAr || nameEn)) {
             candidates = passengers.filter(p =>
               (!parsed.gender || p.gender === parsed.gender) &&
-              ((nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
-              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn))))
+              ((nameAr && (strongNameMatch(p.name_ar, nameAr) || strongNameMatch(p.short_ar, nameAr))) ||
+              (nameEn && (strongNameMatch(p.name_en, nameEn) || strongNameMatch(p.short_en, nameEn))))
             );
           }
           if (candidates.length > 0) {
@@ -1285,76 +1307,4 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
                     {!manualScanning && (
                       <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
                         تغيير
-                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setManualIdImg(null); setManualIdFile(null);
-                          setManualScanning(true);
-                          const reader = new FileReader();
-                          reader.onload = async ev => {
-                            setManualIdImg(ev.target?.result as string);
-                            setManualIdFile(file);
-                            try {
-                              const parsed = await scanDocument(file, "idcard");
-                              setManualForm(prev => ({
-                                ...prev,
-                                national_id: parsed.national_id || prev.national_id,
-                                id_expiry: parsed.id_expiry || prev.id_expiry,
-                              }));
-                            } catch { /* تجاهل */ }
-                            setManualScanning(false);
-                          };
-                          reader.readAsDataURL(file);
-                          e.target.value = "";
-                        }} />
-                      </label>
-                    )}
-                  </div>
-                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
-                    <img src={manualIdImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 260, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
-                    {manualScanning && (
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1.5px dashed var(--line)", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", background: "var(--bg-2)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  + إضافة صورة البطاقة الشخصية (اختياري)
-                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setManualScanning(true);
-                    const reader = new FileReader();
-                    reader.onload = async ev => {
-                      setManualIdImg(ev.target?.result as string);
-                      setManualIdFile(file);
-                      try {
-                        const parsed = await scanDocument(file, "idcard");
-                        setManualForm(prev => ({
-                          ...prev,
-                          national_id: parsed.national_id || prev.national_id,
-                          id_expiry: parsed.id_expiry || prev.id_expiry,
-                        }));
-                      } catch { /* تجاهل */ }
-                      setManualScanning(false);
-                    };
-                    reader.readAsDataURL(file);
-                    e.target.value = "";
-                  }} />
-                </label>
-              )}
-            </div>
-          )}
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-
-
-export { PassengersStats, PassengersPage };
+                        <input type="file" ac
