@@ -3,6 +3,7 @@ import type { DragEvent } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, ICON_COLOR_CYCLE, FLIGHT_ICON_COLORS } from "../utils";
 
@@ -48,6 +49,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 // ===== صفحة الطيران =====
 function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const config = useConfig();
+  const { alert: alertState, showAlert } = useAlert();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
   const [editFlightModal, setEditFlightModal] = useState<Flight | null>(null);
@@ -121,11 +123,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const addFlight = async () => {
-    if (!flightName.trim()) { setNameError("اكتب رقم/اسم الرحلة!"); return; }
-    if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} باسم "${flightName}" موجودة!`); return; }
+    if (!flightName.trim()) { setNameError("يرجى إدخال رقم الرحلة أو اسمها"); return; }
+    if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} بالاسم "${flightName}" موجودة بالفعل`); return; }
     setNameError("");
     const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
-    if (error) { alert(`❌ فشل في إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
+    if (error) { showAlert("error", `فشل إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
@@ -135,7 +137,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const deleteFlight = async (flight: Flight) => {
-    if (getFlightPassengers(flight).length > 0) { alert("مش هينفع تمسح رحلة فيها مسافرين!"); return; }
+    if (getFlightPassengers(flight).length > 0) { showAlert("warning", "لا يمكن حذف رحلة تحتوي على مسافرين"); return; }
     await supabase.from("flights").delete().eq("id", flight.id);
     setFlights(prev => prev.filter(f => f.id !== flight.id));
   };
@@ -262,6 +264,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <FlightsStats passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> رحلة جديدة</button>
