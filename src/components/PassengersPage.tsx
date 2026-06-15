@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 import { useConfig } from "../config/ConfigContext";
 import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
@@ -51,6 +52,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
 function PassengersPage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User }) {
   const config = useConfig();
+  const { alert: alertState, showAlert } = useAlert();
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("list");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -262,9 +264,9 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
         await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id);
         const updated = { ...passenger, hajj_permit_url: url } as Passenger;
         setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
-        alert(`✅ تم حفظ التصريح في ملف ${passenger.short_ar || passenger.name_ar}`);
+        showAlert("success", `تم حفظ تصريح الحج في ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
-        alert("❌ فشل رفع الملف، حاول مرة أخرى");
+        showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
       }
     } else {
       const url = await uploadDoc(file, passenger.id, "idcard");
@@ -276,9 +278,9 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
         await supabase.from("passengers").update(updates).eq("id", passenger.id);
         const updated = { ...passenger, ...updates } as Passenger;
         setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
-        alert(`✅ تم ربط البطاقة بملف ${passenger.short_ar || passenger.name_ar}`);
+        showAlert("success", `تم ربط البطاقة الشخصية بملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
-        alert("❌ فشل رفع الملف، حاول مرة أخرى");
+        showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
       }
     }
     setAutoScanning(false);
@@ -312,18 +314,18 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
   };
 
   const handleManualSave = async () => {
-    if (!manualForm.name_ar && !manualForm.name_en) { alert("اكتب الاسم على الأقل!"); return; }
+    if (!manualForm.name_ar && !manualForm.name_en) { showAlert("warning", "يرجى إدخال الاسم على الأقل"); return; }
     const dupP = manualForm.passport && passengers.some((p: Passenger) => p.passport === manualForm.passport);
     const dupN = manualForm.national_id && passengers.some((p: Passenger) => p.national_id === manualForm.national_id);
-    if (dupP) { alert("⚠️ رقم الجواز ده مسجل بالفعل!"); return; }
-    if (dupN) { alert("⚠️ رقم البطاقة ده مسجل بالفعل!"); return; }
+    if (dupP) { showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return; }
+    if (dupN) { showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return; }
     setManualSaving(true);
     const short_ar = makeShort(manualForm.name_ar);
     const short_en = makeShort(manualForm.name_en);
     const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa, created_by: currentUser?.name || null }]).select();
     if (error) {
       console.error("Manual save error:", error);
-      alert(`❌ فشل في حفظ البيانات: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      showAlert("error", `فشل حفظ البيانات: ${error.message || "يرجى المحاولة مرة أخرى"}`);
       setManualSaving(false);
       return;
     }
@@ -412,7 +414,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           const updated = { ...p, [field]: url };
           setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
           setSelected(updated);
-          if (idNum) alert(`⚠️ قرأ رقم "${idNum}" بس مش موجود في القائمة — تم الرفع على ${p.short_ar || p.name_ar}`);
+          if (idNum) showAlert("warning", `تمت قراءة الرقم "${idNum}" من المستند، لكنه غير موجود في القائمة — تم رفع الملف على ${p.short_ar || p.name_ar}`);
         }
       }
     } else {
@@ -573,7 +575,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
       updated_by, updated_at
     }).eq("id", p.id);
-    if (error) { alert("حصل خطأ في الحفظ!"); return; }
+    if (error) { showAlert("error", "حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return; }
     const updatedP = { ...p, updated_by, updated_at };
     setPassengers(passengers.map(x => x.id === p.id ? updatedP : x));
     setEditing(null); setSelected(updatedP);
@@ -589,6 +591,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           </div>
         </div>
       )}
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {docMatchCandidates !== null && pendingDocScan && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 350, padding: 16 }}>
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: 18, maxWidth: 380, width: "100%", maxHeight: "80vh", overflowY: "auto" }}>
@@ -598,11 +601,24 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
                 ? (pendingDocScan.docKind === "hajj_permit" ? "وجدنا حاج مطابق بنفس الاسم/الرقم — هل ده هو؟" : "وجدنا حجاج بنفس الاسم/الرقم — هل ده هو؟")
                 : (pendingDocScan.docKind === "hajj_permit" ? "لم يتم العثور على حاج مطابق لهذا التصريح" : "مفيش حد بنفس الاسم في القائمة")}
             </div>
+            {pendingDocScan.docKind === "idcard" && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>الصورة الممسوحة:</div>
+                <img src={pendingDocScan.dataUrl} style={{ width: "100%", maxHeight: 140, objectFit: "contain", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }} />
+              </div>
+            )}
             {docMatchCandidates.map(p => (
               <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", marginBottom: 6, background: "var(--bg-2)" }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} {p.passport ? `· ${p.passport}` : ""}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {pendingDocScan.docKind === "idcard" && (p as any).passport_url ? (
+                    <img src={(p as any).passport_url} title="صورة الجواز المحفوظة" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid var(--line)", flexShrink: 0 }} />
+                  ) : (
+                    <Avatar name={p.name_ar} gender={p.gender} size={36} />
+                  )}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} {p.passport ? `· ${p.passport}` : ""}</div>
+                  </div>
                 </div>
                 <button onClick={() => linkDocToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>ده هو</button>
               </div>
@@ -960,7 +976,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>هل تأكد إن التصريح ده بتاع هذا الحاج؟</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>هل أنت متأكد أن هذا التصريح يخص هذا الحاج؟</div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={async () => {
                 const { passenger, url, field } = permitConfirm;
