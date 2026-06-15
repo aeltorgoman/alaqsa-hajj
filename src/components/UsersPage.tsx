@@ -5,9 +5,11 @@ import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadDoc } from "../utils";
 import { useConfig } from "../config/ConfigContext";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 
 function UsersPage({ currentUser }: { currentUser: User }) {
   const config = useConfig();
+  const { alert: alertState, showAlert } = useAlert();
   const [users, setUsers] = useState<User[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -39,7 +41,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     const url = await uploadDoc(file, 0, "company_logo");
     setCompanyUploading(false);
     if (url) setCompanyForm(prev => ({ ...prev, logo_url: url }));
-    else alert("فشل رفع الشعار، حاول مرة أخرى");
+    else showAlert("error", "فشل رفع الشعار، يرجى المحاولة مرة أخرى");
   };
 
   const saveCompanyConfig = async () => {
@@ -87,6 +89,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {currentUser.permissions.manage_users && (
         <div style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 16, background: "var(--paper)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 12 }}>بيانات الشركة</div>
