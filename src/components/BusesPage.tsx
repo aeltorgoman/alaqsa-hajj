@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE, VIP_ICON_COLOR } from "../utils";
 
@@ -47,6 +48,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
 // ===== صفحة الباصات =====
 function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const config = useConfig();
+  const { alert: alertState, showAlert } = useAlert();
   const [buses, setBuses] = useState<Bus[]>([]);
   const [editingBusId, setEditingBusId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -75,11 +77,11 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const toggleBus = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addBus = async () => {
-    if (!busName.trim()) { setNameError("اكتب اسم الباص!"); return; }
-    if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`باص باسم "${busName}" موجود بالفعل!`); return; }
+    if (!busName.trim()) { setNameError("يرجى إدخال اسم الباص"); return; }
+    if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`يوجد باص بالاسم "${busName}" بالفعل`); return; }
     setNameError("");
     const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType }]).select();
-    if (error) { alert(`❌ فشل في إضافة الباص: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
+    if (error) { showAlert("error", `فشل إضافة الباص: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newBus = data[0] as Bus;
       setBuses(prev => [...prev, newBus]);
@@ -89,9 +91,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const deleteBus = async (id: number) => {
-    if (getBusPassengers(id).length > 0) { alert("مش هينفع تمسح باص فيه مسافرين!"); return; }
+    if (getBusPassengers(id).length > 0) { showAlert("warning", "لا يمكن حذف باص يحتوي على مسافرين"); return; }
     const { error } = await supabase.from("buses").delete().eq("id", id);
-    if (error) { alert(`❌ فشل في حذف الباص: ${error.message}`); return; }
+    if (error) { showAlert("error", `فشل حذف الباص: ${error.message}`); return; }
     setBuses(prev => prev.filter(b => b.id !== id));
   };
 
@@ -102,7 +104,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", id)));
     setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, bus_id: currentBusId } : p));
     const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && p.bus_id == null && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
-    if (familyToAdd.length > 0 && confirm(`هتوضع حجاج بدون أقاربهم!\nهتضيف أقاربهم معاهم؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
+    if (familyToAdd.length > 0 && confirm(`سيتم تعيين حجاج بدون أقاربهم.\nهل تريد إضافة أقاربهم معهم أيضًا؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
       await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", p.id)));
       setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: Passenger) => f.id === p.id) ? { ...p, bus_id: currentBusId } : p));
     }
@@ -190,6 +192,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <BusesStats buses={buses} passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
