@@ -219,11 +219,11 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
           if (candidates.length === 0 && (nameAr || nameEn)) {
             candidates = passengers.filter(p =>
-              (nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
-              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn)))
+              (!parsed.gender || p.gender === parsed.gender) &&
+              ((nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
+              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn))))
             );
           }
-          setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard" });
           setDocMatchCandidates(candidates);
         } else {
           // جواز سفر — تحقق أولًا من وجود حاج مطابق (لتجنب التكرار) قبل فتح الإضافة
@@ -234,8 +234,9 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
           if (candidates.length === 0 && (nameAr || nameEn)) {
             candidates = passengers.filter(p =>
-              (nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
-              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn)))
+              (!parsed.gender || p.gender === parsed.gender) &&
+              ((nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
+              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn))))
             );
           }
           if (candidates.length > 0) {
