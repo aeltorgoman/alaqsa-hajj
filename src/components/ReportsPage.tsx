@@ -152,6 +152,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     { key: "bus", label: "نوع الباص", get: (p: Passenger) => p.services?.bus },
     { key: "bus_name", label: "رقم الباص", get: (p: Passenger) => buses.find(b => b.id === (p as any).bus_id)?.name || "" },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
+    { key: "flight_dep", label: "رحلة الذهاب", get: (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || "" },
+    { key: "flight_ret", label: "رحلة الإياب", get: (p: Passenger) => flights.find(f => f.id === p.return_flight_id)?.name || "" },
     { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
     { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
     { key: "room_number", label: "رقم الغرفة", get: (p: Passenger) => rooms.find(r => r.id === (p as any).room_id)?.number || "" },
@@ -747,9 +749,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                         flights.map((flight, idx) => {
                           const fp = passengersOfFlight(flight);
                           const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
+                          const isOpen = expandedItems.has(flight.id);
                           return (
                             <div key={flight.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 12, overflow: "hidden" }}>
-                              <div style={{ background: "var(--male-bg)", padding: "10px 14px", borderBottom: "0.5px solid #dce8f8", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                              <div onClick={() => toggleExpandedItem(flight.id)} style={{ background: "var(--male-bg)", padding: "10px 14px", borderBottom: isOpen ? "0.5px solid #dce8f8" : "none", display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)", marginTop: 9, flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
                                 <div style={{ width: 30, height: 30, borderRadius: 8, background: flightColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
                                 </div>
@@ -764,7 +768,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                                   </div>
                                 </div>
                               </div>
-                              {fp.length > 0 && (
+                              {isOpen && fp.length > 0 && (
                                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                                   <thead>
                                     <tr style={{ background: primaryColor, color: "#fff" }}>
@@ -814,6 +818,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <SelectionPanel
                     title="الباصات المطلوبة في التقرير"
                     panelKey="buses"
+                    alwaysOpen
                     items={buses.map(b => ({ id: b.id, label: `${b.name}${b.type === "VIP" ? " ⭐" : ""}` }))}
                     selected={selectedBusIds}
                     setSelected={(s) => setSelectedBusIds(s as Set<number>)}
@@ -872,6 +877,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <SelectionPanel
                     title="مخيمات منى المطلوبة في التقرير"
                     panelKey="mina"
+                    alwaysOpen
                     items={camps.filter(c => c.page_type === "منى").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
                     selected={selectedMinaCampIds}
                     setSelected={(s) => setSelectedMinaCampIds(s as Set<number>)}
@@ -936,6 +942,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <SelectionPanel
                     title="مخيمات عرفة المطلوبة في التقرير"
                     panelKey="arafa"
+                    alwaysOpen
                     items={camps.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
                     selected={selectedArafaCampIds}
                     setSelected={(s) => setSelectedArafaCampIds(s as Set<number>)}
@@ -1022,6 +1029,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               <SelectionPanel
                 title="الأدوار المطلوبة في التقرير"
                 panelKey="hotel"
+                alwaysOpen
                 items={floorItems}
                 selected={selectedFloors}
                 setSelected={(s) => setSelectedFloors(s as Set<string>)}
