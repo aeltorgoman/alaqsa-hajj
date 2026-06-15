@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Camp } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE } from "../utils";
 
@@ -50,6 +51,7 @@ function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: C
 // ===== صفحة المخيمات =====
 function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const config = useConfig();
+  const { alert: alertState, showAlert } = useAlert();
   const [camps, setCamps] = useState<Camp[]>([]);
   const [editingCampId, setEditingCampId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -87,11 +89,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const toggleCamp = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addCamp = async () => {
-    if (!campName.trim()) { setNameError("اكتب اسم المخيم!"); return; }
-    if (camps.some(c => c.name.trim() === campName.trim() && c.gender === campGender)) { setNameError(`مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} باسم "${campName}" موجود!`); return; }
+    if (!campName.trim()) { setNameError("يرجى إدخال اسم المخيم"); return; }
+    if (camps.some(c => c.name.trim() === campName.trim() && c.gender === campGender)) { setNameError(`يوجد مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} بالاسم "${campName}" بالفعل`); return; }
     setNameError("");
     const { data, error } = await supabase.from("camps").insert([{ name: campName.trim(), gender: campGender, type: campType, page_type: pageType }]).select();
-    if (error) { alert(`❌ فشل في إضافة المخيم: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
+    if (error) { showAlert("error", `فشل إضافة المخيم: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       setCamps(prev => [...prev, data[0] as Camp]);
       setExpanded(prev => new Set([...prev, data[0].id]));
@@ -100,9 +102,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   };
 
   const deleteCamp = async (id: number) => {
-    if (getCampPassengers(id).length > 0) { alert("أزل المسافرين الأول!"); return; }
+    if (getCampPassengers(id).length > 0) { showAlert("warning", "يرجى إزالة المسافرين قبل حذف المخيم"); return; }
     const { error } = await supabase.from("camps").delete().eq("id", id);
-    if (error) { alert(`❌ فشل في حذف المخيم: ${error.message}`); return; }
+    if (error) { showAlert("error", `فشل حذف المخيم: ${error.message}`); return; }
     setCamps(prev => prev.filter(c => c.id !== id));
   };
 
@@ -313,6 +315,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} campServiceKey={serviceKey} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
