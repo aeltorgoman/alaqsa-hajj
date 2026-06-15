@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 import { ROOM_TYPES, ROOM_COLORS, ROOM_ICON_COLORS, inp, btnP, btnS } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
@@ -90,6 +91,7 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
 
 // ===== صفحة الفندق =====
 function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const { alert: alertState, showAlert } = useAlert();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -131,12 +133,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addRoom = async () => {
-    if (!roomNumber.trim()) { setNumberError("اكتب رقم الغرفة!"); return; }
-    if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`غرفة "${roomNumber}" موجودة!`); return; }
+    if (!roomNumber.trim()) { setNumberError("يرجى إدخال رقم الغرفة"); return; }
+    if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`الغرفة رقم "${roomNumber}" موجودة بالفعل`); return; }
     setNumberError("");
     const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية" }]).select();
     if (error) {
-      alert(`❌ فشل في إضافة الغرفة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      showAlert("error", `فشل إضافة الغرفة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
       return;
     }
     if (data?.[0]) {
@@ -148,17 +150,17 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const addRange = async () => {
     const from = parseInt(rangeFrom), to = parseInt(rangeTo);
-    if (!from || !to || from > to) { setRangeError("تأكد من الأرقام"); return; }
+    if (!from || !to || from > to) { setRangeError("يرجى التحقق من الأرقام المُدخلة"); return; }
     const existingNums = new Set(rooms.map(r => r.number));
     const newRooms = [];
     for (let n = from; n <= to; n++) {
       if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "ثنائية" });
     }
-    if (newRooms.length === 0) { setRangeError("كل الغرف في هذا النطاق موجودة بالفعل!"); return; }
+    if (newRooms.length === 0) { setRangeError("جميع الغرف في هذا النطاق موجودة بالفعل"); return; }
     setRangeError("");
     const { data, error } = await supabase.from("rooms").insert(newRooms).select();
     if (error) {
-      setRangeError(`❌ فشل في الإضافة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      setRangeError(`فشل الإضافة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
       return;
     }
     if (data) setRooms(prev => [...prev, ...data as Room[]]);
@@ -182,13 +184,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       if (newRooms.length > 0) {
         const { data, error } = await supabase.from("rooms").insert(newRooms).select();
         if (!error && data) setRooms(prev => [...prev, ...data as Room[]]);
-      } else alert("لم يتم إضافة غرف. تأكد من شكل الملف.");
+      } else showAlert("warning", "لم يتم إضافة أي غرف. يرجى التحقق من تنسيق الملف.");
     };
     reader.readAsText(file);
   };
 
   const deleteRoom = async (id: number) => {
-    if (getRoomPassengers(id).length > 0) { alert("أزل المسافرين الأول!"); return; }
+    if (getRoomPassengers(id).length > 0) { showAlert("warning", "يرجى إزالة المسافرين قبل حذف الغرفة"); return; }
     await supabase.from("rooms").delete().eq("id", id);
     setRooms(prev => prev.filter(r => r.id !== id));
   };
@@ -292,6 +294,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <HotelStats rooms={rooms} passengers={passengers} />
       <div style={{ padding: 14, overflowY: "auto", flex: 1 }}>
         {/* أزرار التحكم */}
