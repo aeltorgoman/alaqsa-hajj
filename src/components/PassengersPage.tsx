@@ -175,8 +175,8 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
   const [manualIdFile, setManualIdFile] = useState<File | null>(null);
   const [manualScanning, setManualScanning] = useState(false);
   const [autoScanning, setAutoScanning] = useState(false);
-  const [idMatchCandidates, setIdMatchCandidates] = useState<Passenger[] | null>(null);
-  const [pendingIdScan, setPendingIdScan] = useState<{ file: File; dataUrl: string; parsed: any } | null>(null);
+  const [docMatchCandidates, setDocMatchCandidates] = useState<Passenger[] | null>(null);
+  const [pendingDocScan, setPendingDocScan] = useState<{ file: File; dataUrl: string; parsed: any; docKind: "idcard" | "hajj_permit" } | null>(null);
 
   const resetManualModal = () => {
     setManualPassportImg(null); setManualPassportFile(null);
@@ -194,26 +194,19 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       try {
         const parsed = await scanDocument(file, "auto");
         if (parsed.doc_type === "hajj_permit") {
-          // تصريح حج — دور على الحاج المطابق واحفظ مباشرة في ملفه
+          // تصريح حج — دور على الحاج المطابق وأظهر تأكيد قبل الحفظ
           const idNum = parsed.national_id || parsed.passport || "";
           const nameVal = parsed.name_ar || parsed.name_en || "";
-          const matched = passengers.find(p =>
-            (idNum && (p.national_id === idNum || p.passport === idNum)) ||
-            (!idNum && nameVal && (p.name_ar === nameVal || p.name_en === nameVal || p.short_ar === nameVal))
-          );
-          if (matched) {
-            const url = await uploadDoc(file, matched.id, "hajj_permit");
-            if (url) {
-              await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", matched.id);
-              const updated = { ...matched, hajj_permit_url: url } as Passenger;
-              setPassengers(passengers.map(x => x.id === matched.id ? updated : x));
-              alert(`✅ تم حفظ التصريح في ملف ${matched.short_ar || matched.name_ar}`);
-            } else {
-              alert("❌ فشل رفع الملف، حاول مرة أخرى");
-            }
-          } else {
-            alert("⚠️ لم يتم العثور على حاج مطابق لهذا التصريح — تأكد من البيانات أو ارفعه من ملف الحاج مباشرة");
+          let candidates: Passenger[] = [];
+          if (idNum) candidates = passengers.filter(p => p.national_id === idNum || p.passport === idNum);
+          if (candidates.length === 0 && nameVal) {
+            candidates = passengers.filter(p =>
+              nameMatches(p.name_ar, nameVal) || nameMatches(p.short_ar, nameVal) ||
+              nameMatches(p.name_en, nameVal) || nameMatches(p.short_en, nameVal)
+            );
           }
+          setPendingDocScan({ file, dataUrl, parsed, docKind: "hajj_permit" });
+          setDocMatchCandidates(candidates);
         } else if (parsed.doc_type === "idcard") {
           // بطاقة شخصية — دايمًا تأكيد قبل الربط أو فتح الإضافة (تجنب الدبلكيت)
           const idNum = parsed.national_id || "";
@@ -227,8 +220,8 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
               (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn)))
             );
           }
-          setPendingIdScan({ file, dataUrl, parsed });
-          setIdMatchCandidates(candidates);
+          setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard" });
+          setDocMatchCandidates(candidates);
         } else {
           // جواز سفر (الافتراضي)
           resetManualModal();
@@ -258,32 +251,44 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
     reader.readAsDataURL(file);
   };
 
-  // ربط صورة البطاقة بحاج موجود بالفعل (بدل إضافته كحاج جديد)
-  const linkIdToExisting = async (passenger: Passenger) => {
-    if (!pendingIdScan) return;
-    const { file, parsed } = pendingIdScan;
+  // ربط الصورة (بطاقة أو تصريح) بحاج موجود بالفعل
+  const linkDocToExisting = async (passenger: Passenger) => {
+    if (!pendingDocScan) return;
+    const { file, parsed, docKind } = pendingDocScan;
     setAutoScanning(true);
-    const url = await uploadDoc(file, passenger.id, "idcard");
-    if (url) {
-      const updates: any = { national_id_url: url };
-      if (!passenger.national_id && parsed.national_id) updates.national_id = parsed.national_id;
-      if (!(passenger as any).id_expiry && parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
-      if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
-      await supabase.from("passengers").update(updates).eq("id", passenger.id);
-      const updated = { ...passenger, ...updates } as Passenger;
-      setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
-      alert(`✅ تم ربط البطاقة بملف ${passenger.short_ar || passenger.name_ar}`);
+    if (docKind === "hajj_permit") {
+      const url = await uploadDoc(file, passenger.id, "hajj_permit");
+      if (url) {
+        await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id);
+        const updated = { ...passenger, hajj_permit_url: url } as Passenger;
+        setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+        alert(`✅ تم حفظ التصريح في ملف ${passenger.short_ar || passenger.name_ar}`);
+      } else {
+        alert("❌ فشل رفع الملف، حاول مرة أخرى");
+      }
     } else {
-      alert("❌ فشل رفع الملف، حاول مرة أخرى");
+      const url = await uploadDoc(file, passenger.id, "idcard");
+      if (url) {
+        const updates: any = { national_id_url: url };
+        if (!passenger.national_id && parsed.national_id) updates.national_id = parsed.national_id;
+        if (!(passenger as any).id_expiry && parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
+        if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
+        await supabase.from("passengers").update(updates).eq("id", passenger.id);
+        const updated = { ...passenger, ...updates } as Passenger;
+        setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+        alert(`✅ تم ربط البطاقة بملف ${passenger.short_ar || passenger.name_ar}`);
+      } else {
+        alert("❌ فشل رفع الملف، حاول مرة أخرى");
+      }
     }
     setAutoScanning(false);
-    setIdMatchCandidates(null); setPendingIdScan(null);
+    setDocMatchCandidates(null); setPendingDocScan(null);
   };
 
   // البطاقة لحاج جديد — افتح مودال الإضافة مع بيانات البطاقة
   const proceedIdAsNew = () => {
-    if (!pendingIdScan) return;
-    const { dataUrl, file, parsed } = pendingIdScan;
+    if (!pendingDocScan || pendingDocScan.docKind !== "idcard") return;
+    const { dataUrl, file, parsed } = pendingDocScan;
     resetManualModal();
     setManualIdImg(dataUrl); setManualIdFile(file);
     setManualForm(prev => ({
@@ -299,11 +304,11 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       gender: parsed.gender || prev.gender,
     }));
     setShowManual(true);
-    setIdMatchCandidates(null); setPendingIdScan(null);
+    setDocMatchCandidates(null); setPendingDocScan(null);
   };
 
-  const cancelIdScan = () => {
-    setIdMatchCandidates(null); setPendingIdScan(null);
+  const cancelDocScan = () => {
+    setDocMatchCandidates(null); setPendingDocScan(null);
   };
 
   const handleManualSave = async () => {
@@ -584,24 +589,28 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           </div>
         </div>
       )}
-      {idMatchCandidates !== null && pendingIdScan && (
+      {docMatchCandidates !== null && pendingDocScan && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 350, padding: 16 }}>
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: 18, maxWidth: 380, width: "100%", maxHeight: "80vh", overflowY: "auto" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>تأكيد البطاقة الشخصية</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>{pendingDocScan.docKind === "hajj_permit" ? "تأكيد تصريح الحج" : "تأكيد البطاقة الشخصية"}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
-              {idMatchCandidates.length > 0 ? "وجدنا حجاج بنفس الاسم/الرقم — هل ده هو؟" : "مفيش حد بنفس الاسم في القائمة"}
+              {docMatchCandidates.length > 0
+                ? (pendingDocScan.docKind === "hajj_permit" ? "وجدنا حاج مطابق بنفس الاسم/الرقم — هل ده هو؟" : "وجدنا حجاج بنفس الاسم/الرقم — هل ده هو؟")
+                : (pendingDocScan.docKind === "hajj_permit" ? "لم يتم العثور على حاج مطابق لهذا التصريح" : "مفيش حد بنفس الاسم في القائمة")}
             </div>
-            {idMatchCandidates.map(p => (
+            {docMatchCandidates.map(p => (
               <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", marginBottom: 6, background: "var(--bg-2)" }}>
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} {p.passport ? `· ${p.passport}` : ""}</div>
                 </div>
-                <button onClick={() => linkIdToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>ده هو</button>
+                <button onClick={() => linkDocToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>ده هو</button>
               </div>
             ))}
-            <button onClick={proceedIdAsNew} style={{ ...btnS(), width: "100%", marginTop: 6, fontWeight: 600 }}>لا، ده حاج جديد → فتح الإضافة</button>
-            <button onClick={cancelIdScan} style={{ width: "100%", marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: "4px 0" }}>إلغاء</button>
+            {pendingDocScan.docKind === "idcard" && (
+              <button onClick={proceedIdAsNew} style={{ ...btnS(), width: "100%", marginTop: 6, fontWeight: 600 }}>لا، ده حاج جديد → فتح الإضافة</button>
+            )}
+            <button onClick={cancelDocScan} style={{ width: "100%", marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: "4px 0" }}>{pendingDocScan.docKind === "hajj_permit" ? "إلغاء / تجاهل" : "إلغاء"}</button>
           </div>
         </div>
       )}
