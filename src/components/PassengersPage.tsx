@@ -178,7 +178,8 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
   const [manualScanning, setManualScanning] = useState(false);
   const [autoScanning, setAutoScanning] = useState(false);
   const [docMatchCandidates, setDocMatchCandidates] = useState<Passenger[] | null>(null);
-  const [pendingDocScan, setPendingDocScan] = useState<{ file: File; dataUrl: string; parsed: any; docKind: "idcard" | "hajj_permit" } | null>(null);
+  const [pendingDocScan, setPendingDocScan] = useState<{ file: File; dataUrl: string; parsed: any; docKind: "idcard" | "hajj_permit" | "passport" } | null>(null);
+  const [compareCandidate, setCompareCandidate] = useState<Passenger | null>(null);
 
   const resetManualModal = () => {
     setManualPassportImg(null); setManualPassportFile(null);
@@ -225,23 +226,39 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
           setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard" });
           setDocMatchCandidates(candidates);
         } else {
-          // جواز سفر (الافتراضي)
-          resetManualModal();
-          setManualPassportImg(dataUrl); setManualPassportFile(file);
-          setManualForm(prev => ({
-            ...prev,
-            name_en: parsed.name_en || prev.name_en,
-            short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
-            name_ar: parsed.name_ar || prev.name_ar,
-            short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
-            passport: parsed.passport || prev.passport,
-            national_id: parsed.national_id || prev.national_id,
-            nat: parsed.nationality || prev.nat,
-            dob: parsed.dob || prev.dob,
-            expiry: parsed.expiry || prev.expiry,
-            gender: parsed.gender || prev.gender,
-          }));
-          setShowManual(true);
+          // جواز سفر — تحقق أولًا من وجود حاج مطابق (لتجنب التكرار) قبل فتح الإضافة
+          const idNum = parsed.national_id || "";
+          const nameAr = parsed.name_ar || "";
+          const nameEn = parsed.name_en || "";
+          let candidates: Passenger[] = [];
+          if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
+          if (candidates.length === 0 && (nameAr || nameEn)) {
+            candidates = passengers.filter(p =>
+              (nameAr && (nameMatches(p.name_ar, nameAr) || nameMatches(p.short_ar, nameAr))) ||
+              (nameEn && (nameMatches(p.name_en, nameEn) || nameMatches(p.short_en, nameEn)))
+            );
+          }
+          if (candidates.length > 0) {
+            setPendingDocScan({ file, dataUrl, parsed, docKind: "passport" });
+            setDocMatchCandidates(candidates);
+          } else {
+            resetManualModal();
+            setManualPassportImg(dataUrl); setManualPassportFile(file);
+            setManualForm(prev => ({
+              ...prev,
+              name_en: parsed.name_en || prev.name_en,
+              short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+              name_ar: parsed.name_ar || prev.name_ar,
+              short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+              passport: parsed.passport || prev.passport,
+              national_id: parsed.national_id || prev.national_id,
+              nat: parsed.nationality || prev.nat,
+              dob: parsed.dob || prev.dob,
+              expiry: parsed.expiry || prev.expiry,
+              gender: parsed.gender || prev.gender,
+            }));
+            setShowManual(true);
+          }
         }
       } catch {
         // فشل القراءة — افتح مودال الإضافة اليدوي فاضي
@@ -268,7 +285,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
       }
-    } else {
+    } else if (docKind === "idcard") {
       const url = await uploadDoc(file, passenger.id, "idcard");
       if (url) {
         const updates: any = { national_id_url: url };
@@ -282,35 +299,76 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
       }
+    } else {
+      // passport — حفظ الصورة وإضافة البيانات التكميلية الفاضية فقط
+      const url = await uploadDoc(file, passenger.id, "passport_doc");
+      if (url) {
+        const updates: any = { passport_url: url };
+        if (!passenger.passport && parsed.passport) updates.passport = parsed.passport;
+        if (!passenger.national_id && parsed.national_id) updates.national_id = parsed.national_id;
+        if (!(passenger as any).expiry && parsed.expiry) updates.expiry = parsed.expiry;
+        if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
+        if (!passenger.gender && parsed.gender) updates.gender = parsed.gender;
+        if (!passenger.name_en && parsed.name_en) {
+          updates.name_en = parsed.name_en;
+          updates.short_en = makeShort(parsed.name_en);
+        }
+        await supabase.from("passengers").update(updates).eq("id", passenger.id);
+        const updated = { ...passenger, ...updates } as Passenger;
+        setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+        showAlert("success", `تم حفظ صورة جواز السفر وتحديث بيانات ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
+      } else {
+        showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
+      }
     }
     setAutoScanning(false);
     setDocMatchCandidates(null); setPendingDocScan(null);
+    setCompareCandidate(null);
   };
 
-  // البطاقة لحاج جديد — افتح مودال الإضافة مع بيانات البطاقة
-  const proceedIdAsNew = () => {
-    if (!pendingDocScan || pendingDocScan.docKind !== "idcard") return;
-    const { dataUrl, file, parsed } = pendingDocScan;
+  // الحاج جديد — افتح مودال الإضافة مع البيانات المستخرجة (بطاقة أو جواز)
+  const proceedDocAsNew = () => {
+    if (!pendingDocScan || pendingDocScan.docKind === "hajj_permit") return;
+    const { dataUrl, file, parsed, docKind } = pendingDocScan;
     resetManualModal();
-    setManualIdImg(dataUrl); setManualIdFile(file);
-    setManualForm(prev => ({
-      ...prev,
-      national_id: parsed.national_id || prev.national_id,
-      id_expiry: parsed.id_expiry || prev.id_expiry,
-      name_ar: parsed.name_ar || prev.name_ar,
-      short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
-      name_en: parsed.name_en || prev.name_en,
-      short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
-      nat: parsed.nationality || prev.nat,
-      dob: parsed.dob || prev.dob,
-      gender: parsed.gender || prev.gender,
-    }));
+    if (docKind === "idcard") {
+      setManualIdImg(dataUrl); setManualIdFile(file);
+      setManualForm(prev => ({
+        ...prev,
+        national_id: parsed.national_id || prev.national_id,
+        id_expiry: parsed.id_expiry || prev.id_expiry,
+        name_ar: parsed.name_ar || prev.name_ar,
+        short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+        name_en: parsed.name_en || prev.name_en,
+        short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+        nat: parsed.nationality || prev.nat,
+        dob: parsed.dob || prev.dob,
+        gender: parsed.gender || prev.gender,
+      }));
+    } else {
+      setManualPassportImg(dataUrl); setManualPassportFile(file);
+      setManualForm(prev => ({
+        ...prev,
+        name_en: parsed.name_en || prev.name_en,
+        short_en: parsed.name_en ? makeShort(parsed.name_en) : prev.short_en,
+        name_ar: parsed.name_ar || prev.name_ar,
+        short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : prev.short_ar,
+        passport: parsed.passport || prev.passport,
+        national_id: parsed.national_id || prev.national_id,
+        nat: parsed.nationality || prev.nat,
+        dob: parsed.dob || prev.dob,
+        expiry: parsed.expiry || prev.expiry,
+        gender: parsed.gender || prev.gender,
+      }));
+    }
     setShowManual(true);
     setDocMatchCandidates(null); setPendingDocScan(null);
+    setCompareCandidate(null);
   };
 
   const cancelDocScan = () => {
     setDocMatchCandidates(null); setPendingDocScan(null);
+    setCompareCandidate(null);
   };
 
   const handleManualSave = async () => {
@@ -595,23 +653,29 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       {docMatchCandidates !== null && pendingDocScan && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 350, padding: 16 }}>
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: 18, maxWidth: 380, width: "100%", maxHeight: "80vh", overflowY: "auto" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>{pendingDocScan.docKind === "hajj_permit" ? "تأكيد تصريح الحج" : "تأكيد البطاقة الشخصية"}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>
+              {pendingDocScan.docKind === "hajj_permit" ? "تأكيد تصريح الحج" : pendingDocScan.docKind === "passport" ? "تأكيد جواز السفر" : "تأكيد البطاقة الشخصية"}
+            </div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
               {docMatchCandidates.length > 0
-                ? (pendingDocScan.docKind === "hajj_permit" ? "وجدنا حاج مطابق بنفس الاسم/الرقم — هل ده هو؟" : "وجدنا حجاج بنفس الاسم/الرقم — هل ده هو؟")
-                : (pendingDocScan.docKind === "hajj_permit" ? "لم يتم العثور على حاج مطابق لهذا التصريح" : "مفيش حد بنفس الاسم في القائمة")}
+                ? (pendingDocScan.docKind === "hajj_permit" ? "تم العثور على حاج مطابق بنفس الاسم أو الرقم — هل هذا هو؟" : "تم العثور على حجاج بنفس الاسم أو الرقم — هل أحدهم هو المقصود؟")
+                : (pendingDocScan.docKind === "hajj_permit" ? "لم يتم العثور على حاج مطابق لهذا التصريح" : "لا يوجد حاج بنفس الاسم في القائمة")}
             </div>
-            {pendingDocScan.docKind === "idcard" && (
+            {pendingDocScan.docKind !== "hajj_permit" && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>الصورة الممسوحة:</div>
                 <img src={pendingDocScan.dataUrl} style={{ width: "100%", maxHeight: 140, objectFit: "contain", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }} />
               </div>
             )}
-            {docMatchCandidates.map(p => (
+            {docMatchCandidates.map(p => {
+              const existingDoc = pendingDocScan.docKind === "passport" ? (p as any).national_id_url : (p as any).passport_url;
+              return (
               <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", marginBottom: 6, background: "var(--bg-2)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {pendingDocScan.docKind === "idcard" && (p as any).passport_url ? (
-                    <img src={(p as any).passport_url} title="صورة الجواز المحفوظة" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid var(--line)", flexShrink: 0 }} />
+                  {existingDoc ? (
+                    <button onClick={() => setCompareCandidate(p)} title="عرض الصور بحجم أكبر للمقارنة" style={{ width: 40, height: 40, padding: 0, border: "1px solid var(--line)", borderRadius: 6, overflow: "hidden", cursor: "pointer", flexShrink: 0, background: "none" }}>
+                      <img src={existingDoc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </button>
                   ) : (
                     <Avatar name={p.name_ar} gender={p.gender} size={36} />
                   )}
@@ -620,16 +684,48 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
                     <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} {p.passport ? `· ${p.passport}` : ""}</div>
                   </div>
                 </div>
-                <button onClick={() => linkDocToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>ده هو</button>
+                <button onClick={() => linkDocToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>هذا هو</button>
               </div>
-            ))}
-            {pendingDocScan.docKind === "idcard" && (
-              <button onClick={proceedIdAsNew} style={{ ...btnS(), width: "100%", marginTop: 6, fontWeight: 600 }}>لا، ده حاج جديد → فتح الإضافة</button>
+              );
+            })}
+            {pendingDocScan.docKind !== "hajj_permit" && (
+              <button onClick={proceedDocAsNew} style={{ ...btnS(), width: "100%", marginTop: 6, fontWeight: 600 }}>لا، هذا حاج جديد ← فتح نموذج الإضافة</button>
             )}
             <button onClick={cancelDocScan} style={{ width: "100%", marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: "4px 0" }}>{pendingDocScan.docKind === "hajj_permit" ? "إلغاء / تجاهل" : "إلغاء"}</button>
           </div>
         </div>
       )}
+      {compareCandidate && pendingDocScan && (() => {
+        const existingDoc = pendingDocScan.docKind === "passport" ? (compareCandidate as any).national_id_url : (compareCandidate as any).passport_url;
+        const existingLabel = pendingDocScan.docKind === "passport" ? "البطاقة الشخصية المحفوظة" : "جواز السفر المحفوظ";
+        const scannedLabel = pendingDocScan.docKind === "passport" ? "صورة الجواز الممسوحة" : "صورة البطاقة الممسوحة";
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 360, padding: 16 }}>
+            <div style={{ background: "var(--paper)", borderRadius: 14, padding: 18, maxWidth: 720, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>مقارنة الصور — {compareCandidate.short_ar || compareCandidate.name_ar}</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>تأكد من تطابق الصورتين قبل الربط بملف هذا الحاج</div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6, textAlign: "center" }}>{scannedLabel}</div>
+                  <img src={pendingDocScan.dataUrl} style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6, textAlign: "center" }}>{existingLabel}</div>
+                  {existingDoc ? (
+                    <img src={existingDoc} style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }} />
+                  ) : (
+                    <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px dashed var(--line)", background: "var(--bg-2)", fontSize: 12, color: "var(--text-muted)" }}>لا توجد صورة محفوظة لهذا الحاج</div>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <button onClick={() => linkDocToExisting(compareCandidate)} style={{ ...btnP(), flex: 1 }}>تأكيد، هذا هو</button>
+                <button onClick={() => setCompareCandidate(null)} style={btnS()}>رجوع</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <PassengersStats passengers={passengers} />
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
