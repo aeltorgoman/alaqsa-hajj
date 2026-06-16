@@ -156,6 +156,7 @@ export function makeHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+  // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح (حوالي 5 نقشات في الصف)
   const patternSVG = `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'><g fill='none' stroke='#D4A017' stroke-width='1.6' stroke-opacity='0.26'><path d='M70 7 L91 32 L119 21 L108 49 L133 70 L108 91 L119 119 L91 108 L70 133 L49 108 L21 119 L32 91 L7 70 L32 49 L21 21 L49 32 Z'/><path d='M70 7 L70 133 M7 70 L133 70 M21 21 L119 119 M119 21 L21 119'/></g></svg>`;
   const patternURL = `data:image/svg+xml,${encodeURIComponent(patternSVG)}`;
   const headerHTML = noHeader ? "" : `<div class="doc-header">
@@ -174,6 +175,7 @@ export function makeHTML(
 <div class="doc-title-bar">${title}</div>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${title}</title>
+<link href="https://fonts.googleapis.com/css2?family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
@@ -192,8 +194,8 @@ export function makeHTML(
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
   .camp-header .camp-logo span { font-size: 62px; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
-  .camp-header .camp-title { font-size: 66px; font-weight: 800; color: #1c1c1c; }
-  .camp-header .camp-subtitle { font-size: 17px; color: #888; margin-top: 5px; }
+  .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 8px 28px; border-radius: 10px; font-size: 30px; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; letter-spacing: 1px; }
+  .camp-header .camp-subtitle { font-size: 22px; font-weight: 600; color: #a8852f; margin-top: 10px; font-family: 'El Messiri', 'Tajawal', sans-serif; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
   th { background: ${primaryColor}; color: #fff; padding: 18px 22px; text-align: right; font-size: 34px; font-weight: 600; }
@@ -226,11 +228,13 @@ export interface ReportBranding {
 }
 type NameItem = { short_ar?: string; name_ar: string };
 
+// شعار القسم (دائرة بصورة اللوجو أو حرف اسم الشركة)
 export function sectionLogoHtml(b: ReportBranding): string {
   const companyName = b.companyName || "حملة الأقصى";
   return b.logoUrl ? `<img src="${b.logoUrl}" alt="logo" />` : `<span>${companyName.trim().charAt(0)}</span>`;
 }
 
+// عرض قائمة أسماء: عمود واحد لو 20 أو أقل، وعمودين لو أكتر
 export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحاج", primaryColor = "#6B1F3A"): string {
   if (items.length === 0) {
     return `<table style="width:60%;margin:0 auto"><tr><th style="text-align:center;width:40px">م</th><th>${nameLabel}</th></tr><tr><td></td><td>لا يوجد مسافرون</td></tr></table>`;
@@ -259,6 +263,7 @@ export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحا
   </table>`;
 }
 
+// قسم بشعارين (يمين/شمال) وعنوان كبير في الوسط + جدول أسماء — مستخدم لكل باص/مخيم
 export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTML: string, b: ReportBranding): string {
   const logo = sectionLogoHtml(b);
   return `<div class="camp-header">
@@ -271,10 +276,12 @@ export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTM
   </div>${namesHTML}`;
 }
 
+// تجميع أقسام متعددة مع فاصل صفحة قبل كل قسم إلا الأول
 export function joinSections(sections: string[]): string {
   return sections.map((s, idx) => `<div class="${idx > 0 ? "page-break-before" : ""}">${s}</div>`).join("");
 }
 
+// قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)
 export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string; services?: { flight?: string } })[], b: ReportBranding): string {
   const primaryColor = b.primaryColor || "#6B1F3A";
   const rows = fp.map((p, i) => {
@@ -319,10 +326,12 @@ export function downloadPDF(html: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ===== تثبيت صف العنوان (Freeze Header Row) =====
 export function freezeHeaderRow(ws: import("xlsx").WorkSheet, rows = 1) {
   (ws as any)["!views"] = [{ state: "frozen", xSplit: 0, ySplit: rows, topLeftCell: `A${rows + 1}`, activePane: "bottomLeft" }];
 }
 
+// ===== تنسيق صف عنوان رئيسي (دمج + خلفية ملوّنة) =====
 export function styleTitleRow(ws: import("xlsx").WorkSheet, rowIndex: number, colCount: number, primaryColor: string) {
   const rgb = primaryColor.replace("#", "");
   if (!ws["!merges"]) ws["!merges"] = [];
@@ -334,6 +343,7 @@ export function styleTitleRow(ws: import("xlsx").WorkSheet, rowIndex: number, co
   }
 }
 
+// ===== تنسيق صف رؤوس الأعمدة (خلفية ملوّنة + خط أبيض) =====
 export function styleHeaderRow(ws: import("xlsx").WorkSheet, rowIndex: number, colCount: number, primaryColor: string) {
   const rgb = primaryColor.replace("#", "");
   for (let c = 0; c < colCount; c++) {
@@ -343,10 +353,12 @@ export function styleHeaderRow(ws: import("xlsx").WorkSheet, rowIndex: number, c
   }
 }
 
+// ===== اسم شيت صالح (حد 31 حرف وبدون رموز ممنوعة) =====
 export function safeSheetName(name: string): string {
   return (name || "ورقة").replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31) || "ورقة";
 }
 
+// ===== إضافة شيت ملخص في أول الملف =====
 export function addSummarySheet(
   wb: import("xlsx").WorkBook,
   XLSXLib: typeof import("xlsx"),
@@ -367,29 +379,32 @@ export function addSummarySheet(
   const ws = XLSXLib.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{ wch: 30 }, { wch: 16 }];
   XLSXLib.utils.book_append_sheet(wb, ws, sheetName);
+  // نقل شيت الملخص لأول الملف
   wb.SheetNames.unshift(wb.SheetNames.pop() as string);
 }
 
 export const ALL_PERMISSIONS = [
-  { key: "add_passenger",    label: "إضافة حجاج"            },
-  { key: "edit_passenger",   label: "تعديل حجاج"            },
-  { key: "delete_passenger", label: "حذف حجاج"              },
-  { key: "view_passengers",  label: "عرض الحجاج"            },
-  { key: "manage_buses",     label: "إدارة الباصات"          },
-  { key: "manage_camps",     label: "إدارة المخيمات"         },
-  { key: "manage_hotel",     label: "إدارة الفندق"           },
-  { key: "view_reports",     label: "عرض التقارير"           },
-  { key: "export_reports",   label: "تصدير التقارير"         },
-  { key: "print_reports",    label: "طباعة التقارير"         },
-  { key: "manage_users",     label: "إدارة المستخدمين"       },
-  { key: "view_archive",     label: "عرض الأرشيف"           },
-  { key: "manage_flights",   label: "إدارة الطيران"          },
-  { key: "manage_payments",  label: "إدارة الحسابات المالية" },
+  { key: "add_passenger", label: "إضافة حجاج" },
+  { key: "edit_passenger", label: "تعديل حجاج" },
+  { key: "delete_passenger", label: "حذف حجاج" },
+  { key: "view_passengers", label: "عرض الحجاج" },
+  { key: "manage_buses", label: "إدارة الباصات" },
+  { key: "manage_camps", label: "إدارة المخيمات" },
+  { key: "manage_hotel", label: "إدارة الفندق" },
+  { key: "view_reports", label: "عرض التقارير" },
+  { key: "export_reports", label: "تصدير التقارير" },
+  { key: "print_reports", label: "طباعة التقارير" },
+  { key: "manage_users", label: "إدارة المستخدمين" },
+  { key: "view_archive", label: "عرض الأرشيف" },
+  { key: "manage_flights", label: "إدارة الطيران" },
 ];
 
 export const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
 export const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"], "سويت": ["var(--info-bg)", "var(--info)"] };
 
+// ============================================================
+// أيقونات ملوّنة موحّدة (باصات/مخيمات/غرف/رحلات) — صفحات التنظيم وصفحة التقارير
+// ============================================================
 export const ICON_COLOR_CYCLE = ["#7D1F3C", "#0C447C", "#2A9D8F", "#E8951A", "#8B3A6B", "#5C7C2E", "#B5651D", "#3F51B5"];
 export const VIP_ICON_COLOR = "#B5651D";
 export const ROOM_ICON_COLORS: Record<string, string> = { "ثنائية": "#0C447C", "ثلاثية": "#E8951A", "رباعية": "#2A9D8F", "سويت": "#7D1F3C", "فردية": "#5C7C2E", "فارغة": "#999999" };
@@ -400,7 +415,7 @@ export const NAV = [
   { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "view_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
   { section: "التقارير", items: [{ id: "reports", label: "التقارير", perm: "view_reports" }] },
   { section: "الأرشيف", items: [{ id: "archive", label: "الأرشيف", perm: "view_archive" }] },
-  { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }, { id: "finance", label: "الحسابات", perm: "manage_payments" }] },
+  { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }] },
 ];
 
 export const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", padding: "7px 10px", width: "100%", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box" as const, color: "var(--text)" };
