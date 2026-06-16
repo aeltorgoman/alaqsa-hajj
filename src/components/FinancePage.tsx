@@ -76,29 +76,6 @@ function printInPage(html: string) {
   setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 600);
 }
 
-async function shareFile(html: string, filename: string) {
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const file = new File([blob], filename, { type: "text/html" });
-  try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: filename.replace(".html","") });
-    } else {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
-  } catch (_) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-}
 
 // ============================================================
 // HTML نظيف للتقارير المالية (بدون نقوش)
@@ -116,18 +93,18 @@ function makeFinanceHTML(
 <style>
   @page { size: A4 ${landscape?"landscape":"portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: 'Tajawal','Arial',sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 13px; color: #1c1c1c; background: #fff; }
-  .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:3px solid ${primaryColor}; margin-bottom:6px; }
-  .logo-box { width:72px; height:72px; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:28px; font-weight:700; flex-shrink:0; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:15px; color:#1c1c1c; background:#fff; }
+  .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:3px solid ${primaryColor}; margin-bottom:8px; }
+  .logo-box { width:80px; height:80px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:32px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company-name { font-size:17px; font-weight:700; color:${primaryColor}; }
-  .tagline { font-size:11px; color:#888; margin-top:2px; }
-  .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:10px; border-radius:8px; font-size:18px; font-weight:700; margin:12px 0 16px; }
+  .company-name { font-size:20px; font-weight:800; color:${primaryColor}; }
+  .tagline { font-size:12px; color:#888; margin-top:3px; }
+  .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:12px; border-radius:10px; font-size:20px; font-weight:800; margin:12px 0 16px; }
   table { width:100%; border-collapse:collapse; margin-bottom:16px; }
-  th { background:${primaryColor}; color:#fff; padding:9px 12px; text-align:right; font-size:12px; font-weight:600; }
-  td { border:0.5px solid rgba(0,0,0,0.1); padding:7px 12px; text-align:right; font-size:12px; }
-  tr:nth-child(even) td { background:rgba(0,0,0,0.02); }
-  .footer { text-align:center; color:#bbb; font-size:10px; margin-top:20px; border-top:0.5px solid #eee; padding-top:8px; }
+  th { background:${primaryColor}; color:#fff; padding:12px 16px; text-align:right; font-size:15px; font-weight:700; }
+  td { border:1px solid #e0e0e0; padding:11px 16px; text-align:right; font-size:15px; }
+  tr:nth-child(even) td { background:#f9f7f4; }
+  .footer { text-align:center; color:#bbb; font-size:11px; margin-top:20px; border-top:1px solid #eee; padding-top:10px; }
   @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
 </style></head><body>
 <div class="doc-header">
@@ -400,7 +377,6 @@ ${memberRows}
 }
 
 // ============================================================
-// نصوص واتساب
 // ============================================================
 
 
@@ -434,6 +410,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   // إيصال
   const [receiptPayment, setReceiptPayment] = useState<{ payment: Payment; passengerName: string } | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   // مودال بند خاص
   const [showChargeModal, setShowChargeModal] = useState(false);
@@ -679,15 +656,54 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
               🖨️ طباعة
             </button>
-            <button onClick={() => shareFile(receiptHtml, receiptFilename)}
-              style={{ flex:1, padding:10, background:"#25D366", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
-              واتساب
-            </button>
+
           </div>
           <button onClick={() => setReceiptPayment(null)}
             style={{ width:"100%", padding:8, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
             إغلاق
           </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ══════════════════════════════════════════════
+  // PAYMENT DETAIL MODAL
+  // ══════════════════════════════════════════════
+  const PaymentDetailModal = () => {
+    if (!selectedPayment || !selectedP) return null;
+    const pName = selectedP.short_ar || selectedP.name_ar;
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }} onClick={() => setSelectedPayment(null)}>
+        <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)" }} onClick={e => e.stopPropagation()}>
+          <div style={{ fontWeight:700, fontSize:16, color:"var(--em8)", marginBottom:16, textAlign:"center" }}>تفاصيل الدفعة</div>
+          <div style={{ background:"rgba(42,157,143,0.08)", border:"1px solid #2A9D8F", borderRadius:12, padding:16, marginBottom:16, textAlign:"center" }}>
+            <div style={{ fontSize:12, color:"#888", marginBottom:4 }}>المبلغ</div>
+            <div style={{ fontSize:32, fontWeight:900, color:"#2A9D8F" }}>{fmtAmt(Number(selectedPayment.amount))}</div>
+            <div style={{ fontSize:12, color:"#888" }}>ر.ق</div>
+          </div>
+          {[
+            { label:"الحاج",         value: pName },
+            { label:"التاريخ",       value: selectedPayment.payment_date },
+            { label:"طريقة الدفع",   value: selectedPayment.method },
+            ...(selectedPayment.notes ? [{ label:"ملاحظات", value: selectedPayment.notes }] : []),
+            ...(selectedPayment.created_by ? [{ label:"سجّل بواسطة", value: selectedPayment.created_by }] : []),
+          ].map(row => (
+            <div key={row.label} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid var(--border)", fontSize:13 }}>
+              <span style={{ color:"var(--text-muted)" }}>{row.label}</span>
+              <span style={{ fontWeight:600 }}>{row.value}</span>
+            </div>
+          ))}
+          <div style={{ display:"flex", gap:10, marginTop:16 }}>
+            <button onClick={() => { printInPage(makeReceiptHTML(pName, selectedPayment, logoUrl, companyName, tagline, primaryColor, accentColor)); }}
+              style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+              🖨️ طباعة إيصال
+            </button>
+            <button onClick={() => setSelectedPayment(null)}
+              style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
+              إغلاق
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -764,7 +780,6 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           </div>
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             <button onClick={()=>printInPage(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ flex:1, padding:"8px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>🖨️ كشف حساب المجموعة</button>
-            <button onClick={()=>shareFile(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-مجموعة-${selectedGroup.name}.html`)} style={{ flex:1, padding:"8px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>واتساب</button>
           </div>
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <div style={{ background:"var(--em8)", color:"#fff", padding:"10px 16px", fontWeight:700, fontSize:14 }}>أعضاء المجموعة</div>
@@ -870,6 +885,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <ReceiptModal />
+        <PaymentDetailModal />
         <div style={{ maxWidth:720, margin:"0 auto" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
             <button onClick={()=>{setSubView("list");setSelectedP(null);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
@@ -879,7 +895,6 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             </div>
             <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span>
             <button onClick={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>🖨️ طباعة</button>
-            <button onClick={()=>shareFile(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-حساب-${selectedP.short_ar||selectedP.name_ar}.html`)} style={{ padding:"6px 12px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", fontWeight:600 }}>واتساب</button>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
             {[{label:"المطلوب",value:fmtAmt(totalDue),color:"var(--em8)"},{label:"المدفوع",value:fmtAmt(totalPaid),color:"#2A9D8F"},{label:"المتبقي",value:fmtAmt(balance),color:balance>0?"#C0392B":"#2A9D8F"}].map(card=>(
@@ -920,7 +935,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                   </tr>
                 ))}
                 {pPayments.map((py,i)=>(
-                  <tr key={`py-${py.id}`} style={{ background:i%2===0?"rgba(42,157,143,0.04)":"white" }}>
+                  <tr key={`py-${py.id}`} onClick={() => setSelectedPayment(py)} style={{ background:i%2===0?"rgba(42,157,143,0.04)":"white", cursor:"pointer" }} title="اضغط لعرض التفاصيل">
                     <td style={tdStyle}>دفعة — {py.payment_date} <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:6 }}>({py.method})</span>{py.notes&&<span style={{ fontSize:10, color:"var(--text-muted)" }}>— {py.notes}</span>}</td>
                     <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
                     <td style={{ ...tdStyle, textAlign:"center", color:"#2A9D8F", fontWeight:600 }}>{fmtAmt(py.amount)}</td>
