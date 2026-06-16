@@ -1356,4 +1356,34 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", fontSize: 12, fontWeight: 600, display: "flex", gap: 14 }}>
                     <span style={{ color: "#25D366" }}>✓ {waResults.filter(r => r.status === "success").length} نجح</span>
                     <span style={{ color: "var(--danger)" }}>✗ {waResults.filter(r => r.status === "error").length} فشل</span>
-                    <span style={{ color: "var(--text-muted)" }}>⏳ {waResults.filter(r => r.
+                    <span style={{ color: "var(--text-muted)" }}>⏳ {waResults.filter(r => r.status === "pending").length} منتظر</span>
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                    {waResults.map((r, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderBottom: "0.5px solid var(--line)" }}>
+                        <span style={{ color: r.status === "success" ? "#25D366" : r.status === "error" ? "var(--danger)" : "var(--text-muted)" }}>
+                          {r.status === "success" ? "✓" : r.status === "error" ? "✗" : "⏳"}
+                        </span>
+                        <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{r.phone}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {passengers.filter(p => !p.phone).length > 0 && (
+                <div style={{ marginTop: 12, padding: "8px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
+                  ⚠️ {passengers.filter(p => !p.phone).length} حاج مش عندهم رقم — مش هيتبعتلهم
+                </div>
+              )}
+            </>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+export { ReportsPage };
