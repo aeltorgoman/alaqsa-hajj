@@ -137,7 +137,7 @@ function makeReceiptHTML(
   * { box-sizing: border-box; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; }
   .receipt { border:2px solid ${primaryColor}; border-radius:12px; overflow:hidden; }
-  .receipt-header { background:${primaryColor}; color:#fff; padding:16px 20px; display:flex; align-items:center; gap:14px; }
+  .receipt-header { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:14px; }
   .logo-box { width:54px; height:54px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.15); color:#fff; font-size:22px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; }
   .receipt-title { font-size:11px; color:rgba(255,255,255,0.8); margin-bottom:2px; }
