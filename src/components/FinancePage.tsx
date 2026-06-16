@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type React from "react";
+import { AlertModal, useAlert } from "./AlertModal";
 import { supabase } from "../supabase";
 import type { Passenger, User } from "../types";
 
@@ -67,6 +67,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   const [payments, setPayments] = useState<Payment[]>([]);
   const [customCharges, setCustomCharges] = useState<CustomCharge[]>([]);
   const [loading, setLoading] = useState(true);
+  const { alert: alertState, showAlert } = useAlert();
 
   // payment modal
   const [showPayModal, setShowPayModal] = useState(false);
@@ -119,7 +120,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     }
     await loadFinanceData();
     setSavingPricing(false);
-    alert("تم حفظ الأسعار بنجاح");
+    showAlert("success", "تم حفظ الأسعار بنجاح");
   }
 
   async function addPayment() {
@@ -176,16 +177,16 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   const sortedPassengers = [...passengers].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle= {
     width: "100%", padding: "8px 12px", borderRadius: 8,
     border: "1px solid var(--border)", background: "var(--bg-input)",
     fontFamily: "var(--font-body)", fontSize: 13, boxSizing: "border-box" as any,
   };
-  const thStyle: React.CSSProperties = {
+  const thStyle= {
     padding: "10px 12px", background: "var(--em8)", color: "#fff",
     textAlign: "right", fontSize: 12, fontWeight: 600,
   };
-  const tdStyle: React.CSSProperties = {
+  const tdStyle= {
     padding: "8px 12px", border: "1px solid var(--border)", fontSize: 13,
   };
 
@@ -665,6 +666,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {/* شريط العنوان */}
       <div style={{ padding: "12px 20px", background: "var(--bg-card)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 700, color: "var(--em8)" }}>الحسابات المالية</div>
