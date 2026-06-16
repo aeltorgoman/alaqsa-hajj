@@ -397,6 +397,7 @@ export const ALL_PERMISSIONS = [
   { key: "manage_users", label: "إدارة المستخدمين" },
   { key: "view_archive", label: "عرض الأرشيف" },
   { key: "manage_flights", label: "إدارة الطيران" },
+  { key: "manage_payments", label: "إدارة الحسابات المالية" },
 ];
 
 export const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
@@ -415,7 +416,7 @@ export const NAV = [
   { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "view_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
   { section: "التقارير", items: [{ id: "reports", label: "التقارير", perm: "view_reports" }] },
   { section: "الأرشيف", items: [{ id: "archive", label: "الأرشيف", perm: "view_archive" }] },
-  { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }] },
+  { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }, { id: "finance", label: "الحسابات", perm: "manage_payments" }] },
 ];
 
 export const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", padding: "7px 10px", width: "100%", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box" as const, color: "var(--text)" };
