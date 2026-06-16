@@ -76,14 +76,28 @@ function printInPage(html: string) {
   setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 600);
 }
 
-function downloadAsPDF(html: string, filename: string) {
+async function shareFile(html: string, filename: string) {
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const file = new File([blob], filename, { type: "text/html" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename.replace(".html","") });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  } catch (_) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 // ============================================================
@@ -388,27 +402,7 @@ ${memberRows}
 // ============================================================
 // نصوص واتساب
 // ============================================================
-function waPassengerText(p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], companyName: string): string {
-  const totalDue  = calcTotalDue(p, pricing, customCharges);
-  const totalPaid = calcTotalPaid(p.id, payments);
-  const balance   = totalDue - totalPaid;
-  const pkgLabel  = pricing[getPackageKey(p.services.hotel_type)]?.label || "";
-  const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
-  const paysText = pPays.map(py=>`  • ${fmtAmt(py.amount)} ر.ق — ${py.payment_date} (${py.method})`).join("\n");
-  return encodeURIComponent(
-    `كشف حساب\n${companyName}\n\nالحاج/ة: ${p.short_ar||p.name_ar}\nالباقة: ${pkgLabel}\n\nالمطلوب:  ${fmtAmt(totalDue)} ر.ق\nالمدفوع:  ${fmtAmt(totalPaid)} ر.ق\nالمتبقي:  ${fmtAmt(balance)} ر.ق\n${paysText?"\nالدفعات:\n"+paysText:""}\n\nشكراً لثقتكم 🤝`
-  );
-}
 
-function waGroupText(group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], companyName: string): string {
-  const gTotDue  = gPassengers.reduce((s,p)=>s+calcTotalDue(p,pricing,customCharges),0);
-  const gTotPaid = gPassengers.reduce((s,p)=>s+calcTotalPaid(p.id,payments),0);
-  const gTotBal  = gTotDue - gTotPaid;
-  const membersText = gPassengers.map(p=>{const due=calcTotalDue(p,pricing,customCharges),paid=calcTotalPaid(p.id,payments),bal=due-paid;return`  • ${p.short_ar||p.name_ar}: مطلوب ${fmtAmt(due)} — مدفوع ${fmtAmt(paid)} — متبقي ${fmtAmt(bal)}`}).join("\n");
-  return encodeURIComponent(
-    `كشف حساب مجموعة\n${companyName}\n\nالمجموعة: ${group.name}\nعدد الأعضاء: ${gPassengers.length}\n\nإجمالي المطلوب:  ${fmtAmt(gTotDue)} ر.ق\nإجمالي المدفوع:  ${fmtAmt(gTotPaid)} ر.ق\nإجمالي المتبقي:  ${fmtAmt(gTotBal)} ر.ق\n\nالأعضاء:\n${membersText}\n\nشكراً لثقتكم 🤝`
-  );
-}
 
 // ============================================================
 // المكوّن الرئيسي
@@ -671,9 +665,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   const ReceiptModal = () => {
     if (!receiptPayment) return null;
     const { payment, passengerName } = receiptPayment;
-    const waText = encodeURIComponent(
-      `إيصال استلام دفعة\n${companyName}\n\nالحاج: ${passengerName}\nالمبلغ: ${fmtAmt(Number(payment.amount))} ر.ق\nالتاريخ: ${payment.payment_date}\nطريقة الدفع: ${payment.method}${payment.notes?"\nملاحظات: "+payment.notes:""}\n\nشكراً لثقتكم 🤝`
-    );
+    const receiptHtml = makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor);
+    const receiptFilename = `إيصال-${passengerName}-${payment.payment_date}.html`;
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
@@ -682,20 +675,14 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:4 }}>{passengerName}</div>
           <div style={{ fontSize:24, fontWeight:900, color:"#2A9D8F", marginBottom:16 }}>{fmtAmt(Number(payment.amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
           <div style={{ display:"flex", gap:10, marginBottom:10 }}>
-            <button onClick={() => printInPage(makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor))}
+            <button onClick={() => printInPage(receiptHtml)}
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
               🖨️ طباعة
             </button>
-            <button onClick={() => downloadAsPDF(makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor),`إيصال-${passengerName}-${payment.payment_date}.html`)}
-              style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
-              📄 PDF
-            </button>
-          </div>
-          <div style={{ marginBottom:10 }}>
-            <a href={`https://wa.me/?text=${waText}`} target="_blank" rel="noreferrer"
-              style={{ display:"block", width:"100%", padding:10, background:"#25D366", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600, textDecoration:"none", textAlign:"center" }}>
+            <button onClick={() => shareFile(receiptHtml, receiptFilename)}
+              style={{ flex:1, padding:10, background:"#25D366", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
               واتساب
-            </a>
+            </button>
           </div>
           <button onClick={() => setReceiptPayment(null)}
             style={{ width:"100%", padding:8, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
@@ -777,8 +764,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           </div>
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             <button onClick={()=>printInPage(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ flex:1, padding:"8px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>🖨️ كشف حساب المجموعة</button>
-            <button onClick={()=>downloadAsPDF(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-مجموعة-${selectedGroup.name}.html`)} style={{ flex:1, padding:"8px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>📄 PDF</button>
-            <a href={`https://wa.me/?text=${waGroupText(selectedGroup,gPassengers,pricing,customCharges,payments,companyName)}`} target="_blank" rel="noreferrer" style={{ flex:1, padding:"8px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", textDecoration:"none", display:"flex", alignItems:"center", justifyContent:"center" }}>واتساب</a>
+            <button onClick={()=>shareFile(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-مجموعة-${selectedGroup.name}.html`)} style={{ flex:1, padding:"8px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>واتساب</button>
           </div>
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <div style={{ background:"var(--em8)", color:"#fff", padding:"10px 16px", fontWeight:700, fontSize:14 }}>أعضاء المجموعة</div>
@@ -893,8 +879,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             </div>
             <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span>
             <button onClick={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>🖨️ طباعة</button>
-            <button onClick={()=>downloadAsPDF(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-حساب-${selectedP.short_ar||selectedP.name_ar}.html`)} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>📄 PDF</button>
-            <a href={`https://wa.me/?text=${waPassengerText(selectedP,pricing,customCharges,payments,companyName)}`} target="_blank" rel="noreferrer" style={{ padding:"6px 12px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", textDecoration:"none", display:"flex", alignItems:"center" }}>واتساب</a>
+            <button onClick={()=>shareFile(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-حساب-${selectedP.short_ar||selectedP.name_ar}.html`)} style={{ padding:"6px 12px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", fontWeight:600 }}>واتساب</button>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
             {[{label:"المطلوب",value:fmtAmt(totalDue),color:"var(--em8)"},{label:"المدفوع",value:fmtAmt(totalPaid),color:"#2A9D8F"},{label:"المتبقي",value:fmtAmt(balance),color:balance>0?"#C0392B":"#2A9D8F"}].map(card=>(
