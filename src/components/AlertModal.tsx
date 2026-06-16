@@ -9,9 +9,9 @@ export interface AlertState {
 }
 
 const ALERT_STYLES: Record<AlertType, { bg: string; color: string; icon: string; defaultTitle: string }> = {
-  success: { bg: "rgba(42,157,143,0.10)", color: "#2A9D8F", icon: "✓", defaultTitle: "تم بنجاح" },
+  success: { bg: "rgba(42,157,143,0.10)", color: "#2A9D8F", icon: "✓", defaultTitle: "تم بنجاح"  },
   error:   { bg: "var(--fb)",             color: "var(--ff)", icon: "✕", defaultTitle: "حدث خطأ" },
-  warning: { bg: "rgba(232,149,26,0.10)", color: "#E8951A", icon: "!", defaultTitle: "تنبيه" },
+  warning: { bg: "rgba(232,149,26,0.10)", color: "#E8951A", icon: "!", defaultTitle: "تنبيه"     },
   info:    { bg: "rgba(125,31,60,0.07)",  color: "var(--em7)", icon: "ⓘ", defaultTitle: "تنبيه" },
 };
 
@@ -38,7 +38,7 @@ export function AlertModal({ alert, onClose }: { alert: AlertState | null; onClo
   const s = ALERT_STYLES[alert.type];
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 16 }}
       onClick={onClose}
     >
       <div
