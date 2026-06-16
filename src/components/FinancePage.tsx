@@ -643,7 +643,6 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     if (!receiptPayment) return null;
     const { payment, passengerName } = receiptPayment;
     const receiptHtml = makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor);
-    const receiptFilename = `إيصال-${passengerName}-${payment.payment_date}.html`;
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
