@@ -12,6 +12,7 @@ import { HotelPage } from "./components/HotelPage";
 import { ReportsPage } from "./components/ReportsPage";
 import { ArchivePage } from "./components/ArchivePage";
 import { UsersPage } from "./components/UsersPage";
+import { FinancePage } from "./components/FinancePage";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -81,8 +82,8 @@ export default function App() {
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
 
-  const pageTitles: Record<string, string> = { dash: "الرئيسية", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين" };
-  const FULL_PAGES = ["dash", "passengers", "manual", "buses", "flights", "mina", "arafa", "hotel"];
+  const pageTitles: Record<string, string> = { dash: "الرئيسية", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "المستخدمين", finance: "الحسابات المالية" };
+  const FULL_PAGES = ["dash", "passengers", "manual", "buses", "flights", "mina", "arafa", "hotel", "finance"];
   const isFull = FULL_PAGES.includes(page);
 
   const renderPage = () => {
@@ -97,6 +98,7 @@ export default function App() {
       case "reports": return <ReportsPage passengers={passengers} resetKey={reportsResetKey} />;
       case "archive": return <ArchivePage currentUser={currentUser} />;
       case "users": return <UsersPage currentUser={currentUser} />;
+      case "finance": return <FinancePage passengers={passengers} currentUser={currentUser!} />;
       default: return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser} />;
     }
   };
