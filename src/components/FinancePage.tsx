@@ -76,6 +76,16 @@ function printInPage(html: string) {
   setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 600);
 }
 
+function downloadAsPDF(html: string, filename: string) {
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ============================================================
 // HTML نظيف للتقارير المالية (بدون نقوش)
 // ============================================================
@@ -194,6 +204,210 @@ function makeReceiptHTML(
   </div>
 </div>
 </body></html>`;
+}
+
+// ============================================================
+// كشف حساب الحاج الفردي - تصميم كبير للطباعة
+// ============================================================
+function makePassengerStatementHTML(
+  p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[],
+  logoUrl = "", companyName = "حملة الأقصى", tagline = "",
+  primaryColor = "#6B1F3A", accentColor = "#0C447C"
+): string {
+  const s = p.services;
+  const pkgKey = getPackageKey(s.hotel_type);
+  const pkgAmt = pricing[pkgKey]?.amount || 0;
+  const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
+  const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
+  const totalDue  = calcTotalDue(p, pricing, customCharges);
+  const totalPaid = calcTotalPaid(p.id, payments);
+  const balance   = totalDue - totalPaid;
+  const logoHtml  = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName||"ح").trim().charAt(0)}</span>`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
+
+  let rows = `<tr><td class="bayan">${pricing[pkgKey]?.label||"الباقة الأساسية"}</td><td class="debit">${fmtAmt(pkgAmt)}</td><td class="credit">—</td></tr>`;
+  if (s.hotel_view==="مطلة") rows+=`<tr class="alt"><td class="bayan">إضافة مطلة</td><td class="debit">${fmtAmt(pricing["addon_view"]?.amount||0)}</td><td class="credit">—</td></tr>`;
+  if (s.camp_mina==="خاص")  rows+=`<tr><td class="bayan">خيمة خاصة - منى</td><td class="debit">${fmtAmt(pricing["addon_mina"]?.amount||0)}</td><td class="credit">—</td></tr>`;
+  if (s.camp_arafa==="خاص") rows+=`<tr class="alt"><td class="bayan">خيمة خاصة - عرفة</td><td class="debit">${fmtAmt(pricing["addon_arafa"]?.amount||0)}</td><td class="credit">—</td></tr>`;
+  if (s.bus==="VIP")         rows+=`<tr><td class="bayan">باص VIP</td><td class="debit">${fmtAmt(pricing["addon_bus_vip"]?.amount||0)}</td><td class="credit">—</td></tr>`;
+  if ((p as any).flight_class==="درجة أولى") rows+=`<tr class="alt"><td class="bayan">طيران درجة أولى</td><td class="debit">${fmtAmt(pricing["addon_first_class"]?.amount||0)}</td><td class="credit">—</td></tr>`;
+  if ((p as any).flight_class==="بدون")      rows+=`<tr><td class="bayan">خصم بدون تذكرة <span class="badge-disc">خصم</span></td><td class="debit disc">(${fmtAmt(pricing["discount_no_ticket"]?.amount||0)})</td><td class="credit">—</td></tr>`;
+  pCustom.forEach((c, i) => { rows+=`<tr${i%2===0?" class='alt'":""}><td class="bayan"><span class="badge-${c.type==="إضافة"?"add":"disc"}">${c.type==="إضافة"?"بند خاص":"خصم خاص"}</span> ${c.description}${c.notes?` <span class="note">(${c.notes})</span>`:""}</td><td class="${c.type==="إضافة"?"debit":"debit disc"}">${c.type==="إضافة"?fmtAmt(c.amount):`(${fmtAmt(c.amount)})`}</td><td class="credit">—</td></tr>`; });
+  pPayments.forEach((py, i) => { rows+=`<tr class="pay-row${i%2===0?" alt":""}"><td class="bayan">دفعة — ${py.payment_date} <span class="method">(${py.method})</span>${py.notes?` — <span class="note">${py.notes}</span>`:""}</td><td class="debit">—</td><td class="credit paid">${fmtAmt(py.amount)}</td></tr>`; });
+
+  const addonsList = [s.hotel_view==="مطلة"?"مطلة":"", s.camp_mina==="خاص"?"منى خاص":"", s.camp_arafa==="خاص"?"عرفة خاص":"", s.bus==="VIP"?"VIP":"", (p as any).flight_class==="درجة أولى"?"درجة أولى":"", (p as any).flight_class==="بدون"?"بدون تذكرة":""].filter(Boolean).join(" · ");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب — ${p.short_ar||p.name_ar}</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:15px; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:3px solid ${primaryColor}; margin-bottom:10px; }
+  .logo-box { width:80px; height:80px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:32px; font-weight:800; flex-shrink:0; }
+  .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
+  .company-name { font-size:20px; font-weight:800; color:${primaryColor}; }
+  .tagline { font-size:12px; color:#888; margin-top:3px; }
+  .title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:12px; border-radius:10px; font-size:20px; font-weight:800; margin:12px 0; }
+  .passenger-name { text-align:center; font-size:26px; font-weight:900; color:${primaryColor}; margin:6px 0 4px; }
+  .passenger-sub { text-align:center; font-size:13px; color:#666; margin-bottom:14px; }
+  .summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px; }
+  .sum-card { border-radius:10px; padding:14px; text-align:center; border:1.5px solid; }
+  .sum-label { font-size:12px; color:#888; margin-bottom:6px; }
+  .sum-val { font-size:28px; font-weight:900; line-height:1; }
+  .sum-cur { font-size:12px; color:#888; margin-top:4px; }
+  .card-due  { background:${primaryColor}08; border-color:${primaryColor}; }
+  .card-paid { background:#2A9D8F10; border-color:#2A9D8F; }
+  .card-bal  { border:2px solid; }
+  table { width:100%; border-collapse:collapse; margin-bottom:14px; }
+  th { background:${primaryColor}; color:#fff; padding:12px 16px; text-align:right; font-size:15px; font-weight:700; }
+  td { padding:11px 16px; border:1px solid #e8e8e8; font-size:15px; }
+  tr.alt td { background:#f9f7f4; }
+  tr.pay-row td { background:#f0faf8; }
+  tr.pay-row.alt td { background:#e8f5f2; }
+  .bayan { font-size:15px; }
+  .debit { text-align:center; color:#C0392B; font-weight:700; font-size:15px; min-width:120px; }
+  .credit { text-align:center; color:#2A9D8F; font-weight:700; font-size:15px; min-width:120px; }
+  .disc { color:#2A9D8F !important; }
+  .paid { font-size:16px; }
+  .method { font-size:13px; color:#888; }
+  .note { font-size:12px; color:#999; }
+  .badge-add { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; background:#E8951A20; color:#E8951A; margin-left:6px; }
+  .badge-disc { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; background:#2A9D8F20; color:#2A9D8F; margin-left:6px; }
+  .total-row td { background:${primaryColor}; color:#fff; font-weight:800; font-size:16px; padding:13px 16px; text-align:center; }
+  .total-row td:first-child { text-align:right; }
+  .footer { text-align:center; font-size:11px; color:#bbb; margin-top:16px; border-top:1px solid #eee; padding-top:10px; }
+  @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+</style></head><body>
+<div class="header">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="logo-box">${logoHtml}</div>
+    <div><div class="company-name">${companyName}</div>${tagline?`<div class="tagline">${tagline}</div>`:""}</div>
+  </div>
+  <div style="text-align:left;font-size:12px;color:#999;line-height:1.8">
+    <div>تاريخ الإصدار: ${dateStr}</div>
+  </div>
+</div>
+<div class="title-bar">كشف حساب</div>
+<div class="passenger-name">${p.short_ar||p.name_ar}</div>
+<div class="passenger-sub">${pricing[pkgKey]?.label||""}${addonsList?" &nbsp;·&nbsp; "+addonsList:""}</div>
+<div class="summary">
+  <div class="sum-card card-due"><div class="sum-label">المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(totalDue)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card card-paid"><div class="sum-label">المدفوع</div><div class="sum-val" style="color:#2A9D8F">${fmtAmt(totalPaid)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card card-bal" style="background:${balance>0?"#C0392B10":"#2A9D8F10"};border-color:${balance>0?"#C0392B":"#2A9D8F"}"><div class="sum-label">المتبقي</div><div class="sum-val" style="color:${balance>0?"#C0392B":"#2A9D8F"}">${fmtAmt(balance)}</div><div class="sum-cur">ر.ق</div></div>
+</div>
+<table>
+  <tr><th>البيان</th><th style="width:140px;text-align:center">مدين (مطلوب)</th><th style="width:140px;text-align:center">دائن (مدفوع)</th></tr>
+  ${rows}
+  <tr class="total-row"><td>الرصيد المتبقي</td><td>${fmtAmt(totalDue)}</td><td>${fmtAmt(totalPaid)}</td></tr>
+</table>
+<div class="footer">${companyName}${tagline?" — "+tagline:""} · كشف حساب</div>
+</body></html>`;
+}
+
+// ============================================================
+// كشف حساب المجموعة المالية
+// ============================================================
+function makeGroupStatementHTML(
+  group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap,
+  customCharges: CustomCharge[], payments: Payment[],
+  logoUrl = "", companyName = "حملة الأقصى", tagline = "",
+  primaryColor = "#6B1F3A", accentColor = "#0C447C"
+): string {
+  const logoHtml  = logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${(companyName||"ح").trim().charAt(0)}</span>`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
+  const gTotDue  = gPassengers.reduce((s,p) => s+calcTotalDue(p,pricing,customCharges), 0);
+  const gTotPaid = gPassengers.reduce((s,p) => s+calcTotalPaid(p.id,payments), 0);
+  const gTotBal  = gTotDue - gTotPaid;
+
+  const memberRows = gPassengers.map((p, i) => {
+    const due  = calcTotalDue(p,pricing,customCharges);
+    const paid = calcTotalPaid(p.id,payments);
+    const bal  = due - paid;
+    const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
+    const pkgKey = getPackageKey(p.services.hotel_type);
+    const payRows = pPays.map(py => `<tr style="background:#f0faf8"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:13px;padding-right:32px">دفعة — ${py.payment_date} <span style="color:#888;font-size:12px">(${py.method})</span>${py.notes?` — ${py.notes}`:""}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;font-size:13px">—</td><td style="text-align:center;border:1px solid #e8e8e8;color:#2A9D8F;font-weight:700;font-size:14px">${fmtAmt(py.amount)}</td></tr>`).join("");
+    return `
+    <div style="margin-bottom:20px;border:1.5px solid ${primaryColor}30;border-radius:10px;overflow:hidden;">
+      <div style="background:${primaryColor}12;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${primaryColor}20">
+        <div style="font-size:17px;font-weight:800;color:${primaryColor}">${i+1}. ${p.short_ar||p.name_ar}</div>
+        <div style="font-size:13px;color:#666">${pricing[pkgKey]?.label||""}</div>
+        <div style="display:flex;gap:16px;font-size:13px">
+          <span>مطلوب: <strong style="color:${primaryColor}">${fmtAmt(due)}</strong></span>
+          <span>مدفوع: <strong style="color:#2A9D8F">${fmtAmt(paid)}</strong></span>
+          <span>متبقي: <strong style="color:${bal>0?"#C0392B":"#2A9D8F"}">${fmtAmt(bal)}</strong></span>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="background:${primaryColor}08"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:14px">${pricing[pkgKey]?.label||"الباقة الأساسية"}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#C0392B;font-weight:700;font-size:14px;width:130px">${fmtAmt(pricing[pkgKey]?.amount||0)}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;width:130px">—</td></tr>
+        ${payRows}
+        <tr style="background:${primaryColor};color:#fff"><td style="padding:10px 16px;font-weight:700">الرصيد</td><td style="text-align:center;font-weight:800">${fmtAmt(due)}</td><td style="text-align:center;font-weight:800">${fmtAmt(paid)}</td></tr>
+      </table>
+    </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب مجموعة — ${group.name}</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:15px; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:3px solid ${primaryColor}; margin-bottom:10px; }
+  .logo-box { width:80px; height:80px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:32px; font-weight:800; flex-shrink:0; }
+  .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
+  .title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:12px; border-radius:10px; font-size:20px; font-weight:800; margin:12px 0; }
+  .summary { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; margin-bottom:18px; }
+  .sum-card { border-radius:10px; padding:12px; text-align:center; border:1.5px solid; }
+  .sum-label { font-size:11px; color:#888; margin-bottom:4px; }
+  .sum-val { font-size:22px; font-weight:900; line-height:1; }
+  .sum-cur { font-size:11px; color:#888; margin-top:3px; }
+  .footer { text-align:center; font-size:11px; color:#bbb; margin-top:16px; border-top:1px solid #eee; padding-top:10px; }
+  @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+</style></head><body>
+<div class="header">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="logo-box">${logoHtml}</div>
+    <div><div style="font-size:20px;font-weight:800;color:${primaryColor}">${companyName}</div>${tagline?`<div style="font-size:12px;color:#888;margin-top:3px">${tagline}</div>`:""}</div>
+  </div>
+  <div style="text-align:left;font-size:12px;color:#999">تاريخ الإصدار: ${dateStr}</div>
+</div>
+<div class="title-bar">كشف حساب مجموعة</div>
+<div style="text-align:center;font-size:24px;font-weight:900;color:${primaryColor};margin:6px 0 4px">${group.name}</div>
+<div style="text-align:center;font-size:13px;color:#888;margin-bottom:14px">${gPassengers.length} أعضاء</div>
+<div class="summary">
+  <div class="sum-card" style="background:${primaryColor}08;border-color:${primaryColor}"><div class="sum-label">إجمالي المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(gTotDue)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card" style="background:#2A9D8F10;border-color:#2A9D8F"><div class="sum-label">إجمالي المدفوع</div><div class="sum-val" style="color:#2A9D8F">${fmtAmt(gTotPaid)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card" style="background:${gTotBal>0?"#C0392B10":"#2A9D8F10"};border-color:${gTotBal>0?"#C0392B":"#2A9D8F"}"><div class="sum-label">إجمالي المتبقي</div><div class="sum-val" style="color:${gTotBal>0?"#C0392B":"#2A9D8F"}">${fmtAmt(gTotBal)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card" style="background:#E8951A10;border-color:#E8951A"><div class="sum-label">عدد الأعضاء</div><div class="sum-val" style="color:#E8951A">${gPassengers.length}</div><div class="sum-cur">حاج</div></div>
+</div>
+${memberRows}
+<div class="footer">${companyName}${tagline?" — "+tagline:""} · كشف حساب مجموعة — ${group.name}</div>
+</body></html>`;
+}
+
+// ============================================================
+// نصوص واتساب
+// ============================================================
+function waPassengerText(p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], companyName: string): string {
+  const totalDue  = calcTotalDue(p, pricing, customCharges);
+  const totalPaid = calcTotalPaid(p.id, payments);
+  const balance   = totalDue - totalPaid;
+  const pkgLabel  = pricing[getPackageKey(p.services.hotel_type)]?.label || "";
+  const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
+  const paysText = pPays.map(py=>`  • ${fmtAmt(py.amount)} ر.ق — ${py.payment_date} (${py.method})`).join("\n");
+  return encodeURIComponent(
+    `كشف حساب\n${companyName}\n\nالحاج/ة: ${p.short_ar||p.name_ar}\nالباقة: ${pkgLabel}\n\nالمطلوب:  ${fmtAmt(totalDue)} ر.ق\nالمدفوع:  ${fmtAmt(totalPaid)} ر.ق\nالمتبقي:  ${fmtAmt(balance)} ر.ق\n${paysText?"\nالدفعات:\n"+paysText:""}\n\nشكراً لثقتكم 🤝`
+  );
+}
+
+function waGroupText(group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], companyName: string): string {
+  const gTotDue  = gPassengers.reduce((s,p)=>s+calcTotalDue(p,pricing,customCharges),0);
+  const gTotPaid = gPassengers.reduce((s,p)=>s+calcTotalPaid(p.id,payments),0);
+  const gTotBal  = gTotDue - gTotPaid;
+  const membersText = gPassengers.map(p=>{const due=calcTotalDue(p,pricing,customCharges),paid=calcTotalPaid(p.id,payments),bal=due-paid;return`  • ${p.short_ar||p.name_ar}: مطلوب ${fmtAmt(due)} — مدفوع ${fmtAmt(paid)} — متبقي ${fmtAmt(bal)}`}).join("\n");
+  return encodeURIComponent(
+    `كشف حساب مجموعة\n${companyName}\n\nالمجموعة: ${group.name}\nعدد الأعضاء: ${gPassengers.length}\n\nإجمالي المطلوب:  ${fmtAmt(gTotDue)} ر.ق\nإجمالي المدفوع:  ${fmtAmt(gTotPaid)} ر.ق\nإجمالي المتبقي:  ${fmtAmt(gTotBal)} ر.ق\n\nالأعضاء:\n${membersText}\n\nشكراً لثقتكم 🤝`
+  );
 }
 
 // ============================================================
@@ -496,10 +710,16 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ display:"flex", gap:10, marginBottom:10 }}>
             <button onClick={() => printInPage(makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor))}
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
-              🖨️ طباعة إيصال
+              🖨️ طباعة
             </button>
+            <button onClick={() => downloadAsPDF(makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor),`إيصال-${passengerName}-${payment.payment_date}.html`)}
+              style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
+              📄 PDF
+            </button>
+          </div>
+          <div style={{ marginBottom:10 }}>
             <a href={`https://wa.me/?text=${waText}`} target="_blank" rel="noreferrer"
-              style={{ flex:1, padding:10, background:"#25D366", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600, textDecoration:"none", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              style={{ display:"block", width:"100%", padding:10, background:"#25D366", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600, textDecoration:"none", textAlign:"center" }}>
               واتساب
             </a>
           </div>
@@ -580,6 +800,11 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             <button onClick={() => setShowGroupPayModal(true)} style={{ flex:1, padding:10, background:"#2A9D8F", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ دفعة مشتركة تُوزَّع على الأعضاء</button>
             <button onClick={() => setShowGroupModal(true)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>+ إضافة عضو</button>
+          </div>
+          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+            <button onClick={()=>printInPage(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ flex:1, padding:"8px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>🖨️ كشف حساب المجموعة</button>
+            <button onClick={()=>downloadAsPDF(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-مجموعة-${selectedGroup.name}.html`)} style={{ flex:1, padding:"8px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>📄 PDF</button>
+            <a href={`https://wa.me/?text=${waGroupText(selectedGroup,gPassengers,pricing,customCharges,payments,companyName)}`} target="_blank" rel="noreferrer" style={{ flex:1, padding:"8px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", textDecoration:"none", display:"flex", alignItems:"center", justifyContent:"center" }}>واتساب</a>
           </div>
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <div style={{ background:"var(--em8)", color:"#fff", padding:"10px 16px", fontWeight:700, fontSize:14 }}>أعضاء المجموعة</div>
@@ -693,7 +918,9 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{pricing[pkgKey]?.label}{addonRows.filter(a=>!a.isDiscount).map(a=>` · ${a.label}`).join("")}</div>
             </div>
             <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span>
-            <button onClick={()=>printPassengerStatement(selectedP)} style={{ padding:"6px 14px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>🖨️ طباعة</button>
+            <button onClick={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>🖨️ طباعة</button>
+            <button onClick={()=>downloadAsPDF(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor),`كشف-حساب-${selectedP.short_ar||selectedP.name_ar}.html`)} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>📄 PDF</button>
+            <a href={`https://wa.me/?text=${waPassengerText(selectedP,pricing,customCharges,payments,companyName)}`} target="_blank" rel="noreferrer" style={{ padding:"6px 12px", background:"#25D366", color:"#fff", border:"none", borderRadius:8, fontSize:12, cursor:"pointer", textDecoration:"none", display:"flex", alignItems:"center" }}>واتساب</a>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
             {[{label:"المطلوب",value:fmtAmt(totalDue),color:"var(--em8)"},{label:"المدفوع",value:fmtAmt(totalPaid),color:"#2A9D8F"},{label:"المتبقي",value:fmtAmt(balance),color:balance>0?"#C0392B":"#2A9D8F"}].map(card=>(
