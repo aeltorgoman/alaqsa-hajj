@@ -93,7 +93,7 @@ function makeFinanceHTML(
 <style>
   @page { size: A4 portrait; margin: 10mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:14px; color:#1c1c1c; background:#fff; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:15px; color:#1c1c1c; background:#fff; }
   .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:3px solid ${primaryColor}; margin-bottom:8px; }
   .logo-box { width:70px; height:70px; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:26px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
@@ -101,8 +101,8 @@ function makeFinanceHTML(
   .tagline { font-size:11px; color:#888; margin-top:2px; }
   .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:10px; border-radius:8px; font-size:16px; font-weight:800; margin:10px 0 12px; }
   table { width:100%; border-collapse:collapse; margin-bottom:14px; }
-  th { background:${primaryColor}; color:#fff; padding:10px 14px; text-align:right; font-size:13px; font-weight:700; }
-  td { border:1px solid #e0e0e0; padding:9px 14px; text-align:right; font-size:13px; }
+  th { background:${primaryColor}; color:#fff; padding:12px 14px; text-align:right; font-size:14px; font-weight:700; }
+  td { border:1px solid #e0e0e0; padding:10px 14px; text-align:right; font-size:14px; }
   tr:nth-child(even) td { background:#f9f7f4; }
   .footer { text-align:center; color:#bbb; font-size:10px; margin-top:14px; border-top:1px solid #eee; padding-top:8px; }
   @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
@@ -593,51 +593,69 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   function printFullReport(data:{p:Passenger;due:number;paid:number;balance:number}[], title="تقرير الحجاج المالي الكامل") {
     const tD=data.reduce((s,r)=>s+r.due,0), tP=data.reduce((s,r)=>s+r.paid,0), tB=tD-tP;
-    const rows=data.map((r,i)=>{const st=financeStatus(r.due,r.paid);return[String(i+1),r.p.short_ar||r.p.name_ar,pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—",`<span style="color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</span>`,`<span style="color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</span>`,`<span style="color:${r.balance>0?"#C0392B":"#2A9D8F"};font-weight:700">${fmtAmt(r.balance)}</span>`,`<span style="padding:2px 8px;border-radius:99px;background:${st.bg};color:${st.color}">${st.label}</span>`];});
-    const body=`
-      <table>
-        <tr>
-          <th style="width:30px;text-align:center">م</th>
-          <th>الاسم</th>
-          <th style="width:80px">الباقة</th>
-          <th style="width:90px;text-align:center">المطلوب</th>
-          <th style="width:90px;text-align:center">المدفوع</th>
-          <th style="width:90px;text-align:center">المتبقي</th>
-          <th style="width:70px;text-align:center">الحالة</th>
-        </tr>
-        ${rows.map((r,i)=>`<tr style="${i%2===1?"background:#f9f7f4":""}">${r.map((c,ci)=>`<td style="${ci===0?"text-align:center":ci>=3?"text-align:center":""}">${c}</td>`).join("")}</tr>`).join("")}
-        <tr style="background:${primaryColor};color:#fff;font-weight:700">
-          <td colspan="3">الإجمالي</td>
-          <td style="text-align:center">${fmtAmt(tD)}</td>
-          <td style="text-align:center">${fmtAmt(tP)}</td>
-          <td style="text-align:center">${fmtAmt(tB)}</td>
-          <td></td>
-        </tr>
-      </table>`;
+    const rows=data.map((r,i)=>{
+      const st=financeStatus(r.due,r.paid);
+      const statusText=st.label;
+      const statusColor=st.color;
+      return `<tr style="${i%2===1?"background:#f5f5f5":""}">
+        <td style="text-align:center;width:28px;color:#888">${i+1}</td>
+        <td>${r.p.short_ar||r.p.name_ar}</td>
+        <td style="width:70px;font-size:12px;color:#555">${(pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—").replace("باقة ","")}</td>
+        <td style="text-align:center;width:85px;color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
+        <td style="text-align:center;width:85px;color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
+        <td style="text-align:center;width:85px;color:${r.balance>0?"#C0392B":"#2A9D8F"};font-weight:700">${fmtAmt(r.balance)}</td>
+        <td style="text-align:center;width:55px;color:${statusColor};font-weight:700;font-size:12px">${statusText}</td>
+      </tr>`;
+    }).join("");
+    const body=`<table>
+      <tr>
+        <th style="width:28px;text-align:center">م</th>
+        <th>الاسم</th>
+        <th style="width:70px">الباقة</th>
+        <th style="width:85px;text-align:center">المطلوب</th>
+        <th style="width:85px;text-align:center">المدفوع</th>
+        <th style="width:85px;text-align:center">المتبقي</th>
+        <th style="width:55px;text-align:center">الحالة</th>
+      </tr>
+      ${rows}
+      <tr style="background:${primaryColor};color:#fff;font-weight:700">
+        <td colspan="3" style="text-align:right">الإجمالي</td>
+        <td style="text-align:center">${fmtAmt(tD)}</td>
+        <td style="text-align:center">${fmtAmt(tP)}</td>
+        <td style="text-align:center">${fmtAmt(tB)}</td>
+        <td></td>
+      </tr>
+    </table>`;
     printInPage(makeFinanceHTML(title,body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
   function printPaymentsReport() {
     const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
-    const rows=sorted.map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);return[String(i+1),p?(p.short_ar||p.name_ar):"—",py.payment_date,py.method,`<strong>${fmtAmt(py.amount)}</strong>`,py.notes||"—"];});
+    const rows=sorted.map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);return `<tr style="${i%2===1?"background:#f5f5f5":""}">
+      <td style="text-align:center;width:28px;color:#888">${i+1}</td>
+      <td>${p?(p.short_ar||p.name_ar):"—"}</td>
+      <td style="text-align:center;width:95px">${py.payment_date}</td>
+      <td style="text-align:center;width:80px">${py.method}</td>
+      <td style="text-align:center;width:90px;color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
+      <td style="width:120px;color:#888;font-size:12px">${py.notes||"—"}</td>
+    </tr>`;}).join("");
     const total=payments.reduce((s,p)=>s+Number(p.amount),0);
-    const body=`
-      <table>
-        <tr>
-          <th style="width:30px;text-align:center">م</th>
-          <th>الحاج</th>
-          <th style="width:100px;text-align:center">التاريخ</th>
-          <th style="width:90px;text-align:center">طريقة الدفع</th>
-          <th style="width:100px;text-align:center">المبلغ</th>
-          <th>ملاحظات</th>
-        </tr>
-        ${rows.map((r,i)=>`<tr style="${i%2===1?"background:#f9f7f4":""}">${r.map((c,ci)=>`<td style="${ci===0||ci===2||ci===3||ci===4?"text-align:center":""}">${c}</td>`).join("")}</tr>`).join("")}
-        <tr style="background:${primaryColor};color:#fff;font-weight:700">
-          <td colspan="4">الإجمالي</td>
-          <td style="text-align:center">${fmtAmt(total)}</td>
-          <td></td>
-        </tr>
-      </table>`;
+    const body=`<table>
+      <tr>
+        <th style="width:28px;text-align:center">م</th>
+        <th>الحاج</th>
+        <th style="width:95px;text-align:center">التاريخ</th>
+        <th style="width:80px;text-align:center">طريقة الدفع</th>
+        <th style="width:90px;text-align:center">المبلغ</th>
+        <th style="width:120px">ملاحظات</th>
+      </tr>
+      ${rows}
+      <tr style="background:${primaryColor};color:#fff;font-weight:700">
+        <td colspan="4" style="text-align:right">الإجمالي</td>
+        <td style="text-align:center">${fmtAmt(total)}</td>
+        <td></td>
+      </tr>
+    </table>`;
     printInPage(makeFinanceHTML("تقرير الدفعات",body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
