@@ -167,6 +167,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [selectedCols, setSelectedCols] = useState<string[]>(ALL_COLS.map(c => c.key));
   const toggleCol = (key: string) => setSelectedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   const toggleAll = () => setSelectedCols(prev => prev.length === ALL_COLS.length ? [] : ALL_COLS.map(c => c.key));
+  const [filterGender, setFilterGender] = useState<string>("الكل");
+  const [filterNat, setFilterNat] = useState<string>("الكل");
+  const nats = ["الكل", ...Array.from(new Set(passengers.map(p => p.nat).filter(Boolean)))];
+  const filteredPassengers = passengers.filter(p =>
+    (filterGender === "الكل" || p.gender === filterGender) &&
+    (filterNat === "الكل" || p.nat === filterNat)
+  );
   const activeCols = ALL_COLS.filter(c => selectedCols.includes(c.key));
 
   useEffect(() => {
@@ -207,7 +214,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // تقرير الحجاج
   // ============================================================
   const getPassengersHTML = () => {
-    const rows = passengers.map((p, i) =>
+    const rows = filteredPassengers.map((p, i) =>
       `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`
     ).join("");
     const body = `<table class="wide-table"><tr><th style="text-align:center;width:30px">م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>${rows}</table>`;
@@ -216,16 +223,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   const exportPassengersXLSX = () => {
     const headers = ["م", ...activeCols.map(c => c.label)];
-    const rows = passengers.map((p, i) => [i + 1, ...activeCols.map(c => c.get(p) || "")]);
+    const rows = filteredPassengers.map((p, i) => [i + 1, ...activeCols.map(c => c.get(p) || "")]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws["!cols"] = [{ wch: 4 }, ...activeCols.map(c => ({ wch: Math.max(c.label.length + 2, 15) }))];
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
     addSummarySheet(wb, XLSX, "كشف الحجاج", companyName, [
-      ["إجمالي عدد الحجاج", passengers.length],
-      ["عدد الرجال", passengers.filter(p => p.gender === "ذكر").length],
-      ["عدد النساء", passengers.filter(p => p.gender === "أنثى").length],
+      ["إجمالي عدد الحجاج", filteredPassengers.length],
+      ["عدد الرجال", filteredPassengers.filter(p => p.gender === "ذكر").length],
+      ["عدد النساء", filteredPassengers.filter(p => p.gender === "أنثى").length],
       ["عدد الأعمدة المعروضة", activeCols.length],
     ]);
     XLSX.writeFile(wb, "تقرير_الحجاج.xlsx");
@@ -662,7 +669,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   ))}
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>{passengers.length} حاج · {activeCols.length} عمود</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>{filteredPassengers.length} حاج · {activeCols.length} عمود</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                {["الكل", "ذكر", "أنثى"].map(g => (
+                  <div key={g} onClick={() => setFilterGender(g)} style={{ padding: "4px 12px", borderRadius: 99, fontSize: 11, fontWeight: 600, cursor: "pointer", background: filterGender === g ? "var(--em7)" : "var(--bg-2)", color: filterGender === g ? "#fff" : "var(--text-muted)", border: `1px solid ${filterGender === g ? "var(--em7)" : "var(--line)"}` }}>
+                    {g === "الكل" ? "الجنس: الكل" : g === "ذكر" ? "رجال" : "نساء"}
+                  </div>
+                ))}
+                <select value={filterNat} onChange={e => setFilterNat(e.target.value)} style={{ padding: "4px 10px", borderRadius: 99, fontSize: 11, border: "1px solid var(--line)", background: "var(--bg-2)", color: "var(--ink)", cursor: "pointer" }}>
+                  {nats.map(n => <option key={n} value={n}>{n === "الكل" ? "الجنسية: الكل" : n}</option>)}
+                </select>
+              </div>
               <ExportButtons
                 onExcel={exportPassengersXLSX}
                 onPDF={() => printInPage(getPassengersHTML())}
