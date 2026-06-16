@@ -424,7 +424,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       if (Object.keys(docUpdates).length > 0) {
         await supabase.from("passengers").update(docUpdates).eq("id", newId);
       }
-      setPassengers([...passengers, { id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger]);
+      setPassengers([{ id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger, ...passengers]);
       setShowManual(false);
       resetManualModal();
     }
