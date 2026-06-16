@@ -619,32 +619,6 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     return `<table><tr>${ths}</tr>${trs}${tot}</table>`;
   }
 
-  function printPassengerStatement(p: Passenger) {
-    const s = p.services;
-    const pkgKey = getPackageKey(s.hotel_type);
-    const pkgAmt = pricing[pkgKey]?.amount||0;
-    const totalDue  = calcTotalDue(p,pricing,customCharges);
-    const totalPaid = calcTotalPaid(p.id,payments);
-    const balance   = totalDue - totalPaid;
-    const pCustom   = customCharges.filter(c=>c.passenger_id===p.id);
-    const pPayments = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
-    let rows = `<tr><td>${pricing[pkgKey]?.label||"الباقة الأساسية"}</td><td style="text-align:center;color:#C0392B">${fmtAmt(pkgAmt)}</td><td style="text-align:center">—</td></tr>`;
-    if (s.hotel_view==="مطلة") rows+=`<tr><td>إضافة مطلة</td><td style="text-align:center;color:#C0392B">${fmtAmt(pricing["addon_view"]?.amount||0)}</td><td style="text-align:center">—</td></tr>`;
-    if (s.camp_mina==="خاص")  rows+=`<tr><td>خيمة خاصة - منى</td><td style="text-align:center;color:#C0392B">${fmtAmt(pricing["addon_mina"]?.amount||0)}</td><td style="text-align:center">—</td></tr>`;
-    if (s.camp_arafa==="خاص") rows+=`<tr><td>خيمة خاصة - عرفة</td><td style="text-align:center;color:#C0392B">${fmtAmt(pricing["addon_arafa"]?.amount||0)}</td><td style="text-align:center">—</td></tr>`;
-    if (s.bus==="VIP")         rows+=`<tr><td>باص VIP</td><td style="text-align:center;color:#C0392B">${fmtAmt(pricing["addon_bus_vip"]?.amount||0)}</td><td style="text-align:center">—</td></tr>`;
-    if ((p as any).flight_class==="درجة أولى") rows+=`<tr><td>طيران درجة أولى</td><td style="text-align:center;color:#C0392B">${fmtAmt(pricing["addon_first_class"]?.amount||0)}</td><td style="text-align:center">—</td></tr>`;
-    if ((p as any).flight_class==="بدون")      rows+=`<tr><td>خصم بدون تذكرة</td><td style="text-align:center;color:#2A9D8F">(${fmtAmt(pricing["discount_no_ticket"]?.amount||0)})</td><td style="text-align:center">—</td></tr>`;
-    pCustom.forEach(c=>{ rows+=`<tr><td>${c.type==="إضافة"?"بند خاص: ":"خصم خاص: "}${c.description}</td><td style="text-align:center;color:${c.type==="إضافة"?"#C0392B":"#2A9D8F"}">${c.type==="إضافة"?fmtAmt(c.amount):`(${fmtAmt(c.amount)})`}</td><td style="text-align:center">—</td></tr>`; });
-    pPayments.forEach(py=>{ rows+=`<tr><td>دفعة — ${py.payment_date} (${py.method})${py.notes?" — "+py.notes:""}</td><td style="text-align:center">—</td><td style="text-align:center;color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td></tr>`; });
-    const body=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
-      <div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#888;margin-bottom:2px">المطلوب</div><div style="font-size:18px;font-weight:700;color:${primaryColor}">${fmtAmt(totalDue)}</div><div style="font-size:9px;color:#888">ر.ق</div></div>
-      <div style="background:rgba(42,157,143,0.1);border:1px solid #2A9D8F;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#888;margin-bottom:2px">المدفوع</div><div style="font-size:18px;font-weight:700;color:#2A9D8F">${fmtAmt(totalPaid)}</div><div style="font-size:9px;color:#888">ر.ق</div></div>
-      <div style="background:rgba(192,57,43,0.1);border:1px solid #C0392B;border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:#888;margin-bottom:2px">المتبقي</div><div style="font-size:18px;font-weight:700;color:${balance>0?"#C0392B":"#2A9D8F"}">${fmtAmt(balance)}</div><div style="font-size:9px;color:#888">ر.ق</div></div>
-    </div>
-    <table><tr><th>البيان</th><th style="width:120px;text-align:center">مدين (مطلوب)</th><th style="width:120px;text-align:center">دائن (مدفوع)</th></tr>${rows}<tr style="background:${primaryColor};color:#fff;font-weight:700"><td>الرصيد المتبقي</td><td style="text-align:center">${fmtAmt(totalDue)}</td><td style="text-align:center">${fmtAmt(totalPaid)}</td></tr></table>`;
-    printInPage(makeFinanceHTML(`كشف حساب — ${p.short_ar||p.name_ar}`,body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
-  }
 
   function printFullReport(data:{p:Passenger;due:number;paid:number;balance:number}[], title="تقرير الحجاج المالي الكامل") {
     const tD=data.reduce((s,r)=>s+r.due,0), tP=data.reduce((s,r)=>s+r.paid,0), tB=tD-tP;
