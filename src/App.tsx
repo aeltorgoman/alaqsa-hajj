@@ -53,7 +53,9 @@ export default function App() {
     camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
     family_id: p.family_id || null,
     flight_id: p.flight_id || null, flight_class: p.flight_class || null,
-    sort_order: p.sort_order || 0
+    return_flight_id: p.return_flight_id || null,
+    sort_order: p.sort_order || 0,
+    passenger_type: p.passenger_type || "حاج",
   });
 
   useEffect(() => {
