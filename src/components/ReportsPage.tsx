@@ -422,38 +422,36 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   const getHotelHTML = () => {
     const filtered = getFilteredRooms();
-    const COLS = 4;
-    const PER_PAGE = 16;
+    const COLS = 4;       // 4 أعمدة
+    const ROWS = 2;       // 2 صفوف
+    const PER_PAGE = COLS * ROWS; // 8 غرف في الصفحة landscape
     const MAX_GUESTS = 4;
-    // landscape: ارتفاع أكبر لكل غرفة
-    const ROOM_HEIGHT = 44 + (MAX_GUESTS * 34) + 8;
 
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
       const [bg, clr] = ROOM_COLORS[room.type] || ["#f0ece8", "#5C1830"];
-      // صفوف ثابتة — 4 صفوف دايماً
       const rows = Array.from({ length: MAX_GUESTS }, (_, i) => {
         const p = rp[i];
         return p
           ? `<tr>
-              <td style="text-align:center;padding:4px 3px;font-size:12px;color:#333;width:22px;border-bottom:0.5px solid rgba(0,0,0,0.06)">${i + 1}</td>
-              <td style="padding:4px 6px;font-size:13px;color:#222;border-bottom:0.5px solid rgba(0,0,0,0.06)">${p.short_ar || p.name_ar}</td>
+              <td style="text-align:center;padding:7px 4px;font-size:15px;color:#444;width:28px;border-bottom:0.5px solid rgba(0,0,0,0.07)">${i + 1}</td>
+              <td style="padding:7px 10px;font-size:16px;color:#111;border-bottom:0.5px solid rgba(0,0,0,0.07)">${p.short_ar || p.name_ar}</td>
             </tr>`
           : `<tr>
-              <td style="padding:4px 3px;border-bottom:0.5px solid rgba(0,0,0,0.04);width:22px">&nbsp;</td>
-              <td style="padding:4px 6px;border-bottom:0.5px solid rgba(0,0,0,0.04)">&nbsp;</td>
+              <td style="padding:7px 4px;border-bottom:0.5px solid rgba(0,0,0,0.04);width:28px">&nbsp;</td>
+              <td style="padding:7px 10px;border-bottom:0.5px solid rgba(0,0,0,0.04)">&nbsp;</td>
             </tr>`;
       }).join("");
 
-      return `<div style="break-inside:avoid;border:1.5px solid ${clr}44;border-radius:7px;overflow:hidden;height:${ROOM_HEIGHT}px;box-sizing:border-box;display:flex;flex-direction:column">
-        <div style="background:${bg};color:${clr};padding:5px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;border-bottom:1.5px solid ${clr}33">
-          <span style="font-size:11px;font-weight:600;opacity:0.85">${room.type}</span>
-          <span style="font-size:15px;font-weight:800;letter-spacing:0.5px">غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""}</span>
+      return `<div style="break-inside:avoid;border:2px solid ${clr}55;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;height:100%">
+        <div style="background:${bg};color:${clr};padding:8px 14px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;border-bottom:2px solid ${clr}33">
+          <span style="font-size:13px;font-weight:600;opacity:0.85">${room.type}</span>
+          <span style="font-size:20px;font-weight:800">غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""}</span>
         </div>
         <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif">
           <tr style="background:${primaryColor}">
-            <th style="text-align:center;width:22px;color:#fff;padding:3px;font-size:11px">م</th>
-            <th style="color:#fff;padding:3px 6px;font-size:11px;text-align:right">الاسم</th>
+            <th style="text-align:center;width:28px;color:#fff;padding:5px;font-size:13px">م</th>
+            <th style="color:#fff;padding:5px 10px;font-size:14px;text-align:right">الاسم</th>
           </tr>
           ${rows}
         </table>
@@ -467,16 +465,19 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
     const amiriFont = `@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap');`;
 
-    const pagesHTML = `<style>${amiriFont} * { font-family: 'Amiri', serif !important; }</style>` +
+    const pagesHTML = `<style>
+      ${amiriFont}
+      * { font-family: 'Amiri', serif !important; }
+    </style>` +
       pages.map((pageRooms, pi) => {
         const padded = [...pageRooms];
         while (padded.length < PER_PAGE) padded.push(null as any);
         const cells = padded.map(room =>
           room
             ? renderRoomBlock(room)
-            : `<div style="border:1px dashed #ddd;border-radius:7px;height:${ROOM_HEIGHT}px;box-sizing:border-box;background:transparent;"></div>`
+            : `<div style="border:1.5px dashed #ccc;border-radius:8px;background:transparent;"></div>`
         ).join("");
-        return `<div style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};display:grid;grid-template-columns:repeat(${COLS},1fr);gap:10px;padding:12px;box-sizing:border-box">
+        return `<div style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};display:grid;grid-template-columns:repeat(${COLS},1fr);grid-template-rows:repeat(${ROWS},1fr);gap:12px;padding:8px;box-sizing:border-box;height:calc(100vh - 60px)">
           ${cells}
         </div>`;
       }).join("");
