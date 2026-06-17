@@ -253,7 +253,7 @@ function AdminsPage({
     };
     const { error } = await supabase.from("passengers").update(updates).eq("id", assignTarget.id);
     if (error) { showAlert("error", "حدث خطأ أثناء الحفظ"); return; }
-    setPassengers(prev => prev.map(p => p.id === assignTarget.id ? { ...p, ...updates } : p));
+    setPassengers(prev => prev.map(p => p.id === assignTarget.id ? { ...p, ...updates, passenger_type: p.passenger_type } : p));
     showAlert("success", "تم حفظ التعيينات");
     setAssignTarget(null);
   };
