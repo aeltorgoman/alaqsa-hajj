@@ -52,7 +52,7 @@ function AdminsPage({
   passengers: Passenger[];
   setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
 }) {
-  const { alertState, showAlert } = useAlert();
+  const { alert, showAlert } = useAlert();
 
   // بيانات التعيين
   const [buses, setBuses]     = useState<Bus[]>([]);
@@ -191,7 +191,7 @@ function AdminsPage({
   // ============================================================
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
-      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+      <AlertModal alert={alert} onClose={() => showAlert(null)} />
 
       <AdminStats admins={admins} />
 
@@ -264,7 +264,7 @@ function AdminsPage({
       {/* مودال الإضافة / التعديل */}
       {/* ============================================================ */}
       {showModal && (
-        <Modal title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري جديد"} onClose={() => { setShowModal(false); setEditTarget(null); setForm(DEFAULT_FORM); }}>
+        <Modal show={showModal} title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري جديد"} onClose={() => { setShowModal(false); setEditTarget(null); setForm(DEFAULT_FORM); }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
               <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>الاسم بالعربي *</label>
@@ -305,7 +305,7 @@ function AdminsPage({
       {/* مودال التعيين */}
       {/* ============================================================ */}
       {assignTarget && (
-        <Modal title={`تعيين: ${assignTarget.short_ar || assignTarget.name_ar}`} onClose={() => setAssignTarget(null)}>
+        <Modal show={!!assignTarget} title={`تعيين: ${assignTarget.short_ar || assignTarget.name_ar}`} onClose={() => setAssignTarget(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <AssignSelect label="الباص" value={assign.bus_id} onChange={v => setAssign(a => ({ ...a, bus_id: v }))}
               options={[{ id: "", label: "— بدون —" }, ...buses.map(b => ({ id: String(b.id), label: `${b.name} (${b.type})` }))]} />
@@ -331,7 +331,7 @@ function AdminsPage({
       {/* مودال تأكيد الحذف */}
       {/* ============================================================ */}
       {deleteTarget && (
-        <Modal title="تأكيد الحذف" onClose={() => setDeleteTarget(null)}>
+        <Modal show={!!deleteTarget} title="تأكيد الحذف" onClose={() => setDeleteTarget(null)}>
           <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
             <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 16 }}>
               هل أنت متأكد من حذف <strong>{deleteTarget.short_ar || deleteTarget.name_ar}</strong>؟
