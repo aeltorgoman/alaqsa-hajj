@@ -22,7 +22,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
   const needsFlight = total - withoutTicket;
   const assigned = passengers.filter(p => p.flight_id != null).length;
-  const unassigned = passengers.filter(p => p.flight_id == null && p.services?.flight !== "بدون").length;
+  const unassigned = passengers.filter(p => p.flight_id == null && p.services?.flight !== "بدون" && (!p.passenger_type || p.passenger_type === "حاج")).length;
   const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
 
   const cards = [
@@ -172,6 +172,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const currentFlight = flights.find(f => f.id === currentFlightId);
   const currentField = flightField(currentFlight?.type);
   const availableP = passengers.filter(p => {
+    if (p.passenger_type && p.passenger_type !== "حاج") return false;
     if (p.services?.flight === "بدون") return false;
     if (!currentFlight) return false;
     const val = (p as any)[currentField];
