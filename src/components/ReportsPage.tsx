@@ -488,44 +488,69 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   const exportHotelXLSX = () => {
     const filtered = getFilteredRooms();
-    const floors = new Map<string, Room[]>();
-    filtered.forEach(room => {
-      const key = room.floor ? String(room.floor) : "بدون طابق";
-      if (!floors.has(key)) floors.set(key, []);
-      floors.get(key)!.push(room);
-    });
-    const floorKeys = [...floors.keys()].sort((a, b) => {
-      if (a === "بدون طابق") return 1;
-      if (b === "بدون طابق") return -1;
-      return Number(a) - Number(b);
-    });
+    const MAX_GUESTS = 4;
+    const COLS = 4; // 4 غرف في كل صف
+
     const wb = XLSX.utils.book_new();
-    const usedNames = new Set<string>();
-    floorKeys.forEach(key => {
-      const floorRooms = floors.get(key)!;
-      const guestCount = floorRooms.reduce((s, r) => s + passengers.filter(p => p.room_id === r.id).length, 0);
-      const title = `${key === "بدون طابق" ? key : `الطابق ${key}`} — ${floorRooms.length} غرفة — ${guestCount} نزيل`;
-      const aoa: any[][] = [[title], ["رقم الغرفة", "النوع", "م", "اسم الحاج", "الجنس", "طلب الحاج"]];
-      floorRooms.forEach(room => {
-        const rp = passengers.filter(p => p.room_id === room.id);
-        rp.forEach((p, i) => aoa.push([room.number, room.type, i + 1, p.short_ar || p.name_ar, p.gender, `${p.services?.hotel_type} ${p.services?.hotel_view}`]));
-        if (rp.length === 0) aoa.push([room.number, room.type, "", "لا يوجد مسافرون", "", ""]);
+
+    // شيت واحد بشكل 4 غرف في الصف
+    // كل غرفة تاخد عمودين: رقم الغرفة/النوع + الأسماء
+    // الترتيب: غرفة1 | غرفة2 | غرفة3 | غرفة4 ... كل 4 غرف في صف
+
+    const aoa: any[][] = [];
+
+    for (let i = 0; i < filtered.length; i += COLS) {
+      const rowRooms = filtered.slice(i, i + COLS);
+      // بادينج لو أقل من 4
+      while (rowRooms.length < COLS) rowRooms.push(null as any);
+
+      // صف header الغرف
+      const headerRow: any[] = [];
+      rowRooms.forEach(room => {
+        if (room) {
+          headerRow.push(`غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""} (${room.type})`);
+          headerRow.push(""); // دمج
+        } else {
+          headerRow.push(""); headerRow.push("");
+        }
       });
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 10 }, { wch: 10 }, { wch: 4 }, { wch: 30 }, { wch: 8 }, { wch: 16 }];
-      styleTitleRow(ws, 0, 6, primaryColor);
-      styleHeaderRow(ws, 1, 6, primaryColor);
-      freezeHeaderRow(ws, 2);
-      let name = safeSheetName(key === "بدون طابق" ? key : `الطابق ${key}`);
-      let n = name, i = 2;
-      while (usedNames.has(n)) { n = safeSheetName(`${name} ${i++}`); }
-      usedNames.add(n);
-      XLSX.utils.book_append_sheet(wb, ws, n);
-    });
+      aoa.push(headerRow);
+
+      // صف عناوين الأعمدة
+      const subHeader: any[] = [];
+      rowRooms.forEach(() => { subHeader.push("م"); subHeader.push("الاسم"); });
+      aoa.push(subHeader);
+
+      // صفوف الحجاج (4 صفوف ثابتة)
+      for (let g = 0; g < MAX_GUESTS; g++) {
+        const guestRow: any[] = [];
+        rowRooms.forEach(room => {
+          if (room) {
+            const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
+            const p = rp[g];
+            guestRow.push(p ? g + 1 : "");
+            guestRow.push(p ? (p.short_ar || p.name_ar) : "");
+          } else {
+            guestRow.push(""); guestRow.push("");
+          }
+        });
+        aoa.push(guestRow);
+      }
+
+      // صف فاصل
+      aoa.push([]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // عرض الأعمدة: كل غرفة = عمود رقم (4) + عمود اسم (22)
+    ws["!cols"] = Array.from({ length: COLS * 2 }, (_, i) => ({ wch: i % 2 === 0 ? 4 : 22 }));
+
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
+    XLSX.utils.book_append_sheet(wb, ws, safeSheetName(`تقرير الفندق${subtitle}`));
+
     addSummarySheet(wb, XLSX, `تقرير الفندق${subtitle}`, companyName, [
       ["إجمالي عدد الغرف", filtered.length],
-      ["إجمالي عدد النزلاء", passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id)).length],
+      ["إجمالي عدد النزلاء", passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id) && (!p.passenger_type || p.passenger_type === "حاج")).length],
       ...ROOM_TYPES.map(t => [`غرف ${t}`, filtered.filter(r => r.type === t).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الفندق.xlsx");
