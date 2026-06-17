@@ -6,18 +6,19 @@ import { timeAgo } from "../utils";
 
 function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
   const config = useConfig();
+  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
   const { males, females } = useMemo(() => ({
-    males: passengers.filter(p => p.gender === "ذكر").length,
-    females: passengers.filter(p => p.gender === "أنثى").length,
-  }), [passengers]);
+    males: hajj.filter(p => p.gender === "ذكر").length,
+    females: hajj.filter(p => p.gender === "أنثى").length,
+  }), [hajj]);
 
-  const total = passengers.length || 1;
+  const total = hajj.length || 1;
   const dist = useMemo(() => {
-    const busCount = passengers.filter(p => (p as any).bus_id != null).length;
-    const minaCount = passengers.filter(p => (p as any).camp_mina_id != null).length;
-    const arafaCount = passengers.filter(p => (p as any).camp_arafa_id != null).length;
-    const hotelCount = passengers.filter(p => (p as any).room_id != null).length;
-    const flightCount = passengers.filter(p => (p as any).flight_id != null).length;
+    const busCount = hajj.filter(p => (p as any).bus_id != null).length;
+    const minaCount = hajj.filter(p => (p as any).camp_mina_id != null).length;
+    const arafaCount = hajj.filter(p => (p as any).camp_arafa_id != null).length;
+    const hotelCount = hajj.filter(p => (p as any).room_id != null).length;
+    const flightCount = hajj.filter(p => (p as any).flight_id != null).length;
     return [
       { label: "الباصات", page: "buses", count: busCount, pct: Math.round(busCount / total * 100), icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
       { label: "مخيمات منى", page: "mina", count: minaCount, pct: Math.round(minaCount / total * 100), icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
@@ -29,11 +30,11 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
 
   // تنبيهات سريعة — أرقام تحتاج مراجعة من الأدمن
   const alerts = useMemo(() => {
-    const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
-    const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
-    const vipBus = passengers.filter(p => p.services?.bus === "VIP").length;
-    const noHotel = passengers.filter(p => p.room_id == null).length;
-    const noBus = passengers.filter(p => p.bus_id == null).length;
+    const withoutTicket = hajj.filter(p => p.services?.flight === "بدون").length;
+    const firstClass = hajj.filter(p => p.services?.flight === "درجة أولى").length;
+    const vipBus = hajj.filter(p => p.services?.bus === "VIP").length;
+    const noHotel = hajj.filter(p => p.room_id == null).length;
+    const noBus = hajj.filter(p => p.bus_id == null).length;
     return [
       { label: "بدون تذكرة طيران", count: withoutTicket, page: "flights", color: "#7a2e45", bg: "var(--fb)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
       { label: "طالبين درجة أولى", count: firstClass, page: "flights", color: "#E8951A", bg: "rgba(232,149,26,0.08)", icon: `<path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/>` },
@@ -84,9 +85,9 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
           {[
-            { label: "الحجاج", num: passengers.length, sub: `+${Math.min(12,passengers.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,#21867A,#2A9D8F)", shadow: "rgba(33,134,122,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-            { label: "رجال", num: males, sub: `${passengers.length ? Math.round(males/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#2F78C5,#4A90D9)", shadow: "rgba(47,120,197,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-            { label: "نساء", num: females, sub: `${passengers.length ? Math.round(females/passengers.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#D4820F,#E8951A)", shadow: "rgba(212,130,15,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "الحجاج", num: hajj.length, sub: `+${Math.min(12,hajj.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,#21867A,#2A9D8F)", shadow: "rgba(33,134,122,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+            { label: "رجال", num: males, sub: `${hajj.length ? Math.round(males/hajj.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#2F78C5,#4A90D9)", shadow: "rgba(47,120,197,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "نساء", num: females, sub: `${hajj.length ? Math.round(females/hajj.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#D4820F,#E8951A)", shadow: "rgba(212,130,15,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
           ].map(({ label, num, sub, bg, shadow, icon }) => (
             <div key={label} style={{ background: bg, borderRadius: 14, padding: "12px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}`, border: `2px solid ${shadow}` }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.filter = "brightness(1.05)"; }}
