@@ -424,22 +424,39 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const filtered = getFilteredRooms();
     const COLS = 4;
     const PER_PAGE = 16;
+    const MAX_GUESTS = 4;
+    // ارتفاع الغرفة = header + 4 صفوف ثابتة (كل صف 26px) + padding
+    const ROOM_HEIGHT = 38 + (MAX_GUESTS * 26) + 8;
 
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
-      const [bg, clr] = ROOM_COLORS[room.type] || ["#f5f5f5", "#333"];
-      const isEmpty = rp.length === 0;
-      return `<div style="break-inside:avoid;border:1px solid ${clr}33;border-radius:6px;overflow:hidden;min-height:80px">
-        <div style="background:${bg};color:${clr};padding:5px 8px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;">
-          <span>${room.type}</span><span>غرفة ${room.number}${room.floor ? ` (ط${room.floor})` : ""}</span>
+      const [bg, clr] = ROOM_COLORS[room.type] || ["#f0ece8", "#5C1830"];
+      // صفوف ثابتة — 4 صفوف دايماً
+      const rows = Array.from({ length: MAX_GUESTS }, (_, i) => {
+        const p = rp[i];
+        return p
+          ? `<tr>
+              <td style="text-align:center;padding:4px 3px;font-size:12px;color:#333;width:22px;border-bottom:0.5px solid rgba(0,0,0,0.06)">${i + 1}</td>
+              <td style="padding:4px 6px;font-size:13px;color:#222;border-bottom:0.5px solid rgba(0,0,0,0.06)">${p.short_ar || p.name_ar}</td>
+            </tr>`
+          : `<tr>
+              <td style="padding:4px 3px;border-bottom:0.5px solid rgba(0,0,0,0.04);width:22px">&nbsp;</td>
+              <td style="padding:4px 6px;border-bottom:0.5px solid rgba(0,0,0,0.04)">&nbsp;</td>
+            </tr>`;
+      }).join("");
+
+      return `<div style="break-inside:avoid;border:1.5px solid ${clr}44;border-radius:7px;overflow:hidden;height:${ROOM_HEIGHT}px;box-sizing:border-box;display:flex;flex-direction:column">
+        <div style="background:${bg};color:${clr};padding:5px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;border-bottom:1.5px solid ${clr}33">
+          <span style="font-size:11px;font-weight:600;opacity:0.85">${room.type}</span>
+          <span style="font-size:15px;font-weight:800;letter-spacing:0.5px">غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""}</span>
         </div>
-        ${isEmpty
-          ? `<div style="padding:10px 8px;font-size:10px;color:#aaa;text-align:center;">— فارغة —</div>`
-          : `<table style="margin:0;width:100%;font-size:10px">
-              <tr><th style="text-align:center;width:20px;background:${primaryColor};color:#fff;padding:3px">م</th><th style="background:${primaryColor};color:#fff;padding:3px">الاسم</th></tr>
-              ${rp.map((p, i) => `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f9f9"}"><td style="text-align:center;padding:3px 4px;border-bottom:0.5px solid #eee">${i + 1}</td><td style="padding:3px 6px;border-bottom:0.5px solid #eee">${p.short_ar || p.name_ar}</td></tr>`).join("")}
-            </table>`
-        }
+        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif">
+          <tr style="background:${primaryColor}">
+            <th style="text-align:center;width:22px;color:#fff;padding:3px;font-size:11px">م</th>
+            <th style="color:#fff;padding:3px 6px;font-size:11px;text-align:right">الاسم</th>
+          </tr>
+          ${rows}
+        </table>
       </div>`;
     };
 
@@ -448,18 +465,21 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       pages.push(filtered.slice(i, i + PER_PAGE));
     }
 
-    const pagesHTML = pages.map((pageRooms, pi) => {
-      const padded = [...pageRooms];
-      while (padded.length < PER_PAGE) padded.push(null as any);
-      const cells = padded.map(room =>
-        room
-          ? renderRoomBlock(room)
-          : `<div style="border:1px dashed #ddd;border-radius:6px;min-height:80px;background:#fafafa;"></div>`
-      ).join("");
-      return `<div style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};display:grid;grid-template-columns:repeat(${COLS},1fr);gap:8px;padding:10px;box-sizing:border-box">
-        ${cells}
-      </div>`;
-    }).join("");
+    const amiriFont = `@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap');`;
+
+    const pagesHTML = `<style>${amiriFont} * { font-family: 'Amiri', serif !important; }</style>` +
+      pages.map((pageRooms, pi) => {
+        const padded = [...pageRooms];
+        while (padded.length < PER_PAGE) padded.push(null as any);
+        const cells = padded.map(room =>
+          room
+            ? renderRoomBlock(room)
+            : `<div style="border:1px dashed #ddd;border-radius:7px;height:${ROOM_HEIGHT}px;box-sizing:border-box;background:transparent;"></div>`
+        ).join("");
+        return `<div style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};display:grid;grid-template-columns:repeat(${COLS},1fr);gap:10px;padding:12px;box-sizing:border-box">
+          ${cells}
+        </div>`;
+      }).join("");
 
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML, true);
