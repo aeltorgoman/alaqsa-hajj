@@ -64,16 +64,21 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   }, []);
 
   const openAdd = () => { setForm({ name: "", username: "", password: "" }); setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false]))); setEditUser(null); setShowAdd(true); };
-  const openEdit = (u: User) => { setForm({ name: u.name, username: u.username, password: u.password }); setPerms({ ...u.permissions }); setEditUser(u); setShowAdd(true); };
+  const openEdit = (u: User) => { setForm({ name: u.name, username: u.username, password: "" }); setPerms({ ...u.permissions }); setEditUser(u); setShowAdd(true); };
   const togglePerm = (key: string) => setPerms(prev => ({ ...prev, [key]: !prev[key] }));
   const toggleAll = () => { const allOn = ALL_PERMISSIONS.every(p => perms[p.key]); setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, !allOn]))); };
 
   const saveUser = async () => {
-    if (!form.name || !form.username || !form.password) return;
+    if (!form.name || !form.username) return;
     if (editUser) {
-      await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
-      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...form, permissions: perms } : u));
+      if (form.password.trim()) {
+        await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
+      } else {
+        await supabase.from("users").update({ name: form.name, username: form.username, permissions: perms }).eq("id", editUser.id);
+      }
+      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, username: form.username, permissions: perms } : u));
     } else {
+      if (!form.password) return;
       await supabase.rpc("create_user", { p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
       const { data } = await supabase.from("users").select("*").order("id");
       if (data) setUsers(data as User[]);
@@ -169,7 +174,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>الاسم</div><input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم المستخدم</div><input style={inp} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} /></div>
         </div>
-        <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>كلمة المرور</div><input type="password" style={inp} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} /></div>
+        <div style={{ marginBottom: 12 }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>كلمة المرور{editUser ? " (اتركها فارغة للإبقاء على الحالية)" : ""}</div><input type="password" style={inp} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder={editUser ? "اتركها فارغة إذا لم تتغير" : ""} /></div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500 }}>الصلاحيات</div>
           <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>{ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}</div>
