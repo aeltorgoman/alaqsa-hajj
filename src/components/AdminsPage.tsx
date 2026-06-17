@@ -4,7 +4,7 @@ import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc } from "../utils";
+import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile } from "../utils";
 
 // ============================================================
 // ثوابت
@@ -89,6 +89,11 @@ function AdminsPage({
 
   // حذف
   const [deleteTarget, setDeleteTarget] = useState<Passenger | null>(null);
+
+  // المستندات
+  const [docTarget, setDocTarget] = useState<Passenger | null>(null);
+  const [docUploading, setDocUploading] = useState<string | null>(null);
+  const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
 
   const admins = passengers.filter(p => p.passenger_type && p.passenger_type !== "حاج");
 
@@ -239,6 +244,27 @@ function AdminsPage({
   };
 
   // ============================================================
+  // رفع المستندات
+  // ============================================================
+  const handleAdminDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
+    setDocUploading(docType);
+    const url = await uploadDoc(file, p.id, docType === "passport_doc" ? "passport_doc" : docType === "idcard" ? "idcard" : docType);
+    setDocUploading(null);
+    if (!url) return;
+    await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
+    const updated = { ...p, [field]: url };
+    setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
+    setDocTarget(updated);
+  };
+
+  const handleAdminDocDelete = async (p: Passenger, field: string) => {
+    await supabase.from("passengers").update({ [field]: null }).eq("id", p.id);
+    const updated = { ...p, [field]: null };
+    setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
+    setDocTarget(updated);
+  };
+
+  // ============================================================
   // حفظ التعيين
   // ============================================================
   const saveAssign = async () => {
@@ -349,6 +375,9 @@ function AdminsPage({
                   )}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => setDocTarget(p)} style={{ ...btnS({ padding: "5px 10px", fontSize: 11 }) }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>مستندات
+                  </button>
                   <button onClick={() => openAssign(p)} style={{ ...btnP({ padding: "5px 10px", fontSize: 11 }) }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><path d="M8 6H21"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>تعيين
                   </button>
@@ -487,8 +516,63 @@ function AdminsPage({
         </div>
       </Modal>
 
+
       {/* ============================================================ */}
-      {/* مودال تأكيد الحذف */}
+      {/* مودال المستندات */}
+      {/* ============================================================ */}
+      <Modal show={!!docTarget} onClose={() => { setDocTarget(null); setDocViewer(null); }} title={`مستندات: ${docTarget?.short_ar || docTarget?.name_ar || ""}`}>
+        {docTarget && (
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              {([
+                ["جواز السفر",  (docTarget as any).passport_url,     "passport_url",     "passport_doc", "image/*"],
+                ["البطاقة",     (docTarget as any).national_id_url,  "national_id_url",  "idcard",       "image/*"],
+                ["العقد",       (docTarget as any).contract_url,     "contract_url",     "contract",     "image/*,application/pdf"],
+                ["تذكرة الطيران",(docTarget as any).flight_ticket_url,"flight_ticket_url","flight_ticket","image/*,application/pdf"],
+              ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
+                <div key={label} style={{ padding: "8px 0", borderBottom: "0.5px solid var(--border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, color: url ? "var(--text)" : "var(--text-muted)" }}>{label}</span>
+                    {docUploading === docType ? (
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...</span>
+                    ) : url ? (
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => setDocViewer({ url, label })} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض
+                        </button>
+                        <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬇</button>
+                        <button onClick={() => handleAdminDocDelete(docTarget, field)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input id={`admin-upload-${docType}`} type="file" accept={accept} style={{ display: "none" }}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleAdminDocUpload(docTarget, docType, field, f); e.currentTarget.value = ""; }} />
+                        <button onClick={() => document.getElementById(`admin-upload-${docType}`)?.click()}
+                          style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> رفع
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* عرض الصورة */}
+            {docViewer && (
+              <div style={{ width: 260, flexShrink: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{docViewer.label}</div>
+                <img src={docViewer.url} alt={docViewer.label} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }}
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* ============================================================ */}
+      {/* مودال تأكيد الحذف */
       {/* ============================================================ */}
       <Modal show={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="تأكيد الحذف">
         <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
