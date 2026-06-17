@@ -425,8 +425,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const COLS = 4;
     const PER_PAGE = 16;
     const MAX_GUESTS = 4;
-    // ارتفاع الغرفة = header + 4 صفوف ثابتة (كل صف 26px) + padding
-    const ROOM_HEIGHT = 38 + (MAX_GUESTS * 26) + 8;
+    // landscape: ارتفاع أكبر لكل غرفة
+    const ROOM_HEIGHT = 44 + (MAX_GUESTS * 34) + 8;
 
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
@@ -1091,6 +1091,22 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 selected={selectedFloors}
                 setSelected={(s) => setSelectedFloors(s as Set<string>)}
               />
+
+              {/* شريط التصدير الثابت */}
+              <div style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-card)", borderBottom: "1px solid var(--border)", padding: "8px 0", marginBottom: 10, display: "flex", gap: 8 }}>
+                <button onClick={exportHotelXLSX} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--success-bg)", border: "1px solid var(--success)", color: "var(--primary-dark)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  Excel
+                </button>
+                <button onClick={() => printInPage(getHotelHTML())} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--info)", border: "none", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  PDF
+                </button>
+                <button onClick={() => printInPage(getHotelHTML())} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--paper)", border: "1px solid var(--border)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  طباعة
+                </button>
+              </div>
 
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
