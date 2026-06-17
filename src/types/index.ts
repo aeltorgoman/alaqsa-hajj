@@ -29,6 +29,7 @@ export interface Passenger {
   flight_ticket_url?: string | null;
   hajj_permit_url?: string | null;
   family_id?: string | null;
+  passenger_type?: "حاج" | "مرافق" | "مشرف" | "إداري";
   bus_id?: number | null;
   room_id?: number | null;
   camp_mina_id?: number | null;
