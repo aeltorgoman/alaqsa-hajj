@@ -148,20 +148,27 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
+    const headers = COLS.map(c => `<th style="padding:6px 10px;background:${config.color_primary || "#6B1F3A"};color:#fff;white-space:nowrap;text-align:right">${c.label}</th>`).join("");
     const rows = filtered.map((p, i) =>
-      `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td><td>${p.passport || "—"}</td><td>${p.nat}</td><td>${p.gender}</td><td>${p.phone || "—"}</td></tr>`
+      `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f6f2"}">
+        <td style="text-align:center;padding:5px 8px;border:0.5px solid #ddd">${i + 1}</td>
+        ${COLS.map(col => `<td style="padding:5px 8px;border:0.5px solid #ddd">${getVal(p, col.key, col.get)}</td>`).join("")}
+      </tr>`
     ).join("");
-    const body = `<table class="wide-table"><tr><th style="text-align:center;width:40px">م</th><th>اسم الحاج / الحاجة</th><th>رقم الجواز</th><th>الجنسية</th><th>الجنس</th><th>التليفون</th></tr>${rows}</table>`;
+    const body = `<table class="wide-table" style="font-size:12px">
+      <thead><tr><th style="text-align:center;padding:6px 8px;background:${config.color_primary || "#6B1F3A"};color:#fff;width:35px">م</th>${headers}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
     const html = makeHTML("كشف الحجاج", body, false, config.logo_url || "", config.name_ar || "حملة الأقصى", config.tagline || "", config.color_primary || "#6B1F3A", config.color_accent || "#0C447C");
     printInPage(html);
   };
 
   // ===== تصدير كشف الحجاج الحالي إكسيل (بعد البحث/الفلاتر) =====
   const exportExcel = () => {
-    const headers = ["م", "اسم الحاج / الحاجة", "الاسم بالإنجليزي", "رقم الجواز", "الجنسية", "الجنس", "التليفون"];
-    const rows = filtered.map((p, i) => [i + 1, p.short_ar || p.name_ar, p.name_en || "", p.passport || "—", p.nat, p.gender, p.phone || "—"]);
+    const headers = ["م", ...COLS.map(c => c.label)];
+    const rows = filtered.map((p, i) => [i + 1, ...COLS.map(col => getVal(p, col.key, col.get) || "—")]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws["!cols"] = [{ wch: 4 }, { wch: 28 }, { wch: 28 }, { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 14 }];
+    ws["!cols"] = [{ wch: 4 }, ...COLS.map(() => ({ wch: 18 }))];
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
