@@ -107,7 +107,7 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
-      <Sidebar page={page} setPage={setPage} count={passengers.length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
+      <Sidebar page={page} setPage={setPage} count={passengers.filter(p => !p.passenger_type || p.passenger_type === 'حاج').length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {isFull ? (
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
