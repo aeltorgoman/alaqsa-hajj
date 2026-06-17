@@ -422,30 +422,47 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   const getHotelHTML = () => {
     const filtered = getFilteredRooms();
-    // 3 أعمدة
-    const col1 = filtered.filter((_, i) => i % 3 === 0);
-    const col2 = filtered.filter((_, i) => i % 3 === 1);
-    const col3 = filtered.filter((_, i) => i % 3 === 2);
+    const COLS = 4;
+    const PER_PAGE = 16;
+
     const renderRoomBlock = (room: Room) => {
-      const rp = passengers.filter(p => p.room_id === room.id);
-      const [bg, clr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
-      return `<div style="margin-bottom:12px;break-inside:avoid">
-        <div style="background:${bg};color:${clr};padding:6px 10px;border:1px solid ${clr}33;border-bottom:none;font-size:13px;font-weight:700;display:flex;justify-content:space-between;border-radius:4px 4px 0 0">
+      const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
+      const [bg, clr] = ROOM_COLORS[room.type] || ["#f5f5f5", "#333"];
+      const isEmpty = rp.length === 0;
+      return `<div style="break-inside:avoid;border:1px solid ${clr}33;border-radius:6px;overflow:hidden;min-height:80px">
+        <div style="background:${bg};color:${clr};padding:5px 8px;font-size:11px;font-weight:700;display:flex;justify-content:space-between;">
           <span>${room.type}</span><span>غرفة ${room.number}${room.floor ? ` (ط${room.floor})` : ""}</span>
         </div>
-        <table style="margin:0">
-          <tr><th style="text-align:center;width:24px;background:${primaryColor}">م</th><th style="background:${primaryColor}">الاسم</th></tr>
-          ${rp.map((p, i) => `<tr><td style="text-align:center">${i + 1}</td><td>${p.short_ar || p.name_ar}</td></tr>`).join("")}
-        </table>
+        ${isEmpty
+          ? `<div style="padding:10px 8px;font-size:10px;color:#aaa;text-align:center;">— فارغة —</div>`
+          : `<table style="margin:0;width:100%;font-size:10px">
+              <tr><th style="text-align:center;width:20px;background:${primaryColor};color:#fff;padding:3px">م</th><th style="background:${primaryColor};color:#fff;padding:3px">الاسم</th></tr>
+              ${rp.map((p, i) => `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f9f9"}"><td style="text-align:center;padding:3px 4px;border-bottom:0.5px solid #eee">${i + 1}</td><td style="padding:3px 6px;border-bottom:0.5px solid #eee">${p.short_ar || p.name_ar}</td></tr>`).join("")}
+            </table>`
+        }
       </div>`;
     };
-    const body = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-      <div>${col1.map(renderRoomBlock).join("")}</div>
-      <div>${col2.map(renderRoomBlock).join("")}</div>
-      <div>${col3.map(renderRoomBlock).join("")}</div>
-    </div>`;
+
+    const pages: Room[][] = [];
+    for (let i = 0; i < filtered.length; i += PER_PAGE) {
+      pages.push(filtered.slice(i, i + PER_PAGE));
+    }
+
+    const pagesHTML = pages.map((pageRooms, pi) => {
+      const padded = [...pageRooms];
+      while (padded.length < PER_PAGE) padded.push(null as any);
+      const cells = padded.map(room =>
+        room
+          ? renderRoomBlock(room)
+          : `<div style="border:1px dashed #ddd;border-radius:6px;min-height:80px;background:#fafafa;"></div>`
+      ).join("");
+      return `<div style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};display:grid;grid-template-columns:repeat(${COLS},1fr);gap:8px;padding:10px;box-sizing:border-box">
+        ${cells}
+      </div>`;
+    }).join("");
+
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
-    return mkHTML(`تقرير الفندق${subtitle}`, body, true);
+    return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML, true);
   };
 
   const exportHotelXLSX = () => {
