@@ -26,7 +26,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
       { label: "الفندق", page: "hotel", count: hotelCount, pct: Math.round(hotelCount / total * 100), icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
       { label: "الطيران", page: "flights", count: flightCount, pct: Math.round(flightCount / total * 100), icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
     ];
-  }, [passengers, total]);
+  }, [hajj, total]);
 
   // تنبيهات سريعة — أرقام تحتاج مراجعة من الأدمن
   const alerts = useMemo(() => {
@@ -42,7 +42,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
       { label: "بدون غرفة بالفندق", count: noHotel, page: "hotel", color: "#c0392b", bg: "rgba(192,57,43,0.08)", icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
       { label: "بدون باص", count: noBus, page: "buses", color: "#c0392b", bg: "rgba(192,57,43,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
     ].filter(a => a.count > 0);
-  }, [passengers]);
+  }, [hajj]);
 
   const recent = [...passengers].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 5);
 
