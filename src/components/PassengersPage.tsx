@@ -126,6 +126,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
 
   const filtered = useMemo(() => passengers
     .filter(p => {
+      if (p.passenger_type && p.passenger_type !== "حاج") return false;
       const fullName = `${p.name_ar} ${p.name_en}`;
       if (search && !fullName.toLowerCase().includes(search.toLowerCase()) &&
         ![p.passport, p.national_id, p.nat, p.phone, p.gender].join(" ").toLowerCase().includes(search.toLowerCase())) return false;
