@@ -284,7 +284,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const currentRoom = rooms.find(r => r.id === currentRoomId);
   const filteredP = passengers
-    .filter(p => p.room_id == null && (!pSearch || p.name_ar.includes(pSearch)))
+    .filter(p => p.room_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!pSearch || p.name_ar.includes(pSearch)))
     .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
   const getFilteredRoomsForPrint = () => {
     if (printFilter === "floor") return rooms.filter(r => r.floor === printFloor);
