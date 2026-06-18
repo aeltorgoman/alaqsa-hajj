@@ -416,6 +416,20 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [chargeType, setChargeType]           = useState<"إضافة"|"خصم">("إضافة");
   const [chargeForm, setChargeForm]           = useState({ description:"", amount:"", notes:"" });
+  const [chargeErrors, setChargeErrors]       = useState({ description: false, amount: false });
+
+  // confirm modal
+  const [confirmMsg, setConfirmMsg]           = useState<string | null>(null);
+  const [confirmResolve, setConfirmResolve]   = useState<((v: boolean) => void) | null>(null);
+  const showConfirm = (msg: string): Promise<boolean> => new Promise(resolve => {
+    setConfirmMsg(msg);
+    setConfirmResolve(() => resolve);
+  });
+  const handleConfirm = (val: boolean) => {
+    setConfirmMsg(null);
+    confirmResolve?.(val);
+    setConfirmResolve(null);
+  };
   const [savingCharge, setSavingCharge]       = useState(false);
 
   // إعدادات أسعار
@@ -492,13 +506,15 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function deletePayment(id: number) {
-    if (!confirm("هل تريد حذف هذه الدفعة؟")) return;
+    if (!await showConfirm("هل تريد حذف هذه الدفعة؟")) return;
     await supabase.from("payments").delete().eq("id",id);
     setPayments(prev => prev.filter(p => p.id !== id));
   }
 
   async function addCustomCharge() {
-    if (!selectedP || !chargeForm.description || !chargeForm.amount) return;
+    const errs = { description: !chargeForm.description.trim(), amount: !chargeForm.amount };
+    setChargeErrors(errs);
+    if (!selectedP || errs.description || errs.amount) return;
     setSavingCharge(true);
     const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount:Number(chargeForm.amount), type:chargeType, notes:chargeForm.notes, created_by:(currentUser as any).username||"" }).select().single();
     if (!error && data) { setCustomCharges(prev => [...prev, data as CustomCharge]); setShowChargeModal(false); setChargeForm({ description:"", amount:"", notes:"" }); }
@@ -506,7 +522,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function deleteCustomCharge(id: number) {
-    if (!confirm("هل تريد حذف هذا البند؟")) return;
+    if (!await showConfirm("هل تريد حذف هذا البند؟")) return;
     await supabase.from("custom_charges").delete().eq("id",id);
     setCustomCharges(prev => prev.filter(c => c.id !== id));
   }
@@ -827,7 +843,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
             <button onClick={() => { setSubView("list"); setSelectedGroup(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
             <div>
-              <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--em8)" }}>{selectedGroup.name}</div>
+              <div style={{ fontFamily:"var(--font-body)", fontSize:20, fontWeight:800, color:"var(--primary)" }}>{selectedGroup.name}</div>
               <div style={{ fontSize:11, color:"var(--text-muted)" }}>{gPassengers.length} أعضاء</div>
             </div>
             <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:gSt.bg, color:gSt.color, fontWeight:700 }}>{gSt.label}</span>
@@ -1022,7 +1038,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             <button onClick={()=>setShowPayModal(true)} style={{ flex:1, padding:10, background:"#2A9D8F", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ تسجيل دفعة</button>
             <button onClick={()=>{setChargeType("إضافة");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"#E8951A", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ بند خاص</button>
-            <button onClick={()=>{setChargeType("خصم");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"#C0392B", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ خصم خاص</button>
+            <button onClick={()=>{setChargeType("خصم");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"#C0392B", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>− خصم خاص</button>
           </div>
           <div style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)" }}>
             <div style={{ fontWeight:700, fontSize:13, color:"var(--em8)", marginBottom:12 }}>المجموعة المالية</div>
@@ -1061,19 +1077,55 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         {/* مودال: بند خاص */}
         {showChargeModal&&(
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
-            <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)" }}>
-              <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:chargeType==="إضافة"?"#E8951A":"#C0392B" }}>{chargeType==="إضافة"?"إضافة بند خاص":"إضافة خصم خاص"}</div>
-              {[{label:"الوصف",key:"description",ph:"مثال: ليموزين من المطار"},{label:"المبلغ",key:"amount",ph:"0"},{label:"ملاحظات (اختياري)",key:"notes",ph:"..."}].map(f=>(
-                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.key==="amount"?"number":"text"} placeholder={f.ph} value={(chargeForm as any)[f.key]} onChange={e=>setChargeForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
+            <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)" }}>
+              {/* أيقونة + عنوان */}
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+                <div style={{ width:40, height:40, borderRadius:"50%", background:chargeType==="إضافة"?"rgba(232,149,26,0.12)":"rgba(192,57,43,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:900, color:chargeType==="إضافة"?"#E8951A":"#C0392B", flexShrink:0 }}>
+                  {chargeType==="إضافة" ? "+" : "−"}
+                </div>
+                <div>
+                  <div style={{ fontWeight:800, fontSize:16, color:chargeType==="إضافة"?"#E8951A":"#C0392B" }}>{chargeType==="إضافة"?"إضافة بند خاص":"إضافة خصم"}</div>
+                  <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{chargeType==="إضافة"?"مبلغ إضافي على الحاج":"خصم من إجمالي الحاج"}</div>
+                </div>
+              </div>
+              {/* الحقول */}
+              {[
+                {label:chargeType==="إضافة"?"وصف البند *":"سبب الخصم *",key:"description",ph:chargeType==="إضافة"?"مثال: ليموزين من المطار":"مثال: خصم موظف"},
+                {label:"المبلغ *",key:"amount",ph:"0"},
+                {label:"ملاحظات (اختياري)",key:"notes",ph:"..."}
+              ].map(f=>(
+                <div key={f.key} style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
+                  <input type={f.key==="amount"?"number":"text"} placeholder={f.ph} value={(chargeForm as any)[f.key]}
+                    onChange={e=>{ setChargeForm(p=>({...p,[f.key]:e.target.value})); if((chargeErrors as any)[f.key]) setChargeErrors(p=>({...p,[f.key]:false})); }}
+                    style={{ ...inputStyle, borderColor:(chargeErrors as any)[f.key]?"#C0392B":"" }} />
+                  {(chargeErrors as any)[f.key] && <div style={{ fontSize:11, color:"#C0392B", marginTop:3 }}>يرجى إدخال {f.label.replace(" *","")}</div>}
+                </div>
               ))}
-              <div style={{ display:"flex", gap:10 }}>
-                <button onClick={addCustomCharge} disabled={savingCharge} style={{ flex:1, padding:10, background:chargeType==="إضافة"?"#E8951A":"#C0392B", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>{savingCharge?"جارٍ الحفظ...":"حفظ"}</button>
-                <button onClick={()=>setShowChargeModal(false)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إلغاء</button>
+              <div style={{ display:"flex", gap:10, marginTop:4 }}>
+                <button onClick={addCustomCharge} disabled={savingCharge} style={{ flex:1, padding:10, background:chargeType==="إضافة"?"#E8951A":"#C0392B", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer", fontWeight:600 }}>{savingCharge?"جارٍ الحفظ...":"حفظ"}</button>
+                <button onClick={()=>{ setShowChargeModal(false); setChargeErrors({description:false,amount:false}); }} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إلغاء</button>
               </div>
             </div>
           </div>
         )}
 
+
+        {/* مودال تأكيد */}
+        {confirmMsg && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000 }}>
+            <div style={{ background:"var(--bg-card)", borderRadius:16, padding:28, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
+              <div style={{ width:48, height:48, borderRadius:"50%", background:"rgba(192,57,43,0.1)", color:"#C0392B", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, margin:"0 auto 14px" }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div style={{ fontSize:14, fontWeight:600, color:"var(--text)", marginBottom:20 }}>{confirmMsg}</div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={()=>handleConfirm(true)} style={{ flex:1, padding:"9px", background:"#C0392B", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>تأكيد الحذف</button>
+                <button onClick={()=>handleConfirm(false)} style={{ flex:1, padding:"9px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>إلغاء</button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* مودال: مجموعة */}
         {showGroupModal&&(
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
@@ -1156,7 +1208,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
               <tbody>
-                {[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);return(<tr key={py.id} onClick={()=>{const pName=p?(p.short_ar||p.name_ar):"—";setReceiptPayment({payment:py,passengerName:pName});}} style={{ background:i%2===0?"white":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"white":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p?(p.short_ar||p.name_ar):"—"}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"#2A9D8F", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></td></tr>);})}
+                {[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"white":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"white":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p?(p.short_ar||p.name_ar):"—"}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"#2A9D8F", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></td></tr>);})}
                 <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={4}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(payments.reduce((s,p)=>s+Number(p.amount),0))}</td><td style={{ padding:"10px 12px" }}></td></tr>
               </tbody>
             </table>
@@ -1193,7 +1245,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
       <ReceiptModal />
       <div style={{ padding:"12px 20px", background:"var(--bg-card)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-        <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--em8)" }}>الحسابات المالية</div>
+        <div style={{ fontFamily:"var(--font-body)", fontSize:20, fontWeight:800, color:"var(--primary)" }}>الحسابات المالية</div>
         <div style={{ marginRight:"auto", display:"flex", gap:8 }}>
           <button onClick={()=>setSubView("reports")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>التقارير</button>
           <button onClick={()=>setSubView("settings")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>
