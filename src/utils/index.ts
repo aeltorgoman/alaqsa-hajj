@@ -180,34 +180,34 @@ export function makeHTML(
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
   html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
-  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 20px; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
-  .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 3px solid ${primaryColor}; margin-bottom: 6px; }
-  .doc-header .brand { display: flex; align-items: center; gap: 14px; }
-  .doc-header .logo-box { width: 130px; height: 130px; border-radius: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 52px; font-weight: 700; flex-shrink: 0; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 9pt; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
+  .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 2pt solid ${primaryColor}; margin-bottom: 4px; }
+  .doc-header .brand { display: flex; align-items: center; gap: 10px; }
+  .doc-header .logo-box { width: 22mm; height: 22mm; border-radius: 4mm; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 16pt; font-weight: 700; flex-shrink: 0; }
   .doc-header .logo-box img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
-  .doc-header .company-name { font-size: 22px; font-weight: 700; color: ${primaryColor}; }
-  .doc-header .tagline { font-size: 13px; color: #888; margin-top: 3px; }
-  .doc-header .meta { text-align: left; font-size: 11px; color: #999; line-height: 1.7; }
-  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 12px 0; border-radius: 8px; font-size: 27px; font-weight: 700; margin: 14px 0 16px; }
-  .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
-  .camp-header .camp-logo { width: 165px; height: 165px; border-radius: 50%; border: 6px solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
+  .doc-header .company-name { font-size: 13pt; font-weight: 700; color: ${primaryColor}; }
+  .doc-header .tagline { font-size: 8pt; color: #888; margin-top: 2px; }
+  .doc-header .meta { text-align: left; font-size: 7pt; color: #999; line-height: 1.7; }
+  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 5pt 0; border-radius: 4pt; font-size: 14pt; font-weight: 700; margin: 8pt 0 10pt; }
+  .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 10pt; margin-bottom: 10pt; }
+  .camp-header .camp-logo { width: 30mm; height: 30mm; border-radius: 50%; border: 3pt solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
-  .camp-header .camp-logo span { font-size: 62px; font-weight: 800; color: ${primaryColor}; }
+  .camp-header .camp-logo span { font-size: 18pt; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
-  .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 8px 28px; border-radius: 10px; font-size: 30px; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; letter-spacing: 1px; }
-  .camp-header .camp-subtitle { font-size: 22px; font-weight: 600; color: #a8852f; margin-top: 10px; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 4pt 16pt; border-radius: 5pt; font-size: 14pt; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-subtitle { font-size: 11pt; font-weight: 600; color: #a8852f; margin-top: 5pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-  th { background: ${primaryColor}; color: #fff; padding: 18px 22px; text-align: right; font-size: 34px; font-weight: 600; }
-  td { border: 0.5px solid rgba(0,0,0,0.08); padding: 18px 22px; text-align: right; background: transparent; font-size: 34px; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+  th { background: ${primaryColor}; color: #fff; padding: 5pt 7pt; text-align: right; font-size: 9pt; font-weight: 600; }
+  td { border: 0.5pt solid rgba(0,0,0,0.12); padding: 5pt 7pt; text-align: right; background: transparent; font-size: 9pt; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
-  .section-title { font-size: 20px; font-weight: 700; color: ${primaryColor}; margin: 16px 0 8px; text-align: center; padding: 8px; background: ${primaryColor}14; border-radius: 6px; }
-  .wide-table th, .wide-table td { font-size: 16px; padding: 8px 10px; }
-  .flight-table th, .flight-table td { font-size: 20px; padding: 10px 14px; white-space: nowrap; }
+  .section-title { font-size: 10pt; font-weight: 700; color: ${primaryColor}; margin: 8pt 0 4pt; text-align: center; padding: 4pt; background: ${primaryColor}14; border-radius: 3pt; }
+  .wide-table th, .wide-table td { font-size: 8pt; padding: 4pt 6pt; }
+  .flight-table th, .flight-table td { font-size: 8pt; padding: 4pt 6pt; white-space: nowrap; }
   .ltr-table th, .ltr-table td { text-align: left; }
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
-  .footer { text-align: center; color: #aaa; font-size: 10px; margin-top: 20px; border-top: 0.5px solid #eee; padding-top: 8px; }
+  .footer { text-align: center; color: #aaa; font-size: 7pt; margin-top: 10pt; border-top: 0.5pt solid #eee; padding-top: 5pt; }
   @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; } }
 </style></head><body>
 ${headerHTML}
