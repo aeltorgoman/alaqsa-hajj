@@ -703,7 +703,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   // مساعدات التصميم
-  const sortedPassengers = [...passengers].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  const sortedPassengers = [...passengers].filter(p => !p.passenger_type || p.passenger_type === "حاج").sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   const inputStyle = { width:"100%", padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, boxSizing:"border-box" as const };
   const thStyle    = { padding:"10px 12px", background:"var(--em8)", color:"#fff", textAlign:"right" as const, fontSize:12, fontWeight:600 };
   const tdStyle    = { padding:"8px 12px", border:"1px solid var(--border)", fontSize:13 };
