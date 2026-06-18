@@ -756,8 +756,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   // ══════════════════════════════════════════════
   const PaymentDetailModal = () => {
     if (!selectedPayment) return null;
-    const modalP = selectedP || passengers.find(x => x.id === selectedPayment.passenger_id) || null;
-    const pName = selectedP.short_ar || selectedP.name_ar;
+    const modalP = selectedP ?? passengers.find(x => x.id === selectedPayment.passenger_id) ?? null;
+    const pName = modalP ? (modalP.short_ar || modalP.name_ar) : "—";
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }} onClick={() => setSelectedPayment(null)}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)" }} onClick={e => e.stopPropagation()}>
