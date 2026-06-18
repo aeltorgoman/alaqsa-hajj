@@ -148,18 +148,18 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
-    const headers = COLS.map(c => `<th style="padding:6px 10px;background:${config.color_primary || "#6B1F3A"};color:#fff;white-space:nowrap;text-align:right">${c.label}</th>`).join("");
+    const headers = COLS.map(c => `<th style="padding:4pt 6pt;background:${config.color_primary || "#6B1F3A"};color:#fff;text-align:right;font-size:8pt">${c.label}</th>`).join("");
     const rows = filtered.map((p, i) =>
       `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f6f2"}">
-        <td style="text-align:center;padding:5px 8px;border:0.5px solid #ddd">${i + 1}</td>
-        ${COLS.map(col => `<td style="padding:5px 8px;border:0.5px solid #ddd">${getVal(p, col.key, col.get)}</td>`).join("")}
+        <td style="text-align:center;padding:4pt 5pt;border:0.5pt solid #ddd;font-size:8pt">${i + 1}</td>
+        ${COLS.map(col => `<td style="padding:4pt 5pt;border:0.5pt solid #ddd;font-size:8pt;white-space:normal">${getVal(p, col.key, col.get)}</td>`).join("")}
       </tr>`
     ).join("");
-    const body = `<table class="wide-table" style="font-size:12px">
-      <thead><tr><th style="text-align:center;padding:6px 8px;background:${config.color_primary || "#6B1F3A"};color:#fff;width:35px">م</th>${headers}</tr></thead>
+    const body = `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <thead><tr><th style="text-align:center;padding:4pt 5pt;background:${config.color_primary || "#6B1F3A"};color:#fff;width:20pt;font-size:8pt">م</th>${headers}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-    const html = makeHTML("كشف الحجاج", body, false, config.logo_url || "", config.name_ar || "حملة الأقصى", config.tagline || "", config.color_primary || "#6B1F3A", config.color_accent || "#0C447C");
+    const html = makeHTML("كشف الحجاج", body, true, config.logo_url || "", config.name_ar || "حملة الأقصى", config.tagline || "", config.color_primary || "#6B1F3A", config.color_accent || "#0C447C");
     printInPage(html);
   };
 
