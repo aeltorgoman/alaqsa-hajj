@@ -18,12 +18,13 @@ async function saveSortOrder(items: { id: number; sort_order: number }[]) {
 const flightField = (type?: string): "flight_id" | "return_flight_id" => type === "إياب" ? "return_flight_id" : "flight_id";
 
 function FlightsStats({ passengers }: { passengers: Passenger[] }) {
-  const total = passengers.length;
-  const withoutTicket = passengers.filter(p => p.services?.flight === "بدون").length;
+  const hajjOnly = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const total = hajjOnly.length;
+  const withoutTicket = hajjOnly.filter(p => p.services?.flight === "بدون").length;
   const needsFlight = total - withoutTicket;
-  const assigned = passengers.filter(p => p.flight_id != null).length;
+  const assigned = hajjOnly.filter(p => p.flight_id != null).length;
   const unassigned = passengers.filter(p => p.flight_id == null && p.services?.flight !== "بدون" && (!p.passenger_type || p.passenger_type === "حاج")).length;
-  const firstClass = passengers.filter(p => p.services?.flight === "درجة أولى").length;
+  const firstClass = hajjOnly.filter(p => p.services?.flight === "درجة أولى").length;
 
   const cards = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
