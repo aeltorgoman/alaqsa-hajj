@@ -93,18 +93,18 @@ function makeFinanceHTML(
 <style>
   @page { size: A4 portrait; margin: 10mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:15px; color:#1c1c1c; background:#fff; }
-  .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:3px solid ${primaryColor}; margin-bottom:8px; }
-  .logo-box { width:70px; height:70px; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:26px; font-weight:800; flex-shrink:0; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:10pt; color:#1c1c1c; background:#fff; }
+  .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:8pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:6pt; }
+  .logo-box { width:18mm; height:18mm; border-radius:3mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:14pt; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company-name { font-size:18px; font-weight:800; color:${primaryColor}; }
-  .tagline { font-size:11px; color:#888; margin-top:2px; }
-  .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:10px; border-radius:8px; font-size:16px; font-weight:800; margin:10px 0 12px; }
-  table { width:100%; border-collapse:collapse; margin-bottom:14px; }
-  th { background:${primaryColor}; color:#fff; padding:12px 14px; text-align:right; font-size:14px; font-weight:700; }
-  td { border:1px solid #e0e0e0; padding:10px 14px; text-align:right; font-size:14px; }
+  .company-name { font-size:13pt; font-weight:800; color:${primaryColor}; }
+  .tagline { font-size:8pt; color:#888; margin-top:2pt; }
+  .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:7pt; border-radius:5pt; font-size:13pt; font-weight:800; margin:8pt 0 10pt; }
+  table { width:100%; border-collapse:collapse; margin-bottom:10pt; }
+  th { background:${primaryColor}; color:#fff; padding:6pt 8pt; text-align:right; font-size:10pt; font-weight:700; }
+  td { border:0.5pt solid #e0e0e0; padding:5pt 8pt; text-align:right; font-size:10pt; }
   tr:nth-child(even) td { background:#f9f7f4; }
-  .footer { text-align:center; color:#bbb; font-size:10px; margin-top:14px; border-top:1px solid #eee; padding-top:8px; }
+  .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
   @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
 </style></head><body>
 <div class="doc-header">
@@ -233,41 +233,41 @@ function makePassengerStatementHTML(
 <style>
   @page { size: A4 portrait; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:15px; }
-  .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:3px solid ${primaryColor}; margin-bottom:10px; }
-  .logo-box { width:80px; height:80px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:32px; font-weight:800; flex-shrink:0; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:12pt; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:8pt; }
+  .logo-box { width:22mm; height:22mm; border-radius:3mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:18pt; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company-name { font-size:20px; font-weight:800; color:${primaryColor}; }
-  .tagline { font-size:12px; color:#888; margin-top:3px; }
-  .title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:12px; border-radius:10px; font-size:20px; font-weight:800; margin:12px 0; }
-  .passenger-name { text-align:center; font-size:26px; font-weight:900; color:${primaryColor}; margin:6px 0 4px; }
-  .passenger-sub { text-align:center; font-size:13px; color:#666; margin-bottom:14px; }
-  .summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px; }
-  .sum-card { border-radius:10px; padding:14px; text-align:center; border:1.5px solid; }
-  .sum-label { font-size:12px; color:#888; margin-bottom:6px; }
-  .sum-val { font-size:28px; font-weight:900; line-height:1; }
-  .sum-cur { font-size:12px; color:#888; margin-top:4px; }
+  .company-name { font-size:15pt; font-weight:800; color:${primaryColor}; }
+  .tagline { font-size:9pt; color:#888; margin-top:2pt; }
+  .title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:10pt; border-radius:6pt; font-size:16pt; font-weight:800; margin:10pt 0; }
+  .passenger-name { text-align:center; font-size:22pt; font-weight:900; color:${primaryColor}; margin:6pt 0 3pt; }
+  .passenger-sub { text-align:center; font-size:10pt; color:#666; margin-bottom:12pt; }
+  .summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10pt; margin-bottom:14pt; }
+  .sum-card { border-radius:6pt; padding:12pt; text-align:center; border:1.5pt solid; }
+  .sum-label { font-size:9pt; color:#888; margin-bottom:5pt; }
+  .sum-val { font-size:24pt; font-weight:900; line-height:1; }
+  .sum-cur { font-size:9pt; color:#888; margin-top:3pt; }
   .card-due  { background:${primaryColor}08; border-color:${primaryColor}; }
   .card-paid { background:#2A9D8F10; border-color:#2A9D8F; }
-  .card-bal  { border:2px solid; }
-  table { width:100%; border-collapse:collapse; margin-bottom:14px; }
-  th { background:${primaryColor}; color:#fff; padding:12px 16px; text-align:right; font-size:15px; font-weight:700; }
-  td { padding:11px 16px; border:1px solid #e8e8e8; font-size:15px; }
+  .card-bal  { border:2pt solid; }
+  table { width:100%; border-collapse:collapse; margin-bottom:12pt; }
+  th { background:${primaryColor}; color:#fff; padding:9pt 12pt; text-align:right; font-size:11pt; font-weight:700; }
+  td { padding:9pt 12pt; border:0.5pt solid #e8e8e8; font-size:11pt; }
   tr.alt td { background:#f9f7f4; }
   tr.pay-row td { background:#f0faf8; }
   tr.pay-row.alt td { background:#e8f5f2; }
-  .bayan { font-size:15px; }
-  .debit { text-align:center; color:#C0392B; font-weight:700; font-size:15px; min-width:120px; }
-  .credit { text-align:center; color:#2A9D8F; font-weight:700; font-size:15px; min-width:120px; }
+  .bayan { font-size:11pt; }
+  .debit { text-align:center; color:#C0392B; font-weight:700; font-size:11pt; min-width:80pt; }
+  .credit { text-align:center; color:#2A9D8F; font-weight:700; font-size:11pt; min-width:80pt; }
   .disc { color:#2A9D8F !important; }
-  .paid { font-size:16px; }
-  .method { font-size:13px; color:#888; }
-  .note { font-size:12px; color:#999; }
-  .badge-add { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; background:#E8951A20; color:#E8951A; margin-left:6px; }
-  .badge-disc { display:inline-block; font-size:11px; padding:1px 8px; border-radius:99px; background:#2A9D8F20; color:#2A9D8F; margin-left:6px; }
-  .total-row td { background:${primaryColor}; color:#fff; font-weight:800; font-size:16px; padding:13px 16px; text-align:center; }
+  .paid { font-size:12pt; }
+  .method { font-size:9pt; color:#888; }
+  .note { font-size:9pt; color:#999; }
+  .badge-add { display:inline-block; font-size:8pt; padding:1pt 6pt; border-radius:99pt; background:#E8951A20; color:#E8951A; margin-left:5pt; }
+  .badge-disc { display:inline-block; font-size:8pt; padding:1pt 6pt; border-radius:99pt; background:#2A9D8F20; color:#2A9D8F; margin-left:5pt; }
+  .total-row td { background:${primaryColor}; color:#fff; font-weight:800; font-size:12pt; padding:10pt 12pt; text-align:center; }
   .total-row td:first-child { text-align:right; }
-  .footer { text-align:center; font-size:11px; color:#bbb; margin-top:16px; border-top:1px solid #eee; padding-top:10px; }
+  .footer { text-align:center; font-size:8pt; color:#bbb; margin-top:14pt; border-top:0.5pt solid #eee; padding-top:8pt; }
   @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
 </style></head><body>
 <div class="header">
@@ -342,17 +342,17 @@ function makeGroupStatementHTML(
 <style>
   @page { size: A4 portrait; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
-  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:15px; }
-  .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:3px solid ${primaryColor}; margin-bottom:10px; }
-  .logo-box { width:80px; height:80px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:32px; font-weight:800; flex-shrink:0; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:11pt; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:8pt; }
+  .logo-box { width:22mm; height:22mm; border-radius:3mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:16pt; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:12px; border-radius:10px; font-size:20px; font-weight:800; margin:12px 0; }
-  .summary { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; margin-bottom:18px; }
-  .sum-card { border-radius:10px; padding:12px; text-align:center; border:1.5px solid; }
-  .sum-label { font-size:11px; color:#888; margin-bottom:4px; }
-  .sum-val { font-size:22px; font-weight:900; line-height:1; }
-  .sum-cur { font-size:11px; color:#888; margin-top:3px; }
-  .footer { text-align:center; font-size:11px; color:#bbb; margin-top:16px; border-top:1px solid #eee; padding-top:10px; }
+  .title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:9pt; border-radius:5pt; font-size:15pt; font-weight:800; margin:10pt 0; }
+  .summary { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8pt; margin-bottom:14pt; }
+  .sum-card { border-radius:5pt; padding:10pt; text-align:center; border:1.5pt solid; }
+  .sum-label { font-size:8pt; color:#888; margin-bottom:4pt; }
+  .sum-val { font-size:18pt; font-weight:900; line-height:1; }
+  .sum-cur { font-size:8pt; color:#888; margin-top:3pt; }
+  .footer { text-align:center; font-size:8pt; color:#bbb; margin-top:14pt; border-top:0.5pt solid #eee; padding-top:8pt; }
   @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
 </style></head><body>
 <div class="header">
@@ -593,70 +593,82 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   function printFullReport(data:{p:Passenger;due:number;paid:number;balance:number}[], title="تقرير الحجاج المالي الكامل") {
     const tD=data.reduce((s,r)=>s+r.due,0), tP=data.reduce((s,r)=>s+r.paid,0), tB=tD-tP;
-    const rows=data.map((r,i)=>{
-      const st=financeStatus(r.due,r.paid);
-      const statusText=st.label;
-      const statusColor=st.color;
-      return `<tr style="${i%2===1?"background:#f5f5f5":""}">
-        <td style="text-align:center;width:28px;color:#888">${i+1}</td>
-        <td>${r.p.short_ar||r.p.name_ar}</td>
-        <td style="width:70px;font-size:12px;color:#555">${(pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—").replace("باقة ","")}</td>
-        <td style="text-align:center;width:85px;color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
-        <td style="text-align:center;width:85px;color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
-        <td style="text-align:center;width:85px;color:${r.balance>0?"#C0392B":"#2A9D8F"};font-weight:700">${fmtAmt(r.balance)}</td>
-        <td style="text-align:center;width:55px;color:${statusColor};font-weight:700;font-size:12px">${statusText}</td>
+    const PER_PAGE = 30;
+    const header = `<tr style="background:${primaryColor};color:#fff">
+        <th style="width:20pt;text-align:center;font-size:9pt;padding:5pt 4pt">م</th>
+        <th style="font-size:9pt;padding:5pt 6pt">الاسم</th>
+        <th style="width:50pt;font-size:9pt;padding:5pt 4pt">الباقة</th>
+        <th style="width:60pt;text-align:center;font-size:9pt;padding:5pt 4pt">المطلوب</th>
+        <th style="width:60pt;text-align:center;font-size:9pt;padding:5pt 4pt">المدفوع</th>
+        <th style="width:60pt;text-align:center;font-size:9pt;padding:5pt 4pt">المتبقي</th>
+        <th style="width:40pt;text-align:center;font-size:9pt;padding:5pt 4pt">الحالة</th>
       </tr>`;
-    }).join("");
-    const body=`<table>
-      <tr>
-        <th style="width:28px;text-align:center">م</th>
-        <th>الاسم</th>
-        <th style="width:70px">الباقة</th>
-        <th style="width:85px;text-align:center">المطلوب</th>
-        <th style="width:85px;text-align:center">المدفوع</th>
-        <th style="width:85px;text-align:center">المتبقي</th>
-        <th style="width:55px;text-align:center">الحالة</th>
-      </tr>
-      ${rows}
-      <tr style="background:${primaryColor};color:#fff;font-weight:700">
-        <td colspan="3" style="text-align:right">الإجمالي</td>
-        <td style="text-align:center">${fmtAmt(tD)}</td>
-        <td style="text-align:center">${fmtAmt(tP)}</td>
-        <td style="text-align:center">${fmtAmt(tB)}</td>
+    const pages = [];
+    for (let i = 0; i < data.length; i += PER_PAGE) {
+      const chunk = data.slice(i, i + PER_PAGE);
+      const isLast = i + PER_PAGE >= data.length;
+      const rows = chunk.map((r, j) => {
+        const st = financeStatus(r.due, r.paid);
+        const idx = i + j;
+        return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
+          <td style="text-align:center;font-size:9pt;padding:4pt 4pt;color:#888">${idx+1}</td>
+          <td style="font-size:10pt;padding:4pt 6pt">${r.p.short_ar||r.p.name_ar}</td>
+          <td style="font-size:8pt;padding:4pt 4pt;color:#555">${(pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—").replace("باقة ","")}</td>
+          <td style="text-align:center;font-size:10pt;padding:4pt;color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
+          <td style="text-align:center;font-size:10pt;padding:4pt;color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
+          <td style="text-align:center;font-size:10pt;padding:4pt;color:${r.balance>0?"#C0392B":"#2A9D8F"};font-weight:700">${fmtAmt(r.balance)}</td>
+          <td style="text-align:center;font-size:9pt;padding:4pt;color:${st.color};font-weight:700">${st.label}</td>
+        </tr>`;
+      }).join("");
+      const totRow = isLast ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
+        <td colspan="3" style="text-align:right;padding:5pt 6pt;font-size:10pt">الإجمالي</td>
+        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(tD)}</td>
+        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(tP)}</td>
+        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(tB)}</td>
         <td></td>
-      </tr>
-    </table>`;
+      </tr>` : "";
+      pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table>${header}${rows}${totRow}</table></div>`);
+    }
+    const body = pages.join("");
     printInPage(makeFinanceHTML(title,body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
   function printPaymentsReport() {
     const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
-    const rows=sorted.map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);return `<tr style="${i%2===1?"background:#f5f5f5":""}">
-      <td style="text-align:center;width:28px;color:#888">${i+1}</td>
-      <td>${p?(p.short_ar||p.name_ar):"—"}</td>
-      <td style="text-align:center;width:95px">${py.payment_date}</td>
-      <td style="text-align:center;width:80px">${py.method}</td>
-      <td style="text-align:center;width:90px;color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
-      <td style="width:120px;color:#888;font-size:12px">${py.notes||"—"}</td>
-    </tr>`;}).join("");
     const total=payments.reduce((s,p)=>s+Number(p.amount),0);
-    const body=`<table>
-      <tr>
-        <th style="width:28px;text-align:center">م</th>
-        <th>الحاج</th>
-        <th style="width:95px;text-align:center">التاريخ</th>
-        <th style="width:80px;text-align:center">طريقة الدفع</th>
-        <th style="width:90px;text-align:center">المبلغ</th>
-        <th style="width:120px">ملاحظات</th>
-      </tr>
-      ${rows}
-      <tr style="background:${primaryColor};color:#fff;font-weight:700">
-        <td colspan="4" style="text-align:right">الإجمالي</td>
-        <td style="text-align:center">${fmtAmt(total)}</td>
+    const PER_PAGE = 30;
+    const header = `<tr style="background:${primaryColor};color:#fff">
+      <th style="width:20pt;text-align:center;font-size:9pt;padding:5pt 4pt">م</th>
+      <th style="font-size:9pt;padding:5pt 6pt">الحاج</th>
+      <th style="width:65pt;text-align:center;font-size:9pt;padding:5pt 4pt">التاريخ</th>
+      <th style="width:55pt;text-align:center;font-size:9pt;padding:5pt 4pt">طريقة الدفع</th>
+      <th style="width:65pt;text-align:center;font-size:9pt;padding:5pt 4pt">المبلغ</th>
+      <th style="font-size:9pt;padding:5pt 4pt">ملاحظات</th>
+    </tr>`;
+    const pages = [];
+    for (let i = 0; i < sorted.length; i += PER_PAGE) {
+      const chunk = sorted.slice(i, i + PER_PAGE);
+      const isLast = i + PER_PAGE >= sorted.length;
+      const rows = chunk.map((py, j) => {
+        const p = passengers.find(x=>x.id===py.passenger_id);
+        const idx = i + j;
+        return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
+          <td style="text-align:center;font-size:9pt;padding:4pt;color:#888">${idx+1}</td>
+          <td style="font-size:10pt;padding:4pt 6pt">${p?(p.short_ar||p.name_ar):"—"}</td>
+          <td style="text-align:center;font-size:9pt;padding:4pt">${py.payment_date}</td>
+          <td style="text-align:center;font-size:9pt;padding:4pt">${py.method}</td>
+          <td style="text-align:center;font-size:10pt;padding:4pt;color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
+          <td style="font-size:8pt;padding:4pt;color:#888">${py.notes||"—"}</td>
+        </tr>`;
+      }).join("");
+      const totRow = isLast ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
+        <td colspan="4" style="text-align:right;padding:5pt 6pt;font-size:10pt">الإجمالي</td>
+        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(total)}</td>
         <td></td>
-      </tr>
-    </table>`;
-    printInPage(makeFinanceHTML("تقرير الدفعات",body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
+      </tr>` : "";
+      pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table>${header}${rows}${totRow}</table></div>`);
+    }
+    printInPage(makeFinanceHTML("تقرير الدفعات",pages.join(""),false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
   function printPackagesReport() {
