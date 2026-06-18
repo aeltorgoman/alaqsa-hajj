@@ -202,6 +202,20 @@ function AdminsPage({
   // ============================================================
   const saveAdmin = async () => {
     if (!form.name_ar.trim() && !form.name_en.trim()) { showAlert("warning", "يرجى إدخال الاسم على الأقل"); return; }
+
+    // منع تسجيل نفس الشخص كحاج وإداري
+    if (!editTarget && (form.passport.trim() || form.national_id.trim())) {
+      const duplicate = passengers.find(p =>
+        (!p.passenger_type || p.passenger_type === "حاج") &&
+        ((form.passport.trim() && p.passport === form.passport.trim()) ||
+         (form.national_id.trim() && p.national_id === form.national_id.trim()))
+      );
+      if (duplicate) {
+        showAlert("warning", `هذا الشخص مسجّل بالفعل كحاج باسم: ${duplicate.short_ar || duplicate.name_ar}`);
+        return;
+      }
+    }
+
     setSaving(true);
     const short_ar = form.short_ar.trim() || makeShort(form.name_ar);
     const short_en = form.short_en.trim() || makeShort(form.name_en);
@@ -231,7 +245,8 @@ function AdminsPage({
           ...data[0],
           services: { bus: "", flight: "", hotel_type: "", hotel_view: "", camp_mina: "", camp_arafa: "" },
         };
-        setPassengers(prev => [...prev, newP]);
+        // نضيف بس لو مش موجود في الـ state (لتجنب التكرار مع الـ realtime)
+        setPassengers(prev => prev.some(p => p.id === newP.id) ? prev : [...prev, newP]);
         showAlert("success", "تمت إضافة الإداري بنجاح");
       }
       setShowModal(false);
