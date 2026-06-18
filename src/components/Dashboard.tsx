@@ -44,7 +44,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
     ].filter(a => a.count > 0);
   }, [hajj]);
 
-  const recent = [...passengers].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 5);
+  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 5);
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
