@@ -16,10 +16,11 @@ async function saveSortOrder(items: { id: number; sort_order: number }[]) {
 // ===== إحصائيات الفندق =====
 function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenger[] }) {
   const stats = useMemo(() => {
-    const total = passengers.length;
-    const assignedCount = passengers.filter(p => p.room_id != null).length;
+    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const total = hajj.length;
+    const assignedCount = hajj.filter(p => p.room_id != null).length;
     const unassigned = total - assignedCount;
-    const viewRequested = passengers.filter(p => p.services?.hotel_view === "مطلة").length;
+    const viewRequested = hajj.filter(p => p.services?.hotel_view === "مطلة").length;
 
     // حساب نوع الغرفة من عدد الحجاج
     const getRoomLabel = (count: number) => {
