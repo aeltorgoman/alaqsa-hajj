@@ -755,7 +755,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   // PAYMENT DETAIL MODAL
   // ══════════════════════════════════════════════
   const PaymentDetailModal = () => {
-    if (!selectedPayment || !selectedP) return null;
+    if (!selectedPayment) return null;
+    const modalP = selectedP || passengers.find(x => x.id === selectedPayment.passenger_id) || null;
     const pName = selectedP.short_ar || selectedP.name_ar;
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }} onClick={() => setSelectedPayment(null)}>
@@ -1168,6 +1169,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   // REPORTS VIEW
   // ══════════════════════════════════════════════
   if (subView === "reports") {
+    // مودال تفاصيل الدفعة متاح في التقارير
     const allData=sortedPassengers.map(p=>{const due=calcTotalDue(p,pricing,customCharges),paid=calcTotalPaid(p.id,payments);return{p,due,paid,balance:due-paid};});
     const totDue=allData.reduce((s,r)=>s+r.due,0),totPaid=allData.reduce((s,r)=>s+r.paid,0),totBal=totDue-totPaid;
     const filtered=reportType==="late"?allData.filter(r=>r.balance>0):allData;
