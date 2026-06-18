@@ -603,6 +603,9 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         <th style="width:60pt;text-align:center;font-size:9pt;padding:5pt 4pt">المتبقي</th>
         <th style="width:40pt;text-align:center;font-size:9pt;padding:5pt 4pt">الحالة</th>
       </tr>`;
+    // A4 portrait صافي الارتفاع = 297 - 20mm margins - ~35mm header = ~242mm
+    // نقسم على 30 صف + صف الإجمالي = كل صف ~7.5mm = 21pt
+    const ROW_H = "21pt";
     const pages = [];
     for (let i = 0; i < data.length; i += PER_PAGE) {
       const chunk = data.slice(i, i + PER_PAGE);
@@ -611,23 +614,23 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         const st = financeStatus(r.due, r.paid);
         const idx = i + j;
         return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
-          <td style="text-align:center;font-size:9pt;padding:4pt 4pt;color:#888">${idx+1}</td>
-          <td style="font-size:10pt;padding:4pt 6pt">${r.p.short_ar||r.p.name_ar}</td>
-          <td style="font-size:8pt;padding:4pt 4pt;color:#555">${(pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—").replace("باقة ","")}</td>
-          <td style="text-align:center;font-size:10pt;padding:4pt;color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
-          <td style="text-align:center;font-size:10pt;padding:4pt;color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
-          <td style="text-align:center;font-size:10pt;padding:4pt;color:${r.balance>0?"#C0392B":"#2A9D8F"};font-weight:700">${fmtAmt(r.balance)}</td>
-          <td style="text-align:center;font-size:9pt;padding:4pt;color:${st.color};font-weight:700">${st.label}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
+          <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${r.p.short_ar||r.p.name_ar}</td>
+          <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${(pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—").replace("باقة ","")}</td>
+          <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
+          <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
+          <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${r.balance>0?"#C0392B":"#2A9D8F"};font-weight:700">${fmtAmt(r.balance)}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:${st.color};font-weight:700">${st.label}</td>
         </tr>`;
       }).join("");
       const totRow = isLast ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
-        <td colspan="3" style="text-align:right;padding:5pt 6pt;font-size:10pt">الإجمالي</td>
-        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(tD)}</td>
-        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(tP)}</td>
-        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(tB)}</td>
+        <td colspan="3" style="text-align:right;padding:6pt 6pt;font-size:11pt">الإجمالي</td>
+        <td style="text-align:center;padding:6pt;font-size:11pt">${fmtAmt(tD)}</td>
+        <td style="text-align:center;padding:6pt;font-size:11pt">${fmtAmt(tP)}</td>
+        <td style="text-align:center;padding:6pt;font-size:11pt">${fmtAmt(tB)}</td>
         <td></td>
       </tr>` : "";
-      pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table>${header}${rows}${totRow}</table></div>`);
+      pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table style="table-layout:fixed">${header}${rows}${totRow}</table></div>`);
     }
     const body = pages.join("");
     printInPage(makeFinanceHTML(title,body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
@@ -645,6 +648,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       <th style="width:65pt;text-align:center;font-size:9pt;padding:5pt 4pt">المبلغ</th>
       <th style="font-size:9pt;padding:5pt 4pt">ملاحظات</th>
     </tr>`;
+    const ROW_H = "21pt";
     const pages = [];
     for (let i = 0; i < sorted.length; i += PER_PAGE) {
       const chunk = sorted.slice(i, i + PER_PAGE);
@@ -653,20 +657,20 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         const p = passengers.find(x=>x.id===py.passenger_id);
         const idx = i + j;
         return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
-          <td style="text-align:center;font-size:9pt;padding:4pt;color:#888">${idx+1}</td>
-          <td style="font-size:10pt;padding:4pt 6pt">${p?(p.short_ar||p.name_ar):"—"}</td>
-          <td style="text-align:center;font-size:9pt;padding:4pt">${py.payment_date}</td>
-          <td style="text-align:center;font-size:9pt;padding:4pt">${py.method}</td>
-          <td style="text-align:center;font-size:10pt;padding:4pt;color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
-          <td style="font-size:8pt;padding:4pt;color:#888">${py.notes||"—"}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
+          <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${p?(p.short_ar||p.name_ar):"—"}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${py.payment_date}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${py.method}</td>
+          <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
+          <td style="font-size:9pt;padding:0 6pt;height:${ROW_H};color:#888">${py.notes||"—"}</td>
         </tr>`;
       }).join("");
       const totRow = isLast ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
-        <td colspan="4" style="text-align:right;padding:5pt 6pt;font-size:10pt">الإجمالي</td>
-        <td style="text-align:center;padding:5pt;font-size:10pt">${fmtAmt(total)}</td>
+        <td colspan="4" style="text-align:right;padding:6pt 6pt;font-size:11pt">الإجمالي</td>
+        <td style="text-align:center;padding:6pt;font-size:11pt">${fmtAmt(total)}</td>
         <td></td>
       </tr>` : "";
-      pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table>${header}${rows}${totRow}</table></div>`);
+      pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table style="table-layout:fixed">${header}${rows}${totRow}</table></div>`);
     }
     printInPage(makeFinanceHTML("تقرير الدفعات",pages.join(""),false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
