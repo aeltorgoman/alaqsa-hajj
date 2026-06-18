@@ -20,10 +20,11 @@ async function saveSortOrder(items: { id: number; sort_order: number }[]) {
 // ===== إحصائيات المخيمات =====
 function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: string; campServiceKey: string }) {
   const stats = useMemo(() => {
-    const total = passengers.length;
-    const assignedCount = passengers.filter(p => (p as any)[campIdKey] != null).length;
+    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const total = hajj.length;
+    const assignedCount = hajj.filter(p => (p as any)[campIdKey] != null).length;
     const unassigned = total - assignedCount;
-    const specialRequested = passengers.filter(p => (p.services as any)[campServiceKey] === "خاص").length;
+    const specialRequested = hajj.filter(p => (p.services as any)[campServiceKey] === "خاص").length;
     return { total, assignedCount, unassigned, specialRequested };
   }, [camps, passengers, campIdKey, campServiceKey]);
   const { total, assignedCount, unassigned, specialRequested } = stats;
