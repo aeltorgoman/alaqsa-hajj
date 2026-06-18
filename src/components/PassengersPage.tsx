@@ -29,11 +29,12 @@ function strongNameMatch(a?: string | null, b?: string | null): boolean {
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
   const stats = useMemo(() => {
-    const total = passengers.length;
-    const males = passengers.filter(p => p.gender === "ذكر").length;
-    const females = passengers.filter(p => p.gender === "أنثى").length;
+    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const total = hajj.length;
+    const males = hajj.filter(p => p.gender === "ذكر").length;
+    const females = hajj.filter(p => p.gender === "أنثى").length;
     const docsComplete = (p: Passenger) => !!(p.photo_url && p.passport_url && p.national_id_url);
-    const docsDone = passengers.filter(docsComplete).length;
+    const docsDone = hajj.filter(docsComplete).length;
     const docPct = total ? Math.round(docsDone / total * 100) : 0;
     return { total, males, females, docsDone, docPct };
   }, [passengers]);
