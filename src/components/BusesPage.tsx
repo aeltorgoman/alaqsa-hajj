@@ -17,10 +17,11 @@ async function saveSortOrder(items: { id: number; sort_order: number }[]) {
 // ===== إحصائيات الباصات =====
 function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger[] }) {
   const stats = useMemo(() => {
-    const total = passengers.length;
-    const assignedCount = passengers.filter(p => p.bus_id != null).length;
+    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const total = hajj.length;
+    const assignedCount = hajj.filter(p => p.bus_id != null).length;
     const unassigned = total - assignedCount;
-    const vipRequested = passengers.filter(p => p.services?.bus === "VIP").length;
+    const vipRequested = hajj.filter(p => p.services?.bus === "VIP").length;
     return { total, assignedCount, unassigned, vipRequested };
   }, [buses, passengers]);
   const { total, assignedCount, unassigned, vipRequested } = stats;
