@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react"; import t
 import type { AppConfig } from "./AppConfig";
 
 // ===== أنواع الثيمات =====
-export type ThemeId = "qatar-heritage" | "qatar-light" | "dark-heritage" | "modern-green";
+export type ThemeId = "qatar-heritage" | "dark-heritage" | "modern-green" | "royal-emerald";
 
 export interface Theme {
   id: ThemeId;
@@ -25,25 +25,25 @@ export const THEMES: Theme[] = [
     preview: { primary: "#7D1F3C", bg: "#F5EFE8", sidebar: "#2C0E1A" },
   },
   {
-    id: "qatar-light",
-    name: "Qatar Heritage Light",
-    nameAr: "التراث القطري الفاتح",
-    description: "نفس الهوية بشكل أكثر حداثة",
-    preview: { primary: "#7D1F3C", bg: "#FAFAFA", sidebar: "#FFFFFF" },
-  },
-  {
     id: "dark-heritage",
     name: "Dark Heritage",
     nameAr: "التراث الداكن",
-    description: "داكن فاخر مع ذهبي",
-    preview: { primary: "#C9A84C", bg: "#0F0A0C", sidebar: "#130C10" },
+    description: "داكن فاخر — نبيتي وذهبي",
+    preview: { primary: "#C9A84C", bg: "#0F0A0C", sidebar: "#080F0C" },
   },
   {
     id: "modern-green",
-    name: "Modern Green",
-    nameAr: "الأخضر العصري",
-    description: "زمردي احترافي نظيف",
-    preview: { primary: "#1A7A5C", bg: "#F4F8F6", sidebar: "#0F3D2E" },
+    name: "Modern Blue",
+    nameAr: "الأزرق العصري",
+    description: "أزرق ملكي احترافي نظيف",
+    preview: { primary: "#0C5FA8", bg: "#F3F7FA", sidebar: "#073E6E" },
+  },
+  {
+    id: "royal-emerald",
+    name: "Royal Emerald",
+    nameAr: "زمردي ملكي",
+    description: "أخضر غامق وذهبي — وقار ملكي",
+    preview: { primary: "#0f5340", bg: "#F6F3EA", sidebar: "#0b3b2e" },
   },
 ];
 
