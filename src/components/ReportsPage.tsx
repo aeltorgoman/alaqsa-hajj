@@ -557,15 +557,14 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   };
 
   // ============================================================
-  // أزرار التصدير الأربعة
+  // أزرار التصدير (عرض / Excel / طباعة)
   // ============================================================
   const ExportButtons = ({
-    onView, onExcel, onPDF, onPrint
-  }: { onView?: () => void; onExcel: () => void; onPDF: () => void; onPrint: () => void }) => (
+    onView, onExcel, onPrint
+  }: { onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
     <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
       {onView && <button onClick={onView} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
       <button onClick={onExcel} style={{ ...btnP({ flex: 1, minWidth: 80 }) }}>⬇️ Excel</button>
-      <button onClick={onPDF} style={{ background: "var(--info)", color: "var(--bg-card)", border: "none", padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500, flex: 1, minWidth: 80 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>
       <button onClick={onPrint} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>
     </div>
   );
@@ -579,7 +578,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const allSelected = items.length > 0 && items.every(it => selected.has(it.id));
     const open = alwaysOpen || openPanels.has(panelKey);
     return (
-      <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+      <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
         <div onClick={() => !alwaysOpen && togglePanel(panelKey)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: alwaysOpen ? "default" : "pointer", marginBottom: open ? 8 : 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {!alwaysOpen && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>}
@@ -685,16 +684,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {reports.map(r => (
               <div key={r.id} onClick={() => { setActiveReport(r.id); setFlightSubReport(null); }}
-                style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "var(--bg-card)" }}
+                style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "var(--bg-card)" }}
                 onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
-                onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                onMouseLeave={e => e.currentTarget.style.background = "var(--bg-card)"}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: r.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} dangerouslySetInnerHTML={{ __html: r.icon }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{r.desc}</div>
                   <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
                     <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--success-bg)", color: "var(--primary-dark)" }}>Excel</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--male-bg)", color: "var(--info)" }}>PDF</span>
                     <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
                   </div>
                 </div>
@@ -713,7 +711,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {activeReport === "passengers_report" && (
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الحجاج</div>
-              <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+              <div style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>اختر الأعمدة</div>
                   <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
@@ -745,7 +743,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               </div>
               <ExportButtons
                 onExcel={exportPassengersXLSX}
-                onPDF={() => printInPage(getPassengersHTML())}
                 onPrint={() => printInPage(getPassengersHTML())}
               />
             </>
@@ -762,9 +759,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     { id: "per_flight", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`, name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
                   ].map(sub => (
                     <div key={sub.id} onClick={() => setFlightSubReport(sub.id as any)}
-                      style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
+                      style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
                       onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
-                      onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                      onMouseLeave={e => e.currentTarget.style.background = "var(--bg-card)"}>
                       <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--male-bg)", display: "flex", alignItems: "center", justifyContent: "center" }} dangerouslySetInnerHTML={{ __html: sub.icon }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{sub.name}</div>
@@ -807,7 +804,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       </div>
                       <ExportButtons
                         onExcel={exportAirlineXLSX}
-                        onPDF={() => printInPage(getAirlineHTML())}
                         onPrint={() => printInPage(getAirlineHTML())}
                       />
                     </>
@@ -834,7 +830,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                           const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
                           const isOpen = expandedItems.has(flight.id);
                           return (
-                            <div key={flight.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 12, overflow: "hidden" }}>
+                            <div key={flight.id} style={{ border: "0.5px solid var(--border)", borderRadius: 10, marginBottom: 12, overflow: "hidden" }}>
                               <div onClick={() => toggleExpandedItem(flight.id)} style={{ background: "var(--male-bg)", padding: "10px 14px", borderBottom: isOpen ? "0.5px solid #dce8f8" : "none", display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)", marginTop: 9, flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
                                 <div style={{ width: 30, height: 30, borderRadius: 8, background: flightColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -881,7 +877,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       }
                       <ExportButtons
                         onExcel={exportPerFlightXLSX}
-                        onPDF={() => printInPage(getPerFlightHTML())}
                         onPrint={() => printInPage(getPerFlightHTML())}
                       />
                     </>
@@ -911,7 +906,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     const isOpen = expandedItems.has(bus.id);
                     const busColor = bus.type === "VIP" ? VIP_ICON_COLOR : ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
                     return (
-                      <div key={bus.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+                      <div key={bus.id} style={{ border: "0.5px solid var(--border)", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
                         <div onClick={() => toggleExpandedItem(bus.id)} style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
@@ -941,7 +936,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   })}
                   <ExportButtons
                     onExcel={exportBusesXLSX}
-                    onPDF={() => printInPage(getBusesHTML())}
                     onPrint={() => printInPage(getBusesHTML())}
                   />
                 </>
@@ -1006,7 +1000,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   })}
                   <ExportButtons
                     onExcel={() => exportCampsXLSX("منى")}
-                    onPDF={() => printInPage(getCampsHTML("منى"))}
                     onPrint={() => printInPage(getCampsHTML("منى"))}
                   />
                 </>
@@ -1071,7 +1064,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   })}
                   <ExportButtons
                     onExcel={() => exportCampsXLSX("عرفة")}
-                    onPDF={() => printInPage(getCampsHTML("عرفة"))}
                     onPrint={() => printInPage(getCampsHTML("عرفة"))}
                   />
                 </>
@@ -1084,7 +1076,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الفندق</div>
               {/* فلتر الطباعة */}
-              <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+              <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>نطاق التقرير</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                   {[["all", "كل الغرف"], ["type", "نوع معين"]].map(([val, label]) => (
@@ -1124,10 +1116,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
                   Excel
                 </button>
-                <button onClick={() => printInPage(getHotelHTML())} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--info)", border: "none", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  PDF
-                </button>
                 <button onClick={() => printInPage(getHotelHTML())} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--paper)", border: "1px solid var(--border)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                   طباعة
@@ -1142,7 +1130,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
                     const isOpen = expandedItems.has(room.id);
                     return (
-                      <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
+                      <div key={room.id} style={{ border: "0.5px solid var(--border)", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
                         <div onClick={() => toggleExpandedItem(room.id)} style={{ padding: "7px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
                           <div style={{ width: 28, height: 28, borderRadius: 8, background: ROOM_ICON_COLORS[room.type] || "#999", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -1175,7 +1163,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   })}
                   <ExportButtons
                     onExcel={exportHotelXLSX}
-                    onPDF={() => printInPage(getHotelHTML())}
                     onPrint={() => printInPage(getHotelHTML())}
                   />
                 </>
