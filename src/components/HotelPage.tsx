@@ -350,7 +350,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 return `${count} أشخاص`;
               };
               return (
-                <div key={room.id} style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>
+                <div key={room.id} style={{ border: "0.5px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>
                   {/* Header */}
                   <div onClick={() => toggleRoom(room.id)} style={{ padding: "8px 10px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                     <div style={{ width: 28, height: 28, borderRadius: 8, background: ROOM_ICON_COLORS[room.type] || "#999", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -380,7 +380,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   {/* Passengers list with Drag & Drop */}
                   {isExpanded && (
                     <div
-                      style={{ padding: "8px 12px", borderTop: "0.5px solid #e5e5e5" }}
+                      style={{ padding: "8px 12px", borderTop: "0.5px solid var(--border)" }}
                       onDragOver={e => e.preventDefault()}
                       onDrop={() => handleDrop(room.id)}
                     >
