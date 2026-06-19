@@ -226,11 +226,15 @@ function AdminsPage({
           .update({ ...form, short_ar, short_en })
           .eq("id", editTarget.id);
         if (error) throw error;
-        // رفع الصور لو تغيرت
-        if (passportFile) await uploadDoc(passportFile, editTarget.id, "passport");
-        if (idFile)       await uploadDoc(idFile,       editTarget.id, "national_id");
+        // رفع الصور لو تغيرت + تحديث أعمدة الروابط في قاعدة البيانات
+        const docUpdates: any = {};
+        if (passportFile) { const url = await uploadDoc(passportFile, editTarget.id, "passport_doc"); if (url) docUpdates.passport_url = url; }
+        if (idFile)       { const url = await uploadDoc(idFile,       editTarget.id, "idcard");       if (url) docUpdates.national_id_url = url; }
+        if (Object.keys(docUpdates).length) {
+          await supabase.from("passengers").update(docUpdates).eq("id", editTarget.id);
+        }
         setPassengers(prev => prev.map(p => p.id === editTarget.id
-          ? { ...p, ...form, short_ar, short_en } : p));
+          ? { ...p, ...form, short_ar, short_en, ...docUpdates } : p));
         showAlert("success", "تم تعديل بيانات الإداري");
       } else {
         const { data, error } = await supabase.from("passengers")
@@ -238,11 +242,16 @@ function AdminsPage({
           .select();
         if (error || !data?.[0]) throw error;
         const newId = data[0].id;
-        // رفع الصور
-        if (passportFile) await uploadDoc(passportFile, newId, "passport");
-        if (idFile)       await uploadDoc(idFile,       newId, "national_id");
+        // رفع الصور + تحديث أعمدة الروابط
+        const docUpdates: any = {};
+        if (passportFile) { const url = await uploadDoc(passportFile, newId, "passport_doc"); if (url) docUpdates.passport_url = url; }
+        if (idFile)       { const url = await uploadDoc(idFile,       newId, "idcard");       if (url) docUpdates.national_id_url = url; }
+        if (Object.keys(docUpdates).length) {
+          await supabase.from("passengers").update(docUpdates).eq("id", newId);
+        }
         const newP: Passenger = {
           ...data[0],
+          ...docUpdates,
           services: { bus: "", flight: "", hotel_type: "", hotel_view: "", camp_mina: "", camp_arafa: "" },
         };
         // نضيف بس لو مش موجود في الـ state (لتجنب التكرار مع الـ realtime)
@@ -540,10 +549,12 @@ function AdminsPage({
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
               {([
+                ["صورة شخصية",   (docTarget as any).photo_url,        "photo_url",        "photo",        "image/*"],
                 ["جواز السفر",  (docTarget as any).passport_url,     "passport_url",     "passport_doc", "image/*"],
                 ["البطاقة",     (docTarget as any).national_id_url,  "national_id_url",  "idcard",       "image/*"],
                 ["العقد",       (docTarget as any).contract_url,     "contract_url",     "contract",     "image/*,application/pdf"],
                 ["تذكرة الطيران",(docTarget as any).flight_ticket_url,"flight_ticket_url","flight_ticket","image/*,application/pdf"],
+                ["تصريح الحاج", (docTarget as any).hajj_permit_url,  "hajj_permit_url",  "hajj_permit",  "image/*,application/pdf"],
               ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
                 <div key={label} style={{ padding: "8px 0", borderBottom: "0.5px solid var(--border)" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
