@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import { AlertModal, useAlert } from "./AlertModal";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
@@ -652,6 +653,62 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     printInPage(makeFinanceHTML(title,body,false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
+  function exportFullReportXLSX(data:{p:Passenger;due:number;paid:number;balance:number}[], title="تقرير الحجاج المالي الكامل") {
+    const headers = ["م", "الاسم", "الباقة", "المطلوب", "المدفوع", "المتبقي", "الحالة"];
+    const rows = data.map((r, i) => {
+      const st = financeStatus(r.due, r.paid);
+      return [
+        i + 1,
+        r.p.short_ar || r.p.name_ar,
+        (pricing[getPackageKey(r.p.services.hotel_type)]?.label || "—").replace("باقة ", ""),
+        r.due,
+        r.paid,
+        r.balance,
+        st.label,
+      ];
+    });
+    const tD = data.reduce((s, r) => s + r.due, 0);
+    const tP = data.reduce((s, r) => s + r.paid, 0);
+    const tB = tD - tP;
+    const ws = XLSX.utils.aoa_to_sheet([
+      headers,
+      ...rows,
+      ["", "الإجمالي", "", tD, tP, tB, ""],
+    ]);
+    ws["!cols"] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "التقرير");
+    XLSX.writeFile(wb, `${title}.xlsx`);
+  }
+
+  function exportFullReportXLSX(data:{p:Passenger;due:number;paid:number;balance:number}[], title="تقرير الحجاج المالي الكامل") {
+    const headers = ["م", "الاسم", "الباقة", "المطلوب", "المدفوع", "المتبقي", "الحالة"];
+    const rows = data.map((r, i) => {
+      const st = financeStatus(r.due, r.paid);
+      return [
+        i + 1,
+        r.p.short_ar || r.p.name_ar,
+        (pricing[getPackageKey(r.p.services.hotel_type)]?.label || "—").replace("باقة ", ""),
+        r.due,
+        r.paid,
+        r.balance,
+        st.label,
+      ];
+    });
+    const tD = data.reduce((s, r) => s + r.due, 0);
+    const tP = data.reduce((s, r) => s + r.paid, 0);
+    const tB = tD - tP;
+    const ws = XLSX.utils.aoa_to_sheet([
+      headers,
+      ...rows,
+      ["", "الإجمالي", "", tD, tP, tB, ""],
+    ]);
+    ws["!cols"] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "التقرير");
+    XLSX.writeFile(wb, `${title}.xlsx`);
+  }
+
   function printPaymentsReport() {
     const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
     const total=payments.reduce((s,p)=>s+Number(p.amount),0);
@@ -1174,13 +1231,17 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     const totDue=allData.reduce((s,r)=>s+r.due,0),totPaid=allData.reduce((s,r)=>s+r.paid,0),totBal=totDue-totPaid;
     const filtered=reportType==="late"?allData.filter(r=>r.balance>0):allData;
     const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData), late:()=>printFullReport(allData.filter(r=>r.balance>0),"تقرير المتأخرين"), payments:printPaymentsReport, packages:printPackagesReport, addons:printAddonsReport };
+    const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={()=>setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
           <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--em8)" }}>التقارير المالية</div>
-          <button onClick={printActions[reportType]} style={{ marginRight:"auto", padding:"7px 18px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
+          {excelActions[reportType] && (
+            <button onClick={excelActions[reportType]} style={{ marginRight:"auto", padding:"7px 18px", background:"#1D6F42", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Excel</button>
+          )}
+          <button onClick={printActions[reportType]} style={{ padding:"7px 18px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
         </div>
         <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
           {([{key:"full",label:"تقرير الحجاج الكامل"},{key:"late",label:"المتأخرون"},{key:"payments",label:"تقرير الدفعات"},{key:"packages",label:"تقرير الباقات"},{key:"addons",label:"ملخص الإضافات"}] as const).map(t=>(
