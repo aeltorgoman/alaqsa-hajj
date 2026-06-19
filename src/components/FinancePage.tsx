@@ -59,9 +59,9 @@ function fmtAmt(n: number): string {
 }
 
 function financeStatus(due: number, paid: number) {
-  if (paid >= due && due > 0) return { label: "مسدد",    color: "#2A9D8F", bg: "rgba(42,157,143,0.1)"  };
-  if (paid > 0)               return { label: "جزئي",    color: "#E8951A", bg: "rgba(232,149,26,0.1)"  };
-  return                             { label: "لم يدفع", color: "#C0392B", bg: "rgba(192,57,43,0.1)"   };
+  if (paid >= due && due > 0) return { label: "مسدد",    color: "var(--success)", bg: "var(--success-bg)" };
+  if (paid > 0)               return { label: "جزئي",    color: "var(--warning)", bg: "var(--warning-bg)" };
+  return                             { label: "لم يدفع", color: "var(--danger)",  bg: "var(--danger-bg)"  };
 }
 
 function printInPage(html: string) {
