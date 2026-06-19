@@ -9,10 +9,10 @@ export interface AlertState {
 }
 
 const ALERT_STYLES: Record<AlertType, { bg: string; color: string; icon: string; defaultTitle: string }> = {
-  success: { bg: "rgba(42,157,143,0.10)", color: "#2A9D8F", icon: "✓", defaultTitle: "تم بنجاح"  },
-  error:   { bg: "var(--fb)",             color: "var(--ff)", icon: "✕", defaultTitle: "حدث خطأ" },
-  warning: { bg: "rgba(232,149,26,0.10)", color: "#E8951A", icon: "!", defaultTitle: "تنبيه"     },
-  info:    { bg: "rgba(125,31,60,0.07)",  color: "var(--em7)", icon: "ⓘ", defaultTitle: "تنبيه" },
+  success: { bg: "var(--success-bg)", color: "var(--success)", icon: "✓", defaultTitle: "تم بنجاح"  },
+  error:   { bg: "var(--danger-bg)",  color: "var(--danger)",  icon: "✕", defaultTitle: "حدث خطأ" },
+  warning: { bg: "var(--warning-bg)", color: "var(--warning)", icon: "!", defaultTitle: "تنبيه"     },
+  info:    { bg: "rgba(125,31,60,0.07)", color: "var(--em7)", icon: "ⓘ", defaultTitle: "تنبيه" },
 };
 
 /**
