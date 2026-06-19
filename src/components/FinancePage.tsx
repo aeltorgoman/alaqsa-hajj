@@ -681,34 +681,6 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     XLSX.writeFile(wb, `${title}.xlsx`);
   }
 
-  function exportFullReportXLSX(data:{p:Passenger;due:number;paid:number;balance:number}[], title="تقرير الحجاج المالي الكامل") {
-    const headers = ["م", "الاسم", "الباقة", "المطلوب", "المدفوع", "المتبقي", "الحالة"];
-    const rows = data.map((r, i) => {
-      const st = financeStatus(r.due, r.paid);
-      return [
-        i + 1,
-        r.p.short_ar || r.p.name_ar,
-        (pricing[getPackageKey(r.p.services.hotel_type)]?.label || "—").replace("باقة ", ""),
-        r.due,
-        r.paid,
-        r.balance,
-        st.label,
-      ];
-    });
-    const tD = data.reduce((s, r) => s + r.due, 0);
-    const tP = data.reduce((s, r) => s + r.paid, 0);
-    const tB = tD - tP;
-    const ws = XLSX.utils.aoa_to_sheet([
-      headers,
-      ...rows,
-      ["", "الإجمالي", "", tD, tP, tB, ""],
-    ]);
-    ws["!cols"] = [{ wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "التقرير");
-    XLSX.writeFile(wb, `${title}.xlsx`);
-  }
-
   function printPaymentsReport() {
     const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
     const total=payments.reduce((s,p)=>s+Number(p.amount),0);
