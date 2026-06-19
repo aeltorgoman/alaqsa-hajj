@@ -4,6 +4,7 @@ import type { Passenger, Room } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
+import { StatCard, type StatCardData } from "./StatCard";
 import { ROOM_TYPES, ROOM_COLORS, ROOM_ICON_COLORS, inp, btnP, btnS } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
@@ -51,23 +52,17 @@ function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenge
     "رباعية": ["rgba(232,149,26,0.1)", "#E8951A"],
   };
 
-  const cards = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
-    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
-    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
-    { label: "طالبين مطل", num: viewRequested, sub: `${total ? Math.round(viewRequested / total * 100) : 0}٪ من الإجمالي`, border: "#4A90D9", clr: "#4A90D9", bg: "rgba(74,144,217,0.05)" },
+  const cards: StatCardData[] = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
+    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, tone: "success" },
+    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
+    { label: "طالبين مطل", num: viewRequested, sub: `${total ? Math.round(viewRequested / total * 100) : 0}٪ من الإجمالي`, tone: "info" },
   ];
 
   return (
     <div style={{ borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px 8px" }}>
-        {cards.map(({ label, num, sub, border, clr, bg }) => (
-          <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-            <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
-          </div>
-        ))}
+        {cards.map(c => <StatCard key={c.label} {...c} />)}
       </div>
       {Object.keys(roomOccupancy).length > 0 && (
         <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", alignItems: "center", flexWrap: "wrap" }}>
