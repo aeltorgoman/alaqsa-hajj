@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
+import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, ICON_COLOR_CYCLE, FLIGHT_ICON_COLORS } from "../utils";
 
@@ -26,25 +27,15 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const unassigned = passengers.filter(p => p.flight_id == null && p.services?.flight !== "بدون" && (!p.passenger_type || p.passenger_type === "حاج")).length;
   const firstClass = hajjOnly.filter(p => p.services?.flight === "درجة أولى").length;
 
-  const cards = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
-    { label: "موزّعون", num: assigned, sub: `${needsFlight ? Math.round(assigned/needsFlight*100) : 0}٪ من المحتاجين`, border: "#2A9D8F", clr: "#2A9D8F", bg: "rgba(42,157,143,0.05)" },
-    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", border: unassigned > 0 ? "#c0392b" : "#ccc", clr: unassigned > 0 ? "#c0392b" : "var(--muted)", bg: unassigned > 0 ? "rgba(192,57,43,0.05)" : "var(--paper)" },
-    { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass/total*100) : 0}٪ من الإجمالي`, border: "#E8951A", clr: "#E8951A", bg: "rgba(232,149,26,0.05)" },
-    { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", border: withoutTicket > 0 ? "#7a2e45" : "#ccc", clr: withoutTicket > 0 ? "var(--ff)" : "var(--muted)", bg: withoutTicket > 0 ? "var(--fb)" : "var(--paper)" },
+  const cards: StatCardData[] = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
+    { label: "موزّعون", num: assigned, sub: `${needsFlight ? Math.round(assigned/needsFlight*100) : 0}٪ من المحتاجين`, tone: "success" },
+    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
+    { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass/total*100) : 0}٪ من الإجمالي`, tone: "warning" },
+    { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", tone: withoutTicket > 0 ? "female" : "muted" },
   ];
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
-      {cards.map(({ label, num, sub, border, clr, bg }) => (
-        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
-        </div>
-      ))}
-    </div>
-  );
+  return <StatsRow cards={cards} />;
 }
 
 // ===== صفحة الطيران =====
