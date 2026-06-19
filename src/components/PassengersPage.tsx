@@ -5,6 +5,7 @@ import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
+import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
@@ -41,23 +42,13 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
   const { total, males, females, docsDone, docPct } = stats;
 
-  const cards = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", border: "#c8a24b", clr: "var(--em8)", bg: "var(--paper)" },
-    { label: "رجال", num: males, sub: `${total ? Math.round(males/total*100) : 0}٪ من الإجمالي`, border: "#4A90D9", clr: "#4A90D9", bg: "var(--mb)" },
-    { label: "نساء", num: females, sub: `${total ? Math.round(females/total*100) : 0}٪ من الإجمالي`, border: "#db2777", clr: "#db2777", bg: "var(--fb)" },
-    { label: "اكتمال المستندات", num: `${docPct}٪`, sub: `${docsDone} من ${total}`, border: "var(--em7)", clr: "var(--em7)", bg: "var(--paper)" },
+  const cards: StatCardData[] = [
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
+    { label: "رجال", num: males, sub: `${total ? Math.round(males/total*100) : 0}٪ من الإجمالي`, tone: "info" },
+    { label: "نساء", num: females, sub: `${total ? Math.round(females/total*100) : 0}٪ من الإجمالي`, tone: "female" },
+    { label: "اكتمال المستندات", num: `${docPct}٪`, sub: `${docsDone} من ${total}`, tone: "success" },
   ];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
-      {cards.map(({ label, num, sub, border, clr, bg }) => (
-        <div key={label} style={{ background: bg, border: "1.5px solid var(--line)", borderRight: `4px solid ${border}`, borderRadius: 10, padding: "11px 14px" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 5 }}>{label}</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: clr }}>{num}</div>
-          <div style={{ fontSize: 11, marginTop: 4, color: "var(--g7)" }}>{sub}</div>
-        </div>
-      ))}
-    </div>
-  );
+  return <StatsRow cards={cards} />;
 }
 
 function PassengersPage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User }) {
