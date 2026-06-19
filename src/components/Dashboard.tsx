@@ -36,11 +36,11 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
     const noHotel = hajj.filter(p => p.room_id == null).length;
     const noBus = hajj.filter(p => p.bus_id == null).length;
     return [
-      { label: "بدون تذكرة طيران", count: withoutTicket, page: "flights", color: "#7a2e45", bg: "var(--fb)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
-      { label: "طالبين درجة أولى", count: firstClass, page: "flights", color: "#E8951A", bg: "rgba(232,149,26,0.08)", icon: `<path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/>` },
-      { label: "VIP في الباصات", count: vipBus, page: "buses", color: "#8B3A6B", bg: "rgba(139,58,107,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
-      { label: "بدون غرفة بالفندق", count: noHotel, page: "hotel", color: "#c0392b", bg: "rgba(192,57,43,0.08)", icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
-      { label: "بدون باص", count: noBus, page: "buses", color: "#c0392b", bg: "rgba(192,57,43,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
+      { label: "بدون تذكرة طيران", count: withoutTicket, page: "flights", color: "var(--female-fg)", bg: "var(--female-bg)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
+      { label: "طالبين درجة أولى", count: firstClass, page: "flights", color: "var(--warning)", bg: "var(--warning-bg)", icon: `<path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/>` },
+      { label: "VIP في الباصات", count: vipBus, page: "buses", color: "var(--em7)", bg: "rgba(125,31,60,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
+      { label: "بدون غرفة بالفندق", count: noHotel, page: "hotel", color: "var(--danger)", bg: "var(--danger-bg)", icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/>` },
+      { label: "بدون باص", count: noBus, page: "buses", color: "var(--danger)", bg: "var(--danger-bg)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>` },
     ].filter(a => a.count > 0);
   }, [hajj]);
 
@@ -85,19 +85,21 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 12 }}>
           {[
-            { label: "الحجاج", num: hajj.length, sub: `+${Math.min(12,hajj.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,#21867A,#2A9D8F)", shadow: "rgba(33,134,122,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-            { label: "رجال", num: males, sub: `${hajj.length ? Math.round(males/hajj.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#2F78C5,#4A90D9)", shadow: "rgba(47,120,197,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-            { label: "نساء", num: females, sub: `${hajj.length ? Math.round(females/hajj.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#D4820F,#E8951A)", shadow: "rgba(212,130,15,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "الحجاج", num: hajj.length, sub: `+${Math.min(12,hajj.length)} هذا الأسبوع`, bg: "linear-gradient(145deg,var(--em8),var(--em7))", shadow: "rgba(125,31,60,0.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+            { label: "رجال", num: males, sub: `${hajj.length ? Math.round(males/hajj.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#13456b,#2F78C5)", shadow: "rgba(19,69,107,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+            { label: "نساء", num: females, sub: `${hajj.length ? Math.round(females/hajj.length*100) : 0}٪ من الإجمالي`, bg: "linear-gradient(145deg,#7a2e45,#A8456A)", shadow: "rgba(122,46,69,0.35)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
           ].map(({ label, num, sub, bg, shadow, icon }) => (
-            <div key={label} style={{ background: bg, borderRadius: 14, padding: "12px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}`, border: `2px solid ${shadow}` }}
+            <div key={label} style={{ background: bg, borderRadius: 14, padding: "13px 14px", cursor: "pointer", transition: "var(--transition)", boxShadow: `0 4px 16px ${shadow}`, border: `2px solid ${shadow}`, display: "flex", alignItems: "center", gap: 12 }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.filter = "brightness(1.05)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.filter = "none"; }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+              <div style={{ width: 42, height: 42, borderRadius: 11, background: "rgba(255,255,255,0.16)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
               </div>
-              <div style={{ fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginBottom: 2 }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 44, fontWeight: 700, lineHeight: 1, color: "#fff" }}>{num}</div>
-              <div style={{ fontSize: 10, marginTop: 4, color: "rgba(255,255,255,0.65)" }}>{sub}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginBottom: 2 }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 700, lineHeight: 1, color: "#fff" }}>{num}</div>
+                <div style={{ fontSize: 9.5, marginTop: 3, color: "rgba(255,255,255,0.65)" }}>{sub}</div>
+              </div>
             </div>
           ))}
         </div>
