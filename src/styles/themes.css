@@ -1,5 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@400;500;600;700&family=Tajawal:wght@300;400;500;700&display=swap');
 
+/* ============================================================
+   نظام الثيمات — حملة الأقصى
+   كل ثيم معرّف مرة واحدة فقط: المتغيرات المختصرة (المستخدمة بكثافة
+   في الكود: --em7, --paper, --line...) + المتغيرات الدلالية المبنية
+   عليها (--primary, --bg-card, --success...). هذا يمنع التعارض
+   ويضمن أن أي تعديل لون يتم في مكان واحد فقط.
+   ============================================================ */
+
+/* ============================================================
+   الثيم الافتراضي: Qatar Heritage (بوردو + ذهبي)
+   مستوحى من كسوة الكعبة
+   ============================================================ */
 [data-theme="qatar-heritage"], :root {
   --em9:#3D0F1E; --em8:#5C1830; --em7:#7D1F3C; --em6:#A32D52; --em5:#C4496E;
   --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
@@ -18,6 +30,7 @@
   --bg-2: var(--ivory2);
   --bg-card: var(--paper);
   --bg-sidebar: var(--em8);
+  --bg-sidebar-hover: rgba(255,255,255,0.06);
   --bg-topbar: var(--paper);
   --bg-input: var(--ivory);
   --text: var(--ink);
@@ -25,60 +38,39 @@
   --text-secondary: var(--em7);
   --text-inverse: #fff;
   --text-sidebar: #cdddd5;
-  --text-sidebar-muted: rgba(231,205,138,0.65);
+  --text-sidebar-muted: rgba(231,205,138,0.7);
   --border: var(--line);
-  --border-sidebar: rgba(212,172,79,0.22);
+  --border-sidebar: rgba(212,172,79,0.25);
   --male-bg: var(--mb); --male-fg: var(--mf);
   --female-bg: var(--fb); --female-fg: var(--ff);
 
   --shadow-sm: 0 1px 3px rgba(92,24,48,0.08);
   --shadow-md: 0 4px 12px rgba(92,24,48,0.12);
   --shadow-lg: 0 8px 24px rgba(92,24,48,0.16);
-  --shadow-xl: 0 30px 80px rgba(0,0,0,0.4);
+  --shadow-xl: 0 30px 80px rgba(0,0,0,0.3);
 
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --radius-xl: 22px;
   --radius-full: 9999px;
 
   --font-heading: 'Reem Kufi', serif;
   --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 240px;
-  --transition: all 0.16s ease;
+  --sidebar-width: 248px;
+  --topbar-height: 56px;
+  --transition: all 0.18s ease;
   --pattern-opacity: 0.08;
 
   --success: var(--em7); --success-bg: rgba(125,31,60,0.08);
-  --danger: #c0392b; --danger-bg: var(--fb);
-  --warning: #92400e; --warning-bg: #fef3c7;
+  --danger: #c0392b; --danger-bg: #fbeae8; --error: #c0392b; --error-bg: #fbeae8;
+  --warning: #a9852f; --warning-bg: #fdf5e0;
   --info: var(--mf); --info-bg: var(--mb);
 }
 
-[data-theme="qatar-light"] {
-  --em9:#3D0F1E; --em8:#5C1830; --em7:#7D1F3C; --em6:#A32D52; --em5:#C4496E;
-  --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
-  --ivory:#fafafa; --ivory2:#f5f5f5; --paper:#ffffff;
-  --ink:#1b2a25; --muted:#6f7b74; --line:#e8e8e8;
-  --mb:#e8eff5; --mf:#13456b; --fb:#f7eaef; --ff:#7a2e45;
-
-  --primary: var(--em7); --primary-light: var(--em6); --primary-dark: var(--em8);
-  --accent: var(--g5); --accent-light: var(--g3); --accent-dark: var(--g6);
-  --bg: var(--ivory); --bg-2: var(--ivory2); --bg-card: var(--paper);
-  --bg-sidebar: #ffffff; --bg-topbar: var(--paper);
-  --bg-input: var(--ivory); --text: var(--ink); --text-muted: var(--muted);
-  --text-secondary: var(--em7); --text-inverse: #fff;
-  --text-sidebar: var(--em8); --text-sidebar-muted: var(--muted);
-  --border: var(--line); --border-sidebar: var(--line);
-  --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10); --shadow-xl: 0 16px 48px rgba(0,0,0,0.12);
-  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 22px; --radius-full: 9999px;
-  --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 240px; --transition: all 0.16s ease; --pattern-opacity: 0.03;
-  --success: var(--em7); --success-bg: rgba(125,31,60,0.08); --danger: #c0392b; --danger-bg: var(--fb);
-  --warning: #92400e; --warning-bg: #fef3c7; --info: var(--mf); --info-bg: var(--mb);
-}
-
+/* ============================================================
+   الثيم الثاني: Dark Heritage (داكن — نبيتي + ذهبي)
+   ============================================================ */
 [data-theme="dark-heritage"] {
   --em9:#0a0408; --em8:#120810; --em7:#c8a24b; --em6:#e7cd8a; --em5:#f0dca0;
   --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
@@ -89,7 +81,8 @@
   --primary: var(--g5); --primary-light: var(--g3); --primary-dark: var(--g6);
   --accent: #9E2B4E; --accent-light: #C4406A; --accent-dark: #7D1F3C;
   --bg: var(--ivory); --bg-2: var(--ivory2); --bg-card: var(--paper);
-  --bg-sidebar: #080f0c; --bg-topbar: var(--paper);
+  --bg-sidebar: #080f0c; --bg-sidebar-hover: rgba(255,255,255,0.05);
+  --bg-topbar: var(--paper);
   --bg-input: var(--ivory2); --text: var(--ink); --text-muted: var(--muted);
   --text-secondary: var(--g3); --text-inverse: #0a0408;
   --text-sidebar: #cdddd5; --text-sidebar-muted: rgba(231,205,138,0.6);
@@ -97,45 +90,115 @@
   --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.4); --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.6); --shadow-xl: 0 30px 80px rgba(0,0,0,0.7);
-  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 22px; --radius-full: 9999px;
+  --radius-sm: 9px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px; --radius-full: 9999px;
   --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 240px; --transition: all 0.16s ease; --pattern-opacity: 0.06;
-  --success: #4CAF82; --success-bg: #0d2a1c; --danger: #e05545; --danger-bg: #2a0d0a;
+  --sidebar-width: 248px; --topbar-height: 56px; --transition: all 0.18s ease; --pattern-opacity: 0.06;
+
+  --success: #4CAF82; --success-bg: #0d2a1c; --danger: #e05545; --danger-bg: #2a0d0a; --error: #e05545; --error-bg: #2a0d0a;
   --warning: var(--g3); --warning-bg: #1a1500; --info: #5ba8c9; --info-bg: #0a1e2a;
 }
 
+/* ============================================================
+   الثيم الثالث: Modern Blue (أزرق ملكي + أزرق غامق)
+   ============================================================ */
 [data-theme="modern-green"] {
-  --em9:#023020; --em8:#085041; --em7:#1D9E75; --em6:#22b588; --em5:#27cc9b;
-  --g3:#a0d4c0; --g4:#7ab89e; --g5:#1D9E75; --g6:#085041; --g7:#023020;
-  --ivory:#f4f8f6; --ivory2:#ecf5f1; --paper:#ffffff;
-  --ink:#0a1f18; --muted:#6b9e8a; --line:#d4ede4;
+  --em9:#041c30; --em8:#073E6E; --em7:#0C5FA8; --em6:#1678c9; --em5:#3a93dd;
+  --g3:#9cc4e6; --g4:#5f9ed1; --g5:#0C447C; --g6:#082e54; --g7:#051d38;
+  --ivory:#f3f7fa; --ivory2:#e9f1f7; --paper:#ffffff;
+  --ink:#0d1b24; --muted:#6a8499; --line:#d6e6ef;
   --mb:#e3eef8; --mf:#0C447C; --fb:#f7eaef; --ff:#7a2e45;
 
   --primary: var(--em7); --primary-light: var(--em6); --primary-dark: var(--em8);
-  --accent: #0C447C; --accent-light: #1a6bb5; --accent-dark: #082e54;
+  --accent: var(--g5); --accent-light: var(--g4); --accent-dark: var(--g6);
   --bg: var(--ivory); --bg-2: var(--ivory2); --bg-card: var(--paper);
-  --bg-sidebar: #085041; --bg-topbar: var(--paper);
+  --bg-sidebar: var(--em8); --bg-sidebar-hover: rgba(255,255,255,0.08);
+  --bg-topbar: var(--paper);
   --bg-input: var(--ivory); --text: var(--ink); --text-muted: var(--muted);
   --text-secondary: var(--em7); --text-inverse: #fff;
-  --text-sidebar: #e0f5ee; --text-sidebar-muted: rgba(224,245,238,0.6);
+  --text-sidebar: #dceaf5; --text-sidebar-muted: rgba(220,234,245,0.6);
   --border: var(--line); --border-sidebar: rgba(255,255,255,0.1);
   --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
-  --shadow-sm: 0 1px 3px rgba(8,80,65,0.08); --shadow-md: 0 4px 12px rgba(8,80,65,0.12);
-  --shadow-lg: 0 8px 24px rgba(8,80,65,0.16); --shadow-xl: 0 16px 48px rgba(8,80,65,0.20);
-  --radius-sm: 8px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 22px; --radius-full: 9999px;
+  --shadow-sm: 0 1px 3px rgba(7,62,110,0.08); --shadow-md: 0 4px 12px rgba(7,62,110,0.12);
+  --shadow-lg: 0 8px 24px rgba(7,62,110,0.16); --shadow-xl: 0 16px 48px rgba(7,62,110,0.20);
+  --radius-sm: 9px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px; --radius-full: 9999px;
   --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 240px; --transition: all 0.16s ease; --pattern-opacity: 0.04;
-  --success: #1D9E75; --success-bg: #e1f5ee; --danger: #c0392b; --danger-bg: #fbeae8;
+  --sidebar-width: 248px; --topbar-height: 56px; --transition: all 0.18s ease; --pattern-opacity: 0.04;
+
+  --success: #1D9E75; --success-bg: #e1f5ee; --danger: #c0392b; --danger-bg: #fbeae8; --error: #c0392b; --error-bg: #fbeae8;
   --warning: #b8860b; --warning-bg: #fdf5e0; --info: #0C447C; --info-bg: #e3eef8;
 }
 
+/* ============================================================
+   الثيم الرابع: زمردي ملكي (أخضر غامق + ذهبي)
+   مستوحى من كسوة الكعبة بدرجة أعمق — بديل عن البوردو
+   ============================================================ */
+[data-theme="royal-emerald"] {
+  --em9:#051f17; --em8:#0b3b2e; --em7:#0f5340; --em6:#13674f; --em5:#1a8163;
+  --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
+  --ivory:#f6f3ea; --ivory2:#eef0e4; --paper:#fffef9;
+  --ink:#16241d; --muted:#6c7b70; --line:#e4e0cf;
+  --mb:#e8eff5; --mf:#13456b;
+  --fb:#f7eaef; --ff:#7a2e45;
+
+  --primary: var(--em7);
+  --primary-light: var(--em6);
+  --primary-dark: var(--em8);
+  --accent: var(--g5);
+  --accent-light: var(--g3);
+  --accent-dark: var(--g6);
+  --bg: var(--ivory);
+  --bg-2: var(--ivory2);
+  --bg-card: var(--paper);
+  --bg-sidebar: var(--em8);
+  --bg-sidebar-hover: rgba(255,255,255,0.06);
+  --bg-topbar: var(--paper);
+  --bg-input: var(--ivory);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --text-secondary: var(--em7);
+  --text-inverse: #fff;
+  --text-sidebar: #cdddd5;
+  --text-sidebar-muted: rgba(231,205,138,0.7);
+  --border: var(--line);
+  --border-sidebar: rgba(212,172,79,0.25);
+  --male-bg: var(--mb); --male-fg: var(--mf);
+  --female-bg: var(--fb); --female-fg: var(--ff);
+
+  --shadow-sm: 0 1px 3px rgba(11,59,46,0.08);
+  --shadow-md: 0 4px 12px rgba(11,59,46,0.12);
+  --shadow-lg: 0 8px 24px rgba(11,59,46,0.16);
+  --shadow-xl: 0 30px 80px rgba(0,0,0,0.3);
+
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+
+  --font-heading: 'Reem Kufi', serif;
+  --font-body: 'Tajawal', sans-serif;
+  --sidebar-width: 248px;
+  --topbar-height: 56px;
+  --transition: all 0.18s ease;
+  --pattern-opacity: 0.08;
+
+  --success: var(--em7); --success-bg: rgba(15,83,64,0.08);
+  --danger: #c0392b; --danger-bg: #fbeae8; --error: #c0392b; --error-bg: #fbeae8;
+  --warning: #a9852f; --warning-bg: #fdf5e0;
+  --info: var(--mf); --info-bg: var(--mb);
+}
+
+/* ============================================================
+   الستايلات العامة
+   ============================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { direction: rtl; }
-body { font-family: var(--font-body); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+body { font-family: var(--font-body); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(200,162,75,0.25); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
 /* نمط النجمة الثمانية */
 .sidebar-pattern {
@@ -193,373 +256,3 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fadeIn 0.22s ease; }
-
-/* ============================================
-   الثيم الافتراضي: Qatar Heritage
-   زمردي داكن + ذهبي — مستوحى من كسوة الكعبة
-   ============================================ */
-[data-theme="qatar-heritage"], :root {
-  --primary:        #7D1F3C;
-  --primary-light:  #A32D52;
-  --primary-dark:   #5C1830;
-  --accent:         #c8a24b;
-  --accent-light:   #e7cd8a;
-  --accent-dark:    #a9852f;
-
-  --bg:             #f7f2e7;
-  --bg-2:           #f1e9d6;
-  --bg-card:        #fffdf8;
-  --bg-sidebar:     #5C1830;
-  --bg-sidebar-hover: rgba(255,255,255,0.06);
-  --bg-topbar:      #fffdf8;
-  --bg-input:       #f7f2e7;
-  --bg-hover:       #f1e9d6;
-
-  --text:           #1b2a25;
-  --text-secondary: #7D1F3C;
-  --text-muted:     #6f7b74;
-  --text-inverse:   #ffffff;
-  --text-sidebar:   #cdddd5;
-  --text-sidebar-muted: rgba(231,205,138,0.7);
-
-  --border:         #e7ded0;
-  --border-strong:  #c8a24b;
-  --border-sidebar: rgba(212,172,79,0.25);
-
-  --success:        #7D1F3C;
-  --success-bg:     rgba(125,31,60,0.08);
-  --danger:         #c0392b;
-  --danger-bg:      #fbeae8;
-  --warning:        #a9852f;
-  --warning-bg:     #fdf5e0;
-  --info:           #13456b;
-  --info-bg:        #e8eff5;
-
-  --male-bg:        #e8eff5;
-  --male-fg:        #13456b;
-  --female-bg:      #f7eaef;
-  --female-fg:      #7a2e45;
-
-  --shadow-sm:      0 1px 3px rgba(92,24,48,0.08);
-  --shadow-md:      0 4px 12px rgba(92,24,48,0.12);
-  --shadow-lg:      0 8px 24px rgba(92,24,48,0.16);
-  --shadow-xl:      0 30px 80px rgba(0,0,0,0.3);
-
-  --radius-sm:      9px;
-  --radius-md:      12px;
-  --radius-lg:      16px;
-  --radius-xl:      22px;
-  --radius-full:    9999px;
-
-  --font-heading:   'Reem Kufi', serif;
-  --font-body:      'Tajawal', sans-serif;
-
-  --sidebar-width:  248px;
-  --topbar-height:  56px;
-
-  --transition:     all 0.18s ease;
-  --transition-slow: all 0.3s ease;
-
-  --pattern-opacity: 0.08;
-}
-
-/* ============================================
-   الثيم الثاني: Qatar Heritage Light
-   ============================================ */
-[data-theme="qatar-light"] {
-  --primary:        #7D1F3C;
-  --primary-light:  #A32D52;
-  --primary-dark:   #5C1830;
-  --accent:         #c8a24b;
-  --accent-light:   #e7cd8a;
-  --accent-dark:    #a9852f;
-
-  --bg:             #fafafa;
-  --bg-2:           #f5f5f5;
-  --bg-card:        #ffffff;
-  --bg-sidebar:     #5C1830;
-  --bg-sidebar-hover: rgba(255,255,255,0.06);
-  --bg-topbar:      #ffffff;
-  --bg-input:       #f8f8f8;
-  --bg-hover:       #fdf0f3;
-
-  --text:           #1b2a25;
-  --text-secondary: #7D1F3C;
-  --text-muted:     #6f7b74;
-  --text-inverse:   #ffffff;
-  --text-sidebar:   #cdddd5;
-  --text-sidebar-muted: rgba(231,205,138,0.65);
-
-  --border:         #e8e8e8;
-  --border-strong:  #7D1F3C;
-  --border-sidebar: rgba(212,172,79,0.22);
-
-  --success:        #7D1F3C;
-  --success-bg:     rgba(125,31,60,0.08);
-  --danger:         #c0392b;
-  --danger-bg:      #fbeae8;
-  --warning:        #a9852f;
-  --warning-bg:     #fdf5e0;
-  --info:           #13456b;
-  --info-bg:        #e8eff5;
-
-  --male-bg:        #e8eff5;
-  --male-fg:        #13456b;
-  --female-bg:      #f7eaef;
-  --female-fg:      #7a2e45;
-
-  --shadow-sm:      0 1px 3px rgba(0,0,0,0.06);
-  --shadow-md:      0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg:      0 8px 24px rgba(0,0,0,0.10);
-  --shadow-xl:      0 16px 48px rgba(0,0,0,0.12);
-
-  --radius-sm:      9px;
-  --radius-md:      12px;
-  --radius-lg:      16px;
-  --radius-xl:      22px;
-  --radius-full:    9999px;
-
-  --font-heading:   'Reem Kufi', serif;
-  --font-body:      'Tajawal', sans-serif;
-
-  --sidebar-width:  248px;
-  --topbar-height:  56px;
-  --transition:     all 0.18s ease;
-  --pattern-opacity: 0.03;
-}
-
-/* ============================================
-   الثيم الثالث: Dark Heritage
-   ============================================ */
-[data-theme="dark-heritage"] {
-  --primary:        #e7cd8a;
-  --primary-light:  #f0dca0;
-  --primary-dark:   #c8a24b;
-  --accent:         #1c8266;
-  --accent-light:   #239e7e;
-  --accent-dark:    #a9852f;
-
-  --bg:             #0a1410;
-  --bg-2:           #0d1a15;
-  --bg-card:        #111f18;
-  --bg-sidebar:     #080f0c;
-  --bg-sidebar-hover: rgba(255,255,255,0.05);
-  --bg-topbar:      #111f18;
-  --bg-input:       #182418;
-  --bg-hover:       #182418;
-
-  --text:           #e8f0eb;
-  --text-secondary: #a8c4b0;
-  --text-muted:     #5a7a65;
-  --text-inverse:   #0a1410;
-  --text-sidebar:   #cdddd5;
-  --text-sidebar-muted: rgba(231,205,138,0.6);
-
-  --border:         #1e3028;
-  --border-strong:  #2e5040;
-  --border-sidebar: rgba(200,162,75,0.2);
-
-  --success:        #7D1F3C;
-  --success-bg:     rgba(125,31,60,0.08);
-  --danger:         #e05545;
-  --danger-bg:      #2a0d0a;
-  --warning:        #e7cd8a;
-  --warning-bg:     #1a1500;
-  --info:           #5ba8c9;
-  --info-bg:        #0a1e2a;
-
-  --male-bg:        #0d1e2a;
-  --male-fg:        #5ba8c9;
-  --female-bg:      #2a0d18;
-  --female-fg:      #e0a0b8;
-
-  --shadow-sm:      0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md:      0 4px 12px rgba(0,0,0,0.5);
-  --shadow-lg:      0 8px 24px rgba(0,0,0,0.6);
-  --shadow-xl:      0 30px 80px rgba(0,0,0,0.7);
-
-  --radius-sm:      9px;
-  --radius-md:      12px;
-  --radius-lg:      16px;
-  --radius-xl:      22px;
-  --radius-full:    9999px;
-
-  --font-heading:   'Reem Kufi', serif;
-  --font-body:      'Tajawal', sans-serif;
-
-  --sidebar-width:  248px;
-  --topbar-height:  56px;
-  --transition:     all 0.18s ease;
-  --pattern-opacity: 0.06;
-}
-
-/* ============================================
-   الثيم الرابع: Modern Green
-   ============================================ */
-[data-theme="modern-green"] {
-  --primary:        #1D9E75;
-  --primary-light:  #22b588;
-  --primary-dark:   #085041;
-  --accent:         #0C447C;
-  --accent-light:   #1a6bb5;
-  --accent-dark:    #082e54;
-
-  --bg:             #f4f8f6;
-  --bg-2:           #ecf5f1;
-  --bg-card:        #ffffff;
-  --bg-sidebar:     #085041;
-  --bg-sidebar-hover: rgba(255,255,255,0.08);
-  --bg-topbar:      #ffffff;
-  --bg-input:       #f0f6f4;
-  --bg-hover:       #e8f5f0;
-
-  --text:           #0a1f18;
-  --text-secondary: #2d6b52;
-  --text-muted:     #6b9e8a;
-  --text-inverse:   #ffffff;
-  --text-sidebar:   #e0f5ee;
-  --text-sidebar-muted: rgba(224,245,238,0.6);
-
-  --border:         #d4ede4;
-  --border-strong:  #1D9E75;
-  --border-sidebar: rgba(255,255,255,0.1);
-
-  --success:        #1D9E75;
-  --success-bg:     #e1f5ee;
-  --danger:         #c0392b;
-  --danger-bg:      #fbeae8;
-  --warning:        #b8860b;
-  --warning-bg:     #fdf5e0;
-  --info:           #0C447C;
-  --info-bg:        #e3eef8;
-
-  --male-bg:        #e3eef8;
-  --male-fg:        #0C447C;
-  --female-bg:      #f7eaef;
-  --female-fg:      #7a2e45;
-
-  --shadow-sm:      0 1px 3px rgba(8,80,65,0.08);
-  --shadow-md:      0 4px 12px rgba(8,80,65,0.12);
-  --shadow-lg:      0 8px 24px rgba(8,80,65,0.16);
-  --shadow-xl:      0 16px 48px rgba(8,80,65,0.20);
-
-  --radius-sm:      9px;
-  --radius-md:      12px;
-  --radius-lg:      16px;
-  --radius-xl:      22px;
-  --radius-full:    9999px;
-
-  --font-heading:   'Reem Kufi', serif;
-  --font-body:      'Tajawal', sans-serif;
-
-  --sidebar-width:  248px;
-  --topbar-height:  56px;
-  --transition:     all 0.18s ease;
-  --pattern-opacity: 0.04;
-}
-
-/* ============================================
-   الستايلات العامة
-   ============================================ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { direction: rtl; }
-body {
-  font-family: var(--font-body);
-  background: var(--bg);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
-
-/* نمط النجمة الثمانية في الـ Sidebar */
-.sidebar-pattern {
-  position: absolute;
-  inset: 0;
-  opacity: var(--pattern-opacity);
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M52,30 L38.3,33.4 L45.6,45.6 L33.4,38.3 L30,52 L26.6,38.3 L14.4,45.6 L21.7,33.4 L8,30 L21.7,26.6 L14.4,14.4 L26.6,21.7 L30,8 L33.4,21.7 L45.6,14.4 L38.3,26.6 Z' fill='none' stroke='%23e7cd8a' stroke-width='1.1'/%3E%3Crect x='27' y='27' width='6' height='6' transform='rotate(45 30 30)' fill='none' stroke='%23e7cd8a' stroke-width='1'/%3E%3C/svg%3E");
-}
-
-/* خط ذهبي زخرفي */
-.gold-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 16px 0;
-}
-.gold-divider .line {
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-}
-
-/* الزرارات */
-.btn-primary {
-  background: var(--primary);
-  color: var(--text-inverse);
-  border: none;
-  padding: 10px 18px;
-  border-radius: var(--radius-md);
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-}
-.btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-.btn-gold {
-  background: linear-gradient(180deg, var(--accent-light), var(--accent));
-  color: #3a2c06;
-  border: none;
-  padding: 13px;
-  border-radius: var(--radius-md);
-  font-family: var(--font-heading);
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-  box-shadow: 0 6px 18px rgba(168,133,47,0.35);
-}
-.btn-gold:hover { filter: brightness(1.05); transform: translateY(-1px); }
-
-/* الـ inputs */
-.input-field {
-  width: 100%;
-  font-family: var(--font-body);
-  font-size: 14px;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--bg-input);
-  color: var(--text);
-  outline: none;
-  transition: var(--transition);
-}
-.input-field:focus {
-  border-color: var(--accent);
-  background: var(--bg-card);
-  box-shadow: 0 0 0 3px rgba(200,162,75,0.18);
-}
-.input-field::placeholder { color: var(--text-muted); }
-
-/* الكروت */
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-/* الانتقالات */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.fade-in { animation: fadeIn 0.25s ease; }
