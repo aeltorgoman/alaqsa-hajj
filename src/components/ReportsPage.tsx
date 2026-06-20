@@ -557,15 +557,21 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   };
 
   // ============================================================
-  // أزرار التصدير (عرض / Excel / طباعة)
+  // أزرار التصدير (عرض / Excel / طباعة) — موحّدة وثابتة أعلى التقرير
+  // Excel: لون الهوية الأساسي | طباعة: لون رمادي داكن موحّد
   // ============================================================
+  const printBtnStyle = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text)", padding: "8px 14px", borderRadius: "var(--radius-md)", fontSize: 13, cursor: "pointer", fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)", flex: 1, minWidth: 90 };
+  const excelBtnStyle = { ...btnP({ flex: 1, minWidth: 90, fontSize: 13, fontWeight: 600, padding: "8px 14px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }) };
+  const printIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+  const excelIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
+
   const ExportButtons = ({
     onView, onExcel, onPrint
   }: { onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
-    <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
-      {onView && <button onClick={onView} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
-      <button onClick={onExcel} style={{ ...btnP({ flex: 1, minWidth: 80 }) }}>⬇️ Excel</button>
-      <button onClick={onPrint} style={{ ...btnS({ flex: 1, minWidth: 80 }) }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>
+    <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "10px 0" }}>
+      <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
+      <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
+      {onView && <button onClick={onView} style={{ ...btnS({ minWidth: 80, padding: "8px 12px", fontSize: 13 }) }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
     </div>
   );
 
@@ -676,7 +682,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // الـ UI
   // ============================================================
   return (
-    <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
+    <div style={{ padding: "0 2px", overflowY: "auto", height: "100%" }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {!activeReport ? (
         <>
@@ -711,6 +717,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {activeReport === "passengers_report" && (
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الحجاج</div>
+              <ExportButtons
+                onExcel={exportPassengersXLSX}
+                onPrint={() => printInPage(getPassengersHTML())}
+              />
               <div style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 500 }}>اختر الأعمدة</div>
@@ -741,10 +751,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {nats.map(n => <option key={n} value={n}>{n === "الكل" ? "الجنسية: الكل" : n}</option>)}
                 </select>
               </div>
-              <ExportButtons
-                onExcel={exportPassengersXLSX}
-                onPrint={() => printInPage(getPassengersHTML())}
-              />
             </>
           )}
 
@@ -778,6 +784,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {flightSubReport === "airline" && (
                     <>
                       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>تقرير خطوط الطيران</div>
+                      <ExportButtons
+                        onExcel={exportAirlineXLSX}
+                        onPrint={() => printInPage(getAirlineHTML())}
+                      />
                       <div style={{ overflowX: "auto", marginBottom: 12 }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
                           <thead>
@@ -802,10 +812,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                           </tbody>
                         </table>
                       </div>
-                      <ExportButtons
-                        onExcel={exportAirlineXLSX}
-                        onPrint={() => printInPage(getAirlineHTML())}
-                      />
                     </>
                   )}
 
@@ -813,6 +819,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {flightSubReport === "per_flight" && (
                     <>
                       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
+                      <ExportButtons
+                        onExcel={exportPerFlightXLSX}
+                        onPrint={() => printInPage(getPerFlightHTML())}
+                      />
                       {!loading && flights.length > 0 && (
                         <SelectionPanel
                           title="الرحلات المطلوبة في التقرير"
@@ -875,10 +885,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                           );
                         })
                       }
-                      <ExportButtons
-                        onExcel={exportPerFlightXLSX}
-                        onPrint={() => printInPage(getPerFlightHTML())}
-                      />
                     </>
                   )}
                 </>
@@ -893,6 +899,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
                 <>
+                  <ExportButtons
+                    onExcel={exportBusesXLSX}
+                    onPrint={() => printInPage(getBusesHTML())}
+                  />
                   <SelectionPanel
                     title="الباصات المطلوبة في التقرير"
                     panelKey="buses"
@@ -934,10 +944,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       </div>
                     );
                   })}
-                  <ExportButtons
-                    onExcel={exportBusesXLSX}
-                    onPrint={() => printInPage(getBusesHTML())}
-                  />
                 </>
               }
             </>
@@ -951,6 +957,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 camps.filter(c => c.page_type === "منى").length === 0 ?
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
+                  <ExportButtons
+                    onExcel={() => exportCampsXLSX("منى")}
+                    onPrint={() => printInPage(getCampsHTML("منى"))}
+                  />
                   <SelectionPanel
                     title="مخيمات منى المطلوبة في التقرير"
                     panelKey="mina"
@@ -998,10 +1008,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       </div>
                     );
                   })}
-                  <ExportButtons
-                    onExcel={() => exportCampsXLSX("منى")}
-                    onPrint={() => printInPage(getCampsHTML("منى"))}
-                  />
                 </>
               }
             </>
@@ -1015,6 +1021,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
                   <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
+                  <ExportButtons
+                    onExcel={() => exportCampsXLSX("عرفة")}
+                    onPrint={() => printInPage(getCampsHTML("عرفة"))}
+                  />
                   <SelectionPanel
                     title="مخيمات عرفة المطلوبة في التقرير"
                     panelKey="arafa"
@@ -1062,10 +1072,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       </div>
                     );
                   })}
-                  <ExportButtons
-                    onExcel={() => exportCampsXLSX("عرفة")}
-                    onPrint={() => printInPage(getCampsHTML("عرفة"))}
-                  />
                 </>
               }
             </>
@@ -1110,17 +1116,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 setSelected={(s) => setSelectedFloors(s as Set<string>)}
               />
 
-              {/* شريط التصدير الثابت */}
-              <div style={{ position: "sticky", top: 0, zIndex: 10, background: "var(--bg-card)", borderBottom: "1px solid var(--border)", padding: "8px 0", marginBottom: 10, display: "flex", gap: 8 }}>
-                <button onClick={exportHotelXLSX} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--success-bg)", border: "1px solid var(--success)", color: "var(--primary-dark)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  Excel
-                </button>
-                <button onClick={() => printInPage(getHotelHTML())} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, background: "var(--paper)", border: "1px solid var(--border)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                  طباعة
-                </button>
-              </div>
+              <ExportButtons
+                onExcel={exportHotelXLSX}
+                onPrint={() => printInPage(getHotelHTML())}
+              />
 
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
@@ -1161,10 +1160,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       </div>
                     );
                   })}
-                  <ExportButtons
-                    onExcel={exportHotelXLSX}
-                    onPrint={() => printInPage(getHotelHTML())}
-                  />
                 </>
               }
             </>
