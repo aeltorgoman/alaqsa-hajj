@@ -426,6 +426,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const ROWS = 4;       // 4 صفوف
     const PER_PAGE = COLS * ROWS; // 16 غرفة في الصفحة (portrait)
 
+    // ألوان ثابتة للطباعة (لا تستخدم متغيرات CSS لأنها غير معرّفة في نافذة الطباعة)
+    // [خلفية الترويسة، لون النص/الإطار]
+    const PRINT_ROOM_COLORS: Record<string, [string, string]> = {
+      "ثنائية": ["#e8eff5", "#13456b"],  // أزرق
+      "ثلاثية": ["#f7eaef", "#7a2e45"],  // نبيتي
+      "رباعية": ["#e6f4ec", "#1a7a4a"],  // أخضر
+      "سويت":   ["#fdf3e0", "#a9852f"],  // ذهبي
+    };
+
     // سعة كل نوع غرفة (عدد صفوف الأسماء الثابتة)
     const roomCapacity = (type: string): number => {
       if (type === "ثنائية") return 2;
@@ -435,7 +444,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
-      const [bg, clr] = ROOM_COLORS[room.type] || ["#f0ece8", "#5C1830"];
+      const [bg, clr] = PRINT_ROOM_COLORS[room.type] || ["#f0ece8", "#5C1830"];
       const cap = roomCapacity(room.type);
       // عدد صفوف ثابت حسب سعة الغرفة — المساحة متساوية سواء امتلأت أو لا
       const rows = Array.from({ length: cap }, (_, i) => {
@@ -451,12 +460,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             </tr>`;
       }).join("");
 
-      return `<div style="break-inside:avoid;border:2px solid ${clr}77;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;height:100%">
-        <div style="background:${bg};color:${clr};padding:6px 10px;flex-shrink:0;border-bottom:2px solid ${clr}44;text-align:center">
+      return `<div style="break-inside:avoid;border:2px solid ${clr};border-radius:8px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:#ffffff">
+        <div style="background:${bg};color:${clr};padding:6px 10px;flex-shrink:0;border-bottom:2px solid ${clr};text-align:center">
           <div style="font-size:18px;font-weight:800;line-height:1.2">غرفة ${room.number}</div>
-          <div style="font-size:12px;font-weight:600;opacity:0.85;margin-top:1px">${room.type}${room.floor ? ` · الدور ${room.floor}` : ""}</div>
+          <div style="font-size:12px;font-weight:600;opacity:0.9;margin-top:1px">${room.type}${room.floor ? ` · الدور ${room.floor}` : ""}</div>
         </div>
-        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif">
+        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif;background:#ffffff">
           ${rows}
         </table>
       </div>`;
@@ -472,9 +481,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const pagesHTML = `<style>
       ${amiriFont}
       * { font-family: 'Amiri', serif !important; }
-      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 9px; box-sizing: border-box; }
+      html, body { background-image: none !important; background: #ffffff !important; }
+      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 9px; box-sizing: border-box; background: #ffffff; }
       .hotel-page table { margin: 0 !important; }
-      .hotel-page td { border: none; white-space: normal !important; background: transparent !important; vertical-align: middle; }
+      .hotel-page td { border: none; white-space: normal !important; vertical-align: middle; }
       .hotel-page tr:nth-child(even) td { background: transparent !important; }
     </style>` +
       pages.map((pageRooms, pi) => {
@@ -483,7 +493,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         const cells = padded.map(room =>
           room
             ? renderRoomBlock(room)
-            : `<div style="border:1.5px dashed #d5d5d5;border-radius:8px;background:transparent;"></div>`
+            : `<div style="background:transparent"></div>`
         ).join("");
         return `<div class="hotel-page" style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};min-height:calc(100vh - 80px)">
           ${cells}
