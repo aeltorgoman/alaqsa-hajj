@@ -115,8 +115,8 @@ export default function App() {
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
         ) : (
           <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
-            <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: "20px" }}>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--em8)", marginBottom: 16 }}>{pageTitles[page]}</div>
+            <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: page === "reports" ? "12px 20px" : "20px" }}>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--text)", marginBottom: page === "reports" ? 8 : 16 }}>{pageTitles[page]}</div>
               {renderPage()}
             </div>
           </div>
