@@ -420,33 +420,37 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     return r;
   };
 
-  const getHotelHTML = () => {
+  const getHotelHTML = (opts?: { landscape?: boolean; showPattern?: boolean }) => {
+    const landscape = opts?.landscape ?? false;
+    const showPattern = opts?.showPattern ?? false;
     const filtered = getFilteredRooms();
-    const COLS = 4;       // 4 أعمدة
-    const ROWS = 4;       // 4 صفوف
-    const PER_PAGE = COLS * ROWS; // 16 غرفة في الصفحة (portrait)
+    const COLS = landscape ? 5 : 4;
+    const ROWS = landscape ? 3 : 4;
+    const PER_PAGE = COLS * ROWS; // landscape: 15 غرفة | portrait: 16 غرفة
 
     // ألوان ثابتة للطباعة (لا تستخدم متغيرات CSS لأنها غير معرّفة في نافذة الطباعة)
     // [خلفية الترويسة، لون النص/الإطار]
     const PRINT_ROOM_COLORS: Record<string, [string, string]> = {
+      "فردية":  ["#f3eee8", "#6b5a45"],  // بني فاتح
       "ثنائية": ["#e8eff5", "#13456b"],  // أزرق
       "ثلاثية": ["#f7eaef", "#7a2e45"],  // نبيتي
       "رباعية": ["#e6f4ec", "#1a7a4a"],  // أخضر
-      "سويت":   ["#fdf3e0", "#a9852f"],  // ذهبي
     };
 
-    // سعة كل نوع غرفة (عدد صفوف الأسماء الثابتة)
-    const roomCapacity = (type: string): number => {
-      if (type === "ثنائية") return 2;
-      if (type === "ثلاثية") return 3;
-      return 4; // رباعية / سويت
+    // نوع وسعة الغرفة الفعلية تُحسب من عدد الحجاج المتعيّنين فيها فعلياً
+    // (وليس من حقل room.type المخزّن، الذي قد لا يعكس الواقع)
+    const roomLabelByCount = (count: number): string => {
+      if (count <= 1) return "فردية";
+      if (count === 2) return "ثنائية";
+      if (count === 3) return "ثلاثية";
+      return "رباعية";
     };
 
     const renderRoomBlock = (room: Room) => {
       const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
-      const [bg, clr] = PRINT_ROOM_COLORS[room.type] || ["#f0ece8", "#5C1830"];
-      const cap = roomCapacity(room.type);
-      // عدد صفوف ثابت حسب سعة الغرفة — المساحة متساوية سواء امتلأت أو لا
+      const actualLabel = roomLabelByCount(rp.length);
+      const cap = Math.max(rp.length, 1); // عدد الصفوف = عدد الحجاج الفعليين (بحد أدنى صف واحد)
+      const [bg, clr] = PRINT_ROOM_COLORS[actualLabel] || ["#f0ece8", "#5C1830"];
       const rows = Array.from({ length: cap }, (_, i) => {
         const p = rp[i];
         return p
@@ -460,12 +464,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             </tr>`;
       }).join("");
 
-      return `<div style="break-inside:avoid;border:2px solid ${clr};border-radius:8px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:#ffffff">
+      const cardBg = showPattern ? "rgba(255,255,255,0.88)" : "#ffffff";
+      return `<div style="break-inside:avoid;border:2px solid ${clr};border-radius:8px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
         <div style="background:${bg};color:${clr};padding:6px 10px;flex-shrink:0;border-bottom:2px solid ${clr};text-align:center">
           <div style="font-size:18px;font-weight:800;line-height:1.2">غرفة ${room.number}</div>
-          <div style="font-size:12px;font-weight:600;opacity:0.9;margin-top:1px">${room.type}${room.floor ? ` · الدور ${room.floor}` : ""}</div>
+          <div style="font-size:12px;font-weight:600;opacity:0.9;margin-top:1px">${actualLabel}${room.floor ? ` · الدور ${room.floor}` : ""}</div>
         </div>
-        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif;background:#ffffff">
+        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif;background:transparent">
           ${rows}
         </table>
       </div>`;
@@ -481,8 +486,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const pagesHTML = `<style>
       ${amiriFont}
       * { font-family: 'Amiri', serif !important; }
-      html, body { background-image: none !important; background: #ffffff !important; }
-      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 9px; box-sizing: border-box; background: #ffffff; }
+      ${showPattern ? "" : "html, body { background-image: none !important; background: #ffffff !important; }"}
+      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 9px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
       .hotel-page table { margin: 0 !important; }
       .hotel-page td { border: none; white-space: normal !important; vertical-align: middle; }
       .hotel-page tr:nth-child(even) td { background: transparent !important; }
@@ -501,7 +506,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       }).join("");
 
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
-    return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML, false);
+    return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML, landscape);
   };
 
   const exportHotelXLSX = () => {
@@ -577,19 +582,20 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   // أزرار التصدير (عرض / Excel / طباعة) — موحّدة وثابتة أعلى التقرير
   // Excel: لون الهوية الأساسي | طباعة: لون رمادي داكن موحّد
+  // أحجام مدمجة (ليست flex:1) حتى لا تأخذ سطراً كاملاً بمفردها
   // ============================================================
-  const printBtnStyle = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text)", padding: "8px 14px", borderRadius: "var(--radius-md)", fontSize: 13, cursor: "pointer", fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)", flex: 1, minWidth: 90 };
-  const excelBtnStyle = { ...btnP({ flex: 1, minWidth: 90, fontSize: 13, fontWeight: 600, padding: "8px 14px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }) };
-  const printIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
-  const excelIcon = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
+  const printBtnStyle = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, background: "var(--bg-2)", border: "1px solid var(--border)", color: "var(--text)", padding: "5px 11px", borderRadius: "var(--radius-sm)", fontSize: 12, cursor: "pointer", fontWeight: 600, fontFamily: "var(--font-body)", transition: "var(--transition)" };
+  const excelBtnStyle = { ...btnP({ fontSize: 12, fontWeight: 600, padding: "5px 11px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: "var(--radius-sm)" }) };
+  const printIcon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+  const excelIcon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
 
   const ExportButtons = ({
     onView, onExcel, onPrint
   }: { onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
-    <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "10px 0" }}>
+    <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
       <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
       <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
-      {onView && <button onClick={onView} style={{ ...btnS({ minWidth: 80, padding: "8px 12px", fontSize: 13 }) }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
+      {onView && <button onClick={onView} style={{ ...btnS({ padding: "5px 10px", fontSize: 12, borderRadius: "var(--radius-sm)" }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
     </div>
   );
 
@@ -1138,6 +1144,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 onExcel={exportHotelXLSX}
                 onPrint={() => printInPage(getHotelHTML())}
               />
+              <div style={{ marginTop: -6, marginBottom: 12 }}>
+                <button
+                  onClick={() => printInPage(getHotelHTML({ landscape: true, showPattern: true }))}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", border: "1px dashed var(--accent-dark)", color: "var(--accent-dark)", padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: 11, cursor: "pointer", fontFamily: "var(--font-body)" }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66 4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/></svg>
+                  تجربة: عرض + نقشة ظاهرة
+                </button>
+              </div>
 
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
