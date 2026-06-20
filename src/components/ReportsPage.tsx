@@ -65,8 +65,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const logoUrl = config.logo_url || "";
   const companyName = config.name_ar || "حملة الأقصى";
   const tagline = config.tagline || "";
-  const primaryColor = config.color_primary || "#6B1F3A";
-  const accentColor = config.color_accent || "#0C447C";
+  // ألوان التقارير المطبوعة تتبع ثيم الواجهة النشط حالياً (وليس لون الشركة الثابت)
+  // نقرأ القيمة الفعلية المحسوبة من document بدل النص الخام للمتغيّر
+  const getThemeColor = (cssVar: string, fallback: string): string => {
+    if (typeof window === "undefined") return fallback;
+    const val = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
+    return val || fallback;
+  };
+  const primaryColor = getThemeColor("--primary", config.color_primary || "#6B1F3A");
+  const accentColor = getThemeColor("--accent", config.color_accent || "#0C447C");
   const mkHTML = (title: string, body: string, landscape = false, noHeader = false) =>
     makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader);
 
@@ -247,9 +254,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       const nat = natCode(p.nat);
       const gender = p.gender === "ذكر" ? "MR." : "MRS.";
       const cls = wantsFirstClass(p) ? "FIRST CLASS" : "";
-      return `<tr><td style="text-align:center;width:30px">${i + 1}</td><td style="text-align:left">${p.name_en}</td><td style="text-align:left">${nat}</td><td style="text-align:left">${p.passport}</td><td style="text-align:left">${p.phone || "—"}</td><td style="text-align:left">${gender}</td><td style="text-align:left">${cls}</td></tr>`;
+      return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
-    const body = `<table class="flight-table ltr-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th style="text-align:left">FULL NAME</th><th style="text-align:left">NAT.</th><th style="text-align:left">PASSPORT NO.</th><th style="text-align:left">TEL. NO.</th><th style="text-align:left">GENDER</th><th style="text-align:left">CLASS</th></tr>${rows}</table>`;
+    const body = `<table class="flight-table ltr-table" style="direction:ltr"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table>`;
     return mkHTML("Pilgrims Flight List", body, false);
   };
 
@@ -590,15 +597,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const excelIcon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
 
   const ExportButtons = ({
-    title, onView, onExcel, onPrint
-  }: { title?: string; onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
-      {title && <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
-        <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
-        <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
-        {onView && <button onClick={onView} style={{ ...btnS({ padding: "5px 10px", fontSize: 12, borderRadius: "var(--radius-sm)" }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
-      </div>
+    onView, onExcel, onPrint
+  }: { onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
+    <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+      <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
+      <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
+      {onView && <button onClick={onView} style={{ ...btnS({ padding: "5px 10px", fontSize: 12, borderRadius: "var(--radius-sm)" }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
     </div>
   );
 
@@ -743,8 +747,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير الحجاج ===== */}
           {activeReport === "passengers_report" && (
             <>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الحجاج</div>
               <ExportButtons
-                title="تقرير الحجاج"
                 onExcel={exportPassengersXLSX}
                 onPrint={() => printInPage(getPassengersHTML())}
               />
@@ -810,8 +814,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {/* خطوط الطيران */}
                   {flightSubReport === "airline" && (
                     <>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>تقرير خطوط الطيران</div>
                       <ExportButtons
-                        title="تقرير خطوط الطيران"
                         onExcel={exportAirlineXLSX}
                         onPrint={() => printInPage(getAirlineHTML())}
                       />
