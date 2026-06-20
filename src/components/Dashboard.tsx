@@ -130,12 +130,12 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
         <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>نِسب التوزيع</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--text)" }}>نِسب التوزيع</div>
           </div>
           {dist.map(({ label, page, pct, icon }) => {
             const isLow = pct < 30;
             const barGradient = isLow ? "linear-gradient(90deg,#c0392b,#e67e22)" : "linear-gradient(90deg,var(--em7),var(--em6))";
-            const pctColor = isLow ? "#c0392b" : "var(--em7)";
+            const pctColor = isLow ? "var(--danger)" : "var(--primary)";
             return (
             <div key={label} onClick={() => setPage(page)} style={{ marginBottom: 12, cursor: "pointer" }}
               onMouseEnter={e => { e.currentTarget.style.opacity = "0.75"; }}
@@ -157,7 +157,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
         <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, borderBottom: "1px solid var(--line)", paddingBottom: 10 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--em8)" }}>تنبيهات سريعة</div>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, fontWeight: 600, color: "var(--text)" }}>تنبيهات سريعة</div>
           </div>
           {alerts.length === 0 ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--muted)", textAlign: "center", padding: "10px 0" }}>
