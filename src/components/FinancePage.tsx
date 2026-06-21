@@ -18,7 +18,7 @@ const PRICING_KEYS = [
   { key: "package_double",     label: "باقة ثنائي",        type: "package"  },
   { key: "package_triple",     label: "باقة ثلاثي",        type: "package"  },
   { key: "package_quad",       label: "باقة رباعي",        type: "package"  },
-  { key: "package_suite",      label: "باقة سويت",         type: "package"  },
+  { key: "package_suite",      label: "باقة فردية",        type: "package"  },
   { key: "addon_view",         label: "إضافة مطلة",        type: "addon"    },
   { key: "addon_mina",         label: "خيمة خاصة - منى",  type: "addon"    },
   { key: "addon_arafa",        label: "خيمة خاصة - عرفة", type: "addon"    },
@@ -31,7 +31,7 @@ function getPackageKey(hotel_type: string): string {
   if (hotel_type === "ثنائية") return "package_double";
   if (hotel_type === "ثلاثية") return "package_triple";
   if (hotel_type === "رباعية") return "package_quad";
-  if (hotel_type === "سويت")   return "package_suite";
+  if (hotel_type === "فردية")  return "package_suite";
   return "package_double";
 }
 
@@ -1207,6 +1207,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
+        <PaymentDetailModal />
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={()=>setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
           <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--text)" }}>التقارير المالية</div>
@@ -1243,7 +1244,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
               <tbody>
-                {[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p?(p.short_ar||p.name_ar):"—"}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></td></tr>);})}
+                {[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);const pName=p?(p.short_ar||p.name_ar):"—";return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{pName}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(pName,py,logoUrl,companyName,tagline,primaryColor,accentColor));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span></td></tr>);})}
                 <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={4}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(payments.reduce((s,p)=>s+Number(p.amount),0))}</td><td style={{ padding:"10px 12px" }}></td></tr>
               </tbody>
             </table>
