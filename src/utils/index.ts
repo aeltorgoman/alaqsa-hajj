@@ -237,28 +237,59 @@ export function sectionLogoHtml(b: ReportBranding): string {
 // عرض قائمة أسماء: عمود واحد لو 20 أو أقل، وعمودين لو أكتر
 export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحاج", primaryColor = "#6B1F3A"): string {
   if (items.length === 0) {
-    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:36px;font-size:10pt;padding:5pt">م</th><th style="font-size:10pt;padding:5pt">${nameLabel}</th></tr><tr><td style="font-size:10pt;padding:5pt"></td><td style="font-size:10pt;padding:5pt">لا يوجد مسافرون</td></tr></table>`;
+    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:36px;font-size:12pt;padding:7pt">م</th><th style="font-size:12pt;padding:7pt">${nameLabel}</th></tr><tr><td style="font-size:12pt;padding:7pt"></td><td style="font-size:12pt;padding:7pt">لا يوجد مسافرون</td></tr></table>`;
   }
+
+  // جدول معايرة حقيقي (عدد صفوف -> أقصى حجم خط آمن) تم اختباره بمحاكاة طباعة A4 فعلية
+  // لضمان عدم الفيضان لصفحة ثانية مع استغلال أكبر مساحة ممكنة عند قلة العدد
+  const FONT_CALIBRATION: [number, number][] = [[10, 17], [15, 17], [21, 14], [25, 11.5], [30, 10]];
+  const calcSizes = (rowCount: number) => {
+    let fontSize = FONT_CALIBRATION[FONT_CALIBRATION.length - 1][1];
+    if (rowCount <= FONT_CALIBRATION[0][0]) {
+      fontSize = FONT_CALIBRATION[0][1];
+    } else if (rowCount >= FONT_CALIBRATION[FONT_CALIBRATION.length - 1][0]) {
+      fontSize = FONT_CALIBRATION[FONT_CALIBRATION.length - 1][1];
+    } else {
+      for (let i = 0; i < FONT_CALIBRATION.length - 1; i++) {
+        const [r1, f1] = FONT_CALIBRATION[i];
+        const [r2, f2] = FONT_CALIBRATION[i + 1];
+        if (rowCount >= r1 && rowCount <= r2) {
+          const ratio = (rowCount - r1) / (r2 - r1);
+          fontSize = Math.round((f1 + (f2 - f1) * ratio) * 2) / 2;
+          break;
+        }
+      }
+    }
+    const padding = Math.round(fontSize * 0.55 * 10) / 10;
+    return { fontSize, padding };
+  };
+
   if (items.length <= 20) {
-    const rows = items.map((p, i) => `<tr><td style="text-align:center;width:36px;font-size:10pt;padding:6pt 5pt">${i + 1}</td><td style="font-size:10.5pt;padding:6pt 5pt;font-weight:600">${p.short_ar || p.name_ar}</td></tr>`).join("");
-    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:36px;font-size:10pt;padding:5pt">م</th><th style="font-size:10pt;padding:5pt">${nameLabel}</th></tr>${rows}</table>`;
+    const { fontSize, padding } = calcSizes(items.length + 1); // +1 لصف الهيدر
+    const numSize = Math.max(10, fontSize - 1);
+    const rows = items.map((p, i) => `<tr><td style="text-align:center;width:38px;font-size:${numSize}pt;padding:${padding}pt 6pt">${i + 1}</td><td style="font-size:${fontSize}pt;padding:${padding}pt 6pt;font-weight:600">${p.short_ar || p.name_ar}</td></tr>`).join("");
+    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:38px;font-size:${numSize}pt;padding:${padding}pt 6pt">م</th><th style="font-size:${numSize}pt;padding:${padding}pt 6pt">${nameLabel}</th></tr>${rows}</table>`;
   }
+
   const half = Math.ceil(items.length / 2);
   const col1 = items.slice(0, half);
   const col2 = items.slice(half);
   const maxRows = Math.max(col1.length, col2.length);
+  const { fontSize, padding } = calcSizes(maxRows + 1); // +1 لصف الهيدر
+  const numSize = Math.max(10, fontSize - 1);
+
   let rows = "";
   for (let i = 0; i < maxRows; i++) {
     const p1 = col1[i], p2 = col2[i];
     rows += `<tr>
-      <td style="text-align:center;width:30px;font-size:10pt;padding:3.5pt 4pt">${p1 ? i + 1 : ""}</td>
-      <td style="font-size:10.5pt;padding:3.5pt 5pt;font-weight:600">${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
-      <td style="text-align:center;width:30px;font-size:10pt;padding:3.5pt 4pt;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
-      <td style="font-size:10.5pt;padding:3.5pt 5pt;font-weight:600">${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
+      <td style="text-align:center;width:32px;font-size:${numSize}pt;padding:${padding}pt 4pt">${p1 ? i + 1 : ""}</td>
+      <td style="font-size:${fontSize}pt;padding:${padding}pt 5pt;font-weight:600">${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
+      <td style="text-align:center;width:32px;font-size:${numSize}pt;padding:${padding}pt 4pt;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
+      <td style="font-size:${fontSize}pt;padding:${padding}pt 5pt;font-weight:600">${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
     </tr>`;
   }
   return `<table style="width:100%">
-    <tr><th style="text-align:center;width:30px;font-size:10pt;padding:5pt 4pt">م</th><th style="font-size:10pt;padding:5pt 4pt">${nameLabel}</th><th style="text-align:center;width:30px;font-size:10pt;padding:5pt 4pt">م</th><th style="font-size:10pt;padding:5pt 4pt">${nameLabel}</th></tr>
+    <tr><th style="text-align:center;width:32px;font-size:${numSize}pt;padding:${padding}pt 4pt">م</th><th style="font-size:${numSize}pt;padding:${padding}pt 4pt">${nameLabel}</th><th style="text-align:center;width:32px;font-size:${numSize}pt;padding:${padding}pt 4pt">م</th><th style="font-size:${numSize}pt;padding:${padding}pt 4pt">${nameLabel}</th></tr>
     ${rows}
   </table>`;
 }
@@ -401,15 +432,15 @@ export const ALL_PERMISSIONS = [
   { key: "manage_admins", label: "إدارة الإداريين" },
 ];
 
-export const ROOM_TYPES = ["ثنائية", "ثلاثية", "رباعية", "سويت"] as const;
-export const ROOM_COLORS: Record<string, [string, string]> = { "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"], "سويت": ["var(--info-bg)", "var(--info)"] };
+export const ROOM_TYPES = ["فردية", "ثنائية", "ثلاثية", "رباعية"] as const;
+export const ROOM_COLORS: Record<string, [string, string]> = { "فردية": ["var(--info-bg)", "var(--info)"], "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"] };
 
 // ============================================================
 // أيقونات ملوّنة موحّدة (باصات/مخيمات/غرف/رحلات) — صفحات التنظيم وصفحة التقارير
 // ============================================================
 export const ICON_COLOR_CYCLE = ["#7D1F3C", "#0C447C", "#2A9D8F", "#E8951A", "#8B3A6B", "#5C7C2E", "#B5651D", "#3F51B5"];
 export const VIP_ICON_COLOR = "#B5651D";
-export const ROOM_ICON_COLORS: Record<string, string> = { "ثنائية": "#0C447C", "ثلاثية": "#E8951A", "رباعية": "#2A9D8F", "سويت": "#7D1F3C", "فردية": "#5C7C2E", "فارغة": "#999999" };
+export const ROOM_ICON_COLORS: Record<string, string> = { "فردية": "#5C7C2E", "ثنائية": "#0C447C", "ثلاثية": "#E8951A", "رباعية": "#2A9D8F", "فارغة": "#999999" };
 export const FLIGHT_ICON_COLORS: Record<string, string> = { "ذهاب": "#0C447C", "إياب": "#8B3A6B" };
 
 export const NAV = [
