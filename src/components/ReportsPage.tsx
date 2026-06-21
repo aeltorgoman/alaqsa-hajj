@@ -473,7 +473,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             </tr>`;
       }).join("");
 
-      const cardBg = showPattern ? "rgba(255,255,255,0.88)" : "#ffffff";
+      const cardBg = showPattern ? "rgba(255,255,255,0.4)" : "#ffffff";
       return `<div style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
         <div style="background:${clr};color:#ffffff;padding:5px 7px;flex-shrink:0;text-align:center;font-size:${headerFs}px;font-weight:800;line-height:1.3">
           غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
@@ -544,12 +544,20 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             }
             cell.style.fontSize = size + 'px';
           });
+          document.documentElement.setAttribute('data-fit-done', '1');
         }
-        if (document.fonts && document.fonts.ready) {
-          document.fonts.ready.then(fitNames);
-        } else {
-          window.addEventListener('load', fitNames);
+        function runWhenFontReady() {
+          if (document.fonts && document.fonts.load) {
+            // نجبر تحميل الخط فعلياً بنفس الوزن المستخدم في القياس قبل أي حساب
+            Promise.all([
+              document.fonts.load('600 17px Cairo'),
+              document.fonts.ready
+            ]).then(fitNames).catch(fitNames);
+          } else {
+            window.addEventListener('load', fitNames);
+          }
         }
+        runWhenFontReady();
       })();
     <\/script>`;
 
