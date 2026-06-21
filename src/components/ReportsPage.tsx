@@ -430,13 +430,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const ROWS = landscape ? 3 : 4;
     const PER_PAGE = COLS * ROWS; // landscape: 15 غرفة | portrait: 16 غرفة
 
-    // ألوان واضحة ومريحة لكل نوع غرفة (لا تستخدم متغيرات CSS لأنها غير معرّفة في نافذة الطباعة)
-    // [خلفية الترويسة، لون النص/الإطار]
-    const PRINT_ROOM_COLORS: Record<string, [string, string]> = {
-      "فردية":  ["#fdf0d5", "#b8762a"],  // كهرماني دافئ
-      "ثنائية": ["#dceefb", "#1565a8"],  // أزرق واضح
-      "ثلاثية": ["#fdecd2", "#c9821a"],  // أصفر/برتقالي واضح
-      "رباعية": ["#e2f3e6", "#1f8a4c"],  // أخضر واضح
+    // ألوان واضحة ومريحة لكل نوع غرفة — الترويسة بلون مصمت كامل ونص أبيض
+    const PRINT_ROOM_COLORS: Record<string, string> = {
+      "فردية":  "#b8762a",  // كهرماني دافئ
+      "ثنائية": "#1565a8",  // أزرق واضح
+      "ثلاثية": "#c9821a",  // أصفر/برتقالي واضح
+      "رباعية": "#1f8a4c",  // أخضر واضح
     };
 
     // نوع وسعة الغرفة الفعلية تُحسب من عدد الحجاج المتعيّنين فيها فعلياً
@@ -448,27 +447,35 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       return "رباعية";
     };
 
-    const renderRoomBlock = (room: Room) => {
+    // حجم الخط لكروت الغرف يُحدَّد ديناميكياً حسب أعلى سعة غرفة موجودة فعلياً في الصفحة
+    // (معايرة حقيقية مُختبرة بمحاكاة طباعة A4 لضمان عدم الفيضان مع استغلال أكبر مساحة ممكنة)
+    const FONT_BY_MAX_CAP: Record<number, number> = { 1: 22, 2: 22, 3: 21, 4: 17 };
+    const getRoomFontSize = (maxCapInPage: number): number => FONT_BY_MAX_CAP[Math.min(4, Math.max(1, maxCapInPage))] || 17;
+
+    const renderRoomBlock = (room: Room, fontSize: number) => {
       const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
       const actualLabel = roomLabelByCount(rp.length);
       const cap = Math.max(rp.length, 1); // عدد الصفوف = عدد الحجاج الفعليين (بحد أدنى صف واحد)
-      const [bg, clr] = PRINT_ROOM_COLORS[actualLabel] || ["#f0ece8", "#5C1830"];
+      const clr = PRINT_ROOM_COLORS[actualLabel] || "#5C1830";
+      const rowPad = Math.round(fontSize * 0.28 * 10) / 10;
+      const numSize = fontSize - 1;
+      const headerFs = Math.min(15, fontSize + 2);
       const rows = Array.from({ length: cap }, (_, i) => {
         const p = rp[i];
         return p
           ? `<tr>
-              <td style="text-align:center;padding:2.5px 4px;font-size:10.5px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
-              <td style="padding:2.5px 7px;font-size:11px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${p.short_ar || p.name_ar}</td>
+              <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
+              <td style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${p.short_ar || p.name_ar}</td>
             </tr>`
           : `<tr>
-              <td style="padding:2.5px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
-              <td style="padding:2.5px 7px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
+              <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
+              <td style="padding:${rowPad}px 7px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
             </tr>`;
       }).join("");
 
       const cardBg = showPattern ? "rgba(255,255,255,0.88)" : "#ffffff";
       return `<div style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
-        <div style="background:${bg};color:${clr};padding:3px 7px;flex-shrink:0;border-bottom:1.5px solid ${clr};text-align:center;font-size:10.5px;font-weight:800;line-height:1.3">
+        <div style="background:${clr};color:#ffffff;padding:5px 7px;flex-shrink:0;text-align:center;font-size:${headerFs}px;font-weight:800;line-height:1.3">
           غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
         </div>
         <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Cairo',sans-serif;background:transparent">
@@ -500,11 +507,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       .hotel-page tr:nth-child(even) td { background: transparent !important; }
     </style>` +
       pages.map((pageRooms, pi) => {
+        // أقصى عدد حجاج في غرفة واحدة ضمن هذه الصفحة يحدد حجم الخط المناسب لكل كروتها
+        const roomOccupancy = (room: Room) => passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج")).length;
+        const maxCapInPage = Math.max(1, ...pageRooms.map(r => Math.max(roomOccupancy(r), 1)));
+        const fontSize = getRoomFontSize(maxCapInPage);
         const padded = [...pageRooms];
         while (padded.length < PER_PAGE) padded.push(null as any);
         const cells = padded.map(room =>
           room
-            ? renderRoomBlock(room)
+            ? renderRoomBlock(room, fontSize)
             : `<div style="background:transparent"></div>`
         ).join("");
         return `<div class="hotel-page" style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"}">
@@ -597,12 +608,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const excelIcon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
 
   const ExportButtons = ({
-    onView, onExcel, onPrint
-  }: { onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
-    <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
-      <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
-      <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
-      {onView && <button onClick={onView} style={{ ...btnS({ padding: "5px 10px", fontSize: 12, borderRadius: "var(--radius-sm)" }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
+    title, onView, onExcel, onPrint
+  }: { title?: string; onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+      {title && <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
+        <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
+        <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
+        {onView && <button onClick={onView} style={{ ...btnS({ padding: "5px 10px", fontSize: 12, borderRadius: "var(--radius-sm)" }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
+      </div>
     </div>
   );
 
@@ -689,9 +703,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             </div>
           </div>`).join("")}
       </div>`).join("");
-    const w = window.open("", "_blank"); if (!w) return;
-    w.document.write(`<html><head><title>${docTypeLabel}</title><style>body{font-family:Tajawal,Arial;margin:0;direction:rtl}@media print{@page{margin:8mm}}</style></head><body>${pagesHTML}<script>window.print();<\/script></body></html>`);
-    w.document.close();
+    printInPage(mkHTML(docTypeLabel, pagesHTML, false, true));
   };
 
 
@@ -749,6 +761,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الحجاج</div>
               <ExportButtons
+                title="تقرير الحجاج"
                 onExcel={exportPassengersXLSX}
                 onPrint={() => printInPage(getPassengersHTML())}
               />
@@ -816,6 +829,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <>
                       <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>تقرير خطوط الطيران</div>
                       <ExportButtons
+                        title="تقرير خطوط الطيران"
                         onExcel={exportAirlineXLSX}
                         onPrint={() => printInPage(getAirlineHTML())}
                       />
@@ -849,11 +863,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {/* كل رحلة */}
                   {flightSubReport === "per_flight" && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
-                      <ExportButtons
-                        onExcel={exportPerFlightXLSX}
-                        onPrint={() => printInPage(getPerFlightHTML())}
-                      />
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
+                          <button onClick={exportPerFlightXLSX} style={excelBtnStyle}>{excelIcon} Excel</button>
+                          <button onClick={() => printInPage(getPerFlightHTML())} style={printBtnStyle}>{printIcon} طباعة</button>
+                        </div>
+                      </div>
                       {!loading && flights.length > 0 && (
                         <SelectionPanel
                           title="الرحلات المطلوبة في التقرير"
@@ -926,11 +942,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير الباصات ===== */}
           {activeReport === "buses" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
-                buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
+              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+                buses.length === 0 ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div></> :
                 <>
                   <ExportButtons
+                    title="تقرير الباصات"
                     onExcel={exportBusesXLSX}
                     onPrint={() => printInPage(getBusesHTML())}
                   />
@@ -983,12 +999,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير منى ===== */}
           {activeReport === "mina" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
-                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
+                  <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
                   <ExportButtons
+                    title="تقرير مخيمات منى"
                     onExcel={() => exportCampsXLSX("منى")}
                     onPrint={() => printInPage(getCampsHTML("منى"))}
                   />
@@ -1047,12 +1063,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير عرفة ===== */}
           {activeReport === "arafa" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
-                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
+                  <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
                   <ExportButtons
+                    title="تقرير مخيمات عرفة"
                     onExcel={() => exportCampsXLSX("عرفة")}
                     onPrint={() => printInPage(getCampsHTML("عرفة"))}
                   />
@@ -1208,7 +1224,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== طباعة المستندات ===== */}
           {activeReport === "documents" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>طباعة المستندات</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>طباعة المستندات</div>
+                {docList.length > 0 && (
+                  <button onClick={printDocuments} style={printBtnStyle}>{printIcon} طباعة ({docSelectedIds.size})</button>
+                )}
+              </div>
 
               {/* نوع المستند */}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
@@ -1260,10 +1281,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       </div>
                     ))}
                   </div>
-                  <button onClick={printDocuments} style={{ width: "100%", padding: "10px 0", borderRadius: 10, background: "var(--em7)", color: "var(--g3)", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    طباعة ({docSelectedIds.size})
-                  </button>
                 </>
               )}
 
