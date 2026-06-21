@@ -849,11 +849,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {/* كل رحلة */}
                   {flightSubReport === "per_flight" && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
-                      <ExportButtons
-                        onExcel={exportPerFlightXLSX}
-                        onPrint={() => printInPage(getPerFlightHTML())}
-                      />
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
+                          <button onClick={exportPerFlightXLSX} style={excelBtnStyle}>{excelIcon} Excel</button>
+                          <button onClick={() => printInPage(getPerFlightHTML())} style={printBtnStyle}>{printIcon} طباعة</button>
+                        </div>
+                      </div>
                       {!loading && flights.length > 0 && (
                         <SelectionPanel
                           title="الرحلات المطلوبة في التقرير"
@@ -926,11 +928,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير الباصات ===== */}
           {activeReport === "buses" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
-                buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
+              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+                buses.length === 0 ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div></> :
                 <>
                   <ExportButtons
+                    title="تقرير الباصات"
                     onExcel={exportBusesXLSX}
                     onPrint={() => printInPage(getBusesHTML())}
                   />
@@ -983,12 +985,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير منى ===== */}
           {activeReport === "mina" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
-                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
+                  <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
                   <ExportButtons
+                    title="تقرير مخيمات منى"
                     onExcel={() => exportCampsXLSX("منى")}
                     onPrint={() => printInPage(getCampsHTML("منى"))}
                   />
@@ -1047,12 +1049,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير عرفة ===== */}
           {activeReport === "arafa" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
-                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
+                  <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
                   <ExportButtons
+                    title="تقرير مخيمات عرفة"
                     onExcel={() => exportCampsXLSX("عرفة")}
                     onPrint={() => printInPage(getCampsHTML("عرفة"))}
                   />
