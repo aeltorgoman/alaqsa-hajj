@@ -232,7 +232,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
         <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>الخدمات المطلوبة</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {([["الباص", "bus", ["عادي", "VIP"]], ["الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية", "ثلاثية", "رباعية", "سويت"]], ["إطلالة الغرفة", "hotel_view", ["مطلة", "غير مطلة"]], ["مخيم منى", "camp_mina", ["عادي", "خاص"]], ["مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
+            {([["الباص", "bus", ["عادي", "VIP"]], ["الطيران", "flight", ["عادي", "درجة أولى", "بدون"]], ["نوع الغرفة", "hotel_type", ["فردية", "ثنائية", "ثلاثية", "رباعية"]], ["إطلالة الغرفة", "hotel_view", ["مطلة", "غير مطلة"]], ["مخيم منى", "camp_mina", ["عادي", "خاص"]], ["مخيم عرفة", "camp_arafa", ["عادي", "خاص"]]] as [string,string,string[]][]).map(([l, k, opts]) => (
               <div key={k}>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                 <div style={{ display: "flex", gap: 4 }}>
