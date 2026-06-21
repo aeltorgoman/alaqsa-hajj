@@ -237,11 +237,11 @@ export function sectionLogoHtml(b: ReportBranding): string {
 // عرض قائمة أسماء: عمود واحد لو 20 أو أقل، وعمودين لو أكتر
 export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحاج", primaryColor = "#6B1F3A"): string {
   if (items.length === 0) {
-    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:50px;font-size:13pt;padding:8pt">م</th><th style="font-size:13pt;padding:8pt">${nameLabel}</th></tr><tr><td style="font-size:12pt;padding:8pt"></td><td style="font-size:12pt;padding:8pt">لا يوجد مسافرون</td></tr></table>`;
+    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:36px;font-size:10pt;padding:5pt">م</th><th style="font-size:10pt;padding:5pt">${nameLabel}</th></tr><tr><td style="font-size:10pt;padding:5pt"></td><td style="font-size:10pt;padding:5pt">لا يوجد مسافرون</td></tr></table>`;
   }
   if (items.length <= 20) {
-    const rows = items.map((p, i) => `<tr><td style="text-align:center;width:50px;font-size:13pt;padding:9pt 8pt">${i + 1}</td><td style="font-size:14pt;padding:9pt 8pt;font-weight:600">${p.short_ar || p.name_ar}</td></tr>`).join("");
-    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:50px;font-size:13pt;padding:8pt">م</th><th style="font-size:13pt;padding:8pt">${nameLabel}</th></tr>${rows}</table>`;
+    const rows = items.map((p, i) => `<tr><td style="text-align:center;width:36px;font-size:10pt;padding:6pt 5pt">${i + 1}</td><td style="font-size:10.5pt;padding:6pt 5pt;font-weight:600">${p.short_ar || p.name_ar}</td></tr>`).join("");
+    return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:36px;font-size:10pt;padding:5pt">م</th><th style="font-size:10pt;padding:5pt">${nameLabel}</th></tr>${rows}</table>`;
   }
   const half = Math.ceil(items.length / 2);
   const col1 = items.slice(0, half);
@@ -251,14 +251,14 @@ export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحا
   for (let i = 0; i < maxRows; i++) {
     const p1 = col1[i], p2 = col2[i];
     rows += `<tr>
-      <td style="text-align:center;width:42px;font-size:12pt;padding:7pt 6pt">${p1 ? i + 1 : ""}</td>
-      <td style="font-size:13pt;padding:7pt 6pt;font-weight:600">${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
-      <td style="text-align:center;width:42px;font-size:12pt;padding:7pt 6pt;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
-      <td style="font-size:13pt;padding:7pt 6pt;font-weight:600">${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
+      <td style="text-align:center;width:30px;font-size:10pt;padding:3.5pt 4pt">${p1 ? i + 1 : ""}</td>
+      <td style="font-size:10.5pt;padding:3.5pt 5pt;font-weight:600">${p1 ? (p1.short_ar || p1.name_ar) : ""}</td>
+      <td style="text-align:center;width:30px;font-size:10pt;padding:3.5pt 4pt;border-right:2px solid ${primaryColor}">${p2 ? half + i + 1 : ""}</td>
+      <td style="font-size:10.5pt;padding:3.5pt 5pt;font-weight:600">${p2 ? (p2.short_ar || p2.name_ar) : ""}</td>
     </tr>`;
   }
   return `<table style="width:100%">
-    <tr><th style="text-align:center;width:42px;font-size:12pt;padding:8pt 6pt">م</th><th style="font-size:12pt;padding:8pt 6pt">${nameLabel}</th><th style="text-align:center;width:42px;font-size:12pt;padding:8pt 6pt">م</th><th style="font-size:12pt;padding:8pt 6pt">${nameLabel}</th></tr>
+    <tr><th style="text-align:center;width:30px;font-size:10pt;padding:5pt 4pt">م</th><th style="font-size:10pt;padding:5pt 4pt">${nameLabel}</th><th style="text-align:center;width:30px;font-size:10pt;padding:5pt 4pt">م</th><th style="font-size:10pt;padding:5pt 4pt">${nameLabel}</th></tr>
     ${rows}
   </table>`;
 }
