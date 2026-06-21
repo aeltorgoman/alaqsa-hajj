@@ -216,6 +216,19 @@ function AdminsPage({
       }
     }
 
+    // منع تكرار نفس الإداري (بنفس الجواز أو الهوية) — يستثني الإداري الحالي عند التعديل
+    if (form.passport.trim() || form.national_id.trim()) {
+      const duplicateAdmin = admins.find(p =>
+        p.id !== editTarget?.id &&
+        ((form.passport.trim() && p.passport === form.passport.trim()) ||
+         (form.national_id.trim() && p.national_id === form.national_id.trim()))
+      );
+      if (duplicateAdmin) {
+        showAlert("warning", `هذا الشخص مسجّل بالفعل كـ${duplicateAdmin.passenger_type} باسم: ${duplicateAdmin.short_ar || duplicateAdmin.name_ar}`);
+        return;
+      }
+    }
+
     setSaving(true);
     const short_ar = form.short_ar.trim() || makeShort(form.name_ar);
     const short_en = form.short_en.trim() || makeShort(form.name_en);
