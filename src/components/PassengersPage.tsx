@@ -109,7 +109,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
     { key: "gender", label: "الجنس", opts: ["ذكر", "أنثى"] },
     { key: "bus", label: "الباص", opts: ["عادي", "VIP", "بدون"] },
     { key: "flight", label: "الطيران", opts: ["عادي", "درجة أولى", "بدون"] },
-    { key: "hotel_type", label: "نوع الغرفة", opts: ["ثنائية", "ثلاثية", "رباعية", "سويت"] },
+    { key: "hotel_type", label: "نوع الغرفة", opts: ["فردية", "ثنائية", "ثلاثية", "رباعية"] },
     { key: "hotel_view", label: "الإطلالة", opts: ["مطلة", "غير مطلة"] },
     { key: "camp_mina", label: "منى", opts: ["عادي", "خاص", "بدون"] },
     { key: "camp_arafa", label: "عرفة", opts: ["عادي", "خاص", "بدون"] },
@@ -1150,7 +1150,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات المطلوبة</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+                {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["فردية","ثنائية","ثلاثية","رباعية"]], ["🪟 إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
                   <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       {opts.map(o => <div key={o} onClick={() => setEditing({ ...editing, services: { ...editing.services, [k]: o } })} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: "1.5px solid " + (editing.services?.[k as keyof typeof editing.services] === o ? "var(--em7)" : "var(--border)"), background: editing.services?.[k as keyof typeof editing.services] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: editing.services?.[k as keyof typeof editing.services] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center" as const }}>{o}</div>)}
@@ -1228,7 +1228,7 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["ثنائية","ثلاثية","رباعية","سويت"]], ["إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
+                {([["الباص", "bus", ["عادي","VIP"]], ["الطيران", "flight", ["عادي","درجة أولى","بدون"]], ["نوع الغرفة", "hotel_type", ["فردية","ثنائية","ثلاثية","رباعية"]], ["إطلالة", "hotel_view", ["مطلة","غير مطلة"]], ["منى", "camp_mina", ["عادي","خاص"]], ["عرفة", "camp_arafa", ["عادي","خاص"]]] as [string,string,string[]][]).map(([l,k,opts]) => (
                   <div key={k}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{l}</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       {opts.map(o => <div key={o} onClick={() => setManualServices(prev => ({ ...prev, [k]: o }))} style={{ flex: 1, padding: "4px 2px", borderRadius: 6, border: `1.5px solid ${(manualServices as any)[k] === o ? "var(--em7)" : "var(--border)"}`, background: (manualServices as any)[k] === o ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 10, color: (manualServices as any)[k] === o ? "var(--em7)" : "var(--text-muted)", textAlign: "center" }}>{o}</div>)}
