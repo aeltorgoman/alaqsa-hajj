@@ -241,8 +241,8 @@ export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحا
   }
 
   // جدول معايرة حقيقي (عدد صفوف -> أقصى حجم خط آمن) تم اختباره بمحاكاة طباعة A4 فعلية
-  // لضمان عدم الفيضان لصفحة ثانية مع استغلال أكبر مساحة ممكنة عند قلة العدد
-  const FONT_CALIBRATION: [number, number][] = [[10, 17], [15, 17], [21, 14], [25, 11.5], [30, 10]];
+  // مطابقة 100% لبنية الجدول الفعلية، بقيم محافظة (أقل قيمة آمنة في كل نطاق) لضمان عدم الفيضان مطلقاً
+  const FONT_CALIBRATION: [number, number][] = [[6, 17], [11, 17], [14, 14.5], [18, 11.5], [22, 11.5], [24, 10.5], [31, 10]];
   const calcSizes = (rowCount: number) => {
     let fontSize = FONT_CALIBRATION[FONT_CALIBRATION.length - 1][1];
     if (rowCount <= FONT_CALIBRATION[0][0]) {
