@@ -69,8 +69,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // بحيث يثبّت كل عميل/شركة لونه الخاص في المطبوعات بصرف النظر عن الثيم الذي يستخدمه الموظف على الشاشة
   const primaryColor = config.color_primary || "#6B1F3A";
   const accentColor = config.color_accent || "#0C447C";
-  const mkHTML = (title: string, body: string, landscape = false, noHeader = false) =>
-    makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader);
+  const mkHTML = (title: string, body: string, landscape = false, noHeader = false, patternOpacity?: number) =>
+    makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader, patternOpacity);
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -424,7 +424,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   const getHotelHTML = (opts?: { landscape?: boolean; showPattern?: boolean }) => {
     const landscape = opts?.landscape ?? false;
-    const showPattern = opts?.showPattern ?? false;
+    const showPattern = opts?.showPattern ?? true;
     const filtered = getFilteredRooms();
     const COLS = landscape ? 5 : 4;
     const ROWS = landscape ? 3 : 4;
@@ -465,7 +465,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         return p
           ? `<tr>
               <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
-              <td style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${p.short_ar || p.name_ar}</td>
+              <td class="auto-fit-name" data-max-size="${fontSize}" style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden">${p.short_ar || p.name_ar}</td>
             </tr>`
           : `<tr>
               <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
@@ -478,7 +478,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         <div style="background:${clr};color:#ffffff;padding:5px 7px;flex-shrink:0;text-align:center;font-size:${headerFs}px;font-weight:800;line-height:1.3">
           غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
         </div>
-        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Cairo',sans-serif;background:transparent">
+        <table style="margin:0;width:100%;table-layout:fixed;border-collapse:collapse;flex:1;font-family:'Cairo',sans-serif;background:transparent">
           ${rows}
         </table>
       </div>`;
@@ -523,8 +523,38 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         </div>`;
       }).join("");
 
+    // سكريبت يضبط حجم خط كل اسم بشكل مستقل حسب طوله الفعلي:
+    // الاسم القصير يحتفظ بالحجم الأقصى المحسوب للصفحة، والاسم الطويل يصغر فقط بقدر ما يلزم ليبقى في سطر واحد
+    const autoFitScript = `<script>
+      (function() {
+        function fitNames() {
+          var cells = document.querySelectorAll('.auto-fit-name');
+          var canvas = document.createElement('canvas');
+          var ctx = canvas.getContext('2d');
+          cells.forEach(function(cell) {
+            var maxSize = parseFloat(cell.getAttribute('data-max-size')) || 17;
+            var minSize = 8;
+            var available = cell.clientWidth - 14; // طرح padding التقريبي يمين/يسار
+            var text = cell.textContent;
+            var size = maxSize;
+            while (size > minSize) {
+              ctx.font = '600 ' + size + 'px Cairo, sans-serif';
+              if (ctx.measureText(text).width <= available) break;
+              size -= 0.5;
+            }
+            cell.style.fontSize = size + 'px';
+          });
+        }
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(fitNames);
+        } else {
+          window.addEventListener('load', fitNames);
+        }
+      })();
+    <\/script>`;
+
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
-    return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML, landscape);
+    return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML + autoFitScript, landscape, false, showPattern ? 0.04 : 0);
   };
 
   const exportHotelXLSX = () => {
