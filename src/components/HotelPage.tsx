@@ -327,7 +327,17 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             لا يوجد غرف بعد
           </div>
         ) : (() => {
-          const filteredRooms = rooms.filter(r => (filterFloor === "الكل" || r.floor === filterFloor) && (filterType === "الكل" || r.type === filterType));
+          // النوع الفعلي للغرفة يُحسب من عدد الحجاج المتعيّنين فيها فعلياً
+          // (وليس من حقل room.type المخزّن، الذي يبقى ثابتاً منذ الإنشاء ولا يعكس الواقع)
+          const actualRoomType = (room: Room): string => {
+            const count = passengers.filter(p => p.room_id === room.id).length;
+            if (count === 1) return "فردية";
+            if (count === 2) return "ثنائية";
+            if (count === 3) return "ثلاثية";
+            if (count >= 4) return "رباعية";
+            return room.type; // غرفة فارغة: نعرض نوعها المسجّل كما هو
+          };
+          const filteredRooms = rooms.filter(r => (filterFloor === "الكل" || r.floor === filterFloor) && (filterType === "الكل" || actualRoomType(r) === filterType));
           if (filteredRooms.length === 0) {
             return (
               <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
