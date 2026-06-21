@@ -430,13 +430,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const ROWS = landscape ? 3 : 4;
     const PER_PAGE = COLS * ROWS; // landscape: 15 غرفة | portrait: 16 غرفة
 
-    // ألوان ثابتة للطباعة (لا تستخدم متغيرات CSS لأنها غير معرّفة في نافذة الطباعة)
+    // ألوان واضحة ومريحة لكل نوع غرفة (لا تستخدم متغيرات CSS لأنها غير معرّفة في نافذة الطباعة)
     // [خلفية الترويسة، لون النص/الإطار]
     const PRINT_ROOM_COLORS: Record<string, [string, string]> = {
-      "فردية":  ["#f3eee8", "#6b5a45"],  // بني فاتح
-      "ثنائية": ["#e8eff5", "#13456b"],  // أزرق
-      "ثلاثية": ["#f7eaef", "#7a2e45"],  // نبيتي
-      "رباعية": ["#e6f4ec", "#1a7a4a"],  // أخضر
+      "فردية":  ["#fdf0d5", "#b8762a"],  // كهرماني دافئ
+      "ثنائية": ["#dceefb", "#1565a8"],  // أزرق واضح
+      "ثلاثية": ["#fdecd2", "#c9821a"],  // أصفر/برتقالي واضح
+      "رباعية": ["#e2f3e6", "#1f8a4c"],  // أخضر واضح
     };
 
     // نوع وسعة الغرفة الفعلية تُحسب من عدد الحجاج المتعيّنين فيها فعلياً
@@ -457,22 +457,21 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         const p = rp[i];
         return p
           ? `<tr>
-              <td style="text-align:center;padding:6px 4px;font-size:16px;font-weight:600;color:#333;width:26px;border-bottom:1px solid rgba(0,0,0,0.12)">${i + 1}</td>
-              <td style="padding:6px 10px;font-size:17px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12)">${p.short_ar || p.name_ar}</td>
+              <td style="text-align:center;padding:2.5px 4px;font-size:10.5px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
+              <td style="padding:2.5px 7px;font-size:11px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${p.short_ar || p.name_ar}</td>
             </tr>`
           : `<tr>
-              <td style="padding:6px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:26px">&nbsp;</td>
-              <td style="padding:6px 10px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
+              <td style="padding:2.5px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
+              <td style="padding:2.5px 7px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
             </tr>`;
       }).join("");
 
       const cardBg = showPattern ? "rgba(255,255,255,0.88)" : "#ffffff";
-      return `<div style="break-inside:avoid;border:2px solid ${clr};border-radius:8px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
-        <div style="background:${bg};color:${clr};padding:6px 10px;flex-shrink:0;border-bottom:2px solid ${clr};text-align:center">
-          <div style="font-size:18px;font-weight:800;line-height:1.2">غرفة ${room.number}</div>
-          <div style="font-size:12px;font-weight:600;opacity:0.9;margin-top:1px">${actualLabel}${room.floor ? ` · الدور ${room.floor}` : ""}</div>
+      return `<div style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
+        <div style="background:${bg};color:${clr};padding:3px 7px;flex-shrink:0;border-bottom:1.5px solid ${clr};text-align:center;font-size:10.5px;font-weight:800;line-height:1.3">
+          غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
         </div>
-        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Amiri',serif;background:transparent">
+        <table style="margin:0;width:100%;border-collapse:collapse;flex:1;font-family:'Cairo',sans-serif;background:transparent">
           ${rows}
         </table>
       </div>`;
@@ -483,13 +482,19 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       pages.push(filtered.slice(i, i + PER_PAGE));
     }
 
-    const amiriFont = `@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap');`;
+    const cairoFont = `@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');`;
 
     const pagesHTML = `<style>
-      ${amiriFont}
-      * { font-family: 'Amiri', serif !important; }
+      ${cairoFont}
+      * { font-family: 'Cairo', sans-serif !important; }
       ${showPattern ? "" : "html, body { background-image: none !important; background: #ffffff !important; }"}
-      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 9px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
+      /* تصغير الهيدر العلوي خاصة بتقرير الفندق لاستيعاب 16 غرفة في الصفحة */
+      .doc-header { padding-bottom: 4px !important; margin-bottom: 2px !important; }
+      .doc-header .logo-box { width: 14mm !important; height: 14mm !important; font-size: 11pt !important; }
+      .doc-header .company-name { font-size: 10pt !important; }
+      .doc-header .tagline { font-size: 6.5pt !important; }
+      .doc-title-bar { padding: 3pt 0 !important; margin: 4pt 0 6pt !important; font-size: 11pt !important; }
+      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 6px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
       .hotel-page table { margin: 0 !important; }
       .hotel-page td { border: none; white-space: normal !important; vertical-align: middle; }
       .hotel-page tr:nth-child(even) td { background: transparent !important; }
@@ -502,7 +507,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             ? renderRoomBlock(room)
             : `<div style="background:transparent"></div>`
         ).join("");
-        return `<div class="hotel-page" style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"};min-height:calc(100vh - 80px)">
+        return `<div class="hotel-page" style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"}">
           ${cells}
         </div>`;
       }).join("");
