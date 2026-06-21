@@ -347,7 +347,7 @@ export function printInPage(html: string) {
   const doc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!doc) return;
   doc.open(); doc.write(html); doc.close();
-  setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 600);
+  setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 1000);
 }
 
 export function downloadPDF(html: string, filename: string) {
