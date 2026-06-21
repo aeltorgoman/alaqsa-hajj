@@ -121,6 +121,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [docType, setDocType] = useState<"passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url">("passport_url");
   const [docSelected, setDocSelected] = useState<Record<string, Set<number>>>({});
   const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
+  const [docPersonFilter, setDocPersonFilter] = useState<"all" | "hajj" | "admin">("all");
 
   // ===== WhatsApp State =====
   const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
@@ -717,7 +718,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     { key: "flight_ticket_url", label: "تذكرة الطيران" },
   ];
   const docTypeLabel = DOC_TYPES.find(d => d.key === docType)?.label || "";
-  const docList = passengers.filter(p => (p as any)[docType]);
+  const isAdminPerson = (p: Passenger) => !!p.passenger_type && p.passenger_type !== "حاج";
+  const docListAll = passengers.filter(p => (p as any)[docType]);
+  const docList = docListAll.filter(p =>
+    docPersonFilter === "all" ? true :
+    docPersonFilter === "admin" ? isAdminPerson(p) :
+    !isAdminPerson(p)
+  );
   const docSelectedIds = docSelected[docType] || new Set<number>();
   const toggleDocSelected = (id: number) => setDocSelected(prev => {
     const cur = new Set(prev[docType] || []);
@@ -1279,6 +1286,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 ))}
               </div>
 
+              {/* فلتر حجاج / إداريين / الكل */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>عرض:</div>
+                {([["all", "الكل"], ["hajj", "الحجاج"], ["admin", "الإداريون"]] as const).map(([key, label]) => (
+                  <div key={key} onClick={() => setDocPersonFilter(key)}
+                    style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${docPersonFilter === key ? "var(--warning)" : "var(--border)"}`, background: docPersonFilter === key ? "var(--warning-bg)" : "transparent", cursor: "pointer", fontSize: 12, fontWeight: 600, color: docPersonFilter === key ? "var(--warning)" : "var(--text-muted)" }}>
+                    {label} ({key === "all" ? docListAll.length : key === "admin" ? docListAll.filter(isAdminPerson).length : docListAll.filter(p => !isAdminPerson(p)).length})
+                  </div>
+                ))}
+              </div>
+
               {/* عدد المستندات في الصفحة */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                 <div style={{ fontSize: 12, color: "var(--text-muted)" }}>عدد المستندات في الصفحة:</div>
@@ -1291,7 +1309,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               </div>
 
               {docList.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد حجاج عندهم {docTypeLabel} مرفوع</div>
+                <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
+                  لا يوجد {docPersonFilter === "admin" ? "إداريون" : docPersonFilter === "hajj" ? "حجاج" : "أشخاص"} عندهم {docTypeLabel} مرفوع
+                </div>
               ) : (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -1312,6 +1332,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                         <span style={{ fontSize: 11, color: "var(--text-muted)", width: 24, flexShrink: 0 }}>{i + 1}</span>
                         {/* الاسم */}
                         <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        {/* علامة تمييز: إداري / نوعه — لا تظهر للحجاج */}
+                        {isAdminPerson(p) && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)" }}>{p.passenger_type}</span>
+                        )}
                         {/* الجواز */}
                         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{p.passport || "—"}</span>
                         {/* الجنس */}
