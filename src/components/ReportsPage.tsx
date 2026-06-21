@@ -65,15 +65,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const logoUrl = config.logo_url || "";
   const companyName = config.name_ar || "حملة الأقصى";
   const tagline = config.tagline || "";
-  // ألوان التقارير المطبوعة تتبع ثيم الواجهة النشط حالياً (وليس لون الشركة الثابت)
-  // نقرأ القيمة الفعلية المحسوبة من document بدل النص الخام للمتغيّر
-  const getThemeColor = (cssVar: string, fallback: string): string => {
-    if (typeof window === "undefined") return fallback;
-    const val = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
-    return val || fallback;
-  };
-  const primaryColor = getThemeColor("--primary", config.color_primary || "#6B1F3A");
-  const accentColor = getThemeColor("--accent", config.color_accent || "#0C447C");
+  // ألوان التقارير المطبوعة = لون الشركة الثابت من الإعدادات (مستقل عن ثيم الواجهة)
+  // بحيث يثبّت كل عميل/شركة لونه الخاص في المطبوعات بصرف النظر عن الثيم الذي يستخدمه الموظف على الشاشة
+  const primaryColor = config.color_primary || "#6B1F3A";
+  const accentColor = config.color_accent || "#0C447C";
   const mkHTML = (title: string, body: string, landscape = false, noHeader = false) =>
     makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader);
 
@@ -849,13 +844,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {/* كل رحلة */}
                   {flightSubReport === "per_flight" && (
                     <>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
-                          <button onClick={exportPerFlightXLSX} style={excelBtnStyle}>{excelIcon} Excel</button>
-                          <button onClick={() => printInPage(getPerFlightHTML())} style={printBtnStyle}>{printIcon} طباعة</button>
-                        </div>
-                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
+                      <ExportButtons
+                        onExcel={exportPerFlightXLSX}
+                        onPrint={() => printInPage(getPerFlightHTML())}
+                      />
                       {!loading && flights.length > 0 && (
                         <SelectionPanel
                           title="الرحلات المطلوبة في التقرير"
@@ -928,11 +921,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير الباصات ===== */}
           {activeReport === "buses" && (
             <>
-              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
-                buses.length === 0 ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div></> :
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+                buses.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div> :
                 <>
                   <ExportButtons
-                    title="تقرير الباصات"
                     onExcel={exportBusesXLSX}
                     onPrint={() => printInPage(getBusesHTML())}
                   />
@@ -985,12 +978,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير منى ===== */}
           {activeReport === "mina" && (
             <>
-              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
-                  <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
                   <ExportButtons
-                    title="تقرير مخيمات منى"
                     onExcel={() => exportCampsXLSX("منى")}
                     onPrint={() => printInPage(getCampsHTML("منى"))}
                   />
@@ -1049,12 +1042,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== تقرير عرفة ===== */}
           {activeReport === "arafa" && (
             <>
-              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>
+              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
-                  <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div> :
                 <>
                   <ExportButtons
-                    title="تقرير مخيمات عرفة"
                     onExcel={() => exportCampsXLSX("عرفة")}
                     onPrint={() => printInPage(getCampsHTML("عرفة"))}
                   />
@@ -1365,7 +1358,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               {/* معاينة */}
               {passengers[0] && (
                 <div style={{ background: "rgba(37,211,102,0.05)", border: "1px solid rgba(37,211,102,0.2)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: "#128C7E", fontWeight: 600, marginBottom: 8 }}>معاينة — {passengers[0].short_ar || passengers[0].name_ar}</div>
+                  <div style={{ fontSize: 11, color: "var(--success)", fontWeight: 600, marginBottom: 8 }}>معاينة — {passengers[0].short_ar || passengers[0].name_ar}</div>
                   <div style={{ fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.8, direction: "rtl" }}>
                     {waTemplate
                       .replace("{الاسم}", passengers[0].short_ar || passengers[0].name_ar)
@@ -1377,7 +1370,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     }
                   </div>
                   {(waSendDocs.permit || waSendDocs.ticket) && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: "#128C7E" }}>
+                    <div style={{ marginTop: 8, fontSize: 11, color: "var(--success)" }}>
                       {waSendDocs.permit && <div>📎 تصريح السفر (مرفق منفصل)</div>}
                       {waSendDocs.ticket && <div>📎 تذكرة الطيران (مرفق منفصل)</div>}
                     </div>
