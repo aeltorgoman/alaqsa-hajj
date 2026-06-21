@@ -761,7 +761,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
           <div style={{ width:48, height:48, borderRadius:"50%", background:"var(--success-bg)", color:"var(--success)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, margin:"0 auto 12px" }}>✓</div>
-          <div style={{ fontSize:15, fontWeight:700, color:"var(--em8)", marginBottom:4 }}>تم تسجيل الدفعة</div>
+          <div style={{ fontSize:15, fontWeight:700, color:"var(--text)", marginBottom:4 }}>تم تسجيل الدفعة</div>
           <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:4 }}>{passengerName}</div>
           <div style={{ fontSize:24, fontWeight:900, color:"var(--success)", marginBottom:16 }}>{fmtAmt(Number(payment.amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
           <div style={{ display:"flex", gap:10, marginBottom:10 }}>
@@ -790,11 +790,11 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }} onClick={() => setSelectedPayment(null)}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)" }} onClick={e => e.stopPropagation()}>
-          <div style={{ fontWeight:700, fontSize:16, color:"var(--em8)", marginBottom:16, textAlign:"center" }}>تفاصيل الدفعة</div>
+          <div style={{ fontWeight:700, fontSize:16, color:"var(--text)", marginBottom:16, textAlign:"center" }}>تفاصيل الدفعة</div>
           <div style={{ background:"var(--success-bg)", border:"1px solid var(--success)", borderRadius:12, padding:16, marginBottom:16, textAlign:"center" }}>
-            <div style={{ fontSize:12, color:"#888", marginBottom:4 }}>المبلغ</div>
+            <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>المبلغ</div>
             <div style={{ fontSize:32, fontWeight:900, color:"var(--success)" }}>{fmtAmt(Number(selectedPayment.amount))}</div>
-            <div style={{ fontSize:12, color:"#888" }}>ر.ق</div>
+            <div style={{ fontSize:12, color:"var(--text-muted)" }}>ر.ق</div>
           </div>
           {[
             { label:"الحاج",         value: pName },
@@ -832,11 +832,11 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       <div style={{ maxWidth:560, margin:"0 auto" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
           <button onClick={() => setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
-          <div style={{ fontFamily:"var(--font-heading)", fontSize:20, fontWeight:600, color:"var(--em8)" }}>إعدادات الأسعار</div>
+          <div style={{ fontFamily:"var(--font-heading)", fontSize:20, fontWeight:600, color:"var(--text)" }}>إعدادات الأسعار</div>
         </div>
         {(["package","addon","discount"] as const).map(type => (
           <div key={type} style={{ background:"var(--bg-card)", borderRadius:12, padding:16, marginBottom:16, boxShadow:"var(--shadow-sm)" }}>
-            <div style={{ fontWeight:700, color:"var(--em8)", marginBottom:12, fontSize:14, borderBottom:"1px solid var(--border)", paddingBottom:8 }}>
+            <div style={{ fontWeight:700, color:"var(--text)", marginBottom:12, fontSize:14, borderBottom:"1px solid var(--border)", paddingBottom:8 }}>
               {type==="package"?"الباقات الأساسية":type==="addon"?"الإضافات":"الخصومات"}
             </div>
             {PRICING_KEYS.filter(k=>k.type===type).map(k => (
@@ -880,7 +880,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <button onClick={() => deleteGroup(selectedGroup.id)} style={{ padding:"6px 12px", background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:8, fontSize:12, cursor:"pointer" }}>حذف المجموعة</button>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
-            {[{label:"إجمالي المطلوب",value:fmtAmt(gTotDue),color:"var(--em8)"},{label:"إجمالي المدفوع",value:fmtAmt(gTotPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(gTotBal),color:gTotBal>0?"var(--danger)":"var(--success)"}].map(card=>(
+            {[{label:"إجمالي المطلوب",value:fmtAmt(gTotDue),color:"var(--text)"},{label:"إجمالي المدفوع",value:fmtAmt(gTotPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(gTotBal),color:gTotBal>0?"var(--danger)":"var(--success)"}].map(card=>(
               <div key={card.label} style={{ background:"var(--bg-card)", borderRadius:12, padding:"14px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}>
                 <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{card.label}</div>
                 <div style={{ fontSize:20, fontWeight:700, color:card.color }}>{card.value}</div>
@@ -910,8 +910,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                   const due=calcTotalDue(p,pricing,customCharges),paid=calcTotalPaid(p.id,payments),bal=due-paid,st=financeStatus(due,paid);
                   return (
                     <tr key={p.id} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}>
-                      <td style={tdStyle}><span style={{ cursor:"pointer", color:"var(--em8)", fontWeight:600 }} onClick={()=>{setSelectedP(p);setSubView("detail");}}>{p.short_ar||p.name_ar}</span><span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:st.bg, color:st.color, marginRight:6 }}>{st.label}</span></td>
-                      <td style={{ ...tdStyle, textAlign:"center", color:"var(--em8)", fontWeight:600 }}>{fmtAmt(due)}</td>
+                      <td style={tdStyle}><span style={{ cursor:"pointer", color:"var(--text)", fontWeight:600 }} onClick={()=>{setSelectedP(p);setSubView("detail");}}>{p.short_ar||p.name_ar}</span><span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:st.bg, color:st.color, marginRight:6 }}>{st.label}</span></td>
+                      <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:600 }}>{fmtAmt(due)}</td>
                       <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td>
                       <td style={{ ...tdStyle, textAlign:"center", color:bal>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(bal)}</td>
                       <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>removeFromGroup(p.id,selectedGroup.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:12 }}>إزالة</button></td>
@@ -926,7 +926,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           {showGroupModal && (
             <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
               <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)", maxHeight:"80vh", overflowY:"auto" }}>
-                <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--em8)" }}>إضافة عضو إلى المجموعة</div>
+                <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--text)" }}>إضافة عضو إلى المجموعة</div>
                 {availableToAdd.length === 0
                   ? <div style={{ textAlign:"center", padding:20, color:"var(--text-muted)", fontSize:13 }}>لا يوجد حجاج متاحون للإضافة</div>
                   : availableToAdd.map(p => (
@@ -1011,7 +1011,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <button onClick={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:5, fontFamily:"var(--font-body)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
-            {[{label:"المطلوب",value:fmtAmt(totalDue),color:"var(--em8)"},{label:"المدفوع",value:fmtAmt(totalPaid),color:"var(--success)"},{label:"المتبقي",value:fmtAmt(balance),color:balance>0?"var(--danger)":"var(--success)"}].map(card=>(
+            {[{label:"المطلوب",value:fmtAmt(totalDue),color:"var(--text)"},{label:"المدفوع",value:fmtAmt(totalPaid),color:"var(--success)"},{label:"المتبقي",value:fmtAmt(balance),color:balance>0?"var(--danger)":"var(--success)"}].map(card=>(
               <div key={card.label} style={{ background:"var(--bg-card)", borderRadius:12, padding:"14px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}>
                 <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{card.label}</div>
                 <div style={{ fontSize:20, fontWeight:700, color:card.color }}>{card.value}</div>
@@ -1071,10 +1071,10 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <button onClick={()=>{setChargeType("خصم");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"var(--danger)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>− خصم خاص</button>
           </div>
           <div style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)" }}>
-            <div style={{ fontWeight:700, fontSize:13, color:"var(--em8)", marginBottom:12 }}>المجموعة المالية</div>
+            <div style={{ fontWeight:700, fontSize:13, color:"var(--text)", marginBottom:12 }}>المجموعة المالية</div>
             {passengerGroup ? (
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ fontSize:12, padding:"4px 12px", borderRadius:99, background:"rgba(125,31,60,0.08)", color:"var(--em8)", fontWeight:600 }}>{passengerGroup.name}</span>
+                <span style={{ fontSize:12, padding:"4px 12px", borderRadius:99, background:"rgba(125,31,60,0.08)", color:"var(--em7)", fontWeight:600 }}>{passengerGroup.name}</span>
                 <button onClick={()=>{setSelectedGroup(passengerGroup);setSubView("group");}} style={{ padding:"4px 12px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:6, fontSize:12, cursor:"pointer" }}>عرض حساب المجموعة</button>
                 <button onClick={()=>removeFromGroup(selectedP.id,passengerGroup.id)} style={{ padding:"4px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:6, fontSize:12, cursor:"pointer", color:"var(--danger)", marginRight:"auto" }}>إزالة من المجموعة</button>
               </div>
@@ -1162,7 +1162,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)", maxHeight:"80vh", overflowY:"auto" }}>
               {groupModalMode==="create"?(
                 <>
-                  <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--em8)" }}>إنشاء مجموعة مالية جديدة</div>
+                  <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--text)" }}>إنشاء مجموعة مالية جديدة</div>
                   <div style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>اسم المجموعة</div><input type="text" placeholder="مثال: عائلة الأحمدي" value={groupForm.name} onChange={e=>setGroupForm(p=>({...p,name:e.target.value}))} style={inputStyle}/></div>
                   <div style={{ marginBottom:16 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>ملاحظات (اختياري)</div><input type="text" placeholder="..." value={groupForm.notes} onChange={e=>setGroupForm(p=>({...p,notes:e.target.value}))} style={inputStyle}/></div>
                   <div style={{ display:"flex", gap:10 }}>
@@ -1172,7 +1172,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                 </>
               ):(
                 <>
-                  <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--em8)" }}>إضافة إلى مجموعة موجودة</div>
+                  <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--text)" }}>إضافة إلى مجموعة موجودة</div>
                   {groups.map(g=>(
                     <div key={g.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
                       <div><div style={{ fontSize:13, fontWeight:600 }}>{g.name}</div><div style={{ fontSize:11, color:"var(--text-muted)" }}>{groupMembers.filter(m=>m.group_id===g.id).length} أعضاء</div></div>
@@ -1209,7 +1209,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={()=>setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
-          <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--em8)" }}>التقارير المالية</div>
+          <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--text)" }}>التقارير المالية</div>
           {excelActions[reportType] && (
             <button onClick={excelActions[reportType]} style={{ marginRight:"auto", padding:"7px 18px", background:"#1D6F42", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Excel</button>
           )}
@@ -1223,7 +1223,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         {(reportType==="full"||reportType==="late")&&(
           <>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
-              {[{label:"إجمالي المطلوب",value:fmtAmt(totDue),color:"var(--em8)"},{label:"إجمالي المحصل",value:fmtAmt(totPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(totBal),color:"var(--danger)"}].map(c=>(
+              {[{label:"إجمالي المطلوب",value:fmtAmt(totDue),color:"var(--text)"},{label:"إجمالي المحصل",value:fmtAmt(totPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(totBal),color:"var(--danger)"}].map(c=>(
                 <div key={c.label} style={{ background:"var(--bg-card)", borderRadius:10, padding:"12px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}><div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{c.label}</div><div style={{ fontSize:18, fontWeight:700, color:c.color }}>{c.value}</div><div style={{ fontSize:10, color:"var(--text-muted)" }}>ر.ق</div></div>
               ))}
             </div>
@@ -1231,7 +1231,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الاسم</th><th style={{ ...thStyle, textAlign:"center" }}>الباقة</th><th style={{ ...thStyle, textAlign:"center" }}>المطلوب</th><th style={{ ...thStyle, textAlign:"center" }}>المدفوع</th><th style={{ ...thStyle, textAlign:"center" }}>المتبقي</th><th style={{ ...thStyle, textAlign:"center" }}>الحالة</th></tr></thead>
                 <tbody>
-                  {filtered.map(({p,due,paid,balance},i)=>{const st=financeStatus(due,paid);return(<tr key={p.id} onClick={()=>{setSelectedP(p);setSubView("detail");}} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p.short_ar||p.name_ar}</td><td style={{ ...tdStyle, textAlign:"center", fontSize:11, color:"var(--text-muted)" }}>{pricing[getPackageKey(p.services.hotel_type)]?.label||"—"}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--em8)", fontWeight:600 }}>{fmtAmt(due)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td><td style={{ ...tdStyle, textAlign:"center", color:balance>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(balance)}</td><td style={{ ...tdStyle, textAlign:"center" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span></td></tr>);})}
+                  {filtered.map(({p,due,paid,balance},i)=>{const st=financeStatus(due,paid);return(<tr key={p.id} onClick={()=>{setSelectedP(p);setSubView("detail");}} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p.short_ar||p.name_ar}</td><td style={{ ...tdStyle, textAlign:"center", fontSize:11, color:"var(--text-muted)" }}>{pricing[getPackageKey(p.services.hotel_type)]?.label||"—"}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:600 }}>{fmtAmt(due)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td><td style={{ ...tdStyle, textAlign:"center", color:balance>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(balance)}</td><td style={{ ...tdStyle, textAlign:"center" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span></td></tr>);})}
                   <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={3}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totDue)}</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totPaid)}</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totBal)}</td><td style={{ padding:"10px 12px" }}></td></tr>
                 </tbody>
               </table>
@@ -1253,7 +1253,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الباقة</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي المستحق</th></tr></thead>
-              <tbody>{PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--em8)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>{PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}</tbody>
             </table>
           </div>
         )}
@@ -1287,7 +1287,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, padding:"12px 20px", flexShrink:0 }}>
-        {[{label:"إجمالي المطلوب",value:fmtAmt(totDueAll),color:"var(--em8)",unit:"ر.ق"},{label:"إجمالي المحصل",value:fmtAmt(totPaidAll),color:"var(--success)",unit:"ر.ق"},{label:"إجمالي المتبقي",value:fmtAmt(totDueAll-totPaidAll),color:"var(--danger)",unit:"ر.ق"},{label:"عدد المتأخرين",value:String(lateCount),color:"var(--warning)",unit:"حاج"}].map(card=>(
+        {[{label:"إجمالي المطلوب",value:fmtAmt(totDueAll),color:"var(--text)",unit:"ر.ق"},{label:"إجمالي المحصل",value:fmtAmt(totPaidAll),color:"var(--success)",unit:"ر.ق"},{label:"إجمالي المتبقي",value:fmtAmt(totDueAll-totPaidAll),color:"var(--danger)",unit:"ر.ق"},{label:"عدد المتأخرين",value:String(lateCount),color:"var(--warning)",unit:"حاج"}].map(card=>(
           <div key={card.label} style={{ background:"var(--bg-card)", borderRadius:12, padding:"14px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}><div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{card.label}</div><div style={{ fontSize:22, fontWeight:700, color:card.color }}>{card.value}</div><div style={{ fontSize:10, color:"var(--text-muted)" }}>{card.unit}</div></div>
         ))}
       </div>
@@ -1329,10 +1329,10 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                     return(
                       <tr key={p.id} onClick={()=>{setSelectedP(p);setSubView("detail");}} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}>
                         <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td>
-                        <td style={tdStyle}><div style={{ display:"flex", alignItems:"center", gap:6 }}>{p.short_ar||p.name_ar}{pGroup&&<span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"rgba(125,31,60,0.1)", color:"var(--em8)", cursor:"pointer" }} onClick={e=>{e.stopPropagation();setSelectedGroup(pGroup);setSubView("group");}}>{pGroup.name}</span>}</div></td>
+                        <td style={tdStyle}><div style={{ display:"flex", alignItems:"center", gap:6 }}>{p.short_ar||p.name_ar}{pGroup&&<span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"rgba(125,31,60,0.1)", color:"var(--em7)", cursor:"pointer" }} onClick={e=>{e.stopPropagation();setSelectedGroup(pGroup);setSubView("group");}}>{pGroup.name}</span>}</div></td>
                         <td style={{ ...tdStyle, fontSize:11, color:"var(--text-muted)" }}>{pricing[getPackageKey(s.hotel_type)]?.label||"—"}</td>
                         <td style={tdStyle}><div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>{badges.map(b=><span key={b} style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"var(--warning-bg)", color:"var(--warning)" }}>{b}</span>)}</div></td>
-                        <td style={{ ...tdStyle, textAlign:"center", color:"var(--em8)", fontWeight:700 }}>{fmtAmt(due)}</td>
+                        <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(due)}</td>
                         <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:700 }}>{fmtAmt(paid)}</td>
                         <td style={{ ...tdStyle, textAlign:"center", color:bal>0?"var(--danger)":"var(--success)", fontWeight:700 }}>{fmtAmt(bal)}</td>
                         <td style={{ ...tdStyle, textAlign:"center" }}><span style={{ fontSize:11, padding:"2px 10px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span></td>
