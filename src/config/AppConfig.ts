@@ -3,6 +3,7 @@ export interface AppConfig {
   name_en: string;
   tagline: string;
   logo_url: string | null;
+  banner_image_url: string | null;
   color_primary: string;
   color_accent: string;
   color_sidebar: string;
@@ -26,6 +27,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   name_en: "Hajj System",
   tagline: "نظام إدارة الحج",
   logo_url: null,
+  banner_image_url: null,
   color_primary: "#1D9E75",
   color_accent: "#085041",
   color_sidebar: "#f9f9f9",
