@@ -122,7 +122,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
                   e.target.value = "";
                 }} />
-                <span style={{ fontSize:11, color:"var(--text-muted)" }}>صورة البانر
+                <span style={{ fontSize:11, color:"var(--text-muted)" }}>صورة البانر</span>
+              </label>
               <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
             </label>
           </div>
