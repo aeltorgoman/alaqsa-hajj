@@ -99,35 +99,36 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         <div style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 16, background: "var(--paper)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 12 }}>بيانات الشركة</div>
 
-          {/* الشعار */}
+          {/* الشعار + صورة البانر */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-            <div style={{ width: 56, height: 56, borderRadius: 12, border: "1px solid var(--line)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-2)", flexShrink: 0 }}>
-              {companyForm.logo_url
-                ? <img src={companyForm.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <span style={{ fontSize: 22, fontWeight: 800, color: companyForm.color_primary }}>{(companyForm.name_ar || "ح").trim().charAt(0)}</span>}
+            {/* الشعار */}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+              <div style={{ width: 56, height: 56, borderRadius: 12, border: "1px solid var(--line)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-2)", flexShrink: 0 }}>
+                {companyForm.logo_url
+                  ? <img src={companyForm.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <span style={{ fontSize: 22, fontWeight: 800, color: companyForm.color_primary }}>{(companyForm.name_ar || "ح").trim().charAt(0)}</span>}
+              </div>
+              <label style={{ ...btnS(), cursor: "pointer", display: "inline-block", fontSize:10, padding:"3px 8px" }}>
+                {companyUploading ? "جاري الرفع..." : "تغيير الشعار"}
+                <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
+              </label>
             </div>
-            <label style={{ ...btnS(), cursor: "pointer", display: "inline-block" }}>
-              {companyUploading ? "جاري الرفع..." : "تغيير الشعار"}
-              </label>
-              {/* صورة البانر */}
-              <label style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:"12px 16px", background:"var(--bg-2)", border:"1px dashed var(--border)", borderRadius:10, cursor:"pointer", textAlign:"center" }}>
-                <div style={{ width:80, height:48, borderRadius:8, overflow:"hidden", background:"var(--bg-3)", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--border)" }}>
-                  {companyForm.banner_image_url
-                    ? <img src={companyForm.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                    : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
-                </div>
-                <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
-                  const file = e.target.files?.[0]; if (!file) return;
-                  const url = await uploadDoc(file, 0, "company_banner");
-                  if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
-                  e.target.value = "";
-                }} />
-                <span style={{ fontSize:11, color:"var(--text-muted)" }}>صورة البانر</span>
-              </label>
-              <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
+            {/* صورة البانر */}
+            <label style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, padding:"10px 14px", background:"var(--bg-2)", border:"1px dashed var(--border)", borderRadius:10, cursor:"pointer", textAlign:"center", flex:1 }}>
+              <div style={{ width:"100%", height:44, borderRadius:8, overflow:"hidden", background:"var(--bg-3)", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--border)" }}>
+                {companyForm.banner_image_url
+                  ? <img src={companyForm.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
+              </div>
+              <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                const url = await uploadDoc(file, 0, "company_banner");
+                if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
+                e.target.value = "";
+              }} />
+              <span style={{ fontSize:10, color:"var(--text-muted)" }}>صورة البانر (اضغط للرفع)</span>
             </label>
           </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم الشركة (عربي)</div><input style={inp} value={companyForm.name_ar} onChange={e => setCompanyForm(p => ({ ...p, name_ar: e.target.value }))} /></div>
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم الشركة (إنجليزي)</div><input style={inp} value={companyForm.name_en} onChange={e => setCompanyForm(p => ({ ...p, name_en: e.target.value }))} /></div>
