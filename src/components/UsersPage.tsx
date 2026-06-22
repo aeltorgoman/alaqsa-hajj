@@ -19,7 +19,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   // ===== بيانات الشركة =====
   const [companyForm, setCompanyForm] = useState({
     name_ar: "", name_en: "", tagline: "", contact_phone: "", contact_email: "",
-    season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null,
+    season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null,
   });
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
@@ -30,7 +30,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       name_ar: config.name_ar || "", name_en: config.name_en || "", tagline: config.tagline || "",
       contact_phone: config.contact_phone || "", contact_email: config.contact_email || "",
       season_label: config.season_label || "", color_primary: config.color_primary || "#6B1F3A",
-      color_accent: config.color_accent || "#0C447C", logo_url: config.logo_url || "",
+      color_accent: config.color_accent || "#0C447C", logo_url: config.logo_url || "", banner_image_url: config.banner_image_url || "",
     });
   }, [config]);
 
@@ -51,7 +51,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       name_ar: companyForm.name_ar, name_en: companyForm.name_en, tagline: companyForm.tagline,
       contact_phone: companyForm.contact_phone, contact_email: companyForm.contact_email,
       season_label: companyForm.season_label, color_primary: companyForm.color_primary,
-      color_accent: companyForm.color_accent, logo_url: companyForm.logo_url,
+      color_accent: companyForm.color_accent, logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url,
     }).eq("id", 1);
     setCompanySaving(false);
     if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
@@ -108,6 +108,21 @@ function UsersPage({ currentUser }: { currentUser: User }) {
             </div>
             <label style={{ ...btnS(), cursor: "pointer", display: "inline-block" }}>
               {companyUploading ? "جاري الرفع..." : "تغيير الشعار"}
+              </label>
+              {/* صورة البانر */}
+              <label style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:"12px 16px", background:"var(--bg-2)", border:"1px dashed var(--border)", borderRadius:10, cursor:"pointer", textAlign:"center" }}>
+                <div style={{ width:80, height:48, borderRadius:8, overflow:"hidden", background:"var(--bg-3)", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--border)" }}>
+                  {companyForm.banner_image_url
+                    ? <img src={companyForm.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                    : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
+                </div>
+                <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  const url = await uploadDoc(file, 0, "company_banner");
+                  if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
+                  e.target.value = "";
+                }} />
+                <span style={{ fontSize:11, color:"var(--text-muted)" }}>صورة البانر
               <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
             </label>
           </div>
