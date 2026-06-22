@@ -130,38 +130,6 @@ function AdminsPage({
   };
 
   // ============================================================
-  // طباعة الإداريين
-  // ============================================================
-  const printAdmins = () => {
-    const rows = admins.map((p, i) => {
-      const type = p.passenger_type || "إداري";
-      return `<tr style="${i%2===1?"background:#f9f7f4":""}">
-        <td style="text-align:center;padding:5pt 4pt;font-size:9pt;color:#888">${i+1}</td>
-        <td style="padding:5pt 6pt;font-size:10pt">${p.short_ar||p.name_ar}</td>
-        <td style="padding:5pt 6pt;font-size:9pt">${p.name_en||"—"}</td>
-        <td style="text-align:center;padding:5pt;font-size:9pt">${type}</td>
-        <td style="text-align:center;padding:5pt;font-size:9pt">${p.passport||"—"}</td>
-        <td style="text-align:center;padding:5pt;font-size:9pt">${p.national_id||"—"}</td>
-        <td style="text-align:center;padding:5pt;font-size:9pt">${p.phone||"—"}</td>
-      </tr>`;
-    }).join("");
-    const body = `<table style="width:100%;border-collapse:collapse">
-      <tr>
-        <th style="text-align:center;width:20pt;padding:5pt 4pt;font-size:9pt">م</th>
-        <th style="padding:5pt 6pt;font-size:9pt">الاسم بالعربي</th>
-        <th style="padding:5pt 6pt;font-size:9pt">الاسم بالإنجليزي</th>
-        <th style="text-align:center;padding:5pt;font-size:9pt">النوع</th>
-        <th style="text-align:center;padding:5pt;font-size:9pt">رقم الجواز</th>
-        <th style="text-align:center;padding:5pt;font-size:9pt">رقم البطاقة</th>
-        <th style="text-align:center;padding:5pt;font-size:9pt">التليفون</th>
-      </tr>
-      ${rows}
-    </table>`;
-    const html = makeHTML("كشف الإداريين", body, true, "", "حملة الأقصى", "", "#7D1F3C", "#0C447C");
-    printInPage(html);
-  };
-
-  // ============================================================
   // تحميل بيانات التعيين
   // ============================================================
   const loadAssignData = async () => {
