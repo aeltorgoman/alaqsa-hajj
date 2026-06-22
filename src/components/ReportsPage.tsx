@@ -220,7 +220,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const rows = filteredPassengers.map((p, i) =>
       `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`
     ).join("");
-    const body = `<table class="wide-table"><tr><th style="text-align:center;width:30px">م</th>${activeCols.map(c => `<th>${c.label}</th>`).join("")}</tr>${rows}</table>`;
+    const body = `<table style="width:100%;border-collapse:collapse;table-layout:auto"><tr><th style="text-align:center;width:25pt;background:${primaryColor};color:#fff;padding:5pt 4pt;font-size:9pt">م</th>${activeCols.map(c => `<th style="background:${primaryColor};color:#fff;padding:5pt 6pt;font-size:9pt;text-align:right">${c.label}</th>`).join("")}</tr>${rows}</table>`;
     return mkHTML("كشف الحجاج", body, activeCols.length > 5);
   };
 
@@ -435,7 +435,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const PRINT_ROOM_COLORS: Record<string, string> = {
       "فردية":  "#b8762a",  // كهرماني دافئ
       "ثنائية": "#1565a8",  // أزرق واضح
-      "ثلاثية": "#c9821a",  // أصفر/برتقالي واضح
+      "ثلاثية": "#6B21A8",  // بنفسجي واضح
       "رباعية": "#1f8a4c",  // أخضر واضح
     };
 
@@ -466,7 +466,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         return p
           ? `<tr>
               <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
-              <td class="auto-fit-name" data-max-size="${fontSize}" style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden">${p.short_ar || p.name_ar}</td>
+              <td class="auto-fit-name" data-max-size="${fontSize}" style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.short_ar || p.name_ar}</td>
             </tr>`
           : `<tr>
               <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
@@ -649,7 +649,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const ExportButtons = ({
     title, onView, onExcel, onPrint
   }: { title?: string; onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       {title && <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
         <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
@@ -908,7 +908,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {/* كل رحلة */}
                   {flightSubReport === "per_flight" && (
                     <>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                         <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
                           <button onClick={exportPerFlightXLSX} style={excelBtnStyle}>{excelIcon} Excel</button>
@@ -1269,7 +1269,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           {/* ===== طباعة المستندات ===== */}
           {activeReport === "documents" && (
             <>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-card)", padding: "6px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>طباعة المستندات</div>
                 {docList.length > 0 && (
                   <button onClick={printDocuments} style={printBtnStyle}>{printIcon} طباعة ({docSelectedIds.size})</button>
