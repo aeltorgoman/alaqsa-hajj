@@ -189,16 +189,16 @@ export function makeHTML(
   .doc-header .company-name { font-size: 13pt; font-weight: 700; color: ${primaryColor}; }
   .doc-header .tagline { font-size: 8pt; color: #888; margin-top: 2px; }
   .doc-header .meta { text-align: left; font-size: 7pt; color: #999; line-height: 1.7; }
-  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 5pt 0; border-radius: 4pt; font-size: 14pt; font-weight: 700; margin: 8pt 0 10pt; }
+  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 5pt 0; border-radius: 8pt; font-size: 14pt; font-weight: 700; margin: 8pt 0 10pt; }
   .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 10pt; margin-bottom: 10pt; }
   .camp-header .camp-logo { width: 30mm; height: 30mm; border-radius: 50%; border: 3pt solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
   .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
   .camp-header .camp-logo span { font-size: 18pt; font-weight: 800; color: ${primaryColor}; }
   .camp-header .camp-title-box { flex: 1; text-align: center; }
-  .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 4pt 16pt; border-radius: 5pt; font-size: 14pt; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; }
-  .camp-header .camp-subtitle { font-size: 11pt; font-weight: 600; color: #a8852f; margin-top: 5pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 6pt 20pt; border-radius: 5pt; font-size: 18pt; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-subtitle { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 8pt; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 8pt; border-radius: 6pt; overflow: hidden; }
   th { background: ${primaryColor}; color: #fff; padding: 5pt 7pt; text-align: right; font-size: 9pt; font-weight: 600; }
   td { border: 0.5pt solid rgba(0,0,0,0.12); padding: 5pt 7pt; text-align: right; background: transparent; font-size: 9pt; white-space: nowrap; }
   tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
@@ -436,14 +436,14 @@ export const ALL_PERMISSIONS = [
 ];
 
 export const ROOM_TYPES = ["فردية", "ثنائية", "ثلاثية", "رباعية"] as const;
-export const ROOM_COLORS: Record<string, [string, string]> = { "فردية": ["var(--info-bg)", "var(--info)"], "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["var(--warning-bg)", "var(--warning)"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"] };
+export const ROOM_COLORS: Record<string, [string, string]> = { "فردية": ["var(--info-bg)", "var(--info)"], "ثنائية": ["var(--male-bg)", "var(--info)"], "ثلاثية": ["#f3e8ff", "#6B21A8"], "رباعية": ["var(--success-bg)", "var(--primary-dark)"] };
 
 // ============================================================
 // أيقونات ملوّنة موحّدة (باصات/مخيمات/غرف/رحلات) — صفحات التنظيم وصفحة التقارير
 // ============================================================
 export const ICON_COLOR_CYCLE = ["#7D1F3C", "#0C447C", "#2A9D8F", "#E8951A", "#8B3A6B", "#5C7C2E", "#B5651D", "#3F51B5"];
 export const VIP_ICON_COLOR = "#B5651D";
-export const ROOM_ICON_COLORS: Record<string, string> = { "فردية": "#5C7C2E", "ثنائية": "#0C447C", "ثلاثية": "#E8951A", "رباعية": "#2A9D8F", "فارغة": "#999999" };
+export const ROOM_ICON_COLORS: Record<string, string> = { "فردية": "#5C7C2E", "ثنائية": "#0C447C", "ثلاثية": "#6B21A8", "رباعية": "#2A9D8F", "فارغة": "#999999" };
 export const FLIGHT_ICON_COLORS: Record<string, string> = { "ذهاب": "#0C447C", "إياب": "#8B3A6B" };
 
 export const NAV = [
