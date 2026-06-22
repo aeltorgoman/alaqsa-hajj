@@ -1002,7 +1002,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         <PaymentDetailModal />
         <div style={{ maxWidth:720, margin:"0 auto" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-            <button onClick={()=>{setSubView("list");setSelectedP(null);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
+            <button onClick={()=>{setSubView("reports");setSelectedP(null);setSelectedPayment(null);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
             <div>
               <div style={{ fontFamily:"var(--font-body)", fontSize:20, fontWeight:800, color:"var(--primary)" }}>{selectedP.short_ar||selectedP.name_ar}</div>
               <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{pricing[pkgKey]?.label}{addonRows.filter(a=>!a.isDiscount).map(a=>` · ${a.label}`).join("")}</div>
