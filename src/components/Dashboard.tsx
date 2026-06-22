@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
-import { timeAgo } from "../utils";
+
 
 function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
   const config = useConfig();
@@ -50,7 +50,6 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
 
   // ألوان مشتقة من config
   const primary = config.color_primary || "#7D1F3C";
-  const accent  = config.color_accent  || "#0C447C";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
