@@ -4,7 +4,7 @@ import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile } from "../utils";
+import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile, makeHTML, printInPage } from "../utils";
 
 // ============================================================
 // ثوابت
@@ -96,6 +96,70 @@ function AdminsPage({
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
 
   const admins = passengers.filter(p => p.passenger_type && p.passenger_type !== "حاج");
+
+  // ============================================================
+  // طباعة الإداريين
+  // ============================================================
+  const printAdmins = () => {
+    const rows = admins.map((p, i) => {
+      const type = p.passenger_type || "إداري";
+      return `<tr style="${i%2===1?"background:#f9f7f4":""}">
+        <td style="text-align:center;padding:5pt 4pt;font-size:9pt;color:#888">${i+1}</td>
+        <td style="padding:5pt 6pt;font-size:10pt">${p.short_ar||p.name_ar}</td>
+        <td style="padding:5pt 6pt;font-size:9pt">${p.name_en||"—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${type}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${p.passport||"—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${p.national_id||"—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${p.phone||"—"}</td>
+      </tr>`;
+    }).join("");
+    const body = `<table style="width:100%;border-collapse:collapse">
+      <tr>
+        <th style="text-align:center;width:20pt;padding:5pt 4pt;font-size:9pt">م</th>
+        <th style="padding:5pt 6pt;font-size:9pt">الاسم بالعربي</th>
+        <th style="padding:5pt 6pt;font-size:9pt">الاسم بالإنجليزي</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">النوع</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">رقم الجواز</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">رقم البطاقة</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">التليفون</th>
+      </tr>
+      ${rows}
+    </table>`;
+    const html = makeHTML("كشف الإداريين", body, true, "", "حملة الأقصى", "", "#7D1F3C", "#0C447C");
+    printInPage(html);
+  };
+
+  // ============================================================
+  // طباعة الإداريين
+  // ============================================================
+  const printAdmins = () => {
+    const rows = admins.map((p, i) => {
+      const type = p.passenger_type || "إداري";
+      return `<tr style="${i%2===1?"background:#f9f7f4":""}">
+        <td style="text-align:center;padding:5pt 4pt;font-size:9pt;color:#888">${i+1}</td>
+        <td style="padding:5pt 6pt;font-size:10pt">${p.short_ar||p.name_ar}</td>
+        <td style="padding:5pt 6pt;font-size:9pt">${p.name_en||"—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${type}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${p.passport||"—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${p.national_id||"—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${p.phone||"—"}</td>
+      </tr>`;
+    }).join("");
+    const body = `<table style="width:100%;border-collapse:collapse">
+      <tr>
+        <th style="text-align:center;width:20pt;padding:5pt 4pt;font-size:9pt">م</th>
+        <th style="padding:5pt 6pt;font-size:9pt">الاسم بالعربي</th>
+        <th style="padding:5pt 6pt;font-size:9pt">الاسم بالإنجليزي</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">النوع</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">رقم الجواز</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">رقم البطاقة</th>
+        <th style="text-align:center;padding:5pt;font-size:9pt">التليفون</th>
+      </tr>
+      ${rows}
+    </table>`;
+    const html = makeHTML("كشف الإداريين", body, true, "", "حملة الأقصى", "", "#7D1F3C", "#0C447C");
+    printInPage(html);
+  };
 
   // ============================================================
   // تحميل بيانات التعيين
@@ -373,6 +437,12 @@ function AdminsPage({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           إضافة إداري
         </button>
+        {admins.length > 0 && (
+          <button onClick={printAdmins} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            طباعة الإداريين
+          </button>
+        )}
       </div>
 
       {/* القائمة */}
