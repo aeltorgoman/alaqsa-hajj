@@ -3,7 +3,7 @@ import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 
-function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger[]; setPage: (p: string) => void; currentUser: User }) {
+function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
   const config = useConfig();
   const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
 
@@ -163,6 +163,7 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
             )}
           </div>
         </div>
+      </div>
     </div>
   );
 }
