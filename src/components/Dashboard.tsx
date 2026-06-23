@@ -99,7 +99,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
         </div>
 
         {/* ===== يسار: نسب التوزيع + تنبيهات ===== */}
-        <div style={{ width:200, flexShrink:0, overflowY:"hidden", display:"flex", flexDirection:"column", gap:10, position:"sticky", top:0, alignSelf:"flex-start", maxHeight:"calc(100vh - 280px)" }}>
+        <div style={{ width:200, flexShrink:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
 
           {/* نسب التوزيع */}
           <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"14px 16px" }}>
