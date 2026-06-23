@@ -43,7 +43,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   const primary  = config.color_primary || "#7D1F3C";
 
   return (
-    <div style={{ flex:1, display:"flex", gap:12, overflow:"hidden", padding:"50px 14px 14px" }}>
+    <div style={{ flex:1, display:"flex", gap:12, overflow:"hidden", padding:"44px 14px 14px" }}>
 
         {/* ===== وسط ===== */}
         <div style={{ flex:1, minWidth:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:12 }}>
@@ -99,7 +99,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
         </div>
 
         {/* ===== يسار: نسب التوزيع + تنبيهات ===== */}
-        <div style={{ width:200, flexShrink:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ width:200, flexShrink:0, overflowY:"hidden", display:"flex", flexDirection:"column", gap:10, position:"sticky", top:0, alignSelf:"flex-start", maxHeight:"calc(100vh - 280px)" }}>
 
           {/* نسب التوزيع */}
           <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"14px 16px" }}>
