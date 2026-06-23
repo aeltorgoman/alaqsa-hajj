@@ -10,15 +10,15 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
   const primary = config.color_primary || "#7D1F3C";
 
   const statCards = [
-    { label: "الحجاج", num: hajj.length, sub: `+${Math.min(12,hajj.length)} هذا الأسبوع`, bg: `linear-gradient(145deg,${primary}dd,${primary})`, shadow: `${primary}55`, icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-    { label: "رجال",   num: males,       sub: `${Math.round(males/total*100)}٪ من الإجمالي`, bg: "linear-gradient(145deg,#13456b,#2F78C5)", shadow: "rgba(19,69,107,0.45)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
-    { label: "نساء",   num: females,     sub: `${Math.round(females/total*100)}٪ من الإجمالي`, bg: "linear-gradient(145deg,#C8730A,#E8951A)", shadow: "rgba(200,115,10,0.45)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+    { label: "الحجاج", num: hajj.length, sub: "+" + (Math.min(12,hajj.length)) + " هذا الأسبوع", bg: "linear-gradient(145deg," + (primary) + "dd," + (primary) + ")", shadow: (primary) + "55", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+    { label: "رجال",   num: males,       sub: (Math.round(males/total*100)) + "٪ من الإجمالي", bg: "linear-gradient(145deg,#13456b,#2F78C5)", shadow: "rgba(19,69,107,0.45)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
+    { label: "نساء",   num: females,     sub: (Math.round(females/total*100)) + "٪ من الإجمالي", bg: "linear-gradient(145deg,#C8730A,#E8951A)", shadow: "rgba(200,115,10,0.45)", icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>` },
   ];
 
   return (
     <div style={{ position:"relative", flexShrink:0, height:200 }}>
-      <div style={{ position:"absolute", inset:0, background:`linear-gradient(110deg,${primary}f0 0%,${primary} 50%,${primary}cc 100%)`, overflow:"hidden" }}>
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:`url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23D4A017' stroke-opacity='0.06' stroke-width='1'%3E%3Cpath d='M40 5l8 27h28l-22 17 8 27-22-17-22 17 8-27L12 32h28z'/%3E%3C/g%3E%3C/svg%3E")` }} />
+      <div style={{ position:"absolute", inset:0, background:"linear-gradient(110deg," + (primary) + "f0 0%," + (primary) + " 50%," + (primary) + "cc 100%)", overflow:"hidden" }}>
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:"url('data:image/svg+xml,%3Csvg width=\'80\' height=\'80\' viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' stroke=\'%23D4A017\' stroke-opacity=\'0.06\' stroke-width=\'1\'%3E%3Cpath d=\'M40 5l8 27h28l-22 17 8 27-22-17-22 17 8-27L12 32h28z\'/%3E%3C/g%3E%3C/svg%3E')" }} />
         <div style={{ position:"absolute", inset:0, overflow:"hidden" }}>
           {config.banner_image_url
             ? <img src={config.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center top" }} />
@@ -56,7 +56,7 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
       {/* كروت الإحصاء متداخلة أسفل البانر */}
       <div style={{ position:"absolute", bottom:-36, left:0, right:0, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, padding:"0 16px", zIndex:10 }}>
         {statCards.map(({ label, num, sub, bg, shadow, icon }) => (
-          <div key={label} style={{ borderRadius:14, padding:"13px 16px", color:"#fff", background:bg, boxShadow:`0 6px 24px ${shadow}`, border:"1.5px solid rgba(255,255,255,0.12)" }}>
+          <div key={label} style={{ borderRadius:14, padding:"13px 16px", color:"#fff", background:bg, boxShadow:"0 6px 24px " + (shadow), border:"1.5px solid rgba(255,255,255,0.12)" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
               <div style={{ fontSize:11, fontWeight:600, opacity:0.85 }}>{label}</div>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.6" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
