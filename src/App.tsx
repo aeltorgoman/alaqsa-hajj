@@ -3,7 +3,7 @@ import { supabase } from "./supabase";
 import type { Passenger, User } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
-import { Dashboard } from "./components/Dashboard";
+import { Dashboard, DashboardBanner } from "./components/Dashboard";
 import { PassengersPage } from "./components/PassengersPage";
 import { BusesPage } from "./components/BusesPage";
 import { FlightsPage } from "./components/FlightsPage";
@@ -108,19 +108,24 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
-      <Sidebar page={page} setPage={setPage} count={passengers.filter(p => !p.passenger_type || p.passenger_type === 'حاج').length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {isFull ? (
-          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
-        ) : (
-          <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
-            <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: page === "reports" ? "12px 20px" : "20px" }}>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--text)", marginBottom: page === "reports" ? 8 : 16 }}>{pageTitles[page]}</div>
-              {renderPage()}
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
+      {/* البانر — يظهر فقط في الداشبورد وبكامل العرض */}
+      {page === "dash" && <DashboardBanner passengers={passengers} setPage={setPage} currentUser={currentUser!} />}
+      {/* الجسم الرئيسي — السايدبار + المحتوى */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        <Sidebar page={page} setPage={setPage} count={passengers.filter(p => !p.passenger_type || p.passenger_type === 'حاج').length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {isFull ? (
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
+          ) : (
+            <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
+              <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: page === "reports" ? "12px 20px" : "20px" }}>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--text)", marginBottom: page === "reports" ? 8 : 16 }}>{pageTitles[page]}</div>
+                {renderPage()}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
