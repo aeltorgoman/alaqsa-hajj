@@ -25,33 +25,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }
 
   return (
     <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative" }}>
-      {/* ===== البانر العلوي مع اللوجو المتداخل ===== */}
-      <div style={{ position: "relative", flexShrink: 0, height: 160, overflow: "hidden" }}>
-        {/* صورة الكعبة / البانر */}
-        {config.banner_image_url ? (
-          <img src={config.banner_image_url} alt="banner" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
-        ) : (
-          <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%)` }} />
-        )}
-        {/* overlay تدرج سفلي */}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.55) 100%)" }} />
-        {/* نقوش */}
-        <div className="sidebar-pattern" style={{ position: "absolute", inset: 0, opacity: 0.4 }} />
-        {/* اللوجو متداخل فوق الصورة */}
-        <div style={{ position: "absolute", bottom: 14, right: 0, left: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, zIndex: 3 }}>
-          {config.logo_url ? (
-            <img src={config.logo_url} alt={config.name_ar} style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "2.5px solid rgba(212,160,23,0.7)", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }} />
-          ) : (
-            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid rgba(212,160,23,0.6)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
-              <svg width="28" height="28" viewBox="0 0 44 44" fill="none" stroke="var(--accent)" strokeWidth="1.6"><path d="M22 3 L26.5 8.5 L33.5 8 L33 15 L38.5 19.5 L33 24 L33.5 31 L26.5 30.5 L22 36 L17.5 30.5 L10.5 31 L11 24 L5.5 19.5 L11 15 L10.5 8 L17.5 8.5 Z"/><circle cx="22" cy="19.5" r="4.5" fill="var(--accent)" stroke="none"/></svg>
-            </div>
-          )}
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 15, color: "#fff", lineHeight: 1.2, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>{config.name_ar}</div>
-            <div style={{ fontSize: 10, color: "rgba(212,172,79,0.9)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{config.tagline}</div>
-          </div>
-        </div>
-      </div>
+      <div className="sidebar-pattern" />
       <div style={{ position: "relative", zIndex: 2, flex: 1, overflowY: "auto", padding: "10px 12px" }}>
         {NAV.map(({ section, items }) => {
           const allowed = items.filter(it => !it.perm || currentUser.permissions?.[it.perm]);
