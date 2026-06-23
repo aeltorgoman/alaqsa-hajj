@@ -19,7 +19,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   // ===== بيانات الشركة =====
   const [companyForm, setCompanyForm] = useState({
     name_ar: "", name_en: "", tagline: "", contact_phone: "", contact_email: "",
-    season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null,
+    season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null, banner_position: "center" as string,
   });
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
@@ -30,7 +30,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       name_ar: config.name_ar || "", name_en: config.name_en || "", tagline: config.tagline || "",
       contact_phone: config.contact_phone || "", contact_email: config.contact_email || "",
       season_label: config.season_label || "", color_primary: config.color_primary || "#6B1F3A",
-      color_accent: config.color_accent || "#0C447C", logo_url: config.logo_url || "", banner_image_url: config.banner_image_url || "",
+      color_accent: config.color_accent || "#0C447C", logo_url: config.logo_url || "", banner_image_url: config.banner_image_url || "", banner_position: (config as any).banner_position || "center",
     });
   }, [config]);
 
@@ -51,7 +51,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       name_ar: companyForm.name_ar, name_en: companyForm.name_en, tagline: companyForm.tagline,
       contact_phone: companyForm.contact_phone, contact_email: companyForm.contact_email,
       season_label: companyForm.season_label, color_primary: companyForm.color_primary,
-      color_accent: companyForm.color_accent, logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url,
+      color_accent: companyForm.color_accent, logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url, banner_position: companyForm.banner_position,
     }).eq("id", 1);
     setCompanySaving(false);
     if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
@@ -128,6 +128,18 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               }} />
               <span style={{ fontSize:10, color:"var(--text-muted)" }}>صورة البانر (اضغط للرفع)</span>
             </label>
+            {/* موضع الصورة */}
+            <div style={{ marginTop:8 }}>
+              <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:5 }}>موضع الصورة في البانر</div>
+              <div style={{ display:"flex", gap:6 }}>
+                {(["top","center","bottom"] as const).map(pos => (
+                  <button key={pos} onClick={() => setCompanyForm(p => ({ ...p, banner_position: pos }))}
+                    style={{ flex:1, padding:"5px 0", borderRadius:6, border:"1px solid var(--border)", background:companyForm.banner_position===pos?"var(--primary)":"var(--bg-2)", color:companyForm.banner_position===pos?"#fff":"var(--text)", fontSize:11, cursor:"pointer", fontFamily:"var(--font-body)" }}>
+                    {pos==="top"?"أعلى":pos==="center"?"وسط":"أسفل"}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم الشركة (عربي)</div><input style={inp} value={companyForm.name_ar} onChange={e => setCompanyForm(p => ({ ...p, name_ar: e.target.value }))} /></div>
@@ -168,15 +180,15 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       {currentUser.permissions.manage_users && <button onClick={openAdd} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", marginBottom: 14, background: "linear-gradient(135deg,var(--em7),var(--em6))", color: "#fff", border: "none", padding: "10px 0", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> مستخدم جديد</button>}
       {users.map(u => (
         <div key={u.id} style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 10, background: "var(--paper)" }}>
-          <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.username === "admin" ? "rgba(200,162,75,0.15)" : "var(--mb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 30, height: 30, borderRadius: "50%", background: u.username === "admin" ? "rgba(200,162,75,0.15)" : "var(--mb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {u.username === "admin"
-              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--mf)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mf)" strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             }
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{u.name}</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{u.name}</div>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>@{u.username} · {Object.values(u.permissions).filter(Boolean).length} صلاحية</div>
           </div>
           {currentUser.permissions.manage_users && u.username !== "admin" && (
             <div style={{ display: "flex", gap: 6 }}>
