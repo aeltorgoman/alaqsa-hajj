@@ -19,7 +19,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   // ===== بيانات الشركة =====
   const [companyForm, setCompanyForm] = useState({
     name_ar: "", name_en: "", tagline: "", contact_phone: "", contact_email: "",
-    season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null, banner_position: "center" as string,
+    season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null, banner_position: "center" as string, banner_position_x: "50" as string,
   });
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
@@ -30,7 +30,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       name_ar: config.name_ar || "", name_en: config.name_en || "", tagline: config.tagline || "",
       contact_phone: config.contact_phone || "", contact_email: config.contact_email || "",
       season_label: config.season_label || "", color_primary: config.color_primary || "#6B1F3A",
-      color_accent: config.color_accent || "#0C447C", logo_url: config.logo_url || "", banner_image_url: config.banner_image_url || "", banner_position: (config as any).banner_position || "center",
+      color_accent: config.color_accent || "#0C447C", logo_url: config.logo_url || "", banner_image_url: config.banner_image_url || "", banner_position: (config as any).banner_position || "center", banner_position_x: (config as any).banner_position_x || "50",
     });
   }, [config]);
 
@@ -51,7 +51,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       name_ar: companyForm.name_ar, name_en: companyForm.name_en, tagline: companyForm.tagline,
       contact_phone: companyForm.contact_phone, contact_email: companyForm.contact_email,
       season_label: companyForm.season_label, color_primary: companyForm.color_primary,
-      color_accent: companyForm.color_accent, logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url, banner_position: companyForm.banner_position,
+      color_accent: companyForm.color_accent, logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url, banner_position: companyForm.banner_position, banner_position_x: companyForm.banner_position_x,
     }).eq("id", 1);
     setCompanySaving(false);
     if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
@@ -113,28 +113,53 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
               </label>
             </div>
-            {/* صورة البانر */}
-            <label style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, padding:"10px 14px", background:"var(--bg-2)", border:"1px dashed var(--border)", borderRadius:10, cursor:"pointer", textAlign:"center", flex:1 }}>
-              <div style={{ width:"100%", height:44, borderRadius:8, overflow:"hidden", background:"var(--bg-3)", display:"flex", alignItems:"center", justifyContent:"center", border:"1px solid var(--border)" }}>
-                {companyForm.banner_image_url
-                  ? <img src={companyForm.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
-              </div>
-              <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
-                const file = e.target.files?.[0]; if (!file) return;
-                const url = await uploadDoc(file, 0, "company_banner");
-                if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
-                e.target.value = "";
-              }} />
-              <span style={{ fontSize:10, color:"var(--text-muted)" }}>صورة البانر (اضغط للرفع)</span>
-            </label>
-            {/* موضع الصورة */}
-            <div style={{ marginTop:8 }}>
-              <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:5 }}>موضع الصورة في البانر</div>
-              <div style={{ display:"flex", gap:6 }}>
+            {/* صورة البانر — preview مع drag */}
+            <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
+              {/* Preview مع drag */}
+              {companyForm.banner_image_url ? (
+                <div style={{ position:"relative", width:"100%", height:80, borderRadius:10, overflow:"hidden", border:"1px solid var(--border)", cursor:"ew-resize", userSelect:"none" }}
+                  onMouseDown={e => {
+                    const el = e.currentTarget;
+                    const img = el.querySelector("img") as HTMLImageElement;
+                    if (!img) return;
+                    const startX = e.clientX;
+                    const startPos = parseFloat(companyForm.banner_position_x ?? "50");
+                    const onMove = (mv: MouseEvent) => {
+                      const dx = mv.clientX - startX;
+                      const newPos = Math.max(0, Math.min(100, startPos - dx * 0.3));
+                      setCompanyForm(p => ({ ...p, banner_position_x: String(Math.round(newPos)) }));
+                    };
+                    const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+                    document.addEventListener("mousemove", onMove);
+                    document.addEventListener("mouseup", onUp);
+                  }}>
+                  <img src={companyForm.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:(companyForm.banner_position_x ?? "50")+"% "+(companyForm.banner_position ?? "center"), pointerEvents:"none" }} />
+                  <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.25)" }}>
+                    <div style={{ color:"#fff", fontSize:10, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15l-5-5L5 21"/><path d="M3 9l5 5L18 3"/></svg>
+                      اسحب يمين/شمال لضبط الصورة
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ width:"100%", height:80, borderRadius:10, background:"var(--bg-2)", border:"1px dashed var(--border)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+              )}
+              {/* أزرار الرفع + أعلى/أسفل */}
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <label style={{ ...btnS(), cursor:"pointer", fontSize:10, padding:"4px 10px", flexShrink:0 }}>
+                  {companyUploading ? "جاري الرفع..." : "رفع صورة"}
+                  <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
+                    const file = e.target.files?.[0]; if (!file) return;
+                    const url = await uploadDoc(file, 0, "company_banner");
+                    if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url, banner_position_x: "50" }));
+                    e.target.value = "";
+                  }} />
+                </label>
                 {(["top","center","bottom"] as const).map(pos => (
                   <button key={pos} onClick={() => setCompanyForm(p => ({ ...p, banner_position: pos }))}
-                    style={{ flex:1, padding:"5px 0", borderRadius:6, border:"1px solid var(--border)", background:companyForm.banner_position===pos?"var(--primary)":"var(--bg-2)", color:companyForm.banner_position===pos?"#fff":"var(--text)", fontSize:11, cursor:"pointer", fontFamily:"var(--font-body)" }}>
+                    style={{ flex:1, padding:"4px 0", borderRadius:6, border:"1px solid var(--border)", background:companyForm.banner_position===pos?"var(--primary)":"var(--bg-2)", color:companyForm.banner_position===pos?"#fff":"var(--text)", fontSize:10, cursor:"pointer", fontFamily:"var(--font-body)" }}>
                     {pos==="top"?"أعلى":pos==="center"?"وسط":"أسفل"}
                   </button>
                 ))}
