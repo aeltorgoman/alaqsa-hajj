@@ -70,42 +70,44 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
           {/* نقوش */}
           <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:`url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23D4A017' stroke-opacity='0.06' stroke-width='1'%3E%3Cpath d='M40 5l8 27h28l-22 17 8 27-22-17-22 17 8-27L12 32h28z'/%3E%3C/g%3E%3C/svg%3E")` }} />
 
-          {/* صورة الكعبة على اليسار */}
-          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:380, overflow:"hidden" }}>
+          {/* صورة الكعبة — تملأ البانر كامل */}
+          <div style={{ position:"absolute", inset:0, overflow:"hidden" }}>
             {config.banner_image_url ? (
               <img src={config.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center top" }} />
             ) : (
-              <svg viewBox="0 0 380 240" width="380" height="240" preserveAspectRatio="xMidYMax meet">
+              <svg viewBox="0 0 800 240" width="100%" height="100%" preserveAspectRatio="xMidYMax meet">
                 <defs>
                   <linearGradient id="gld" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#F5D070"/><stop offset="100%" stopColor="#C8932A"/></linearGradient>
                 </defs>
                 <g opacity="0.35" fill="#D4A017">
-                  <rect x="30" y="50" width="10" height="170" rx="2"/><path d="M35 42 l6 10 h-12 z"/><circle cx="35" cy="40" r="3"/>
-                  <rect x="330" y="45" width="10" height="175" rx="2"/><path d="M335 37 l6 10 h-12 z"/><circle cx="335" cy="35" r="3"/>
+                  <rect x="60" y="50" width="10" height="170" rx="2"/><path d="M65 42 l6 10 h-12 z"/><circle cx="65" cy="40" r="3"/>
+                  <rect x="720" y="45" width="10" height="175" rx="2"/><path d="M725 37 l6 10 h-12 z"/><circle cx="725" cy="35" r="3"/>
                 </g>
-                <rect x="130" y="75" width="120" height="130" rx="2" fill="#111"/>
-                <rect x="130" y="92" width="120" height="18" fill="url(#gld)"/>
-                <rect x="178" y="122" width="24" height="83" rx="1" fill="url(#gld)"/>
-                <rect x="130" y="77" width="120" height="4" fill="#D4A017" opacity="0.6"/>
-                <ellipse cx="190" cy="207" rx="80" ry="10" fill="#D4A017" opacity="0.1"/>
+                <rect x="330" y="60" width="140" height="155" rx="2" fill="#111"/>
+                <rect x="330" y="80" width="140" height="20" fill="url(#gld)"/>
+                <rect x="385" y="112" width="30" height="103" rx="1" fill="url(#gld)"/>
+                <rect x="330" y="62" width="140" height="5" fill="#D4A017" opacity="0.6"/>
+                <ellipse cx="400" cy="217" rx="100" ry="12" fill="#D4A017" opacity="0.1"/>
               </svg>
             )}
-            {/* gradient fade للصورة */}
-            <div style={{ position:"absolute", inset:0, background:`linear-gradient(to left, ${primary} 0%, transparent 60%)` }} />
+            {/* overlay تدرج من الجانبين */}
+            <div style={{ position:"absolute", inset:0, background:`linear-gradient(to right, rgba(0,0,0,0.2) 0%, transparent 30%, transparent 60%, ${primary}dd 100%)` }} />
+            {/* overlay سفلي */}
+            <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 50%)" }} />
           </div>
 
-          {/* اللوجو والاسم على اليمين */}
-          <div style={{ position:"absolute", right:0, top:0, bottom:0, left:280, display:"flex", alignItems:"center", padding:"20px 28px 60px", gap:16 }}>
+          {/* اللوجو والاسم — على اليمين فوق الصورة */}
+          <div style={{ position:"absolute", right:0, top:0, bottom:0, width:"42%", display:"flex", alignItems:"center", justifyContent:"center", padding:"20px 24px 60px", zIndex:4, gap:14 }}>
             {/* اللوجو */}
-            <div style={{ width:70, height:70, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(212,160,23,0.5)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
+            <div style={{ width:76, height:76, borderRadius:"50%", flexShrink:0, overflow:"hidden", border:"3px solid rgba(212,160,23,0.75)", boxShadow:"0 6px 24px rgba(0,0,0,0.45)" }}>
               {config.logo_url
-                ? <img src={config.logo_url} alt="logo" style={{ width:"100%", height:"100%", objectFit:"contain" }} />
-                : <span style={{ fontSize:24, fontWeight:900, color:"#D4A017" }}>{(config.name_ar||"ح").charAt(0)}</span>}
+                ? <img src={config.logo_url} alt="logo" style={{ width:"100%", height:"100%", objectFit:"contain", background:"rgba(255,255,255,0.05)" }} />
+                : <div style={{ width:"100%", height:"100%", background:"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center" }}><span style={{ fontSize:28, fontWeight:900, color:"#D4A017" }}>{(config.name_ar||"ح").charAt(0)}</span></div>}
             </div>
             <div>
               <div style={{ fontSize:10, color:"rgba(212,160,23,0.9)", fontWeight:700, letterSpacing:"0.1em", marginBottom:4 }}>نظام إدارة الحج</div>
-              <div style={{ fontSize:26, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:6 }}>{config.name_ar||"حملة الأقصى"}</div>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{config.tagline||"نظام إدارة الحج"}</div>
+              <div style={{ fontSize:24, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:5, textShadow:"0 2px 8px rgba(0,0,0,0.5)" }}>{config.name_ar||"حملة الأقصى"}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{config.tagline||"نظام إدارة الحج"}</div>
             </div>
           </div>
 
