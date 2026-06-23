@@ -163,7 +163,6 @@ function Dashboard({ passengers, setPage, currentUser }: { passengers: Passenger
             )}
           </div>
         </div>
-      </div>
     </div>
   );
 }
