@@ -16,18 +16,18 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
   ];
 
   return (
-    <div style={{ position:"relative", flexShrink:0, height:200 }}>
+    <div style={{ position:"relative", flexShrink:0, height:240 }}>
       <div style={{ position:"absolute", inset:0, background:"linear-gradient(110deg," + (primary) + "f0 0%," + (primary) + " 50%," + (primary) + "cc 100%)", overflow:"hidden" }}>
         <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:'url("data:image/svg+xml,%3Csvg width=%2280%22 height=%2280%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 stroke=%22%23D4A017%22 stroke-opacity=%220.06%22%3E%3Cpath d=%22M40 5l8 27h28l-22 17 8 27-22-17-22 17 8-27L12 32h28z%22/%3E%3C/g%3E%3C/svg%3E")' }} />
         <div style={{ position:"absolute", inset:0, overflow:"hidden" }}>
           {config.banner_image_url
-            ? <img src={config.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center top" }} />
+            ? <img src={config.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:((config as any).banner_position || "center") }} />
             : null}
-          <div style={{ position:"absolute", inset:0, background:["linear-gradient(to right, rgba(0,0,0,0.15) 0%","transparent 35%","transparent 55%",primary+"dd 100%)"].join(", ") }} />
-          <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top, rgba(0,0,0,0.3) 0%, transparent 50%)" }} />
+          <div style={{ position:"absolute", inset:0, background:["linear-gradient(to right, rgba(0,0,0,0.05) 0%","transparent 25%","transparent 50%",primary+"aa 100%)"].join(", ") }} />
+          <div style={{ position:"absolute", inset:0, background:"linear-gradient(to top, rgba(0,0,0,0.15) 0%, transparent 40%)" }} />
         </div>
         <div style={{ position:"absolute", right:0, top:0, bottom:0, width:"40%", display:"flex", alignItems:"center", justifyContent:"center", padding:"16px 24px 40px", zIndex:4, gap:14 }}>
-          <div style={{ width:72, height:72, borderRadius:"50%", flexShrink:0, overflow:"hidden", border:"3px solid rgba(212,160,23,0.75)", boxShadow:"0 6px 24px rgba(0,0,0,0.45)" }}>
+          <div style={{ width:86, height:86, borderRadius:"50%", flexShrink:0, overflow:"hidden", border:"3px solid rgba(212,160,23,0.75)", boxShadow:"0 6px 24px rgba(0,0,0,0.45)" }}>
             {config.logo_url
               ? <img src={config.logo_url} alt="logo" style={{ width:"100%", height:"100%", objectFit:"contain", background:"rgba(255,255,255,0.05)" }} />
               : <div style={{ width:"100%", height:"100%", background:"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center" }}><span style={{ fontSize:26, fontWeight:900, color:"#D4A017" }}>{(config.name_ar||"ح").charAt(0)}</span></div>}
@@ -54,14 +54,14 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
         </div>
       </div>
       {/* كروت الإحصاء متداخلة أسفل البانر */}
-      <div style={{ position:"absolute", bottom:-36, left:0, right:0, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, padding:"0 16px", zIndex:10 }}>
+      <div style={{ position:"absolute", bottom:-30, left:0, right:0, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, padding:"0 16px", zIndex:10 }}>
         {statCards.map(({ label, num, sub, bg, shadow, icon }) => (
-          <div key={label} style={{ borderRadius:14, padding:"13px 16px", color:"#fff", background:bg, boxShadow:"0 6px 24px " + (shadow), border:"1.5px solid rgba(255,255,255,0.12)" }}>
+          <div key={label} style={{ borderRadius:14, padding:"10px 14px", color:"#fff", background:bg, boxShadow:"0 6px 24px " + (shadow), border:"1.5px solid rgba(255,255,255,0.12)" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
               <div style={{ fontSize:11, fontWeight:600, opacity:0.85 }}>{label}</div>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.6" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
             </div>
-            <div style={{ fontSize:32, fontWeight:900, lineHeight:1, marginBottom:4 }}>{num}</div>
+            <div style={{ fontSize:26, fontWeight:900, lineHeight:1, marginBottom:3 }}>{num}</div>
             <div style={{ fontSize:10, opacity:0.6 }}>{sub}</div>
           </div>
         ))}
