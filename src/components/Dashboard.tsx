@@ -51,8 +51,8 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   return (
     <div style={{ flex:1, display:"flex", gap:12, overflow:"hidden", padding:"50px 14px 14px" }}>
 
-        {/* ===== وسط ===== */}
-        <div style={{ flex:1, minWidth:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:12 }}>
+      {/* ===== وسط ===== */}
+      <div style={{ flex:1, minWidth:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:12 }}>
 
           {/* أزرار الإضافة */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
