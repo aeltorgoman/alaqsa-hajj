@@ -1,18 +1,11 @@
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
-import type { Passenger, User } from "../types";
+import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
 
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
   const config = useConfig();
   const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
-
-  const { males, females } = useMemo(() => ({
-    males:   hajj.filter(p => p.gender === "ذكر").length,
-    females: hajj.filter(p => p.gender === "أنثى").length,
-  }), [hajj]);
-
-  const total = hajj.length || 1;
 
   const dist = useMemo(() => {
     const busCount    = hajj.filter(p => (p as any).bus_id        != null).length;
