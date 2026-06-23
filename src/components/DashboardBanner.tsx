@@ -18,7 +18,7 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
   return (
     <div style={{ position:"relative", flexShrink:0, height:200 }}>
       <div style={{ position:"absolute", inset:0, background:"linear-gradient(110deg," + (primary) + "f0 0%," + (primary) + " 50%," + (primary) + "cc 100%)", overflow:"hidden" }}>
-        <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:"url('data:image/svg+xml,%3Csvg width=\'80\' height=\'80\' viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' stroke=\'%23D4A017\' stroke-opacity=\'0.06\' stroke-width=\'1\'%3E%3Cpath d=\'M40 5l8 27h28l-22 17 8 27-22-17-22 17 8-27L12 32h28z\'/%3E%3C/g%3E%3C/svg%3E')" }} />
+        <div style={{ position:"absolute", inset:0, pointerEvents:"none", backgroundImage:'url("data:image/svg+xml,%3Csvg width=%2280%22 height=%2280%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 stroke=%22%23D4A017%22 stroke-opacity=%220.06%22%3E%3Cpath d=%22M40 5l8 27h28l-22 17 8 27-22-17-22 17 8-27L12 32h28z%22/%3E%3C/g%3E%3C/svg%3E")' }} />
         <div style={{ position:"absolute", inset:0, overflow:"hidden" }}>
           {config.banner_image_url
             ? <img src={config.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center top" }} />
@@ -66,9 +66,6 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
           </div>
         ))}
       </div>
-    </div>
-    </div>
-    </div>
     </div>
   );
 }
