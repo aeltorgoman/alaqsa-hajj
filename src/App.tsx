@@ -91,7 +91,7 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash": return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
+      case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
       case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
       case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
@@ -103,7 +103,7 @@ export default function App() {
       case "users": return <UsersPage currentUser={currentUser} />;
       case "finance": return <FinancePage passengers={passengers} currentUser={currentUser!} />;
       case "admins": return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
-      default: return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser} />;
+      default: return <Dashboard passengers={passengers} setPage={setPage} />;
     }
   };
 
