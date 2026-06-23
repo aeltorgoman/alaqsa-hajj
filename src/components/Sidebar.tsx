@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { useConfig } from "../config/ConfigContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import type { User } from "../types";
 import { NAV } from "../utils";
 
 function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; onReportsClick?: () => void }) {
-  const config = useConfig();
   const [showThemes, setShowThemes] = useState(false);
 
   const NAV_ICONS: Record<string, string> = {
