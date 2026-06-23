@@ -164,7 +164,6 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
           </div>
         </div>
       </div>
-    </div>
   );
 }
 export { Dashboard };
