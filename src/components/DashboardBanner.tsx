@@ -54,7 +54,7 @@ function DashboardBanner({ passengers, setPage, currentUser }: { passengers: Pas
         </div>
       </div>
       {/* كروت الإحصاء متداخلة أسفل البانر */}
-      <div style={{ position:"absolute", bottom:-30, left:0, right:0, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, padding:"0 16px", zIndex:10 }}>
+      <div style={{ position:"absolute", bottom:-30, left:0, right:0, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, padding:"0 12px", zIndex:10, maxWidth:680, margin:"0 auto" }}>
         {statCards.map(({ label, num, sub, bg, shadow, icon }) => (
           <div key={label} style={{ borderRadius:14, padding:"10px 14px", color:"#fff", background:bg, boxShadow:"0 6px 24px " + (shadow), border:"1.5px solid rgba(255,255,255,0.12)" }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:5 }}>
