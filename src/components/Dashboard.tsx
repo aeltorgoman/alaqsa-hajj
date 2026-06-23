@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
@@ -6,6 +6,7 @@ import { Avatar } from "./Avatar";
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
   const config = useConfig();
   const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const total = hajj.length || 1;
 
   const dist = useMemo(() => {
     const busCount    = hajj.filter(p => (p as any).bus_id        != null).length;
@@ -107,7 +108,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
               <div style={{ fontSize:13, fontWeight:700, color:"var(--text)" }}>نسب التوزيع</div>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {dist.map(({ label, page, pct, icon }) => {
+              {dist.map(({ label, page, pct, icon }: { label: string; page: string; pct: number; icon: string; count: number }) => {
                 const isLow = pct < 30;
                 return (
                   <div key={label} onClick={() => setPage(page)} style={{ cursor:"pointer" }}
@@ -140,7 +141,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
               </div>
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {alerts.map(({ label, count, page, color, bg, icon }) => (
+                {alerts.map(({ label, count, page, color, bg, icon }: { label: string; count: number; page: string; color: string; bg: string; icon: string }) => (
                   <div key={label} onClick={() => setPage(page)}
                     style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 9px", borderRadius:10, cursor:"pointer", background:bg as string }}
                     onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.filter="brightness(0.97)"; }}
