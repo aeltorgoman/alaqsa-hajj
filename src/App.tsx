@@ -92,32 +92,42 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash": return <Dashboard passengers={passengers} setPage={setPage} />;
+      case "dash":       return <Dashboard passengers={passengers} setPage={setPage} />;
       case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
-      case "buses": return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
-      case "flights": return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
-      case "mina": return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
-      case "arafa": return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
-      case "hotel": return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
-      case "reports": return <ReportsPage passengers={passengers} resetKey={reportsResetKey} />;
-      case "archive": return <ArchivePage currentUser={currentUser} />;
-      case "users": return <UsersPage currentUser={currentUser} />;
-      case "finance": return <FinancePage passengers={passengers} currentUser={currentUser!} />;
-      case "admins": return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
-      default: return <Dashboard passengers={passengers} setPage={setPage} />;
+      case "buses":      return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
+      case "flights":    return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
+      case "mina":       return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
+      case "arafa":      return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
+      case "hotel":      return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
+      case "reports":    return <ReportsPage passengers={passengers} resetKey={reportsResetKey} />;
+      case "archive":    return <ArchivePage currentUser={currentUser} />;
+      case "users":      return <UsersPage currentUser={currentUser} />;
+      case "finance":    return <FinancePage passengers={passengers} currentUser={currentUser!} />;
+      case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
+      default:           return <Dashboard passengers={passengers} setPage={setPage} />;
     }
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
-      {/* البانر — يظهر فقط في الداشبورد وبكامل العرض */}
-      {page === "dash" && <DashboardBanner passengers={passengers} setPage={setPage} currentUser={currentUser!} />}
+
       {/* الجسم الرئيسي — السايدبار + المحتوى */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <Sidebar page={page} setPage={setPage} count={passengers.filter(p => !p.passenger_type || p.passenger_type === 'حاج').length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <Sidebar page={page} setPage={setPage} count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
+
+        {/* المنطقة اليمنى — البانر + المحتوى معاً في نفس الـ container */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+
+          {/* البانر — يظهر فقط في الداشبورد */}
+          {page === "dash" && (
+            <DashboardBanner passengers={passengers} setPage={setPage} currentUser={currentUser!} />
+          )}
+
+          {/* المحتوى */}
           {isFull ? (
-            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{renderPage()}</div>
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              {renderPage()}
+            </div>
           ) : (
             <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
               <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: page === "reports" ? "12px 20px" : "20px" }}>
@@ -126,6 +136,7 @@ export default function App() {
               </div>
             </div>
           )}
+
         </div>
       </div>
     </div>
