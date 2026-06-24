@@ -22,6 +22,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null, banner_position: "center" as string, banner_position_x: "50" as string,
   });
   const [companySaving, setCompanySaving] = useState(false);
+  const dragStartRef = useRef<{ x: number; pos: number } | null>(null);
   const [companyUploading, setCompanyUploading] = useState(false);
   const [companyMsg, setCompanyMsg] = useState("");
 
@@ -96,8 +97,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {currentUser.permissions.manage_users && (
-        <div style={{ border: "1.5px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 16, background: "var(--paper)" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 12 }}>بيانات الشركة</div>
+        <div style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px", marginBottom: 12, background: "var(--paper)" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", marginBottom: 10 }}>بيانات الشركة</div>
 
           {/* الشعار + صورة البانر */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -119,17 +120,14 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               {companyForm.banner_image_url ? (
                 <div style={{ position:"relative", width:"100%", height:80, borderRadius:10, overflow:"hidden", border:"1px solid var(--border)", cursor:"ew-resize", userSelect:"none" }}
                   onMouseDown={e => {
-                    const el = e.currentTarget;
-                    const img = el.querySelector("img") as HTMLImageElement;
-                    if (!img) return;
-                    const startX = e.clientX;
-                    const startPos = parseFloat(companyForm.banner_position_x ?? "50");
+                    dragStartRef.current = { x: e.clientX, pos: parseFloat(companyForm.banner_position_x ?? "50") };
                     const onMove = (mv: MouseEvent) => {
-                      const dx = mv.clientX - startX;
-                      const newPos = Math.max(0, Math.min(100, startPos - dx * 0.3));
+                      if (!dragStartRef.current) return;
+                      const dx = mv.clientX - dragStartRef.current.x;
+                      const newPos = Math.max(0, Math.min(100, dragStartRef.current.pos - dx * 0.5));
                       setCompanyForm(p => ({ ...p, banner_position_x: String(Math.round(newPos)) }));
                     };
-                    const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+                    const onUp = () => { dragStartRef.current = null; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
                     document.addEventListener("mousemove", onMove);
                     document.addEventListener("mouseup", onUp);
                   }}>
@@ -166,8 +164,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم الشركة (عربي)</div><input style={inp} value={companyForm.name_ar} onChange={e => setCompanyForm(p => ({ ...p, name_ar: e.target.value }))} /></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 6 }}>
+            <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>اسم الشركة (عربي)</div><input style={{...inp, fontSize:12, padding:"5px 8px"}} value={companyForm.name_ar} onChange={e => setCompanyForm(p => ({ ...p, name_ar: e.target.value }))} /></div>
             <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم الشركة (إنجليزي)</div><input style={inp} value={companyForm.name_en} onChange={e => setCompanyForm(p => ({ ...p, name_en: e.target.value }))} /></div>
           </div>
           <div style={{ marginBottom: 8 }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>الشعار النصي (Tagline)</div><input style={inp} value={companyForm.tagline} onChange={e => setCompanyForm(p => ({ ...p, tagline: e.target.value }))} /></div>
