@@ -755,7 +755,27 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   // قائمة التقارير
   // ============================================================
-  const reports = [
+  // ============================================================
+  // KPI calculations للـ gateway
+  // ============================================================
+  const hajjTotal = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length || 1;
+  const withFlight = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).flight_id != null).length;
+  const withBus    = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).bus_id != null).length;
+  const withMina   = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).camp_mina_id != null).length;
+  const withArafa  = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).camp_arafa_id != null).length;
+  const withRoom   = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).room_id != null).length;
+  const noFlight   = hajjTotal - withFlight;
+  const noBus      = hajjTotal - withBus;
+  const noMina     = hajjTotal - withMina;
+  const noArafa    = hajjTotal - withArafa;
+  const noRoom     = hajjTotal - withRoom;
+  const pctFlight  = Math.round(withFlight / hajjTotal * 100);
+  const pctBus     = Math.round(withBus    / hajjTotal * 100);
+  const pctMina    = Math.round(withMina   / hajjTotal * 100);
+  const pctArafa   = Math.round(withArafa  / hajjTotal * 100);
+  const pctRoom    = Math.round(withRoom   / hajjTotal * 100);
+
+    const reports = [
     { id: "passengers_report", name: "تقرير الحجاج", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, desc: "كشف بيانات الحجاج", color: "#2A9D8F" },
     { id: "flight", name: "تقرير الطيران", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`, desc: "خطوط الطيران والرحلات", color: "#0C447C" },
     { id: "buses", name: "تقرير الباصات", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>`, desc: "توزيع المسافرين على الباصات", color: "#3F51B5" },
@@ -774,21 +794,67 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {!activeReport ? (
         <>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>اختر التقرير</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {reports.map(r => (
-              <div key={r.id} onClick={() => { setActiveReport(r.id); setFlightSubReport(null); }}
-                style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: "var(--bg-card)" }}
-                onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
-                onMouseLeave={e => e.currentTarget.style.background = "var(--bg-card)"}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: r.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} dangerouslySetInnerHTML={{ __html: r.icon }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{r.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{r.desc}</div>
-                  <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--success-bg)", color: "var(--primary-dark)" }}>Excel</span>
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
+          {/* Quick Actions */}
+          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+            {[
+              { id:"documents", label:"طباعة المستندات", sub:"جواز · بطاقة · تصريح · تذكرة", bg:"rgba(125,31,60,0.08)", color:"var(--primary)", icon:`<path d="M3 3h18v18H3z M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M8 16s1-2 4-2 4 2 4 2"/>` },
+              { id:"whatsapp",  label:"رسائل WhatsApp",  sub:"إرسال رسائل مخصصة للحجاج",    bg:"rgba(37,211,102,0.08)", color:"#25D366", icon:`<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>` },
+            ].map(qa => (
+              <div key={qa.id} onClick={() => { setActiveReport(qa.id); setFlightSubReport(null); }}
+                style={{ flex:1, display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderRadius:12, border:"1.5px solid var(--line)", background:"var(--paper)", cursor:"pointer", transition:"all 0.15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor="var(--primary)"; (e.currentTarget as HTMLDivElement).style.boxShadow="0 4px 14px rgba(125,31,60,0.1)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor="var(--line)"; (e.currentTarget as HTMLDivElement).style.boxShadow="none"; }}>
+                <div style={{ width:36, height:36, borderRadius:9, background:qa.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={qa.color} strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: qa.icon }} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:"var(--ink)" }}>{qa.label}</div>
+                  <div style={{ fontSize:11, color:"var(--muted)", marginTop:1 }}>{qa.sub}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+              </div>
+            ))}
+          </div>
+
+          {/* Smart Cards Grid */}
+          <div style={{ fontSize:10, fontWeight:700, color:"var(--muted)", letterSpacing:"0.08em", marginBottom:10, display:"flex", alignItems:"center", gap:8 }}>
+            تقارير الأقسام
+            <div style={{ flex:1, height:1, background:"linear-gradient(to left, transparent, var(--line))" }} />
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+            {[
+              { id:"passengers_report", name:"تقرير الحجاج",  icon:`<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, color:"#2A9D8F", bg:"rgba(42,157,143,0.1)",  kpiNum: String(passengers.filter(p=>!p.passenger_type||p.passenger_type==="حاج").length), kpiLabel:"إجمالي الحجاج", kpiSub:"", pct:100, alert:false },
+              { id:"flight",            name:"تقرير الطيران", icon:`<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,                             color:"#0C447C", bg:"rgba(12,68,124,0.1)",   kpiNum:pctFlight+"%", kpiLabel:"لديهم تذاكر طيران", kpiSub: noFlight > 0 ? noFlight+" بدون تذكرة" : "جميعهم مكتملون", pct:pctFlight, alert: noFlight>0 },
+              { id:"buses",             name:"تقرير الباصات", icon:`<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>`, color:"#3F51B5", bg:"rgba(63,81,181,0.1)",  kpiNum:pctBus+"%",    kpiLabel:"موزّعون على الباصات",  kpiSub: noBus   > 0 ? noBus+  " بدون باص"    : "جميعهم مكتملون", pct:pctBus,    alert: noBus>0 },
+              { id:"mina",              name:"تقرير منى",     icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#5C7C2E", bg:"rgba(92,124,46,0.1)",   kpiNum:pctMina+"%",   kpiLabel:"في مخيمات منى",        kpiSub: noMina  > 0 ? noMina+ " لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctMina,   alert: noMina>0 },
+              { id:"arafa",             name:"تقرير عرفة",    icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#B5651D", bg:"rgba(181,101,29,0.1)",  kpiNum:pctArafa+"%",  kpiLabel:"في مخيمات عرفة",       kpiSub: noArafa > 0 ? noArafa+" لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctArafa,  alert: noArafa>0 },
+              { id:"hotel",             name:"تقرير الفندق",  icon:`<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/>`,                                                                                    color:"#8B3A6B", bg:"rgba(139,58,107,0.1)",  kpiNum:pctRoom+"%",   kpiLabel:"تم تسكينهم بالفندق",  kpiSub: noRoom  > 0 ? noRoom+ " بدون غرفة"   : "جميعهم مكتملون", pct:pctRoom,   alert: noRoom>0 },
+            ].map(card => (
+              <div key={card.id} onClick={() => { setActiveReport(card.id); setFlightSubReport(null); }}
+                style={{ background:"var(--paper)", border:"1.5px solid var(--line)", borderRadius:16, padding:"16px 16px 0", cursor:"pointer", display:"flex", flexDirection:"column", overflow:"hidden", position:"relative", transition:"all 0.2s" }}
+                onMouseEnter={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor=card.color; el.style.boxShadow="0 8px 24px "+card.color+"22"; el.style.transform="translateY(-2px)"; }}
+                onMouseLeave={e => { const el = e.currentTarget as HTMLDivElement; el.style.borderColor="var(--line)"; el.style.boxShadow="none"; el.style.transform="none"; }}>
+                {/* Header */}
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }}>
+                  <div>
+                    <div style={{ width:34, height:34, borderRadius:9, background:card.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={card.color} strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: card.icon }} />
+                    </div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"var(--ink)", marginTop:8 }}>{card.name}</div>
                   </div>
+                  <div style={{ width:22, height:22, borderRadius:6, background:"var(--ivory2)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                  </div>
+                </div>
+                {/* KPI */}
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:30, fontWeight:900, lineHeight:1, color:card.color, marginBottom:3 }}>{card.kpiNum}</div>
+                  <div style={{ fontSize:10, color:"var(--muted)", fontWeight:600 }}>{card.kpiLabel}</div>
+                  {card.kpiSub && <div style={{ fontSize:10, marginTop:4, display:"inline-block", padding:"2px 7px", borderRadius:99, background: card.alert?"rgba(192,57,43,0.1)":"rgba(42,157,143,0.1)", color: card.alert?"#C0392B":"#2A9D8F", fontWeight:700 }}>{card.kpiSub}</div>}
+                </div>
+                {/* Progress Bar */}
+                <div style={{ height:4, background:"var(--ivory2)", margin:"0 -16px", overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:card.pct+"%", background:"linear-gradient(to left, #D4A017, "+card.color+")", transition:"width 0.8s ease" }} />
                 </div>
               </div>
             ))}
