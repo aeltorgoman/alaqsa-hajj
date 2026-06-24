@@ -98,7 +98,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
           }} />
 
           {/* إضافة يدوي */}
-          <div onClick={() => setPage("passengers")}
+          <div onClick={() => { (window as any).__hajj_open_manual__ = true; setPage("passengers"); }}
             style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 16px", borderRadius: 12, cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
