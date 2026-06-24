@@ -1,10 +1,7 @@
-import { useState } from "react";
-import { ThemeSwitcher } from "../config/ThemeContext";
 import type { User } from "../types";
 import { NAV, NAV_ICONS } from "../utils";
 
 function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; onReportsClick?: () => void }) {
-  const [showThemes, setShowThemes] = useState(false);
 
   return (
     <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative" }}>
@@ -31,12 +28,7 @@ function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }
             </div>
           );
         })}
-        <div onClick={() => setShowThemes(!showThemes)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: "var(--radius-md)", fontSize: 14, color: "var(--text-sidebar-muted)", cursor: "pointer", transition: "var(--transition)", marginTop: 4 }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          المظهر
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginInlineStart: "auto", transition: "var(--transition)", transform: showThemes ? "rotate(180deg)" : "rotate(0)" }}><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        {showThemes && <ThemeSwitcher />}
+
       </div>
       <div style={{ position: "relative", zIndex: 2, padding: "10px 12px", borderTop: "0.5px solid var(--border-sidebar)", flexShrink: 0 }}>
         <button onClick={onLogout} style={{ width: "100%", background: "rgba(228,108,108,0.14)", color: "rgba(255,200,200,0.9)", border: "none", padding: "7px 0", borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "var(--transition)" }}>
