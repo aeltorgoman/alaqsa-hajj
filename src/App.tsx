@@ -111,7 +111,7 @@ export default function App() {
 
       {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
       {page === "dash" && (
-        <DashboardBanner passengers={passengers} setPage={setPage} currentUser={currentUser!} />
+        <DashboardBanner setPage={setPage} currentUser={currentUser!} />
       )}
 
       {/* الجسم — السايدبار + المحتوى */}
