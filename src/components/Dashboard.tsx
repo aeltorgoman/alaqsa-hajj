@@ -2,11 +2,13 @@ import { useMemo, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
+import { CARDS_OVERLAP } from "./DashboardBanner";
 
 function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
-  const config = useConfig();
-  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
-  const total = hajj.length || 1;
+  const config  = useConfig();
+  const hajj    = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const total   = hajj.length || 1;
+  const primary = config.color_primary || "#7D1F3C";
 
   const dist = useMemo(() => {
     const busCount    = hajj.filter(p => (p as any).bus_id        != null).length;
@@ -27,45 +29,54 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
     const withoutTicket = hajj.filter(p => p.services?.flight === "بدون").length;
     const firstClass    = hajj.filter(p => p.services?.flight === "درجة أولى").length;
     const vipBus        = hajj.filter(p => p.services?.bus    === "VIP").length;
-    const noHotel       = hajj.filter(p => p.room_id == null).length;
-    const noBus         = hajj.filter(p => p.bus_id  == null).length;
+    const noHotel       = hajj.filter(p => p.room_id  == null).length;
+    const noBus         = hajj.filter(p => p.bus_id   == null).length;
     return [
-      { label: "بدون تذكرة طيران", count: withoutTicket, page: "flights", color: "var(--female-fg)", bg: "var(--female-bg)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
-      { label: "طالبين درجة أولى", count: firstClass,    page: "flights", color: "var(--warning)",   bg: "var(--warning-bg)", icon: `<path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/>` },
-      { label: "VIP في الباصات",   count: vipBus,        page: "buses",   color: "var(--em7)",       bg: "rgba(125,31,60,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>` },
-      { label: "بدون غرفة بالفندق",count: noHotel,       page: "hotel",   color: "var(--danger)",    bg: "var(--danger-bg)",  icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>` },
-      { label: "بدون باص",          count: noBus,         page: "buses",   color: "var(--danger)",    bg: "var(--danger-bg)",  icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>` },
+      { label: "بدون تذكرة طيران",  count: withoutTicket, page: "flights", color: "var(--female-fg)", bg: "var(--female-bg)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
+      { label: "طالبين درجة أولى",  count: firstClass,    page: "flights", color: "var(--warning)",   bg: "var(--warning-bg)", icon: `<path d="M12 2l2.4 7.6H22l-6.2 4.7 2.4 7.7L12 17l-6.2 5 2.4-7.7L2 9.6h7.6z"/>` },
+      { label: "VIP في الباصات",    count: vipBus,        page: "buses",   color: "var(--em7)",       bg: "rgba(125,31,60,0.08)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>` },
+      { label: "بدون غرفة بالفندق", count: noHotel,       page: "hotel",   color: "var(--danger)",    bg: "var(--danger-bg)", icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>` },
+      { label: "بدون باص",           count: noBus,         page: "buses",   color: "var(--danger)",    bg: "var(--danger-bg)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>` },
     ].filter(a => a.count > 0);
   }, [hajj]);
 
-  const recent   = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 6);
+  const recent      = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 6);
   const scanInputRef = useRef<HTMLInputElement>(null);
-  const primary  = config.color_primary || "#7D1F3C";
 
   return (
-    <div style={{ flex: 1, display: "flex", gap: 12, overflow: "hidden", padding: "94px 14px 14px" }}>
+    <div style={{ flex: 1, display: "flex", gap: 12, overflow: "hidden", paddingTop: CARDS_OVERLAP + 8, paddingBottom: 14, paddingLeft: 14, paddingRight: 14 }}>
 
       {/* ===== وسط ===== */}
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
 
         {/* أزرار الإضافة */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div onClick={() => scanInputRef.current?.click()} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: 14, cursor: "pointer", background: "linear-gradient(135deg," + primary + "," + primary + "cc)", color: "#fff", boxShadow: "0 6px 18px " + primary + "44" }}>
+          <div
+            onClick={() => scanInputRef.current?.click()}
+            style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: 14, cursor: "pointer", background: `linear-gradient(135deg,${primary},${primary}cc)`, color: "#fff", boxShadow: `0 6px 18px ${primary}44` }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4A017" strokeWidth="1.8" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
             </div>
-            <div><div style={{ fontSize: 14, fontWeight: 700 }}>مسح مستند</div><div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>جواز / بطاقة / تصريح حج</div></div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>مسح مستند</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>جواز / بطاقة / تصريح حج</div>
+            </div>
           </div>
           <input ref={scanInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
             const file = e.target.files?.[0]; if (!file) return;
             (window as any).__hajj_pending_scan_file__ = file;
             setPage("passengers"); e.target.value = "";
           }} />
-          <div onClick={() => setPage("passengers")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: 14, cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)" }}>
+          <div
+            onClick={() => setPage("passengers")}
+            style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: 14, cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
             </div>
-            <div><div style={{ fontSize: 14, fontWeight: 700 }}>إضافة يدوي</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>إدخال بيانات يدوياً</div></div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>إضافة يدوي</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>إدخال بيانات يدوياً</div>
+            </div>
           </div>
         </div>
 
@@ -120,7 +131,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
                     <span style={{ fontSize: 12, fontWeight: 700, color: isLow ? "var(--danger)" : "var(--primary)" }}>{pct}٪</span>
                   </div>
                   <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 99, width: ((pct || 2) + "%"), background: isLow ? "linear-gradient(90deg,#c0392b,#e67e22)" : ("linear-gradient(90deg," + primary + "," + primary + "99)") }} />
+                    <div style={{ height: "100%", borderRadius: 99, width: (pct || 2) + "%", background: isLow ? "linear-gradient(90deg,#c0392b,#e67e22)" : `linear-gradient(90deg,${primary},${primary}99)` }} />
                   </div>
                 </div>
               );
