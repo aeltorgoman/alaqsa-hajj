@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { User } from "../types";
 
@@ -29,12 +30,26 @@ function DashboardBanner({ setPage, currentUser }: {
     }
   }
 
-  const diffMs   = Math.max(0, getArafaDate().getTime() - Date.now());
-  const diffDays = Math.floor(diffMs / 864e5);
-  const diffHrs  = Math.floor((diffMs % 864e5) / 36e5);
-  const diffMins = Math.floor((diffMs % 36e5) / 6e4);
-  const diffSecs = Math.floor((diffMs % 6e4) / 1e3);
   const pad = (n: number) => n < 10 ? "0" + n : "" + n;
+
+  function calcDiff() {
+    const diffMs = Math.max(0, getArafaDate().getTime() - Date.now());
+    return {
+      days: Math.floor(diffMs / 864e5),
+      hrs:  Math.floor((diffMs % 864e5) / 36e5),
+      mins: Math.floor((diffMs % 36e5) / 6e4),
+      secs: Math.floor((diffMs % 6e4) / 1e3),
+    };
+  }
+
+  const [countdown, setCountdown] = useState(calcDiff);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCountdown(calcDiff()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const { days: diffDays, hrs: diffHrs, mins: diffMins, secs: diffSecs } = countdown;
 
   // أول حرفين من الاسم للأفاتار
   const initials = currentUser.name.trim().split(" ").map((w: string) => w[0]).slice(0, 2).join("");
