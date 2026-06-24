@@ -43,121 +43,122 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
   const primary  = config.color_primary || "#7D1F3C";
 
   return (
-    <div style={{ flex:1, display:"flex", gap:12, overflow:"hidden", padding:"44px 14px 14px" }}>
+    <div style={{ flex: 1, display: "flex", gap: 12, overflow: "hidden", padding: "94px 14px 14px" }}>
 
-        {/* ===== وسط ===== */}
-        <div style={{ flex:1, minWidth:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:12 }}>
+      {/* ===== وسط ===== */}
+      <div style={{ flex: 1, minWidth: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
 
-          {/* أزرار الإضافة */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <div onClick={() => scanInputRef.current?.click()} style={{ display:"flex", alignItems:"center", gap:11, padding:13, borderRadius:14, cursor:"pointer", background:"linear-gradient(135deg,"+primary+","+primary+"cc)", color:"#fff", boxShadow:"0 6px 18px "+primary+"44" }}>
-              <div style={{ width:38, height:38, borderRadius:10, background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4A017" strokeWidth="1.8" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
-              </div>
-              <div><div style={{ fontSize:14, fontWeight:700 }}>مسح مستند</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", marginTop:2 }}>جواز / بطاقة / تصريح حج</div></div>
+        {/* أزرار الإضافة */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div onClick={() => scanInputRef.current?.click()} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: 14, cursor: "pointer", background: "linear-gradient(135deg," + primary + "," + primary + "cc)", color: "#fff", boxShadow: "0 6px 18px " + primary + "44" }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4A017" strokeWidth="1.8" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
             </div>
-            <input ref={scanInputRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e => {
-              const file = e.target.files?.[0]; if (!file) return;
-              (window as any).__hajj_pending_scan_file__ = file;
-              setPage("passengers"); e.target.value = "";
-            }} />
-            <div onClick={() => setPage("passengers")} style={{ display:"flex", alignItems:"center", gap:11, padding:13, borderRadius:14, cursor:"pointer", background:"var(--paper)", border:"1px solid var(--line)", color:"var(--ink)" }}>
-              <div style={{ width:38, height:38, borderRadius:10, background:"var(--ivory2)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
+            <div><div style={{ fontSize: 14, fontWeight: 700 }}>مسح مستند</div><div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>جواز / بطاقة / تصريح حج</div></div>
+          </div>
+          <input ref={scanInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+            const file = e.target.files?.[0]; if (!file) return;
+            (window as any).__hajj_pending_scan_file__ = file;
+            setPage("passengers"); e.target.value = "";
+          }} />
+          <div onClick={() => setPage("passengers")} style={{ display: "flex", alignItems: "center", gap: 11, padding: 13, borderRadius: 14, cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)" }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/><path d="M13 6l5 5"/></svg>
+            </div>
+            <div><div style={{ fontSize: 14, fontWeight: 700 }}>إضافة يدوي</div><div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>إدخال بيانات يدوياً</div></div>
+          </div>
+        </div>
+
+        {/* آخر المضافين */}
+        {recent.length > 0 && (
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingBottom: 9, borderBottom: "1px solid var(--line)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                آخر المضافين
               </div>
-              <div><div style={{ fontSize:14, fontWeight:700 }}>إضافة يدوي</div><div style={{ fontSize:11, color:"var(--muted)", marginTop:2 }}>إدخال بيانات يدوياً</div></div>
+              <span onClick={() => setPage("passengers")} style={{ fontSize: 11, color: "var(--muted)", cursor: "pointer" }}>عرض الكل ←</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {recent.map(p => (
+                <div key={p.id} onClick={() => setPage("passengers")}
+                  style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 10, cursor: "pointer", border: "1px solid transparent" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; (e.currentTarget as HTMLDivElement).style.borderColor = "var(--line)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; (e.currentTarget as HTMLDivElement).style.borderColor = "transparent"; }}>
+                  <Avatar name={p.name_ar} gender={p.gender} size={30} />
+                  <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
+                    <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nat} · {p.passport || p.national_id || "—"}</div>
+                  </div>
+                  {p.services?.bus === "VIP" && <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: "rgba(200,162,75,.12)", color: "var(--g6)", border: "1px solid rgba(200,162,75,.25)", flexShrink: 0 }}>VIP</span>}
+                </div>
+              ))}
             </div>
           </div>
+        )}
+      </div>
 
-          {/* آخر المضافين */}
-          {recent.length > 0 && (
-            <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"14px 16px" }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, paddingBottom:9, borderBottom:"1px solid var(--line)" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:14, fontWeight:700, color:"var(--text)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                  آخر المضافين
-                </div>
-                <span onClick={() => setPage("passengers")} style={{ fontSize:11, color:"var(--muted)", cursor:"pointer" }}>عرض الكل ←</span>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                {recent.map(p => (
-                  <div key={p.id} onClick={() => setPage("passengers")}
-                    style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 10px", borderRadius:10, cursor:"pointer", border:"1px solid transparent" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background="var(--ivory)"; (e.currentTarget as HTMLDivElement).style.borderColor="var(--line)"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background="transparent"; (e.currentTarget as HTMLDivElement).style.borderColor="transparent"; }}>
-                    <Avatar name={p.name_ar} gender={p.gender} size={30} />
-                    <div style={{ flex:1, minWidth:0, textAlign:"right" }}>
-                      <div style={{ fontSize:12, fontWeight:600, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.short_ar||p.name_ar}</div>
-                      <div style={{ fontSize:10, color:"var(--muted)", marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.nat} · {p.passport||p.national_id||"—"}</div>
-                    </div>
-                    {p.services?.bus==="VIP" && <span style={{ fontSize:9, fontWeight:700, padding:"1px 7px", borderRadius:99, background:"rgba(200,162,75,.12)", color:"var(--g6)", border:"1px solid rgba(200,162,75,.25)", flexShrink:0 }}>VIP</span>}
+      {/* ===== يسار: نسب التوزيع + تنبيهات ===== */}
+      <div style={{ width: 200, flexShrink: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+
+        {/* نسب التوزيع */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, paddingBottom: 9, borderBottom: "1px solid var(--line)" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>نسب التوزيع</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {dist.map(({ label, page, pct, icon }: { label: string; page: string; pct: number; icon: string; count: number }) => {
+              const isLow = pct < 30;
+              return (
+                <div key={label} onClick={() => setPage(page)} style={{ cursor: "pointer" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = "0.75"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = "1"; }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: isLow ? "var(--danger)" : "var(--primary)" }}>{pct}٪</span>
                   </div>
-                ))}
-              </div>
+                  <div style={{ height: 4, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 99, width: ((pct || 2) + "%"), background: isLow ? "linear-gradient(90deg,#c0392b,#e67e22)" : ("linear-gradient(90deg," + primary + "," + primary + "99)") }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* تنبيهات سريعة */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, padding: "14px 16px", flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, paddingBottom: 9, borderBottom: "1px solid var(--line)" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>تنبيهات سريعة</div>
+          </div>
+          {alerts.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "16px 0", color: "var(--muted)" }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8 }}>كل شيء متوزّع</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {alerts.map(({ label, count, page, color, bg, icon }: { label: string; count: number; page: string; color: string; bg: string; icon: string }) => (
+                <div key={label} onClick={() => setPage(page)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 9px", borderRadius: 10, cursor: "pointer", background: bg as string }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.filter = "brightness(0.97)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.filter = "none"; }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: color as string, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                  </div>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: color as string }}>{count}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
-
-        {/* ===== يسار: نسب التوزيع + تنبيهات ===== */}
-        <div style={{ width:200, flexShrink:0, overflowY:"auto", display:"flex", flexDirection:"column", gap:10 }}>
-
-          {/* نسب التوزيع */}
-          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"14px 16px" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:12, paddingBottom:9, borderBottom:"1px solid var(--line)" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M18 9l-5 5-3-3-4 4"/></svg>
-              <div style={{ fontSize:13, fontWeight:700, color:"var(--text)" }}>نسب التوزيع</div>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {dist.map(({ label, page, pct, icon }: { label: string; page: string; pct: number; icon: string; count: number }) => {
-                const isLow = pct < 30;
-                return (
-                  <div key={label} onClick={() => setPage(page)} style={{ cursor:"pointer" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity="0.75"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity="1"; }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
-                      <span style={{ fontSize:11, fontWeight:600, color:"var(--ink)", flex:1 }}>{label}</span>
-                      <span style={{ fontSize:12, fontWeight:700, color:isLow?"var(--danger)":"var(--primary)" }}>{pct}٪</span>
-                    </div>
-                    <div style={{ height:4, borderRadius:99, background:"var(--ivory2)", overflow:"hidden" }}>
-                      <div style={{ height:"100%", borderRadius:99, width:((pct||2)+"%"), background:isLow ? "linear-gradient(90deg,#c0392b,#e67e22)" : ("linear-gradient(90deg,"+primary+","+primary+"99)") }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* تنبيهات سريعة */}
-          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"14px 16px", flex:1 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:10, paddingBottom:9, borderBottom:"1px solid var(--line)" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <div style={{ fontSize:13, fontWeight:700, color:"var(--text)" }}>تنبيهات سريعة</div>
-            </div>
-            {alerts.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"16px 0", color:"var(--muted)" }}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
-                <div style={{ fontSize:12, fontWeight:600, marginTop:8 }}>كل شيء متوزّع</div>
-              </div>
-            ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {alerts.map(({ label, count, page, color, bg, icon }: { label: string; count: number; page: string; color: string; bg: string; icon: string }) => (
-                  <div key={label} onClick={() => setPage(page)}
-                    style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 9px", borderRadius:10, cursor:"pointer", background:bg as string }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.filter="brightness(0.97)"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.filter="none"; }}>
-                    <div style={{ width:26, height:26, borderRadius:7, background:color as string, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
-                    </div>
-                    <span style={{ fontSize:10.5, fontWeight:600, color:"var(--ink)", flex:1 }}>{label}</span>
-                    <span style={{ fontSize:13, fontWeight:700, color:color as string }}>{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
+    </div>
   );
 }
+
 export { Dashboard };
