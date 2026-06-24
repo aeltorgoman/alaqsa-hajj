@@ -65,7 +65,6 @@ export default function App() {
       if (!error && data) setPassengers(data.map(mapPassenger) as any);
     };
     loadPassengers();
-
     const channel = supabase.channel("passengers-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "passengers" }, (payload: any) => {
         if (payload.eventType === "INSERT") {
@@ -80,7 +79,6 @@ export default function App() {
         }
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
@@ -111,19 +109,20 @@ export default function App() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
 
-      {/* الجسم الرئيسي — السايدبار + المحتوى */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <Sidebar page={page} setPage={setPage} count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length} currentUser={currentUser} onLogout={handleLogout} onReportsClick={() => setReportsResetKey(k => k + 1)} />
+      {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
+      {page === "dash" && (
+        <DashboardBanner passengers={passengers} setPage={setPage} currentUser={currentUser!} />
+      )}
 
-        {/* المنطقة اليمنى — البانر + المحتوى معاً في نفس الـ container */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-
-          {/* البانر — يظهر فقط في الداشبورد */}
-          {page === "dash" && (
-            <DashboardBanner passengers={passengers} setPage={setPage} currentUser={currentUser!} />
-          )}
-
-          {/* المحتوى */}
+      {/* الجسم — السايدبار + المحتوى */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+        <Sidebar
+          page={page} setPage={setPage}
+          count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}
+          currentUser={currentUser} onLogout={handleLogout}
+          onReportsClick={() => setReportsResetKey(k => k + 1)}
+        />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {isFull ? (
             <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
               {renderPage()}
@@ -136,7 +135,6 @@ export default function App() {
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>
