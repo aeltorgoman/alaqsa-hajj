@@ -1,8 +1,7 @@
 import { useConfig } from "../config/ConfigContext";
-import type { Passenger, User } from "../types";
+import type { User } from "../types";
 
-function DashboardBanner({ passengers, setPage, currentUser }: {
-  passengers: Passenger[];
+function DashboardBanner({ setPage, currentUser }: {
   setPage: (p: string) => void;
   currentUser: User;
 }) {
