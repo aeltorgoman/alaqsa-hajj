@@ -51,7 +51,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   return <StatsRow cards={cards} />;
 }
 
-function PassengersPage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User }) {
+function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const [search, setSearch] = useState("");
@@ -75,13 +75,16 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
       (window as any).__hajj_pending_scan_file__ = null;
       runUnifiedScan(file);
     }
-    // استقبال طلب فتح مودال الإضافة اليدوية من Dashboard
-    if ((window as any).__hajj_open_manual__) {
-      (window as any).__hajj_open_manual__ = null;
+  }, []);
+
+  // فتح مودال الإضافة اليدوية من الداشبورد
+  useEffect(() => {
+    if (globalShowManual) {
       resetManualModal();
       setShowManual(true);
+      onGlobalManualClose?.();
     }
-  }, []);
+  }, [globalShowManual]);
   
 
   const COLS = [
