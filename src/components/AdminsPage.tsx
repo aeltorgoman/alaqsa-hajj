@@ -356,6 +356,7 @@ function AdminsPage({
       camp_arafa_id:    assign.camp_arafa_id    ? Number(assign.camp_arafa_id)    : null,
       flight_id:        assign.flight_id        ? Number(assign.flight_id)        : null,
       return_flight_id: assign.return_flight_id ? Number(assign.return_flight_id) : null,
+      wants_flight:     assign.wants_flight,
     };
     const { error } = await supabase.from("passengers").update(updates).eq("id", assignTarget.id);
     if (error) { showAlert("error", "حدث خطأ أثناء الحفظ"); return; }
