@@ -12,22 +12,30 @@ function DashboardBanner({ setPage, currentUser }: {
 
   // ─── عداد يوم عرفة ───
   function getArafaDate(): Date {
-    const map: Record<number, string> = {
-      1446: "2025-06-05", 1447: "2026-05-26",
-      1448: "2027-05-15", 1449: "2028-05-03", 1450: "2029-04-22",
-    };
     try {
-      const fmt   = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" });
-      const parts = fmt.formatToParts(new Date());
-      let y  = parseInt(parts.find(p => p.type === "year")!.value);
-      const mo = parseInt(parts.find(p => p.type === "month")!.value);
-      const da = parseInt(parts.find(p => p.type === "day")!.value);
-      if (mo === 12 && da > 9) y++;
-      const d = new Date(map[y] || map[1448]);
-      d.setHours(12, 0, 0, 0);
-      return d;
+      const fmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year:"numeric", month:"numeric", day:"numeric" });
+      const now = new Date();
+      const partsNow = fmt.formatToParts(now);
+      let hYear  = parseInt(partsNow.find(p => p.type === "year")!.value);
+      const hMon = parseInt(partsNow.find(p => p.type === "month")!.value);
+      const hDay = parseInt(partsNow.find(p => p.type === "day")!.value);
+      if (hMon === 12 && hDay > 9) hYear++;
+      const base = new Date(now);
+      base.setDate(base.getDate() - 60);
+      for (let i = 0; i < 400; i++) {
+        const d = new Date(base);
+        d.setDate(d.getDate() + i);
+        const parts = fmt.formatToParts(d);
+        const y = parseInt(parts.find(p => p.type === "year")!.value);
+        const m = parseInt(parts.find(p => p.type === "month")!.value);
+        const day = parseInt(parts.find(p => p.type === "day")!.value);
+        if (y === hYear && m === 12 && day === 9) {
+          return new Date(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T00:00:00+03:00");
+        }
+      }
+      return new Date("2027-05-15T00:00:00+03:00");
     } catch {
-      const d = new Date("2027-05-15"); d.setHours(12, 0, 0, 0); return d;
+      return new Date("2027-05-15T00:00:00+03:00");
     }
   }
 
@@ -153,7 +161,7 @@ function DashboardBanner({ setPage, currentUser }: {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </div>
           {showThemes && (
-            <div style={{ position:"absolute", top:40, left:0, zIndex:200, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:180, padding:8 }}
+            <div style={{ position:"absolute", top:40, left:0, zIndex:200, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
               onMouseLeave={() => setShowThemes(false)}>
               <ThemeSwitcher />
             </div>
