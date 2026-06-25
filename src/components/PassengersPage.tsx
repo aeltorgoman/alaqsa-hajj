@@ -1314,4 +1314,75 @@ function PassengersPage({ passengers, setPassengers, currentUser }: { passengers
                       <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
                         تغيير
                         <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                          const file = e.target
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setManualIdImg(null); setManualIdFile(null);
+                          setManualScanning(true);
+                          const reader = new FileReader();
+                          reader.onload = async ev => {
+                            setManualIdImg(ev.target?.result as string);
+                            setManualIdFile(file);
+                            try {
+                              const parsed = await scanDocument(file, "idcard");
+                              setManualForm(prev => ({
+                                ...prev,
+                                national_id: parsed.national_id || prev.national_id,
+                                id_expiry: parsed.id_expiry || prev.id_expiry,
+                              }));
+                            } catch { /* تجاهل */ }
+                            setManualScanning(false);
+                          };
+                          reader.readAsDataURL(file);
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    )}
+                  </div>
+                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
+                    <img src={manualIdImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 260, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
+                    {manualScanning && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1.5px dashed var(--line)", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", background: "var(--bg-2)" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  + إضافة صورة البطاقة الشخصية (اختياري)
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setManualScanning(true);
+                    const reader = new FileReader();
+                    reader.onload = async ev => {
+                      setManualIdImg(ev.target?.result as string);
+                      setManualIdFile(file);
+                      try {
+                        const parsed = await scanDocument(file, "idcard");
+                        setManualForm(prev => ({
+                          ...prev,
+                          national_id: parsed.national_id || prev.national_id,
+                          id_expiry: parsed.id_expiry || prev.id_expiry,
+                        }));
+                      } catch { /* تجاهل */ }
+                      setManualScanning(false);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }} />
+                </label>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+
+
+export { PassengersStats, PassengersPage };
