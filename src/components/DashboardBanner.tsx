@@ -44,6 +44,7 @@ function DashboardBanner({ setPage, currentUser }: {
   }
 
   const [countdown, setCountdown] = useState(calcDiff);
+  const [showThemes, setShowThemes] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCountdown(calcDiff()), 1000);
@@ -148,7 +149,7 @@ function DashboardBanner({ setPage, currentUser }: {
         </div>
         {/* ثيم */}
         <div style={{ position:"relative" }}>
-          <div style={S.iconBtn} onClick={() => setShowThemes(s => !s)}>
+          <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </div>
           {showThemes && (
