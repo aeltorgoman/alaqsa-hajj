@@ -115,7 +115,7 @@ function AdminsPage({
         <td style="text-align:center;padding:5pt;font-size:9pt">${type}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${p.passport||"—"}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${bus ? bus.name : "—"}</td>
-        <td style="text-align:center;padding:5pt;font-size:9pt">${flight ? (flight.airline+" "+flight.flight_number) : "—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${flight ? (flight.airline+" — "+flight.name) : "—"}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${campM ? campM.name : "—"}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${campA ? campA.name : "—"}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${room ? (room.floor+"/"+(room as any).number) : "—"}</td>
