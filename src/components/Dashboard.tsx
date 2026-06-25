@@ -73,7 +73,7 @@ function Dashboard({ passengers, setPage, onAddManual }: { passengers: Passenger
   ];
 
   return (
-    <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+    <div style={{ display: "flex", flex: 1 }}>
 
       {/* ══ العمود الأوسط — Main Content ══ */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: 14, gap: 12, minWidth: 0 }}>

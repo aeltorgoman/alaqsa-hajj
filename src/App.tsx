@@ -108,7 +108,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)" }}>
 
       {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
       {page === "dash" && (
@@ -116,21 +116,26 @@ export default function App() {
       )}
 
       {/* الجسم — السايدبار + المحتوى */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
-        <Sidebar
-          page={page} setPage={setPage}
-          count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}
-          currentUser={currentUser} onLogout={handleLogout}
-          onReportsClick={() => setReportsResetKey(k => k + 1)}
-        />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "flex-start" }}>
+        {/* السايدبار ثابت */}
+        <div style={{ position: "sticky", top: 0, height: "100vh", flexShrink: 0 }}>
+          <Sidebar
+            page={page} setPage={setPage}
+            count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}
+            currentUser={currentUser} onLogout={handleLogout}
+            onReportsClick={() => setReportsResetKey(k => k + 1)}
+          />
+        </div>
+
+        {/* المحتوى — يتمرر بشكل طبيعي */}
+        <div style={{ flex: 1, minWidth: 0, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           {isFull ? (
-            <div style={{ flex: 1, overflowY: page === "dash" ? "auto" : "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               {renderPage()}
             </div>
           ) : (
-            <div style={{ flex: 1, overflowY: "auto", background: "var(--ivory)" }}>
-              <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto", padding: page === "reports" ? "12px 20px" : "20px" }}>
+            <div style={{ background: "var(--ivory)", padding: "20px", paddingTop: "20px" }}>
+              <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
                 <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--text)", marginBottom: page === "reports" ? 8 : 16 }}>{pageTitles[page]}</div>
                 {renderPage()}
               </div>
