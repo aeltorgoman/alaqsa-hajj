@@ -69,7 +69,7 @@ function DashboardBanner({ setPage, currentUser }: {
     banner: {
       position: "relative" as const,
       flexShrink: 0,
-      height: 200,
+      height: 260,
       background: config.banner_image_url
         ? undefined
         : `linear-gradient(110deg,${primary}f0 0%,${primary} 40%,#a0294e 70%,${primary}cc 100%)`,
