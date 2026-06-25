@@ -85,7 +85,7 @@ function AdminsPage({
 
   // مودال التعيين
   const [assignTarget, setAssignTarget] = useState<Passenger | null>(null);
-  const [assign, setAssign] = useState({ bus_id: "", room_id: "", camp_mina_id: "", camp_arafa_id: "", flight_id: "", return_flight_id: "" });
+  const [assign, setAssign] = useState({ bus_id: "", room_id: "", camp_mina_id: "", camp_arafa_id: "", flight_id: "", return_flight_id: "", wants_flight: false });
 
   // حذف
   const [deleteTarget, setDeleteTarget] = useState<Passenger | null>(null);
@@ -387,6 +387,7 @@ function AdminsPage({
       camp_arafa_id:    p.camp_arafa_id    ? String(p.camp_arafa_id)    : "",
       flight_id:        p.flight_id        ? String(p.flight_id)        : "",
       return_flight_id: p.return_flight_id ? String(p.return_flight_id) : "",
+      wants_flight: !!(p.flight_id || p.return_flight_id || (p as any).services?.flight === "طيران"),
     });
     setAssignTarget(p);
   };
@@ -591,10 +592,24 @@ function AdminsPage({
             options={[{ id: "", label: "— بدون —" }, ...camps.filter(c => c.page_type === "منى").map(c => ({ id: String(c.id), label: c.name }))]} />
           <AssignSelect label="مخيم عرفة"    value={assign.camp_arafa_id}    onChange={v => setAssign(a => ({ ...a, camp_arafa_id: v }))}
             options={[{ id: "", label: "— بدون —" }, ...camps.filter(c => c.page_type === "عرفة").map(c => ({ id: String(c.id), label: c.name }))]} />
-          <AssignSelect label="رحلة الذهاب"  value={assign.flight_id}        onChange={v => setAssign(a => ({ ...a, flight_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "ذهاب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
-          <AssignSelect label="رحلة الإياب"  value={assign.return_flight_id} onChange={v => setAssign(a => ({ ...a, return_flight_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "إياب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
+          {/* طيران / بدون */}
+          <div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>الطيران</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ val: false, label: "بدون طيران" }, { val: true, label: "طيران" }].map(opt => (
+                <button key={String(opt.val)} onClick={() => setAssign(a => ({ ...a, wants_flight: opt.val, flight_id: opt.val ? a.flight_id : "", return_flight_id: opt.val ? a.return_flight_id : "" }))}
+                  style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: "1.5px solid", borderColor: assign.wants_flight === opt.val ? "var(--primary)" : "var(--line)", background: assign.wants_flight === opt.val ? "var(--primary)" : "var(--paper)", color: assign.wants_flight === opt.val ? "#fff" : "var(--ink)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all 0.15s" }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {assign.wants_flight && (<>
+            <AssignSelect label="رحلة الذهاب"  value={assign.flight_id}        onChange={v => setAssign(a => ({ ...a, flight_id: v }))}
+              options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "ذهاب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
+            <AssignSelect label="رحلة الإياب"  value={assign.return_flight_id} onChange={v => setAssign(a => ({ ...a, return_flight_id: v }))}
+              options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "إياب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
+          </>)}
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <button onClick={saveAssign} style={{ ...btnP({ flex: 1 }) }}>حفظ</button>
             <button onClick={() => setAssignTarget(null)} style={{ ...btnS({ flex: 1 }) }}>إلغاء</button>
