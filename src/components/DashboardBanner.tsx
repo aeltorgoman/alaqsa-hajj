@@ -109,7 +109,7 @@ function DashboardBanner({ setPage, currentUser }: {
       display: "flex", alignItems: "center", gap: 11, zIndex: 2,
     },
     brandCircle: {
-      width: 80, height: 80, borderRadius: "50%",
+      width: 110, height: 110, borderRadius: "50%",
       background: "rgba(93,24,48,.85)", border: "3px solid #d4ac4f",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       overflow: "hidden" as const,
@@ -183,7 +183,7 @@ function DashboardBanner({ setPage, currentUser }: {
         <div style={S.brandCircle}>
           {config.logo_url
             ? <img src={config.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-            : <svg viewBox="0 0 44 44" fill="none" stroke="#d4ac4f" strokeWidth="1.5" width="44" height="44">
+            : <svg viewBox="0 0 44 44" fill="none" stroke="#d4ac4f" strokeWidth="1.5" width="62" height="62">
                 <path d="M22 3L26.5 8.5L33.5 8L33 15L38.5 19.5L33 24L33.5 31L26.5 30.5L22 36L17.5 30.5L10.5 31L11 24L5.5 19.5L11 15L10.5 8L17.5 8.5Z"/>
                 <circle cx="22" cy="19.5" r="4.5"/>
               </svg>
