@@ -114,67 +114,71 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
               </label>
             </div>
-            {/* صورة البانر — preview مع drag */}
-            <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
-              {/* Preview مع drag */}
+            {/* صورة البانر — preview */}
+            <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8 }}>
+
+              {/* Preview كبير */}
               {companyForm.banner_image_url ? (
-                <div style={{ position:"relative", width:"100%", height:80, borderRadius:10, overflow:"hidden", border:"1px solid var(--border)", cursor:"ew-resize", userSelect:"none" }}
-                  onMouseDown={e => {
-                    dragStartRef.current = { x: e.clientX, pos: parseFloat(companyForm.banner_position_x ?? "50") };
-                    const onMove = (mv: MouseEvent) => {
-                      if (!dragStartRef.current) return;
-                      const dx = mv.clientX - dragStartRef.current.x;
-                      const newPos = Math.max(0, Math.min(100, dragStartRef.current.pos - dx * 0.5));
-                      setCompanyForm(p => ({ ...p, banner_position_x: String(Math.round(newPos)) }));
-                    };
-                    const onUp = () => { dragStartRef.current = null; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
-                    document.addEventListener("mousemove", onMove);
-                    document.addEventListener("mouseup", onUp);
-                  }}>
-                  <img src={companyForm.banner_image_url} alt="banner" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:(companyForm.banner_position_x ?? "50")+"% "+(companyForm.banner_position ?? "center"), pointerEvents:"none" }} />
-                  <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(0,0,0,0.25)" }}>
-                    <div style={{ color:"#fff", fontSize:10, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15l-5-5L5 21"/><path d="M3 9l5 5L18 3"/></svg>
-                      اسحب يمين/شمال لضبط الصورة
-                    </div>
+                <div style={{ position:"relative", width:"100%", height:160, borderRadius:10, overflow:"hidden", border:"2px solid var(--border)" }}>
+                  <div style={{
+                    width:"100%", height:"100%",
+                    backgroundImage:`url(${companyForm.banner_image_url})`,
+                    backgroundSize:"cover",
+                    backgroundPosition:`${companyForm.banner_position_x ?? "50"}% ${companyForm.banner_position === "top" ? "0%" : companyForm.banner_position === "bottom" ? "100%" : "50%"}`,
+                  }} />
+                  <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"rgba(0,0,0,0.45)", padding:"4px 8px", textAlign:"center" }}>
+                    <span style={{ color:"#fff", fontSize:9 }}>معاينة مباشرة — حرّك الأشرطة أدناه لضبط الصورة</span>
                   </div>
                 </div>
               ) : (
-                <div style={{ width:"100%", height:80, borderRadius:10, background:"var(--bg-2)", border:"1px dashed var(--border)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <div style={{ width:"100%", height:160, borderRadius:10, background:"var(--bg-2)", border:"2px dashed var(--border)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8 }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span style={{ fontSize:11, color:"var(--text-muted)" }}>لا توجد صورة — ارفع صورة أدناه</span>
                 </div>
               )}
-              {/* أزرار الرفع + أعلى/أسفل */}
-              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                <label style={{ ...btnS(), cursor:"pointer", fontSize:10, padding:"4px 10px", flexShrink:0 }}>
-                  {companyUploading ? "جاري الرفع..." : "رفع صورة"}
-                  <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
-                    const file = e.target.files?.[0]; if (!file) return;
-                    const url = await uploadDoc(file, 0, "company_banner");
-                    if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url, banner_position_x: "50" }));
-                    e.target.value = "";
-                  }} />
-                </label>
-                {(["top","center","bottom"] as const).map(pos => (
-                  <button key={pos} onClick={() => setCompanyForm(p => ({ ...p, banner_position: pos }))}
-                    style={{ flex:1, padding:"4px 0", borderRadius:6, border:"1px solid var(--border)", background:companyForm.banner_position===pos?"var(--primary)":"var(--bg-2)", color:companyForm.banner_position===pos?"#fff":"var(--text)", fontSize:10, cursor:"pointer", fontFamily:"var(--font-body)" }}>
-                    {pos==="top"?"أعلى":pos==="center"?"وسط":"أسفل"}
-                  </button>
-                ))}
-              </div>
-              {/* شريط تمرير يمين/شمال */}
-              {companyForm.banner_image_url && (
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:4 }}>
-                  <span style={{ fontSize:10, color:"var(--text-muted)", flexShrink:0 }}>◀ يسار</span>
-                  <input
-                    type="range" min="0" max="100"
-                    value={companyForm.banner_position_x ?? "50"}
-                    onChange={e => setCompanyForm(p => ({ ...p, banner_position_x: e.target.value }))}
-                    style={{ flex:1, accentColor:"var(--primary)", cursor:"pointer" }}
-                  />
-                  <span style={{ fontSize:10, color:"var(--text-muted)", flexShrink:0 }}>يمين ▶</span>
+
+              {/* زر الرفع */}
+              <label style={{ ...btnS(), cursor:"pointer", fontSize:11, padding:"6px 12px", textAlign:"center", display:"block" }}>
+                {companyUploading ? "جاري الرفع..." : "📁 رفع صورة جديدة"}
+                <input type="file" accept="image/*" style={{ display:"none" }} onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  const url = await uploadDoc(file, 0, "company_banner");
+                  if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url, banner_position_x: "50", banner_position: "center" }));
+                  e.target.value = "";
+                }} />
+              </label>
+
+              {companyForm.banner_image_url && (<>
+                {/* ضبط الموضع العمودي */}
+                <div>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", marginBottom:5 }}>الموضع العمودي</div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {(["top","center","bottom"] as const).map(pos => (
+                      <button key={pos} onClick={() => setCompanyForm(p => ({ ...p, banner_position: pos }))}
+                        style={{ flex:1, padding:"5px 0", borderRadius:6, border:"1px solid var(--border)", background:companyForm.banner_position===pos?"var(--primary)":"var(--bg-2)", color:companyForm.banner_position===pos?"#fff":"var(--text)", fontSize:11, cursor:"pointer", fontFamily:"var(--font-body)" }}>
+                        {pos==="top"?"⬆ أعلى":pos==="center"?"↔ وسط":"⬇ أسفل"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )}
+
+                {/* ضبط الموضع الأفقي */}
+                <div>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", marginBottom:5 }}>
+                    الموضع الأفقي — <span style={{ color:"var(--primary)", fontWeight:700 }}>{companyForm.banner_position_x ?? "50"}%</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:11 }}>◀</span>
+                    <input
+                      type="range" min="0" max="100"
+                      value={companyForm.banner_position_x ?? "50"}
+                      onChange={e => setCompanyForm(p => ({ ...p, banner_position_x: e.target.value }))}
+                      style={{ flex:1, accentColor:"var(--primary)", cursor:"pointer", height:4 }}
+                    />
+                    <span style={{ fontSize:11 }}>▶</span>
+                  </div>
+                </div>
+              </>)}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 6 }}>
