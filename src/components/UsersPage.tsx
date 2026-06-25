@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { supabase } from "../supabase";
 import type { User } from "../types";
@@ -22,7 +22,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     season_label: "", color_primary: "#6B1F3A", color_accent: "#0C447C", logo_url: "" as string | null, banner_image_url: "" as string | null, banner_position: "center" as string, banner_position_x: "50" as string,
   });
   const [companySaving, setCompanySaving] = useState(false);
-  const dragStartRef = useRef<{ x: number; pos: number } | null>(null);
   const [companyUploading, setCompanyUploading] = useState(false);
   const [companyMsg, setCompanyMsg] = useState("");
 
