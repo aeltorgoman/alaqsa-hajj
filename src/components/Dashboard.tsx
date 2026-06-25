@@ -73,10 +73,10 @@ function Dashboard({ passengers, setPage, onAddManual }: { passengers: Passenger
   ];
 
   return (
-    <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+    <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
 
       {/* ══ العمود الأوسط — Main Content ══ */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: 14, gap: 12, minWidth: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: 14, gap: 12, minWidth: 0 }}>
 
         {/* 1) أزرار الإجراءات */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>

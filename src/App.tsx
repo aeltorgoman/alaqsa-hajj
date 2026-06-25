@@ -125,7 +125,7 @@ export default function App() {
         />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {isFull ? (
-            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, overflowY: page === "dash" ? "auto" : "hidden", display: "flex", flexDirection: "column" }}>
               {renderPage()}
             </div>
           ) : (
