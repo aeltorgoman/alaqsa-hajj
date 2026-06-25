@@ -245,7 +245,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // تقرير الطيران — خطوط الطيران (airline list)
   // ============================================================
   const getAirlineHTML = () => {
-    const list = passengers.filter(p => p.services?.flight !== "بدون");
+    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || (p as any).flight_id));
+    const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const rows = list.map((p, i) => {
       const nat = natCode(p.nat);
       const gender = p.gender === "ذكر" ? "MR." : "MRS.";
@@ -257,7 +258,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   };
 
   const exportAirlineXLSX = () => {
-    const list = passengers.filter(p => p.services?.flight !== "بدون");
+    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || (p as any).flight_id));
+    const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
       i + 1, p.name_en,
