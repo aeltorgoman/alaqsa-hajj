@@ -1,5 +1,6 @@
 import type { User } from "../types";
 import { NAV, NAV_ICONS } from "../utils";
+import { NotificationBell } from "./NotificationBell";
 
 function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; onReportsClick?: () => void }) {
 
@@ -30,7 +31,9 @@ function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }
         })}
 
       </div>
-      <div style={{ position: "relative", zIndex: 2, padding: "10px 12px", borderTop: "0.5px solid var(--border-sidebar)", flexShrink: 0 }}>
+      <div style={{ position: "relative", zIndex: 2, padding: "8px 12px", borderTop: "0.5px solid var(--border-sidebar)", flexShrink: 0 }}>
+        <NotificationBell />
+        <div style={{ height: 1, background: "rgba(255,255,255,.07)", margin: "8px 0" }} />
         <button onClick={onLogout} style={{ width: "100%", background: "rgba(228,108,108,0.14)", color: "rgba(255,200,200,0.9)", border: "none", padding: "7px 0", borderRadius: "var(--radius-sm)", fontSize: 12, fontFamily: "var(--font-body)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "var(--transition)" }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           تسجيل خروج
