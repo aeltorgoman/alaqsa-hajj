@@ -105,14 +105,16 @@ function DashboardBanner({ setPage, currentUser }: {
     },
     // يمين — شعار الحملة
     brand: {
-      position: "absolute" as const, top: 16, right: 20,
-      display: "flex", alignItems: "center", gap: 11, zIndex: 2,
+      position: "absolute" as const, top: "50%", right: 20,
+      transform: "translateY(-50%)",
+      display: "flex", alignItems: "center", gap: 16, zIndex: 2,
     },
     brandCircle: {
-      width: 110, height: 110, borderRadius: "50%",
-      background: "rgba(93,24,48,.85)", border: "3px solid #d4ac4f",
+      width: 140, height: 140, borderRadius: "50%",
+      background: "rgba(93,24,48,.85)", border: "4px solid #d4ac4f",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       overflow: "hidden" as const,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
     },
     // يسار أسفل — عداد عرفة
     arafaWidget: {
@@ -183,16 +185,16 @@ function DashboardBanner({ setPage, currentUser }: {
         <div style={S.brandCircle}>
           {config.logo_url
             ? <img src={config.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-            : <svg viewBox="0 0 44 44" fill="none" stroke="#d4ac4f" strokeWidth="1.5" width="62" height="62">
+            : <svg viewBox="0 0 44 44" fill="none" stroke="#d4ac4f" strokeWidth="1.5" width="80" height="80">
                 <path d="M22 3L26.5 8.5L33.5 8L33 15L38.5 19.5L33 24L33.5 31L26.5 30.5L22 36L17.5 30.5L10.5 31L11 24L5.5 19.5L11 15L10.5 8L17.5 8.5Z"/>
                 <circle cx="22" cy="19.5" r="4.5"/>
               </svg>
           }
         </div>
         <div>
-          <div style={{ fontSize: 10, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 3 }}>نظام إدارة الحج</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 4, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", lineHeight: 1.4 }}>{config.tagline || "نُدير التفاصيل لتتفرّغوا للعبادة"}</div>
+          <div style={{ fontSize: 13, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 5 }}>نظام إدارة الحج</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 6, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{config.tagline || "نُدير التفاصيل لتتفرّغوا للعبادة"}</div>
         </div>
       </div>
 
