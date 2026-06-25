@@ -3,7 +3,7 @@ import { useConfig } from "../config/ConfigContext";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
 
-function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
+function Dashboard({ passengers, setPage, onAddManual }: { passengers: Passenger[]; setPage: (p: string) => void; onAddManual?: () => void }) {
   const config  = useConfig();
   const hajj    = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
   const males   = hajj.filter(p => p.gender === "ذكر").length;
@@ -98,7 +98,7 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
           }} />
 
           {/* إضافة يدوي */}
-          <div onClick={() => { (window as any).__hajj_open_manual__ = true; setPage("passengers"); }}
+          <div onClick={() => { onAddManual ? onAddManual() : setPage("passengers"); }}
             style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 16px", borderRadius: 12, cursor: "pointer", background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)" }}>
             <div style={{ width: 38, height: 38, borderRadius: 10, background: "var(--ivory2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -117,9 +117,9 @@ function Dashboard({ passengers, setPage }: { passengers: Passenger[]; setPage: 
               <div style={{ width: 28, height: 28, borderRadius: 8, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
               </div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: lblColor, marginBottom: 2, opacity: .8 }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 24, fontWeight: 700, lineHeight: 1, color: numColor }}>{num}</div>
-              <div style={{ fontSize: 9.5, marginTop: 2, color: subColor, opacity: .6 }}>{sub}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: lblColor, marginBottom: 3 }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 900, lineHeight: 1, color: numColor }}>{num}</div>
+              <div style={{ fontSize: 10.5, marginTop: 3, color: subColor, fontWeight: 600 }}>{sub}</div>
             </div>
           ))}
         </div>
