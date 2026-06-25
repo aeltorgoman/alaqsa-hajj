@@ -66,6 +66,28 @@ body {
   margin: 0;
 }
 
+@keyframes bannerZoom {
+  0%   { transform: scale(1)    translateX(0); }
+  50%  { transform: scale(1.07) translateX(-1%); }
+  100% { transform: scale(1)    translateX(0); }
+}
+
+@keyframes bannerGradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.banner-img-animated {
+  animation: bannerZoom 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+.banner-gradient-animated {
+  animation: bannerGradientShift 14s ease-in-out infinite;
+  background-size: 200% 200% !important;
+}
+
 h1,
 h2 {
   font-family: var(--heading);

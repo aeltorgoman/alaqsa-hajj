@@ -72,7 +72,8 @@ function DashboardBanner({ setPage, currentUser }: {
       height: 200,
       background: config.banner_image_url
         ? undefined
-        : `linear-gradient(110deg,${primary}f0 0%,${primary} 50%,${primary}cc 100%)`,
+        : `linear-gradient(110deg,${primary}f0 0%,${primary} 40%,#a0294e 70%,${primary}cc 100%)`,
+      backgroundSize: "200% 200%",
       overflow: "hidden" as const,
     },
     overlay: {
@@ -127,11 +128,12 @@ function DashboardBanner({ setPage, currentUser }: {
   };
 
   return (
-    <div style={S.banner}>
+    <div style={S.banner} className={!config.banner_image_url ? "banner-gradient-animated" : ""}>
 
       {/* صورة الكعبة */}
       {config.banner_image_url && (
         <img src={config.banner_image_url} alt="banner"
+          className="banner-img-animated"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: (config as any).banner_position || "center" }} />
       )}
 
