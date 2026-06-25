@@ -162,6 +162,19 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   </button>
                 ))}
               </div>
+              {/* شريط تمرير يمين/شمال */}
+              {companyForm.banner_image_url && (
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:4 }}>
+                  <span style={{ fontSize:10, color:"var(--text-muted)", flexShrink:0 }}>◀ يسار</span>
+                  <input
+                    type="range" min="0" max="100"
+                    value={companyForm.banner_position_x ?? "50"}
+                    onChange={e => setCompanyForm(p => ({ ...p, banner_position_x: e.target.value }))}
+                    style={{ flex:1, accentColor:"var(--primary)", cursor:"pointer" }}
+                  />
+                  <span style={{ fontSize:10, color:"var(--text-muted)", flexShrink:0 }}>يمين ▶</span>
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 6 }}>
