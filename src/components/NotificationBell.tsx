@@ -27,7 +27,7 @@ function NotificationBell() {
   const [notifs, setNotifs]   = useState<Notif[]>([]);
   const [open,   setOpen]     = useState(false);
   const wrapRef               = useRef<HTMLDivElement>(null);
-  const tickRef               = useRef<ReturnType<typeof setInterval>>();
+  const tickRef               = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* تحديث الوقت كل دقيقة */
   useEffect(() => {
