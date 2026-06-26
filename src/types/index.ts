@@ -76,7 +76,8 @@ export interface Room {
   id: number;
   number: string;
   floor: string;
-  type: "فردية" | "ثنائية" | "ثلاثية" | "رباعية";
+  type: "فردية" | "ثنائية" | "ثلاثية" | "رباعية" | "مجلس" | "أخرى";
+  notes?: string | null;
   season_id?: number | null;
 }
 
