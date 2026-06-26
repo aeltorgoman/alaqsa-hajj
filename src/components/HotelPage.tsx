@@ -17,7 +17,7 @@ function avatarInitials(name: string) {
 function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const config = useConfig();
   const primary = config.color_primary || "#7D1F3C";
-  const { alertState, showAlert } = useAlert();
+  const { alert, showAlert } = useAlert();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
@@ -152,7 +152,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
-      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+      <AlertModal alert={alert} onClose={() => showAlert(null)} />
 
       {/* ===== المحتوى الرئيسي ===== */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
