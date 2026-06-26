@@ -32,7 +32,7 @@ function NotificationBell() {
   /* تحديث الوقت كل دقيقة */
   useEffect(() => {
     tickRef.current = setInterval(() => setNotifs(n => [...n]), 30_000);
-    return () => clearInterval(tickRef.current);
+    return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
 
   /* Supabase Realtime */
