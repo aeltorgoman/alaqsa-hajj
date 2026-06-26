@@ -1,521 +1,398 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
-import { Avatar } from "./Avatar";
-import { Modal } from "./Modal";
+import { useConfig } from "../config/ConfigContext";
 import { AlertModal, useAlert } from "./AlertModal";
-import { StatCard, type StatCardData } from "./StatCard";
-import { ROOM_TYPES, ROOM_COLORS, ROOM_ICON_COLORS, inp, btnP, btnS } from "../utils";
 
-// ===== دالة حفظ الترتيب في Supabase =====
-async function saveSortOrder(items: { id: number; sort_order: number }[]) {
-  await Promise.all(items.map(item =>
-    supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
-  ));
+const ROOM_TYPES: Room["type"][] = ["فردية", "ثنائية", "ثلاثية", "رباعية", "مجلس", "أخرى"];
+
+const TYPE_CAP: Record<string, number> = {
+  "فردية": 1, "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "مجلس": 0, "أخرى": 0,
+};
+
+function avatarInitials(name: string) {
+  return name.trim().split(" ").map(w => w[0]).slice(0, 2).join("");
 }
 
-// ===== إحصائيات الفندق =====
-function HotelStats({ rooms, passengers }: { rooms: Room[]; passengers: Passenger[] }) {
-  const stats = useMemo(() => {
-    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
-    const total = hajj.length;
-    const assignedCount = hajj.filter(p => p.room_id != null).length;
-    const unassigned = total - assignedCount;
-    const viewRequested = hajj.filter(p => p.services?.hotel_view === "مطلة").length;
+function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+  const config = useConfig();
+  const primary = config.color_primary || "#7D1F3C";
+  const { alertState, showAlert } = useAlert();
 
-    // حساب نوع الغرفة من عدد الحجاج
-    const getRoomLabel = (count: number) => {
-      if (count === 0) return "فارغة";
-      if (count === 1) return "فردية";
-      if (count === 2) return "ثنائية";
-      if (count === 3) return "ثلاثية";
-      if (count === 4) return "رباعية";
-      return `${count} أشخاص`;
-    };
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [filterFloor, setFilterFloor] = useState("الكل");
+  const [filterStatus, setFilterStatus] = useState("الكل");
+  const [search, setSearch] = useState("");
+  const [showAddRoom, setShowAddRoom] = useState(false);
+  const [showAddPilgrim, setShowAddPilgrim] = useState(false);
+  const [pSearch, setPSearch] = useState("");
 
-    const roomOccupancy: Record<string, number> = {};
-    rooms.forEach(r => {
-      const count = passengers.filter(p => p.room_id === r.id).length;
-      const label = getRoomLabel(count);
-      roomOccupancy[label] = (roomOccupancy[label] || 0) + 1;
-    });
+  // Add Room form
+  const [addNum, setAddNum] = useState("");
+  const [addFloor, setAddFloor] = useState("");
+  const [addType, setAddType] = useState<Room["type"]>("ثنائية");
+  const [addNotes, setAddNotes] = useState("");
 
-    return { total, assignedCount, unassigned, viewRequested, roomOccupancy };
-  }, [rooms, passengers]);
-  const { total, assignedCount, unassigned, viewRequested, roomOccupancy } = stats;
+  // Panel notes
+  const [panelNotes, setPanelNotes] = useState("");
+  const [panelType, setPanelType] = useState<Room["type"]>("ثنائية");
 
-  const occupancyColors: Record<string, [string, string]> = {
-    "فارغة": ["#f5f5f5", "#999"],
-    "فردية": ["rgba(74,144,217,0.1)", "#4A90D9"],
-    "ثنائية": ["rgba(42,157,143,0.1)", "#2A9D8F"],
-    "ثلاثية": ["rgba(125,31,60,0.08)", "var(--em7)"],
-    "رباعية": ["rgba(232,149,26,0.1)", "#E8951A"],
+  useEffect(() => {
+    supabase.from("rooms").select("*").order("floor").order("number")
+      .then(({ data }: any) => { if (data) setRooms(data as Room[]); });
+  }, []);
+
+  const floors = useMemo(() => {
+    const fs = [...new Set(rooms.map(r => r.floor))].sort();
+    return fs;
+  }, [rooms]);
+
+  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+
+  const roomPassengers = (roomId: number) =>
+    hajj.filter(p => (p as any).room_id === roomId);
+
+  const unassigned = hajj.filter(p => !(p as any).room_id);
+
+  const getStatus = (room: Room) => {
+    const cap = TYPE_CAP[room.type] || 0;
+    const occ = roomPassengers(room.id).length;
+    if (cap === 0 || room.type === "مجلس") return "مجلس";
+    if (occ === 0) return "فارغة";
+    if (occ >= cap) return "ممتلئة";
+    return "جزئية";
   };
 
-  const cards: StatCardData[] = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
-    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, tone: "success" },
-    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
-    { label: "طالبين مطل", num: viewRequested, sub: `${total ? Math.round(viewRequested / total * 100) : 0}٪ من الإجمالي`, tone: "info" },
-  ];
+  const statusColor: Record<string, string> = {
+    "ممتلئة": primary,
+    "جزئية": "#D4A017",
+    "فارغة": "#2A9D8F",
+    "مجلس": "#3F51B5",
+  };
+
+  const filteredRooms = useMemo(() => {
+    return rooms.filter(r => {
+      if (filterFloor !== "الكل" && r.floor !== filterFloor) return false;
+      if (filterStatus !== "الكل" && getStatus(r) !== filterStatus) return false;
+      if (search) {
+        const q = search.trim();
+        if (r.number.includes(q)) return true;
+        return roomPassengers(r.id).some(p => p.name_ar.includes(q) || (p.short_ar || "").includes(q));
+      }
+      return true;
+    });
+  }, [rooms, filterFloor, filterStatus, search, passengers]);
+
+  // KPIs
+  const totalRooms = rooms.length;
+  const emptyRooms = rooms.filter(r => getStatus(r) === "فارغة").length;
+  const withRoom = hajj.filter(p => (p as any).room_id).length;
+  const withoutRoom = hajj.filter(p => !(p as any).room_id).length;
+  const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
+
+  const addRoom = async () => {
+    if (!addNum.trim() || !addFloor.trim()) { showAlert("error", "رقم الغرفة والدور مطلوبان"); return; }
+    const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, notes: addNotes.trim() || null }]).select();
+    if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
+    setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => a.floor.localeCompare(b.floor) || a.number.localeCompare(b.number)));
+    setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes("");
+    setShowAddRoom(false);
+    showAlert("success", "تمت إضافة الغرفة");
+  };
+
+  const removeFromRoom = async (pId: number) => {
+    await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: null } as any : p));
+  };
+
+  const addToRoom = async (pId: number) => {
+    if (!selectedRoom) return;
+    await supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId);
+    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } as any : p));
+    setShowAddPilgrim(false);
+    setPSearch("");
+  };
+
+  const deleteRoom = async (room: Room) => {
+    const occ = roomPassengers(room.id);
+    if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها حجاج"); return; }
+    await supabase.from("rooms").delete().eq("id", room.id);
+    setRooms(prev => prev.filter(r => r.id !== room.id));
+    setSelectedRoom(null);
+    showAlert("success", "تم حذف الغرفة");
+  };
+
+  const saveRoomType = async (type: Room["type"]) => {
+    if (!selectedRoom) return;
+    await supabase.from("rooms").update({ type }).eq("id", selectedRoom.id);
+    setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, type } : r));
+    setSelectedRoom(prev => prev ? { ...prev, type } : prev);
+  };
+
+  const saveNotes = async () => {
+    if (!selectedRoom) return;
+    await supabase.from("rooms").update({ notes: panelNotes || null }).eq("id", selectedRoom.id);
+    setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, notes: panelNotes || null } : r));
+    showAlert("success", "تم حفظ الملاحظات");
+  };
+
+  const openPanel = (room: Room) => {
+    setSelectedRoom(room);
+    setPanelType(room.type);
+    setPanelNotes((room as any).notes || "");
+    setShowAddPilgrim(false);
+    setPSearch("");
+  };
+
+  // Styles
+  const inp = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontFamily: "var(--font-body)", fontSize: 13, outline: "none" };
+  const btnP = { padding: "8px 16px", borderRadius: 8, border: "none", background: primary, color: "#fff", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, cursor: "pointer" };
+  const btnS = { padding: "8px 16px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 
   return (
-    <div style={{ borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "10px 14px 8px" }}>
-        {cards.map(c => <StatCard key={c.label} {...c} />)}
-      </div>
-      {Object.keys(roomOccupancy).length > 0 && (
-        <div style={{ display: "flex", gap: 6, padding: "0 14px 10px", alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600, marginLeft: 4 }}>الغرف:</span>
-          {Object.entries(roomOccupancy).filter(([k]) => k !== "فارغة").map(([label, count]) => {
-            const [bg, clr] = occupancyColors[label] || ["var(--bg-2)", "var(--text)"];
+    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+
+      {/* ===== المحتوى الرئيسي ===== */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+
+        {/* KPIs */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "12px 12px 0", flexShrink: 0 }}>
+          {[
+            { label: "إجمالي الغرف", num: totalRooms, color: primary },
+            { label: "نسبة الإشغال", num: pct + "٪", color: primary },
+            { label: "غرف فارغة", num: emptyRooms, color: "#2A9D8F" },
+            { label: "بدون غرفة", num: withoutRoom, color: withoutRoom > 0 ? "#C8730A" : "#2A9D8F" },
+          ].map(k => (
+            <div key={k.label} style={{ background: "var(--paper)", border: `1px solid ${k.color}33`, borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{k.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.num}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Toolbar */}
+        <div style={{ display: "flex", gap: 8, padding: "10px 12px", flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={() => setShowAddRoom(true)} style={{ ...btnP, display: "flex", alignItems: "center", gap: 5 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            غرفة جديدة
+          </button>
+          <select value={filterFloor} onChange={e => setFilterFloor(e.target.value)} style={{ ...inp, width: "auto", flex: 1 }}>
+            <option>الكل</option>
+            {floors.map(f => <option key={f}>{f}</option>)}
+          </select>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width: "auto", flex: 1 }}>
+            {["الكل","ممتلئة","جزئية","فارغة","مجلس"].map(s => <option key={s}>{s}</option>)}
+          </select>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث عن غرفة أو حاج..." style={{ ...inp, flex: 2 }} />
+        </div>
+
+        {/* Rooms Grid */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
+          {floors.filter(f => filterFloor === "الكل" || f === filterFloor).map(floor => {
+            const floorRooms = filteredRooms.filter(r => r.floor === floor);
+            if (floorRooms.length === 0) return null;
             return (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 5, background: bg, borderRadius: 7, padding: "4px 10px" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: clr }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: clr, fontFamily: "var(--font-heading)" }}>{count}</span>
+              <div key={floor} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  الطابق {floor}
+                  <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                  {floorRooms.map(room => {
+                    const occ = roomPassengers(room.id);
+                    const cap = TYPE_CAP[room.type] || 0;
+                    const status = getStatus(room);
+                    const color = statusColor[status] || primary;
+                    const isSelected = selectedRoom?.id === room.id;
+                    const isMajlis = room.type === "مجلس";
+
+                    return (
+                      <div key={room.id} onClick={() => openPanel(room)}
+                        style={{ background: isMajlis ? "rgba(63,81,181,0.04)" : "var(--paper)", border: `1.5px solid ${isSelected ? color : isMajlis ? "rgba(63,81,181,0.3)" : "var(--line)"}`, borderRadius: 10, padding: "10px 10px 8px", cursor: "pointer", transition: "all .15s", position: "relative", boxShadow: isSelected ? `0 4px 14px ${color}22` : "none" }}>
+                        {/* نقطة الحالة */}
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, position: "absolute", top: 8, left: 8 }} />
+                        {/* رقم الغرفة */}
+                        <div style={{ fontSize: 14, fontWeight: 900, color: "var(--ink)", lineHeight: 1, marginBottom: 2 }}>{room.number}</div>
+                        {/* النوع */}
+                        <div style={{ fontSize: 10, color: isMajlis ? "#3F51B5" : "var(--muted)", fontWeight: 700, marginBottom: 6 }}>{room.type}</div>
+                        {/* الأسماء */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {isMajlis ? (
+                            <div style={{ fontSize: 10, color: "#3F51B5", fontWeight: 700 }}>مجلس الحجاج</div>
+                          ) : occ.length === 0 ? (
+                            <div style={{ fontSize: 10, color: "#2A9D8F", fontWeight: 700 }}>فارغة</div>
+                          ) : (
+                            occ.map(p => (
+                              <div key={p.id} style={{ fontSize: 10, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 3 }}>
+                                <div style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        {/* العدد */}
+                        {!isMajlis && (
+                          <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, fontWeight: 600 }}>{occ.length}/{cap}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
-          {roomOccupancy["فارغة"] > 0 && (
-            <span style={{ fontSize: 10, color: "var(--muted)" }}>({roomOccupancy["فارغة"]} فارغة)</span>
-          )}
+        </div>
+      </div>
+
+      {/* ===== Side Panel ===== */}
+      {selectedRoom && (
+        <div style={{ width: 272, flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Header */}
+          <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: primary, lineHeight: 1 }}>غرفة {selectedRoom.number}</div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>الطابق {selectedRoom.floor}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: `${primary}11`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={primary} strokeWidth="1.7"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                </div>
+                <button onClick={() => setSelectedRoom(null)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--muted)" }}>×</button>
+              </div>
+            </div>
+            {/* النوع selector */}
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {ROOM_TYPES.map(t => (
+                <button key={t} onClick={() => { setPanelType(t); saveRoomType(t); }}
+                  style={{ padding: "4px 8px", borderRadius: 99, border: "1.5px solid", borderColor: panelType === t ? primary : "var(--line)", background: panelType === t ? primary : "var(--paper)", color: panelType === t ? "#fff" : "var(--ink)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .12s" }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI mini */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+            {[
+              { label: "الدور", val: selectedRoom.floor },
+              { label: "الوضع", val: getStatus(selectedRoom), color: statusColor[getStatus(selectedRoom)] },
+              { label: "عدد الحجاج", val: `${roomPassengers(selectedRoom.id).length}/${TYPE_CAP[selectedRoom.type] || "—"}` },
+            ].map(k => (
+              <div key={k.label} style={{ background: "var(--ivory)", borderRadius: 8, padding: "7px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{k.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: k.color || "var(--ink)" }}>{k.val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Body */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 8 }}>الحجاج الموجودون</div>
+            {roomPassengers(selectedRoom.id).length === 0 ? (
+              <div style={{ textAlign: "center", padding: "16px 0", color: "var(--muted)", fontSize: 12 }}>لا يوجد حجاج في هذه الغرفة</div>
+            ) : (
+              roomPassengers(selectedRoom.id).map((p, i) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 6, background: "var(--ivory)" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg,${primary},${primary}99)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+                    {avatarInitials(p.name_ar)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name_ar}</div>
+                    <div style={{ fontSize: 10, color: "var(--muted)" }}>{p.passport || p.national_id || "—"}</div>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{i + 1}</div>
+                  <button onClick={() => removeFromRoom(p.id)} style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>×</button>
+                </div>
+              ))
+            )}
+
+            {/* إضافة حاج */}
+            <button onClick={() => setShowAddPilgrim(!showAddPilgrim)}
+              style={{ width: "100%", padding: "9px", borderRadius: 9, border: `1.5px dashed var(--line)`, background: "transparent", color: primary, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 4, transition: "all .15s" }}>
+              + إضافة حاج للغرفة
+            </button>
+
+            {showAddPilgrim && (
+              <div style={{ marginTop: 8, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+                <input value={pSearch} onChange={e => setPSearch(e.target.value)} placeholder="ابحث في الحجاج..." style={{ ...inp, borderRadius: 0, borderWidth: "0 0 1px 0", fontSize: 12 }} />
+                <div style={{ maxHeight: 150, overflowY: "auto" }}>
+                  {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).slice(0, 20).map(p => (
+                    <div key={p.id} onClick={() => addToRoom(p.id)}
+                      style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--ivory)", fontWeight: 600 }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
+                      {p.name_ar}
+                    </div>
+                  ))}
+                  {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).length === 0 && (
+                    <div style={{ padding: "12px", textAlign: "center", color: "var(--muted)", fontSize: 12 }}>لا يوجد حجاج غير موزعين</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ملاحظات */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 6 }}>ملاحظات</div>
+              <textarea value={panelNotes} onChange={e => setPanelNotes(e.target.value)}
+                placeholder="أضف ملاحظات على الغرفة..."
+                style={{ ...inp, resize: "none", height: 70, fontSize: 12 }} />
+              <button onClick={saveNotes} style={{ ...btnP, width: "100%", marginTop: 6, fontSize: 11 }}>حفظ الملاحظات</button>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", display: "flex", gap: 8, flexShrink: 0 }}>
+            <button onClick={() => deleteRoom(selectedRoom)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+              حذف الغرفة
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== مودال إضافة غرفة ===== */}
+      {showAddRoom && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={e => { if (e.target === e.currentTarget) setShowAddRoom(false); }}>
+          <div style={{ background: "var(--paper)", borderRadius: 16, padding: 24, width: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 18 }}>إضافة غرفة جديدة</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>رقم الغرفة</div>
+                <input value={addNum} onChange={e => setAddNum(e.target.value)} style={inp} autoFocus placeholder="مثال: 1201" />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الدور</div>
+                <input value={addFloor} onChange={e => setAddFloor(e.target.value)} style={inp} placeholder="مثال: 12" />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الغرفة</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {ROOM_TYPES.map(t => (
+                  <button key={t} onClick={() => setAddType(t)}
+                    style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: addType === t ? primary : "var(--line)", background: addType === t ? primary : "var(--paper)", color: addType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>ملاحظة (اختياري)</div>
+              <input value={addNotes} onChange={e => setAddNotes(e.target.value)} style={inp} placeholder="ملاحظات على الغرفة..." />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={addRoom} style={{ ...btnP, flex: 1 }}>إضافة</button>
+              <button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ===== صفحة الفندق =====
-function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
-  const { alert: alertState, showAlert } = useAlert();
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState(new Set<number>());
-  const [showAdd, setShowAdd] = useState(false);
-  const [showRange, setShowRange] = useState(false);
-  const [showAddP, setShowAddP] = useState(false);
-  const [showPrint, setShowPrint] = useState(false);
-  const [roomNumber, setRoomNumber] = useState("");
-  const [roomFloor, setRoomFloor] = useState("");
-  const [numberError, setNumberError] = useState("");
-  const [rangeFrom, setRangeFrom] = useState("");
-  const [rangeTo, setRangeTo] = useState("");
-  const [rangeFloor, setRangeFloor] = useState("");
-  const [rangeError, setRangeError] = useState("");
-  const [currentRoomId, setCurrentRoomId] = useState<number | null>(null);
-  const [selectedP, setSelectedP] = useState(new Set<number>());
-  const [pSearch, setPSearch] = useState("");
-  const [printFilter, setPrintFilter] = useState<"all" | "floor" | "type">("all");
-  const [printFloor, setPrintFloor] = useState("");
-  const [printType, setPrintType] = useState<Room["type"]>("ثنائية");
-  const [filterFloor, setFilterFloor] = useState("الكل");
-  const [filterType, setFilterType] = useState("الكل");
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  // Drag state
-  const dragPassengerId = useRef<number | null>(null);
-  const dragOverPassengerId = useRef<number | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [dragOverId, setDragOverId] = useState<number | null>(null);
-
-  useEffect(() => {
-    supabase.from("rooms").select("*").order("number").then(({ data }: any) => { if (data) setRooms(data as Room[]); });
-  }, []);
-
-  const getRoomPassengers = (roomId: number) =>
-    passengers.filter(p => p.room_id === roomId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-
-  const floors = [...new Set(rooms.filter(r => r.floor).map(r => r.floor))].sort();
-  const toggleRoom = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-
-  const addRoom = async () => {
-    if (!roomNumber.trim()) { setNumberError("يرجى إدخال رقم الغرفة"); return; }
-    if (rooms.some(r => r.number === roomNumber.trim())) { setNumberError(`الغرفة رقم "${roomNumber}" موجودة بالفعل`); return; }
-    setNumberError("");
-    const { data, error } = await supabase.from("rooms").insert([{ number: roomNumber.trim(), floor: roomFloor.trim(), type: "ثنائية" }]).select();
-    if (error) {
-      showAlert("error", `فشل إضافة الغرفة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
-      return;
-    }
-    if (data?.[0]) {
-      setRooms(prev => [...prev, data[0] as Room]);
-      setExpanded(prev => new Set([...prev, data[0].id]));
-      setRoomNumber(""); setRoomFloor(""); setShowAdd(false);
-    }
-  };
-
-  const addRange = async () => {
-    const from = parseInt(rangeFrom), to = parseInt(rangeTo);
-    if (!from || !to || from > to) { setRangeError("يرجى التحقق من الأرقام المُدخلة"); return; }
-    const existingNums = new Set(rooms.map(r => r.number));
-    const newRooms = [];
-    for (let n = from; n <= to; n++) {
-      if (!existingNums.has(String(n))) newRooms.push({ number: String(n), floor: rangeFloor.trim(), type: "ثنائية" });
-    }
-    if (newRooms.length === 0) { setRangeError("جميع الغرف في هذا النطاق موجودة بالفعل"); return; }
-    setRangeError("");
-    const { data, error } = await supabase.from("rooms").insert(newRooms).select();
-    if (error) {
-      setRangeError(`فشل الإضافة: ${error.message || "يرجى المحاولة مرة أخرى"}`);
-      return;
-    }
-    if (data) setRooms(prev => [...prev, ...data as Room[]]);
-    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setShowRange(false);
-  };
-
-  const handleExcel = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      const lines = text.split("\n").slice(1);
-      const existingNums = new Set(rooms.map(r => r.number));
-      const newRooms: any[] = [];
-      lines.forEach(line => {
-        const parts = line.split(",");
-        if (parts.length >= 2) {
-          const num = parts[0]?.trim(), type = parts[1]?.trim() as Room["type"], floor = parts[2]?.trim() || "";
-          if (num && !existingNums.has(num) && (ROOM_TYPES as readonly string[]).includes(type)) newRooms.push({ number: num, floor, type });
-        }
-      });
-      if (newRooms.length > 0) {
-        const { data, error } = await supabase.from("rooms").insert(newRooms).select();
-        if (!error && data) setRooms(prev => [...prev, ...data as Room[]]);
-      } else showAlert("warning", "لم يتم إضافة أي غرف. يرجى التحقق من تنسيق الملف.");
-    };
-    reader.readAsText(file);
-  };
-
-  const deleteRoom = async (id: number) => {
-    if (getRoomPassengers(id).length > 0) { showAlert("warning", "يرجى إزالة المسافرين قبل حذف الغرفة"); return; }
-    await supabase.from("rooms").delete().eq("id", id);
-    setRooms(prev => prev.filter(r => r.id !== id));
-  };
-
-  const openAddP = (roomId: number) => { setCurrentRoomId(roomId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
-  const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-
-  const confirmAddP = async () => {
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ room_id: currentRoomId }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, room_id: currentRoomId } : p));
-    setShowAddP(false);
-  };
-
-  const removeP = async (pId: number) => {
-    await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: null } : p));
-  };
-
-  const moveP = async (pId: number, toId: string) => {
-    if (!toId) return;
-    const newRoomId = parseInt(toId);
-    await supabase.from("passengers").update({ room_id: newRoomId }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: newRoomId } : p));
-  };
-
-  // ===== Drag & Drop handlers =====
-  const handleDragStart = (pId: number) => {
-    dragPassengerId.current = pId;
-    setDraggingId(pId);
-  };
-
-  const handleDragOver = (e: React.DragEvent, pId: number) => {
-    e.preventDefault();
-    dragOverPassengerId.current = pId;
-    setDragOverId(pId);
-  };
-
-  const handleDrop = async (roomId: number) => {
-    const fromId = dragPassengerId.current;
-    const toId = dragOverPassengerId.current;
-    if (!fromId || !toId || fromId === toId) {
-      setDraggingId(null); setDragOverId(null);
-      dragPassengerId.current = null; dragOverPassengerId.current = null;
-      return;
-    }
-    const rp = getRoomPassengers(roomId);
-    const fromIdx = rp.findIndex(p => p.id === fromId);
-    const toIdx = rp.findIndex(p => p.id === toId);
-    if (fromIdx === -1 || toIdx === -1) return;
-
-    const newOrder = [...rp];
-    const [moved] = newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, moved);
-
-    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
-    const updatedPassengers = passengers.map(p => {
-      const upd = updates.find(u => u.id === p.id);
-      return upd ? { ...p, sort_order: upd.sort_order } : p;
-    });
-    setPassengers(updatedPassengers);
-    await saveSortOrder(updates);
-
-    setDraggingId(null); setDragOverId(null);
-    dragPassengerId.current = null; dragOverPassengerId.current = null;
-  };
-
-  const handleDragEnd = () => {
-    setDraggingId(null); setDragOverId(null);
-    dragPassengerId.current = null; dragOverPassengerId.current = null;
-  };
-
-  const doPrint = (roomsToPrint: Room[]) => {
-    const w = window.open("", "_blank"); if (!w) return;
-    const half = Math.ceil(roomsToPrint.length / 2);
-    const left = roomsToPrint.slice(0, half), right = roomsToPrint.slice(half);
-    const renderRoom = (room: Room) => {
-      const rp = getRoomPassengers(room.id);
-      const [bg] = ROOM_COLORS[room.type] || ["#f5f5f5"];
-      return `<div style="margin-bottom:12px"><div style="background:${bg};padding:5px 10px;border:1px solid #ddd;border-bottom:none;font-size:11px;font-weight:bold;display:flex;justify-content:space-between"><span>${room.type}</span><span>${room.number}${room.floor ? ` (طابق ${room.floor})` : ""}</span></div><table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f5"><th style="padding:4px 8px;border:1px solid #ddd;text-align:center;width:28px">م</th><th style="padding:4px 8px;border:1px solid #ddd;text-align:right">الاسم</th></tr>${rp.map((p, i) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;text-align:center">${i + 1}</td><td style="padding:4px 8px;border:1px solid #ddd">${p.short_ar}</td></tr>`).join("")}</table></div>`;
-    };
-    w.document.write(`<html><head><title>تقرير الفندق</title><style>body{font-family:Arial;direction:rtl;padding:16px}h1{text-align:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}</style></head><body><h1>تقرير الفندق</h1><div class="grid"><div>${left.map(renderRoom).join("")}</div><div>${right.map(renderRoom).join("")}</div></div><script>window.print();<\/script></body></html>`);
-    w.document.close();
-  };
-
-  const handlePrint = () => {
-    let r = rooms;
-    if (printFilter === "floor") r = rooms.filter(x => x.floor === printFloor);
-    else if (printFilter === "type") r = rooms.filter(x => x.type === printType);
-    doPrint(r); setShowPrint(false);
-  };
-
-  const currentRoom = rooms.find(r => r.id === currentRoomId);
-  const filteredP = passengers
-    .filter(p => p.room_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!pSearch || p.name_ar.includes(pSearch)))
-    .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
-  const getFilteredRoomsForPrint = () => {
-    if (printFilter === "floor") return rooms.filter(r => r.floor === printFloor);
-    if (printFilter === "type") return rooms.filter(r => r.type === printType);
-    return rooms;
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
-      <HotelStats rooms={rooms} passengers={passengers} />
-      <div style={{ padding: 14, overflowY: "auto", flex: 1 }}>
-        {/* أزرار التحكم */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> غرفة جديدة
-          </button>
-          <button onClick={() => setShowRange(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> نطاق غرف</button>
-          <button onClick={() => fileRef.current?.click()} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> استيراد Excel</button>
-          {rooms.length > 0 && <button onClick={() => setShowPrint(true)} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button>}
-          <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => e.target.files?.[0] && handleExcel(e.target.files[0])} />
-        </div>
-
-        {rooms.length > 0 && (
-          <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>الطابق:</span>
-              <div onClick={() => setFilterFloor("الكل")} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterFloor === "الكل" ? "var(--em7)" : "var(--border)"}`, background: filterFloor === "الكل" ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterFloor === "الكل" ? "var(--em7)" : "var(--text-muted)" }}>الكل</div>
-              {floors.map(f => <div key={f} onClick={() => setFilterFloor(f)} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterFloor === f ? "var(--em7)" : "var(--border)"}`, background: filterFloor === f ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterFloor === f ? "var(--em7)" : "var(--text-muted)" }}>ط{f}</div>)}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>النوع:</span>
-              <div onClick={() => setFilterType("الكل")} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterType === "الكل" ? "var(--em7)" : "var(--border)"}`, background: filterType === "الكل" ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterType === "الكل" ? "var(--em7)" : "var(--text-muted)" }}>الكل</div>
-              {ROOM_TYPES.map(t => <div key={t} onClick={() => setFilterType(t)} style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${filterType === t ? "var(--em7)" : "var(--border)"}`, background: filterType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 11, color: filterType === t ? "var(--em7)" : "var(--text-muted)" }}>{t}</div>)}
-            </div>
-          </div>
-        )}
-
-        {!rooms.length ? (
-          <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
-            </div>
-            لا يوجد غرف بعد
-          </div>
-        ) : (() => {
-          // النوع الفعلي للغرفة يُحسب من عدد الحجاج المتعيّنين فيها فعلياً
-          // (وليس من حقل room.type المخزّن، الذي يبقى ثابتاً منذ الإنشاء ولا يعكس الواقع)
-          const actualRoomType = (room: Room): string => {
-            const count = passengers.filter(p => p.room_id === room.id).length;
-            if (count === 1) return "فردية";
-            if (count === 2) return "ثنائية";
-            if (count === 3) return "ثلاثية";
-            if (count >= 4) return "رباعية";
-            return room.type; // غرفة فارغة: نعرض نوعها المسجّل كما هو
-          };
-          const filteredRooms = rooms.filter(r => (filterFloor === "الكل" || r.floor === filterFloor) && (filterType === "الكل" || actualRoomType(r) === filterType));
-          if (filteredRooms.length === 0) {
-            return (
-              <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>
-                لا توجد غرف مطابقة للفلتر
-              </div>
-            );
-          }
-          return (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {filteredRooms.map(room => {
-              const isExpanded = expanded.has(room.id);
-              const rp = getRoomPassengers(room.id);
-              // تحديد نوع الغرفة من عدد الحجاج
-              const getRoomLabel = (count: number) => {
-                if (count === 0) return "فارغة";
-                if (count === 1) return "فردية";
-                if (count === 2) return "ثنائية";
-                if (count === 3) return "ثلاثية";
-                if (count === 4) return "رباعية";
-                return `${count} أشخاص`;
-              };
-              return (
-                <div key={room.id} style={{ border: "0.5px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "var(--paper)" }}>
-                  {/* Header */}
-                  <div onClick={() => toggleRoom(room.id)} style={{ padding: "8px 10px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: ROOM_ICON_COLORS[room.type] || "#999", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
-                    </div>
-                    <div style={{ flex: 1 }} onDoubleClick={e => { e.stopPropagation(); setEditingRoomId(room.id); }}>
-                      {editingRoomId === room.id ? (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                          <input defaultValue={room.number} id={`rn-${room.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 80 }} autoFocus
-                            onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`rn-${room.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("rooms").update({ number: v }).eq("id", room.id); setRooms(rooms.map(r => r.id === room.id ? { ...r, number: v } : r)); } setEditingRoomId(null); } if (e.key === "Escape") setEditingRoomId(null); }} />
-                          <button onClick={() => { const v = (document.getElementById(`rn-${room.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("rooms").update({ number: v }).eq("id", room.id); setRooms(rooms.map(r => r.id === room.id ? { ...r, number: v } : r)); } setEditingRoomId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 12, fontWeight: 600 }}>
-                          غرفة {room.number}
-                          {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 3 }}>ط{room.floor}</span>}
-                        </div>
-                      )}
-                    </div>
-                    <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)", border: "1px solid var(--line)" }}>{getRoomLabel(rp.length)}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: 3 }}>{rp.length} <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                    <button onClick={e => { e.stopPropagation(); openAddP(room.id); }} style={{ ...btnS(), background: "rgba(125,31,60,0.08)", borderColor: "var(--em7)", color: "var(--em7)", padding: "3px 6px" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-                    <button onClick={e => { e.stopPropagation(); deleteRoom(room.id); }} style={{ background: "none", border: `1px solid ${rp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, borderRadius: 6, padding: "3px 6px", cursor: rp.length === 0 ? "pointer" : "not-allowed", color: rp.length === 0 ? "var(--ff)" : "var(--text-muted)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-                  </div>
-
-                  {/* Passengers list with Drag & Drop */}
-                  {isExpanded && (
-                    <div
-                      style={{ padding: "8px 12px", borderTop: "0.5px solid var(--border)" }}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={() => handleDrop(room.id)}
-                    >
-                      {rp.length ? rp.map((p, i) => (
-                        <div
-                          key={p.id}
-                          draggable
-                          onDragStart={() => handleDragStart(p.id)}
-                          onDragOver={e => handleDragOver(e, p.id)}
-                          onDragEnd={handleDragEnd}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 7,
-                            padding: "5px 4px", borderRadius: 6, marginBottom: 2,
-                            background: draggingId === p.id ? "rgba(125,31,60,0.08)" : dragOverId === p.id ? "rgba(125,31,60,0.04)" : "transparent",
-                            border: `1px solid ${dragOverId === p.id ? "var(--em7)" : "transparent"}`,
-                            cursor: "grab", transition: "background 0.15s",
-                            opacity: draggingId === p.id ? 0.5 : 1,
-                          }}
-                        >
-                          {/* أيقونة السحب */}
-                          <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                              <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
-                              <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
-                              <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
-                            </svg>
-                          </span>
-                          <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
-                          <Avatar name={p.name_ar} gender={p.gender} size={24} />
-                          <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar}</span>
-                          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 99, background: ROOM_COLORS[p.services.hotel_type]?.[0] || "var(--bg-2)", color: ROOM_COLORS[p.services.hotel_type]?.[1] || "var(--text-muted)" }}>{p.services.hotel_type} {p.services.hotel_view}</span>
-                          {p.services.hotel_type !== room.type && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
-                          <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
-                            <option value="">نقل لـ...</option>
-                            {rooms.filter(r => r.id !== room.id).map(r => <option key={r.id} value={r.id}>غرفة {r.number}</option>)}
-                          </select>
-                          <button onClick={() => removeP(p.id)} title="إزالة من الغرفة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
-                        </div>
-                      )) : (
-                        <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          );
-        })()}
-
-        {/* Modal غرفة جديدة */}
-        <Modal show={showAdd} onClose={() => { setShowAdd(false); setNumberError(""); }} title="غرفة جديدة" maxWidth={340}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم الغرفة</div><input style={{ ...inp, borderColor: numberError ? "var(--danger)" : "var(--border)" }} value={roomNumber} onChange={e => { setRoomNumber(e.target.value); setNumberError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addRoom()} />{numberError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{numberError}</div>}</div>
-            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={roomFloor} onChange={e => setRoomFloor(e.target.value)} /></div>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowAdd(false); setNumberError(""); }} style={btnS()}>إلغاء</button></div>
-        </Modal>
-
-        {/* Modal نطاق غرف */}
-        <Modal show={showRange} onClose={() => { setShowRange(false); setRangeError(""); }} title="إضافة نطاق غرف" maxWidth={360}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
-            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>من رقم</div><input style={inp} type="number" value={rangeFrom} onChange={e => { setRangeFrom(e.target.value); setRangeError(""); }} /></div>
-            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>إلى رقم</div><input style={inp} type="number" value={rangeTo} onChange={e => { setRangeTo(e.target.value); setRangeError(""); }} /></div>
-            <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>الطابق</div><input style={inp} value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} /></div>
-          </div>
-          {rangeError && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{rangeError}</div>}
-          {rangeFrom && rangeTo && parseInt(rangeFrom) <= parseInt(rangeTo) && <div style={{ fontSize: 11, color: "var(--em7)", marginBottom: 10, background: "rgba(125,31,60,.06)", padding: "6px 10px", borderRadius: 8 }}>سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة</div>}
-          <div style={{ display: "flex", gap: 8 }}><button onClick={addRange} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button><button onClick={() => { setShowRange(false); setRangeError(""); }} style={btnS()}>إلغاء</button></div>
-        </Modal>
-
-        {/* Modal إضافة مسافرين */}
-        <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — غرفة ${currentRoom?.number}`}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg>
-            <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
-          </div>
-          {filteredP.map(p => {
-            const isSel = selectedP.has(p.id);
-            return (
-              <div key={p.id} onClick={() => toggleSelectP(p.id)}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                </div>
-                <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{p.services.hotel_type}</span>
-              </div>
-            );
-          })}
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button><button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button></div>
-        </Modal>
-
-        {/* Modal الطباعة */}
-        <Modal show={showPrint} onClose={() => setShowPrint(false)} title="خيارات الطباعة" maxWidth={340}>
-          {[["all", "طباعة كل الغرف"], ["floor", "طباعة دور معين"], ["type", "طباعة نوع معين"]].map(([val, label]) => (
-            <div key={val} onClick={() => setPrintFilter(val as any)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: printFilter === val ? "rgba(125,31,60,.08)" : "var(--bg-2)", border: `0.5px solid ${printFilter === val ? "var(--em7)" : "var(--border)"}` }}>
-              <div style={{ width: 16, height: 16, borderRadius: "50%", background: printFilter === val ? "var(--em7)" : "var(--bg-card)", border: `2px solid ${printFilter === val ? "var(--em7)" : "var(--border)"}` }} />
-              <span style={{ fontSize: 12 }}>{label}</span>
-            </div>
-          ))}
-          {printFilter === "floor" && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر الطابق</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {floors.map(f => <div key={f} onClick={() => setPrintFloor(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${printFloor === f ? "var(--em7)" : "var(--border)"}`, background: printFloor === f ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", fontSize: 12, color: printFloor === f ? "var(--em7)" : "var(--text-muted)" }}>{f}</div>)}
-              </div>
-            </div>
-          )}
-          {printFilter === "type" && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>اختر النوع</div>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {ROOM_TYPES.map(t => { const [bg, clr] = ROOM_COLORS[t]; return <div key={t} onClick={() => setPrintType(t)} style={{ flex: 1, padding: 7, borderRadius: 8, border: `1.5px solid ${printType === t ? clr : "var(--border)"}`, background: printType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: printType === t ? clr : "var(--text-muted)" }}>{t}</div>; })}
-              </div>
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
-            سيتم طباعة {getFilteredRoomsForPrint().length} غرفة
-          </div>
-          <div style={{ display: "flex", gap: 8 }}><button onClick={handlePrint} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة</button><button onClick={() => setShowPrint(false)} style={btnS()}>إلغاء</button></div>
-        </Modal>
-      </div>
-    </div>
-  );
-}
-
-export { HotelStats, HotelPage };
+export { HotelPage };
