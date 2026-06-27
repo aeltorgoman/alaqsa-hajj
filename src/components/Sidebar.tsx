@@ -1,7 +1,7 @@
 import type { User } from "../types";
 import { NAV, NAV_ICONS } from "../utils";
 
-function Sidebar({ page, setPage, count, currentUser, onLogout, onReportsClick }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout: () => void; onReportsClick?: () => void }) {
+function Sidebar({ page, setPage, count, currentUser, onReportsClick }: { page: string; setPage: (p: string) => void; count: number; currentUser: User; onLogout?: () => void; onReportsClick?: () => void }) {
 
   return (
     <div style={{ width: "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative" }}>
