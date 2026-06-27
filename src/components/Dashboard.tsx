@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
+import { AlertRotator } from "./AlertRotator";
 
 function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: Passenger[]; setPage: (p: string) => void; onAddManual?: () => void; onScan?: (file: File) => void }) {
   const config  = useConfig();
@@ -26,32 +27,7 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
     ];
   }, [hajj, total]);
 
-  const alerts = useMemo(() => {
-    const noPassport = hajj.filter(p => !p.passport && !p.national_id).length;
-    const noPhone    = hajj.filter(p => !p.phone).length;
-    // جواز ينتهي قبل 1 ذي الحجة 1447 (2026-05-18) بأقل من 6 شهور
-    const dhulHijja1 = new Date("2026-05-18T00:00:00+03:00");
-    const sixMonthsBefore = new Date(dhulHijja1);
-    sixMonthsBefore.setMonth(sixMonthsBefore.getMonth() - 6);
-    const expiringPassport = hajj.filter(p => {
-      if (!(p as any).passport_expiry) return false;
-      const exp = new Date((p as any).passport_expiry);
-      return exp >= sixMonthsBefore && exp <= dhulHijja1;
-    }).length;
-    return [
-      { label: "بدون جواز / هوية",   count: noPassport,       page: "passengers", color: "#C62828", bg: "rgba(198,40,40,0.08)",  icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/>` },
-      { label: "جواز قريب الانتهاء", count: expiringPassport, page: "passengers", color: "#E65100", bg: "rgba(230,81,0,0.08)",   icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><line x1="12" y1="17" x2="12.01" y2="17"/>` },
-      { label: "بدون رقم تليفون",    count: noPhone,          page: "passengers", color: "#1565C0", bg: "rgba(21,101,192,0.08)", icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>` },
-    ].filter(a => a.count > 0);
-  }, [hajj]);
 
-  // عداد التنبيه الدوار
-  const [alertIndex, setAlertIndex] = useState(0);
-  useEffect(() => {
-    if (alerts.length <= 1) return;
-    const t = setInterval(() => setAlertIndex(i => (i + 1) % alerts.length), 4500);
-    return () => clearInterval(t);
-  }, [alerts.length]);
 
   const recent      = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 8);
   const scanInputRef = useRef<HTMLInputElement>(null);
@@ -191,40 +167,13 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
             })}
           </div>
 
-          {/* تنبيهات سريعة — كارت دوار */}
+          {/* تنبيهات سريعة */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--em8)", marginBottom: 8, paddingBottom: 7, borderBottom: "1px solid var(--line)" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.7"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               تنبيهات سريعة
-              {alerts.length > 0 && <span style={{ marginInlineStart:"auto", fontSize:10, color:"var(--muted)" }}>{alertIndex + 1}/{alerts.length}</span>}
             </div>
-            {alerts.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "14px 0", color: "var(--muted)" }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
-                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>كل شيء مكتمل</div>
-              </div>
-            ) : (() => {
-              const a = alerts[alertIndex % alerts.length];
-              return (
-                <div onClick={() => setPage(a.page)} style={{ display:"flex", alignItems:"center", gap:12, padding:"16px", borderRadius:14, cursor:"pointer", background: a.bg as string, border:`1.5px solid ${a.color as string}44`, transition:"all .3s" }}>
-                  <div style={{ width:44, height:44, borderRadius:11, background: a.color as string, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: a.icon }} />
-                  </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:24, fontWeight:900, color: a.color as string, lineHeight:1 }}>{a.count}</div>
-                    <div style={{ fontSize:11, fontWeight:700, color:"var(--ink)", marginTop:2 }}>{a.label}</div>
-                  </div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-                </div>
-              );
-            })()}
-            {alerts.length > 1 && (
-              <div style={{ display:"flex", gap:4, justifyContent:"center", marginTop:8 }}>
-                {alerts.map((_: unknown, i: number) => (
-                  <div key={i} onClick={() => setAlertIndex(i)} style={{ width: i === alertIndex ? 16 : 6, height:6, borderRadius:99, background: i === alertIndex ? primary : "var(--line)", transition:"all .3s", cursor:"pointer" }} />
-                ))}
-              </div>
-            )}
+            <AlertRotator passengers={passengers} setPage={setPage} />
           </div>
 
         </div>
