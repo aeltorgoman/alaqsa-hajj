@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
