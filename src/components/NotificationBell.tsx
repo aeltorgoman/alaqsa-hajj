@@ -126,7 +126,7 @@ function NotificationBell() {
       {/* لوحة الإشعارات */}
       {open && (
         <div style={{
-          position: "absolute", bottom: "calc(100% + 8px)", right: 0,
+          position: "fixed", top: 50, left: 14, zIndex: 9999,
           width: 290, maxHeight: 380,
           background: "var(--bg-sidebar)",
           border: "1px solid rgba(255,255,255,.12)",
