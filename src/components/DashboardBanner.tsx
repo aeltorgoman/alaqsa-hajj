@@ -147,11 +147,12 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
   };
 
   return (
-    <div style={S.banner}>
+    <div style={S.banner} className={!config.banner_image_url ? "banner-gradient-animated" : ""}>
 
       {/* صورة الكعبة */}
       {config.banner_image_url && (
         <img src={config.banner_image_url} alt="banner"
+          className="banner-img-animated"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: ((config as any).banner_position_x || "50") + "% " + ((config as any).banner_position || "center") }} />
       )}
 
