@@ -139,7 +139,7 @@ function NotificationBell() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.9)", flex: 1 }}>الإشعارات الحية</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.9)", flex: 1 }}>الإشعارات</span>
             {notifs.length > 0 && (
               <span onClick={e => { e.stopPropagation(); clearAll(); }}
                 style={{ fontSize: 10.5, color: "rgba(255,255,255,.4)", cursor: "pointer", padding: "2px 6px", borderRadius: 6 }}
