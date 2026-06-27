@@ -131,9 +131,8 @@ function NotificationBell() {
           background: "var(--bg-sidebar)",
           border: "1px solid rgba(255,255,255,.12)",
           borderRadius: 14, overflow: "hidden",
-          boxShadow: "0 -8px 32px rgba(0,0,0,.45)",
+          boxShadow: "0 8px 32px rgba(0,0,0,.45)",
           display: "flex", flexDirection: "column",
-          zIndex: 9999,
         }}>
 
           {/* الهيدر */}
