@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import type { User } from "../types";
@@ -54,8 +54,25 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
   }
 
   const [countdown, setCountdown] = useState(calcDiff);
-  const [showThemes, setShowThemes] = useState(false);
+  const [showThemes, setShowThemes]     = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [themePos, setThemePos]         = useState({ top: 54, left: 14 });
+  const [userPos, setUserPos]           = useState({ top: 54, left: 14 });
+  const themeRef = useRef<HTMLDivElement>(null);
+  const userRef  = useRef<HTMLDivElement>(null);
+
+  // إغلاق عند الضغط برا
+  useEffect(() => {
+    if (!showThemes && !showUserMenu) return;
+    const h = (e: MouseEvent) => {
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) setShowThemes(false);
+      if (userRef.current  && !userRef.current.contains(e.target as Node))  setShowUserMenu(false);
+    };
+    document.addEventListener("mousedown", h);
+    const t1 = showThemes    ? setTimeout(() => setShowThemes(false), 8000)    : null;
+    const t2 = showUserMenu  ? setTimeout(() => setShowUserMenu(false), 8000)  : null;
+    return () => { document.removeEventListener("mousedown", h); if(t1) clearTimeout(t1); if(t2) clearTimeout(t2); };
+  }, [showThemes, showUserMenu]);
 
   useEffect(() => {
     const timer = setInterval(() => setCountdown(calcDiff()), 1000);
@@ -151,13 +168,19 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
           </svg>
         </div>
         {/* 2. ثيم */}
-        <div style={{ position:"relative" }}>
-          <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
+        <div ref={themeRef} style={{ position:"relative", flexShrink:0 }}>
+          <div style={S.iconBtn} onClick={() => {
+            if (!showThemes && themeRef.current) {
+              const r = themeRef.current.getBoundingClientRect();
+              setThemePos({ top: r.bottom + 8, left: Math.max(8, r.left - 100 + r.width) });
+            }
+            setShowThemes(s => !s);
+            setShowUserMenu(false);
+          }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </div>
           {showThemes && (
-            <div style={{ position:"fixed", top:50, left:14, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
-              onMouseLeave={() => setShowThemes(false)}>
+            <div style={{ position:"fixed", top:themePos.top, left:themePos.left, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}>
               <ThemeSwitcher />
             </div>
           )}
@@ -167,23 +190,42 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
         {/* فاصل */}
         <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)", margin: "0 4px" }} />
         {/* 4. اسم المستخدم */}
-        <div style={{ position:"relative" }}>
-          <div onClick={() => setShowUserMenu((s: boolean) => !s)} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+        <div ref={userRef} style={{ position:"relative", flexShrink:0 }}>
+          <div onClick={() => {
+            if (!showUserMenu && userRef.current) {
+              const r = userRef.current.getBoundingClientRect();
+              setUserPos({ top: r.bottom + 8, left: Math.max(8, r.left - 160 + r.width) });
+            }
+            setShowUserMenu(s => !s);
+            setShowThemes(false);
+          }} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", padding:"4px 8px", borderRadius:8, background:"rgba(0,0,0,0.2)", border:"1px solid rgba(255,255,255,0.15)" }}>
             <div style={S.avatar}>{initials}</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{currentUser.name.split(" ")[0]}</div>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 1 }}>مدير النظام</div>
             </div>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="2" style={{ transition:"transform .2s", transform: showUserMenu ? "rotate(180deg)" : "rotate(0)" }}><polyline points="6 9 12 15 18 9"/></svg>
           </div>
           {showUserMenu && (
-            <div style={{ position:"fixed", top:52, left:14, zIndex:9999, background:"var(--bg-card)", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.2)", border:"1px solid var(--border)", minWidth:160, padding:6 }}
-              onMouseLeave={() => setShowUserMenu(false)}>
-              <button onClick={() => { setShowUserMenu(false); onLogout(); }}
-                style={{ width:"100%", padding:"9px 14px", borderRadius:7, border:"none", background:"transparent", color:"#C62828", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"var(--font-body)", display:"flex", alignItems:"center", gap:8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                تسجيل الخروج
-              </button>
+            <div style={{ position:"fixed", top:userPos.top, left:userPos.left, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.25)", border:"1px solid var(--border)", minWidth:200, overflow:"hidden" }}>
+              {/* header المستخدم */}
+              <div style={{ padding:"12px 14px", borderBottom:"1px solid var(--line)", display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:36, height:36, borderRadius:"50%", background:"linear-gradient(135deg,"+primary+","+primary+"99)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#fff", flexShrink:0 }}>{initials}</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"var(--ink)" }}>{currentUser.name.split(" ").slice(0,2).join(" ")}</div>
+                  <div style={{ fontSize:10, color:"var(--muted)", marginTop:1 }}>مدير النظام</div>
+                </div>
+              </div>
+              {/* تسجيل الخروج */}
+              <div style={{ padding:6 }}>
+                <button onClick={() => { setShowUserMenu(false); onLogout(); }}
+                  style={{ width:"100%", padding:"9px 12px", borderRadius:8, border:"none", background:"transparent", color:"#C62828", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"var(--font-body)", display:"flex", alignItems:"center", gap:8 }}
+                  onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background="rgba(198,40,40,0.08)"}
+                  onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background="transparent"}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  تسجيل الخروج
+                </button>
+              </div>
             </div>
           )}
         </div>
