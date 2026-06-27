@@ -143,7 +143,30 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
 
       {/* ── يسار أعلى: مستخدم + أيقونات ── */}
       <div style={S.userStrip}>
-        {/* أفاتار + اسم + dropdown تسجيل الخروج */}
+        {/* 1. إعدادات */}
+        <div style={S.iconBtn} onClick={() => setPage("users")}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </div>
+        {/* 2. ثيم */}
+        <div style={{ position:"relative" }}>
+          <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          </div>
+          {showThemes && (
+            <div style={{ position:"fixed", top:50, left:14, zIndex:9999, background:"#2a1020", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.5)", border:"1px solid rgba(255,255,255,0.1)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
+              onMouseLeave={() => setShowThemes(false)}>
+              <ThemeSwitcher />
+            </div>
+          )}
+        </div>
+        {/* 3. إشعارات */}
+        <NotificationBell />
+        {/* فاصل */}
+        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)", margin: "0 4px" }} />
+        {/* 4. اسم المستخدم */}
         <div style={{ position:"relative" }}>
           <div onClick={() => setShowUserMenu((s: boolean) => !s)} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
             <div style={S.avatar}>{initials}</div>
@@ -157,35 +180,12 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
             <div style={{ position:"fixed", top:52, left:14, zIndex:9999, background:"var(--bg-card)", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.2)", border:"1px solid var(--border)", minWidth:160, padding:6 }}
               onMouseLeave={() => setShowUserMenu(false)}>
               <button onClick={() => { setShowUserMenu(false); onLogout(); }}
-                style={{ width:"100%", padding:"9px 14px", borderRadius:7, border:"none", background:"transparent", color:"#C62828", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"var(--font-body)", display:"flex", alignItems:"center", gap:8, textAlign:"right" }}>
+                style={{ width:"100%", padding:"9px 14px", borderRadius:7, border:"none", background:"transparent", color:"#C62828", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"var(--font-body)", display:"flex", alignItems:"center", gap:8 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 تسجيل الخروج
               </button>
             </div>
           )}
-        </div>
-        {/* فاصل */}
-        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)", margin: "0 4px" }} />
-        {/* إشعارات */}
-        <NotificationBell />
-        {/* ثيم */}
-        <div style={{ position:"relative" }}>
-          <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          </div>
-          {showThemes && (
-            <div style={{ position:"fixed", top:50, left:160, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
-              onMouseLeave={() => setShowThemes(false)}>
-              <ThemeSwitcher />
-            </div>
-          )}
-        </div>
-        {/* إعدادات */}
-        <div style={S.iconBtn} onClick={() => setPage("users")}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
         </div>
       </div>
 
