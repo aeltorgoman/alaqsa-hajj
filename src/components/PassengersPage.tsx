@@ -436,6 +436,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       setPassengers([{ id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger, ...passengers]);
       setShowManual(false);
       resetManualModal();
+      // لو جاي من الداشبورد عن طريق سكان، ارجع للداشبورد
+      if ((window as any).__hajj_scan_return_dash__) {
+        (window as any).__hajj_scan_return_dash__ = null;
+        // نبعث event للـ App عشان يرجع للداشبورد
+        window.dispatchEvent(new CustomEvent("hajj_return_dash"));
+      }
     }
     setManualSaving(false);
   };
