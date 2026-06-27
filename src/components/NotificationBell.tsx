@@ -80,7 +80,7 @@ function NotificationBell() {
   const clearAll = () => setNotifs([]);
 
   return (
-    <div ref={wrapRef} style={{ position: "relative" }}>
+    <div ref={wrapRef} style={{ position: "relative", flexShrink: 0 }}>
 
       {/* زرار الجرس */}
       <div onClick={handleOpen}
@@ -133,8 +133,7 @@ function NotificationBell() {
           borderRadius: 14, overflow: "hidden",
           boxShadow: "0 -8px 32px rgba(0,0,0,.45)",
           display: "flex", flexDirection: "column",
-          animation: "slideUpFade .2s ease",
-          zIndex: 999,
+          zIndex: 9999,
         }}>
 
           {/* الهيدر */}
