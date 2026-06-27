@@ -38,16 +38,10 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
       const exp = new Date((p as any).passport_expiry);
       return exp >= sixMonthsBefore && exp <= dhulHijja1;
     }).length;
-    const withoutTicket = hajj.filter(p => p.services?.flight === "بدون").length;
-    const noHotel       = hajj.filter(p => p.room_id  == null).length;
-    const noBus         = hajj.filter(p => p.bus_id   == null).length;
     return [
-      { label: "بدون جواز / هوية",       count: noPassport,       page: "passengers", color: "#C62828", bg: "rgba(198,40,40,0.08)",   icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/>` },
-      { label: "جواز قريب الانتهاء",     count: expiringPassport, page: "passengers", color: "#E65100", bg: "rgba(230,81,0,0.08)",    icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><line x1="12" y1="17" x2="12.01" y2="17"/>` },
-      { label: "بدون رقم تليفون",        count: noPhone,          page: "passengers", color: "#1565C0", bg: "rgba(21,101,192,0.08)",  icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>` },
-      { label: "بدون تذكرة طيران",       count: withoutTicket,    page: "flights",    color: "var(--female-fg)", bg: "var(--female-bg)", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
-      { label: "بدون غرفة بالفندق",      count: noHotel,          page: "hotel",      color: "var(--danger)",    bg: "var(--danger-bg)", icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>` },
-      { label: "بدون باص",               count: noBus,            page: "buses",      color: "var(--danger)",    bg: "var(--danger-bg)", icon: `<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/>` },
+      { label: "بدون جواز / هوية",   count: noPassport,       page: "passengers", color: "#C62828", bg: "rgba(198,40,40,0.08)",  icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/>` },
+      { label: "جواز قريب الانتهاء", count: expiringPassport, page: "passengers", color: "#E65100", bg: "rgba(230,81,0,0.08)",   icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><line x1="12" y1="17" x2="12.01" y2="17"/>` },
+      { label: "بدون رقم تليفون",    count: noPhone,          page: "passengers", color: "#1565C0", bg: "rgba(21,101,192,0.08)", icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 8.91a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>` },
     ].filter(a => a.count > 0);
   }, [hajj]);
 
@@ -149,20 +143,16 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
             <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "var(--em8)", flex: 1 }}>آخر الحجاج المسجلين</div>
             <span onClick={() => setPage("passengers")} style={{ fontSize: 11, color: "var(--g6)", cursor: "pointer", fontWeight: 600 }}>عرض الكل</span>
           </div>
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {recent.map(p => (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, overflowY: "auto", flex: 1 }}>
+            {recent.slice(0, 8).map(p => (
               <div key={p.id} onClick={() => setPage("passengers")}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", direction: "rtl" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                <Avatar name={p.name_ar} gender={p.gender} size={34} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
-                  <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nat} · {p.passport || p.national_id || "—"}</div>
-                </div>
-                {/* باركود ديكو */}
-                <div style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--muted)" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M18 14h.01M14 18h.01M18 18h.01M14 14v4M18 14v4M14 18h4"/></svg>
+                <Avatar name={p.name_ar} gender={p.gender} size={28} />
+                <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nat}</div>
                 </div>
               </div>
             ))}
@@ -216,12 +206,12 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
             ) : (() => {
               const a = alerts[alertIndex % alerts.length];
               return (
-                <div onClick={() => setPage(a.page)} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px", borderRadius:12, cursor:"pointer", background: a.bg as string, border:`1px solid ${a.color as string}33`, transition:"all .3s" }}>
-                  <div style={{ width:36, height:36, borderRadius:9, background: a.color as string, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <div onClick={() => setPage(a.page)} style={{ display:"flex", alignItems:"center", gap:12, padding:"16px", borderRadius:14, cursor:"pointer", background: a.bg as string, border:`1.5px solid ${a.color as string}44`, transition:"all .3s" }}>
+                  <div style={{ width:44, height:44, borderRadius:11, background: a.color as string, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: a.icon }} />
                   </div>
                   <div style={{ flex:1 }}>
-                    <div style={{ fontSize:18, fontWeight:900, color: a.color as string, lineHeight:1 }}>{a.count}</div>
+                    <div style={{ fontSize:24, fontWeight:900, color: a.color as string, lineHeight:1 }}>{a.count}</div>
                     <div style={{ fontSize:11, fontWeight:700, color:"var(--ink)", marginTop:2 }}>{a.label}</div>
                   </div>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
