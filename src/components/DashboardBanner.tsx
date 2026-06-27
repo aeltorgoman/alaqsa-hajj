@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { useConfig } from "../config/ConfigContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import type { User } from "../types";
+import { NotificationBell } from "./NotificationBell";
 
-function DashboardBanner({ setPage, currentUser }: {
+function DashboardBanner({ setPage, currentUser, onLogout }: {
   setPage: (p: string) => void;
+  onLogout: () => void;
   currentUser: User;
 }) {
   const config  = useConfig();
@@ -53,6 +55,7 @@ function DashboardBanner({ setPage, currentUser }: {
 
   const [countdown, setCountdown] = useState(calcDiff);
   const [showThemes, setShowThemes] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCountdown(calcDiff()), 1000);
@@ -140,25 +143,37 @@ function DashboardBanner({ setPage, currentUser }: {
 
       {/* ── يسار أعلى: مستخدم + أيقونات ── */}
       <div style={S.userStrip}>
-        {/* أفاتار */}
-        <div style={S.avatar}>{initials}</div>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{currentUser.name.split(" ")[0]}</div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 1 }}>مدير النظام</div>
+        {/* أفاتار + اسم + dropdown تسجيل الخروج */}
+        <div style={{ position:"relative" }}>
+          <div onClick={() => setShowUserMenu((s: boolean) => !s)} style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer" }}>
+            <div style={S.avatar}>{initials}</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{currentUser.name.split(" ")[0]}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 1 }}>مدير النظام</div>
+            </div>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          {showUserMenu && (
+            <div style={{ position:"fixed", top:52, left:14, zIndex:9999, background:"var(--bg-card)", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.2)", border:"1px solid var(--border)", minWidth:160, padding:6 }}
+              onMouseLeave={() => setShowUserMenu(false)}>
+              <button onClick={() => { setShowUserMenu(false); onLogout(); }}
+                style={{ width:"100%", padding:"9px 14px", borderRadius:7, border:"none", background:"transparent", color:"#C62828", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"var(--font-body)", display:"flex", alignItems:"center", gap:8, textAlign:"right" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                تسجيل الخروج
+              </button>
+            </div>
+          )}
         </div>
         {/* فاصل */}
         <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)", margin: "0 4px" }} />
         {/* إشعارات */}
         <div style={S.iconBtn}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-          <div style={S.notifDot} />
+          <NotificationBell />
         </div>
         {/* ثيم */}
         <div style={{ position:"relative" }}>
           <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </div>
           {showThemes && (
             <div style={{ position:"fixed", top:50, left:160, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
