@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger } from "../types";
 import { Avatar } from "./Avatar";
@@ -34,8 +34,8 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
     const sixMonthsBefore = new Date(dhulHijja1);
     sixMonthsBefore.setMonth(sixMonthsBefore.getMonth() - 6);
     const expiringPassport = hajj.filter(p => {
-      if (!p.passport_expiry) return false;
-      const exp = new Date(p.passport_expiry);
+      if (!(p as any).passport_expiry) return false;
+      const exp = new Date((p as any).passport_expiry);
       return exp >= sixMonthsBefore && exp <= dhulHijja1;
     }).length;
     const withoutTicket = hajj.filter(p => p.services?.flight === "بدون").length;
@@ -230,7 +230,7 @@ function Dashboard({ passengers, setPage, onAddManual, onScan }: { passengers: P
             })()}
             {alerts.length > 1 && (
               <div style={{ display:"flex", gap:4, justifyContent:"center", marginTop:8 }}>
-                {alerts.map((_, i) => (
+                {alerts.map((_: unknown, i: number) => (
                   <div key={i} onClick={() => setAlertIndex(i)} style={{ width: i === alertIndex ? 16 : 6, height:6, borderRadius:99, background: i === alertIndex ? primary : "var(--line)", transition:"all .3s", cursor:"pointer" }} />
                 ))}
               </div>
