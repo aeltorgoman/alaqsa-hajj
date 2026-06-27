@@ -156,7 +156,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
           </div>
           {showThemes && (
-            <div style={{ position:"fixed", top:50, left:14, zIndex:9999, background:"#2a1020", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.5)", border:"1px solid rgba(255,255,255,0.1)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
+            <div style={{ position:"fixed", top:50, left:14, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
               onMouseLeave={() => setShowThemes(false)}>
               <ThemeSwitcher />
             </div>
