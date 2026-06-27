@@ -26,6 +26,7 @@ function timeAgo(date: Date) {
 function NotificationBell() {
   const [notifs, setNotifs]   = useState<Notif[]>([]);
   const [open,   setOpen]     = useState(false);
+  const [dropPos, setDropPos]  = useState({ top: 54, left: 14 });
   const wrapRef               = useRef<HTMLDivElement>(null);
   const tickRef               = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -60,21 +61,26 @@ function NotificationBell() {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  /* إغلاق عند الضغط خارجاً */
+  /* إغلاق عند الضغط خارجاً + auto-close بعد 8 ثواني */
   useEffect(() => {
     if (!open) return;
     const h = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    const timer = setTimeout(() => setOpen(false), 8000);
+    return () => { document.removeEventListener("mousedown", h); clearTimeout(timer); };
   }, [open]);
 
   const unread = notifs.filter(n => !n.read).length;
 
   const handleOpen = () => {
+    if (!open && wrapRef.current) {
+      const rect = wrapRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 8, left: Math.max(8, rect.left - 260 + rect.width) });
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    }
     setOpen(o => !o);
-    if (!open) setNotifs(prev => prev.map(n => ({ ...n, read: true })));
   };
 
   const clearAll = () => setNotifs([]);
@@ -112,21 +118,13 @@ function NotificationBell() {
           )}
         </div>
 
-        <span style={{ fontSize: 12.5, fontWeight: 500, color: unread > 0 ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.65)", flex: 1 }}>
-          الإشعارات
-        </span>
 
-        {unread > 0 && (
-          <span style={{ fontSize: 10, background: "rgba(200,162,75,.25)", color: "#C8A24B", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>
-            {unread} جديد
-          </span>
-        )}
       </div>
 
       {/* لوحة الإشعارات */}
       {open && (
         <div style={{
-          position: "fixed", top: 50, left: 14, zIndex: 9999,
+          position: "fixed", top: dropPos.top, left: dropPos.left, zIndex: 9999,
           width: 290, maxHeight: 380,
           background: "var(--bg-sidebar)",
           border: "1px solid rgba(255,255,255,.12)",
