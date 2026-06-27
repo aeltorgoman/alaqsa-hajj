@@ -89,7 +89,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
     banner: {
       position: "relative" as const,
       flexShrink: 0,
-      height: 200,
+      height: 240,
       background: config.banner_image_url
         ? undefined
         : `linear-gradient(110deg,${primary}f0 0%,${primary} 50%,${primary}cc 100%)`,
@@ -128,7 +128,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
       display: "flex", alignItems: "center", gap: 11, zIndex: 2,
     },
     brandCircle: {
-      width: 52, height: 52, borderRadius: "50%",
+      width: 72, height: 72, borderRadius: "50%",
       background: "rgba(93,24,48,.85)", border: "2px solid #d4ac4f",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       overflow: "hidden" as const,
@@ -152,7 +152,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
       {/* صورة الكعبة */}
       {config.banner_image_url && (
         <img src={config.banner_image_url} alt="banner"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: (config as any).banner_position || "center" }} />
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: ((config as any).banner_position_x || "50") + "% " + ((config as any).banner_position || "center") }} />
       )}
 
       {/* overlay */}
@@ -244,7 +244,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
         </div>
         <div>
           <div style={{ fontSize: 10, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 3 }}>نظام إدارة الحج</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 4, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 4, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", lineHeight: 1.4 }}>{config.tagline || "نُدير التفاصيل لتتفرّغوا للعبادة"}</div>
         </div>
       </div>
