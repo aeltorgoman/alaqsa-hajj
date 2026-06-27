@@ -128,7 +128,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
       display: "flex", alignItems: "center", gap: 11, zIndex: 2,
     },
     brandCircle: {
-      width: 72, height: 72, borderRadius: "50%",
+      width: 130, height: 130, borderRadius: "50%",
       background: "rgba(93,24,48,.85)", border: "2px solid #d4ac4f",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       overflow: "hidden" as const,
