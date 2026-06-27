@@ -167,9 +167,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
         {/* فاصل */}
         <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)", margin: "0 4px" }} />
         {/* إشعارات */}
-        <div style={S.iconBtn}>
-          <NotificationBell />
-        </div>
+        <NotificationBell />
         {/* ثيم */}
         <div style={{ position:"relative" }}>
           <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
