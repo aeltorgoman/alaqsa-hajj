@@ -84,9 +84,9 @@ function NotificationBell() {
 
       {/* زرار الجرس */}
       <div onClick={handleOpen}
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "7px 12px", borderRadius: 10, cursor: "pointer", background: open ? "rgba(200,162,75,.15)" : "transparent", transition: "background .15s", position: "relative" }}
-        onMouseEnter={e => { if (!open) (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.06)"; }}
-        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+        style={{ width:32, height:32, borderRadius:8, background: open ? "rgba(200,162,75,.25)" : "rgba(0,0,0,.3)", border:"1px solid rgba(255,255,255,.15)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", flexShrink:0, position:"relative", transition:"background .15s" }}
+        onMouseEnter={e => { if (!open) (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.15)"; }}
+        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLDivElement).style.background = "rgba(0,0,0,.3)"; }}>
 
         <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
