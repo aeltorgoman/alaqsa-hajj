@@ -26,7 +26,6 @@ export default function App() {
   useEffect(() => { sessionStorage.setItem("hajj_page", page); }, [page]);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [globalShowManual, setGlobalShowManual] = useState(false);
-  const [globalScanFile, setGlobalScanFile] = useState<File | null>(null);
 
   const handleLogin = (user: User) => {
     const { password: _, ...userWithoutPassword } = user;
@@ -92,8 +91,8 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash":       return <Dashboard passengers={passengers} setPage={setPage} onAddManual={() => setGlobalShowManual(true)} onScan={(file) => { (window as any).__hajj_pending_scan_file__ = file; setGlobalScanFile(file); }} />;
-      case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} globalShowManual={globalShowManual} onGlobalManualClose={() => setGlobalShowManual(false)} globalScanFile={globalScanFile} onGlobalScanClose={() => setGlobalScanFile(null)} />;
+      case "dash":       return <Dashboard passengers={passengers} setPage={setPage} onAddManual={() => setGlobalShowManual(true)} onScan={(file) => { (window as any).__hajj_pending_scan_file__ = file; }} />;
+      case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} globalShowManual={globalShowManual} onGlobalManualClose={() => setGlobalShowManual(false)} />;
       case "buses":      return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights":    return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
       case "mina":       return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
@@ -113,7 +112,7 @@ export default function App() {
 
       {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
       {page === "dash" && (
-        <DashboardBanner setPage={setPage} currentUser={currentUser!} />
+        <DashboardBanner setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />
       )}
 
       {/* الجسم — السايدبار + المحتوى */}
