@@ -1,238 +1,218 @@
-import { useState, useEffect } from "react";
-import { useConfig } from "../config/ConfigContext";
-import { ThemeSwitcher } from "../config/ThemeContext";
-import type { User } from "../types";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "../supabase";
 
-function DashboardBanner({ setPage, currentUser }: {
-  setPage: (p: string) => void;
-  currentUser: User;
-}) {
-  const config  = useConfig();
-  const primary = config.color_primary || "#7D1F3C";
+interface Notif {
+  id: number;
+  type: "add" | "update" | "delete";
+  msg: string;
+  time: Date;
+  read: boolean;
+}
 
-  // ─── عداد يوم عرفة ───
-  function getArafaDate(): Date {
-    try {
-      const fmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year:"numeric", month:"numeric", day:"numeric" });
-      const now = new Date();
-      const partsNow = fmt.formatToParts(now);
-      let hYear  = parseInt(partsNow.find(p => p.type === "year")!.value);
-      const hMon = parseInt(partsNow.find(p => p.type === "month")!.value);
-      const hDay = parseInt(partsNow.find(p => p.type === "day")!.value);
-      if (hMon === 12 && hDay > 9) hYear++;
-      const base = new Date(now);
-      base.setDate(base.getDate() - 60);
-      for (let i = 0; i < 400; i++) {
-        const d = new Date(base);
-        d.setDate(d.getDate() + i);
-        const parts = fmt.formatToParts(d);
-        const y = parseInt(parts.find(p => p.type === "year")!.value);
-        const m = parseInt(parts.find(p => p.type === "month")!.value);
-        const day = parseInt(parts.find(p => p.type === "day")!.value);
-        if (y === hYear && m === 12 && day === 9) {
-          return new Date(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T00:00:00+03:00");
-        }
-      }
-      return new Date("2027-05-15T00:00:00+03:00");
-    } catch {
-      return new Date("2027-05-15T00:00:00+03:00");
-    }
-  }
+const TYPE = {
+  add:    { color: "#2A9D8F", bg: "rgba(42,157,143,.12)",  label: "إضافة",  svgPath: `<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>` },
+  update: { color: "#C8A24B", bg: "rgba(200,162,75,.13)",  label: "تعديل",  svgPath: `<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>` },
+  delete: { color: "#E76F51", bg: "rgba(231,111,81,.12)",  label: "حذف",    svgPath: `<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>` },
+};
 
-  const pad = (n: number) => n < 10 ? "0" + n : "" + n;
+function timeAgo(date: Date) {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 5)   return "الآن";
+  if (s < 60)  return `منذ ${s} ث`;
+  if (s < 3600) return `منذ ${Math.floor(s / 60)} د`;
+  return `منذ ${Math.floor(s / 3600)} س`;
+}
 
-  function calcDiff() {
-    const diffMs = Math.max(0, getArafaDate().getTime() - Date.now());
-    return {
-      days: Math.floor(diffMs / 864e5),
-      hrs:  Math.floor((diffMs % 864e5) / 36e5),
-      mins: Math.floor((diffMs % 36e5) / 6e4),
-      secs: Math.floor((diffMs % 6e4) / 1e3),
-    };
-  }
+function NotificationBell() {
+  const [notifs, setNotifs]   = useState<Notif[]>([]);
+  const [open,   setOpen]     = useState(false);
+  const wrapRef               = useRef<HTMLDivElement>(null);
+  const tickRef               = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [countdown, setCountdown] = useState(calcDiff);
-  const [showThemes, setShowThemes] = useState(false);
-
+  /* تحديث الوقت كل دقيقة */
   useEffect(() => {
-    const timer = setInterval(() => setCountdown(calcDiff()), 1000);
-    return () => clearInterval(timer);
+    tickRef.current = setInterval(() => setNotifs(n => [...n]), 30_000);
+    return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
 
-  const { days: diffDays, hrs: diffHrs, mins: diffMins, secs: diffSecs } = countdown;
+  /* Supabase Realtime */
+  useEffect(() => {
+    const push = (type: Notif["type"], row: Record<string, unknown>) => {
+      const name = (row.name_ar || row.name || "غير معروف") as string;
+      const msgs: Record<Notif["type"], string> = {
+        add:    `تم إضافة حاج جديد: ${name}`,
+        update: `تم تحديث بيانات: ${name}`,
+        delete: `تم حذف حاج من القائمة`,
+      };
+      setNotifs(prev => [
+        { id: Date.now(), type, msg: msgs[type], time: new Date(), read: false },
+        ...prev,
+      ].slice(0, 60));
+    };
 
-  // أول حرفين من الاسم للأفاتار
-  const initials = currentUser.name.trim().split(" ").map((w: string) => w[0]).slice(0, 2).join("");
+    const ch = supabase
+      .channel("hajj-notif-bell")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "passengers" }, p => push("add",    p.new as Record<string, unknown>))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "passengers" }, p => push("update", p.new as Record<string, unknown>))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "passengers" }, p => push("delete", (p.old || {}) as Record<string, unknown>))
+      .subscribe();
 
-  // ─── inline styles مستخرجة بالضبط من المعاينة ───
-  const S = {
-    banner: {
-      position: "relative" as const,
-      flexShrink: 0,
-      height: 260,
-      background: config.banner_image_url
-        ? undefined
-        : `linear-gradient(110deg,${primary}f0 0%,${primary} 40%,#a0294e 70%,${primary}cc 100%)`,
-      backgroundSize: "200% 200%",
-      overflow: "hidden" as const,
-    },
-    overlay: {
-      position: "absolute" as const, inset: 0,
-      background: "linear-gradient(to bottom, rgba(93,24,48,.72) 0%, rgba(0,0,0,.38) 55%, rgba(0,0,0,.80) 100%)",
-    },
-    // يسار أعلى — مستخدم + أيقونات
-    userStrip: {
-      position: "absolute" as const, top: 14, left: 18, zIndex: 3,
-      display: "flex", alignItems: "center", gap: 8,
-    },
-    avatar: {
-      width: 34, height: 34, borderRadius: "50%",
-      background: primary, border: "2px solid rgba(212,172,79,.6)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 700,
-      color: "#e7cd8a", flexShrink: 0, cursor: "pointer",
-    },
-    iconBtn: {
-      width: 32, height: 32, borderRadius: 8,
-      background: "rgba(0,0,0,.3)", border: "1px solid rgba(255,255,255,.15)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      cursor: "pointer", flexShrink: 0, position: "relative" as const,
-    },
-    notifDot: {
-      position: "absolute" as const, top: 5, left: 5,
-      width: 7, height: 7, borderRadius: "50%",
-      background: "#f87171", border: "1.5px solid rgba(0,0,0,.4)",
-    },
-    // يمين — شعار الحملة
-    brand: {
-      position: "absolute" as const, top: "50%", right: 20,
-      transform: "translateY(-50%)",
-      display: "flex", alignItems: "center", gap: 16, zIndex: 2,
-    },
-    brandCircle: {
-      width: 140, height: 140, borderRadius: "50%",
-      background: "rgba(93,24,48,.85)", border: "4px solid #d4ac4f",
-      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-      overflow: "hidden" as const,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-    },
-    // يسار أسفل — عداد عرفة
-    arafaWidget: {
-      position: "absolute" as const, bottom: 14, left: 18, zIndex: 2,
-      display: "flex", alignItems: "center", gap: 10,
-      background: "rgba(0,0,0,.42)", border: "1px solid rgba(212,172,79,.38)",
-      borderRadius: 11, padding: "8px 12px", backdropFilter: "blur(6px)",
-    },
-    abox: {
-      background: "rgba(0,0,0,.55)", border: "1px solid rgba(255,255,255,.1)",
-      borderRadius: 7, padding: "4px 8px", textAlign: "center" as const, minWidth: 42,
-    },
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  /* إغلاق عند الضغط خارجاً */
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const unread = notifs.filter(n => !n.read).length;
+
+  const handleOpen = () => {
+    setOpen(o => !o);
+    if (!open) setNotifs(prev => prev.map(n => ({ ...n, read: true })));
   };
 
+  const clearAll = () => setNotifs([]);
+
   return (
-    <div style={S.banner} className={!config.banner_image_url ? "banner-gradient-animated" : ""}>
+    <div ref={wrapRef} style={{ position: "relative" }}>
 
-      {/* صورة الكعبة */}
-      {config.banner_image_url && (
-        <img src={config.banner_image_url} alt="banner"
-          className="banner-img-animated"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: (config as any).banner_position || "center" }} />
-      )}
+      {/* زرار الجرس */}
+      <div onClick={handleOpen}
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "7px 12px", borderRadius: 10, cursor: "pointer", background: open ? "rgba(200,162,75,.15)" : "transparent", transition: "background .15s", position: "relative" }}
+        onMouseEnter={e => { if (!open) (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.06)"; }}
+        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
 
-      {/* overlay */}
-      <div style={S.overlay} />
-
-      {/* ── يسار أعلى: مستخدم + أيقونات ── */}
-      <div style={S.userStrip}>
-        {/* أفاتار */}
-        <div style={S.avatar}>{initials}</div>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{currentUser.name.split(" ")[0]}</div>
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 1 }}>مدير النظام</div>
-        </div>
-        {/* فاصل */}
-        <div style={{ width: 1, height: 28, background: "rgba(255,255,255,.2)", margin: "0 4px" }} />
-        {/* إشعارات */}
-        <div style={S.iconBtn}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke={unread > 0 ? "#C8A24B" : "rgba(255,255,255,.65)"}
+            strokeWidth="1.8" strokeLinecap="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            {unread > 0 && <circle cx="18" cy="5" r="3" fill="#C8A24B" stroke="#1a0e1a" strokeWidth="1.5"/>}
           </svg>
-          <div style={S.notifDot} />
-        </div>
-        {/* ثيم */}
-        <div style={{ position:"relative" }}>
-          <div style={S.iconBtn} onClick={() => setShowThemes((s: boolean) => !s)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          </div>
-          {showThemes && (
-            <div style={{ position:"fixed", top:50, left:160, zIndex:9999, background:"var(--bg-card)", borderRadius:12, boxShadow:"var(--shadow-xl)", border:"1px solid var(--border)", minWidth:220, padding:8, maxHeight:"80vh", overflowY:"auto" }}
-              onMouseLeave={() => setShowThemes(false)}>
-              <ThemeSwitcher />
-            </div>
+          {unread > 0 && (
+            <span style={{
+              position: "absolute", top: -7, left: -7,
+              minWidth: 17, height: 17, borderRadius: 99,
+              background: "#C8A24B", color: "#fff",
+              fontSize: 10, fontWeight: 800,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "0 4px", lineHeight: 1,
+              boxShadow: "0 1px 4px rgba(0,0,0,.35)",
+              animation: "bellPop .3s cubic-bezier(.34,1.56,.64,1)",
+            }}>
+              {unread > 9 ? "9+" : unread}
+            </span>
           )}
         </div>
-        {/* إعدادات */}
-        <div style={S.iconBtn} onClick={() => setPage("users")}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </div>
+
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: unread > 0 ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.65)", flex: 1 }}>
+          الإشعارات
+        </span>
+
+        {unread > 0 && (
+          <span style={{ fontSize: 10, background: "rgba(200,162,75,.25)", color: "#C8A24B", padding: "1px 7px", borderRadius: 99, fontWeight: 700 }}>
+            {unread} جديد
+          </span>
+        )}
       </div>
 
-      {/* ── يمين: شعار الحملة + الاسم ── */}
-      <div style={S.brand}>
-        <div style={S.brandCircle}>
-          {config.logo_url
-            ? <img src={config.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-            : <svg viewBox="0 0 44 44" fill="none" stroke="#d4ac4f" strokeWidth="1.5" width="80" height="80">
-                <path d="M22 3L26.5 8.5L33.5 8L33 15L38.5 19.5L33 24L33.5 31L26.5 30.5L22 36L17.5 30.5L10.5 31L11 24L5.5 19.5L11 15L10.5 8L17.5 8.5Z"/>
-                <circle cx="22" cy="19.5" r="4.5"/>
-              </svg>
-          }
-        </div>
-        <div>
-          <div style={{ fontSize: 13, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 5 }}>نظام إدارة الحج</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 6, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
-          <div style={{ fontSize: 14, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{config.tagline || "نُدير التفاصيل لتتفرّغوا للعبادة"}</div>
-        </div>
-      </div>
+      {/* لوحة الإشعارات */}
+      {open && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 8px)", right: 0,
+          width: 290, maxHeight: 380,
+          background: "var(--bg-sidebar)",
+          border: "1px solid rgba(255,255,255,.12)",
+          borderRadius: 14, overflow: "hidden",
+          boxShadow: "0 -8px 32px rgba(0,0,0,.45)",
+          display: "flex", flexDirection: "column",
+          animation: "slideUpFade .2s ease",
+          zIndex: 999,
+        }}>
 
-      {/* ── يسار أسفل: عداد عرفة ── */}
-      <div style={S.arafaWidget}>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", lineHeight: 1.5 }}>
-          <div style={{ color: "#e7cd8a", fontWeight: 700, fontSize: 11, marginBottom: 1 }}>وقفة عرفات ١٤٤٨</div>
-          المتبقي على يوم عرفة
+          {/* الهيدر */}
+          <div style={{ display: "flex", alignItems: "center", padding: "12px 14px 10px", borderBottom: "1px solid rgba(255,255,255,.08)", flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C8A24B" strokeWidth="1.8" strokeLinecap="round" style={{ marginLeft: 6 }}>
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.9)", flex: 1 }}>الإشعارات الحية</span>
+            {notifs.length > 0 && (
+              <span onClick={e => { e.stopPropagation(); clearAll(); }}
+                style={{ fontSize: 10.5, color: "rgba(255,255,255,.4)", cursor: "pointer", padding: "2px 6px", borderRadius: 6 }}
+                onMouseEnter={e => (e.currentTarget as HTMLSpanElement).style.color = "rgba(231,111,81,.8)"}
+                onMouseLeave={e => (e.currentTarget as HTMLSpanElement).style.color = "rgba(255,255,255,.4)"}>
+                مسح الكل
+              </span>
+            )}
+          </div>
+
+          {/* قائمة الإشعارات */}
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {notifs.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "32px 16px", color: "rgba(255,255,255,.35)" }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ marginBottom: 10, opacity: .5 }}>
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>لا توجد إشعارات</div>
+                <div style={{ fontSize: 11, marginTop: 4, opacity: .6 }}>ستظهر هنا أي تغييرات في البيانات</div>
+              </div>
+            ) : (
+              notifs.map(n => {
+                const cfg = TYPE[n.type];
+                return (
+                  <div key={n.id} style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    padding: "10px 14px",
+                    borderBottom: "1px solid rgba(255,255,255,.05)",
+                    background: n.read ? "transparent" : "rgba(200,162,75,.05)",
+                    transition: "background .2s",
+                  }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+                      background: cfg.bg,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      marginTop: 1,
+                    }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: cfg.svgPath }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.85)", lineHeight: 1.4, marginBottom: 3 }}>
+                        {n.msg}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: "1px 7px", borderRadius: 99 }}>
+                          {cfg.label}
+                        </span>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,.3)" }}>
+                          {timeAgo(n.time)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* فوتر — مؤشر الاتصال المباشر */}
+          <div style={{ padding: "8px 14px", borderTop: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2A9D8F", display: "inline-block", boxShadow: "0 0 6px #2A9D8F", animation: "livePulse 2s infinite" }} />
+            <span style={{ fontSize: 10.5, color: "rgba(255,255,255,.35)" }}>متصل مباشرة</span>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          {/* أيام */}
-          <div style={S.abox}>
-            <span style={{ display: "block", fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 700, color: "#fbbf24", lineHeight: 1 }}>{diffDays}</span>
-            <span style={{ display: "block", fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 1 }}>يوم</span>
-          </div>
-          <span style={{ color: "rgba(255,255,255,.3)", fontSize: 13, alignSelf: "flex-start", marginTop: 3 }}>:</span>
-          {/* ساعات */}
-          <div style={S.abox}>
-            <span style={{ display: "block", fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 700, color: "#e7cd8a", lineHeight: 1 }}>{pad(diffHrs)}</span>
-            <span style={{ display: "block", fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 1 }}>ساعة</span>
-          </div>
-          <span style={{ color: "rgba(255,255,255,.3)", fontSize: 13, alignSelf: "flex-start", marginTop: 3 }}>:</span>
-          {/* دقائق */}
-          <div style={S.abox}>
-            <span style={{ display: "block", fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 700, color: "#e7cd8a", lineHeight: 1 }}>{pad(diffMins)}</span>
-            <span style={{ display: "block", fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 1 }}>دقيقة</span>
-          </div>
-          <span style={{ color: "rgba(255,255,255,.3)", fontSize: 13, alignSelf: "flex-start", marginTop: 3 }}>:</span>
-          {/* ثواني */}
-          <div style={S.abox}>
-            <span style={{ display: "block", fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 700, color: "#e7cd8a", lineHeight: 1 }}>{pad(diffSecs)}</span>
-            <span style={{ display: "block", fontSize: 9, color: "rgba(255,255,255,.5)", marginTop: 1 }}>ثانية</span>
-          </div>
-        </div>
-      </div>
+      )}
 
     </div>
   );
 }
 
-export { DashboardBanner };
+export { NotificationBell };
