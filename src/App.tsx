@@ -23,6 +23,12 @@ export default function App() {
   const [page, setPage] = useState(() => sessionStorage.getItem("hajj_page") || "dash");
   const [reportsResetKey, setReportsResetKey] = useState(0);
 
+  useEffect(() => {
+    const handler = () => setPage("dash");
+    window.addEventListener("hajj_return_dash", handler);
+    return () => window.removeEventListener("hajj_return_dash", handler);
+  }, []);
+
   useEffect(() => { sessionStorage.setItem("hajj_page", page); }, [page]);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [globalShowManual, setGlobalShowManual] = useState(false);
@@ -91,7 +97,7 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
-      case "dash":       return <Dashboard passengers={passengers} setPage={setPage} onAddManual={() => setGlobalShowManual(true)} onScan={(file) => { (window as any).__hajj_pending_scan_file__ = file; }} />;
+      case "dash":       return <Dashboard passengers={passengers} setPage={setPage} onAddManual={() => setGlobalShowManual(true)} onScan={(file) => { (window as any).__hajj_pending_scan_file__ = file; (window as any).__hajj_scan_return_dash__ = true; setPage("passengers"); }} />;
       case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} globalShowManual={globalShowManual} onGlobalManualClose={() => setGlobalShowManual(false)} />;
       case "buses":      return <BusesPage passengers={passengers} setPassengers={setPassengers} />;
       case "flights":    return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
