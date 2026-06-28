@@ -23,48 +23,61 @@ const AVATAR_COLORS = [
   "linear-gradient(135deg,#0891b2,#0e7490)",
 ];
 
+/* ─── Switch component ─── */
+function Switch({ on, onChange, disabled }: { on: boolean; onChange: () => void; disabled?: boolean }) {
+  return (
+    <div
+      onClick={disabled ? undefined : onChange}
+      style={{
+        width: 36, height: 20, borderRadius: 10,
+        background: on ? "var(--primary)" : "var(--line)",
+        position: "relative", cursor: disabled ? "not-allowed" : "pointer",
+        transition: "background .2s", flexShrink: 0, opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <div style={{
+        position: "absolute", width: 14, height: 14, borderRadius: "50%",
+        background: "white", top: 3,
+        right: on ? 3 : "auto", left: on ? "auto" : 3,
+        transition: "all .2s",
+        boxShadow: "0 1px 3px rgba(0,0,0,.2)",
+      }} />
+    </div>
+  );
+}
+
 /* ─── shared style tokens ─── */
 const card: React.CSSProperties = {
-  background: "var(--paper)",
-  border: "1px solid var(--line)",
-  borderRadius: 14,
-  boxShadow: "0 1px 4px rgba(92,24,48,.06)",
-  overflow: "hidden",
-  marginBottom: 14,
+  background: "var(--paper)", border: "1px solid var(--line)",
+  borderRadius: 14, boxShadow: "0 1px 4px rgba(92,24,48,.06)",
+  overflow: "hidden", marginBottom: 14,
 };
 
 const cardHead: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 10,
-  padding: "13px 18px",
-  borderBottom: "1px solid var(--bg-2)",
+  padding: "13px 18px", borderBottom: "1px solid var(--bg-2)",
   background: "linear-gradient(135deg,rgba(125,31,60,.03),transparent 70%)",
 };
 
 const cardIcon: React.CSSProperties = {
-  width: 32, height: 32,
-  background: "rgba(125,31,60,.08)",
-  borderRadius: 8,
-  display: "flex", alignItems: "center", justifyContent: "center",
+  width: 32, height: 32, background: "rgba(125,31,60,.08)",
+  borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
   color: "var(--primary)", flexShrink: 0,
 };
 
 const cardBody: React.CSSProperties = { padding: "18px" };
 
 const fieldLabel: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, color: "var(--em8)",
-  marginBottom: 4, display: "block",
+  fontSize: 11, fontWeight: 700, color: "var(--em8)", marginBottom: 4, display: "block",
 };
 
-const divider: React.CSSProperties = {
-  height: 1, background: "var(--bg-2)", margin: "14px 0",
-};
+const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", margin: "14px 0" };
 
 /* ─── component ─── */
 function UsersPage({ currentUser }: { currentUser: User }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
 
-  /* tabs */
   const [activeTab, setActiveTab] = useState<"identity" | "system" | "users">("identity");
 
   /* users */
@@ -122,16 +135,11 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setCompanySaving(true);
     setCompanyMsg("");
     const { error } = await supabase.from("company_config").update({
-      name_ar: companyForm.name_ar,
-      name_en: companyForm.name_en,
-      tagline: companyForm.tagline,
-      contact_phone: companyForm.contact_phone,
-      contact_email: companyForm.contact_email,
-      season_label: companyForm.season_label,
-      color_primary: companyForm.color_primary,
-      color_accent: companyForm.color_accent,
-      logo_url: companyForm.logo_url,
-      banner_image_url: companyForm.banner_image_url,
+      name_ar: companyForm.name_ar, name_en: companyForm.name_en,
+      tagline: companyForm.tagline, contact_phone: companyForm.contact_phone,
+      contact_email: companyForm.contact_email, season_label: companyForm.season_label,
+      color_primary: companyForm.color_primary, color_accent: companyForm.color_accent,
+      logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url,
     }).eq("id", 1);
     setCompanySaving(false);
     if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
@@ -139,18 +147,21 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setTimeout(() => window.location.reload(), 1200);
   };
 
+  /* ── [FIX #4] reset form completely on openAdd ── */
   const openAdd = () => {
+    setEditUser(null);
     setForm({ name: "", username: "", password: "" });
     setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false])));
-    setEditUser(null);
     setShowAdd(true);
   };
+
   const openEdit = (u: User) => {
+    setEditUser(u);
     setForm({ name: u.name, username: u.username, password: "" });
     setPerms({ ...u.permissions });
-    setEditUser(u);
     setShowAdd(true);
   };
+
   const togglePerm = (key: string) => setPerms(prev => ({ ...prev, [key]: !prev[key] }));
   const toggleAll = () => {
     const allOn = ALL_PERMISSIONS.every(p => perms[p.key]);
@@ -181,21 +192,22 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setUsers(prev => prev.filter(x => x.id !== id));
   };
 
-  /* ─── tab button style ─── */
+  /* ── [FEATURE #2] toggle is_active ── */
+  const toggleActive = async (u: User) => {
+    const newVal = !(u as any).is_active ?? false;
+    await supabase.from("users").update({ is_active: newVal }).eq("id", u.id);
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: newVal } as any : x));
+  };
+
   const tabBtn = (id: typeof activeTab): React.CSSProperties => ({
     display: "flex", alignItems: "center", gap: 6,
-    padding: "9px 16px",
-    fontFamily: "var(--font-body)", fontSize: 12,
+    padding: "9px 16px", fontFamily: "var(--font-body)", fontSize: 12,
     fontWeight: activeTab === id ? 800 : 600,
     color: activeTab === id ? "var(--primary)" : "var(--text-muted)",
     background: activeTab === id ? "var(--bg)" : "transparent",
     border: activeTab === id ? "1.5px solid var(--line)" : "1.5px solid transparent",
-    borderBottom: "none",
-    borderRadius: "10px 10px 0 0",
-    cursor: "pointer",
-    position: "relative",
-    bottom: -1.5,
-    transition: "all .15s",
+    borderBottom: "none", borderRadius: "10px 10px 0 0",
+    cursor: "pointer", position: "relative", bottom: -1.5, transition: "all .15s",
   });
 
   return (
@@ -208,13 +220,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
           <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 700, color: "var(--primary)" }}>إعدادات الحملة</div>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>تخصيص هوية وإعدادات {config.name_ar || "الحملة"}</div>
         </div>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          background: "linear-gradient(135deg,var(--em8),var(--em7))",
-          color: "var(--accent-light)", fontSize: 11, fontWeight: 700,
-          padding: "7px 14px", borderRadius: 99,
-          boxShadow: "0 2px 8px rgba(92,24,48,.25)",
-        }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,var(--em8),var(--em7))", color: "var(--accent-light)", fontSize: 11, fontWeight: 700, padding: "7px 14px", borderRadius: 99, boxShadow: "0 2px 8px rgba(92,24,48,.25)" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
           {companyForm.season_label || "موسم الحج"}
         </div>
@@ -256,50 +262,37 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
                 {/* BANNER + LOGO */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 12, marginBottom: 16 }}>
-
-                  {/* BANNER SIDE */}
                   <div>
                     <span style={fieldLabel}>صورة البانر الرئيسي</span>
-                    <div>
-
-                      {/* preview box */}
-                      <div style={{ position: "relative", height: 120, borderRadius: 10, overflow: "hidden", border: "1.5px dashed var(--accent)", cursor: "pointer", background: "var(--bg-2)" }}>
-                        {companyForm.banner_image_url ? (
-                          <div style={{
-                            width: "100%", height: "100%",
-                            backgroundImage: `url(${companyForm.banner_image_url})`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }} />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>لا توجد صورة</span>
-                          </div>
-                        )}
-                        {/* upload overlay */}
-                        <label style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, background: "rgba(92,24,48,.5)", color: "white", fontSize: 11, fontWeight: 600, opacity: 0, cursor: "pointer", transition: "opacity .2s" }}
-                          onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-                          onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                          {companyUploading ? "جاري الرفع..." : "رفع صورة جديدة"}
-                          <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                            const file = e.target.files?.[0]; if (!file) return;
-                            setCompanyUploading(true);
-                            const url = await uploadDoc(file, 0, "company_banner");
-                            setCompanyUploading(false);
-                            if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
-                            e.target.value = "";
-                          }} />
-                        </label>
-                      </div>
+                    <div style={{ position: "relative", height: 120, borderRadius: 10, overflow: "hidden", border: "1.5px dashed var(--accent)", background: "var(--bg-2)" }}>
+                      {companyForm.banner_image_url ? (
+                        <div style={{ width: "100%", height: "100%", backgroundImage: `url(${companyForm.banner_image_url})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>لا توجد صورة</span>
+                        </div>
+                      )}
+                      <label style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, background: "rgba(92,24,48,.5)", color: "white", fontSize: 11, fontWeight: 600, opacity: 0, cursor: "pointer", transition: "opacity .2s" }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        {companyUploading ? "جاري الرفع..." : "رفع صورة جديدة"}
+                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          setCompanyUploading(true);
+                          const url = await uploadDoc(file, 0, "company_banner");
+                          setCompanyUploading(false);
+                          if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
+                          e.target.value = "";
+                        }} />
+                      </label>
                     </div>
                   </div>
 
-                  {/* LOGO */}
                   <div>
                     <span style={fieldLabel}>شعار الحملة</span>
-                    <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, border: "1.5px dashed var(--accent)", borderRadius: 12, background: "var(--bg-2)", height: "calc(100% - 22px)", cursor: "pointer", transition: "all .15s" }}>
+                    <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, border: "1.5px dashed var(--accent)", borderRadius: 12, background: "var(--bg-2)", height: "calc(100% - 22px)", cursor: "pointer" }}>
                       <div style={{ width: 56, height: 56, borderRadius: "50%", border: "2px solid var(--line)", background: "var(--paper)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                         {companyForm.logo_url
                           ? <img src={companyForm.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -317,7 +310,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
                 <div style={divider} />
 
-                {/* NAMES */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div>
                     <label style={fieldLabel}>اسم الحملة (عربي)</label>
@@ -346,7 +338,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         {/* ══════════ TAB 2: SYSTEM ══════════ */}
         {activeTab === "system" && (
           <div>
-            {/* CONTACT */}
             <div style={card}>
               <div style={cardHead}>
                 <div style={cardIcon}>
@@ -371,7 +362,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
-            {/* COLORS */}
+            {/* ── [FIX #5] COLOR PICKERS ── */}
             <div style={card}>
               <div style={cardHead}>
                 <div style={cardIcon}>
@@ -387,20 +378,28 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   <div>
                     <label style={fieldLabel}>اللون الأساسي</label>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 8, background: companyForm.color_primary, border: "1.5px solid var(--line)", flexShrink: 0 }} />
-                      <input type="color" value={companyForm.color_primary} onChange={e => setCompanyForm(p => ({ ...p, color_primary: e.target.value }))} style={{ width: 0, height: 0, opacity: 0, position: "absolute" }} id="cp1" />
+                      <input
+                        type="color"
+                        value={companyForm.color_primary}
+                        onChange={e => setCompanyForm(p => ({ ...p, color_primary: e.target.value }))}
+                        style={{ width: 36, height: 36, padding: 2, border: "1.5px solid var(--line)", borderRadius: 8, cursor: "pointer", background: "none", flexShrink: 0 }}
+                      />
                       <input style={{ ...inp, flex: 1, fontFamily: "monospace", fontSize: 11 }} value={companyForm.color_primary} onChange={e => setCompanyForm(p => ({ ...p, color_primary: e.target.value }))} />
                     </div>
                   </div>
                   <div>
                     <label style={fieldLabel}>اللون الثانوي</label>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 8, background: companyForm.color_accent, border: "1.5px solid var(--line)", flexShrink: 0 }} />
+                      <input
+                        type="color"
+                        value={companyForm.color_accent}
+                        onChange={e => setCompanyForm(p => ({ ...p, color_accent: e.target.value }))}
+                        style={{ width: 36, height: 36, padding: 2, border: "1.5px solid var(--line)", borderRadius: 8, cursor: "pointer", background: "none", flexShrink: 0 }}
+                      />
                       <input style={{ ...inp, flex: 1, fontFamily: "monospace", fontSize: 11 }} value={companyForm.color_accent} onChange={e => setCompanyForm(p => ({ ...p, color_accent: e.target.value }))} />
                     </div>
                   </div>
                 </div>
-                {/* preview */}
                 <div style={{ padding: 12, background: "rgba(125,31,60,.03)", border: "1px solid rgba(125,31,60,.08)", borderRadius: 10 }}>
                   <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>معاينة</div>
                   <div style={{ display: "flex", gap: 8 }}>
@@ -434,11 +433,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 )}
               </div>
               <div style={cardBody}>
-
-                {/* USERS GRID */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {users.map((u, idx) => {
                     const isOwner = u.username === "admin";
+                    const isActive = (u as any).is_active !== false;
                     const avatarBg = isOwner
                       ? "linear-gradient(135deg,#c8a24b,#8a6a22)"
                       : AVATAR_COLORS[idx % AVATAR_COLORS.length];
@@ -446,9 +444,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                       <div key={u.id} style={{
                         background: isOwner ? "linear-gradient(135deg,rgba(212,172,79,.07),var(--paper))" : "var(--paper)",
                         border: `1px solid ${isOwner ? "rgba(212,172,79,.4)" : "var(--line)"}`,
-                        borderRadius: 12, padding: "12px 12px 12px 10px",
+                        borderRadius: 12, padding: "12px",
                         display: "flex", alignItems: "flex-start", gap: 10,
-                        position: "relative", transition: "all .15s",
+                        opacity: isActive ? 1 : 0.6,
+                        transition: "all .2s",
                       }}>
                         {/* AVATAR */}
                         <div style={{ width: 40, height: 40, borderRadius: "50%", background: avatarBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "white", flexShrink: 0, boxShadow: "0 2px 6px rgba(0,0,0,.15)" }}>
@@ -458,27 +457,37 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</div>
                           <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace", marginTop: 2 }}>@{u.username}</div>
-                          <div style={{
-                            display: "inline-flex", alignItems: "center", gap: 3,
-                            marginTop: 5, padding: "2px 7px", borderRadius: 99,
-                            fontSize: 10, fontWeight: 700,
-                            background: isOwner ? "rgba(212,172,79,.15)" : "rgba(125,31,60,.07)",
-                            color: isOwner ? "#8a6a22" : "var(--primary)",
-                            border: `1px solid ${isOwner ? "rgba(212,172,79,.3)" : "rgba(125,31,60,.15)"}`,
-                          }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 5, padding: "2px 7px", borderRadius: 99, fontSize: 10, fontWeight: 700, background: isOwner ? "rgba(212,172,79,.15)" : "rgba(125,31,60,.07)", color: isOwner ? "#8a6a22" : "var(--primary)", border: `1px solid ${isOwner ? "rgba(212,172,79,.3)" : "rgba(125,31,60,.15)"}` }}>
                             {isOwner && <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
                             {isOwner ? "المدير العام" : `${Object.values(u.permissions).filter(Boolean).length} صلاحية`}
                           </div>
                         </div>
-                        {/* ACTIONS */}
+                        {/* ── [FEATURE #2 + FIX #3] ACTIONS ── */}
                         {currentUser.permissions.manage_users && !isOwner && (
-                          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                            <button onClick={() => openEdit(u)} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--info)" }}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button onClick={() => deleteUser(u.id)} style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "pointer", cursor: "pointer", color: "var(--danger)" }}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                            </button>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                            {/* Switch تفعيل الحساب */}
+                            <Switch on={isActive} onChange={() => toggleActive(u)} />
+                            {/* أزرار التعديل والحذف */}
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                onClick={() => openEdit(u)}
+                                title="تعديل"
+                                style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-muted)", transition: "all .15s" }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--info)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--info)"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--line)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted)"; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                              </button>
+                              <button
+                                onClick={() => deleteUser(u.id)}
+                                title="حذف"
+                                style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-muted)", transition: "all .15s" }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--danger)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--danger)"; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--line)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted)"; }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -486,10 +495,12 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   })}
                 </div>
 
-                {/* FOOTER */}
                 <div style={{ marginTop: 14, padding: "10px 14px", background: "rgba(125,31,60,.03)", border: "1px solid rgba(125,31,60,.08)", borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                     إجمالي الحسابات: <strong style={{ color: "var(--primary)" }}>{users.length} مستخدمين</strong>
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    نشطون: <strong style={{ color: "var(--primary)" }}>{users.filter(u => (u as any).is_active !== false).length}</strong>
                   </span>
                 </div>
 
@@ -498,9 +509,9 @@ function UsersPage({ currentUser }: { currentUser: User }) {
           </div>
         )}
 
-      </div>{/* end tab-panels */}
+      </div>
 
-      {/* ── STICKY SAVE BAR (hidden on users tab) ── */}
+      {/* ── STICKY SAVE BAR ── */}
       {activeTab !== "users" && currentUser.permissions.manage_users && (
         <div style={{ flexShrink: 0, padding: "12px 20px 16px", background: "linear-gradient(to top, var(--bg) 80%, transparent)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {companyMsg && (
@@ -508,8 +519,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               {companyMsg}
             </span>
           )}
-          <button style={{ padding: "9px 16px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--line)", borderRadius: 9, fontFamily: "var(--font-body)", fontSize: 12, cursor: "pointer" }}
-            onClick={() => window.location.reload()}>
+          <button style={{ padding: "9px 16px", background: "transparent", color: "var(--text-muted)", border: "1px solid var(--line)", borderRadius: 9, fontFamily: "var(--font-body)", fontSize: 12, cursor: "pointer" }} onClick={() => window.location.reload()}>
             إلغاء
           </button>
           <button onClick={saveCompanyConfig} disabled={companySaving} style={{ ...btnP(), display: "flex", alignItems: "center", gap: 7, opacity: companySaving ? 0.6 : 1 }}>
@@ -522,26 +532,42 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       {/* ── ADD/EDIT MODAL ── */}
       <Modal show={showAdd} onClose={() => setShowAdd(false)} title={editUser ? "تعديل مستخدم" : "مستخدم جديد"}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>الاسم</div><input style={inp} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم المستخدم</div><input style={inp} value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} /></div>
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>الاسم</div>
+            <input style={inp} value={form.name} autoComplete="off" onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم المستخدم</div>
+            {/* [FIX #4] autoComplete="off" prevents browser from filling last username */}
+            <input style={inp} value={form.username} autoComplete="off" onChange={e => setForm(p => ({ ...p, username: e.target.value }))} />
+          </div>
         </div>
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>كلمة المرور{editUser ? " (اتركها فارغة للإبقاء على الحالية)" : ""}</div>
-          <input type="password" style={inp} value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder={editUser ? "اتركها فارغة إذا لم تتغير" : ""} />
+          <input type="password" style={inp} value={form.password} autoComplete="new-password" onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder={editUser ? "اتركها فارغة إذا لم تتغير" : ""} />
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500 }}>الصلاحيات</div>
-          <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>{ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}</div>
-        </div>
-        {ALL_PERMISSIONS.map(p => (
-          <div key={p.key} onClick={() => togglePerm(p.key)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", marginBottom: 3, background: perms[p.key] ? "rgba(125,31,60,.08)" : "var(--bg-2)", border: `0.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}` }}>
-            <div style={{ width: 16, height: 16, borderRadius: 4, background: perms[p.key] ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${perms[p.key] ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {perms[p.key] && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
-            </div>
-            <span style={{ fontSize: 12 }}>{p.label}</span>
+
+        {/* ── [FEATURE #1] PERMISSIONS AS SWITCHES ── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>الصلاحيات</div>
+          <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer", fontWeight: 600 }}>
+            {ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}
           </div>
-        ))}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
+          {ALL_PERMISSIONS.map(p => (
+            <div
+              key={p.key}
+              onClick={() => togglePerm(p.key)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 9, cursor: "pointer", background: perms[p.key] ? "rgba(125,31,60,.06)" : "var(--bg-2)", border: `1px solid ${perms[p.key] ? "rgba(125,31,60,.2)" : "var(--border)"}`, transition: "all .15s" }}
+            >
+              <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: perms[p.key] ? 600 : 400 }}>{p.label}</span>
+              <Switch on={perms[p.key]} onChange={() => togglePerm(p.key)} />
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button onClick={saveUser} style={{ ...btnP(), flex: 1 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> حفظ
           </button>
