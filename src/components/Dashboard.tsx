@@ -20,7 +20,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
 
   /* ── التحقق من الصلاحية قبل التنقل ── */
   const PERM_MAP: Record<string, string> = {
-    passengers: "view_passengers",
+    passengers: "manage_passengers",
     buses:      "manage_buses",
     mina:       "manage_camps",
     arafa:      "manage_camps",
@@ -33,7 +33,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
     if (!perm || currentUser.permissions[perm]) setPage(page);
   };
 
-  const canAdd = currentUser.permissions.add_passenger;
+  const canAdd = currentUser.permissions.manage_passengers;
 
   const dist = useMemo(() => {
     const busCount    = hajj.filter(p => (p as any).bus_id        != null).length;
@@ -135,7 +135,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
         </div>
 
         {/* 3) آخر الحجاج المسجلين — تظهر فقط إذا كان لديه صلاحية العرض */}
-        {currentUser.permissions.view_passengers && (
+        {currentUser.permissions.manage_passengers && (
           <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
