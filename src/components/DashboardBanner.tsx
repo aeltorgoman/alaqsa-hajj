@@ -102,7 +102,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
     // يسار أعلى — مستخدم + أيقونات
     userStrip: {
       position: "absolute" as const, top: 14, left: 18, zIndex: 3,
-      display: "flex", alignItems: "center", gap: 8,
+      display: "flex", alignItems: "center", gap: 4,
     },
     avatar: {
       width: 34, height: 34, borderRadius: "50%",
