@@ -82,8 +82,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     color_primary: "#6B1F3A", color_accent: "#0C447C",
     logo_url: "" as string | null,
     banner_image_url: "" as string | null,
-    banner_position: "center" as string,
-    banner_position_x: "50" as string,
   });
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
@@ -101,8 +99,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       color_accent: config.color_accent || "#0C447C",
       logo_url: config.logo_url || "",
       banner_image_url: config.banner_image_url || "",
-      banner_position: (config as any).banner_position || "center",
-      banner_position_x: (config as any).banner_position_x || "50",
     });
   }, [config]);
 
@@ -136,8 +132,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       color_accent: companyForm.color_accent,
       logo_url: companyForm.logo_url,
       banner_image_url: companyForm.banner_image_url,
-      banner_position: companyForm.banner_position,
-      banner_position_x: companyForm.banner_position_x,
     }).eq("id", 1);
     setCompanySaving(false);
     if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
@@ -265,17 +259,17 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
                   {/* BANNER SIDE */}
                   <div>
-                    <span style={fieldLabel}>معاينة حية للبانر الرئيسي</span>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "center" }}>
+                    <span style={fieldLabel}>صورة البانر الرئيسي</span>
+                    <div>
 
                       {/* preview box */}
-                      <div style={{ position: "relative", height: 120, borderRadius: 10, overflow: "hidden", border: "1.5px dashed var(--accent)", cursor: "pointer", background: "var(--bg-2)", flexShrink: 0 }}>
+                      <div style={{ position: "relative", height: 120, borderRadius: 10, overflow: "hidden", border: "1.5px dashed var(--accent)", cursor: "pointer", background: "var(--bg-2)" }}>
                         {companyForm.banner_image_url ? (
                           <div style={{
                             width: "100%", height: "100%",
                             backgroundImage: `url(${companyForm.banner_image_url})`,
                             backgroundSize: "cover",
-                            backgroundPosition: `${companyForm.banner_position_x ?? "50"}% ${companyForm.banner_position === "top" ? "0%" : companyForm.banner_position === "bottom" ? "100%" : "50%"}`,
+                            backgroundPosition: "center",
                           }} />
                         ) : (
                           <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
@@ -294,35 +288,11 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                             setCompanyUploading(true);
                             const url = await uploadDoc(file, 0, "company_banner");
                             setCompanyUploading(false);
-                            if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url, banner_position_x: "50", banner_position: "center" }));
+                            if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
                             e.target.value = "";
                           }} />
                         </label>
                       </div>
-
-                      {/* position controls */}
-                      {companyForm.banner_image_url && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--em8)", textAlign: "center" }}>التموضع</span>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            {(["top", "center", "bottom"] as const).map(pos => (
-                              <button key={pos} onClick={() => setCompanyForm(p => ({ ...p, banner_position: pos }))}
-                                style={{ padding: "5px 10px", borderRadius: 7, border: "1px solid var(--line)", background: companyForm.banner_position === pos ? "var(--primary)" : "var(--bg-2)", color: companyForm.banner_position === pos ? "white" : "var(--text-muted)", fontFamily: "var(--font-body)", fontSize: 10, cursor: "pointer", fontWeight: companyForm.banner_position === pos ? 700 : 400 }}>
-                                {pos === "top" ? "↑ أعلى" : pos === "center" ? "— وسط" : "↓ أسفل"}
-                              </button>
-                            ))}
-                          </div>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--em8)", textAlign: "center" }}>الوضوح</span>
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                            <input type="range" min="0" max="100"
-                              value={companyForm.banner_position_x ?? "50"}
-                              onChange={e => setCompanyForm(p => ({ ...p, banner_position_x: e.target.value }))}
-                              style={{ accentColor: "var(--primary)", writingMode: "vertical-lr" as any, direction: "rtl" as any, height: 50, width: 14, cursor: "pointer" }}
-                            />
-                            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--primary)" }}>{companyForm.banner_position_x ?? "50"}%</span>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
 
