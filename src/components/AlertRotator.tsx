@@ -24,10 +24,10 @@ function buildAlerts(hajj: Passenger[]): Alert[] {
   sixMonthsBefore.setMonth(sixMonthsBefore.getMonth() - 6);
 
   const expiringCount = hajj.filter(p => {
-    const exp = (p as any).passport_expiry;
+    const exp = (p as any).expiry || (p as any).passport_expiry;
     if (!exp) return false;
     const d = new Date(exp);
-    return !isNaN(d.getTime()) && d >= sixMonthsBefore && d <= dhulHijja1;
+    return !isNaN(d.getTime()) && d <= dhulHijja1;
   }).length;
 
   const all: Alert[] = [
