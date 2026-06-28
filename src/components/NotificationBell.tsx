@@ -48,7 +48,7 @@ function NotificationBell() {
       setNotifs(prev => [
         { id: Date.now(), type, msg: msgs[type], time: new Date(), read: false },
         ...prev,
-      ].slice(0, 60));
+      ].slice(0, 6));
     };
 
     const ch = supabase
