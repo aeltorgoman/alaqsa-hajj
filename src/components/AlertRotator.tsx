@@ -69,7 +69,7 @@ function buildAlerts(hajj: Passenger[]): Alert[] {
     },
   ];
 
-  return all.filter(a => a.count > 0);
+  return all;
 }
 
 function AlertRotator({ passengers, setPage, currentUser }: {
@@ -151,7 +151,7 @@ function AlertRotator({ passengers, setPage, currentUser }: {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: cur.color, marginBottom: 2, letterSpacing: ".5px" }}>تنبيه</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 900, lineHeight: 1, color: cur.color }}>{cur.count}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 900, lineHeight: 1, color: cur.count === 0 ? "#2A9D8F" : cur.color }}>{cur.count === 0 ? "✓" : cur.count}</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 3 }}>{cur.label}</div>
           <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 1 }}>{cur.sub}</div>
         </div>
