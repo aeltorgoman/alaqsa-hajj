@@ -418,16 +418,11 @@ export function addSummarySheet(
 }
 
 export const ALL_PERMISSIONS = [
-  { key: "add_passenger", label: "إضافة حجاج" },
-  { key: "edit_passenger", label: "تعديل حجاج" },
-  { key: "delete_passenger", label: "حذف حجاج" },
-  { key: "view_passengers", label: "عرض الحجاج" },
+  { key: "manage_passengers", label: "إدارة الحجاج (عرض، إضافة، تعديل، حذف)" },
   { key: "manage_buses", label: "إدارة الباصات" },
   { key: "manage_camps", label: "إدارة المخيمات" },
   { key: "manage_hotel", label: "إدارة الفندق" },
-  { key: "view_reports", label: "عرض التقارير" },
-  { key: "export_reports", label: "تصدير التقارير" },
-  { key: "print_reports", label: "طباعة التقارير" },
+  { key: "view_reports", label: "التقارير (عرض، طباعة، تصدير)" },
   { key: "manage_users", label: "إدارة المستخدمين" },
   { key: "view_archive", label: "عرض الأرشيف" },
   { key: "manage_flights", label: "إدارة الطيران" },
@@ -448,7 +443,7 @@ export const FLIGHT_ICON_COLORS: Record<string, string> = { "ذهاب": "#0C447C
 
 export const NAV = [
   { section: "الرئيسية", items: [{ id: "dash", label: "الرئيسية", perm: "" }] },
-  { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "view_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
+  { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "manage_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
   { section: "التقارير", items: [{ id: "reports", label: "التقارير", perm: "view_reports" }] },
   { section: "الأرشيف", items: [{ id: "archive", label: "الأرشيف", perm: "view_archive" }] },
   { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }, { id: "finance", label: "الحسابات", perm: "manage_payments" }, { id: "admins", label: "الإداريون", perm: "manage_admins" }] },
