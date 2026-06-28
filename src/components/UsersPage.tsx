@@ -194,7 +194,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
   /* ── [FEATURE #2] toggle is_active ── */
   const toggleActive = async (u: User) => {
-    const newVal = !(u as any).is_active ?? false;
+    const current = (u as any).is_active === false ? false : true;
+    const newVal = !current;
     await supabase.from("users").update({ is_active: newVal }).eq("id", u.id);
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: newVal } as any : x));
   };
@@ -578,4 +579,5 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     </div>
   );
 }
+
 export { UsersPage };
