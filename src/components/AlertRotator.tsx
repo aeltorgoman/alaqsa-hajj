@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Passenger, User } from "../types";
 
 interface Alert {
@@ -77,8 +77,8 @@ function AlertRotator({ passengers, setPage, currentUser }: {
   setPage: (p: string) => void;
   currentUser: User;
 }) {
-  const hajj   = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
-  const alerts = buildAlerts(hajj);
+  const hajj   = useMemo(() => passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج"), [passengers]);
+  const alerts = useMemo(() => buildAlerts(hajj), [hajj]);
   const [idx, setIdx]           = useState(0);
   const [progress, setProgress] = useState(0);
   const [paused, setPaused]     = useState(false);
