@@ -41,7 +41,7 @@ function buildAlerts(hajj: Passenger[]): Alert[] {
       borderColor: "rgba(198,40,40,.25)",
       svgPath: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M8 16s1-2 4-2 4 2 4 2"/>`,
       page: "passengers",
-      perm: "view_passengers",
+      perm: "manage_passengers",
     },
     {
       key: "expiry_soon",
@@ -53,7 +53,7 @@ function buildAlerts(hajj: Passenger[]): Alert[] {
       borderColor: "rgba(230,81,0,.25)",
       svgPath: `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,
       page: "passengers",
-      perm: "view_passengers",
+      perm: "manage_passengers",
     },
     {
       key: "no_phone",
@@ -65,7 +65,7 @@ function buildAlerts(hajj: Passenger[]): Alert[] {
       borderColor: "rgba(21,101,192,.25)",
       svgPath: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.38 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.4a16 16 0 0 0 5.69 5.69l.95-.95a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>`,
       page: "passengers",
-      perm: "view_passengers",
+      perm: "manage_passengers",
     },
   ];
 
