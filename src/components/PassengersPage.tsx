@@ -625,7 +625,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   // ===== رتب حسب العائلة =====
   const sortByFamily = async () => {
-    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = [...passengers].filter(p => !p.passenger_type || p.passenger_type === "حاج").sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     const result: Passenger[] = [];
     const visited = new Set<number>();
     for (const p of sorted) {
@@ -649,7 +649,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const applyOrderChange = async (p: Passenger, newNum: number) => {
     setEditingOrderId(null);
     if (!newNum || newNum < 1) return;
-    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = [...passengers].filter(x => !x.passenger_type || x.passenger_type === "حاج").sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     const currentIdx = sorted.findIndex(x => x.id === p.id);
     const targetIdx = Math.min(newNum - 1, sorted.length - 1);
     if (currentIdx === targetIdx) return;
@@ -836,7 +836,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <button onClick={() => setFilters({})} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--danger)", background: "var(--fb)", color: "var(--ff)", cursor: "pointer", fontFamily: "var(--font-body)" }}>مسح الفلاتر ✕</button>
             )}
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {passengers.length} حاج</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {total} حاج</div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {viewMode === "list" ? (
@@ -871,7 +871,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       style={{ width: 36, fontSize: 11, textAlign: "center", border: "1.5px solid var(--em7)", borderRadius: 6, padding: "2px 4px", outline: "none", flexShrink: 0 }}
                     />
                   ) : (
-                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String(idx + 1)); }} style={{ width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String([...passengers].filter(x => !x.passenger_type || x.passenger_type === "حاج").sort((a:any,b:any)=>(a.sort_order||0)-(b.sort_order||0)).findIndex(x=>x.id===p.id)+1)); }} style={{ width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       {idx + 1}
@@ -995,10 +995,17 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           ))}
           <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>الخدمات</div>
-            {[["الباص", selected.services?.bus], ["الطيران", selected.services?.flight], ["الفندق", `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim()], ["منى", selected.services?.camp_mina], ["عرفة", selected.services?.camp_arafa]].map(([icon, label, val]) => (
-              <div key={label as string} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "3px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                <span style={{ color: "var(--text-muted)" }}>{icon as string} {label as string}</span>
-                <span style={{ fontWeight: 500, color: (val === "VIP" || val === "درجة أولى" || val === "خاص") ? "var(--warning)" : "var(--text)" }}>{val as string}</span>
+            {[
+              ["الباص",   selected.services?.bus,       (selected as any).bus_id        ? `باص #${(selected as any).bus_id}`        : null],
+              ["الطيران", selected.services?.flight,    (selected as any).flight_id     ? `رحلة #${(selected as any).flight_id}`    : null],
+              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id ? `غرفة #${(selected as any).room_id}` : null],
+              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id  ? `خيمة #${(selected as any).camp_mina_id}` : null],
+              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id ? `خيمة #${(selected as any).camp_arafa_id}` : null],
+            ].map(([lbl, cls, assign]) => (
+              <div key={lbl as string} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, padding: "4px 0", borderBottom: "0.5px solid #f5f5f5" }}>
+                <span style={{ color: "var(--text-muted)", minWidth: 40 }}>{lbl as string}</span>
+                <span style={{ fontWeight: 500, color: (cls === "VIP" || cls === "درجة أولى" || cls === "خاص") ? "var(--warning)" : "var(--text)" }}>{cls as string}</span>
+                {assign ? <span style={{ fontSize: 10, fontWeight: 600, color: "var(--primary)", background: "rgba(125,31,60,.07)", padding: "1px 7px", borderRadius: 99 }}>{assign as string}</span> : <span />}
               </div>
             ))}
           </div>
@@ -1305,93 +1312,4 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
                     <img src={manualPassportImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 260, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
                     {manualScanning && (
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* صورة البطاقة الشخصية */}
-              {manualIdImg ? (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)" }}>🪪 صورة البطاقة الشخصية</span>
-                    {!manualScanning && (
-                      <label style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
-                        تغيير
-                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setManualIdImg(null); setManualIdFile(null);
-                          setManualScanning(true);
-                          const reader = new FileReader();
-                          reader.onload = async ev => {
-                            setManualIdImg(ev.target?.result as string);
-                            setManualIdFile(file);
-                            try {
-                              const parsed = await scanDocument(file, "idcard");
-                              setManualForm(prev => ({
-                                ...prev,
-                                national_id: parsed.national_id || prev.national_id,
-                                id_expiry: parsed.id_expiry || prev.id_expiry,
-                              }));
-                            } catch { /* تجاهل */ }
-                            setManualScanning(false);
-                          };
-                          reader.readAsDataURL(file);
-                          e.target.value = "";
-                        }} />
-                      </label>
-                    )}
-                  </div>
-                  <div style={{ position: "relative", borderRadius: 10, overflow: "hidden" }}>
-                    <img src={manualIdImg} style={{ width: "100%", display: "block", objectFit: "contain", maxHeight: 260, filter: manualScanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
-                    {manualScanning && (
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.3)", borderTop: "3px solid var(--em7)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1.5px dashed var(--line)", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", background: "var(--bg-2)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  + إضافة صورة البطاقة الشخصية (اختياري)
-                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setManualScanning(true);
-                    const reader = new FileReader();
-                    reader.onload = async ev => {
-                      setManualIdImg(ev.target?.result as string);
-                      setManualIdFile(file);
-                      try {
-                        const parsed = await scanDocument(file, "idcard");
-                        setManualForm(prev => ({
-                          ...prev,
-                          national_id: parsed.national_id || prev.national_id,
-                          id_expiry: parsed.id_expiry || prev.id_expiry,
-                        }));
-                      } catch { /* تجاهل */ }
-                      setManualScanning(false);
-                    };
-                    reader.readAsDataURL(file);
-                    e.target.value = "";
-                  }} />
-                </label>
-              )}
-            </div>
-          )}
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-
-
-export { PassengersStats, PassengersPage };
+                      <div style={{ position: "absolute", inset: 0, ba
