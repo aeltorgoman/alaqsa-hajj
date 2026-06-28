@@ -33,7 +33,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
     if (!perm || currentUser.permissions[perm]) setPage(page);
   };
 
-  const canAdd = currentUser.permissions.manage_passengers;
 
   const dist = useMemo(() => {
     const busCount    = hajj.filter(p => (p as any).bus_id        != null).length;
@@ -86,9 +85,8 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
       {/* ══ العمود الأوسط ══ */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto", padding: 14, gap: 12, minWidth: 0 }}>
 
-        {/* 1) أزرار الإجراءات — تظهر فقط إذا كان لديه صلاحية الإضافة */}
-        {canAdd && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
+        {/* 1) أزرار الإجراءات */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
             {/* مسح مستند */}
             <div onClick={() => scanInputRef.current?.click()}
               style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 16px", borderRadius: 12, cursor: "pointer", background: `linear-gradient(135deg,${primary},${primary}cc)`, color: "#fff", boxShadow: `0 6px 18px ${primary}44` }}>
@@ -118,7 +116,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               </div>
             </div>
           </div>
-        )}
 
         {/* 2) كروت الإحصاء */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, flexShrink: 0 }}>
@@ -134,9 +131,8 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
           ))}
         </div>
 
-        {/* 3) آخر الحجاج المسجلين — تظهر فقط إذا كان لديه صلاحية العرض */}
-        {currentUser.permissions.manage_passengers && (
-          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        {/* 3) آخر الحجاج المسجلين */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--g5)" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
               <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "var(--em8)", flex: 1 }}>آخر الحجاج المسجلين</div>
@@ -157,7 +153,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               ))}
             </div>
           </div>
-        )}
       </div>
 
       {/* ══ العمود الأيسر — Analytics ══ */}
