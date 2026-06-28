@@ -578,5 +578,4 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     </div>
   );
 }
-
 export { UsersPage };
