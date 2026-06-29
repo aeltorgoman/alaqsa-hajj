@@ -39,12 +39,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [panelType, setPanelType] = useState<Room["type"]>("ثنائية");
 
   useEffect(() => {
-    supabase.from("rooms").select("*").order("floor").order("number")
-      .then(({ data }: any) => { if (data) setRooms(data as Room[]); });
+    supabase.from("rooms").select("*")
+      .then(({ data }: any) => { if (data) setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); });
   }, []);
 
   const floors = useMemo(() => {
-    const fs = [...new Set(rooms.map(r => r.floor))].sort();
+    const fs = [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
     return fs;
   }, [rooms]);
 
@@ -95,7 +95,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!addNum.trim() || !addFloor.trim()) { showAlert("error", "رقم الغرفة والدور مطلوبان"); return; }
     const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, notes: addNotes.trim() || null }]).select();
     if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
-    setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => a.floor.localeCompare(b.floor) || a.number.localeCompare(b.number)));
+    setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number)));
     setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes("");
     setShowAddRoom(false);
     showAlert("success", "تمت إضافة الغرفة");
@@ -214,7 +214,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         {/* نقطة الحالة */}
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, position: "absolute", top: 8, left: 8 }} />
                         {/* رقم الغرفة */}
-                        <div style={{ fontSize: 14, fontWeight: 900, color: "var(--ink)", lineHeight: 1, marginBottom: 2 }}>{room.number}</div>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: "var(--primary)", lineHeight: 1, marginBottom: 3 }}>{room.number}</div>
                         {/* النوع */}
                         <div style={{ fontSize: 10, color: isMajlis ? "#3F51B5" : "var(--muted)", fontWeight: 700, marginBottom: 6 }}>{room.type}</div>
                         {/* الأسماء */}
