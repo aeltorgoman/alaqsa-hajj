@@ -172,6 +172,30 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           ))}
         </div>
 
+        {/* ملخص أنواع الغرف */}
+        {(() => {
+          const types = ["فردية", "ثنائية", "ثلاثية", "رباعية", "سويت", "مجلس"];
+          const TYPE_COLORS: Record<string, string> = { فردية: "#7D1F3C", ثنائية: "#0C5FA8", ثلاثية: "#2A9D8F", رباعية: "#E65100", سويت: "#6A0DAD", مجلس: "#3F51B5" };
+          return (
+            <div style={{ display: "flex", gap: 6, padding: "8px 12px 0", flexShrink: 0, overflowX: "auto" }}>
+              {types.map(type => {
+                const typeRooms = rooms.filter(r => r.type === type);
+                if (typeRooms.length === 0) return null;
+                const occupied = typeRooms.filter(r => roomPassengers(r.id).length > 0).length;
+                const color = TYPE_COLORS[type] || "var(--primary)";
+                return (
+                  <div key={type} style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: `1px solid ${color}30`, borderRadius: 9, padding: "6px 11px", flexShrink: 0, borderRight: `3px solid ${color}` }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600 }}>{type}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color, lineHeight: 1.1 }}>{typeRooms.length} <span style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>غرفة</span></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         {/* Toolbar */}
         <div style={{ display: "flex", gap: 8, padding: "10px 12px", flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
           <button onClick={() => setShowAddRoom(true)} style={{ ...btnP, display: "flex", alignItems: "center", gap: 5 }}>
