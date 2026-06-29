@@ -103,9 +103,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   // KPIs
   const totalRooms = rooms.length;
-  const emptyRooms = rooms.filter(r => getStatus(r) === "فارغة").length;
   const withRoom = hajj.filter(p => (p as any).room_id).length;
-  const withoutRoom = hajj.filter(p => !(p as any).room_id).length;
   const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
 
   const addRoom = async () => {
