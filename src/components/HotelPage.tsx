@@ -181,7 +181,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               {types.map(type => {
                 const typeRooms = rooms.filter(r => r.type === type);
                 if (typeRooms.length === 0) return null;
-                const occupied = typeRooms.filter(r => roomPassengers(r.id).length > 0).length;
+
                 const color = TYPE_COLORS[type] || "var(--primary)";
                 return (
                   <div key={type} style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: `1px solid ${color}30`, borderRadius: 9, padding: "6px 11px", flexShrink: 0, borderRight: `3px solid ${color}` }}>
