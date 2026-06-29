@@ -52,6 +52,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [panelType, setPanelType] = useState<Room["type"]>("ثنائية");
   const [editingRoomNum, setEditingRoomNum] = useState(false);
   const [newRoomNum, setNewRoomNum] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
 
   useEffect(() => {
     supabase.from("rooms").select("*")
@@ -113,7 +114,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number)));
     setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes("");
     setShowAddRoom(false);
-    showAlert("success", "تمت إضافة الغرفة");
+    showAlert("success", "تمت إضافة الغرفة"); setTimeout(() => showAlert(null), 2500);
   };
 
   const addRoomRange = async () => {
@@ -177,7 +178,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!selectedRoom) return;
     await supabase.from("rooms").update({ notes: panelNotes || null }).eq("id", selectedRoom.id);
     setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, notes: panelNotes || null } : r));
-    showAlert("success", "تم حفظ الملاحظات");
+    showAlert("success", "تم حفظ الملاحظات"); setTimeout(() => showAlert(null), 2500);
   };
 
   const saveRoomNumber = async () => {
@@ -186,7 +187,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, number: newRoomNum.trim() } : r).sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
     setSelectedRoom(prev => prev ? { ...prev, number: newRoomNum.trim() } : prev);
     setEditingRoomNum(false);
-    showAlert("success", "تم تعديل رقم الغرفة");
+    showAlert("success", "تم تعديل رقم الغرفة"); setTimeout(() => showAlert(null), 2500);
   };
 
   const openPanel = (room: Room) => {
@@ -212,44 +213,50 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
         {/* KPIs + Donut */}
-        <div style={{ display: "flex", gap: 8, padding: "12px 12px 0", flexShrink: 0, alignItems: "stretch" }}>
+        <div style={{ display: "flex", gap: 10, padding: "12px 12px 0", flexShrink: 0, alignItems: "stretch" }}>
           {/* كروت KPI */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, flex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, flex: 1 }}>
             {[
-              { label: "إجمالي الغرف", num: totalRooms, color: primary, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); } },
-              { label: "حجاج موزعين", num: `${withRoom}/${hajj.length}`, color: "#2A9D8F", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
-              { label: "غرف متاحة", num: rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length, color: "#C8730A", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
+              { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", color: primary, bg: `linear-gradient(135deg,${primary}18,${primary}06)`, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); setFilterFloor("الكل"); } },
+              { label: "حجاج موزعين", num: `${withRoom}`, sub: `من ${hajj.length} حاج`, color: "#0C7E6A", bg: "linear-gradient(135deg,rgba(12,126,106,.12),rgba(12,126,106,.03))", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
+              { label: "غرف متاحة", num: String(rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length), sub: "فيها مساحة", color: "#B85C00", bg: "linear-gradient(135deg,rgba(184,92,0,.12),rgba(184,92,0,.03))", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
             ].map(k => (
-              <div key={k.label} onClick={k.onClick} style={{ background: "var(--paper)", border: `1px solid ${k.color}33`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", transition: "all .15s" }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 10px ${k.color}22`}
-                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.boxShadow = "none"}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 6, background: `${k.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={k.color} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: k.icon }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>{k.label}</div>
+              <div key={k.label} onClick={k.onClick} style={{ background: k.bg, border: `1px solid ${k.color}25`, borderRadius: 12, padding: "12px 14px", cursor: "pointer", transition: "all .15s", position: "relative", overflow: "hidden" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 16px ${k.color}20`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}>
+                {/* أيقونة كبيرة في الخلفية */}
+                <div style={{ position: "absolute", left: -8, bottom: -8, opacity: 0.06 }}>
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill={k.color} stroke="none" dangerouslySetInnerHTML={{ __html: k.icon }} />
                 </div>
-                <div style={{ fontSize: 24, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.num}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: `${k.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={k.color} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: k.icon }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: k.color, fontWeight: 700, opacity: 0.8 }}>{k.label}</div>
+                </div>
+                <div style={{ fontSize: 36, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: "-1px" }}>{k.num}</div>
+                <div style={{ fontSize: 10, color: k.color, fontWeight: 600, marginTop: 3, opacity: 0.65 }}>{k.sub}</div>
               </div>
             ))}
           </div>
-          {/* دائرة نسبة التوزيع مستقلة وأكبر */}
-          <div style={{ background: "var(--paper)", border: `1px solid ${primary}33`, borderRadius: 10, padding: "10px 14px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {/* دائرة نسبة التوزيع */}
+          <div style={{ background: `linear-gradient(135deg,${primary}12,${primary}04)`, border: `1px solid ${primary}25`, borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 110 }}>
             {(() => {
-              const r = 28, circ = 2 * Math.PI * r;
+              const r = 32, circ = 2 * Math.PI * r;
               const stroke = circ * pct / 100;
               return (
                 <>
-                  <svg width="72" height="72" viewBox="0 0 72 72">
-                    <circle cx="36" cy="36" r={r} fill="none" stroke="var(--line)" strokeWidth="7"/>
-                    <circle cx="36" cy="36" r={r} fill="none" stroke={primary} strokeWidth="7"
+                  <svg width="84" height="84" viewBox="0 0 84 84">
+                    <circle cx="42" cy="42" r={r} fill="none" stroke={`${primary}20`} strokeWidth="8"/>
+                    <circle cx="42" cy="42" r={r} fill="none" stroke={primary} strokeWidth="8"
                       strokeDasharray={`${stroke} ${circ}`}
                       strokeLinecap="round"
-                      transform="rotate(-90 36 36)"
+                      transform="rotate(-90 42 42)"
                     />
-                    <text x="36" y="41" textAnchor="middle" fontSize="14" fontWeight="900" fill={primary}>{pct}٪</text>
+                    <text x="42" y="48" textAnchor="middle" fontSize="16" fontWeight="900" fill={primary}>{pct}٪</text>
                   </svg>
-                  <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 2 }}>نسبة التوزيع</div>
+                  <div style={{ fontSize: 11, color: primary, fontWeight: 700, marginTop: 4, opacity: 0.8 }}>نسبة التوزيع</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{withRoom} من {hajj.length}</div>
                 </>
               );
             })()}
@@ -478,10 +485,33 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           {/* Actions */}
           <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
             <div style={{ fontSize: 9, color: "var(--muted)", textAlign: "center", marginBottom: 6, fontWeight: 600 }}>⚠️ تأكيد قبل الحذف</div>
-            <button onClick={() => { if (window.confirm("هل أنت متأكد من حذف الغرفة " + selectedRoom.number + "؟")) deleteRoom(selectedRoom); }}
+            <button onClick={() => setConfirmDelete(selectedRoom)}
               style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
               حذف الغرفة
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== مودال تأكيد الحذف ===== */}
+      {confirmDelete && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "var(--paper)", borderRadius: 16, padding: 28, width: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", textAlign: "center" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff0f0", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C62828" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 8 }}>حذف الغرفة {confirmDelete.number}؟</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 22, lineHeight: 1.6 }}>هذا الإجراء لا يمكن التراجع عنه. سيتم حذف الغرفة نهائياً من النظام.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { deleteRoom(confirmDelete); setConfirmDelete(null); }}
+                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: "#C62828", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                نعم، احذف
+              </button>
+              <button onClick={() => setConfirmDelete(null)}
+                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                إلغاء
+              </button>
+            </div>
           </div>
         </div>
       )}
