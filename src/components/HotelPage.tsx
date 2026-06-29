@@ -29,14 +29,28 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [pSearch, setPSearch] = useState("");
 
   // Add Room form
+  const [addMode, setAddMode] = useState<"single"|"range"|"template">("single");
   const [addNum, setAddNum] = useState("");
   const [addFloor, setAddFloor] = useState("");
   const [addType, setAddType] = useState<Room["type"]>("ثنائية");
   const [addNotes, setAddNotes] = useState("");
+  // Range mode
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [rangeFloor, setRangeFloor] = useState("");
+  const [rangeType, setRangeType] = useState<Room["type"]>("ثنائية");
+  // Template mode
+  const [tplFloors, setTplFloors] = useState("");
+  const [tplRoomsPerFloor, setTplRoomsPerFloor] = useState("");
+  const [tplStartNum, setTplStartNum] = useState("");
+  const [tplType, setTplType] = useState<Room["type"]>("ثنائية");
+  const [tplFloorStart, setTplFloorStart] = useState("");
 
   // Panel notes
   const [panelNotes, setPanelNotes] = useState("");
   const [panelType, setPanelType] = useState<Room["type"]>("ثنائية");
+  const [editingRoomNum, setEditingRoomNum] = useState(false);
+  const [newRoomNum, setNewRoomNum] = useState("");
 
   useEffect(() => {
     supabase.from("rooms").select("*")
@@ -102,6 +116,34 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     showAlert("success", "تمت إضافة الغرفة");
   };
 
+  const addRoomRange = async () => {
+    const from = parseInt(rangeFrom), to = parseInt(rangeTo);
+    if (!rangeFloor.trim() || isNaN(from) || isNaN(to) || from > to) { showAlert("error", "يرجى إدخال نطاق صحيح ودور صحيح"); return; }
+    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType }));
+    const { data, error } = await supabase.from("rooms").insert(entries).select();
+    if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
+    setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
+    setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setShowAddRoom(false);
+    showAlert("success", `تمت إضافة ${entries.length} غرفة`);
+  };
+
+  const addRoomTemplate = async () => {
+    const numFloors = parseInt(tplFloors), rPerFloor = parseInt(tplRoomsPerFloor);
+    const startNum = parseInt(tplStartNum), floorStart = parseInt(tplFloorStart);
+    if (isNaN(numFloors)||isNaN(rPerFloor)||isNaN(startNum)||isNaN(floorStart)||numFloors<1||rPerFloor<1) { showAlert("error", "يرجى تعبئة جميع الحقول بشكل صحيح"); return; }
+    const entries: {number:string;floor:string;type:Room["type"]}[] = [];
+    for (let f = 0; f < numFloors; f++) {
+      for (let r = 0; r < rPerFloor; r++) {
+        entries.push({ number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType });
+      }
+    }
+    const { data, error } = await supabase.from("rooms").insert(entries).select();
+    if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
+    setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
+    setTplFloors(""); setTplRoomsPerFloor(""); setTplStartNum(""); setTplFloorStart(""); setShowAddRoom(false);
+    showAlert("success", `تمت إضافة ${entries.length} غرفة`);
+  };
+
   const removeFromRoom = async (pId: number) => {
     await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
     setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: null } as any : p));
@@ -138,12 +180,23 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     showAlert("success", "تم حفظ الملاحظات");
   };
 
+  const saveRoomNumber = async () => {
+    if (!selectedRoom || !newRoomNum.trim()) return;
+    await supabase.from("rooms").update({ number: newRoomNum.trim() }).eq("id", selectedRoom.id);
+    setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, number: newRoomNum.trim() } : r).sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
+    setSelectedRoom(prev => prev ? { ...prev, number: newRoomNum.trim() } : prev);
+    setEditingRoomNum(false);
+    showAlert("success", "تم تعديل رقم الغرفة");
+  };
+
   const openPanel = (room: Room) => {
     setSelectedRoom(room);
     setPanelType(room.type);
     setPanelNotes((room as any).notes || "");
     setShowAddPilgrim(false);
     setPSearch("");
+    setEditingRoomNum(false);
+    setNewRoomNum(room.number);
   };
 
   // Styles
@@ -162,7 +215,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "12px 12px 0", flexShrink: 0 }}>
           {[
             { label: "إجمالي الغرف", num: totalRooms, color: primary },
-            { label: "نسبة الإشغال", num: pct + "٪", color: primary },
             { label: "غرف فارغة", num: emptyRooms, color: "#2A9D8F" },
             { label: "بدون غرفة", num: withoutRoom, color: withoutRoom > 0 ? "#C8730A" : "#2A9D8F" },
           ].map(k => (
@@ -171,6 +223,27 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               <div style={{ fontSize: 20, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.num}</div>
             </div>
           ))}
+          {/* دائرة نسبة التوزيع */}
+          <div style={{ background: "var(--paper)", border: `1px solid ${primary}33`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {(() => {
+              const r = 18, circ = 2 * Math.PI * r;
+              const stroke = circ * pct / 100;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                  <svg width="48" height="48" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r={r} fill="none" stroke="var(--line)" strokeWidth="5"/>
+                    <circle cx="24" cy="24" r={r} fill="none" stroke={primary} strokeWidth="5"
+                      strokeDasharray={`${stroke} ${circ}`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 24 24)"
+                    />
+                    <text x="24" y="28" textAnchor="middle" fontSize="10" fontWeight="900" fill={primary}>{pct}٪</text>
+                  </svg>
+                  <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600 }}>نسبة التوزيع</div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
 
         {/* ملخص أنواع الغرف */}
@@ -279,7 +352,26 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
               <div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: primary, lineHeight: 1 }}>غرفة {selectedRoom.number}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {editingRoomNum ? (
+                    <>
+                      <input value={newRoomNum} onChange={e => setNewRoomNum(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveRoomNumber(); if (e.key === "Escape") setEditingRoomNum(false); }}
+                        style={{ width: 80, fontSize: 16, fontWeight: 900, color: primary, border: "none", borderBottom: `2px solid ${primary}`, outline: "none", background: "transparent", fontFamily: "var(--font-body)", textAlign: "right" }}
+                        autoFocus />
+                      <button onClick={saveRoomNumber} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "none", background: primary, color: "white", cursor: "pointer", fontFamily: "var(--font-body)", fontWeight: 700 }}>حفظ</button>
+                      <button onClick={() => setEditingRoomNum(false)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "transparent", cursor: "pointer", fontFamily: "var(--font-body)" }}>إلغاء</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: primary, lineHeight: 1 }}>غرفة {selectedRoom.number}</div>
+                      <button onClick={() => { setEditingRoomNum(true); setNewRoomNum(selectedRoom.number); }}
+                        style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", background: "var(--ivory)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>الطابق {selectedRoom.floor}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -383,37 +475,82 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       {showAddRoom && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={e => { if (e.target === e.currentTarget) setShowAddRoom(false); }}>
-          <div style={{ background: "var(--paper)", borderRadius: 16, padding: 24, width: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 18 }}>إضافة غرفة جديدة</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>رقم الغرفة</div>
-                <input value={addNum} onChange={e => setAddNum(e.target.value)} style={inp} autoFocus placeholder="مثال: 1201" />
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الدور</div>
-                <input value={addFloor} onChange={e => setAddFloor(e.target.value)} style={inp} placeholder="مثال: 12" />
-              </div>
+          <div style={{ background: "var(--paper)", borderRadius: 16, padding: 24, width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 14 }}>إضافة غرفة</div>
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 16, background: "var(--ivory)", borderRadius: 10, padding: 4 }}>
+              {(["single","range","template"] as const).map(m => (
+                <button key={m} onClick={() => setAddMode(m)}
+                  style={{ flex: 1, padding: "6px", borderRadius: 7, border: "none", background: addMode === m ? primary : "transparent", color: addMode === m ? "white" : "var(--muted)", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  {m === "single" ? "غرفة واحدة" : m === "range" ? "نطاق" : "قالب"}
+                </button>
+              ))}
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الغرفة</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {ROOM_TYPES.map(t => (
-                  <button key={t} onClick={() => setAddType(t)}
-                    style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: addType === t ? primary : "var(--line)", background: addType === t ? primary : "var(--paper)", color: addType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>ملاحظة (اختياري)</div>
-              <input value={addNotes} onChange={e => setAddNotes(e.target.value)} style={inp} placeholder="ملاحظات على الغرفة..." />
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={addRoom} style={{ ...btnP, flex: 1 }}>إضافة</button>
-              <button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button>
-            </div>
+
+            {/* Single */}
+            {addMode === "single" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>رقم الغرفة</div><input value={addNum} onChange={e => setAddNum(e.target.value)} style={inp} autoFocus placeholder="مثال: 1201" /></div>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الدور</div><input value={addFloor} onChange={e => setAddFloor(e.target.value)} style={inp} placeholder="مثال: 12" /></div>
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الغرفة</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {ROOM_TYPES.map(t => <button key={t} onClick={() => setAddType(t)} style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: addType === t ? primary : "var(--line)", background: addType === t ? primary : "var(--paper)", color: addType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>)}
+                  </div>
+                </div>
+                <div style={{ marginBottom: 16 }}><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>ملاحظة (اختياري)</div><input value={addNotes} onChange={e => setAddNotes(e.target.value)} style={inp} placeholder="ملاحظات..." /></div>
+                <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP, flex: 1 }}>إضافة</button><button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button></div>
+              </>
+            )}
+
+            {/* Range */}
+            {addMode === "range" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>من رقم</div><input value={rangeFrom} onChange={e => setRangeFrom(e.target.value)} style={inp} placeholder="1201" autoFocus /></div>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>إلى رقم</div><input value={rangeTo} onChange={e => setRangeTo(e.target.value)} style={inp} placeholder="1210" /></div>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الدور</div><input value={rangeFloor} onChange={e => setRangeFloor(e.target.value)} style={inp} placeholder="12" /></div>
+                </div>
+                {rangeFrom && rangeTo && parseInt(rangeTo) >= parseInt(rangeFrom) && (
+                  <div style={{ fontSize: 11, color: primary, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>
+                    سيتم إضافة {parseInt(rangeTo) - parseInt(rangeFrom) + 1} غرفة
+                  </div>
+                )}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الغرف</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {ROOM_TYPES.map(t => <button key={t} onClick={() => setRangeType(t)} style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: rangeType === t ? primary : "var(--line)", background: rangeType === t ? primary : "var(--paper)", color: rangeType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}><button onClick={addRoomRange} style={{ ...btnP, flex: 1 }}>إضافة النطاق</button><button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button></div>
+              </>
+            )}
+
+            {/* Template */}
+            {addMode === "template" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>عدد الأدوار</div><input value={tplFloors} onChange={e => setTplFloors(e.target.value)} style={inp} placeholder="3" autoFocus /></div>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>بداية الدور</div><input value={tplFloorStart} onChange={e => setTplFloorStart(e.target.value)} style={inp} placeholder="10" /></div>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>غرف لكل دور</div><input value={tplRoomsPerFloor} onChange={e => setTplRoomsPerFloor(e.target.value)} style={inp} placeholder="10" /></div>
+                  <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>بداية الترقيم</div><input value={tplStartNum} onChange={e => setTplStartNum(e.target.value)} style={inp} placeholder="1001" /></div>
+                </div>
+                {tplFloors && tplRoomsPerFloor && parseInt(tplFloors) > 0 && parseInt(tplRoomsPerFloor) > 0 && (
+                  <div style={{ fontSize: 11, color: primary, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>
+                    سيتم إضافة {parseInt(tplFloors) * parseInt(tplRoomsPerFloor)} غرفة
+                  </div>
+                )}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الغرف</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {ROOM_TYPES.map(t => <button key={t} onClick={() => setTplType(t)} style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: tplType === t ? primary : "var(--line)", background: tplType === t ? primary : "var(--paper)", color: tplType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}><button onClick={addRoomTemplate} style={{ ...btnP, flex: 1 }}>إنشاء القالب</button><button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button></div>
+              </>
+            )}
           </div>
         </div>
       )}
