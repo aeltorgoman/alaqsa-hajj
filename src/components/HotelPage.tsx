@@ -23,6 +23,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [filterFloor, setFilterFloor] = useState("الكل");  // سيتم تعيينه بأول طابق عند التحميل
   const [filterStatus, setFilterStatus] = useState("الكل");
+  const [filterType, setFilterType] = useState<string|null>(null);
   const [search, setSearch] = useState("");
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [showAddPilgrim, setShowAddPilgrim] = useState(false);
@@ -90,6 +91,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     return rooms.filter(r => {
       if (filterFloor !== "الكل" && r.floor !== filterFloor) return false;
       if (filterStatus !== "الكل" && getStatus(r) !== filterStatus) return false;
+      if (filterType && r.type !== filterType) return false;
       if (search) {
         const q = search.trim();
         if (r.number.includes(q)) return true;
@@ -97,7 +99,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       }
       return true;
     });
-  }, [rooms, filterFloor, filterStatus, search, passengers]);
+  }, [rooms, filterFloor, filterStatus, filterType, search, passengers]);
 
   // KPIs
   const totalRooms = rooms.length;
@@ -211,83 +213,94 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       {/* ===== المحتوى الرئيسي ===== */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
-        {/* KPIs */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, padding: "12px 12px 0", flexShrink: 0 }}>
-          {[
-            { label: "إجمالي الغرف", num: totalRooms, color: primary },
-            { label: "غرف فارغة", num: emptyRooms, color: "#2A9D8F" },
-            { label: "بدون غرفة", num: withoutRoom, color: withoutRoom > 0 ? "#C8730A" : "#2A9D8F" },
-          ].map(k => (
-            <div key={k.label} style={{ background: "var(--paper)", border: `1px solid ${k.color}33`, borderRadius: 10, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{k.label}</div>
-              <div style={{ fontSize: 20, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.num}</div>
-            </div>
-          ))}
-          {/* دائرة نسبة التوزيع */}
-          <div style={{ background: "var(--paper)", border: `1px solid ${primary}33`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {/* KPIs + Donut */}
+        <div style={{ display: "flex", gap: 8, padding: "12px 12px 0", flexShrink: 0, alignItems: "stretch" }}>
+          {/* كروت KPI */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, flex: 1 }}>
+            {[
+              { label: "إجمالي الغرف", num: totalRooms, color: primary, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); } },
+              { label: "حجاج موزعين", num: `${withRoom}/${hajj.length}`, color: "#2A9D8F", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
+              { label: "غرف متاحة", num: rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length, color: "#C8730A", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
+            ].map(k => (
+              <div key={k.label} onClick={k.onClick} style={{ background: "var(--paper)", border: `1px solid ${k.color}33`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", transition: "all .15s" }}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.boxShadow = `0 2px 10px ${k.color}22`}
+                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.boxShadow = "none"}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 6, background: `${k.color}15`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={k.color} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: k.icon }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>{k.label}</div>
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.num}</div>
+              </div>
+            ))}
+          </div>
+          {/* دائرة نسبة التوزيع مستقلة وأكبر */}
+          <div style={{ background: "var(--paper)", border: `1px solid ${primary}33`, borderRadius: 10, padding: "10px 14px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {(() => {
-              const r = 18, circ = 2 * Math.PI * r;
+              const r = 28, circ = 2 * Math.PI * r;
               const stroke = circ * pct / 100;
               return (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                  <svg width="48" height="48" viewBox="0 0 48 48">
-                    <circle cx="24" cy="24" r={r} fill="none" stroke="var(--line)" strokeWidth="5"/>
-                    <circle cx="24" cy="24" r={r} fill="none" stroke={primary} strokeWidth="5"
+                <>
+                  <svg width="72" height="72" viewBox="0 0 72 72">
+                    <circle cx="36" cy="36" r={r} fill="none" stroke="var(--line)" strokeWidth="7"/>
+                    <circle cx="36" cy="36" r={r} fill="none" stroke={primary} strokeWidth="7"
                       strokeDasharray={`${stroke} ${circ}`}
                       strokeLinecap="round"
-                      transform="rotate(-90 24 24)"
+                      transform="rotate(-90 36 36)"
                     />
-                    <text x="24" y="28" textAnchor="middle" fontSize="10" fontWeight="900" fill={primary}>{pct}٪</text>
+                    <text x="36" y="41" textAnchor="middle" fontSize="14" fontWeight="900" fill={primary}>{pct}٪</text>
                   </svg>
-                  <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600 }}>نسبة التوزيع</div>
-                </div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 2 }}>نسبة التوزيع</div>
+                </>
               );
             })()}
           </div>
         </div>
 
-        {/* ملخص أنواع الغرف */}
-        {(() => {
-          const types = ["فردية", "ثنائية", "ثلاثية", "رباعية", "سويت", "مجلس"];
-          const TYPE_COLORS: Record<string, string> = { فردية: "#7D1F3C", ثنائية: "#0C5FA8", ثلاثية: "#2A9D8F", رباعية: "#E65100", سويت: "#6A0DAD", مجلس: "#3F51B5" };
-          return (
-            <div style={{ display: "flex", gap: 6, padding: "8px 12px 0", flexShrink: 0, overflowX: "auto" }}>
-              {types.map(type => {
-                const typeRooms = rooms.filter(r => r.type === type);
-                if (typeRooms.length === 0) return null;
-
-                const color = TYPE_COLORS[type] || "var(--primary)";
-                return (
-                  <div key={type} style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: `1px solid ${color}30`, borderRadius: 9, padding: "6px 11px", flexShrink: 0, borderRight: `3px solid ${color}` }}>
-                    <div>
-                      <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600 }}>{type}</div>
-                      <div style={{ fontSize: 13, fontWeight: 900, color, lineHeight: 1.1 }}>{typeRooms.length} <span style={{ fontSize: 9, fontWeight: 600, color: "var(--muted)" }}>غرفة</span></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-
-        {/* Toolbar */}
-        <div style={{ display: "flex", gap: 8, padding: "10px 12px", flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
-          <button onClick={() => setShowAddRoom(true)} style={{ ...btnP, display: "flex", alignItems: "center", gap: 5 }}>
+        {/* Row 1: كروت أنواع الغرف + بحث + فلتر + إضافة */}
+        <div style={{ display: "flex", gap: 6, padding: "8px 12px 0", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
+          {/* كروت الأنواع */}
+          {(["فردية","ثنائية","ثلاثية","رباعية","سويت","مجلس"] as const).map(type => {
+            const typeRooms = rooms.filter(r => r.type === type);
+            if (typeRooms.length === 0) return null;
+            const TYPE_COLORS: Record<string,string> = { فردية:"#7D1F3C",ثنائية:"#0C5FA8",ثلاثية:"#2A9D8F",رباعية:"#E65100",سويت:"#6A0DAD",مجلس:"#3F51B5" };
+            const color = TYPE_COLORS[type] || primary;
+            const active = filterType === type;
+            return (
+              <div key={type} onClick={() => { setFilterType(active ? null : type); setFilterFloor("الكل"); }}
+                style={{ display:"flex",alignItems:"center",gap:6,background: active ? color : "var(--paper)",border: active ? `1.5px solid ${color}` : `1px solid ${color}30`,borderRadius:8,padding:"5px 10px",flexShrink:0,cursor:"pointer",transition:"all .15s",borderRight:`3px solid ${color}` }}>
+                <div style={{ fontSize:9,color: active?"white":"var(--muted)",fontWeight:600 }}>{type}</div>
+                <div style={{ fontSize:13,fontWeight:900,color: active?"white":color,lineHeight:1.1 }}>{typeRooms.length}</div>
+              </div>
+            );
+          })}
+          <div style={{ flex:1 }} />
+          {/* بحث */}
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث..." style={{ ...inp, width:130, flex:"none" }} />
+          {/* فلتر الحالة */}
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width:"auto" }}>
+            {["الكل","ممتلئة","جزئية","فارغة"].map(s => <option key={s}>{s}</option>)}
+          </select>
+          {/* إضافة */}
+          <button onClick={() => setShowAddRoom(true)} style={{ ...btnP, display:"flex",alignItems:"center",gap:5,flexShrink:0 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             غرفة جديدة
           </button>
-          <div style={{ display: "flex", gap: 4, overflowX: "auto", flex: 2 }}>
-            {floors.map(f => (
-              <button key={f} onClick={() => setFilterFloor(f)}
-                style={{ padding: "5px 12px", borderRadius: 99, border: filterFloor === f ? "1.5px solid var(--primary)" : "1.5px solid var(--line)", background: filterFloor === f ? "var(--primary)" : "var(--paper)", color: filterFloor === f ? "white" : "var(--muted)", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, transition: "all .15s" }}>
-                ط{f}
-              </button>
-            ))}
-          </div>
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width: "auto", flex: 1 }}>
-            {["الكل","ممتلئة","جزئية","فارغة","مجلس"].map(s => <option key={s}>{s}</option>)}
-          </select>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث عن غرفة أو حاج..." style={{ ...inp, flex: 2 }} />
+        </div>
+
+        {/* Row 2: أزرار الأدوار */}
+        <div style={{ display:"flex",gap:4,padding:"6px 12px 0",flexShrink:0,overflowX:"auto" }}>
+          <button onClick={() => setFilterFloor("الكل")}
+            style={{ padding:"4px 12px",borderRadius:99,border: filterFloor==="الكل"?"1.5px solid var(--primary)":"1.5px solid var(--line)",background: filterFloor==="الكل"?"var(--primary)":"var(--paper)",color: filterFloor==="الكل"?"white":"var(--muted)",fontFamily:"var(--font-body)",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0,transition:"all .15s" }}>
+            الكل
+          </button>
+          {floors.map(f => (
+            <button key={f} onClick={() => setFilterFloor(f)}
+              style={{ padding:"4px 12px",borderRadius:99,border: filterFloor===f?"1.5px solid var(--primary)":"1.5px solid var(--line)",background: filterFloor===f?"var(--primary)":"var(--paper)",color: filterFloor===f?"white":"var(--muted)",fontFamily:"var(--font-body)",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0,transition:"all .15s" }}>
+              ط{f}
+            </button>
+          ))}
         </div>
 
         {/* Rooms Grid */}
@@ -314,27 +327,29 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, position: "absolute", top: 8, left: 8 }} />
                         {/* رقم الغرفة */}
                         <div style={{ fontSize: 22, fontWeight: 900, color: "var(--primary)", lineHeight: 1, marginBottom: 3 }}>{room.number}</div>
-                        {/* النوع */}
-                        <div style={{ fontSize: 10, color: isMajlis ? "#3F51B5" : "var(--muted)", fontWeight: 700, marginBottom: 6 }}>{room.type}</div>
+                        {/* النوع + العدد في سطر واحد */}
+                        {!isMajlis && (
+                          <div style={{ display:"flex",alignItems:"center",gap:4,marginBottom:5 }}>
+                            <span style={{ fontSize:10,color:"var(--muted)",fontWeight:700 }}>{room.type}</span>
+                            <span style={{ fontSize:10,color:color,fontWeight:800 }}>{occ.length}/{cap}</span>
+                          </div>
+                        )}
+                        {isMajlis && <div style={{ fontSize:10,color:"#3F51B5",fontWeight:700,marginBottom:5 }}>مجلس</div>}
                         {/* الأسماء */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <div style={{ display:"flex",flexDirection:"column",gap:2,flex:1 }}>
                           {isMajlis ? (
-                            <div style={{ fontSize: 10, color: "#3F51B5", fontWeight: 700 }}>مجلس الحجاج</div>
+                            <div style={{ fontSize:10,color:"#3F51B5",fontWeight:700 }}>مجلس الحجاج</div>
                           ) : occ.length === 0 ? (
-                            <div style={{ fontSize: 10, color: "#2A9D8F", fontWeight: 700 }}>فارغة</div>
+                            <div style={{ fontSize:11,color:"#2A9D8F",fontWeight:700 }}>فارغة</div>
                           ) : (
                             occ.map(p => (
-                              <div key={p.id} style={{ fontSize: 10, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 3 }}>
-                                <div style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                              <div key={p.id} style={{ fontSize: occ.length <= 2 ? 12 : 10, color:"var(--ink)",fontWeight: occ.length <= 2 ? 700 : 600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",gap:3 }}>
+                                <div style={{ width:3,height:3,borderRadius:"50%",background:color,flexShrink:0 }} />
                                 {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
                               </div>
                             ))
                           )}
                         </div>
-                        {/* العدد */}
-                        {!isMajlis && (
-                          <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, fontWeight: 600 }}>{occ.length}/{cap}</div>
-                        )}
                       </div>
                     );
                   })}
@@ -428,10 +443,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             )}
 
             {/* إضافة حاج */}
-            <button onClick={() => setShowAddPilgrim(!showAddPilgrim)}
+            {selectedRoom.type !== "مجلس" && <button onClick={() => setShowAddPilgrim(!showAddPilgrim)}
               style={{ width: "100%", padding: "9px", borderRadius: 9, border: `1.5px dashed var(--line)`, background: "transparent", color: primary, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 4, transition: "all .15s" }}>
               + إضافة حاج للغرفة
-            </button>
+            </button>}
 
             {showAddPilgrim && (
               <div style={{ marginTop: 8, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
@@ -463,8 +478,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           </div>
 
           {/* Actions */}
-          <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", display: "flex", gap: 8, flexShrink: 0 }}>
-            <button onClick={() => deleteRoom(selectedRoom)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+          <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
+            <div style={{ fontSize: 9, color: "var(--muted)", textAlign: "center", marginBottom: 6, fontWeight: 600 }}>⚠️ تأكيد قبل الحذف</div>
+            <button onClick={() => { if (window.confirm("هل أنت متأكد من حذف الغرفة " + selectedRoom.number + "؟")) deleteRoom(selectedRoom); }}
+              style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
               حذف الغرفة
             </button>
           </div>
