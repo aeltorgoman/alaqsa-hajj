@@ -21,7 +21,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
-  const [filterFloor, setFilterFloor] = useState("الكل");
+  const [filterFloor, setFilterFloor] = useState("الكل");  // سيتم تعيينه بأول طابق عند التحميل
   const [filterStatus, setFilterStatus] = useState("الكل");
   const [search, setSearch] = useState("");
   const [showAddRoom, setShowAddRoom] = useState(false);
@@ -45,6 +45,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const floors = useMemo(() => {
     const fs = [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
+    if (fs.length > 0 && filterFloor === "الكل") setFilterFloor(fs[0]);
     return fs;
   }, [rooms]);
 
@@ -202,10 +203,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             غرفة جديدة
           </button>
-          <select value={filterFloor} onChange={e => setFilterFloor(e.target.value)} style={{ ...inp, width: "auto", flex: 1 }}>
-            <option>الكل</option>
-            {floors.map(f => <option key={f}>{f}</option>)}
-          </select>
+          <div style={{ display: "flex", gap: 4, overflowX: "auto", flex: 2 }}>
+            {floors.map(f => (
+              <button key={f} onClick={() => setFilterFloor(f)}
+                style={{ padding: "5px 12px", borderRadius: 99, border: filterFloor === f ? "1.5px solid var(--primary)" : "1.5px solid var(--line)", background: filterFloor === f ? "var(--primary)" : "var(--paper)", color: filterFloor === f ? "white" : "var(--muted)", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0, transition: "all .15s" }}>
+                ط{f}
+              </button>
+            ))}
+          </div>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width: "auto", flex: 1 }}>
             {["الكل","ممتلئة","جزئية","فارغة","مجلس"].map(s => <option key={s}>{s}</option>)}
           </select>
@@ -219,10 +224,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             if (floorRooms.length === 0) return null;
             return (
               <div key={floor} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                  الطابق {floor}
-                  <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
-                </div>
+
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
                   {floorRooms.map(room => {
                     const occ = roomPassengers(room.id);
