@@ -5,7 +5,7 @@ import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadDoc } from "../utils";
 import { useConfig } from "../config/ConfigContext";
 import { Modal } from "./Modal";
-import { AlertModal, useAlert } from "./AlertModal";
+import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 
 /* ─── helpers ─── */
@@ -78,6 +78,7 @@ const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", mar
 function UsersPage({ currentUser }: { currentUser: User }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
   const [activeTab, setActiveTab] = useState<"identity" | "system" | "users">("identity");
 
@@ -202,7 +203,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   };
 
   const deleteUser = async (id: number) => {
-    if (!confirm("هل تريد حذف هذا المستخدم؟")) return;
+    const ok = await confirmAction("هل تريد حذف هذا المستخدم؟", { title: "حذف مستخدم" });
+    if (!ok) return;
     await supabase.from("users").delete().eq("id", id);
     setUsers(prev => prev.filter(x => x.id !== id));
   };
@@ -229,6 +231,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+      <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
 
       {/* ── PAGE HEADER ── */}
       <div style={{ padding: "18px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
