@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
-import { AlertModal, useAlert } from "./AlertModal";
+import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
@@ -35,9 +35,18 @@ function getPackageKey(hotel_type: string): string {
   return "package_double";
 }
 
+// السعر يدوي لو الإقامة "خاص"، غير كده بياخد سعر الباقة الثابتة
+function getPriceInfo(s: Passenger["services"], pricing: PricingMap): { label: string; amount: number } {
+  if (s.hotel_type === "خاص") {
+    return { label: "سعر خاص", amount: Number((s as any).custom_price) || 0 };
+  }
+  const key = getPackageKey(s.hotel_type);
+  return { label: pricing[key]?.label || "الباقة الأساسية", amount: pricing[key]?.amount || 0 };
+}
+
 function calcTotalDue(p: Passenger, pricing: PricingMap, custom: CustomCharge[]): number {
   const s = p.services;
-  let total = pricing[getPackageKey(s.hotel_type)]?.amount || 0;
+  let total = getPriceInfo(s, pricing).amount;
   if (s.hotel_view === "مطلة") total += pricing["addon_view"]?.amount    || 0;
   if (s.camp_mina === "خاص")  total += pricing["addon_mina"]?.amount    || 0;
   if (s.camp_arafa === "خاص") total += pricing["addon_arafa"]?.amount   || 0;
@@ -207,8 +216,8 @@ function makePassengerStatementHTML(
   primaryColor = "#6B1F3A", accentColor = "#0C447C"
 ): string {
   const s = p.services;
-  const pkgKey = getPackageKey(s.hotel_type);
-  const pkgAmt = pricing[pkgKey]?.amount || 0;
+  const priceInfo = getPriceInfo(s, pricing);
+  const pkgAmt = priceInfo.amount;
   const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
   const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
   const totalDue  = calcTotalDue(p, pricing, customCharges);
@@ -218,7 +227,7 @@ function makePassengerStatementHTML(
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
 
-  let rows = `<tr><td class="bayan">${pricing[pkgKey]?.label||"الباقة الأساسية"}</td><td class="debit">${fmtAmt(pkgAmt)}</td><td class="credit">—</td></tr>`;
+  let rows = `<tr><td class="bayan">${priceInfo.label}</td><td class="debit">${fmtAmt(pkgAmt)}</td><td class="credit">—</td></tr>`;
   if (s.hotel_view==="مطلة") rows+=`<tr class="alt"><td class="bayan">إضافة مطلة</td><td class="debit">${fmtAmt(pricing["addon_view"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if (s.camp_mina==="خاص")  rows+=`<tr><td class="bayan">خيمة خاصة - منى</td><td class="debit">${fmtAmt(pricing["addon_mina"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if (s.camp_arafa==="خاص") rows+=`<tr class="alt"><td class="bayan">خيمة خاصة - عرفة</td><td class="debit">${fmtAmt(pricing["addon_arafa"]?.amount||0)}</td><td class="credit">—</td></tr>`;
@@ -282,7 +291,7 @@ function makePassengerStatementHTML(
 </div>
 <div class="title-bar">كشف حساب</div>
 <div class="passenger-name">${p.short_ar||p.name_ar}</div>
-<div class="passenger-sub">${pricing[pkgKey]?.label||""}${addonsList?" &nbsp;·&nbsp; "+addonsList:""}</div>
+<div class="passenger-sub">${priceInfo.label}${addonsList?" &nbsp;·&nbsp; "+addonsList:""}</div>
 <div class="summary">
   <div class="sum-card card-due"><div class="sum-label">المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(totalDue)}</div><div class="sum-cur">ر.ق</div></div>
   <div class="sum-card card-paid"><div class="sum-label">المدفوع</div><div class="sum-val" style="color:#2A9D8F">${fmtAmt(totalPaid)}</div><div class="sum-cur">ر.ق</div></div>
@@ -318,13 +327,13 @@ function makeGroupStatementHTML(
     const paid = calcTotalPaid(p.id,payments);
     const bal  = due - paid;
     const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
-    const pkgKey = getPackageKey(p.services.hotel_type);
+    const priceInfo = getPriceInfo(p.services, pricing);
     const payRows = pPays.map(py => `<tr style="background:#f0faf8"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:13px;padding-right:32px">دفعة — ${py.payment_date} <span style="color:#888;font-size:12px">(${py.method})</span>${py.notes?` — ${py.notes}`:""}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;font-size:13px">—</td><td style="text-align:center;border:1px solid #e8e8e8;color:#2A9D8F;font-weight:700;font-size:14px">${fmtAmt(py.amount)}</td></tr>`).join("");
     return `
     <div style="margin-bottom:20px;border:1.5px solid ${primaryColor}30;border-radius:10px;overflow:hidden;">
       <div style="background:${primaryColor}12;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${primaryColor}20">
         <div style="font-size:17px;font-weight:800;color:${primaryColor}">${i+1}. ${p.short_ar||p.name_ar}</div>
-        <div style="font-size:13px;color:#666">${pricing[pkgKey]?.label||""}</div>
+        <div style="font-size:13px;color:#666">${priceInfo.label||""}</div>
         <div style="display:flex;gap:16px;font-size:13px">
           <span>مطلوب: <strong style="color:${primaryColor}">${fmtAmt(due)}</strong></span>
           <span>مدفوع: <strong style="color:#2A9D8F">${fmtAmt(paid)}</strong></span>
@@ -332,7 +341,7 @@ function makeGroupStatementHTML(
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
-        <tr style="background:${primaryColor}08"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:14px">${pricing[pkgKey]?.label||"الباقة الأساسية"}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#C0392B;font-weight:700;font-size:14px;width:130px">${fmtAmt(pricing[pkgKey]?.amount||0)}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;width:130px">—</td></tr>
+        <tr style="background:${primaryColor}08"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:14px">${priceInfo.label}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#C0392B;font-weight:700;font-size:14px;width:130px">${fmtAmt(priceInfo.amount)}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;width:130px">—</td></tr>
         ${payRows}
         <tr style="background:${primaryColor};color:#fff"><td style="padding:10px 16px;font-weight:700">الرصيد</td><td style="text-align:center;font-weight:800">${fmtAmt(due)}</td><td style="text-align:center;font-weight:800">${fmtAmt(paid)}</td></tr>
       </table>
@@ -390,6 +399,9 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   const [subView, setSubView]     = useState<"list"|"detail"|"settings"|"reports"|"group">("list");
   const [selectedP, setSelectedP] = useState<Passenger | null>(null);
+  const [editingCustomPrice, setEditingCustomPrice] = useState(false);
+  const [customPriceInput, setCustomPriceInput]     = useState("");
+  const [savingCustomPrice, setSavingCustomPrice]   = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<FinancialGroup | null>(null);
 
   const [pricing, setPricing]               = useState<PricingMap>({});
@@ -419,18 +431,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   const [chargeForm, setChargeForm]           = useState({ description:"", amount:"", notes:"" });
   const [chargeErrors, setChargeErrors]       = useState({ description: false, amount: false });
 
-  // confirm modal
-  const [confirmMsg, setConfirmMsg]           = useState<string | null>(null);
-  const [confirmResolve, setConfirmResolve]   = useState<((v: boolean) => void) | null>(null);
-  const showConfirm = (msg: string): Promise<boolean> => new Promise(resolve => {
-    setConfirmMsg(msg);
-    setConfirmResolve(() => resolve);
-  });
-  const handleConfirm = (val: boolean) => {
-    setConfirmMsg(null);
-    confirmResolve?.(val);
-    setConfirmResolve(null);
-  };
+  // مودال التأكيد الموحد (بديل window.confirm)
+  const { confirmState, confirmAction: showConfirm, handleConfirm: handleConfirmYes, handleCancel: handleConfirmNo } = useConfirm();
   const [savingCharge, setSavingCharge]       = useState(false);
 
   // إعدادات أسعار
@@ -489,6 +491,22 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     await loadFinanceData();
     setSavingPricing(false);
     showAlert("success","تم حفظ الأسعار بنجاح");
+  }
+
+  async function saveCustomPrice() {
+    if (!selectedP) return;
+    setSavingCustomPrice(true);
+    const amt = Number(customPriceInput) || 0;
+    const newServices = { ...selectedP.services, custom_price: String(amt) };
+    const { error } = await supabase.from("passengers").update({ services: newServices }).eq("id", selectedP.id);
+    if (!error) {
+      setSelectedP({ ...selectedP, services: newServices });
+      setEditingCustomPrice(false);
+      showAlert("success", "تم حفظ السعر الخاص");
+    } else {
+      showAlert("error", "حدث خطأ أثناء حفظ السعر");
+    }
+    setSavingCustomPrice(false);
   }
 
   async function addPayment() {
@@ -569,13 +587,13 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function removeFromGroup(passengerId: number, groupId: number) {
-    if (!confirm("هل تريد إزالة هذا الحاج من المجموعة؟")) return;
+    if (!await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" })) return;
     await supabase.from("financial_group_members").delete().eq("group_id",groupId).eq("passenger_id",passengerId);
     setGroupMembers(prev => prev.filter(m => !(m.group_id===groupId && m.passenger_id===passengerId)));
   }
 
   async function deleteGroup(groupId: number) {
-    if (!confirm("هل تريد حذف هذه المجموعة؟")) return;
+    if (!await showConfirm("هل تريد حذف هذه المجموعة؟", { title: "حذف مجموعة" })) return;
     await supabase.from("financial_groups").delete().eq("id",groupId);
     setGroups(prev => prev.filter(g => g.id !== groupId));
     setGroupMembers(prev => prev.filter(m => m.group_id !== groupId));
@@ -633,7 +651,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
           <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
           <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${r.p.short_ar||r.p.name_ar}</td>
-          <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${(pricing[getPackageKey(r.p.services.hotel_type)]?.label||"—").replace("باقة ","")}</td>
+          <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${getPriceInfo(r.p.services, pricing).label.replace("باقة ","")}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${r.balance>0?"var(--danger)":"var(--success)"};font-weight:700">${fmtAmt(r.balance)}</td>
@@ -660,7 +678,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       return [
         i + 1,
         r.p.short_ar || r.p.name_ar,
-        (pricing[getPackageKey(r.p.services.hotel_type)]?.label || "—").replace("باقة ", ""),
+        getPriceInfo(r.p.services, pricing).label.replace("باقة ", ""),
         r.due,
         r.paid,
         r.balance,
@@ -721,7 +739,12 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   function printPackagesReport() {
-    const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[pk.label,String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
+    const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>p.services.hotel_type!=="خاص"&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[pk.label,String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
+    const specialPassengers = passengers.filter(p=>p.services.hotel_type==="خاص");
+    if (specialPassengers.length>0) {
+      const specialTotal = specialPassengers.reduce((s,p)=>s+(Number((p.services as any).custom_price)||0),0);
+      rows.push(["سعر خاص",String(specialPassengers.length),"—",`<strong>${fmtAmt(specialTotal)}</strong>`]);
+    }
     printInPage(makeFinanceHTML("تقرير الباقات",printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"],rows),false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
@@ -829,6 +852,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   if (subView === "settings") return (
     <div style={{ flex:1, overflowY:"auto", padding:20 }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+      <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
       <div style={{ maxWidth:560, margin:"0 auto" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
           <button onClick={() => setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
@@ -868,6 +892,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+        <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <ReceiptModal />
         <div style={{ maxWidth:720, margin:"0 auto" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
@@ -981,7 +1006,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   // ══════════════════════════════════════════════
   if (subView === "detail" && selectedP) {
     const s=selectedP.services;
-    const pkgKey=getPackageKey(s.hotel_type), pkgAmt=pricing[pkgKey]?.amount||0;
+    const priceInfo = getPriceInfo(s, pricing), pkgAmt = priceInfo.amount;
+    const isSpecial = s.hotel_type === "خاص";
     const pPayments=[...payments.filter(p=>p.passenger_id===selectedP.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
     const pCustom=customCharges.filter(c=>c.passenger_id===selectedP.id);
     const totalDue=calcTotalDue(selectedP,pricing,customCharges), totalPaid=calcTotalPaid(selectedP.id,payments), balance=totalDue-totalPaid;
@@ -998,6 +1024,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
+        <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <ReceiptModal />
         <PaymentDetailModal />
         <div style={{ maxWidth:720, margin:"0 auto" }}>
@@ -1005,7 +1032,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <button onClick={()=>{setSubView("reports");setSelectedP(null);setSelectedPayment(null);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
             <div>
               <div style={{ fontFamily:"var(--font-body)", fontSize:20, fontWeight:800, color:"var(--primary)" }}>{selectedP.short_ar||selectedP.name_ar}</div>
-              <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{pricing[pkgKey]?.label}{addonRows.filter(a=>!a.isDiscount).map(a=>` · ${a.label}`).join("")}</div>
+              <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{priceInfo.label}{addonRows.filter(a=>!a.isDiscount).map(a=>` · ${a.label}`).join("")}</div>
             </div>
             <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span>
             <button onClick={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:5, fontFamily:"var(--font-body)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
@@ -1031,7 +1058,40 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                 </tr>
               </thead>
               <tbody>
-                <tr><td style={tdStyle}>{pricing[pkgKey]?.label||"الباقة الأساسية"}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--danger)", fontWeight:600 }}>{fmtAmt(pkgAmt)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td><td style={tdStyle}></td></tr>
+                <tr>
+                  <td style={tdStyle}>
+                    {priceInfo.label}
+                    {isSpecial && (
+                      <span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, marginRight:6, background:"var(--warning-bg)", color:"var(--warning)" }}>سعر يدوي</span>
+                    )}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign:"center", color:"var(--danger)", fontWeight:600 }}>
+                    {isSpecial && editingCustomPrice ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}>
+                        <input
+                          type="number"
+                          value={customPriceInput}
+                          onChange={e=>setCustomPriceInput(e.target.value)}
+                          onKeyDown={e=>{ if(e.key==="Enter") saveCustomPrice(); if(e.key==="Escape") setEditingCustomPrice(false); }}
+                          style={{ width:90, padding:"4px 8px", borderRadius:6, border:"1px solid var(--border)", fontFamily:"var(--font-body)", fontSize:13, textAlign:"center" }}
+                          autoFocus
+                        />
+                        <button onClick={saveCustomPrice} disabled={savingCustomPrice} style={{ fontSize:10, padding:"3px 8px", borderRadius:6, border:"none", background:"var(--primary)", color:"#fff", cursor:"pointer", fontFamily:"var(--font-body)", fontWeight:700 }}>
+                          {savingCustomPrice?"...":"حفظ"}
+                        </button>
+                      </div>
+                    ) : (
+                      <span
+                        onClick={isSpecial ? () => { setCustomPriceInput(String((s as any).custom_price || "")); setEditingCustomPrice(true); } : undefined}
+                        style={{ cursor: isSpecial ? "pointer" : "default", borderBottom: isSpecial ? "1px dashed var(--danger)" : "none" }}
+                      >
+                        {fmtAmt(pkgAmt)}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
+                  <td style={tdStyle}></td>
+                </tr>
                 {addonRows.map((a,i)=>(
                   <tr key={i} style={{ background:"var(--bg-2)" }}>
                     <td style={tdStyle}>{a.label}{a.isDiscount&&<span style={{ fontSize:10, color:"var(--success)", background:"var(--success-bg)", padding:"1px 6px", borderRadius:99, marginRight:6 }}>خصم</span>}</td>
@@ -1141,21 +1201,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         )}
 
 
-        {/* مودال تأكيد */}
-        {confirmMsg && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:2000 }}>
-            <div style={{ background:"var(--bg-card)", borderRadius:16, padding:28, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
-              <div style={{ width:48, height:48, borderRadius:"50%", background:"var(--danger-bg)", color:"var(--danger)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, margin:"0 auto 14px" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              </div>
-              <div style={{ fontSize:14, fontWeight:600, color:"var(--text)", marginBottom:20 }}>{confirmMsg}</div>
-              <div style={{ display:"flex", gap:10 }}>
-                <button onClick={()=>handleConfirm(true)} style={{ flex:1, padding:"9px", background:"var(--danger)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>تأكيد الحذف</button>
-                <button onClick={()=>handleConfirm(false)} style={{ flex:1, padding:"9px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>إلغاء</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* مودال تأكيد الإجراءات */}
+        <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         {/* مودال: مجموعة */}
         {showGroupModal&&(
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
@@ -1207,6 +1254,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
+        <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <PaymentDetailModal />
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={()=>setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
@@ -1232,7 +1280,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الاسم</th><th style={{ ...thStyle, textAlign:"center" }}>الباقة</th><th style={{ ...thStyle, textAlign:"center" }}>المطلوب</th><th style={{ ...thStyle, textAlign:"center" }}>المدفوع</th><th style={{ ...thStyle, textAlign:"center" }}>المتبقي</th><th style={{ ...thStyle, textAlign:"center" }}>الحالة</th></tr></thead>
                 <tbody>
-                  {filtered.map(({p,due,paid,balance},i)=>{const st=financeStatus(due,paid);return(<tr key={p.id} onClick={()=>{setSelectedP(p);setSubView("detail");}} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p.short_ar||p.name_ar}</td><td style={{ ...tdStyle, textAlign:"center", fontSize:11, color:"var(--text-muted)" }}>{pricing[getPackageKey(p.services.hotel_type)]?.label||"—"}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:600 }}>{fmtAmt(due)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td><td style={{ ...tdStyle, textAlign:"center", color:balance>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(balance)}</td><td style={{ ...tdStyle, textAlign:"center" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span></td></tr>);})}
+                  {filtered.map(({p,due,paid,balance},i)=>{const st=financeStatus(due,paid);return(<tr key={p.id} onClick={()=>{setSelectedP(p);setSubView("detail");}} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{p.short_ar||p.name_ar}</td><td style={{ ...tdStyle, textAlign:"center", fontSize:11, color:"var(--text-muted)" }}>{getPriceInfo(p.services, pricing).label||"—"}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:600 }}>{fmtAmt(due)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td><td style={{ ...tdStyle, textAlign:"center", color:balance>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(balance)}</td><td style={{ ...tdStyle, textAlign:"center" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span></td></tr>);})}
                   <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={3}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totDue)}</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totPaid)}</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totBal)}</td><td style={{ padding:"10px 12px" }}></td></tr>
                 </tbody>
               </table>
@@ -1254,98 +1302,4 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الباقة</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي المستحق</th></tr></thead>
-              <tbody>{PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}</tbody>
-            </table>
-          </div>
-        )}
-        {reportType==="addons"&&(
-          <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr><th style={thStyle}>الإضافة / الخصم</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي</th></tr></thead>
-              <tbody>{[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>(p as any).flight_class==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>(p as any).flight_class==="بدون"}].map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pricing[a.key]?.label||a.key}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ══════════════════════════════════════════════
-  // MAIN LIST VIEW
-  // ══════════════════════════════════════════════
-  const totDueAll=sortedPassengers.reduce((s,p)=>s+calcTotalDue(p,pricing,customCharges),0);
-  const totPaidAll=sortedPassengers.reduce((s,p)=>s+calcTotalPaid(p.id,payments),0);
-  const lateCount=sortedPassengers.filter(p=>calcTotalDue(p,pricing,customCharges)>calcTotalPaid(p.id,payments)).length;
-  return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
-      <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
-      <ReceiptModal />
-      <div style={{ padding:"12px 20px", background:"var(--bg-card)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-        <div style={{ fontFamily:"var(--font-body)", fontSize:20, fontWeight:800, color:"var(--primary)" }}>الحسابات المالية</div>
-        <div style={{ marginRight:"auto", display:"flex", gap:8 }}>
-          <button onClick={()=>setSubView("reports")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>التقارير</button>
-          <button onClick={()=>setSubView("settings")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>
-        </div>
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, padding:"12px 20px", flexShrink:0 }}>
-        {[{label:"إجمالي المطلوب",value:fmtAmt(totDueAll),color:"var(--text)",unit:"ر.ق"},{label:"إجمالي المحصل",value:fmtAmt(totPaidAll),color:"var(--success)",unit:"ر.ق"},{label:"إجمالي المتبقي",value:fmtAmt(totDueAll-totPaidAll),color:"var(--danger)",unit:"ر.ق"},{label:"عدد المتأخرين",value:String(lateCount),color:"var(--warning)",unit:"حاج"}].map(card=>(
-          <div key={card.label} style={{ background:"var(--bg-card)", borderRadius:12, padding:"14px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}><div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{card.label}</div><div style={{ fontSize:22, fontWeight:700, color:card.color }}>{card.value}</div><div style={{ fontSize:10, color:"var(--text-muted)" }}>{card.unit}</div></div>
-        ))}
-      </div>
-      <div style={{ padding:"0 20px 12px", display:"flex", gap:10, flexShrink:0 }}>
-        <input type="text" placeholder="🔍 بحث عن حاج..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} style={{ flex:1, padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13 }} />
-        <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value as any)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:120 }}>
-          <option value="all">كل الحالات</option><option value="paid">مسدد</option><option value="partial">جزئي</option><option value="unpaid">لم يدفع</option>
-        </select>
-        <select value={filterPackage} onChange={e=>setFilterPackage(e.target.value)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:130 }}>
-          <option value="all">كل الباقات</option>
-          {PRICING_KEYS.filter(k=>k.type==="package").map(pk=><option key={pk.key} value={pk.key}>{pk.label}</option>)}
-        </select>
-        {(searchTerm||filterStatus!=="all"||filterPackage!=="all")&&<button onClick={()=>{setSearchTerm("");setFilterStatus("all");setFilterPackage("all");}} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer", color:"var(--danger)", whiteSpace:"nowrap" }}>✕ مسح</button>}
-      </div>
-      {loading?(
-        <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", color:"var(--text-muted)" }}>جارٍ التحميل...</div>
-      ):(
-        <div style={{ flex:1, overflowY:"auto", padding:"0 20px 20px" }}>
-          {filteredPassengers.length===0?(
-            <div style={{ textAlign:"center", padding:40, color:"var(--text-muted)", fontSize:14 }}>لا توجد نتائج مطابقة للبحث</div>
-          ):(
-            <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
-              <div style={{ padding:"8px 16px", background:"var(--bg-2)", borderBottom:"1px solid var(--border)", fontSize:11, color:"var(--text-muted)" }}>عرض {filteredPassengers.length} من {sortedPassengers.length} حاج</div>
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead style={{ position:"sticky", top:0, zIndex:10 }}>
-                  <tr>{["م","الاسم","الباقة","الإضافات","المطلوب","المدفوع","المتبقي","الحالة"].map(h=><th key={h} style={{ ...thStyle, textAlign:h==="م"?"center":"right" }}>{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {filteredPassengers.map((p,i)=>{
-                    const due=calcTotalDue(p,pricing,customCharges),paid=calcTotalPaid(p.id,payments),bal=due-paid,st=financeStatus(due,paid),s=p.services;
-                    const badges:string[]=[];
-                    if(s.hotel_view==="مطلة") badges.push("مطلة");
-                    if(s.camp_mina==="خاص")  badges.push("منى خاص");
-                    if(s.camp_arafa==="خاص") badges.push("عرفة خاص");
-                    if(s.bus==="VIP")         badges.push("VIP");
-                    if((p as any).flight_class==="درجة أولى") badges.push("درجة أولى");
-                    if((p as any).flight_class==="بدون")      badges.push("بدون تذكرة");
-                    const pGroup=getPassengerGroup(p.id);
-                    return(
-                      <tr key={p.id} onClick={()=>{setSelectedP(p);setSubView("detail");}} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}>
-                        <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td>
-                        <td style={tdStyle}><div style={{ display:"flex", alignItems:"center", gap:6 }}>{p.short_ar||p.name_ar}{pGroup&&<span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"rgba(125,31,60,0.1)", color:"var(--em7)", cursor:"pointer" }} onClick={e=>{e.stopPropagation();setSelectedGroup(pGroup);setSubView("group");}}>{pGroup.name}</span>}</div></td>
-                        <td style={{ ...tdStyle, fontSize:11, color:"var(--text-muted)" }}>{pricing[getPackageKey(s.hotel_type)]?.label||"—"}</td>
-                        <td style={tdStyle}><div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>{badges.map(b=><span key={b} style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"var(--warning-bg)", color:"var(--warning)" }}>{b}</span>)}</div></td>
-                        <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(due)}</td>
-                        <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:700 }}>{fmtAmt(paid)}</td>
-                        <td style={{ ...tdStyle, textAlign:"center", color:bal>0?"var(--danger)":"var(--success)", fontWeight:700 }}>{fmtAmt(bal)}</td>
-                        <td style={{ ...tdStyle, textAlign:"center" }}><span style={{ fontSize:11, padding:"2px 10px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+              <tbody>{PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount|
