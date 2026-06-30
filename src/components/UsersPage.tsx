@@ -6,6 +6,7 @@ import { ALL_PERMISSIONS, inp, btnP, btnS, uploadDoc } from "../utils";
 import { useConfig } from "../config/ConfigContext";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
+import { ThemeSwitcher } from "../config/ThemeContext";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -168,22 +169,36 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, !allOn])));
   };
 
+  const [savingUser, setSavingUser] = useState(false);
+
   const saveUser = async () => {
     if (!form.name || !form.username) return;
-    if (editUser) {
-      if (form.password.trim()) {
-        await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
+    setSavingUser(true);
+    try {
+      if (editUser) {
+        if (form.password.trim()) {
+          const { error } = await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
+          if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error.message); return; }
+        } else {
+          const { error } = await supabase.from("users").update({ name: form.name, username: form.username, permissions: perms }).eq("id", editUser.id);
+          if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error.message); return; }
+        }
+        setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, username: form.username, permissions: perms } : u));
       } else {
-        await supabase.from("users").update({ name: form.name, username: form.username, permissions: perms }).eq("id", editUser.id);
+        if (!form.password) return;
+        const { error } = await supabase.rpc("create_user", { p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
+        if (error) { showAlert("error", "تعذر إنشاء المستخدم: " + error.message); return; }
+        const { data, error: fetchError } = await supabase.from("users").select("*").order("id");
+        if (fetchError) { showAlert("error", "تم الإنشاء لكن تعذر تحديث القائمة: " + fetchError.message); return; }
+        if (data) setUsers(data as User[]);
       }
-      setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, username: form.username, permissions: perms } : u));
-    } else {
-      if (!form.password) return;
-      await supabase.rpc("create_user", { p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
-      const { data } = await supabase.from("users").select("*").order("id");
-      if (data) setUsers(data as User[]);
+      showAlert("success", "تم حفظ بيانات المستخدم بنجاح");
+      setShowAdd(false);
+    } catch (e: any) {
+      showAlert("error", "حدث خطأ غير متوقع أثناء الحفظ: " + (e?.message || ""));
+    } finally {
+      setSavingUser(false);
     }
-    setShowAdd(false);
   };
 
   const deleteUser = async (id: number) => {
@@ -411,10 +426,24 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 </div>
               </div>
             </div>
+
+            {/* ── [FIX #6] المظهر — نفس الـ ThemeSwitcher الموجود في الداشبورد ── */}
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>المظهر</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>اختر مظهر النظام المفضل لديك</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <ThemeSwitcher />
+              </div>
+            </div>
           </div>
         )}
-
-        {/* ══════════ TAB 3: USERS ══════════ */}
         {activeTab === "users" && (
           <div>
             <div style={card}>
@@ -569,8 +598,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button onClick={saveUser} style={{ ...btnP(), flex: 1 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> حفظ
+          <button onClick={saveUser} disabled={savingUser} style={{ ...btnP(), flex: 1, opacity: savingUser ? 0.6 : 1 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> {savingUser ? "جاري الحفظ..." : "حفظ"}
           </button>
           <button onClick={() => setShowAdd(false)} style={btnS()}>إلغاء</button>
         </div>
