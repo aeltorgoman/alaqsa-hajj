@@ -124,5 +124,113 @@ function AlertModal({ alert, onClose }: { alert: AlertState | null; onClose: () 
   );
 }
 
-export { AlertModal, useAlert };
-export type { AlertState, AlertType };
+/* ═══════════════════════════════════════════════════════
+   useConfirm / ConfirmModal — بديل مخصص لـ window.confirm()
+   ═══════════════════════════════════════════════════════ */
+interface ConfirmState {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  danger: boolean;
+  resolve: (v: boolean) => void;
+}
+
+function useConfirm() {
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+
+  const confirmAction = useCallback(
+    (message: string, opts?: { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean }) => {
+      return new Promise<boolean>((resolve) => {
+        setConfirmState({
+          title: opts?.title || "تأكيد الإجراء",
+          message,
+          confirmLabel: opts?.confirmLabel || "تأكيد",
+          cancelLabel: opts?.cancelLabel || "إلغاء",
+          danger: opts?.danger ?? true,
+          resolve,
+        });
+      });
+    },
+    []
+  );
+
+  const handleConfirm = useCallback(() => {
+    confirmState?.resolve(true);
+    setConfirmState(null);
+  }, [confirmState]);
+
+  const handleCancel = useCallback(() => {
+    confirmState?.resolve(false);
+    setConfirmState(null);
+  }, [confirmState]);
+
+  return { confirmState, confirmAction, handleConfirm, handleCancel };
+}
+
+function ConfirmModal({
+  state,
+  onConfirm,
+  onCancel,
+}: {
+  state: ConfirmState | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!state) return null;
+  const c = state.danger ? "#C62828" : "var(--primary)";
+  const cBg = state.danger ? "#fff0f0" : "rgba(125,31,60,.08)";
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, zIndex: 10000,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "var(--paper)", borderRadius: 16, padding: 28,
+          width: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+          textAlign: "center", direction: "rtl",
+          animation: "alertSlideIn .2s ease",
+        }}
+      >
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%",
+          background: cBg, display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 14px",
+        }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round">
+            {state.danger
+              ? <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></>
+              : <><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></>
+            }
+          </svg>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 8 }}>{state.title}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 22, lineHeight: 1.6 }}>{state.message}</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onConfirm}
+            style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: c, color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}
+          >
+            {state.confirmLabel}
+          </button>
+          <button
+            onClick={onCancel}
+            style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}
+          >
+            {state.cancelLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export { AlertModal, useAlert, ConfirmModal, useConfirm };
+export type { AlertState, AlertType, ConfirmState };
