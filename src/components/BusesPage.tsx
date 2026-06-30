@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { AlertModal, useAlert } from "./AlertModal";
+import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE, VIP_ICON_COLOR } from "../utils";
@@ -41,6 +41,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
 function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const [buses, setBuses] = useState<Bus[]>([]);
   const [editingBusId, setEditingBusId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(new Set<number>());
@@ -96,7 +97,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", id)));
     setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, bus_id: currentBusId } : p));
     const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && p.bus_id == null && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
-    if (familyToAdd.length > 0 && confirm(`سيتم تعيين حجاج بدون أقاربهم.\nهل تريد إضافة أقاربهم معهم أيضًا؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`)) {
+    const familyOk = familyToAdd.length > 0 && await confirmAction(`سيتم تعيين حجاج بدون أقاربهم.\nهل تريد إضافة أقاربهم معهم أيضًا؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`, { title: "إضافة الأقارب", danger: false });
+    if (familyOk) {
       await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", p.id)));
       setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: Passenger) => f.id === p.id) ? { ...p, bus_id: currentBusId } : p));
     }
@@ -185,6 +187,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+      <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <BusesStats buses={buses} passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12 }}>
         <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
