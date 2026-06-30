@@ -82,10 +82,16 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const statusColor: Record<string, string> = {
-    "ممتلئة": primary,
-    "جزئية": "#D4A017",
-    "فارغة": "#2A9D8F",
-    "مجلس": "#3F51B5",
+    "ممتلئة": "#7D1F3C",
+    "جزئية": "#D97706",
+    "فارغة": "#059669",
+    "مجلس": "#7C3AED",
+  };
+  const statusBg: Record<string, string> = {
+    "ممتلئة": "#f8f8fa",
+    "جزئية": "#ffffff",
+    "فارغة": "#ffffff",
+    "مجلس": "#f5f3ff",
   };
 
   const filteredRooms = useMemo(() => {
@@ -212,51 +218,47 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       {/* ===== المحتوى الرئيسي ===== */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
-        {/* KPIs + Donut */}
+        {/* KPIs + Donut — ألوان جريئة ثابتة */}
         <div style={{ display: "flex", gap: 10, padding: "12px 12px 0", flexShrink: 0, alignItems: "stretch" }}>
           {/* كروت KPI */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, flex: 1 }}>
             {[
-              { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", color: primary, bg: `linear-gradient(135deg,${primary}18,${primary}06)`, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); setFilterFloor("الكل"); } },
-              { label: "حجاج موزعين", num: `${withRoom}`, sub: `من ${hajj.length} حاج`, color: "#0C7E6A", bg: "linear-gradient(135deg,rgba(12,126,106,.12),rgba(12,126,106,.03))", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
-              { label: "غرف متاحة", num: String(rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length), sub: "فيها مساحة", color: "#B85C00", bg: "linear-gradient(135deg,rgba(184,92,0,.12),rgba(184,92,0,.03))", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
+              { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", grad: "linear-gradient(135deg,#6C3CE1,#9B59B6)", shadow: "rgba(108,60,225,.35)", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); setFilterFloor("الكل"); } },
+              { label: "حجاج موزعين", num: `${withRoom}`, sub: `من ${hajj.length} حاج`, grad: "linear-gradient(135deg,#0EA5E9,#0284C7)", shadow: "rgba(14,165,233,.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
+              { label: "غرف متاحة", num: String(rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length), sub: "فيها مساحة", grad: "linear-gradient(135deg,#F59E0B,#D97706)", shadow: "rgba(245,158,11,.35)", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
             ].map(k => (
-              <div key={k.label} onClick={k.onClick} style={{ background: k.bg, border: `1px solid ${k.color}25`, borderRadius: 12, padding: "12px 14px", cursor: "pointer", transition: "all .15s", position: "relative", overflow: "hidden" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 16px ${k.color}20`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}>
-                {/* أيقونة كبيرة في الخلفية */}
-                <div style={{ position: "absolute", left: -8, bottom: -8, opacity: 0.06 }}>
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill={k.color} stroke="none" dangerouslySetInnerHTML={{ __html: k.icon }} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: `${k.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={k.color} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: k.icon }} />
+              <div key={k.label} onClick={k.onClick} style={{ background: k.grad, borderRadius: 16, padding: "14px 16px", cursor: "pointer", transition: "transform .15s", boxShadow: `0 6px 18px ${k.shadow}`, position: "relative", overflow: "hidden" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: k.icon }} />
                   </div>
-                  <div style={{ fontSize: 11, color: k.color, fontWeight: 700, opacity: 0.8 }}>{k.label}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", fontWeight: 700 }}>{k.label}</div>
                 </div>
-                <div style={{ fontSize: 36, fontWeight: 900, color: k.color, lineHeight: 1, letterSpacing: "-1px" }}>{k.num}</div>
-                <div style={{ fontSize: 10, color: k.color, fontWeight: 600, marginTop: 3, opacity: 0.65 }}>{k.sub}</div>
+                <div style={{ fontSize: 36, fontWeight: 900, color: "white", lineHeight: 1, letterSpacing: "-1.5px" }}>{k.num}</div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.75)", fontWeight: 600, marginTop: 4 }}>{k.sub}</div>
               </div>
             ))}
           </div>
           {/* دائرة نسبة التوزيع */}
-          <div style={{ background: `linear-gradient(135deg,${primary}12,${primary}04)`, border: `1px solid ${primary}25`, borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 110 }}>
+          <div style={{ background: `linear-gradient(135deg,${primary},${primary}cc)`, borderRadius: 16, padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 110, boxShadow: `0 6px 18px ${primary}44` }}>
             {(() => {
               const r = 32, circ = 2 * Math.PI * r;
               const stroke = circ * pct / 100;
               return (
                 <>
                   <svg width="84" height="84" viewBox="0 0 84 84">
-                    <circle cx="42" cy="42" r={r} fill="none" stroke={`${primary}20`} strokeWidth="8"/>
-                    <circle cx="42" cy="42" r={r} fill="none" stroke={primary} strokeWidth="8"
+                    <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="8"/>
+                    <circle cx="42" cy="42" r={r} fill="none" stroke="white" strokeWidth="8"
                       strokeDasharray={`${stroke} ${circ}`}
                       strokeLinecap="round"
                       transform="rotate(-90 42 42)"
                     />
-                    <text x="42" y="48" textAnchor="middle" fontSize="16" fontWeight="900" fill={primary}>{pct}٪</text>
+                    <text x="42" y="47" textAnchor="middle" fontSize="15" fontWeight="900" fill="white">{pct}٪</text>
                   </svg>
-                  <div style={{ fontSize: 11, color: primary, fontWeight: 700, marginTop: 4, opacity: 0.8 }}>نسبة التوزيع</div>
-                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{withRoom} من {hajj.length}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", fontWeight: 700, marginTop: 5 }}>نسبة التوزيع</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginTop: 1 }}>{withRoom} من {hajj.length}</div>
                 </>
               );
             })()}
@@ -327,34 +329,43 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
                     return (
                       <div key={room.id} onClick={() => openPanel(room)}
-                        style={{ background: isMajlis ? "rgba(63,81,181,0.04)" : "var(--paper)", border: `1.5px solid ${isSelected ? color : isMajlis ? "rgba(63,81,181,0.3)" : "var(--line)"}`, borderRadius: 10, padding: "10px 10px 8px", cursor: "pointer", transition: "all .15s", position: "relative", boxShadow: isSelected ? `0 4px 14px ${color}22` : "none" }}>
+                        style={{ background: statusBg[status] || "var(--paper)", border: `1.5px solid ${color}`, borderRadius: 12, padding: "10px 10px 8px", cursor: "pointer", transition: "all .18s", position: "relative", boxShadow: isSelected ? `0 6px 18px ${color}30` : `0 1px 4px ${color}12`, transform: isSelected ? "translateY(-2px)" : "none" }}
+                        onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px ${color}25`; } }}
+                        onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 1px 4px ${color}12`; } }}>
                         {/* نقطة الحالة */}
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, position: "absolute", top: 8, left: 8 }} />
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, position: "absolute", top: 9, left: 9 }} />
                         {/* رقم الغرفة */}
-                        <div style={{ fontSize: 22, fontWeight: 900, color: "var(--primary)", lineHeight: 1, marginBottom: 3 }}>{room.number}</div>
-                        {/* النوع + العدد في سطر واحد */}
+                        <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1, marginBottom: 5 }}>{room.number}</div>
+                        {/* النوع + شارة الحالة */}
                         {!isMajlis && (
-                          <div style={{ display:"flex",alignItems:"center",gap:4,marginBottom:5 }}>
+                          <div style={{ display:"flex",alignItems:"center",gap:5,marginBottom:7 }}>
                             <span style={{ fontSize:10,color:"var(--muted)",fontWeight:700 }}>{room.type}</span>
-                            <span style={{ fontSize:10,color:color,fontWeight:800 }}>{occ.length}/{cap}</span>
+                            <span style={{ fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,background:`${color}18`,color }}>
+                              {status === "فارغة" ? "✓ فارغة" : status === "جزئية" ? "جزئية" : "مكتملة"}
+                            </span>
                           </div>
                         )}
-                        {isMajlis && <div style={{ fontSize:10,color:"#3F51B5",fontWeight:700,marginBottom:5 }}>مجلس</div>}
+                        {isMajlis && <span style={{ fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,background:`${color}18`,color,marginBottom:7,display:"inline-block" }}>مجلس الحجاج</span>}
                         {/* الأسماء */}
-                        <div style={{ display:"flex",flexDirection:"column",gap:2,flex:1 }}>
-                          {isMajlis ? (
-                            <div style={{ fontSize:10,color:"#3F51B5",fontWeight:700 }}>مجلس الحجاج</div>
-                          ) : occ.length === 0 ? (
-                            <div style={{ fontSize:11,color:"#2A9D8F",fontWeight:700 }}>فارغة</div>
-                          ) : (
+                        <div style={{ display:"flex",flexDirection:"column",gap:3,flex:1 }}>
+                          {isMajlis ? null : occ.length === 0 ? null : (
                             occ.map(p => (
-                              <div key={p.id} style={{ fontSize: occ.length <= 2 ? 12 : 10, color:"var(--ink)",fontWeight: occ.length <= 2 ? 700 : 600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",gap:3 }}>
-                                <div style={{ width:3,height:3,borderRadius:"50%",background:color,flexShrink:0 }} />
+                              <div key={p.id} style={{ fontSize: occ.length <= 2 ? 12 : 10, color:"var(--ink)",fontWeight: occ.length <= 2 ? 700 : 600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",gap:4 }}>
+                                <div style={{ width:3,height:3,borderRadius:"50%",background:color,flexShrink:0,opacity:status==="ممتلئة"?0.5:1 }} />
                                 {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
                               </div>
                             ))
                           )}
                         </div>
+                        {/* شريط الإشغال */}
+                        {!isMajlis && (
+                          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"auto",paddingTop:6,borderTop:`1px solid ${color}15` }}>
+                            <div style={{ flex:1,height:3,borderRadius:99,background:`${color}15`,overflow:"hidden",marginLeft:8 }}>
+                              <div style={{ height:"100%",borderRadius:99,background:color,width:`${cap?Math.min(100,(occ.length/cap)*100):0}%` }} />
+                            </div>
+                            <span style={{ fontSize:10,fontWeight:800,color }}>{occ.length}/{cap}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
