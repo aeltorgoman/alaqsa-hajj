@@ -203,7 +203,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
             <div style={S.avatar}>{initials}</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{currentUser.name.split(" ")[0]}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", marginTop: 1 }}>مدير النظام</div>
+
             </div>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" strokeWidth="2" style={{ transition:"transform .2s", transform: showUserMenu ? "rotate(180deg)" : "rotate(0)" }}><polyline points="6 9 12 15 18 9"/></svg>
           </div>
