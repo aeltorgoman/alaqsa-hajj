@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
 import { useConfig } from "../config/ConfigContext";
 import { AlertModal, useAlert } from "./AlertModal";
+import { StatsRow, type StatCardData } from "./StatCard";
 
 const ROOM_TYPES: Room["type"][] = ["فردية", "ثنائية", "ثلاثية", "رباعية", "مجلس", "أخرى"];
 
@@ -112,6 +113,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const totalRooms = rooms.length;
   const withRoom = hajj.filter(p => (p as any).room_id).length;
   const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
+  const availableRooms = rooms.filter(r => { const c = TYPE_CAP[r.type] || 0; return c > 0 && roomPassengers(r.id).length < c; }).length;
+
+  const hotelCards: StatCardData[] = [
+    { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
+    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajj.length} حاج`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+    { label: "غرف متاحة", num: String(availableRooms), sub: "فيها مساحة", tone: "warning", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>` },
+    { label: "نسبة التوزيع", num: `${pct}٪`, sub: `${withRoom} من ${hajj.length}`, tone: "info", icon: `<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>` },
+  ];
 
   const addRoom = async () => {
     if (!addNum.trim() || !addFloor.trim()) { showAlert("error", "رقم الغرفة والدور مطلوبان"); return; }
@@ -218,52 +227,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       {/* ===== المحتوى الرئيسي ===== */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
-        {/* KPIs + Donut — ألوان جريئة ثابتة */}
-        <div style={{ display: "flex", gap: 10, padding: "12px 12px 0", flexShrink: 0, alignItems: "stretch" }}>
-          {/* كروت KPI */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, flex: 1 }}>
-            {[
-              { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", grad: "linear-gradient(135deg,#5C1228,#A8294F)", shadow: "rgba(92,18,40,.45)", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); setFilterFloor("الكل"); } },
-              { label: "حجاج موزعين", num: `${withRoom}`, sub: `من ${hajj.length} حاج`, grad: "linear-gradient(135deg,#064E3B,#059669)", shadow: "rgba(6,78,59,.4)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
-              { label: "غرف متاحة", num: String(rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length), sub: "فيها مساحة", grad: "linear-gradient(135deg,#8B6700,#D4A017)", shadow: "rgba(212,160,23,.45)", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
-            ].map(k => (
-              <div key={k.label} onClick={k.onClick} style={{ background: k.grad, borderRadius: 16, padding: "14px 16px", cursor: "pointer", transition: "transform .15s", boxShadow: `0 6px 18px ${k.shadow}`, position: "relative", overflow: "hidden" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: k.icon }} />
-                  </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", fontWeight: 700 }}>{k.label}</div>
-                </div>
-                <div style={{ fontSize: 36, fontWeight: 900, color: "white", lineHeight: 1, letterSpacing: "-1.5px" }}>{k.num}</div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,.75)", fontWeight: 600, marginTop: 4 }}>{k.sub}</div>
-              </div>
-            ))}
-          </div>
-          {/* دائرة نسبة التوزيع */}
-          <div style={{ background: "var(--paper)", border: "1.5px solid var(--line)", borderRadius: 16, padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 110, boxShadow: "0 4px 14px rgba(0,0,0,.07)" }}>
-            {(() => {
-              const r = 32, circ = 2 * Math.PI * r;
-              const stroke = circ * pct / 100;
-              return (
-                <>
-                  <svg width="84" height="84" viewBox="0 0 84 84">
-                    <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(125,31,60,.12)" strokeWidth="8"/>
-                    <circle cx="42" cy="42" r={r} fill="none" stroke="#7D1F3C" strokeWidth="8"
-                      strokeDasharray={`${stroke} ${circ}`}
-                      strokeLinecap="round"
-                      transform="rotate(-90 42 42)"
-                    />
-                    <text x="42" y="47" textAnchor="middle" fontSize="15" fontWeight="900" fill="#5C1228">{pct}٪</text>
-                  </svg>
-                  <div style={{ fontSize: 11, color: "var(--ink)", fontWeight: 700, marginTop: 5 }}>نسبة التوزيع</div>
-                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{withRoom} من {hajj.length}</div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
+        {/* كروت KPI — موحّدة مع باقي الصفحات */}
+        <StatsRow cards={hotelCards} />
 
         {/* Row 1: كروت أنواع الغرف + بحث + فلتر + إضافة */}
         <div style={{ display: "flex", gap: 6, padding: "8px 12px 0", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
