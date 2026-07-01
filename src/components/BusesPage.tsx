@@ -6,7 +6,7 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE, VIP_ICON_COLOR } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -44,7 +44,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const [buses, setBuses] = useState<Bus[]>([]);
   const [editingBusId, setEditingBusId] = useState<number | null>(null);
-  const [expanded, setExpanded] = useState(new Set<number>());
   const [showAdd, setShowAdd] = useState(false);
   const [showAddP, setShowAddP] = useState(false);
   const [busName, setBusName] = useState("");
@@ -69,7 +68,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const getBusPassengers = (busId: number) =>
     passengers.filter(p => p.bus_id === busId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-  const toggleBus = (id: number) => setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const addBus = async () => {
     if (!busName.trim()) { setNameError("يرجى إدخال اسم الباص"); return; }
@@ -92,7 +90,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     setBuses(prev => prev.filter(b => b.id !== id));
   };
 
-  const openAddP = (busId: number) => { setCurrentBusId(busId); setSelectedP(new Set()); setPSearch(""); setShowAddP(true); };
   const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const confirmAddP = async () => {
