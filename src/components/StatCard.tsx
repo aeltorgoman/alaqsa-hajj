@@ -49,12 +49,57 @@ export interface StatCardData {
   tone: StatTone;
   /** مسار SVG اختياري (Lucide) — يُستخدم بدلاً من الأيقونة الافتراضية للـ tone */
   icon?: string;
+  /** الكارت الرئيسي — يظهر بخلفية ملونة جريئة، الباقي بيضاء بشريط علوي */
+  featured?: boolean;
 }
 
 /** كارت إحصائية واحد */
-export function StatCard({ label, num, sub, tone, icon }: StatCardData) {
+export function StatCard({ label, num, sub, tone, icon, featured = false }: StatCardData) {
   const s = TONE_STYLES[tone];
   const iconPath = icon ?? s.icon;
+
+  /* ── كارت عادي — أبيض بشريط علوي ملون ── */
+  if (!featured) {
+    /* استخراج لون أساسي من الـ gradient للاستخدام في الأرقام والشريط */
+    const accentColor = tone === "brand" ? "var(--primary)"
+      : tone === "success" ? "#059669"
+      : tone === "danger"  ? "#DC2626"
+      : tone === "warning" ? "#D4A017"
+      : tone === "info"    ? "#2563EB"
+      : tone === "female"  ? "#DB2777"
+      : "#6B7280";
+    return (
+      <div style={{
+        background: "var(--paper)",
+        borderRadius: 14, overflow: "hidden",
+        border: "1px solid var(--line)",
+        boxShadow: "0 1px 4px rgba(0,0,0,.06)",
+        transition: "transform .15s, box-shadow .15s",
+        cursor: "default",
+      }}
+        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 14px rgba(0,0,0,.1)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.06)"; }}
+      >
+        {/* شريط علوي ملون */}
+        <div style={{ height: 4, background: s.grad }} />
+        <div style={{ padding: "12px 14px" }}>
+          {/* أيقونة + عنوان */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${accentColor}14`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: iconPath }} />
+            </div>
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{label}</div>
+          </div>
+          {/* الرقم */}
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 900, color: accentColor, lineHeight: 1, letterSpacing: "-1px" }}>{num}</div>
+          {/* النص الفرعي */}
+          <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 4 }}>{sub}</div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── كارت featured — ملون جريء ── */
   return (
     <div
       style={{
@@ -67,47 +112,17 @@ export function StatCard({ label, num, sub, tone, icon }: StatCardData) {
         transition: "transform .15s, box-shadow .15s",
         cursor: "default",
       }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 10px 24px ${s.shadow}`;
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.transform = "none";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px ${s.shadow}`;
-      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 10px 24px ${s.shadow}`; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px ${s.shadow}`; }}
     >
-      {/* دائرة زخرفية خلفية */}
-      <div style={{
-        position: "absolute", bottom: -18, left: -18,
-        width: 72, height: 72, borderRadius: "50%",
-        background: "rgba(255,255,255,.08)",
-        pointerEvents: "none",
-      }} />
-      {/* أيقونة + عنوان */}
+      <div style={{ position: "absolute", bottom: -18, left: -18, width: 72, height: 72, borderRadius: "50%", background: "rgba(255,255,255,.08)", pointerEvents: "none" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: 9,
-          background: "rgba(255,255,255,.18)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
-        }}>
-          <svg
-            width="15" height="15" viewBox="0 0 24 24"
-            fill="none" stroke="white" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round"
-            dangerouslySetInnerHTML={{ __html: iconPath }}
-          />
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: iconPath }} />
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", fontWeight: 700 }}>{label}</div>
       </div>
-      {/* الرقم الرئيسي */}
-      <div style={{
-        fontFamily: "var(--font-heading)",
-        fontSize: 36, fontWeight: 900,
-        color: "white", lineHeight: 1,
-        letterSpacing: "-1px",
-      }}>{num}</div>
-      {/* النص الفرعي */}
+      <div style={{ fontFamily: "var(--font-heading)", fontSize: 36, fontWeight: 900, color: "white", lineHeight: 1, letterSpacing: "-1px" }}>{num}</div>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,.72)", fontWeight: 600, marginTop: 5 }}>{sub}</div>
     </div>
   );
