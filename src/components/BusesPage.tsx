@@ -49,7 +49,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [busType, setBusType] = useState("عادي");
   const [nameError, setNameError] = useState("");
   const [showAddP, setShowAddP] = useState(false);
-  const [currentBusId, setCurrentBusId] = useState<number | null>(null);
+  const [currentBusId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
