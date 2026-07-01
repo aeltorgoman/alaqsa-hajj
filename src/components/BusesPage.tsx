@@ -45,11 +45,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [buses, setBuses] = useState<Bus[]>([]);
   const [editingBusId, setEditingBusId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [showAddP, setShowAddP] = useState(false);
   const [busName, setBusName] = useState("");
   const [busType, setBusType] = useState("عادي");
   const [nameError, setNameError] = useState("");
-  const [currentBusId, setCurrentBusId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
@@ -78,7 +76,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!error && data?.[0]) {
       const newBus = data[0] as Bus;
       setBuses(prev => [...prev, newBus]);
-      setExpanded(prev => new Set([...prev, newBus.id]));
       setBusName(""); setBusType("عادي"); setShowAdd(false);
     }
   };
