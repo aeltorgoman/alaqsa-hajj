@@ -86,13 +86,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const statusColor: Record<string, string> = {
     "مكتملة": "#7D1F3C",
-    "قيد التسكين": "#D97706",
+    "قيد التسكين": "#1D4ED8",
     "جاهزة": "#059669",
     "مجلس": "#7C3AED",
   };
   const statusLabel: Record<string, string> = {
     "مكتملة": "🔴 مكتملة",
-    "قيد التسكين": "🟡 قيد التسكين",
+    "قيد التسكين": "🔵 قيد التسكين",
     "جاهزة": "🟢 جاهزة",
     "مجلس": "مجلس",
   };
@@ -264,7 +264,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
 
         {/* Row 2: أزرار الأدوار */}
-        <div style={{ display:"flex",gap:4,padding:"6px 12px 0",flexShrink:0,overflowX:"auto" }}>
+        <div style={{ display:"flex",gap:4,padding:"6px 12px 0",flexShrink:0,overflowX:"auto",msOverflowStyle:"none",scrollbarWidth:"none" }}>
           <button onClick={() => setFilterFloor("الكل")}
             style={{ padding:"4px 12px",borderRadius:99,border: filterFloor==="الكل"?"1.5px solid var(--primary)":"1.5px solid var(--line)",background: filterFloor==="الكل"?"var(--primary)":"var(--paper)",color: filterFloor==="الكل"?"white":"var(--muted)",fontFamily:"var(--font-body)",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0,transition:"all .15s" }}>
             الكل
@@ -321,12 +321,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                           onMouseEnter={() => setHoveredCardId(room.id)}
                           onMouseLeave={() => setHoveredCardId(null)}
                           style={{
-                            background: "var(--paper)", borderRadius: 12, cursor: "pointer",
+                            background: status === "مكتملة" ? "#f3f4f6" : "var(--paper)", borderRadius: 12, cursor: "pointer",
                             transition: "all .18s", position: "relative", height: 130,
                             display: "flex", flexDirection: "column", overflow: "hidden",
                             border: isSelected ? `2.5px solid var(--primary)` : "1px solid var(--line)",
                             boxShadow: isSelected ? `0 4px 16px rgba(125,31,60,.25)` : isHovered ? "0 4px 14px rgba(0,0,0,.1)" : "0 1px 4px rgba(0,0,0,.06)",
                             transform: isSelected || isHovered ? "translateY(-2px)" : "none",
+                            opacity: status === "مكتملة" ? 0.82 : 1,
                           }}>
                           {/* شريط ملون في الأعلى */}
                           <div style={{ height: 4, background: color, flexShrink: 0 }} />
@@ -345,9 +346,16 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                               {isMajlis && <span style={{ fontSize: 9, color: "#7c3aed", fontWeight: 700 }}>مجلس</span>}
                             </div>
 
-                            {/* أسماء أو زرار إضافة */}
+                            {/* أسماء أو زرار إضافة أو مجلس */}
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minHeight: 0 }}>
-                              {isEmpty ? (
+                              {isMajlis ? (
+                                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <div style={{ textAlign: "center", color: "#7C3AED", opacity: .6 }}>
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                    <div style={{ fontSize: 10, fontWeight: 700, marginTop: 3 }}>مجلس الحجاج</div>
+                                  </div>
+                                </div>
+                              ) : isEmpty ? (
                                 <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 4, color, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: `1px dashed ${color}60`, background: `${color}06` }}>
                                     <span style={{ fontSize: 14 }}>＋</span> إضافة حاج
