@@ -170,7 +170,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     await supabase.from("rooms").delete().eq("id", room.id);
     setRooms(prev => prev.filter(r => r.id !== room.id));
     setSelectedRoom(null);
-    showAlert("success", "تم حذف الغرفة");
+    showAlert("success", "تم حذف الغرفة"); setTimeout(() => showAlert(null), 2500);
   };
 
   const saveRoomType = async (type: Room["type"]) => {
