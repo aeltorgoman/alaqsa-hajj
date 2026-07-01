@@ -89,12 +89,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     "فارغة": "#059669",
     "مجلس": "#7C3AED",
   };
-  const statusBg: Record<string, string> = {
-    "ممتلئة": "#f8f8fa",
-    "جزئية": "#ffffff",
-    "فارغة": "#ffffff",
-    "مجلس": "#f5f3ff",
-  };
+
 
   const filteredRooms = useMemo(() => {
     return rooms.filter(r => {
