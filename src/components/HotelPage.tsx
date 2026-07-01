@@ -223,9 +223,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           {/* كروت KPI */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, flex: 1 }}>
             {[
-              { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", grad: "linear-gradient(135deg,#6C3CE1,#9B59B6)", shadow: "rgba(108,60,225,.35)", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); setFilterFloor("الكل"); } },
-              { label: "حجاج موزعين", num: `${withRoom}`, sub: `من ${hajj.length} حاج`, grad: "linear-gradient(135deg,#0EA5E9,#0284C7)", shadow: "rgba(14,165,233,.35)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
-              { label: "غرف متاحة", num: String(rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length), sub: "فيها مساحة", grad: "linear-gradient(135deg,#F59E0B,#D97706)", shadow: "rgba(245,158,11,.35)", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
+              { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", grad: "linear-gradient(135deg,#5C1228,#A8294F)", shadow: "rgba(92,18,40,.45)", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>`, onClick: () => { setFilterType(null); setFilterStatus("الكل"); setFilterFloor("الكل"); } },
+              { label: "حجاج موزعين", num: `${withRoom}`, sub: `من ${hajj.length} حاج`, grad: "linear-gradient(135deg,#064E3B,#059669)", shadow: "rgba(6,78,59,.4)", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, onClick: () => {} },
+              { label: "غرف متاحة", num: String(rooms.filter(r => { const c = TYPE_CAP[r.type]||0; return c > 0 && roomPassengers(r.id).length < c; }).length), sub: "فيها مساحة", grad: "linear-gradient(135deg,#8B6700,#D4A017)", shadow: "rgba(212,160,23,.45)", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`, onClick: () => { setFilterType(null); setFilterStatus("جزئية"); setFilterFloor("الكل"); } },
             ].map(k => (
               <div key={k.label} onClick={k.onClick} style={{ background: k.grad, borderRadius: 16, padding: "14px 16px", cursor: "pointer", transition: "transform .15s", boxShadow: `0 6px 18px ${k.shadow}`, position: "relative", overflow: "hidden" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
@@ -242,23 +242,23 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             ))}
           </div>
           {/* دائرة نسبة التوزيع */}
-          <div style={{ background: `linear-gradient(135deg,${primary},${primary}cc)`, borderRadius: 16, padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 110, boxShadow: `0 6px 18px ${primary}44` }}>
+          <div style={{ background: "var(--paper)", border: "1.5px solid var(--line)", borderRadius: 16, padding: "14px 18px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0, minWidth: 110, boxShadow: "0 4px 14px rgba(0,0,0,.07)" }}>
             {(() => {
               const r = 32, circ = 2 * Math.PI * r;
               const stroke = circ * pct / 100;
               return (
                 <>
                   <svg width="84" height="84" viewBox="0 0 84 84">
-                    <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="8"/>
-                    <circle cx="42" cy="42" r={r} fill="none" stroke="white" strokeWidth="8"
+                    <circle cx="42" cy="42" r={r} fill="none" stroke="rgba(125,31,60,.12)" strokeWidth="8"/>
+                    <circle cx="42" cy="42" r={r} fill="none" stroke="#7D1F3C" strokeWidth="8"
                       strokeDasharray={`${stroke} ${circ}`}
                       strokeLinecap="round"
                       transform="rotate(-90 42 42)"
                     />
-                    <text x="42" y="47" textAnchor="middle" fontSize="15" fontWeight="900" fill="white">{pct}٪</text>
+                    <text x="42" y="47" textAnchor="middle" fontSize="15" fontWeight="900" fill="#5C1228">{pct}٪</text>
                   </svg>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", fontWeight: 700, marginTop: 5 }}>نسبة التوزيع</div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginTop: 1 }}>{withRoom} من {hajj.length}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink)", fontWeight: 700, marginTop: 5 }}>نسبة التوزيع</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{withRoom} من {hajj.length}</div>
                 </>
               );
             })()}
