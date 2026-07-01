@@ -5,6 +5,7 @@ import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
 import { Dashboard } from "./components/Dashboard";
 import { DashboardBanner } from "./components/DashboardBanner";
+import { TopBar } from "./components/TopBar";
 import { PassengersPage } from "./components/PassengersPage";
 import { BusesPage } from "./components/BusesPage";
 import { FlightsPage } from "./components/FlightsPage";
@@ -135,14 +136,16 @@ export default function App() {
 
         {/* المحتوى — يتمرر بشكل طبيعي */}
         <div style={{ flex: 1, minWidth: 0, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+          {page !== "dash" && (
+            <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />
+          )}
           {isFull ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               {renderPage()}
             </div>
           ) : (
-            <div style={{ background: "var(--ivory)", padding: "20px", paddingTop: "20px" }}>
+            <div style={{ background: "var(--ivory)", padding: "20px" }}>
               <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
-                <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 600, color: "var(--text)", marginBottom: page === "reports" ? 8 : 16 }}>{pageTitles[page]}</div>
                 {renderPage()}
               </div>
             </div>
