@@ -115,7 +115,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
     { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajj.length} حاج`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
     { label: "غرف متاحة", num: String(availableRooms), sub: "فيها مساحة", tone: "warning", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>` },
-    { label: "نسبة التوزيع", num: `${pct}٪`, sub: `${withRoom} من ${hajj.length}`, tone: "info", icon: `<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>` },
+    { label: "نسبة التوزيع", num: `${pct}٪`, sub: `${withRoom} من ${hajj.length}`, tone: "info", featured: true, icon: `<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>` },
   ];
 
   const addRoom = async () => {
