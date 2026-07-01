@@ -59,8 +59,8 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 16px", height: 46, flexShrink: 0,
-        background: `linear-gradient(135deg,${primary},${primary}cc)`,
-        boxShadow: `0 2px 12px ${primary}44`,
+        background: "linear-gradient(135deg,var(--primary),var(--em8))",
+        boxShadow: "0 2px 12px rgba(0,0,0,.2)",
         position: "relative", overflow: "hidden", zIndex: 10,
       }}>
         {/* pattern خلفية خفيف */}
