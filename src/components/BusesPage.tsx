@@ -29,7 +29,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
 
   const cards: StatCardData[] = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
-    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, tone: "success" },
+    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, tone: "success", featured: true },
     { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
     { label: "طالبين VIP", num: vipRequested, sub: `${total ? Math.round(vipRequested / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
   ];
@@ -53,6 +53,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [currentBusId, setCurrentBusId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
+  const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
+  const [drawerPSearch, setDrawerPSearch] = useState("");
 
   // Drag state
   const dragPassengerId = useRef<number | null>(null);
@@ -196,92 +198,167 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         {buses.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
 
+      {/* شبكة الباصات */}
       {!buses.length ? (
-        <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
-          <br />لا يوجد باصات بعد
+        <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)", fontSize: 12 }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+          <div style={{ marginTop: 8 }}>لا يوجد باصات بعد</div>
         </div>
-      ) : buses.map((bus, idx) => {
-        const isExpanded = expanded.has(bus.id);
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
+          {buses.map((bus, idx) => {
+            const bp = getBusPassengers(bus.id);
+            const isVIP = bus.type === "VIP";
+            const busColor = isVIP ? "#D4A017" : ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
+            const cap = 50; // سعة قياسية للباص
+            const fillPct = Math.min(100, Math.round(bp.length / cap * 100));
+            const isSelected = selectedBusId === bus.id;
+            return (
+              <div key={bus.id} onClick={() => setSelectedBusId(bus.id)}
+                style={{
+                  background: "var(--paper)", borderRadius: 12, cursor: "pointer",
+                  border: isSelected ? "2.5px solid var(--primary)" : "1px solid var(--line)",
+                  boxShadow: isSelected ? "0 4px 16px rgba(125,31,60,.2)" : "0 1px 4px rgba(0,0,0,.06)",
+                  transition: "all .18s", overflow: "hidden",
+                  transform: isSelected ? "translateY(-2px)" : "none",
+                }}
+                onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 14px rgba(0,0,0,.1)"; } }}
+                onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.06)"; } }}>
+                {/* شريط علوي ملون */}
+                <div style={{ height: 4, background: isVIP ? "linear-gradient(90deg,#b8860b,#D4A017)" : `linear-gradient(90deg,${busColor},${busColor}bb)` }} />
+                <div style={{ padding: "10px 10px 8px" }}>
+                  {/* رقم الباص + النوع */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
+                    <span style={{ fontSize: 16, fontWeight: 900, color: busColor, lineHeight: 1 }}>{bus.name}</span>
+                    {isVIP && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "#D4A01718", color: "#b8860b" }}>VIP</span>}
+                  </div>
+                  {/* عدد المسافرين */}
+                  {bp.length === 0 ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 0" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: busColor, padding: "3px 8px", borderRadius: 8, border: `1px dashed ${busColor}60`, background: `${busColor}06` }}>
+                        ＋ إضافة مسافر
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 6 }}>
+                      {bp.slice(0,3).map(p => (
+                        <div key={p.id} style={{ fontSize: 10, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1 }}>
+                          · {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
+                        </div>
+                      ))}
+                      {bp.length > 3 && <div style={{ fontSize: 10, color: busColor, fontWeight: 700 }}>+{bp.length - 3} آخرون</div>}
+                    </div>
+                  )}
+                  {/* شريط الإشغال */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ flex: 1, height: 3, borderRadius: 99, background: `${busColor}18`, overflow: "hidden" }}>
+                      <div style={{ height: "100%", borderRadius: 99, background: busColor, width: `${fillPct}%`, transition: "width .3s" }} />
+                    </div>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: busColor }}>{bp.length}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ===== Drawer تفاصيل الباص ===== */}
+      {selectedBusId !== null && (() => {
+        const bus = buses.find(b => b.id === selectedBusId);
+        if (!bus) return null;
         const bp = getBusPassengers(bus.id);
         const isVIP = bus.type === "VIP";
-        const busColor = isVIP ? VIP_ICON_COLOR : ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
+        const busIdx = buses.findIndex(b => b.id === selectedBusId);
+        const busColor = isVIP ? "#D4A017" : ICON_COLOR_CYCLE[busIdx % ICON_COLOR_CYCLE.length];
+        const drawerFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch)));
         return (
-          <div key={bus.id} style={{ border: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, marginBottom: 8, overflow: "hidden" }}>
-            {/* Header */}
-            <div onClick={() => toggleBus(bus.id)} style={{ padding: "10px 12px", background: isVIP ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: busColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
-              </div>
-              <div style={{ flex: 1 }}>
-                {editingBusId === bus.id ? (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                    <input defaultValue={bus.name} id={`bus-name-${bus.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 120 }} onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-name-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} autoFocus />
-                    <button onClick={() => { const v = (document.getElementById(`bus-name-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+          <div onClick={() => setSelectedBusId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 -8px 32px rgba(0,0,0,.25)" }}>
+              {/* هيدر الـ Drawer */}
+              <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: `${busColor}18`, display: "flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${busColor}30` }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={busColor} strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
                   </div>
-                ) : (
-                  <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }} onDoubleClick={e => { e.stopPropagation(); setEditingBusId(bus.id); }}>
-                    {bus.name}
-                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isVIP ? "var(--warning-bg)" : "var(--info-bg)", color: isVIP ? "var(--warning)" : "var(--info)" }}>{isVIP ? "VIP" : "عادي"}</span>
+                  <div style={{ flex: 1 }}>
+                    {editingBusId === bus.id ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input defaultValue={bus.name} id={`bus-drawer-${bus.id}`} style={{ ...inp, fontSize: 14, padding: "4px 10px", width: 140 }} autoFocus onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-drawer-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
+                        <button onClick={() => { const v = (document.getElementById(`bus-drawer-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--ink)" }} onDoubleClick={() => setEditingBusId(bus.id)}>{bus.name}</div>
+                        {isVIP && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "#D4A01720", color: "#b8860b" }}>VIP</span>}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{bp.length} مسافر</div>
                   </div>
-                )}
+                  {/* أزرار الهيدر */}
+                  <button onClick={() => printBus(bus)} style={{ ...btnS(), flexShrink: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  </button>
+                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} style={{ background: "none", border: "1px solid rgba(198,40,40,.2)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#C62828", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                  </button>
+                  <button onClick={() => setSelectedBusId(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 20, lineHeight: 1, padding: "4px 6px", flexShrink: 0 }}>✕</button>
+                </div>
               </div>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 4 }}>{bp.length} مسافر</span>
-              <button onClick={e => { e.stopPropagation(); printBus(bus); }} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button>
-              <button onClick={e => { e.stopPropagation(); openAddP(bus.id); }} style={{ ...btnS(), background: "rgba(125,31,60,0.08)", borderColor: "var(--em7)", color: "var(--em7)" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-              <button onClick={e => { e.stopPropagation(); deleteBus(bus.id); }} style={{ background: "none", border: `1px solid ${bp.length === 0 ? "rgba(122,46,69,0.2)" : "var(--line)"}`, borderRadius: 6, padding: "4px 7px", cursor: bp.length === 0 ? "pointer" : "not-allowed", color: bp.length === 0 ? "var(--ff)" : "var(--text-muted)", transition: "var(--transition)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
-            </div>
 
-            {/* Passengers list with Drag & Drop */}
-            {isExpanded && (
-              <div
-                style={{ padding: "8px 12px", borderTop: `0.5px solid ${isVIP ? "var(--accent)" : "var(--border)"}` }}
+              {/* قائمة المسافرين */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}
                 onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(bus.id)}
-              >
-                {bp.length ? bp.map((p, i) => (
-                  <div
-                    key={p.id}
-                    draggable
-                    onDragStart={() => handleDragStart(p.id)}
-                    onDragOver={e => handleDragOver(e, p.id)}
-                    onDragEnd={handleDragEnd}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "5px 4px", borderRadius: 6, marginBottom: 2,
-                      background: draggingId === p.id ? "rgba(125,31,60,0.08)" : dragOverId === p.id ? "rgba(125,31,60,0.04)" : "transparent",
-                      border: `1px solid ${dragOverId === p.id ? "var(--em7)" : "transparent"}`,
-                      cursor: "grab", transition: "background 0.15s",
-                      opacity: draggingId === p.id ? 0.5 : 1,
-                    }}
-                  >
-                    {/* أيقونة السحب */}
+                onDrop={() => handleDrop(bus.id)}>
+                {bp.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد مسافرون بعد</div>
+                ) : bp.map((p, i) => (
+                  <div key={p.id} draggable onDragStart={() => handleDragStart(p.id)} onDragOver={e => handleDragOver(e, p.id)} onDragEnd={handleDragEnd}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? "rgba(125,31,60,.06)" : dragOverId === p.id ? "rgba(125,31,60,.03)" : "transparent", cursor: "grab", opacity: draggingId === p.id ? 0.5 : 1 }}>
                     <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
-                        <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
-                        <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
-                      </svg>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
                     </span>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", width: 18, textAlign: "center" }}>{i + 1}</span>
-                    <Avatar name={p.name_ar} gender={p.gender} size={24} />
-                    <span style={{ fontSize: 11, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                    {p.services?.bus === "VIP" && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
-                    <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 4, padding: "2px 4px", fontFamily: "inherit" }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)", width: 22, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
+                    <Avatar name={p.name_ar} gender={p.gender} size={28} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                    {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
+                    <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 11, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 6, padding: "3px 6px", fontFamily: "inherit" }}>
                       <option value="">نقل لـ...</option>
                       {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
-                    <button onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 18, lineHeight: 1, padding: "0 4px" }}>✕</button>
+                    <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#C62828", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
                   </div>
-                )) : (
-                  <div style={{ textAlign: "center", padding: "10px", color: "var(--text-muted)", fontSize: 11 }}>لا يوجد مسافرون</div>
+                ))}
+              </div>
+
+              {/* إضافة مسافرين */}
+              <div style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 10, padding: "7px 12px", marginBottom: 8 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                  <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث لإضافة مسافر..." value={drawerPSearch} onChange={e => setDrawerPSearch(e.target.value)} />
+                </div>
+                {drawerPSearch && (
+                  <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 10, background: "var(--paper)" }}>
+                    {drawerFiltered.length === 0 ? (
+                      <div style={{ padding: 12, textAlign: "center", fontSize: 11, color: "var(--muted)" }}>لا توجد نتائج</div>
+                    ) : drawerFiltered.map(p => (
+                      <div key={p.id} onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); setDrawerPSearch(""); }}
+                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                        <Avatar name={p.name_ar} gender={p.gender} size={26} />
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "2px 7px", borderRadius: 99 }}>VIP</span>}
+                        <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>+ إضافة</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         );
-      })}
+      })()}
 
       {/* Modal إضافة باص */}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="إضافة باص جديد" maxWidth={340}>
