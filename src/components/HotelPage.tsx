@@ -54,6 +54,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [editingRoomNum, setEditingRoomNum] = useState(false);
   const [newRoomNum, setNewRoomNum] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
+  const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.from("rooms").select("*")
@@ -169,7 +170,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!selectedRoom) return;
     await supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId);
     setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } as any : p));
-    setShowAddPilgrim(false);
     setPSearch("");
   };
 
@@ -292,45 +292,66 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     const isSelected = selectedRoom?.id === room.id;
                     const isMajlis = room.type === "مجلس";
 
+                    const visibleOcc = occ.slice(0, 2);
+                    const extraCount = occ.length - 2;
+                    const isExpanded = expandedCardId === room.id;
+
                     return (
                       <div key={room.id} onClick={() => openPanel(room)}
-                        style={{ background: statusBg[status] || "var(--paper)", border: `1.5px solid ${color}`, borderRadius: 12, padding: "10px 10px 8px", cursor: "pointer", transition: "all .18s", position: "relative", boxShadow: isSelected ? `0 6px 18px ${color}30` : `0 1px 4px ${color}12`, transform: isSelected ? "translateY(-2px)" : "none" }}
-                        onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px ${color}25`; } }}
-                        onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 1px 4px ${color}12`; } }}>
-                        {/* نقطة الحالة */}
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, position: "absolute", top: 9, left: 9 }} />
-                        {/* رقم الغرفة */}
-                        <div style={{ fontSize: 22, fontWeight: 900, color, lineHeight: 1, marginBottom: 5 }}>{room.number}</div>
-                        {/* النوع + شارة الحالة */}
-                        {!isMajlis && (
-                          <div style={{ display:"flex",alignItems:"center",gap:5,marginBottom:7 }}>
-                            <span style={{ fontSize:10,color:"var(--muted)",fontWeight:700 }}>{room.type}</span>
-                            <span style={{ fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,background:`${color}18`,color }}>
-                              {status === "فارغة" ? "✓ فارغة" : status === "جزئية" ? "جزئية" : "مكتملة"}
-                            </span>
+                        style={{ background: "var(--paper)", borderRadius: 12, cursor: "pointer", transition: "all .18s", position: "relative", boxShadow: isSelected ? `0 6px 18px ${color}30` : "0 1px 6px rgba(0,0,0,.08)", transform: isSelected ? "translateY(-2px)" : "none", height: 130, display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid var(--line)" }}
+                        onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px rgba(0,0,0,.12)`; } }}
+                        onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 6px rgba(0,0,0,.08)"; } }}>
+                        {/* شريط ملون في الأعلى */}
+                        <div style={{ height: 4, background: color, flexShrink: 0 }} />
+                        {/* المحتوى */}
+                        <div style={{ padding: "7px 9px 7px", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                          {/* سطر واحد: رقم + نوع + حالة */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 5, flexWrap: "nowrap", overflow: "hidden" }}>
+                            <span style={{ fontSize: 18, fontWeight: 900, color, lineHeight: 1, flexShrink: 0 }}>{room.number}</span>
+                            {!isMajlis && <>
+                              <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700, flexShrink: 0 }}>{room.type}</span>
+                              <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: `${color}15`, color, flexShrink: 0 }}>
+                                {status === "فارغة" ? "✓" : status === "جزئية" ? "جزئي" : "مكتمل"}
+                              </span>
+                            </>}
+                            {isMajlis && <span style={{ fontSize: 9, color: "#7c3aed", fontWeight: 700 }}>مجلس</span>}
                           </div>
-                        )}
-                        {isMajlis && <span style={{ fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,background:`${color}18`,color,marginBottom:7,display:"inline-block" }}>مجلس الحجاج</span>}
-                        {/* الأسماء */}
-                        <div style={{ display:"flex",flexDirection:"column",gap:3,flex:1 }}>
-                          {isMajlis ? null : occ.length === 0 ? null : (
-                            occ.map(p => (
-                              <div key={p.id} style={{ fontSize: occ.length <= 2 ? 12 : 10, color:"var(--ink)",fontWeight: occ.length <= 2 ? 700 : 600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",gap:4 }}>
-                                <div style={{ width:3,height:3,borderRadius:"50%",background:color,flexShrink:0,opacity:status==="ممتلئة"?0.5:1 }} />
+                          {/* أول اسمين */}
+                          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, minHeight: 0, overflow: "hidden" }}>
+                            {!isMajlis && occ.length === 0 && (
+                              <span style={{ fontSize: 10, color: "#10b981", fontWeight: 700 }}>فارغة</span>
+                            )}
+                            {!isMajlis && visibleOcc.map(p => (
+                              <div key={p.id} style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 3 }}>
+                                <div style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
                                 {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
                               </div>
-                            ))
+                            ))}
+                            {/* +N للباقين */}
+                            {extraCount > 0 && (
+                              <div onClick={e => { e.stopPropagation(); setExpandedCardId(isExpanded ? null : room.id); }}
+                                style={{ fontSize: 10, fontWeight: 800, color, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 6px", borderRadius: 99, background: `${color}12`, width: "fit-content" }}>
+                                {isExpanded ? "▲ إخفاء" : `+${extraCount} أكثر`}
+                              </div>
+                            )}
+                            {/* الأسماء المخفية */}
+                            {isExpanded && occ.slice(2).map(p => (
+                              <div key={p.id} style={{ fontSize: 10, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 3 }}>
+                                <div style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
+                              </div>
+                            ))}
+                          </div>
+                          {/* شريط الإشغال */}
+                          {!isMajlis && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                              <div style={{ flex: 1, height: 3, borderRadius: 99, background: `${color}15`, overflow: "hidden" }}>
+                                <div style={{ height: "100%", borderRadius: 99, background: color, width: `${cap ? Math.min(100,(occ.length/cap)*100) : 0}%` }} />
+                              </div>
+                              <span style={{ fontSize: 9, fontWeight: 800, color, flexShrink: 0 }}>{occ.length}/{cap}</span>
+                            </div>
                           )}
                         </div>
-                        {/* شريط الإشغال */}
-                        {!isMajlis && (
-                          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"auto",paddingTop:6,borderTop:`1px solid ${color}15` }}>
-                            <div style={{ flex:1,height:3,borderRadius:99,background:`${color}15`,overflow:"hidden",marginLeft:8 }}>
-                              <div style={{ height:"100%",borderRadius:99,background:color,width:`${cap?Math.min(100,(occ.length/cap)*100):0}%` }} />
-                            </div>
-                            <span style={{ fontSize:10,fontWeight:800,color }}>{occ.length}/{cap}</span>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -435,10 +456,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 <div style={{ maxHeight: 150, overflowY: "auto" }}>
                   {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).slice(0, 20).map(p => (
                     <div key={p.id} onClick={() => addToRoom(p.id)}
-                      style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--ivory)", fontWeight: 600 }}
+                      style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid var(--ivory)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
                       onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
                       onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
-                      {p.name_ar}
+                      <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 600 }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</span>
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        {p.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
+                        {String(p.services?.hotel_type) === "خاص" && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
+                      </div>
                     </div>
                   ))}
                   {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).length === 0 && (
