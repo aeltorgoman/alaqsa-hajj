@@ -92,7 +92,6 @@ export default function App() {
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
 
-  const pageTitles: Record<string, string> = { dash: "الرئيسية", passengers: "الحجاج", buses: "الباصات", flights: "الطيران", mina: "مخيمات منى", arafa: "مخيمات عرفة", hotel: "الفندق", reports: "التقارير", archive: "الأرشيف", users: "الإعدادات", finance: "الحسابات المالية" };
   const FULL_PAGES = ["dash", "passengers", "manual", "buses", "flights", "mina", "arafa", "hotel", "finance", "admins", "users"];
   const isFull = FULL_PAGES.includes(page);
 
