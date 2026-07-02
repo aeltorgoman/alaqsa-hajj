@@ -31,9 +31,9 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
   const availableSeats = Math.max(0, totalSeats - assignedCount);
   const cards: StatCardData[] = [
     { label: "إجمالي الباصات", num: buses.length, sub: `${buses.filter(b => b.type === "VIP").length} VIP`, tone: "brand" },
+    { label: "نسبة التوزيع", num: `${total ? Math.round(assignedCount / total * 100) : 0}٪`, sub: `${assignedCount} من ${total} حاج`, tone: "success", featured: true },
     { label: "طالبين VIP", num: vipRequested, sub: `${total ? Math.round(vipRequested / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
     { label: "مقاعد متاحة", num: availableSeats, sub: `من ${totalSeats} مقعد`, tone: availableSeats === 0 ? "danger" : "info" },
-    { label: "نسبة التوزيع", num: `${total ? Math.round(assignedCount / total * 100) : 0}٪`, sub: `${assignedCount} من ${total} حاج`, tone: "success", featured: true },
   ];
 
   return <StatsRow cards={cards} />;
@@ -212,8 +212,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <div style={{ marginTop: 8 }}>لا يوجد باصات بعد</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 12 }}>
-          {buses.filter(b => !busSearch || b.name.includes(busSearch) || getBusPassengers(b.id).some(p => p.name_ar.includes(busSearch) || (p.short_ar || "").includes(busSearch))).map((bus, _idx) => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
+          {buses.filter(b => !busSearch || b.name.includes(busSearch)).map((bus, _idx) => {
             const bp = getBusPassengers(bus.id);
             const isVIP = bus.type === "VIP";
             const busColor = isVIP ? "#D4A017" : "#1D4ED8";
@@ -393,30 +393,61 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
       </Modal>
 
-      {/* Modal إضافة مسافرين */}
-      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — ${currentBus?.name}`}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid #ddd", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
-          <span style={{ color: "var(--text-muted)" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg></span>
-          <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
-        </div>
-        {filteredP.map(p => {
-          const isSel = selectedP.has(p.id);
-          return (
-            <div key={p.id} onClick={() => toggleSelectP(p.id)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+      {/* مودال إضافة مسافرين — نفس أسلوب الغرفة */}
+      {showAddP && (
+        <div onClick={() => setShowAddP(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 18, width: "90%", maxWidth: 520, maxHeight: "82vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.3)" }}>
+            {/* هيدر */}
+            <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)" }}>إضافة مسافرين</div>
+                {currentBus && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{currentBus.name}</div>}
               </div>
-              <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-              {p.services?.bus === "VIP" && <span style={{ fontSize: 11, fontWeight: 700, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
+              <button onClick={() => setShowAddP(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 20, lineHeight: 1 }}>✕</button>
             </div>
-          );
-        })}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة ({selectedP.size})</button>
-          <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
+            {/* بحث */}
+            <div style={{ padding: "10px 18px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 10, padding: "7px 12px" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} placeholder="ابحث عن مسافر..." value={pSearch} onChange={e => setPSearch(e.target.value)} autoFocus />
+                {pSearch && <button onClick={() => setPSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 14 }}>✕</button>}
+              </div>
+            </div>
+            {/* قائمة المسافرين */}
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {filteredP.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا توجد نتائج</div>
+              ) : filteredP.map(p => {
+                const isSel = selectedP.has(p.id);
+                return (
+                  <div key={p.id} onClick={() => toggleSelectP(p.id)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 18px", borderBottom: "1px solid var(--line)", cursor: "pointer", background: isSel ? "rgba(125,31,60,.05)" : "transparent", transition: "background .1s" }}
+                    onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
+                    onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${isSel ? "var(--primary)" : "var(--line)"}`, background: isSel ? "var(--primary)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}>
+                      {isSel && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>
+                    <Avatar name={p.name_ar} gender={p.gender} size={30} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</div>
+                      {p.services?.bus === "VIP" && <div style={{ fontSize: 10, color: "#b8860b", fontWeight: 700 }}>طالب VIP</div>}
+                    </div>
+                    {isSel && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                );
+              })}
+            </div>
+            {/* أزرار */}
+            <div style={{ padding: "12px 18px", borderTop: "1px solid var(--line)", flexShrink: 0, display: "flex", gap: 10 }}>
+              <button onClick={confirmAddP} style={{ ...btnP(), flex: 1, fontSize: 13, padding: "10px" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                إضافة {selectedP.size > 0 ? `(${selectedP.size})` : ""}
+              </button>
+              <button onClick={() => setShowAddP(false)} style={{ ...btnS(), padding: "10px 18px", fontSize: 13 }}>إلغاء</button>
+            </div>
+          </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }
