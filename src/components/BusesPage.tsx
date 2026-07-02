@@ -6,7 +6,7 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, ICON_COLOR_CYCLE } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
 
 // ===== دالة حفظ الترتيب في Supabase =====
 async function saveSortOrder(items: { id: number; sort_order: number }[]) {
@@ -27,11 +27,13 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
   }, [buses, passengers]);
   const { total, assignedCount, unassigned, vipRequested } = stats;
 
+  const totalSeats = buses.reduce((s, b) => s + ((b as any).capacity || 50), 0);
+  const availableSeats = Math.max(0, totalSeats - assignedCount);
   const cards: StatCardData[] = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
-    { label: "موزّعون", num: assignedCount, sub: `${total ? Math.round(assignedCount / total * 100) : 0}٪ من الإجمالي`, tone: "success", featured: true },
-    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
+    { label: "إجمالي الباصات", num: buses.length, sub: `${buses.filter(b => b.type === "VIP").length} VIP`, tone: "brand" },
+    { label: "نسبة التوزيع", num: `${total ? Math.round(assignedCount / total * 100) : 0}٪`, sub: `${assignedCount} من ${total} حاج`, tone: "success", featured: true },
     { label: "طالبين VIP", num: vipRequested, sub: `${total ? Math.round(vipRequested / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
+    { label: "مقاعد متاحة", num: availableSeats, sub: `من ${totalSeats} مقعد`, tone: availableSeats === 0 ? "danger" : "info" },
   ];
 
   return <StatsRow cards={cards} />;
@@ -47,6 +49,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [showAdd, setShowAdd] = useState(false);
   const [busName, setBusName] = useState("");
   const [busType, setBusType] = useState("عادي");
+  const [busCapacity, setBusCapacity] = useState("50");
   const [nameError, setNameError] = useState("");
   const [showAddP, setShowAddP] = useState(false);
   const [currentBusId] = useState<number | null>(null);
@@ -54,6 +57,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [pSearch, setPSearch] = useState("");
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
   const [drawerPSearch, setDrawerPSearch] = useState("");
+  const [busSearch, setBusSearch] = useState("");
 
   // Drag state
   const dragPassengerId = useRef<number | null>(null);
@@ -73,12 +77,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!busName.trim()) { setNameError("يرجى إدخال اسم الباص"); return; }
     if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`يوجد باص بالاسم "${busName}" بالفعل`); return; }
     setNameError("");
-    const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType }]).select();
+    const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType, capacity: Number(busCapacity) || 50 }]).select();
     if (error) { showAlert("error", `فشل إضافة الباص: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newBus = data[0] as Bus;
       setBuses(prev => [...prev, newBus]);
-      setBusName(""); setBusType("عادي"); setShowAdd(false);
+      setBusName(""); setBusType("عادي"); setBusCapacity("50"); setShowAdd(false);
     }
   };
 
@@ -202,59 +206,62 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
-          {buses.map((bus, idx) => {
+          {buses.filter(b => !busSearch || b.name.includes(busSearch)).map((bus, idx) => {
             const bp = getBusPassengers(bus.id);
             const isVIP = bus.type === "VIP";
-            const busColor = isVIP ? "#D4A017" : ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
-            const cap = 50; // سعة قياسية للباص
-            const fillPct = Math.min(100, Math.round(bp.length / cap * 100));
+            const busColor = isVIP ? "#D4A017" : "#1D4ED8";
             const isSelected = selectedBusId === bus.id;
-            return (
-              <div key={bus.id} onClick={() => setSelectedBusId(bus.id)}
-                style={{
-                  background: "var(--paper)", borderRadius: 12, cursor: "pointer",
-                  border: isSelected ? "2.5px solid var(--primary)" : "1px solid var(--line)",
-                  boxShadow: isSelected ? "0 4px 16px rgba(125,31,60,.2)" : "0 1px 4px rgba(0,0,0,.06)",
-                  transition: "all .18s", overflow: "hidden",
-                  transform: isSelected ? "translateY(-2px)" : "none",
-                }}
-                onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 14px rgba(0,0,0,.1)"; } }}
-                onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.06)"; } }}>
-                {/* شريط علوي ملون */}
-                <div style={{ height: 4, background: isVIP ? "linear-gradient(90deg,#b8860b,#D4A017)" : `linear-gradient(90deg,${busColor},${busColor}bb)` }} />
-                <div style={{ padding: "10px 10px 8px" }}>
-                  {/* رقم الباص + النوع */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
-                    <span style={{ fontSize: 16, fontWeight: 900, color: busColor, lineHeight: 1 }}>{bus.name}</span>
-                    {isVIP && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "#D4A01718", color: "#b8860b" }}>VIP</span>}
-                  </div>
-                  {/* عدد المسافرين */}
-                  {bp.length === 0 ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 0" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: busColor, padding: "3px 8px", borderRadius: 8, border: `1px dashed ${busColor}60`, background: `${busColor}06` }}>
-                        ＋ إضافة مسافر
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ marginBottom: 6 }}>
-                      {bp.slice(0,3).map(p => (
-                        <div key={p.id} style={{ fontSize: 10, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1 }}>
-                          · {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
+                    const cap2 = (bus as any).capacity || 50;
+                    const fillPct2 = Math.min(100, Math.round(bp.length / cap2 * 100));
+                    return (
+                      <div key={bus.id} onClick={() => setSelectedBusId(bus.id)}
+                        style={{
+                          background: "var(--paper)", borderRadius: 14, cursor: "pointer",
+                          border: isSelected ? `2.5px solid ${busColor}` : "1px solid var(--line)",
+                          boxShadow: isSelected ? `0 4px 16px ${busColor}30` : "0 1px 4px rgba(0,0,0,.06)",
+                          transition: "all .18s", overflow: "hidden",
+                          transform: isSelected ? "translateY(-2px)" : "none",
+                        }}
+                        onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px ${busColor}22`; } }}
+                        onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.06)"; } }}>
+                        {/* لافتة الباص العلوية */}
+                        <div style={{ background: `linear-gradient(135deg,${busColor},${busColor}cc)`, padding: "10px 12px 8px", position: "relative", overflow: "hidden" }}>
+                          {/* أيقونة باص في الخلفية */}
+                          <div style={{ position: "absolute", left: -8, bottom: -12, opacity: .08, pointerEvents: "none" }}>
+                            <svg width="80" height="80" viewBox="0 0 24 24" fill="white"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
+                            <div style={{ fontSize: 20, fontWeight: 900, color: "white", lineHeight: 1 }}>{bus.name}</div>
+                            {isVIP && <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,.25)", color: "white" }}>VIP ✦</span>}
+                          </div>
                         </div>
-                      ))}
-                      {bp.length > 3 && <div style={{ fontSize: 10, color: busColor, fontWeight: 700 }}>+{bp.length - 3} آخرون</div>}
-                    </div>
-                  )}
-                  {/* شريط الإشغال */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ flex: 1, height: 3, borderRadius: 99, background: `${busColor}18`, overflow: "hidden" }}>
-                      <div style={{ height: "100%", borderRadius: 99, background: busColor, width: `${fillPct}%`, transition: "width .3s" }} />
-                    </div>
-                    <span style={{ fontSize: 9, fontWeight: 800, color: busColor }}>{bp.length}</span>
-                  </div>
-                </div>
-              </div>
-            );
+                        {/* محتوى الكارت */}
+                        <div style={{ padding: "10px 12px 10px" }}>
+                          {/* عدد كبير + حالة */}
+                          {bp.length === 0 ? (
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 0" }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: busColor, padding: "4px 12px", borderRadius: 8, border: `1px dashed ${busColor}60`, background: `${busColor}06` }}>
+                                ＋ إضافة مسافر
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
+                              <span style={{ fontSize: 32, fontWeight: 900, color: busColor, lineHeight: 1 }}>{bp.length}</span>
+                              <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>/ {cap2} مسافر</span>
+                            </div>
+                          )}
+                          {/* Progress bar واضح */}
+                          {bp.length > 0 && (
+                            <>
+                              <div style={{ height: 8, borderRadius: 99, background: `${busColor}18`, overflow: "hidden", marginBottom: 4 }}>
+                                <div style={{ height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${busColor},${busColor}cc)`, width: `${fillPct2}%`, transition: "width .3s" }} />
+                              </div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: busColor, textAlign: "left" }}>{fillPct2}٪</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
           })}
         </div>
       )}
@@ -269,8 +276,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const busColor = isVIP ? "#D4A017" : ICON_COLOR_CYCLE[busIdx % ICON_COLOR_CYCLE.length];
         const drawerFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch)));
         return (
-          <div onClick={() => setSelectedBusId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 -8px 32px rgba(0,0,0,.25)" }}>
+          <div onClick={() => setSelectedBusId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 18, width: "90%", maxWidth: 580, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.3)" }}>
               {/* هيدر الـ Drawer */}
               <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -368,6 +375,10 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <div style={{ display: "flex", gap: 8 }}>
             {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--em7)" : "var(--border)"}`, background: busType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--em7)" : "var(--text-muted)" }}>{t}</div>)}
           </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>السعة (عدد المقاعد)</div>
+          <input style={inp} type="number" value={busCapacity} onChange={e => setBusCapacity(e.target.value)} placeholder="مثال: 50" min="1" max="100" />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={addBus} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
