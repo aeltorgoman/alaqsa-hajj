@@ -273,125 +273,143 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
       )}
 
-      {/* ===== Drawer تفاصيل الباص ===== */}
+      {/* ===== مودال تفاصيل الباص — عمودين ===== */}
       {selectedBusId !== null && (() => {
         const bus = buses.find(b => b.id === selectedBusId);
         if (!bus) return null;
         const bp = getBusPassengers(bus.id);
         const isVIP = bus.type === "VIP";
-
         const busColor = isVIP ? "#D4A017" : "#1D4ED8";
-        const drawerFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch)));
+        const cap = (bus as any).capacity || 50;
+        const available = Math.max(0, cap - bp.length);
+        const fillPct = Math.min(100, Math.round(bp.length / cap * 100));
+        const addFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
+        const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
-          <div onClick={() => setSelectedBusId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 18, width: "90%", maxWidth: 580, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.3)" }}>
-              {/* هيدر الـ Drawer */}
-              <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: `${busColor}18`, display: "flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${busColor}30` }}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={busColor} strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+          <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 820, maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+
+              {/* ══ هيدر ملون ══ */}
+              <div style={{ background: `linear-gradient(135deg,${busColor},${busColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
+                {/* أيقونة خلفية */}
+                <div style={{ position: "absolute", left: -10, bottom: -14, opacity: .08, pointerEvents: "none" }}>
+                  <svg width="90" height="90" viewBox="0 0 24 24" fill="white"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 1 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
                   </div>
                   <div style={{ flex: 1 }}>
                     {editingBusId === bus.id ? (
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <input defaultValue={bus.name} id={`bus-drawer-${bus.id}`} style={{ ...inp, fontSize: 14, padding: "4px 10px", width: 140 }} autoFocus onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-drawer-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
-                        <button onClick={() => { const v = (document.getElementById(`bus-drawer-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>✓</button>
+                        <input defaultValue={bus.name} id={`bus-modal-${bus.id}`} style={{ fontSize: 15, fontWeight: 800, padding: "4px 10px", borderRadius: 8, border: "none", outline: "none", width: 140, fontFamily: "var(--font-body)" }} autoFocus
+                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
+                        <button onClick={() => { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>✓</button>
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--ink)" }} onDoubleClick={() => setEditingBusId(bus.id)}>{bus.name}</div>
-                        {isVIP && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "#D4A01720", color: "#b8860b" }}>VIP</span>}
+                        <div style={{ fontSize: 18, fontWeight: 900, color: "white", lineHeight: 1 }} onDoubleClick={() => setEditingBusId(bus.id)}>{bus.name}</div>
+                        {isVIP && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>VIP ✦</span>}
                       </div>
                     )}
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{bp.length} مسافر</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 3 }}>{bp.length} مسافر · {available} مقعد متبقٍ</div>
                   </div>
-                  {/* أزرار الهيدر */}
-                  <button onClick={() => printBus(bus)} style={{ ...btnS(), flexShrink: 0 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  <button onClick={() => printBus(bus)} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                   </button>
-                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} style={{ background: "none", border: "1px solid rgba(198,40,40,.2)", borderRadius: 8, padding: "5px 9px", cursor: "pointer", color: "#C62828", flexShrink: 0 }}>
+                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                   </button>
-                  <button onClick={() => setSelectedBusId(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 20, lineHeight: 1, padding: "4px 6px", flexShrink: 0 }}>✕</button>
+                  <button onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
                 </div>
-              </div>
-
-              {/* قائمة المسافرين */}
-              <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(bus.id)}>
-                {bp.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد مسافرون بعد</div>
-                ) : bp.map((p, i) => (
-                  <div key={p.id} draggable onDragStart={() => handleDragStart(p.id)} onDragOver={e => handleDragOver(e, p.id)} onDragEnd={handleDragEnd}
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 18px", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? "rgba(125,31,60,.06)" : dragOverId === p.id ? "rgba(125,31,60,.03)" : "transparent", cursor: "grab", opacity: draggingId === p.id ? 0.5 : 1 }}>
-                    <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--muted)", width: 22, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                    <Avatar name={p.name_ar} gender={p.gender} size={28} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                    {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "2px 8px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
-                    <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 11, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 6, padding: "3px 6px", fontFamily: "inherit" }}>
-                      <option value="">نقل لـ...</option>
-                      {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                    <button onClick={() => removeP(p.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#C62828", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                {/* شريط إشغال */}
+                <div style={{ marginTop: 10, position: "relative", zIndex: 1 }}>
+                  <div style={{ height: 8, borderRadius: 99, background: "rgba(0,0,0,.2)", overflow: "hidden", marginBottom: 5 }}>
+                    <div style={{ height: "100%", borderRadius: 99, background: "rgba(255,255,255,.85)", width: `${fillPct}%`, transition: "width .3s" }} />
                   </div>
-                ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "rgba(255,255,255,.75)", fontWeight: 600 }}>
+                    <span>{bp.length} / {cap} مقعد</span>
+                    <span>{available} مقعد متبقٍ · {fillPct}٪</span>
+                  </div>
+                </div>
               </div>
 
-              {/* إضافة مسافرين */}
-              <div style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 10, padding: "7px 12px", marginBottom: 8 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                  <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث لإضافة مسافر..." value={drawerPSearch} onChange={e => setDrawerPSearch(e.target.value)} />
-                </div>
-                {drawerPSearch && (
-                  <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 10, background: "var(--paper)" }}>
-                    {drawerFiltered.length === 0 ? (
-                      <div style={{ padding: 12, textAlign: "center", fontSize: 11, color: "var(--muted)" }}>لا توجد نتائج</div>
-                    ) : drawerFiltered.map(p => (
-                      <div key={p.id} onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); setDrawerPSearch(""); }}
-                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
-                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+              {/* ══ الجسم — عمودين ══ */}
+              <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+
+                {/* يمين: قائمة المسافرين */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid var(--line)" }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: busColor, background: `${busColor}12`, padding: "2px 8px", borderRadius: 99 }}>{bp.length} مسافر</span>
+                  </div>
+                  <div style={{ flex: 1, overflowY: "auto" }} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(bus.id)}>
+                    {bp.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد مسافرون بعد</div>
+                    ) : bp.map((p, i) => (
+                      <div key={p.id} draggable onDragStart={() => handleDragStart(p.id)} onDragOver={e => handleDragOver(e, p.id)} onDragEnd={handleDragEnd}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? `${busColor}08` : dragOverId === p.id ? `${busColor}04` : "transparent", cursor: "grab", opacity: draggingId === p.id ? 0.5 : 1 }}>
+                        <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                         <Avatar name={p.name_ar} gender={p.gender} size={26} />
                         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                        {p.services?.bus === "VIP" && <span style={{ fontSize: 10, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "2px 7px", borderRadius: 99 }}>VIP</span>}
-                        <span style={{ fontSize: 11, color: "var(--primary)", fontWeight: 700 }}>+ إضافة</span>
+                        {vipMismatch(p) && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: "#C62828", background: "rgba(198,40,40,.08)", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>
+                            {isVIP ? "ليس VIP" : "VIP"}
+                          </span>
+                        )}
+                        {p.services?.bus === "VIP" && !vipMismatch(p) && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
+                        <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 5px", fontFamily: "inherit", flexShrink: 0 }}>
+                          <option value="">نقل لـ...</option>
+                          {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                        <button onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1, flexShrink: 0, padding: "0 2px" }}>↩</button>
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
+
+                {/* شمال: إضافة مسافرين */}
+                <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
+                  <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
+                  </div>
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 10px" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                      <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} placeholder="ابحث عن مسافر..." value={drawerPSearch} onChange={e => setDrawerPSearch(e.target.value)} autoFocus />
+                      {drawerPSearch && <button onClick={() => setDrawerPSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13 }}>✕</button>}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, overflowY: "auto" }}>
+                    {addFiltered.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)", fontSize: 11 }}>{drawerPSearch ? "لا توجد نتائج" : "جميع الحجاج موزعون"}</div>
+                    ) : addFiltered.map(p => {
+                      const willMismatch = (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
+                      return (
+                        <div key={p.id} onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)", background: "transparent" }}
+                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
+                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                          <Avatar name={p.name_ar} gender={p.gender} size={26} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
+                            {willMismatch && <div style={{ fontSize: 9, color: "#C62828", fontWeight: 700 }}>⚠ {isVIP ? "ليس VIP" : "طالب VIP"}</div>}
+                          </div>
+                          {p.services?.bus === "VIP" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
+                          <span style={{ fontSize: 16, color: busColor, fontWeight: 700, flexShrink: 0 }}>＋</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         );
       })()}
-
-      {/* Modal إضافة باص */}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="إضافة باص جديد" maxWidth={340}>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>اسم الباص</div>
-          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={busName} onChange={e => { setBusName(e.target.value); setNameError(""); }} placeholder="مثال: باص 1" autoFocus onKeyDown={e => e.key === "Enter" && addBus()} />
-          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع الباص</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {["عادي", "VIP"].map(t => <div key={t} onClick={() => setBusType(t)} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1.5px solid ${busType === t ? "var(--em7)" : "var(--border)"}`, background: busType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: busType === t ? "var(--em7)" : "var(--text-muted)" }}>{t}</div>)}
-          </div>
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>السعة (عدد المقاعد)</div>
-          <input style={inp} type="number" value={busCapacity} onChange={e => setBusCapacity(e.target.value)} placeholder="مثال: 50" min="1" max="100" />
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addBus} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
-          <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
-        </div>
-      </Modal>
 
       {/* مودال إضافة مسافرين — نفس أسلوب الغرفة */}
       {showAddP && (
