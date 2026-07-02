@@ -64,6 +64,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const dragOverPassengerId = useRef<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const dragType = useRef<"reorder"|"add">("reorder");
 
   useEffect(() => {
     supabase.from("buses").select("*").order("created_at").then(({ data }: any) => { if (data) setBuses(data); });
@@ -121,6 +122,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   // ===== Drag & Drop handlers =====
   const handleDragStart = (pId: number) => {
+    dragType.current = "reorder";
+    dragPassengerId.current = pId;
+    setDraggingId(pId);
+  };
+
+  const handleDragStartAdd = (pId: number) => {
+    dragType.current = "add";
     dragPassengerId.current = pId;
     setDraggingId(pId);
   };
@@ -133,6 +141,16 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const handleDrop = async (busId: number) => {
     const fromId = dragPassengerId.current;
+
+    /* سحب من قائمة الإضافة → إضافة للباص */
+    if (dragType.current === "add" && fromId) {
+      await supabase.from("passengers").update({ bus_id: busId }).eq("id", fromId);
+      setPassengers(passengers.map(x => x.id === fromId ? { ...x, bus_id: busId } : x));
+      setDraggingId(null); dragPassengerId.current = null; dragOverPassengerId.current = null;
+      return;
+    }
+
+    /* سحب داخلي → إعادة ترتيب */
     const toId = dragOverPassengerId.current;
     if (!fromId || !toId || fromId === toId) {
       setDraggingId(null); setDragOverId(null);
@@ -389,8 +407,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     ) : addFiltered.map(p => {
                       const willMismatch = (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
                       return (
-                        <div key={p.id} onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)", background: "transparent" }}
+                        <div key={p.id}
+                          draggable
+                          onDragStart={() => handleDragStartAdd(p.id)}
+                          onDragEnd={handleDragEnd}
+                          onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? "rgba(125,31,60,.05)" : "transparent" }}
                           onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
                           onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
                           <Avatar name={p.name_ar} gender={p.gender} size={26} />
