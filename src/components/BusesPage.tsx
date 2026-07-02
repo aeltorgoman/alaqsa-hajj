@@ -31,9 +31,9 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
   const availableSeats = Math.max(0, totalSeats - assignedCount);
   const cards: StatCardData[] = [
     { label: "إجمالي الباصات", num: buses.length, sub: `${buses.filter(b => b.type === "VIP").length} VIP`, tone: "brand" },
-    { label: "نسبة التوزيع", num: `${total ? Math.round(assignedCount / total * 100) : 0}٪`, sub: `${assignedCount} من ${total} حاج`, tone: "success", featured: true },
     { label: "طالبين VIP", num: vipRequested, sub: `${total ? Math.round(vipRequested / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
     { label: "مقاعد متاحة", num: availableSeats, sub: `من ${totalSeats} مقعد`, tone: availableSeats === 0 ? "danger" : "info" },
+    { label: "نسبة التوزيع", num: `${total ? Math.round(assignedCount / total * 100) : 0}٪`, sub: `${assignedCount} من ${total} حاج`, tone: "success", featured: true },
   ];
 
   return <StatsRow cards={cards} />;
@@ -212,8 +212,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <div style={{ marginTop: 8 }}>لا يوجد باصات بعد</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
-          {buses.filter(b => !busSearch || b.name.includes(busSearch)).map((bus, _idx) => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 12 }}>
+          {buses.filter(b => !busSearch || b.name.includes(busSearch) || getBusPassengers(b.id).some(p => p.name_ar.includes(busSearch) || (p.short_ar || "").includes(busSearch))).map((bus, _idx) => {
             const bp = getBusPassengers(bus.id);
             const isVIP = bus.type === "VIP";
             const busColor = isVIP ? "#D4A017" : "#1D4ED8";
