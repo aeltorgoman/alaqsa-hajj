@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Camp } from "../types";
-import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
@@ -85,8 +84,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const { data, error } = await supabase.from("camps").insert([{ name: campName.trim(), gender: campGender, type: campType, page_type: pageType }]).select();
     if (error) { showAlert("error", `فشل إضافة المخيم: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
-      setCamps(prev => [...prev, data[0] as Camp]);
-      setExpanded(prev => new Set([...prev, data[0].id]));
+      setCamps((prev: Camp[]) => [...prev, data[0] as Camp]);
       setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setShowAdd(false);
     }
   };
@@ -95,7 +93,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (getCampPassengers(id).length > 0) { showAlert("warning", "يرجى إزالة المسافرين قبل حذف المخيم"); return; }
     const { error } = await supabase.from("camps").delete().eq("id", id);
     if (error) { showAlert("error", `فشل حذف المخيم: ${error.message}`); return; }
-    setCamps(prev => prev.filter(c => c.id !== id));
+    setCamps((prev: Camp[]) => prev.filter(c => c.id !== id));
   };
 
 
@@ -213,9 +211,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
             const cp = getCampPassengers(camp.id);
             const isSpecial = camp.type === "خاص";
             const campColor = isSpecial ? "#D4A017" : genderColor;
-            const cap = cp.length;
             const isSelected = selectedCampId === camp.id;
-            const fillPct = Math.min(100, Math.round(cp.length / Math.max(cp.length, 1) * 100));
             return (
               <div key={camp.id} onClick={() => setSelectedCampId(camp.id)}
                 style={{
