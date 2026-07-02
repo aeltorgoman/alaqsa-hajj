@@ -198,6 +198,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         {buses.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
       </div>
 
+      {/* بحث */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "7px 14px", marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,.04)" }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input value={busSearch} onChange={e => setBusSearch(e.target.value)} placeholder="ابحث عن باص..." style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} />
+        {busSearch && <button onClick={() => setBusSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>✕</button>}
+      </div>
+
       {/* شبكة الباصات */}
       {!buses.length ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)", fontSize: 12 }}>
@@ -272,7 +279,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         if (!bus) return null;
         const bp = getBusPassengers(bus.id);
         const isVIP = bus.type === "VIP";
-        const busIdx = buses.findIndex(b => b.id === selectedBusId);
+
         const busColor = isVIP ? "#D4A017" : "#1D4ED8";
         const drawerFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch)));
         return (
