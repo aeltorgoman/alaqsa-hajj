@@ -25,7 +25,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
     const vipRequested = hajj.filter(p => p.services?.bus === "VIP").length;
     return { total, assignedCount, unassigned, vipRequested };
   }, [buses, passengers]);
-  const { total, assignedCount, unassigned, vipRequested } = stats;
+  const { total, assignedCount, vipRequested } = stats;
 
   const totalSeats = buses.reduce((s, b) => s + ((b as any).capacity || 50), 0);
   const availableSeats = Math.max(0, totalSeats - assignedCount);
@@ -206,7 +206,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 10 }}>
-          {buses.filter(b => !busSearch || b.name.includes(busSearch)).map((bus, idx) => {
+          {buses.filter(b => !busSearch || b.name.includes(busSearch)).map((bus, _idx) => {
             const bp = getBusPassengers(bus.id);
             const isVIP = bus.type === "VIP";
             const busColor = isVIP ? "#D4A017" : "#1D4ED8";
@@ -273,7 +273,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const bp = getBusPassengers(bus.id);
         const isVIP = bus.type === "VIP";
         const busIdx = buses.findIndex(b => b.id === selectedBusId);
-        const busColor = isVIP ? "#D4A017" : ICON_COLOR_CYCLE[busIdx % ICON_COLOR_CYCLE.length];
+        const busColor = isVIP ? "#D4A017" : "#1D4ED8";
         const drawerFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch)));
         return (
           <div onClick={() => setSelectedBusId(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
