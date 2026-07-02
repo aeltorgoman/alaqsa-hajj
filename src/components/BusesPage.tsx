@@ -305,7 +305,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
           <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 820, maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
               {/* ══ هيدر ملون ══ */}
               <div style={{ background: `linear-gradient(135deg,${busColor},${busColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
@@ -371,7 +371,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
                         </span>
                         <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                        <Avatar name={p.name_ar} gender={p.gender} size={26} />
                         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
                         {vipMismatch(p) && (
                           <span style={{ fontSize: 9, fontWeight: 700, color: "#C62828", background: "rgba(198,40,40,.08)", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>
@@ -390,7 +389,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 </div>
 
                 {/* شمال: إضافة مسافرين */}
-                <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
+                <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
                   </div>
@@ -411,11 +410,20 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                           draggable
                           onDragStart={() => handleDragStartAdd(p.id)}
                           onDragEnd={handleDragEnd}
-                          onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }}
+                          onClick={async () => {
+                            if (willMismatch) {
+                              const msg = isVIP
+                                ? `هذا الحاج لم يطلب باص VIP — هل تريد إضافته لباص VIP؟`
+                                : `هذا الحاج طالب باص VIP — هل تريد إضافته لباص عادي؟`;
+                              const ok = await confirmAction(msg, { title: "تحذير — عدم تطابق النوع", danger: false, confirmLabel: "إضافة على أي حال", cancelLabel: "إلغاء" });
+                              if (!ok) return;
+                            }
+                            await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id);
+                            setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x));
+                          }}
                           style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? "rgba(125,31,60,.05)" : "transparent" }}
                           onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
                           onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
-                          <Avatar name={p.name_ar} gender={p.gender} size={26} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
                             {willMismatch && <div style={{ fontSize: 9, color: "#C62828", fontWeight: 700 }}>⚠ {isVIP ? "ليس VIP" : "طالب VIP"}</div>}
