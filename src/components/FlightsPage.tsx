@@ -34,6 +34,28 @@ const PlaneIcon = ({ size = 16, color = "currentColor", flip = false }: { size?:
   </svg>
 );
 
+// ===== شعارات شركات الطيران =====
+const QATAR_LOGO = (
+  <svg viewBox="0 0 60 24" width="28" height="11" xmlns="http://www.w3.org/2000/svg">
+    <rect width="60" height="24" rx="3" fill="#5C0632"/>
+    <text x="4" y="17" fontFamily="Arial" fontSize="10" fontWeight="bold" fill="#C8A96E" letterSpacing="0.5">QATAR</text>
+    <text x="36" y="17" fontFamily="Arial" fontSize="7" fill="white">airways</text>
+  </svg>
+);
+const SAUDIA_LOGO = (
+  <svg viewBox="0 0 60 24" width="28" height="11" xmlns="http://www.w3.org/2000/svg">
+    <rect width="60" height="24" rx="3" fill="#006341"/>
+    <text x="6" y="17" fontFamily="Arial" fontSize="11" fontWeight="bold" fill="white" letterSpacing="0.5">SAUDIA</text>
+  </svg>
+);
+
+const getAirlineLogo = (airline: string) => {
+  const a = airline.toLowerCase();
+  if (a.includes("qatar")) return QATAR_LOGO;
+  if (a.includes("saudi") || a.includes("saudia")) return SAUDIA_LOGO;
+  return null;
+};
+
 // ===== ملخص صفحة الطيران =====
 function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const hajjOnly = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
@@ -213,12 +235,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     const economyCount = fp.length - firstClassCount;
     const arrivalTime = (flight as any).arrival_time || "";
 
-    // تنسيق التاريخ
+    // تنسيق التاريخ بالإنجليزي — زي تذكرة الطيران
     let dateDisplay = flight.date || "";
     if (flight.date) {
       try {
         const d = new Date(flight.date);
-        dateDisplay = d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+        dateDisplay = `${String(d.getDate()).padStart(2,"0")} ${months[d.getMonth()]} ${d.getFullYear()}`;
       } catch { /* keep raw */ }
     }
 
@@ -253,19 +276,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 2 }}>
-                {flight.airline ? (
-                  <img
-                    src={`https://logo.clearbit.com/${flight.airline.toLowerCase().replace(/\s+/g, "")}.com`}
-                    alt={flight.airline}
-                    width={26} height={26}
-                    style={{ objectFit: "contain", borderRadius: 4 }}
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.nextSibling as HTMLElement).style.display = "flex"; }}
-                  />
-                ) : null}
-                <div style={{ display: flight.airline ? "none" : "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%" }}>
-                  <PlaneIcon size={15} color="var(--em7)" />
-                </div>
+              <div style={{ width: 36, height: 36, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 4 }}>
+                {flight.airline && getAirlineLogo(flight.airline)
+                  ? getAirlineLogo(flight.airline)
+                  : <PlaneIcon size={15} color="var(--em7)" />
+                }
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
@@ -524,8 +539,20 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{nameError}</div>}
         </div>
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الشركة</div>
-          <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="مثال: Qatar Airways" />
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: airline === "أخرى" ? 8 : 0 }}>
+            {(["Qatar Airways", "Saudia", "أخرى"] as const).map(opt => (
+              <div key={opt} onClick={() => { setAirline(opt === "أخرى" ? "أخرى" : opt); }} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${airline === opt || (opt === "أخرى" && !["Qatar Airways","Saudia"].includes(airline) && airline !== "") ? "var(--em7)" : "var(--border)"}`, background: airline === opt || (opt === "أخرى" && !["Qatar Airways","Saudia"].includes(airline) && airline !== "") ? "rgba(125,31,60,.06)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 700, color: airline === opt || (opt === "أخرى" && !["Qatar Airways","Saudia"].includes(airline) && airline !== "") ? "var(--em7)" : "var(--muted)" }}>
+                {opt === "Qatar Airways" ? "القطرية" : opt === "Saudia" ? "السعودية" : "أخرى"}
+              </div>
+            ))}
+          </div>
+          {!["Qatar Airways", "Saudia", ""].includes(airline) && airline !== "أخرى" && (
+            <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="اسم شركة الطيران" autoFocus />
+          )}
+          {airline === "أخرى" && (
+            <input style={inp} value="" onChange={e => setAirline(e.target.value)} placeholder="اسم شركة الطيران" autoFocus />
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
@@ -548,32 +575,58 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <div onClick={() => setShowAddP(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
-            {/* ══ هيدر ملون ══ */}
-            <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
-              <div style={{ position: "absolute", left: -10, bottom: -14, opacity: .08, pointerEvents: "none" }}>
-                <svg width="90" height="90" viewBox="0 0 24 24" fill="white"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+            {/* ══ هيدر ملون بشكل تذكرة الطيران ══ */}
+            <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "16px 20px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
+              {/* أيقونة خلفية */}
+              <div style={{ position: "absolute", left: -10, bottom: -14, opacity: .06, pointerEvents: "none" }}>
+                <svg width="100" height="100" viewBox="0 0 24 24" fill="white"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 1 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <PlaneIcon size={20} color="white" />
+              <div style={{ position: "relative", zIndex: 1 }}>
+                {/* سطر علوي: رقم الرحلة + اختيار الدرجة + زر الإغلاق */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", fontWeight: 600, marginBottom: 2 }}>رقم الرحلة</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: "white", fontFamily: "monospace", lineHeight: 1 }}>{currentFlight?.name || "—"}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
+                      <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ padding: "5px 12px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: addFlightClass === cls ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.15)", color: addFlightClass === cls ? "#7D1F3C" : "white", border: "1px solid rgba(255,255,255,.25)", transition: "all .15s" }}>
+                        {cls}
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => setShowAddP(false)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: "white", lineHeight: 1 }}>{currentFlight?.name || "رحلة"}</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 3 }}>
-                    {currentFlight ? `${extractIATA(currentFlight.from_airport || "")} ← ${extractIATA(currentFlight.to_airport || "")} · ${getFlightPassengers(currentFlight).length} مسافر` : ""}
+                {/* Timeline — بشكل تذكرة الطيران */}
+                <div style={{ display: "flex", alignItems: "center", gap: 0, background: "rgba(0,0,0,.15)", borderRadius: 12, padding: "12px 16px" }}>
+                  {/* المغادرة */}
+                  <div style={{ textAlign: "center", minWidth: 70 }}>
+                    <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "white", lineHeight: 1 }}>{extractIATA(currentFlight?.from_airport || "")}</div>
+                    <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{extractCity(currentFlight?.from_airport || "")}</div>
+                    {currentFlight?.time && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{currentFlight.time}</div>}
+                  </div>
+                  {/* الخط */}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 12px" }}>
+                    <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,.3)", position: "relative", marginBottom: 4 }}>
+                      <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%,-55%)${currentFlight?.type === "إياب" ? " scaleX(-1)" : ""}` }}>
+                        <PlaneIcon size={16} color="white" />
+                      </div>
+                    </div>
+                    {currentFlight?.date && (
+                      <div style={{ fontFamily: "monospace", fontSize: 9, color: "rgba(255,255,255,.55)", textAlign: "center" }}>
+                        {(() => { const d = new Date(currentFlight.date); const m = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]; return `${String(d.getDate()).padStart(2,"0")} ${m[d.getMonth()]} ${d.getFullYear()}`; })()}
+                      </div>
+                    )}
+                  </div>
+                  {/* الوصول */}
+                  <div style={{ textAlign: "center", minWidth: 70 }}>
+                    <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,.9)", lineHeight: 1 }}>{extractIATA(currentFlight?.to_airport || "")}</div>
+                    <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{extractCity(currentFlight?.to_airport || "")}</div>
+                    {(currentFlight as any)?.arrival_time && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{(currentFlight as any).arrival_time}</div>}
                   </div>
                 </div>
-                {/* اختيار الدرجة */}
-                <div style={{ display: "flex", gap: 6 }}>
-                  {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
-                    <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ padding: "5px 12px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: addFlightClass === cls ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.18)", color: addFlightClass === cls ? "#7D1F3C" : "white", border: "1px solid rgba(255,255,255,.3)", transition: "all .15s" }}>
-                      {cls}
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setShowAddP(false)} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
               </div>
             </div>
 
@@ -661,8 +714,23 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <input style={inp} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: QR501" />
         </div>
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الشركة</div>
-          <input style={inp} value={editForm.airline} onChange={e => setEditForm(p => ({ ...p, airline: e.target.value }))} placeholder="مثال: Qatar Airways" />
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+            {(["Qatar Airways", "Saudia", "أخرى"] as const).map(opt => {
+              const isOther = opt === "أخرى";
+              const isSelected = isOther
+                ? !["Qatar Airways", "Saudia", ""].includes(editForm.airline)
+                : editForm.airline === opt;
+              return (
+                <div key={opt} onClick={() => setEditForm(p => ({ ...p, airline: isOther ? "" : opt }))} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${isSelected ? "var(--em7)" : "var(--border)"}`, background: isSelected ? "rgba(125,31,60,.06)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 700, color: isSelected ? "var(--em7)" : "var(--muted)" }}>
+                  {opt === "Qatar Airways" ? "القطرية" : opt === "Saudia" ? "السعودية" : "أخرى"}
+                </div>
+              );
+            })}
+          </div>
+          {!["Qatar Airways", "Saudia", ""].includes(editForm.airline) && (
+            <input style={inp} value={editForm.airline} onChange={e => setEditForm(p => ({ ...p, airline: e.target.value }))} placeholder="اسم شركة الطيران" />
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} /></div>
