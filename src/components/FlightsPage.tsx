@@ -301,10 +301,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
                   <div style={{
                     position: "absolute", top: "50%", left: "50%",
-                    transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`,
+                    transform: "translate(-50%, -55%)",
                     animation: isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite",
                   }}>
-                    <PlaneIcon size={16} color={isTomorrow ? "#7D1F3C" : "#7D1F3C"} />
+                    <div style={{ transform: isReturn ? "scaleX(-1)" : undefined }}>
+                      <PlaneIcon size={16} color="#7D1F3C" />
+                    </div>
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
