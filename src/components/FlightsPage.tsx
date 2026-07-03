@@ -159,14 +159,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
-  const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-
-  const confirmAddP = async () => {
-    const field = flightField(currentFlight?.type);
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ [field]: currentFlightId, flight_class: effectiveClass }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, [field]: currentFlightId, flight_class: effectiveClass } : p));
-    setShowAddP(false);
-  };
+  // selectP و effectiveClass مستخدمين في مودال إضافة المسافرين
 
   const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
     await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
