@@ -76,7 +76,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [flights, setFlights] = useState<Flight[]>([]);
   const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
   const [editFlightModal, setEditFlightModal] = useState<Flight | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", arrival_time: "", from_airport: "", to_airport: "" });
+  const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "" });
   const [expanded, setExpanded] = useState(new Set<number>());
   const [activeTab, setActiveTab] = useState<"ذهاب" | "إياب" | "الكل">("ذهاب");
 
@@ -93,6 +93,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [flightDate, setFlightDate] = useState("");
   const [flightTime, setFlightTime] = useState("");
   const [arrivalTime, setArrivalTime] = useState("");
+  const [arrivalDate, setArrivalDate] = useState("");
   const [fromAirport, setFromAirport] = useState("");
   const [toAirport, setToAirport] = useState("");
   const [nameError, setNameError] = useState("");
@@ -141,11 +142,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ===== تعديل الرحلة =====
   const openEditFlight = (flight: Flight) => {
     setEditFlightModal(flight);
-    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", arrival_time: (flight as any).arrival_time || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
+    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", arrival_time: (flight as any).arrival_time || "", arrival_date: (flight as any).arrival_date || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
   };
   const saveEditFlight = async () => {
     if (!editFlightModal) return;
-    const upd = { name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(), date: editForm.date, time: editForm.time, arrival_time: editForm.arrival_time, from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim() };
+    const upd = { name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(), date: editForm.date, time: editForm.time, arrival_time: editForm.arrival_time, arrival_date: editForm.arrival_date, from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim() };
     await supabase.from("flights").update(upd).eq("id", editFlightModal.id);
     setFlights(flights.map(f => f.id === editFlightModal.id ? { ...f, ...upd } : f));
     setEditFlightModal(null);
@@ -155,13 +156,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (!flightName.trim()) { setNameError("يرجى إدخال رقم الرحلة أو اسمها"); return; }
     if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} بالاسم "${flightName}" موجودة بالفعل`); return; }
     setNameError("");
-    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, arrival_time: arrivalTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
+    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, arrival_time: arrivalTime, arrival_date: arrivalDate, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
     if (error) { showAlert("error", `فشل إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
       setExpanded(prev => new Set([...prev, newFlight.id]));
-      setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setArrivalTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
+      setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setArrivalTime(""); setArrivalDate(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
     }
   };
 
@@ -516,52 +517,94 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       </div>
 
       {/* ===== مودال رحلة جديدة ===== */}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="رحلة جديدة" maxWidth={380}>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الرحلة</div>
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title="رحلة جديدة" maxWidth={420}>
+        {/* نوع الرحلة */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>نوع الرحلة</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذهاب", "إياب"] as const).map(t => (
-              <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)" }}>
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-                  <PlaneIcon size={12} color={flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)"} flip={t === "إياب"} />
-                  {t}
-                </span>
+              <div key={t} onClick={() => setFlightType(t)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: flightType === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 13, fontWeight: 700, color: flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <PlaneIcon size={13} color={flightType === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)"} flip={t === "إياب"} />
+                {t}
               </div>
             ))}
           </div>
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>رقم الرحلة</div>
+
+        {/* رقم الرحلة */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>رقم الرحلة</div>
           <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
-          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 3 }}>{nameError}</div>}
+          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
-          <div style={{ display: "flex", gap: 6, marginBottom: airline === "أخرى" ? 8 : 0 }}>
-            {(["Qatar Airways", "Saudia", "أخرى"] as const).map(opt => (
-              <div key={opt} onClick={() => { setAirline(opt === "أخرى" ? "أخرى" : opt); }} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${airline === opt || (opt === "أخرى" && !["Qatar Airways","Saudia"].includes(airline) && airline !== "") ? "var(--em7)" : "var(--border)"}`, background: airline === opt || (opt === "أخرى" && !["Qatar Airways","Saudia"].includes(airline) && airline !== "") ? "rgba(125,31,60,.06)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 700, color: airline === opt || (opt === "أخرى" && !["Qatar Airways","Saudia"].includes(airline) && airline !== "") ? "var(--em7)" : "var(--muted)" }}>
-                {opt === "Qatar Airways" ? "القطرية" : opt === "Saudia" ? "السعودية" : "أخرى"}
-              </div>
-            ))}
+
+        {/* شركة الطيران */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
+          <select
+            value={["Qatar Airways", "Saudia"].includes(airline) ? airline : (airline ? "أخرى" : "")}
+            onChange={e => { if (e.target.value === "أخرى") setAirline("__other__"); else setAirline(e.target.value); }}
+            style={{ ...inp, cursor: "pointer" }}
+          >
+            <option value="">— اختر شركة الطيران —</option>
+            <option value="Qatar Airways">Qatar Airways — القطرية</option>
+            <option value="Saudia">Saudia — السعودية</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+          {airline === "__other__" || (!["Qatar Airways", "Saudia", "", "__other__"].includes(airline) && !["Qatar Airways", "Saudia"].includes(airline) && airline !== "") ? (
+            <input style={{ ...inp, marginTop: 8 }} value={airline === "__other__" ? "" : airline} onChange={e => setAirline(e.target.value)} placeholder="اكتب اسم شركة الطيران" autoFocus />
+          ) : null}
+        </div>
+
+        {/* المطارات */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>المطارات</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>مطار المغادرة</div>
+              <input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="مثال: DOH" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>مطار الوصول</div>
+              <input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="مثال: JED" />
+            </div>
           </div>
-          {!["Qatar Airways", "Saudia", ""].includes(airline) && airline !== "أخرى" && (
-            <input style={inp} value={airline} onChange={e => setAirline(e.target.value)} placeholder="اسم شركة الطيران" autoFocus />
-          )}
-          {airline === "أخرى" && (
-            <input style={inp} value="" onChange={e => setAirline(e.target.value)} placeholder="اسم شركة الطيران" autoFocus />
-          )}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الإقلاع</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
-          <div style={{ gridColumn: "span 2" }}><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الوصول</div><input style={inp} type="time" value={arrivalTime} onChange={e => setArrivalTime(e.target.value)} /></div>
+
+        {/* موعد الإقلاع */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>موعد الإقلاع</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div>
+              <input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>الوقت</div>
+              <input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} />
+            </div>
+          </div>
         </div>
+
+        {/* موعد الوصول */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>موعد الوصول</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div>
+              <input style={inp} type="date" value={arrivalDate} onChange={e => setArrivalDate(e.target.value)} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>الوقت</div>
+              <input style={inp} type="time" value={arrivalTime} onChange={e => setArrivalTime(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            إضافة
+            إضافة الرحلة
           </button>
           <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
         </div>
@@ -695,51 +738,93 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       )}
 
       {/* ===== مودال تعديل الرحلة ===== */}
-      <Modal show={!!editFlightModal} onClose={() => setEditFlightModal(null)} title="تعديل بيانات الرحلة" maxWidth={380}>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>نوع الرحلة</div>
+      <Modal show={!!editFlightModal} onClose={() => setEditFlightModal(null)} title="تعديل بيانات الرحلة" maxWidth={420}>
+        {/* نوع الرحلة */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>نوع الرحلة</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذهاب", "إياب"] as const).map(t => (
-              <div key={t} onClick={() => setEditForm(p => ({ ...p, type: t }))} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid ${editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: editForm.type === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)" }}>
+              <div key={t} onClick={() => setEditForm(p => ({ ...p, type: t }))} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `1.5px solid ${editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: editForm.type === t ? (t === "ذهاب" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 13, fontWeight: 700, color: editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <PlaneIcon size={13} color={editForm.type === t ? (t === "ذهاب" ? "var(--info)" : "var(--female-fg)") : "var(--muted)"} flip={t === "إياب"} />
                 {t}
               </div>
             ))}
           </div>
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>رقم الرحلة</div>
+
+        {/* رقم الرحلة */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>رقم الرحلة</div>
           <input style={inp} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} placeholder="مثال: QR501" />
         </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-            {(["Qatar Airways", "Saudia", "أخرى"] as const).map(opt => {
-              const isOther = opt === "أخرى";
-              const isSelected = isOther
-                ? !["Qatar Airways", "Saudia", ""].includes(editForm.airline)
-                : editForm.airline === opt;
-              return (
-                <div key={opt} onClick={() => setEditForm(p => ({ ...p, airline: isOther ? "" : opt }))} style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1.5px solid ${isSelected ? "var(--em7)" : "var(--border)"}`, background: isSelected ? "rgba(125,31,60,.06)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 700, color: isSelected ? "var(--em7)" : "var(--muted)" }}>
-                  {opt === "Qatar Airways" ? "القطرية" : opt === "Saudia" ? "السعودية" : "أخرى"}
-                </div>
-              );
-            })}
-          </div>
-          {!["Qatar Airways", "Saudia", ""].includes(editForm.airline) && (
-            <input style={inp} value={editForm.airline} onChange={e => setEditForm(p => ({ ...p, airline: e.target.value }))} placeholder="اسم شركة الطيران" />
+
+        {/* شركة الطيران */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
+          <select
+            value={["Qatar Airways", "Saudia"].includes(editForm.airline) ? editForm.airline : (editForm.airline ? "أخرى" : "")}
+            onChange={e => { if (e.target.value === "أخرى") setEditForm(p => ({ ...p, airline: "__other__" })); else setEditForm(p => ({ ...p, airline: e.target.value })); }}
+            style={{ ...inp, cursor: "pointer" }}
+          >
+            <option value="">— اختر شركة الطيران —</option>
+            <option value="Qatar Airways">Qatar Airways — القطرية</option>
+            <option value="Saudia">Saudia — السعودية</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+          {(editForm.airline === "__other__" || (!["Qatar Airways", "Saudia", "", "__other__"].includes(editForm.airline))) && (
+            <input style={{ ...inp, marginTop: 8 }} value={editForm.airline === "__other__" ? "" : editForm.airline} onChange={e => setEditForm(p => ({ ...p, airline: e.target.value }))} placeholder="اكتب اسم شركة الطيران" />
           )}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الإقلاع</div><input style={inp} type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>من</div><input style={inp} value={editForm.from_airport} onChange={e => setEditForm(p => ({ ...p, from_airport: e.target.value }))} placeholder="الدوحة DOH" /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={editForm.to_airport} onChange={e => setEditForm(p => ({ ...p, to_airport: e.target.value }))} placeholder="جدة JED" /></div>
-          <div style={{ gridColumn: "span 2" }}><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الوصول</div><input style={inp} type="time" value={editForm.arrival_time} onChange={e => setEditForm(p => ({ ...p, arrival_time: e.target.value }))} /></div>
+
+        {/* المطارات */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>المطارات</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>مطار المغادرة</div>
+              <input style={inp} value={editForm.from_airport} onChange={e => setEditForm(p => ({ ...p, from_airport: e.target.value }))} placeholder="مثال: DOH" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>مطار الوصول</div>
+              <input style={inp} value={editForm.to_airport} onChange={e => setEditForm(p => ({ ...p, to_airport: e.target.value }))} placeholder="مثال: JED" />
+            </div>
+          </div>
         </div>
+
+        {/* موعد الإقلاع */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>موعد الإقلاع</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div>
+              <input style={inp} type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>الوقت</div>
+              <input style={inp} type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+
+        {/* موعد الوصول */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>موعد الوصول</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div>
+              <input style={inp} type="date" value={editForm.arrival_date} onChange={e => setEditForm(p => ({ ...p, arrival_date: e.target.value }))} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>الوقت</div>
+              <input style={inp} type="time" value={editForm.arrival_time} onChange={e => setEditForm(p => ({ ...p, arrival_time: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={saveEditFlight} style={{ ...btnP(), flex: 1 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            حفظ
+            حفظ التعديلات
           </button>
           <button onClick={() => setEditFlightModal(null)} style={btnS()}>إلغاء</button>
         </div>
