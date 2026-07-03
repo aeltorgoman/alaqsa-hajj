@@ -47,11 +47,11 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const firstClass = hajjOnly.filter(p => p.services?.flight === "درجة أولى").length;
 
   const cards: StatCardData[] = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
     { label: "موزّعون", num: assigned, sub: `${needsFlight ? Math.round(assigned / needsFlight * 100) : 0}٪ من المحتاجين`, tone: "success" },
     { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
     { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
     { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", tone: withoutTicket > 0 ? "female" : "muted" },
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand", featured: true },
   ];
   return <StatsRow cards={cards} />;
 }
