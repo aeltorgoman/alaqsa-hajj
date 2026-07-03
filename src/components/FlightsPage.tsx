@@ -236,51 +236,57 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             background: "var(--paper)",
             border: `1.5px solid ${isExpanded ? "#7D1F3C" : "var(--line)"}`,
             borderRadius: 18,
+            display: "flex",
             overflow: "hidden",
             boxShadow: isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)",
             transition: "all .2s",
             cursor: "pointer",
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(125,31,60,.15)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)"; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 20px rgba(125,31,60,.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
         >
-          {/* ══ هيدر: شعار الشركة + Timeline + رقم الرحلة ══ */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--ivory)" }}>
-            {/* أيقونة الشركة */}
-            <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <PlaneIcon size={16} color="var(--em7)" />
-            </div>
-            {/* اسم الشركة ورقم الرحلة */}
-            <div style={{ flexShrink: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
-              <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{flight.name}</div>
-            </div>
-            {/* فاصل */}
-            <div style={{ width: 1, height: 28, background: "var(--line)", flexShrink: 0, margin: "0 4px" }} />
-            {/* Timeline المطارات */}
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 0 }}>
-              <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
-                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 1 }}>{fromCity}</div>
-                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 800, color: "#7D1F3C", marginTop: 2 }}>{flight.time}</div>}
+          {/* ══ يمين — Timeline ══ */}
+          <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* شعار + اسم الشركة */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <PlaneIcon size={15} color="var(--em7)" />
               </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 10px" }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{flight.name}</div>
+              </div>
+            </div>
+            {/* Timeline المطارات */}
+            <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+              <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
+                <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{fromCity}</div>
+                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: "#7D1F3C", marginTop: 3 }}>{flight.time}</div>}
+              </div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
                   <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`, animation: "bpPlanePulse 3s ease-in-out infinite" }}>
-                    <PlaneIcon size={15} color="#7D1F3C" />
+                    <PlaneIcon size={16} color="#7D1F3C" />
                   </div>
                 </div>
-                {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 4, whiteSpace: "nowrap" }}>{dateDisplay}</div>}
+                {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
               </div>
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
-                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 1 }}>{toCity}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{toCity}</div>
               </div>
             </div>
           </div>
 
-          {/* ══ جسم الكارت — البيانات والأزرار ══ */}
-          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* ══ الفاصل المنقط ══ */}
+          <div style={{ width: 0, borderRight: "2px dashed var(--line)", flexShrink: 0, position: "relative", margin: "14px 0" }}>
+            <div style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--line)", right: -11, top: -24 }} />
+            <div style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--line)", right: -11, bottom: -24 }} />
+          </div>
+
+          {/* ══ يسار — البيانات والأزرار ══ */}
+          <div style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
             {/* الاسم والتاريخ */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <div>
