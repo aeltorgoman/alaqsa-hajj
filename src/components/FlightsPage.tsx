@@ -35,24 +35,15 @@ const PlaneIcon = ({ size = 16, color = "currentColor", flip = false }: { size?:
 );
 
 // ===== شعارات شركات الطيران =====
-const QATAR_LOGO = (
-  <svg viewBox="0 0 60 24" width="28" height="11" xmlns="http://www.w3.org/2000/svg">
-    <rect width="60" height="24" rx="3" fill="#5C0632"/>
-    <text x="4" y="17" fontFamily="Arial" fontSize="10" fontWeight="bold" fill="#C8A96E" letterSpacing="0.5">QATAR</text>
-    <text x="36" y="17" fontFamily="Arial" fontSize="7" fill="white">airways</text>
-  </svg>
-);
-const SAUDIA_LOGO = (
-  <svg viewBox="0 0 60 24" width="28" height="11" xmlns="http://www.w3.org/2000/svg">
-    <rect width="60" height="24" rx="3" fill="#006341"/>
-    <text x="6" y="17" fontFamily="Arial" fontSize="11" fontWeight="bold" fill="white" letterSpacing="0.5">SAUDIA</text>
-  </svg>
-);
+const AIRLINE_LOGOS: Record<string, string> = {
+  qatar: "https://upload.wikimedia.org/wikipedia/en/thumb/9/9b/Qatar_Airways_Logo.svg/120px-Qatar_Airways_Logo.svg.png",
+  saudia: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Saudia_Logo.svg/120px-Saudia_Logo.svg.png",
+};
 
-const getAirlineLogo = (airline: string) => {
+const getAirlineLogoUrl = (airline: string): string | null => {
   const a = airline.toLowerCase();
-  if (a.includes("qatar")) return QATAR_LOGO;
-  if (a.includes("saudi") || a.includes("saudia")) return SAUDIA_LOGO;
+  if (a.includes("qatar")) return AIRLINE_LOGOS.qatar;
+  if (a.includes("saudi") || a.includes("saudia")) return AIRLINE_LOGOS.saudia;
   return null;
 };
 
@@ -276,11 +267,17 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 4 }}>
-                {flight.airline && getAirlineLogo(flight.airline)
-                  ? getAirlineLogo(flight.airline)
-                  : <PlaneIcon size={15} color="var(--em7)" />
-                }
+              <div style={{ width: 36, height: 36, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 3 }}>
+                {flight.airline && getAirlineLogoUrl(flight.airline) ? (
+                  <img
+                    src={getAirlineLogoUrl(flight.airline)!}
+                    alt={flight.airline}
+                    style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 4 }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                ) : (
+                  <PlaneIcon size={15} color="var(--em7)" />
+                )}
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
