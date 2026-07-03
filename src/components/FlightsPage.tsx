@@ -231,74 +231,56 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       <div key={flight.id} style={{ marginBottom: 12 }}>
         {/* ===== البطاقة الرئيسية ===== */}
         <div
+          onClick={() => openAddP(flight.id)}
           style={{
             background: "var(--paper)",
             border: `1.5px solid ${isExpanded ? "#7D1F3C" : "var(--line)"}`,
             borderRadius: 18,
-            display: "flex",
             overflow: "hidden",
             boxShadow: isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)",
             transition: "all .2s",
+            cursor: "pointer",
           }}
+          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(125,31,60,.15)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)"; }}
         >
-          {/* ══ يمين — Timeline ══ */}
-          <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", borderLeft: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* شعار + اسم الشركة */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 7, background: "var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <PlaneIcon size={15} color="var(--em7)" />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
-                <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{flight.name}</div>
-              </div>
+          {/* ══ هيدر: شعار الشركة + Timeline + رقم الرحلة ══ */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid var(--line)", background: "var(--ivory)" }}>
+            {/* أيقونة الشركة */}
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <PlaneIcon size={16} color="var(--em7)" />
             </div>
-
+            {/* اسم الشركة ورقم الرحلة */}
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
+              <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{flight.name}</div>
+            </div>
+            {/* فاصل */}
+            <div style={{ width: 1, height: 28, background: "var(--line)", flexShrink: 0, margin: "0 4px" }} />
             {/* Timeline المطارات */}
-            <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-              {/* المغادرة */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 0 }}>
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
-                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{fromCity}</div>
-                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: "#7D1F3C", marginTop: 3 }}>{flight.time}</div>}
+                <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 1 }}>{fromCity}</div>
+                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 800, color: "#7D1F3C", marginTop: 2 }}>{flight.time}</div>}
               </div>
-
-              {/* الخط بالطائرة */}
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 10px" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
-                  <div style={{
-                    position: "absolute", top: "50%", left: "50%",
-                    transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`,
-                    animation: "bpPlanePulse 3s ease-in-out infinite",
-                  }}>
-                    <PlaneIcon size={16} color="#7D1F3C" />
+                  <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`, animation: "bpPlanePulse 3s ease-in-out infinite" }}>
+                    <PlaneIcon size={15} color="#7D1F3C" />
                   </div>
                 </div>
-                {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
+                {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 4, whiteSpace: "nowrap" }}>{dateDisplay}</div>}
               </div>
-
-              {/* الوصول */}
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
-                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{toCity}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 1 }}>{toCity}</div>
               </div>
             </div>
           </div>
 
-          {/* ══ الفاصل المنقط ══ */}
-          <div style={{
-            width: 0,
-            borderRight: "2px dashed var(--line)",
-            flexShrink: 0,
-            position: "relative",
-            margin: "14px 0",
-          }}>
-            <div style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--line)", right: -11, top: -24 }} />
-            <div style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--line)", right: -11, bottom: -24 }} />
-          </div>
-
-          {/* ══ يسار — البيانات والأزرار ══ */}
-          <div style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* ══ جسم الكارت — البيانات والأزرار ══ */}
+          <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
             {/* الاسم والتاريخ */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <div>
@@ -324,13 +306,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
               {/* أزرار التحكم */}
               <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                <button onClick={() => openEditFlight(flight)} title="تعديل" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)" }}>
+                <button onClick={e => { e.stopPropagation(); openEditFlight(flight); }} title="تعديل" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)" }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
                 </button>
-                <button onClick={() => printFlight(flight)} title="طباعة" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)" }}>
+                <button onClick={e => { e.stopPropagation(); printFlight(flight); }} title="طباعة" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)" }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                 </button>
-                <button onClick={() => deleteFlight(flight)} title="حذف" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--muted)" }}>
+                <button onClick={e => { e.stopPropagation(); deleteFlight(flight); }} title="حذف" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--muted)" }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                 </button>
               </div>
@@ -368,12 +350,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 </div>
                 <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--muted)" }}>{fp.length} حاج</div>
               </div>
-              <button onClick={() => openAddP(flight.id)} style={{ height: 32, padding: "0 14px", borderRadius: 9, display: "inline-flex", alignItems: "center", gap: 5, background: "#7D1F3C", color: "white", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "var(--font-body)", flexShrink: 0 }}>
+              <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ height: 32, padding: "0 14px", borderRadius: 9, display: "inline-flex", alignItems: "center", gap: 5, background: "#7D1F3C", color: "white", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "var(--font-body)", flexShrink: 0 }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 إضافة
               </button>
               {/* زر توسيع قائمة الحجاج */}
-              <button onClick={() => toggleFlight(flight.id)} style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", flexShrink: 0, transition: "all .2s" }}>
+              <button onClick={e => { e.stopPropagation(); toggleFlight(flight.id); }} style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", flexShrink: 0, transition: "all .2s" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}>
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
