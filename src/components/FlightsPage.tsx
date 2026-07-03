@@ -302,9 +302,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   <div style={{
                     position: "absolute", top: "50%", left: "50%",
                     transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`,
-                    animation: isTomorrow ? "bpPlanePulse 3s ease-in-out infinite" : undefined,
+                    animation: isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite",
                   }}>
-                    <PlaneIcon size={16} color={isTomorrow ? "#7D1F3C" : "var(--muted)"} />
+                    <PlaneIcon size={16} color={isTomorrow ? "#7D1F3C" : "#7D1F3C"} />
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
@@ -457,9 +457,14 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     <div style={{ overflowY: "auto", height: "100%", display: "flex", flexDirection: "column" }}>
       {/* أنيميشن الطائرة */}
       <style>{`
+        @keyframes bpPlaneFloat {
+          0%,100% { transform: translate(-50%,-55%) translateX(0); }
+          50%      { transform: translate(-50%,-55%) translateX(-4px); }
+        }
         @keyframes bpPlanePulse {
-          0%,100% { transform: translate(-50%,-55%)${" "}translateX(0); }
-          50%      { transform: translate(-50%,-55%) translateX(-5px); }
+          0%,100% { transform: translate(-50%,-55%) translateX(0) scale(1); opacity:1; }
+          40%      { transform: translate(-50%,-55%) translateX(-6px) scale(1.15); opacity:.85; }
+          60%      { transform: translate(-50%,-55%) translateX(-6px) scale(1.15); opacity:.85; }
         }
       `}</style>
 
