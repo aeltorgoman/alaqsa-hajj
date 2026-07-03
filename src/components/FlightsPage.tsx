@@ -63,7 +63,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [flights, setFlights] = useState<Flight[]>([]);
   const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
   const [editFlightModal, setEditFlightModal] = useState<Flight | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", from_airport: "", to_airport: "" });
+  const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", arrival_time: "", from_airport: "", to_airport: "" });
   const [expanded, setExpanded] = useState(new Set<number>());
   const [activeTab, setActiveTab] = useState<"ذهاب" | "إياب" | "الكل">("ذهاب");
 
@@ -79,6 +79,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [airline, setAirline] = useState("");
   const [flightDate, setFlightDate] = useState("");
   const [flightTime, setFlightTime] = useState("");
+  const [arrivalTime, setArrivalTime] = useState("");
   const [fromAirport, setFromAirport] = useState("");
   const [toAirport, setToAirport] = useState("");
   const [nameError, setNameError] = useState("");
@@ -127,11 +128,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ===== تعديل الرحلة =====
   const openEditFlight = (flight: Flight) => {
     setEditFlightModal(flight);
-    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
+    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", arrival_time: (flight as any).arrival_time || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
   };
   const saveEditFlight = async () => {
     if (!editFlightModal) return;
-    const upd = { name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(), date: editForm.date, time: editForm.time, from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim() };
+    const upd = { name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(), date: editForm.date, time: editForm.time, arrival_time: editForm.arrival_time, from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim() };
     await supabase.from("flights").update(upd).eq("id", editFlightModal.id);
     setFlights(flights.map(f => f.id === editFlightModal.id ? { ...f, ...upd } : f));
     setEditFlightModal(null);
@@ -141,13 +142,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (!flightName.trim()) { setNameError("يرجى إدخال رقم الرحلة أو اسمها"); return; }
     if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} بالاسم "${flightName}" موجودة بالفعل`); return; }
     setNameError("");
-    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
+    const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, arrival_time: arrivalTime, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
     if (error) { showAlert("error", `فشل إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
       setExpanded(prev => new Set([...prev, newFlight.id]));
-      setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
+      setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setArrivalTime(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
     }
   };
 
@@ -217,6 +218,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     const toCity = extractCity(flight.to_airport || "");
     const firstClassCount = fp.filter(p => (p as any).flight_class === "درجة أولى").length;
     const economyCount = fp.length - firstClassCount;
+    const arrivalTime = (flight as any).arrival_time || "";
 
     // تنسيق التاريخ
     let dateDisplay = flight.date || "";
@@ -226,6 +228,15 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         dateDisplay = d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
       } catch { /* keep raw */ }
     }
+
+    // هل الرحلة بكرة؟
+    const isTomorrow = (() => {
+      if (!flight.date) return false;
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const fd = new Date(flight.date);
+      return fd.getFullYear() === tomorrow.getFullYear() && fd.getMonth() === tomorrow.getMonth() && fd.getDate() === tomorrow.getDate();
+    })();
 
     return (
       <div key={flight.id} style={{ marginBottom: 12 }}>
@@ -249,13 +260,29 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <PlaneIcon size={15} color="var(--em7)" />
+              <div style={{ width: 32, height: 32, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 2 }}>
+                {flight.airline ? (
+                  <img
+                    src={`https://logo.clearbit.com/${flight.airline.toLowerCase().replace(/\s+/g, "")}.com`}
+                    alt={flight.airline}
+                    width={26} height={26}
+                    style={{ objectFit: "contain", borderRadius: 4 }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.nextSibling as HTMLElement).style.display = "flex"; }}
+                  />
+                ) : null}
+                <div style={{ display: flight.airline ? "none" : "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%" }}>
+                  <PlaneIcon size={15} color="var(--em7)" />
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
                 <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{flight.name}</div>
               </div>
+              {isTomorrow && (
+                <span style={{ marginRight: "auto", fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(125,31,60,.1)", color: "#7D1F3C", border: "1px solid rgba(125,31,60,.2)" }}>
+                  غداً
+                </span>
+              )}
             </div>
             {/* Timeline المطارات */}
             <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
@@ -266,8 +293,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
-                  <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`, animation: "bpPlanePulse 3s ease-in-out infinite" }}>
-                    <PlaneIcon size={16} color="#7D1F3C" />
+                  <div style={{
+                    position: "absolute", top: "50%", left: "50%",
+                    transform: `translate(-50%, -55%)${isReturn ? " scaleX(-1)" : ""}`,
+                    animation: isTomorrow ? "bpPlanePulse 3s ease-in-out infinite" : undefined,
+                  }}>
+                    <PlaneIcon size={16} color={isTomorrow ? "#7D1F3C" : "var(--muted)"} />
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
@@ -275,6 +306,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
                 <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
                 <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{toCity}</div>
+                {arrivalTime && <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: "#059669", marginTop: 3 }}>{arrivalTime}</div>}
               </div>
             </div>
           </div>
@@ -504,9 +536,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الإقلاع</div><input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} /></div>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>من</div><input style={inp} value={fromAirport} onChange={e => setFromAirport(e.target.value)} placeholder="الدوحة DOH" /></div>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={toAirport} onChange={e => setToAirport(e.target.value)} placeholder="جدة JED" /></div>
+          <div style={{ gridColumn: "span 2" }}><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الوصول</div><input style={inp} type="time" value={arrivalTime} onChange={e => setArrivalTime(e.target.value)} /></div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}>
@@ -518,70 +551,105 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       </Modal>
 
       {/* ===== مودال إضافة مسافرين ===== */}
-      <Modal show={showAddP} onClose={() => setShowAddP(false)} title={`إضافة مسافرين — ${currentFlight?.name}`} maxWidth={420}>
-        {/* هيدر التايم لاين داخل المودال */}
-        {currentFlight && (
-          <div style={{ background: "var(--ivory)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 0 }}>
-            <div style={{ textAlign: "center", minWidth: 50 }}>
-              <div style={{ fontFamily: "monospace", fontSize: 18, fontWeight: 700, color: "#7D1F3C" }}>{extractIATA(currentFlight.from_airport || "")}</div>
-              <div style={{ fontSize: 8, color: "var(--muted)" }}>{extractCity(currentFlight.from_airport || "")}</div>
+      {showAddP && (
+        <div onClick={() => setShowAddP(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+
+            {/* ══ هيدر ملون ══ */}
+            <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", left: -10, bottom: -14, opacity: .08, pointerEvents: "none" }}>
+                <svg width="90" height="90" viewBox="0 0 24 24" fill="white"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 1 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <PlaneIcon size={20} color="white" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: "white", lineHeight: 1 }}>{currentFlight?.name || "رحلة"}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 3 }}>
+                    {currentFlight ? `${extractIATA(currentFlight.from_airport || "")} ← ${extractIATA(currentFlight.to_airport || "")} · ${getFlightPassengers(currentFlight).length} مسافر` : ""}
+                  </div>
+                </div>
+                {/* اختيار الدرجة */}
+                <div style={{ display: "flex", gap: 6 }}>
+                  {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
+                    <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ padding: "5px 12px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: addFlightClass === cls ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.18)", color: addFlightClass === cls ? "#7D1F3C" : "white", border: "1px solid rgba(255,255,255,.3)", transition: "all .15s" }}>
+                      {cls}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => setShowAddP(false)} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
             </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px" }}>
-              <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg,var(--line),#c8b8a0,var(--line))", borderRadius: 99, position: "relative" }}>
-                <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%,-55%)${currentFlight.type === "إياب" ? " scaleX(-1)" : ""}` }}>
-                  <PlaneIcon size={14} color="#7D1F3C" />
+
+            {/* ══ الجسم — عمودين ══ */}
+            <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+
+              {/* يمين: المسافرون المضافون */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid var(--line)" }}>
+                <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#7D1F3C", background: "rgba(125,31,60,.08)", padding: "2px 8px", borderRadius: 99 }}>{currentFlight ? getFlightPassengers(currentFlight).length : 0} مسافر</span>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                  {currentFlight && getFlightPassengers(currentFlight).length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد مسافرون بعد</div>
+                  ) : currentFlight && getFlightPassengers(currentFlight).map((p, i) => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
+                      <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
+                      <button onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 3 }}>{currentFlight.date ? new Date(currentFlight.date).toLocaleDateString("ar-SA", { day: "numeric", month: "long" }) : ""}</div>
-            </div>
-            <div style={{ textAlign: "center", minWidth: 50 }}>
-              <div style={{ fontFamily: "monospace", fontSize: 18, fontWeight: 700, color: "#059669" }}>{extractIATA(currentFlight.to_airport || "")}</div>
-              <div style={{ fontSize: 8, color: "var(--muted)" }}>{extractCity(currentFlight.to_airport || "")}</div>
-            </div>
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
-            <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ flex: 1, padding: "7px 0", borderRadius: 8, border: `1.5px solid ${addFlightClass === cls ? "var(--em7)" : "var(--border)"}`, background: addFlightClass === cls ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: addFlightClass === cls ? "var(--em7)" : "var(--muted)" }}>
-              {cls}
-            </div>
-          ))}
-          {!allSelectedWantFirst && selectedP.size > 0 && <div style={{ fontSize: 10, color: "var(--muted)", alignSelf: "center" }}>درجة أولى متاحة بس للي طلبوها</div>}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", border: "0.5px solid var(--line)", borderRadius: 8, padding: "6px 10px", flex: 1 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21-4.35-4.35"/></svg>
-            <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }} placeholder="ابحث..." value={pSearch} onChange={e => setPSearch(e.target.value)} />
-          </div>
-          <button onClick={() => setSelectedP(prev => prev.size === filteredP.length ? new Set() : new Set(filteredP.map(p => p.id)))}
-            style={{ fontSize: 11, padding: "0 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "var(--font-body)" }}>
-            {selectedP.size === filteredP.length ? "إلغاء الكل" : "تحديد الكل"}
-          </button>
-        </div>
-        {filteredP.length === 0 ? (
-          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: 12, padding: "1rem" }}>لا يوجد مسافرين متاحين</div>
-        ) : filteredP.map(p => {
-          const isSel = selectedP.has(p.id);
-          const wantsFirst = p.services?.flight === "درجة أولى";
-          return (
-            <div key={p.id} onClick={() => toggleSelectP(p.id)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, marginBottom: 2, cursor: "pointer", background: isSel ? "rgba(125,31,60,.08)" : "transparent" }}>
-              <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSel ? "var(--em7)" : "var(--line)"}`, background: isSel ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {isSel && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+
+              {/* شمال: إضافة مسافرين */}
+              <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
+                <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
+                </div>
+                <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 10px" }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} placeholder="ابحث عن مسافر..." value={pSearch} onChange={e => setPSearch(e.target.value)} autoFocus />
+                    {pSearch && <button onClick={() => setPSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, lineHeight: 1 }}>✕</button>}
+                  </div>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                  {filteredP.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)", fontSize: 11 }}>{pSearch ? "لا توجد نتائج" : "جميع الحجاج موزعون"}</div>
+                  ) : filteredP.map(p => {
+                    const wantsFirst = p.services?.flight === "درجة أولى";
+                    return (
+                      <div key={p.id}
+                        onClick={async () => {
+                          const field = flightField(currentFlight?.type);
+                          await supabase.from("passengers").update({ [field]: currentFlightId, flight_class: effectiveClass }).eq("id", p.id);
+                          setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: currentFlightId, flight_class: effectiveClass } : x));
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
+                        </div>
+                        {wantsFirst && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
+                        <span style={{ fontSize: 16, color: "#7D1F3C", fontWeight: 700, flexShrink: 0 }}>＋</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-              {wantsFirst && <span style={{ fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>أولى</span>}
             </div>
-          );
-        })}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={confirmAddP} style={{ ...btnP(), flex: 1 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            إضافة ({selectedP.size})
-          </button>
-          <button onClick={() => setShowAddP(false)} style={btnS()}>إلغاء</button>
+          </div>
         </div>
-      </Modal>
+      )}
 
       {/* ===== مودال تعديل الرحلة ===== */}
       <Modal show={!!editFlightModal} onClose={() => setEditFlightModal(null)} title="تعديل بيانات الرحلة" maxWidth={380}>
@@ -605,9 +673,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div><input style={inp} type="date" value={editForm.date} onChange={e => setEditForm(p => ({ ...p, date: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الوقت</div><input style={inp} type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} /></div>
+          <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الإقلاع</div><input style={inp} type="time" value={editForm.time} onChange={e => setEditForm(p => ({ ...p, time: e.target.value }))} /></div>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>من</div><input style={inp} value={editForm.from_airport} onChange={e => setEditForm(p => ({ ...p, from_airport: e.target.value }))} placeholder="الدوحة DOH" /></div>
           <div><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>إلى</div><input style={inp} value={editForm.to_airport} onChange={e => setEditForm(p => ({ ...p, to_airport: e.target.value }))} placeholder="جدة JED" /></div>
+          <div style={{ gridColumn: "span 2" }}><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>وقت الوصول</div><input style={inp} type="time" value={editForm.arrival_time} onChange={e => setEditForm(p => ({ ...p, arrival_time: e.target.value }))} /></div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={saveEditFlight} style={{ ...btnP(), flex: 1 }}>
