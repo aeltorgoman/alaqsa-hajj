@@ -299,13 +299,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
-                  <div style={{
-                    position: "absolute", top: "50%", left: "50%",
-                    transform: "translate(-50%, -55%)",
-                    animation: isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite",
-                  }}>
-                    <div style={{ transform: isReturn ? "scaleX(-1)" : undefined }}>
-                      <PlaneIcon size={16} color="#7D1F3C" />
+                  {/* wrapper للتمركز */}
+                  <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -55%)" }}>
+                    {/* div للـ animation منفصل */}
+                    <div style={{ animation: isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite" }}>
+                      <PlaneIcon size={16} color="#7D1F3C" flip={isReturn} />
                     </div>
                   </div>
                 </div>
@@ -460,13 +458,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       {/* أنيميشن الطائرة */}
       <style>{`
         @keyframes bpPlaneFloat {
-          0%,100% { transform: translate(-50%,-55%) translateX(0); }
-          50%      { transform: translate(-50%,-55%) translateX(-4px); }
+          0%,100% { transform: translateX(0); }
+          50%      { transform: translateX(-4px); }
         }
         @keyframes bpPlanePulse {
-          0%,100% { transform: translate(-50%,-55%) translateX(0) scale(1); opacity:1; }
-          40%      { transform: translate(-50%,-55%) translateX(-6px) scale(1.15); opacity:.85; }
-          60%      { transform: translate(-50%,-55%) translateX(-6px) scale(1.15); opacity:.85; }
+          0%,100% { transform: translateX(0) scale(1); opacity:1; }
+          40%,60% { transform: translateX(-6px) scale(1.2); opacity:.8; }
         }
       `}</style>
 
