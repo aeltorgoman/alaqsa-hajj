@@ -3,6 +3,7 @@ import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { AlertRotator } from "./AlertRotator";
+import { StatsRow, type StatCardData } from "./StatCard";
 
 function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   passengers: Passenger[];
@@ -52,29 +53,27 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   const recent      = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 8);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
-  const statCards = [
+  const statCards: StatCardData[] = [
     {
-      label: "إجمالي الحجاج", num: hajj.length,
-      sub: "+" + Math.min(12, hajj.length) + " هذا الأسبوع",
-      bg: "var(--paper)", border: "var(--line)", numColor: "var(--em8)",
-      lblColor: "var(--g7)", subColor: "var(--g6)",
-      iconBg: "rgba(200,162,75,.12)", iconColor: "var(--g5)",
+      label: "إجمالي الحجاج",
+      num: hajj.length,
+      sub: "الموسم الحالي",
+      tone: "brand",
+      featured: true,
       icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
     },
     {
-      label: "رجال", num: males,
+      label: "رجال",
+      num: males,
       sub: Math.round(males / total * 100) + "٪ من الإجمالي",
-      bg: "var(--mb)", border: "rgba(19,69,107,.1)", numColor: "var(--mf)",
-      lblColor: "var(--mf)", subColor: "var(--mf)",
-      iconBg: "rgba(19,69,107,.12)", iconColor: "var(--mf)",
+      tone: "info",
       icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
     },
     {
-      label: "نساء", num: females,
+      label: "نساء",
+      num: females,
       sub: Math.round(females / total * 100) + "٪ من الإجمالي",
-      bg: "var(--fb)", border: "rgba(122,46,69,.1)", numColor: "var(--ff)",
-      lblColor: "var(--ff)", subColor: "var(--ff)",
-      iconBg: "rgba(122,46,69,.12)", iconColor: "var(--ff)",
+      tone: "female",
       icon: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
     },
   ];
@@ -118,17 +117,8 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
           </div>
 
         {/* 2) كروت الإحصاء */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, flexShrink: 0 }}>
-          {statCards.map(({ label, num, sub, bg, border, numColor, lblColor, subColor, iconBg, iconColor, icon }) => (
-            <div key={label} style={{ borderRadius: 12, padding: "12px 14px", background: bg, border: `1px solid ${border}`, position: "relative", overflow: "hidden" }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: iconBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: lblColor, marginBottom: 3 }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 28, fontWeight: 900, lineHeight: 1, color: numColor }}>{num}</div>
-              <div style={{ fontSize: 10.5, marginTop: 3, color: subColor, fontWeight: 600 }}>{sub}</div>
-            </div>
-          ))}
+        <div style={{ flexShrink: 0, margin: "0 -14px" }}>
+          <StatsRow cards={statCards} />
         </div>
 
         {/* 3) آخر الحجاج المسجلين */}
