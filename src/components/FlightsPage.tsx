@@ -58,10 +58,10 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 
   const assignedPct = needsFlight ? Math.round(assigned / needsFlight * 100) : 0;
   const cards: StatCardData[] = [
-    { label: "نسبة التوزيع", num: `${assignedPct}%`, sub: `${assigned} من ${needsFlight} حاج`, tone: assignedPct === 100 ? "success" : "warning", featured: true },
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
     { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
     { label: "بدون تذكرة", num: withoutTicket, sub: "حسب طلب الحاج", tone: withoutTicket > 0 ? "female" : "muted" },
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
+    { label: "نسبة التوزيع", num: `${assignedPct}%`, sub: `${assigned} من ${needsFlight} حاج`, tone: assignedPct === 100 ? "success" : "brand", featured: true },
   ];
   return <StatsRow cards={cards} />;
 }
@@ -219,7 +219,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     const toIATA = extractIATA(flight.to_airport || "");
     const fromCity = extractCity(flight.from_airport || "");
     const toCity = extractCity(flight.to_airport || "");
-    const firstClassCount = fp.filter(p => (p as any).flight_class === "درجة أولى").length;
+    const firstClassCount = fp.filter(p => (p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى").length;
     const economyCount = fp.length - firstClassCount;
     const arrivalTime = (flight as any).arrival_time || "";
 
@@ -248,7 +248,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <div
           onClick={() => openAddP(flight.id)}
           style={{
-            background: idx % 2 === 0 ? "var(--paper)" : "var(--ivory)",
+            background: idx % 2 === 0 ? "var(--paper)" : "#EDE8E1",
             border: `1.5px solid ${isExpanded ? "#7D1F3C" : "var(--line)"}`,
             borderRadius: 18,
             display: "flex",
@@ -264,11 +264,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 4 }}>
+              <div style={{ width: 56, height: 56, borderRadius: 12, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 5 }}>
                 {flight.airline && getAirlineLogoUrl(flight.airline) ? (
                   <img src={getAirlineLogoUrl(flight.airline)!} alt={flight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                 ) : (
-                  <PlaneIcon size={18} color="var(--em7)" />
+                  <PlaneIcon size={22} color="var(--em7)" />
                 )}
               </div>
               <div>
@@ -290,11 +290,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
-                  {/* wrapper للتمركز فقط */}
-                  <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -55%)" }}>
-                    <div className={isTomorrow ? "plane-pulse" : "plane-float"} style={{ display: "flex" }}>
-                      <PlaneIcon size={16} color="#7D1F3C" flip={isReturn} />
-                    </div>
+                  <div className={isTomorrow ? "plane-pulse" : "plane-float"}>
+                    <PlaneIcon size={16} color="#7D1F3C" flip={isReturn} />
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
@@ -447,15 +444,24 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     <div style={{ overflowY: "auto", height: "100%", display: "flex", flexDirection: "column" }}>
       {/* أنيميشن الطائرة */}
       <style>{`
-        .plane-float { animation: bpPlaneFloat 4s ease-in-out infinite; }
-        .plane-pulse { animation: bpPlanePulse 2.5s ease-in-out infinite; }
         @keyframes bpPlaneFloat {
-          0%,100% { transform: translateX(0px); }
-          50%      { transform: translateX(-5px); }
+          0%,100% { left: calc(50% + 0px); }
+          50%      { left: calc(50% - 6px); }
         }
         @keyframes bpPlanePulse {
-          0%,100% { transform: translateX(0px) scale(1); opacity:1; }
-          40%,60% { transform: translateX(-7px) scale(1.2); opacity:.75; }
+          0%,100% { left: calc(50% + 0px); transform: translate(-50%,-55%) scale(1); opacity:1; }
+          40%,60% { left: calc(50% - 8px); transform: translate(-50%,-55%) scale(1.2); opacity:.75; }
+        }
+        .plane-float {
+          position: absolute !important;
+          top: 50% !important;
+          transform: translate(-50%,-55%) !important;
+          animation: bpPlaneFloat 4s ease-in-out infinite;
+        }
+        .plane-pulse {
+          position: absolute !important;
+          top: 50% !important;
+          animation: bpPlanePulse 2.5s ease-in-out infinite;
         }
       `}</style>
 
@@ -569,11 +575,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div>
               <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div>
-              <input style={inp} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} />
+              <input style={{ ...inp, direction: "ltr" }} type="date" value={flightDate} onChange={e => setFlightDate(e.target.value)} />
             </div>
             <div>
               <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>الوقت</div>
-              <input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} />
+              <input style={{ ...inp, direction: "ltr" }} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} />
             </div>
           </div>
         </div>
@@ -584,11 +590,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <div>
               <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>التاريخ</div>
-              <input style={inp} type="date" value={arrivalDate} onChange={e => setArrivalDate(e.target.value)} />
+              <input style={{ ...inp, direction: "ltr" }} type="date" value={arrivalDate} onChange={e => setArrivalDate(e.target.value)} />
             </div>
             <div>
               <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>الوقت</div>
-              <input style={inp} type="time" value={arrivalTime} onChange={e => setArrivalTime(e.target.value)} />
+              <input style={{ ...inp, direction: "ltr" }} type="time" value={arrivalTime} onChange={e => setArrivalTime(e.target.value)} />
             </div>
           </div>
         </div>
@@ -618,7 +624,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
                   {/* شعار الشركة */}
                   {currentFlight?.airline && getAirlineLogoUrl(currentFlight.airline) && (
-                    <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 4 }}>
+                    <div style={{ width: 60, height: 60, borderRadius: 12, background: "rgba(255,255,255,.95)", border: "1px solid rgba(255,255,255,.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6 }}>
                       <img src={getAirlineLogoUrl(currentFlight.airline)!} alt={currentFlight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                     </div>
                   )}
@@ -684,7 +690,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
                       <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                      {(p as any).flight_class === "درجة أولى" && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
+                      {((p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى") && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
                       <button onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
                       </button>
