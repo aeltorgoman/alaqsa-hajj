@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { DragEvent } from "react";
+import { Plane } from "lucide-react";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
@@ -28,10 +29,9 @@ const extractCity = (airport: string) => airport.replace(/\b[A-Z]{3}\b/, "").tri
 
 // ===== أيقونة الطائرة SVG =====
 const PlaneIcon = ({ size = 16, color = "currentColor", flip = false, animation }: { size?: number; color?: string; flip?: boolean; animation?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none"
-    style={{ display: "block", transform: flip ? "scaleX(-1)" : undefined, animation }}>
-    <path d="M22 16.21v-1.895l-9.526-5.743V2.5a1.5 1.5 0 0 0-3 0v6.072L0 13.315v1.895l9.474-2.842V18l-2.368 1.895V21.5l3.894-1.053L14.894 21.5v-1.605L12.526 18v-5.632L22 16.21z"/>
-  </svg>
+  <div style={{ display: "block", transform: flip ? "scaleX(-1) rotate(45deg)" : "rotate(45deg)", animation, lineHeight: 0 }}>
+    <Plane size={size} color={color} strokeWidth={1.8} />
+  </div>
 );
 
 // ===== شعارات شركات الطيران =====
