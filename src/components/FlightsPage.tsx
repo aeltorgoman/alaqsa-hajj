@@ -690,8 +690,25 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
               {/* شمال: إضافة مسافرين */}
               <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
-                <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
+                  {filteredP.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        const field = flightField(currentFlight?.type);
+                        await Promise.all(filteredP.map(p =>
+                          supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" }).eq("id", p.id)
+                        ));
+                        setPassengers(prev => prev.map(x => {
+                          const found = filteredP.find(p => p.id === x.id);
+                          return found ? { ...x, [field]: currentFlightId, flight_class: found.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x;
+                        }));
+                      }}
+                      style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(125,31,60,.08)", border: "1px solid rgba(125,31,60,.2)", color: "#7D1F3C", cursor: "pointer", fontFamily: "var(--font-body)" }}
+                    >
+                      تحديد الكل ({filteredP.length})
+                    </button>
+                  )}
                 </div>
                 <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 10px" }}>
