@@ -54,9 +54,6 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   const withoutTicket = hajjOnly.filter(p => p.services?.flight === "بدون").length;
   const needsFlight = total - withoutTicket;
   const assigned = hajjOnly.filter(p => p.flight_id != null).length;
-  const unassigned = passengers.filter(p =>
-    p.flight_id == null && p.services?.flight !== "بدون" && (!p.passenger_type || p.passenger_type === "حاج")
-  ).length;
   const firstClass = hajjOnly.filter(p => p.services?.flight === "درجة أولى").length;
 
   const assignedPct = needsFlight ? Math.round(assigned / needsFlight * 100) : 0;
@@ -100,7 +97,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [showAddP, setShowAddP] = useState(false);
   const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
   const [addFlightClass, setAddFlightClass] = useState("عادي");
-  const [selectedP, setSelectedP] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
 
   useEffect(() => {
@@ -172,7 +168,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     setFlights(prev => prev.filter(f => f.id !== flight.id));
   };
 
-  const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setSelectedP(new Set()); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
+  const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
   // selectP و effectiveClass مستخدمين في مودال إضافة المسافرين
 
   const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
@@ -206,9 +202,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (val === currentFlightId) return false;
     return val == null;
   });
+  const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
   const allSelectedWantFirst = filteredP.some(p => p.services?.flight === "درجة أولى");
   const effectiveClass = addFlightClass;
-  const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
 
   const goFlights = flights.filter(f => f.type === "ذهاب");
   const retFlights = flights.filter(f => f.type === "إياب");
