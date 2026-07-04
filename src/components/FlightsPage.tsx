@@ -30,7 +30,7 @@ const extractCity = (airport: string) => airport.replace(/\b[A-Z]{3}\b/, "").tri
 const PlaneIcon = ({ size = 16, color = "currentColor", flip = false, animation }: { size?: number; color?: string; flip?: boolean; animation?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none"
     style={{ display: "block", transform: flip ? "scaleX(-1)" : undefined, animation }}>
-    <path d="M21 15.5L13 12l-9 4.5V14l9-2.5V4.5A1.5 1.5 0 0 1 14.5 3a1.5 1.5 0 0 1 1.5 1.5V11.5l5 1.5v2.5z"/>
+    <path d="M22 16.21v-1.895l-9.526-5.743V2.5a1.5 1.5 0 0 0-3 0v6.072L0 13.315v1.895l9.474-2.842V18l-2.368 1.895V21.5l3.894-1.053L14.894 21.5v-1.605L12.526 18v-5.632L22 16.21z"/>
   </svg>
 );
 
@@ -259,7 +259,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
         >
           {/* ══ يمين — Timeline ══ */}
-          <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--paper)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 70, height: 70, borderRadius: 14, background: "white", border: "2.5px solid #D4A017", boxShadow: "0 2px 12px rgba(212,160,23,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6 }}>
