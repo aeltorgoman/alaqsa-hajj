@@ -90,7 +90,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const COLS = [
     { key: "name_ar", label: "الاسم بالعربي" },
-    { key: "name_en", label: "الاسم بالإنجليزي" },
     { key: "passport", label: "رقم الجواز" },
     { key: "national_id", label: "رقم البطاقة" },
     { key: "nat", label: "الجنسية" },
@@ -955,6 +954,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     {COLS.map(col => (
                       <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid var(--border)", whiteSpace: "nowrap" }}>
                         {getVal(p, col.key, col.get)}
+                        {col.key === "name_ar" && p.name_en && (
+                          <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400, marginTop: 1, direction: "ltr", textAlign: "right" }}>{p.short_en || p.name_en}</div>
+                        )}
                         {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
                       </td>
                     ))}
