@@ -59,12 +59,12 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
   ).length;
   const firstClass = hajjOnly.filter(p => p.services?.flight === "درجة أولى").length;
 
+  const assignedPct = needsFlight ? Math.round(assigned / needsFlight * 100) : 0;
   const cards: StatCardData[] = [
-    { label: "موزّعون", num: assigned, sub: `${needsFlight ? Math.round(assigned / needsFlight * 100) : 0}٪ من المحتاجين`, tone: "success" },
-    { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
+    { label: "نسبة التوزيع", num: `${assignedPct}%`, sub: `${assigned} من ${needsFlight} حاج`, tone: assignedPct === 100 ? "success" : "warning", featured: true },
     { label: "درجة أولى", num: firstClass, sub: `${total ? Math.round(firstClass / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
-    { label: "بدون تذكرة", num: withoutTicket, sub: withoutTicket > 0 ? "يحتاج مراجعة" : "لا يوجد", tone: withoutTicket > 0 ? "female" : "muted" },
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand", featured: true },
+    { label: "بدون تذكرة", num: withoutTicket, sub: "حسب طلب الحاج", tone: withoutTicket > 0 ? "female" : "muted" },
+    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
   ];
   return <StatsRow cards={cards} />;
 }
@@ -215,7 +215,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const visibleFlights = activeTab === "ذهاب" ? goFlights : activeTab === "إياب" ? retFlights : flights;
 
   // ===== Boarding Pass Card =====
-  const renderBoardingPass = (flight: Flight) => {
+  const renderBoardingPass = (flight: Flight, idx: number = 0) => {
     const fp = getFlightPassengers(flight);
     const isExpanded = expanded.has(flight.id);
     const isReturn = flight.type === "إياب";
@@ -252,7 +252,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <div
           onClick={() => openAddP(flight.id)}
           style={{
-            background: "var(--paper)",
+            background: idx % 2 === 0 ? "var(--paper)" : "var(--ivory)",
             border: `1.5px solid ${isExpanded ? "#7D1F3C" : "var(--line)"}`,
             borderRadius: 18,
             display: "flex",
@@ -268,16 +268,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 7, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 3 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 4 }}>
                 {flight.airline && getAirlineLogoUrl(flight.airline) ? (
-                  <img
-                    src={getAirlineLogoUrl(flight.airline)!}
-                    alt={flight.airline}
-                    style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: 4 }}
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                  />
+                  <img src={getAirlineLogoUrl(flight.airline)!} alt={flight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                 ) : (
-                  <PlaneIcon size={15} color="var(--em7)" />
+                  <PlaneIcon size={18} color="var(--em7)" />
                 )}
               </div>
               <div>
@@ -301,12 +296,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
                   {/* wrapper للتمركز فقط */}
                   <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -55%)" }}>
-                    <PlaneIcon
-                      size={16}
-                      color="#7D1F3C"
-                      flip={isReturn}
-                      animation={isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite"}
-                    />
+                    <div className={isTomorrow ? "plane-pulse" : "plane-float"} style={{ display: "flex" }}>
+                      <PlaneIcon size={16} color="#7D1F3C" flip={isReturn} />
+                    </div>
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
@@ -459,13 +451,15 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     <div style={{ overflowY: "auto", height: "100%", display: "flex", flexDirection: "column" }}>
       {/* أنيميشن الطائرة */}
       <style>{`
+        .plane-float { animation: bpPlaneFloat 4s ease-in-out infinite; }
+        .plane-pulse { animation: bpPlanePulse 2.5s ease-in-out infinite; }
         @keyframes bpPlaneFloat {
-          0%,100% { margin-right: 0; }
-          50%      { margin-right: -5px; }
+          0%,100% { transform: translateX(0px); }
+          50%      { transform: translateX(-5px); }
         }
         @keyframes bpPlanePulse {
-          0%,100% { margin-right: 0; transform: scale(1); opacity:1; }
-          40%,60% { margin-right: -6px; transform: scale(1.2); opacity:.8; }
+          0%,100% { transform: translateX(0px) scale(1); opacity:1; }
+          40%,60% { transform: translateX(-7px) scale(1.2); opacity:.75; }
         }
       `}</style>
 
@@ -518,7 +512,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             <div style={{ marginTop: 10 }}>لا يوجد رحلات بعد</div>
           </div>
         ) : (
-          visibleFlights.map(flight => renderBoardingPass(flight))
+          visibleFlights.map((flight, idx) => renderBoardingPass(flight, idx))
         )}
       </div>
 
@@ -537,29 +531,25 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           </div>
         </div>
 
-        {/* رقم الرحلة */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>رقم الرحلة</div>
-          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
-          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
-        </div>
-
-        {/* شركة الطيران */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
-          <select
-            value={["Qatar Airways", "Saudia"].includes(airline) ? airline : (airline ? "أخرى" : "")}
-            onChange={e => { if (e.target.value === "أخرى") setAirline("__other__"); else setAirline(e.target.value); }}
-            style={{ ...inp, cursor: "pointer" }}
-          >
-            <option value="">— اختر شركة الطيران —</option>
-            <option value="Qatar Airways">Qatar Airways — القطرية</option>
-            <option value="Saudia">Saudia — السعودية</option>
-            <option value="أخرى">أخرى</option>
-          </select>
-          {airline === "__other__" || (!["Qatar Airways", "Saudia", "", "__other__"].includes(airline) && !["Qatar Airways", "Saudia"].includes(airline) && airline !== "") ? (
-            <input style={{ ...inp, marginTop: 8 }} value={airline === "__other__" ? "" : airline} onChange={e => setAirline(e.target.value)} placeholder="اكتب اسم شركة الطيران" autoFocus />
-          ) : null}
+        {/* رقم الرحلة + شركة الطيران في سطر واحد */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>رقم الرحلة</div>
+            <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={flightName} onChange={e => { setFlightName(e.target.value); setNameError(""); }} placeholder="مثال: QR501" autoFocus onKeyDown={e => e.key === "Enter" && addFlight()} />
+            {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>شركة الطيران</div>
+            <select value={["Qatar Airways", "Saudia"].includes(airline) ? airline : (airline ? "أخرى" : "")} onChange={e => { if (e.target.value === "أخرى") setAirline("__other__"); else setAirline(e.target.value); }} style={{ ...inp, cursor: "pointer" }}>
+              <option value="">— اختر —</option>
+              <option value="Qatar Airways">Qatar Airways</option>
+              <option value="Saudia">Saudia</option>
+              <option value="أخرى">أخرى</option>
+            </select>
+            {(airline === "__other__" || (!["Qatar Airways", "Saudia", "", "__other__"].includes(airline))) && (
+              <input style={{ ...inp, marginTop: 6 }} value={airline === "__other__" ? "" : airline} onChange={e => setAirline(e.target.value)} placeholder="اسم الشركة" />
+            )}
+          </div>
         </div>
 
         {/* المطارات */}
@@ -630,6 +620,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               <div style={{ position: "relative", zIndex: 1 }}>
                 {/* سطر علوي: رقم الرحلة + اختيار الدرجة + زر الإغلاق */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  {/* شعار الشركة */}
+                  {currentFlight?.airline && getAirlineLogoUrl(currentFlight.airline) && (
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 4 }}>
+                      <img src={getAirlineLogoUrl(currentFlight.airline)!} alt={currentFlight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                    </div>
+                  )}
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", fontWeight: 600, marginBottom: 2 }}>رقم الرحلة</div>
                     <div style={{ fontSize: 20, fontWeight: 900, color: "white", fontFamily: "monospace", lineHeight: 1 }}>{currentFlight?.name || "—"}</div>
