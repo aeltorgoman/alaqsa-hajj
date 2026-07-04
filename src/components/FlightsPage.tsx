@@ -696,11 +696,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <button
                       onClick={async () => {
                         const field = flightField(currentFlight?.type);
-                        await Promise.all(filteredP.map((p: Passenger) =>
+                        await Promise.all(filteredP.map(p =>
                           supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" }).eq("id", p.id)
                         ));
-                        setPassengers((prev: Passenger[]) => prev.map((x: Passenger) => {
-                          const found = filteredP.find((p: Passenger) => p.id === x.id);
+                        setPassengers(passengers.map(x => {
+                          const found = filteredP.find(p => p.id === x.id);
                           return found ? { ...x, [field]: currentFlightId, flight_class: found.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x;
                         }));
                       }}
