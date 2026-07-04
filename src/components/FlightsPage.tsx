@@ -209,7 +209,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const visibleFlights = activeTab === "ذهاب" ? goFlights : activeTab === "إياب" ? retFlights : flights;
 
   // ===== Boarding Pass Card =====
-  const renderBoardingPass = (flight: Flight, idx: number = 0) => {
+  const renderBoardingPass = (flight: Flight) => {
     const fp = getFlightPassengers(flight);
     const isExpanded = expanded.has(flight.id);
     const isReturn = flight.type === "إياب";
@@ -512,7 +512,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             <div style={{ marginTop: 10 }}>لا يوجد رحلات بعد</div>
           </div>
         ) : (
-          visibleFlights.map((flight, idx) => renderBoardingPass(flight, idx))
+          visibleFlights.map(flight => renderBoardingPass(flight))
         )}
       </div>
 
