@@ -28,9 +28,9 @@ const extractCity = (airport: string) => airport.replace(/\b[A-Z]{3}\b/, "").tri
 
 // ===== أيقونة الطائرة SVG =====
 const PlaneIcon = ({ size = 16, color = "currentColor", flip = false, animation }: { size?: number; color?: string; flip?: boolean; animation?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none"
     style={{ display: "block", transform: flip ? "scaleX(-1)" : undefined, animation }}>
-    <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+    <path d="M21 15.5L13 12l-9 4.5V14l9-2.5V4.5A1.5 1.5 0 0 1 14.5 3a1.5 1.5 0 0 1 1.5 1.5V11.5l5 1.5v2.5z"/>
   </svg>
 );
 
@@ -96,7 +96,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [nameError, setNameError] = useState("");
   const [showAddP, setShowAddP] = useState(false);
   const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
-  const [addFlightClass, setAddFlightClass] = useState("عادي");
   const [pSearch, setPSearch] = useState("");
 
   useEffect(() => {
@@ -168,8 +167,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     setFlights(prev => prev.filter(f => f.id !== flight.id));
   };
 
-  const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setPSearch(""); setAddFlightClass("عادي"); setShowAddP(true); };
-  // selectP و effectiveClass مستخدمين في مودال إضافة المسافرين
+  const openAddP = (flightId: number) => { setCurrentFlightId(flightId); setPSearch(""); setShowAddP(true); };
+  // الدرجة بتتحدد من services.flight بتاع الحاج نفسه تلقائياً
 
   const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
     await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
@@ -203,8 +202,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     return val == null;
   });
   const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
-  const allSelectedWantFirst = filteredP.some(p => p.services?.flight === "درجة أولى");
-  const effectiveClass = addFlightClass;
+  // الدرجة بتتحدد أوتوماتيك من services.flight بتاع الحاج نفسه
 
   const goFlights = flights.filter(f => f.type === "ذهاب");
   const retFlights = flights.filter(f => f.type === "إياب");
@@ -248,7 +246,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
         <div
           onClick={() => openAddP(flight.id)}
           style={{
-            background: idx % 2 === 0 ? "var(--paper)" : "#EDE8E1",
+            background: "var(--paper)",
             border: `1.5px solid ${isExpanded ? "#7D1F3C" : "var(--line)"}`,
             borderRadius: 18,
             display: "flex",
@@ -264,11 +262,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--ivory)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 12, background: "var(--paper)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 5 }}>
+              <div style={{ width: 70, height: 70, borderRadius: 14, background: "white", border: "2.5px solid #D4A017", boxShadow: "0 2px 12px rgba(212,160,23,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6 }}>
                 {flight.airline && getAirlineLogoUrl(flight.airline) ? (
                   <img src={getAirlineLogoUrl(flight.airline)!} alt={flight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                 ) : (
-                  <PlaneIcon size={22} color="var(--em7)" />
+                  <PlaneIcon size={28} color="#D4A017" />
                 )}
               </div>
               <div>
@@ -632,13 +630,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", fontWeight: 600, marginBottom: 2 }}>رقم الرحلة</div>
                     <div style={{ fontSize: 20, fontWeight: 900, color: "white", fontFamily: "monospace", lineHeight: 1 }}>{currentFlight?.name || "—"}</div>
                   </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {(["عادي", ...(allSelectedWantFirst ? ["درجة أولى"] : [])] as string[]).map(cls => (
-                      <div key={cls} onClick={() => setAddFlightClass(cls)} style={{ padding: "5px 12px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: addFlightClass === cls ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.15)", color: addFlightClass === cls ? "#7D1F3C" : "white", border: "1px solid rgba(255,255,255,.25)", transition: "all .15s" }}>
-                        {cls}
-                      </div>
-                    ))}
-                  </div>
                   <button onClick={() => setShowAddP(false)} style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
@@ -720,8 +711,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       <div key={p.id}
                         onClick={async () => {
                           const field = flightField(currentFlight?.type);
-                          await supabase.from("passengers").update({ [field]: currentFlightId, flight_class: effectiveClass }).eq("id", p.id);
-                          setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: currentFlightId, flight_class: effectiveClass } : x));
+                          await supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" }).eq("id", p.id);
+                          setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x));
                         }}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
                         onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
