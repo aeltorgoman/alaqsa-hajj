@@ -27,9 +27,9 @@ const extractIATA = (airport: string) => {
 const extractCity = (airport: string) => airport.replace(/\b[A-Z]{3}\b/, "").trim() || airport;
 
 // ===== أيقونة الطائرة SVG =====
-const PlaneIcon = ({ size = 16, color = "currentColor", flip = false }: { size?: number; color?: string; flip?: boolean }) => (
+const PlaneIcon = ({ size = 16, color = "currentColor", flip = false, animation }: { size?: number; color?: string; flip?: boolean; animation?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-    style={{ display: "block", transform: flip ? "scaleX(-1)" : undefined }}>
+    style={{ display: "block", transform: flip ? "scaleX(-1)" : undefined, animation }}>
     <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
   </svg>
 );
@@ -299,12 +299,14 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
-                  {/* wrapper للتمركز */}
+                  {/* wrapper للتمركز فقط */}
                   <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -55%)" }}>
-                    {/* div للـ animation منفصل */}
-                    <div style={{ animation: isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite" }}>
-                      <PlaneIcon size={16} color="#7D1F3C" flip={isReturn} />
-                    </div>
+                    <PlaneIcon
+                      size={16}
+                      color="#7D1F3C"
+                      flip={isReturn}
+                      animation={isTomorrow ? "bpPlanePulse 2.5s ease-in-out infinite" : "bpPlaneFloat 4s ease-in-out infinite"}
+                    />
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
@@ -458,12 +460,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       {/* أنيميشن الطائرة */}
       <style>{`
         @keyframes bpPlaneFloat {
-          0%,100% { transform: translateX(0); }
-          50%      { transform: translateX(-4px); }
+          0%,100% { margin-right: 0; }
+          50%      { margin-right: -5px; }
         }
         @keyframes bpPlanePulse {
-          0%,100% { transform: translateX(0) scale(1); opacity:1; }
-          40%,60% { transform: translateX(-6px) scale(1.2); opacity:.8; }
+          0%,100% { margin-right: 0; transform: scale(1); opacity:1; }
+          40%,60% { margin-right: -6px; transform: scale(1.2); opacity:.8; }
         }
       `}</style>
 
