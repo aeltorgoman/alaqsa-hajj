@@ -206,8 +206,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (val === currentFlightId) return false;
     return val == null;
   });
-  const allSelectedWantFirst = selectedP.size > 0 && [...selectedP].every(id => passengers.find(p => p.id === id)?.services?.flight === "درجة أولى");
-  const effectiveClass = (!allSelectedWantFirst && addFlightClass === "درجة أولى") ? "عادي" : addFlightClass;
+  const allSelectedWantFirst = filteredP.some(p => p.services?.flight === "درجة أولى");
+  const effectiveClass = addFlightClass;
   const filteredP = availableP.filter(p => !pSearch || p.name_ar.includes(pSearch) || p.passport.includes(pSearch));
 
   const goFlights = flights.filter(f => f.type === "ذهاب");
