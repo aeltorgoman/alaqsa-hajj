@@ -28,10 +28,7 @@ const extractCity = (airport: string) => airport.replace(/\b[A-Z]{3}\b/, "").tri
 
 // ===== أيقونة الطائرة SVG =====
 const PlaneIcon = ({ size = 16, color = "currentColor", flip = false, animation }: { size?: number; color?: string; flip?: boolean; animation?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 100 100" fill={color} stroke="none"
-    style={{ display: "block", transform: flip ? "scaleX(-1)" : undefined, animation }}>
-    <path d="M95,47.5L62,28V10c0-5.5-4.5-10-10-10S42,4.5,42,10v18L9,47.5v9l33-9v24l-8,6v8l16-4.5L66,85.5v-8l-8-6V57.5l33,9V47.5z"/>
-  </svg>
+  <span style={{ fontSize: size, lineHeight: 1, display: "block", transform: flip ? "scaleX(-1)" : undefined, animation, color }}>✈</span>
 );
 
 // ===== شعارات شركات الطيران =====
@@ -443,22 +440,23 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       {/* أنيميشن الطائرة */}
       <style>{`
         @keyframes bpPlaneFloat {
-          0%,100% { left: calc(50% + 0px); }
-          50%      { left: calc(50% - 6px); }
+          0%,100% { transform: translate(-50%,-55%) translateX(0); }
+          50%      { transform: translate(-50%,-55%) translateX(-5px); }
         }
         @keyframes bpPlanePulse {
-          0%,100% { left: calc(50% + 0px); transform: translate(-50%,-55%) scale(1); opacity:1; }
-          40%,60% { left: calc(50% - 8px); transform: translate(-50%,-55%) scale(1.2); opacity:.75; }
+          0%,100% { transform: translate(-50%,-55%) translateX(0) scale(1); opacity:1; }
+          40%,60% { transform: translate(-50%,-55%) translateX(-7px) scale(1.15); opacity:.8; }
         }
         .plane-float {
-          position: absolute !important;
-          top: 50% !important;
-          transform: translate(-50%,-55%) !important;
+          position: absolute;
+          top: 50%;
+          left: 50%;
           animation: bpPlaneFloat 4s ease-in-out infinite;
         }
         .plane-pulse {
-          position: absolute !important;
-          top: 50% !important;
+          position: absolute;
+          top: 50%;
+          left: 50%;
           animation: bpPlanePulse 2.5s ease-in-out infinite;
         }
       `}</style>
