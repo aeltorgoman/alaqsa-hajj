@@ -56,7 +56,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"list" | "table">("list");
+  const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
@@ -91,10 +91,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const COLS = [
     { key: "name_ar", label: "الاسم بالعربي" },
     { key: "passport", label: "رقم الجواز" },
-    { key: "national_id", label: "رقم البطاقة" },
     { key: "nat", label: "الجنسية" },
     { key: "gender", label: "الجنس" },
-    { key: "dob", label: "تاريخ الميلاد" },
     { key: "expiry", label: "انتهاء الجواز" },
     { key: "phone", label: "التليفون" },
     { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
@@ -942,7 +940,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                 <tr style={{ background: "var(--em7)", color: "var(--g3)" }}>
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
-                  {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right" }}>{col.label}</th>)}
+                  {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right", ...(col.key === "name_ar" ? { position: "sticky", right: 40, background: "var(--ivory)", zIndex: 3, boxShadow: "-2px 0 4px rgba(0,0,0,.05)" } : {}) }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
                 </tr>
 
@@ -952,7 +950,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: "pointer", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)" }}>
                     <td style={{ padding: "6px 10px", border: "0.5px solid var(--border)", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
                     {COLS.map(col => (
-                      <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid var(--border)", whiteSpace: "nowrap" }}>
+                      <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid var(--border)", whiteSpace: "nowrap", ...(col.key === "name_ar" ? { position: "sticky", right: 40, background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)", zIndex: 1, boxShadow: "-2px 0 4px rgba(0,0,0,.05)" } : {}) }}>
                         {getVal(p, col.key, col.get)}
                         {col.key === "name_ar" && p.name_en && (
                           <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400, marginTop: 1, direction: "ltr", textAlign: "right" }}>{p.short_en || p.name_en}</div>
