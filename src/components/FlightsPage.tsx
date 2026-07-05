@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-import type { DragEvent } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
@@ -74,8 +73,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [activeTab, setActiveTab] = useState<"ذهاب" | "إياب" | "الكل">("ذهاب");
 
   // ترتيب الحجاج بالسحب
-  const dragPassengerId = useRef<number | null>(null);
-  const dragOverPassengerId = useRef<number | null>(null);
 
   const [showAdd, setShowAdd] = useState(false);
   const [flightName, setFlightName] = useState("");
@@ -106,25 +103,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   // ===== Drag & Drop =====
-  const handleDragStart = (pId: number) => { dragPassengerId.current = pId; setDraggingId(pId); };
-  const handleDragOver = (e: DragEvent, pId: number) => { e.preventDefault(); dragOverPassengerId.current = pId; setDragOverId(pId); };
-  const handleDragEnd = () => { setDraggingId(null); setDragOverId(null); dragPassengerId.current = null; dragOverPassengerId.current = null; };
-  const handleDrop = async (flight: Flight) => {
-    const fromId = dragPassengerId.current;
-    const toId = dragOverPassengerId.current;
-    if (!fromId || !toId || fromId === toId) { handleDragEnd(); return; }
-    const fp = getFlightPassengers(flight);
-    const fromIdx = fp.findIndex(p => p.id === fromId);
-    const toIdx = fp.findIndex(p => p.id === toId);
-    if (fromIdx === -1 || toIdx === -1) { handleDragEnd(); return; }
-    const newOrder = [...fp];
-    const [moved] = newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, moved);
-    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
-    setPassengers(passengers.map(p => { const upd = updates.find(u => u.id === p.id); return upd ? { ...p, sort_order: upd.sort_order } : p; }));
-    await saveSortOrder(updates);
-    handleDragEnd();
-  };
 
   // ===== تعديل الرحلة =====
   const openEditFlight = (flight: Flight) => {
@@ -148,7 +126,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
-      setExpanded(prev => new Set([...prev, newFlight.id]));
       setFlightName(""); setFlightType("ذهاب"); setAirline(""); setFlightDate(""); setFlightTime(""); setArrivalTime(""); setArrivalDate(""); setFromAirport(""); setToAirport(""); setShowAdd(false);
     }
   };
