@@ -34,7 +34,7 @@ const PlaneIcon = ({ size = 16, color = "currentColor", flip = false, animation 
 // ===== شعارات شركات الطيران =====
 const AIRLINE_LOGOS: Record<string, string> = {
   qatar: "https://upload.wikimedia.org/wikipedia/en/thumb/9/9b/Qatar_Airways_Logo.svg/120px-Qatar_Airways_Logo.svg.png",
-  saudia: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Saudia_Logo.svg/120px-Saudia_Logo.svg.png",
+  saudia: "data:image/png;base64,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",
 };
 
 const getAirlineLogoUrl = (airline: string): string | null => {
@@ -71,14 +71,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
   const [editFlightModal, setEditFlightModal] = useState<Flight | null>(null);
   const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "" });
-  const [expanded, setExpanded] = useState(new Set<number>());
   const [activeTab, setActiveTab] = useState<"ذهاب" | "إياب" | "الكل">("ذهاب");
 
   // ترتيب الحجاج بالسحب
   const dragPassengerId = useRef<number | null>(null);
   const dragOverPassengerId = useRef<number | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [dragOverId, setDragOverId] = useState<number | null>(null);
 
   const [showAdd, setShowAdd] = useState(false);
   const [flightName, setFlightName] = useState("");
@@ -107,8 +104,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       .filter(p => (p as any)[field] === flight.id)
       .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
   };
-  const toggleFlight = (id: number) =>
-    setExpanded(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   // ===== Drag & Drop =====
   const handleDragStart = (pId: number) => { dragPassengerId.current = pId; setDraggingId(pId); };
@@ -208,7 +203,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ===== Boarding Pass Card =====
   const renderBoardingPass = (flight: Flight) => {
     const fp = getFlightPassengers(flight);
-    const isExpanded = expanded.has(flight.id);
     const isReturn = flight.type === "إياب";
     const fromIATA = extractIATA(flight.from_airport || "");
     const toIATA = extractIATA(flight.to_airport || "");
@@ -244,16 +238,16 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           onClick={() => openAddP(flight.id)}
           style={{
             background: "var(--paper)",
-            border: `1.5px solid ${isExpanded ? "#7D1F3C" : "var(--line)"}`,
+            border: "1.5px solid var(--line)",
             borderRadius: 18,
             display: "flex",
             overflow: "hidden",
-            boxShadow: isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)",
+            boxShadow: "0 2px 8px rgba(0,0,0,.06)",
             transition: "all .2s",
             cursor: "pointer",
           }}
           onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 20px rgba(125,31,60,.12)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = isExpanded ? "0 0 0 1px rgba(125,31,60,.15), 0 6px 20px rgba(125,31,60,.1)" : "0 2px 8px rgba(0,0,0,.06)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,.06)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
         >
           {/* ══ يمين — Timeline ══ */}
           <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--paper)", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -381,56 +375,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 إضافة
               </button>
               {/* زر توسيع قائمة الحجاج */}
-              <button onClick={e => { e.stopPropagation(); toggleFlight(flight.id); }} style={{ width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)", flexShrink: 0, transition: "all .2s" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: isExpanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
+              
             </div>
           </div>
         </div>
 
-        {/* ══ قائمة الحجاج المنسدلة ══ */}
-        {isExpanded && (
-          <div
-            style={{ background: "var(--paper)", border: "1px solid var(--line)", borderTop: "none", borderRadius: "0 0 14px 14px", padding: "6px 12px 10px", marginTop: -4 }}
-            onDragOver={e => e.preventDefault()}
-            onDrop={() => handleDrop(flight)}
-          >
-            {fp.length ? fp.map((p, i) => (
-              <div key={p.id} draggable
-                onDragStart={() => handleDragStart(p.id)}
-                onDragOver={e => handleDragOver(e, p.id)}
-                onDragEnd={handleDragEnd}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6, padding: "5px 4px", borderRadius: 6, marginBottom: 2,
-                  background: draggingId === p.id ? "rgba(125,31,60,0.08)" : dragOverId === p.id ? "rgba(125,31,60,0.04)" : "transparent",
-                  border: `1px solid ${dragOverId === p.id ? "var(--em7)" : "transparent"}`,
-                  cursor: "grab", transition: "background .15s", opacity: draggingId === p.id ? 0.5 : 1,
-                }}
-              >
-                <span style={{ color: "var(--muted)", flexShrink: 0 }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
-                    <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
-                    <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
-                  </svg>
-                </span>
-                <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                <span style={{ fontSize: 12, flex: 1 }}>{p.short_ar || p.name_ar}</span>
-                {(p as any).flight_class === "درجة أولى" && (
-                  <span style={{ fontSize: 10, fontWeight: 700, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "2px 8px", borderRadius: 99 }}>أولى</span>
-                )}
-                <button onClick={() => removeP(p.id, flightField(flight.type))} title="إزالة من الرحلة"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 16, lineHeight: 1, padding: "0 4px", flexShrink: 0 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </div>
-            )) : (
-              <div style={{ textAlign: "center", padding: "8px", color: "var(--muted)", fontSize: 11 }}>لا يوجد مسافرون</div>
-            )}
-          </div>
-        )}
+
       </div>
     );
   };
