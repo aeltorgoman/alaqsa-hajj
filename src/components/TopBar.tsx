@@ -37,10 +37,15 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
   const themeRef = useRef<HTMLDivElement>(null);
   const userRef  = useRef<HTMLDivElement>(null);
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsPos, setSettingsPos] = useState({ top: 0, left: 0 });
+  const settingsRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (themeRef.current && !themeRef.current.contains(e.target as Node)) setShowThemes(false);
       if (userRef.current  && !userRef.current.contains(e.target as Node))  setShowUserMenu(false);
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setShowSettings(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -73,9 +78,9 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: meta.icon }} />
             </div>
           )}
-          <div>
-            <div style={{ fontFamily:"var(--font-heading)", fontSize:15, fontWeight:700, color:"white", lineHeight:1.1 }}>{meta.label}</div>
-            {meta.sub && <div style={{ fontSize:9, color:"rgba(255,255,255,.6)", marginTop:1 }}>{meta.sub}</div>}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 800, color: "white", lineHeight: 1 }}>{meta.label}</div>
+            {meta.sub && <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", paddingTop: 1 }}>{meta.sub}</div>}
           </div>
         </div>
 
@@ -83,11 +88,41 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
         <div style={{ display:"flex", alignItems:"center", gap:4, position:"relative", zIndex:1 }}>
 
           {/* 1. إعدادات */}
-          <div style={iconBtn} onClick={() => setPage("users")}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
+          <div ref={settingsRef} style={{ position: "relative", flexShrink: 0 }}>
+            <div style={iconBtn} onClick={() => {
+              if (!showSettings && settingsRef.current) {
+                const r = settingsRef.current.getBoundingClientRect();
+                setSettingsPos({ top: r.bottom + 8, left: Math.max(8, r.left - 160 + r.width) });
+              }
+              setShowSettings(s => !s);
+              setShowThemes(false);
+              setShowUserMenu(false);
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </div>
+            {showSettings && (
+              <div style={{ position: "fixed", top: settingsPos.top, left: settingsPos.left, zIndex: 9999, background: "var(--bg-card)", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,.25)", border: "1px solid var(--border)", minWidth: 200, overflow: "hidden" }}>
+                <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--line)", fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: ".5px" }}>الإعدادات</div>
+                <div style={{ padding: 6 }}>
+                  {[
+                    { label: "إعدادات الحملة", icon: `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`, page: "users" },
+                    { label: "الحسابات المالية", icon: `<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>`, page: "finance" },
+                    { label: "الإداريون", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>`, page: "admins" },
+                  ].map(item => (
+                    <button key={item.page} onClick={() => { setShowSettings(false); setPage(item.page); }}
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "none", background: "transparent", color: "var(--ink)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", gap: 8, textAlign: "right" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "var(--ivory)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "transparent"}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 2. ثيم */}
