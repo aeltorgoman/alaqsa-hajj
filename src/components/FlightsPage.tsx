@@ -7,13 +7,6 @@ import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
 
-// ===== دالة حفظ ترتيب الحجاج =====
-async function saveSortOrder(items: { id: number; sort_order: number }[]) {
-  await Promise.all(items.map(item =>
-    supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
-  ));
-}
-
 // رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id
 const flightField = (type?: string): "flight_id" | "return_flight_id" =>
   type === "إياب" ? "return_flight_id" : "flight_id";
