@@ -92,7 +92,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     { key: "name_ar", label: "الاسم بالعربي" },
     { key: "passport", label: "رقم الجواز" },
     { key: "nat", label: "الجنسية" },
-    { key: "gender", label: "الجنس" },
     { key: "expiry", label: "انتهاء الجواز" },
     { key: "phone", label: "التليفون" },
     { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
@@ -940,7 +939,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                 <tr style={{ background: "var(--em7)", color: "var(--g3)" }}>
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
-                  {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right", ...(col.key === "name_ar" ? { position: "sticky", right: 40, background: "var(--ivory)", zIndex: 3, boxShadow: "-2px 0 4px rgba(0,0,0,.05)" } : {}) }}>{col.label}</th>)}
+                  {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right", ...(col.key === "name_ar" ? { position: "sticky", right: 40, zIndex: 3, boxShadow: "-2px 0 4px rgba(0,0,0,.05)" } : {}) }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
                 </tr>
 
