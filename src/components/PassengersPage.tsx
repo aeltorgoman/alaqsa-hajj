@@ -94,10 +94,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     { key: "nat", label: "الجنسية" },
     { key: "expiry", label: "انتهاء الجواز" },
     { key: "phone", label: "التليفون" },
-    { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
-    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
     { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
+    { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
+    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
     { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
     { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
   ] as { key: string; label: string; get?: (p: Passenger) => string }[];
@@ -939,17 +939,49 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                 <tr style={{ background: "var(--em7)", color: "var(--g3)" }}>
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
-                  {COLS.map(col => <th key={col.key} style={{ padding: "8px 10px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right", ...(col.key === "name_ar" ? { position: "sticky", right: 40, zIndex: 3, boxShadow: "-2px 0 4px rgba(0,0,0,.05)" } : {}) }}>{col.label}</th>)}
+                  {COLS.map(col => <th key={col.key} style={{ padding: "6px 8px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right", fontSize: 11 }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
                 </tr>
 
               </thead>
               <tbody>
                 {filtered.map((p, i) => (
-                  <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: "pointer", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)" }}>
-                    <td style={{ padding: "6px 10px", border: "0.5px solid var(--border)", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
+                  <tr key={p.id}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.setData("pid", String(p.id)); (e.currentTarget as HTMLTableRowElement).style.opacity = "0.4"; }}
+                    onDragEnd={e => { (e.currentTarget as HTMLTableRowElement).style.opacity = "1"; }}
+                    onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLTableRowElement).style.background = "var(--male-bg)"; }}
+                    onDragLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = ""; }}
+                    onDrop={async e => {
+                      e.preventDefault();
+                      (e.currentTarget as HTMLTableRowElement).style.background = "";
+                      const fromId = Number(e.dataTransfer.getData("pid"));
+                      const toId = p.id;
+                      if (fromId === toId) return;
+                      const fromIdx = passengers.findIndex(x => x.id === fromId);
+                      const toIdx = passengers.findIndex(x => x.id === toId);
+                      if (fromIdx === -1 || toIdx === -1) return;
+                      const reordered = [...passengers];
+                      const [moved] = reordered.splice(fromIdx, 1);
+                      reordered.splice(toIdx, 0, moved);
+                      const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
+                      setPassengers(reordered.map((x, idx) => ({ ...x, sort_order: idx + 1 })));
+                      await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
+                    }}
+                    onClick={() => setSelected(p)}
+                    style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)" }}>
+                    <td style={{ padding: "6px 8px", border: "0.5px solid var(--border)", textAlign: "center", color: "var(--muted)", userSelect: "none" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                          <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
+                          <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
+                          <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
+                        </svg>
+                        <span style={{ fontSize: 10 }}>{i + 1}</span>
+                      </div>
+                    </td>
                     {COLS.map(col => (
-                      <td key={col.key} style={{ padding: "6px 10px", border: "0.5px solid var(--border)", whiteSpace: "nowrap", ...(col.key === "name_ar" ? { position: "sticky", right: 40, background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)", zIndex: 1, boxShadow: "-2px 0 4px rgba(0,0,0,.05)" } : {}) }}>
+                      <td key={col.key} style={{ padding: "5px 8px", border: "0.5px solid var(--border)", whiteSpace: "nowrap", fontSize: 12 }}>
                         {getVal(p, col.key, col.get)}
                         {col.key === "name_ar" && p.name_en && (
                           <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400, marginTop: 1, direction: "ltr", textAlign: "right" }}>{p.short_en || p.name_en}</div>
