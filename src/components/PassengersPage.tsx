@@ -94,10 +94,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     { key: "nat", label: "الجنسية" },
     { key: "expiry", label: "انتهاء الجواز" },
     { key: "phone", label: "التليفون" },
-    { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
-    { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
     { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
     { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
+    { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
+    { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
     { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
     { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
   ] as { key: string; label: string; get?: (p: Passenger) => string }[];
