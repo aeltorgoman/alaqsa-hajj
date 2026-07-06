@@ -937,10 +937,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           ) : (
             <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "max-content", width: "100%" }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
-                <tr style={{ background: "var(--em7)", color: "var(--g3)" }}>
-                  <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>م</th>
-                  {COLS.map(col => <th key={col.key} style={{ padding: "6px 8px", border: "0.5px solid #17836", whiteSpace: "nowrap", textAlign: "right", fontSize: 11 }}>{col.label}</th>)}
-                  <th style={{ padding: "8px 10px", border: "0.5px solid #17836", textAlign: "center" }}>إجراءات</th>
+                <tr style={{ background: "var(--bg-2)", color: "var(--muted)" }}>
+                  <th style={{ padding: "8px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11 }}>م</th>
+                  {COLS.map(col => <th key={col.key} style={{ padding: "7px 10px", border: "0.5px solid var(--line)", whiteSpace: "nowrap", textAlign: "right", fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>{col.label}</th>)}
+                  <th style={{ padding: "8px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11 }}>إجراءات</th>
                 </tr>
 
               </thead>
@@ -1010,18 +1010,40 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       )}
                     </td>
                     {COLS.map(col => (
-                      <td key={col.key} style={{ padding: "5px 8px", border: "0.5px solid var(--border)", whiteSpace: "nowrap", fontSize: 12 }}>
-                        {getVal(p, col.key, col.get)}
+                      <td key={col.key} style={{ padding: "5px 8px", border: "0.5px solid var(--line)", whiteSpace: "nowrap", fontSize: 12, color: "var(--ink)" }}>
+                        {/* باجات ملونة للباص والطيران */}
+                        {(col.key === "bus" || col.key === "flight") ? (() => {
+                          const val = getVal(p, col.key, col.get);
+                          if (!val) return <span style={{ color: "var(--muted)", fontSize: 11 }}>—</span>;
+                          const isVIP = val === "VIP";
+                          const isFirst = val === "درجة أولى";
+                          const bg = isVIP ? "var(--warning-bg)" : isFirst ? "var(--male-bg)" : "var(--bg-2)";
+                          const color = isVIP ? "var(--warning)" : isFirst ? "var(--info)" : "var(--muted)";
+                          return <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 99, fontSize: 10, fontWeight: 600, background: bg, color }}>{val}</span>;
+                        })() : col.key === "expiry" ? (() => {
+                          const val = getVal(p, col.key, col.get);
+                          if (!val) return <span style={{ color: "var(--muted)" }}>—</span>;
+                          const color = isExpired(val) ? "var(--danger)" : isExpiringSoon(val) ? "var(--warning)" : "var(--success)";
+                          return <span style={{ color, fontWeight: 600 }}>{val}</span>;
+                        })() : getVal(p, col.key, col.get)}
                         {col.key === "name_ar" && p.name_en && (
                           <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400, marginTop: 1, direction: "ltr", textAlign: "right" }}>{p.short_en || p.name_en}</div>
                         )}
                         {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
                       </td>
                     ))}
-                    <td style={{ padding: "6px 10px", border: "0.5px solid var(--border)", textAlign: "center" }}>
+                    <td style={{ padding: "5px 8px", border: "0.5px solid var(--line)", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ background: "var(--male-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "2px 6px", borderRadius: 4, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} title="تعديل" style={{ width: 26, height: 26, borderRadius: 6, border: "0.5px solid var(--line)", background: "transparent", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--male-bg)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--info)"; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--muted)"; }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف" style={{ width: 26, height: 26, borderRadius: 6, border: "0.5px solid var(--line)", background: "transparent", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--female-bg)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--danger)"; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--muted)"; }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                        </button>
                       </div>
                     </td>
                   </tr>
