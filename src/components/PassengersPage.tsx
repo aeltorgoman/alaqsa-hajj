@@ -971,14 +971,43 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     onClick={() => setSelected(p)}
                     style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)" }}>
                     <td style={{ padding: "6px 8px", border: "0.5px solid var(--border)", textAlign: "center", color: "var(--muted)", userSelect: "none" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                          <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
-                          <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
-                          <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
-                        </svg>
-                        <span style={{ fontSize: 10 }}>{i + 1}</span>
-                      </div>
+                      {editingOrderId === p.id ? (
+                        <input
+                          autoFocus
+                          type="number"
+                          min={1}
+                          value={editingOrderVal}
+                          onChange={e => setEditingOrderVal(e.target.value)}
+                          onBlur={async () => {
+                            const newOrder = parseInt(editingOrderVal);
+                            if (!isNaN(newOrder) && newOrder > 0) {
+                              const reordered = [...passengers].filter(x => x.id !== p.id);
+                              reordered.splice(Math.min(newOrder - 1, reordered.length), 0, p);
+                              const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
+                              setPassengers(reordered.map((x, idx) => ({ ...x, sort_order: idx + 1 })));
+                              await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
+                            }
+                            setEditingOrderId(null);
+                            setEditingOrderVal("");
+                          }}
+                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setEditingOrderId(null); setEditingOrderVal(""); } }}
+                          onClick={e => e.stopPropagation()}
+                          style={{ width: 36, textAlign: "center", border: "1px solid var(--em7)", borderRadius: 4, fontSize: 11, padding: "1px 2px", outline: "none", fontFamily: "var(--font-body)" }}
+                        />
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                            <circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/>
+                            <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
+                            <circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/>
+                          </svg>
+                          <span
+                            style={{ fontSize: 10, cursor: "text", minWidth: 14 }}
+                            onDoubleClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String(i + 1)); }}
+                            title="اضغط مرتين لتعديل الترتيب"
+                          >{i + 1}</span>
+                        </div>
+                      )}
                     </td>
                     {COLS.map(col => (
                       <td key={col.key} style={{ padding: "5px 8px", border: "0.5px solid var(--border)", whiteSpace: "nowrap", fontSize: 12 }}>
