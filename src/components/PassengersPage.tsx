@@ -145,29 +145,38 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (p.passenger_type && p.passenger_type !== "حاج") return false;
       if (search) {
         const q = search.trim().toLowerCase();
-        // رقم الرحلة (مثلاً QR501)
-        const flightMatch = p.services?.flight_number && p.services.flight_number.toLowerCase().includes(q);
-        // رقم الغرفة أو الفندق
-        const roomMatch = (p as any).room_number && String((p as any).room_number).includes(q);
-        const hotelMatch = (p as any).hotel_name && (p as any).hotel_name.toLowerCase().includes(q);
-        // الاسم
-        const nameMatch = `${p.name_ar} ${p.name_en} ${p.short_ar || ""} ${p.short_en || ""}`.toLowerCase().includes(q);
-        // رقم الجواز أو البطاقة أو التليفون
-        const docMatch = [p.passport, p.national_id, p.phone].join(" ").toLowerCase().includes(q);
-        // الجنسية
-        const natMatch = p.nat && p.nat.toLowerCase().includes(q);
-        // VIP
-        const vipMatch = q === "vip" && p.services?.bus === "VIP";
-        // درجة أولى
-        const firstMatch = (q === "درجة أولى" || q === "اولى" || q === "أولى") && p.services?.flight === "درجة أولى";
-        // الجنس
-        const genderMatch = p.gender && p.gender.toLowerCase().includes(q);
-        // الباص
-        const busMatch = p.services?.bus && p.services.bus.toLowerCase().includes(q);
-        // المخيمات
-        const campMatch = [p.services?.camp_mina, p.services?.camp_arafa].join(" ").toLowerCase().includes(q);
 
-        if (!nameMatch && !docMatch && !natMatch && !vipMatch && !firstMatch && !genderMatch && !busMatch && !flightMatch && !roomMatch && !hotelMatch && !campMatch) return false;
+        // الاسم بالعربي والإنجليزي
+        const nameMatch = `${p.name_ar} ${p.name_en} ${p.short_ar || ""} ${p.short_en || ""}`.toLowerCase().includes(q);
+
+        // رقم الجواز أو البطاقة أو التليفون
+        const docMatch = `${p.passport || ""} ${p.national_id || ""} ${p.phone || ""}`.toLowerCase().includes(q);
+
+        // الجنسية
+        const natMatch = (p.nat || "").toLowerCase().includes(q);
+
+        // الجنس
+        const genderMatch = (p.gender || "").toLowerCase().includes(q);
+
+        // VIP
+        const vipMatch = (q === "vip") && p.services?.bus === "VIP";
+
+        // درجة أولى
+        const firstMatch = ["درجة أولى", "اولى", "أولى", "first"].includes(q) && p.services?.flight === "درجة أولى";
+
+        // الباص (اسم الخدمة)
+        const busMatch = (p.services?.bus || "").toLowerCase().includes(q);
+
+        // الطيران (اسم الخدمة)
+        const flightMatch = (p.services?.flight || "").toLowerCase().includes(q);
+
+        // المخيمات
+        const campMatch = `${p.services?.camp_mina || ""} ${p.services?.camp_arafa || ""}`.toLowerCase().includes(q);
+
+        // نوع الغرفة والإطلالة
+        const hotelMatch = `${p.services?.hotel_type || ""} ${p.services?.hotel_view || ""}`.toLowerCase().includes(q);
+
+        if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch) return false;
       }
       for (const [key, val] of Object.entries(filters)) {
         if (!val) continue;
