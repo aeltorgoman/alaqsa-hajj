@@ -861,16 +861,16 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           ].filter(i => i.count > 0);
 
           const distItems = [
-            { icon: "✈️", label: "بدون رحلة", count: noFlight },
-            { icon: "🚌", label: "بدون باص", count: noBus },
-            { icon: "🏨", label: "بدون غرفة فندق", count: noRoom },
-            { icon: "⛺", label: "بدون مخيم منى", count: noMina },
-            { icon: "🕌", label: "بدون مخيم عرفة", count: noArafa },
+            { icon: "✈️", label: "بدون رحلة", count: noFlight, filter: () => {} },
+            { icon: "🚌", label: "بدون باص", count: noBus, filter: () => {} },
+            { icon: "🏨", label: "بدون غرفة فندق", count: noRoom, filter: () => {} },
+            { icon: "⛺", label: "بدون مخيم منى", count: noMina, filter: () => {} },
+            { icon: "🕌", label: "بدون مخيم عرفة", count: noArafa, filter: () => {} },
           ].filter(i => i.count > 0);
 
           const travelItems = [
-            { icon: "🎫", label: "بدون تذكرة طيران", count: noTicket },
-            { icon: "📋", label: "بدون تصريح حج", count: noPermit },
+            { icon: "🎫", label: "بدون تذكرة طيران", count: noTicket, filter: () => {} },
+            { icon: "📋", label: "بدون تصريح حج", count: noPermit, filter: () => {} },
           ].filter(i => i.count > 0);
 
           const [opsTab, setOpsTab] = useState<"reg"|"dist"|"travel">("reg");
