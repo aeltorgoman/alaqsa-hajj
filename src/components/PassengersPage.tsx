@@ -34,19 +34,37 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
     const total = hajj.length;
     const males = hajj.filter(p => p.gender === "ذكر").length;
     const females = hajj.filter(p => p.gender === "أنثى").length;
+    // المضافون هذا الأسبوع
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const addedThisWeek = hajj.filter(p => {
+      if (!(p as any).created_at) return false;
+      return new Date((p as any).created_at) >= oneWeekAgo;
+    }).length;
+    // اكتمال مستندات التسجيل: جواز + بطاقة + صورة
     const docsComplete = (p: Passenger) => !!(p.photo_url && p.passport_url && p.national_id_url);
     const docsDone = hajj.filter(docsComplete).length;
     const docPct = total ? Math.round(docsDone / total * 100) : 0;
-    return { total, males, females, docsDone, docPct };
+    return { total, males, females, docsDone, docPct, addedThisWeek };
   }, [passengers]);
 
-  const { total, males, females, docsDone, docPct } = stats;
+  const { total, males, females, docsDone, docPct, addedThisWeek } = stats;
 
   const cards: StatCardData[] = [
-    { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
+    {
+      label: "إجمالي الحجاج",
+      num: total,
+      sub: addedThisWeek > 0 ? `↑ ${addedThisWeek}+ هذا الأسبوع` : "الموسم الحالي",
+      tone: "brand"
+    },
     { label: "رجال", num: males, sub: `${total ? Math.round(males/total*100) : 0}٪ من الإجمالي`, tone: "info" },
     { label: "نساء", num: females, sub: `${total ? Math.round(females/total*100) : 0}٪ من الإجمالي`, tone: "female" },
-    { label: "اكتمال المستندات", num: `${docPct}٪`, sub: `${docsDone} من ${total}`, tone: "success" },
+    {
+      label: "اكتمال مستندات التسجيل",
+      num: `${docPct}٪`,
+      sub: `${docsDone} من ${total} · جواز + بطاقة + صورة`,
+      tone: "success"
+    },
   ];
   return <StatsRow cards={cards} />;
 }
@@ -125,9 +143,32 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const filtered = useMemo(() => passengers
     .filter(p => {
       if (p.passenger_type && p.passenger_type !== "حاج") return false;
-      const fullName = `${p.name_ar} ${p.name_en}`;
-      if (search && !fullName.toLowerCase().includes(search.toLowerCase()) &&
-        ![p.passport, p.national_id, p.nat, p.phone, p.gender].join(" ").toLowerCase().includes(search.toLowerCase())) return false;
+      if (search) {
+        const q = search.trim().toLowerCase();
+        // رقم الرحلة (مثلاً QR501)
+        const flightMatch = p.services?.flight_number && p.services.flight_number.toLowerCase().includes(q);
+        // رقم الغرفة أو الفندق
+        const roomMatch = (p as any).room_number && String((p as any).room_number).includes(q);
+        const hotelMatch = (p as any).hotel_name && (p as any).hotel_name.toLowerCase().includes(q);
+        // الاسم
+        const nameMatch = `${p.name_ar} ${p.name_en} ${p.short_ar || ""} ${p.short_en || ""}`.toLowerCase().includes(q);
+        // رقم الجواز أو البطاقة أو التليفون
+        const docMatch = [p.passport, p.national_id, p.phone].join(" ").toLowerCase().includes(q);
+        // الجنسية
+        const natMatch = p.nat && p.nat.toLowerCase().includes(q);
+        // VIP
+        const vipMatch = q === "vip" && p.services?.bus === "VIP";
+        // درجة أولى
+        const firstMatch = (q === "درجة أولى" || q === "اولى" || q === "أولى") && p.services?.flight === "درجة أولى";
+        // الجنس
+        const genderMatch = p.gender && p.gender.toLowerCase().includes(q);
+        // الباص
+        const busMatch = p.services?.bus && p.services.bus.toLowerCase().includes(q);
+        // المخيمات
+        const campMatch = [p.services?.camp_mina, p.services?.camp_arafa].join(" ").toLowerCase().includes(q);
+
+        if (!nameMatch && !docMatch && !natMatch && !vipMatch && !firstMatch && !genderMatch && !busMatch && !flightMatch && !roomMatch && !hotelMatch && !campMatch) return false;
+      }
       for (const [key, val] of Object.entries(filters)) {
         if (!val) continue;
         const pval = key === "bus" ? p.services?.bus :
@@ -773,7 +814,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               onFocus={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--g5)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(200,162,75,.12)"; }}
               onBlur={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--line)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-              <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)", color: "var(--ink)" }} placeholder="ابحث..." />
+              <input value={search} onChange={e => setSearch(e.target.value)} style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)", color: "var(--ink)" }} placeholder="ابحث بالاسم، الجواز، الجنسية، رقم الرحلة، VIP، رقم الغرفة..." />
               {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>✕</span>}
             </div>
             {/* مسح موحّد — جواز/بطاقة/تصريح حج، بيتعرف على النوع ويتصرف تلقائيًا */}
