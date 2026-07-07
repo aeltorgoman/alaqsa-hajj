@@ -1132,11 +1132,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>الخدمات</div>
             {[
-              ["الباص",   selected.services?.bus,       (selected as any).bus_id        ? `باص #${(selected as any).bus_id}`        : null],
-              ["الطيران", selected.services?.flight,    (selected as any).flight_id     ? `رحلة #${(selected as any).flight_id}`    : null],
-              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id ? `غرفة #${(selected as any).room_id}` : null],
-              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id  ? `خيمة #${(selected as any).camp_mina_id}` : null],
-              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id ? `خيمة #${(selected as any).camp_arafa_id}` : null],
+              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null],
+              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? `رحلة #${(selected as any).flight_id}` : null],
+              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null],
+              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null],
+              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null],
             ].map(([lbl, cls, assign]) => (
               <div key={lbl as string} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, padding: "4px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                 <span style={{ color: "var(--text-muted)", minWidth: 40 }}>{lbl as string}</span>
