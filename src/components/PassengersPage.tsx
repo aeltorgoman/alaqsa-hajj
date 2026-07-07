@@ -80,11 +80,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
   const [metaCamps, setMetaCamps] = useState<any[]>([]);
+  const [metaFlights, setMetaFlights] = useState<any[]>([]);
 
   useEffect(() => {
     supabase.from("buses").select("id,name").then(({ data }) => { if (data) setMetaBuses(data); });
     supabase.from("rooms").select("id,number").then(({ data }) => { if (data) setMetaRooms(data); });
     supabase.from("camps").select("id,name,page_type").then(({ data }) => { if (data) setMetaCamps(data); });
+    supabase.from("flights").select("id,name,type").then(({ data }) => { if (data) setMetaFlights(data); });
   }, []);
 
   // استقبال scan من Dashboard
@@ -164,19 +166,28 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         // درجة أولى
         const firstMatch = ["درجة أولى", "اولى", "أولى", "first"].includes(q) && p.services?.flight === "درجة أولى";
 
-        // الباص (اسم الخدمة)
-        const busMatch = (p.services?.bus || "").toLowerCase().includes(q);
+        // الباص — اسم الخدمة + اسم الباص الحقيقي
+        const busName = metaBuses.find((b: any) => b.id === (p as any).bus_id)?.name || "";
+        const busMatch = (p.services?.bus || "").toLowerCase().includes(q) || busName.toLowerCase().includes(q);
 
-        // الطيران (اسم الخدمة)
-        const flightMatch = (p.services?.flight || "").toLowerCase().includes(q);
+        // الطيران — اسم الخدمة + رقم الرحلة الحقيقي
+        const flightName = metaFlights.find((f: any) => f.id === (p as any).flight_id)?.name || "";
+        const returnFlightName = metaFlights.find((f: any) => f.id === (p as any).return_flight_id)?.name || "";
+        const flightMatch = (p.services?.flight || "").toLowerCase().includes(q) || flightName.toLowerCase().includes(q) || returnFlightName.toLowerCase().includes(q);
 
-        // المخيمات
-        const campMatch = `${p.services?.camp_mina || ""} ${p.services?.camp_arafa || ""}`.toLowerCase().includes(q);
+        // الغرفة — رقم الغرفة الحقيقي
+        const roomNumber = String(metaRooms.find((r: any) => r.id === (p as any).room_id)?.number || "");
+        const roomMatch = roomNumber.includes(q);
+
+        // المخيمات — اسم الخيمة الحقيقي
+        const minaName = metaCamps.find((c: any) => c.id === (p as any).camp_mina_id)?.name || "";
+        const arafaName = metaCamps.find((c: any) => c.id === (p as any).camp_arafa_id)?.name || "";
+        const campMatch = `${p.services?.camp_mina || ""} ${p.services?.camp_arafa || ""} ${minaName} ${arafaName}`.toLowerCase().includes(q);
 
         // نوع الغرفة والإطلالة
         const hotelMatch = `${p.services?.hotel_type || ""} ${p.services?.hotel_view || ""}`.toLowerCase().includes(q);
 
-        if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch) return false;
+        if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch && !roomMatch) return false;
       }
       for (const [key, val] of Object.entries(filters)) {
         if (!val) continue;
@@ -192,7 +203,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       return true;
     })
     .sort((a, b) => ((a as any).sort_order || 0) - ((b as any).sort_order || 0)),
-  [passengers, search, filters]);
+  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps]);
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
@@ -816,6 +827,95 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       })()}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <PassengersStats passengers={passengers} />
+
+        {/* ══ مركز العمليات ══ */}
+        {(() => {
+          const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+          const noPhoto = hajj.filter(p => !p.photo_url).length;
+          const noPassportFile = hajj.filter(p => !p.passport_url).length;
+          const expiredPassport = hajj.filter(p => p.expiry && isExpired(p.expiry)).length;
+          const expiringSoon = hajj.filter(p => p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry)).length;
+          const noPhone = hajj.filter(p => !p.phone).length;
+          const dupPhones = (() => {
+            const phones = hajj.map(p => p.phone).filter(Boolean);
+            const dups = phones.filter((ph, i) => phones.indexOf(ph) !== i);
+            return [...new Set(dups)].length;
+          })();
+          // التوزيع
+          const noFlight = hajj.filter(p => !(p as any).flight_id).length;
+          const noBus = hajj.filter(p => !(p as any).bus_id).length;
+          const noRoom = hajj.filter(p => !(p as any).room_id).length;
+          const noMina = hajj.filter(p => !(p as any).camp_mina_id).length;
+          const noArafa = hajj.filter(p => !(p as any).camp_arafa_id).length;
+          // السفر
+          const noTicket = hajj.filter(p => !p.flight_ticket_url).length;
+          const noPermit = hajj.filter(p => !p.hajj_permit_url).length;
+
+          const regItems = [
+            { icon: "📷", label: "بدون صورة شخصية", count: noPhoto, filter: () => setSearch("__no_photo__") },
+            { icon: "📄", label: "جواز لم يُرفع", count: noPassportFile, filter: () => setSearch("__no_passport_file__") },
+            { icon: "🛂", label: "جواز منتهي الصلاحية", count: expiredPassport, filter: () => {} },
+            { icon: "⚠️", label: "جواز يقترب من الانتهاء", count: expiringSoon, filter: () => {} },
+            { icon: "📵", label: "بدون رقم تليفون", count: noPhone, filter: () => {} },
+            { icon: "👥", label: "رقم تليفون مكرر", count: dupPhones, filter: () => {} },
+          ].filter(i => i.count > 0);
+
+          const distItems = [
+            { icon: "✈️", label: "بدون رحلة", count: noFlight },
+            { icon: "🚌", label: "بدون باص", count: noBus },
+            { icon: "🏨", label: "بدون غرفة فندق", count: noRoom },
+            { icon: "⛺", label: "بدون مخيم منى", count: noMina },
+            { icon: "🕌", label: "بدون مخيم عرفة", count: noArafa },
+          ].filter(i => i.count > 0);
+
+          const travelItems = [
+            { icon: "🎫", label: "بدون تذكرة طيران", count: noTicket },
+            { icon: "📋", label: "بدون تصريح حج", count: noPermit },
+          ].filter(i => i.count > 0);
+
+          const [opsTab, setOpsTab] = useState<"reg"|"dist"|"travel">("reg");
+          const items = opsTab === "reg" ? regItems : opsTab === "dist" ? distItems : travelItems;
+          const totalAlerts = regItems.reduce((s, i) => s + i.count, 0) + distItems.reduce((s, i) => s + i.count, 0) + travelItems.reduce((s, i) => s + i.count, 0);
+
+          if (totalAlerts === 0) return null;
+
+          return (
+            <div style={{ margin: "0 16px 8px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
+              {/* هيدر */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--line)", background: "var(--ivory)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "blink 2s infinite" }} />
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)" }}>مركز العمليات</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(220,38,38,.1)", color: "#DC2626", padding: "1px 7px", borderRadius: 99 }}>{totalAlerts} إجراء</span>
+                </div>
+                {/* تابز المراحل */}
+                <div style={{ display: "flex", gap: 4 }}>
+                  {([["reg","التسجيل"], ["dist","التوزيع"], ["travel","السفر"]] as const).map(([tab, label]) => (
+                    <button key={tab} onClick={() => setOpsTab(tab)} style={{ padding: "3px 10px", borderRadius: 6, border: `1px solid ${opsTab === tab ? "rgba(125,31,60,.3)" : "var(--line)"}`, background: opsTab === tab ? "rgba(125,31,60,.08)" : "transparent", color: opsTab === tab ? "var(--em7)" : "var(--muted)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* العناصر */}
+              {items.length === 0 ? (
+                <div style={{ padding: "10px 14px", fontSize: 11, color: "var(--muted)", textAlign: "center" }}>✓ لا توجد إجراءات مطلوبة في هذه المرحلة</div>
+              ) : (
+                <div style={{ display: "flex", gap: 0, overflowX: "auto", padding: "8px 10px" }}>
+                  {items.map((item, i) => (
+                    <div key={i} onClick={item.filter} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--paper)", marginLeft: 6, flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}>
+                      <span style={{ fontSize: 14 }}>{item.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink)" }}>{item.label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 900, color: "#DC2626", minWidth: 20, textAlign: "center" }}>{item.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             {/* البحث */}
@@ -1133,7 +1233,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>الخدمات</div>
             {[
               ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null],
-              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? `رحلة #${(selected as any).flight_id}` : null],
+              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null],
               ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null],
               ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null],
               ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null],
