@@ -32,23 +32,19 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   const stats = useMemo(() => {
     const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
     const total = hajj.length;
-    const males = hajj.filter(p => p.gender === "ذكر").length;
-    const females = hajj.filter(p => p.gender === "أنثى").length;
-    // المضافون هذا الأسبوع
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     const addedThisWeek = hajj.filter(p => {
       if (!(p as any).created_at) return false;
       return new Date((p as any).created_at) >= oneWeekAgo;
     }).length;
-    // اكتمال مستندات التسجيل: جواز + بطاقة + صورة
     const docsComplete = (p: Passenger) => !!(p.photo_url && p.passport_url && p.national_id_url);
     const docsDone = hajj.filter(docsComplete).length;
     const docPct = total ? Math.round(docsDone / total * 100) : 0;
-    return { total, males, females, docsDone, docPct, addedThisWeek };
+    return { total, docsDone, docPct, addedThisWeek };
   }, [passengers]);
 
-  const { total, males, females, docsDone, docPct, addedThisWeek } = stats;
+  const { total, docsDone, docPct, addedThisWeek } = stats;
 
   const cards: StatCardData[] = [
     {
@@ -57,8 +53,6 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
       sub: addedThisWeek > 0 ? `↑ ${addedThisWeek}+ هذا الأسبوع` : "الموسم الحالي",
       tone: "brand"
     },
-    { label: "رجال", num: males, sub: `${total ? Math.round(males/total*100) : 0}٪ من الإجمالي`, tone: "info" },
-    { label: "نساء", num: females, sub: `${total ? Math.round(females/total*100) : 0}٪ من الإجمالي`, tone: "female" },
     {
       label: "اكتمال مستندات التسجيل",
       num: `${docPct}٪`,
@@ -77,6 +71,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
+  const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
+  const [opsFilter, setOpsFilter] = useState<string | null>(null);
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
   const [metaCamps, setMetaCamps] = useState<any[]>([]);
@@ -202,8 +198,29 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       }
       return true;
     })
+    .filter(p => {
+      if (!opsFilter) return true;
+      if (opsFilter === "no_photo") return !p.photo_url;
+      if (opsFilter === "no_passport_file") return !p.passport_url;
+      if (opsFilter === "expired_passport") return !!(p.expiry && isExpired(p.expiry));
+      if (opsFilter === "expiring_soon") return !!(p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry));
+      if (opsFilter === "no_phone") return !p.phone;
+      if (opsFilter === "dup_phones") {
+        const phoneCounts: Record<string, number> = {};
+        passengers.forEach(x => { if (x.phone) phoneCounts[x.phone] = (phoneCounts[x.phone] || 0) + 1; });
+        return !!(p.phone && phoneCounts[p.phone] > 1);
+      }
+      if (opsFilter === "no_flight") return !(p as any).flight_id;
+      if (opsFilter === "no_bus") return !(p as any).bus_id;
+      if (opsFilter === "no_room") return !(p as any).room_id;
+      if (opsFilter === "no_mina") return !(p as any).camp_mina_id;
+      if (opsFilter === "no_arafa") return !(p as any).camp_arafa_id;
+      if (opsFilter === "no_ticket") return !p.flight_ticket_url;
+      if (opsFilter === "no_permit") return !p.hajj_permit_url;
+      return true;
+    })
     .sort((a, b) => ((a as any).sort_order || 0) - ((b as any).sort_order || 0)),
-  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps]);
+  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter]);
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
@@ -825,10 +842,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           </div>
         );
       })()}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <PassengersStats passengers={passengers} />
-
-        {/* ══ مركز العمليات ══ */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        {/* ══ مركز العمليات — جانبي بالطول ══ */}
         {(() => {
           const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
           const noPhoto = hajj.filter(p => !p.photo_url).length;
@@ -836,86 +851,95 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           const expiredPassport = hajj.filter(p => p.expiry && isExpired(p.expiry)).length;
           const expiringSoon = hajj.filter(p => p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry)).length;
           const noPhone = hajj.filter(p => !p.phone).length;
-          const dupPhones = (() => {
-            const phones = hajj.map(p => p.phone).filter(Boolean);
-            const dups = phones.filter((ph, i) => phones.indexOf(ph) !== i);
-            return [...new Set(dups)].length;
-          })();
-          // التوزيع
+          const phoneCounts: Record<string, number> = {};
+          hajj.forEach(p => { if (p.phone) phoneCounts[p.phone] = (phoneCounts[p.phone] || 0) + 1; });
+          const dupPhones = Object.values(phoneCounts).filter(c => c > 1).length;
           const noFlight = hajj.filter(p => !(p as any).flight_id).length;
           const noBus = hajj.filter(p => !(p as any).bus_id).length;
           const noRoom = hajj.filter(p => !(p as any).room_id).length;
           const noMina = hajj.filter(p => !(p as any).camp_mina_id).length;
           const noArafa = hajj.filter(p => !(p as any).camp_arafa_id).length;
-          // السفر
           const noTicket = hajj.filter(p => !p.flight_ticket_url).length;
           const noPermit = hajj.filter(p => !p.hajj_permit_url).length;
 
           const regItems = [
-            { icon: "📷", label: "بدون صورة شخصية", count: noPhoto, filter: () => setSearch("__no_photo__") },
-            { icon: "📄", label: "جواز لم يُرفع", count: noPassportFile, filter: () => setSearch("__no_passport_file__") },
-            { icon: "🛂", label: "جواز منتهي الصلاحية", count: expiredPassport, filter: () => {} },
-            { icon: "⚠️", label: "جواز يقترب من الانتهاء", count: expiringSoon, filter: () => {} },
-            { icon: "📵", label: "بدون رقم تليفون", count: noPhone, filter: () => {} },
-            { icon: "👥", label: "رقم تليفون مكرر", count: dupPhones, filter: () => {} },
+            { key: "no_photo", label: "حجاج بدون صورة شخصية", desc: "مستند مطلوب للتسجيل", count: noPhoto, icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
+            { key: "no_passport_file", label: "جوازات لم يتم رفعها", desc: "مستندات مفقودة تحتاج إجراء", count: noPassportFile, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
+            { key: "expired_passport", label: "جوازات منتهية الصلاحية", desc: "يحتاج تجديد عاجل", count: expiredPassport, icon: `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
+            { key: "expiring_soon", label: "جوازات تقترب من الانتهاء", desc: "أقل من ٦ أشهر على الانتهاء", count: expiringSoon, icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
+            { key: "no_phone", label: "حجاج بدون رقم هاتف", desc: "بيانات التواصل مفقودة", count: noPhone, icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
+            { key: "dup_phones", label: "أرقام هواتف مكررة", desc: "يحتاج مراجعة ومطابقة", count: dupPhones, icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, color: "#7c3aed", bg: "rgba(124,58,237,.08)" },
           ].filter(i => i.count > 0);
 
           const distItems = [
-            { icon: "✈️", label: "بدون رحلة", count: noFlight, filter: () => {} },
-            { icon: "🚌", label: "بدون باص", count: noBus, filter: () => {} },
-            { icon: "🏨", label: "بدون غرفة فندق", count: noRoom, filter: () => {} },
-            { icon: "⛺", label: "بدون مخيم منى", count: noMina, filter: () => {} },
-            { icon: "🕌", label: "بدون مخيم عرفة", count: noArafa, filter: () => {} },
+            { key: "no_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
+            { key: "no_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
+            { key: "no_room", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
+            { key: "no_mina", label: "حجاج بدون مخيم منى", desc: "لم يتم التوزيع بعد", count: noMina, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, color: "#2563EB", bg: "rgba(37,99,235,.08)" },
+            { key: "no_arafa", label: "حجاج بدون مخيم عرفة", desc: "لم يتم التوزيع بعد", count: noArafa, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, color: "#2563EB", bg: "rgba(37,99,235,.08)" },
           ].filter(i => i.count > 0);
 
           const travelItems = [
-            { icon: "🎫", label: "بدون تذكرة طيران", count: noTicket, filter: () => {} },
-            { icon: "📋", label: "بدون تصريح حج", count: noPermit, filter: () => {} },
+            { key: "no_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
+            { key: "no_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
           ].filter(i => i.count > 0);
 
-          const [opsTab, setOpsTab] = useState<"reg"|"dist"|"travel">("reg");
           const items = opsTab === "reg" ? regItems : opsTab === "dist" ? distItems : travelItems;
-          const totalAlerts = regItems.reduce((s, i) => s + i.count, 0) + distItems.reduce((s, i) => s + i.count, 0) + travelItems.reduce((s, i) => s + i.count, 0);
-
-          if (totalAlerts === 0) return null;
+          const totalAlerts = [...regItems, ...distItems, ...travelItems].reduce((s, i) => s + i.count, 0);
 
           return (
-            <div style={{ margin: "0 16px 8px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
+            <div style={{ width: 256, flexShrink: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden" }}>
               {/* هيدر */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--line)", background: "var(--ivory)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC2626", animation: "blink 2s infinite" }} />
-                  <span style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)" }}>مركز العمليات</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(220,38,38,.1)", color: "#DC2626", padding: "1px 7px", borderRadius: 99 }}>{totalAlerts} إجراء</span>
+              <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "12px 14px", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,.9)", animation: "blink 2s infinite" }} />
+                  <span style={{ fontSize: 13, fontWeight: 900, color: "white", flex: 1 }}>مركز العمليات</span>
+                  {totalAlerts > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "white", padding: "2px 8px", borderRadius: 99 }}>{totalAlerts}</span>}
                 </div>
-                {/* تابز المراحل */}
                 <div style={{ display: "flex", gap: 4 }}>
-                  {([["reg","التسجيل"], ["dist","التوزيع"], ["travel","السفر"]] as const).map(([tab, label]) => (
-                    <button key={tab} onClick={() => setOpsTab(tab)} style={{ padding: "3px 10px", borderRadius: 6, border: `1px solid ${opsTab === tab ? "rgba(125,31,60,.3)" : "var(--line)"}`, background: opsTab === tab ? "rgba(125,31,60,.08)" : "transparent", color: opsTab === tab ? "var(--em7)" : "var(--muted)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                  {([["reg", "التسجيل"], ["dist", "التوزيع"], ["travel", "السفر"]] as const).map(([tab, label]) => (
+                    <button key={tab} onClick={() => { setOpsTab(tab); setOpsFilter(null); }} style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${opsTab === tab ? "transparent" : "rgba(255,255,255,.2)"}`, background: opsTab === tab ? "rgba(255,255,255,.9)" : "transparent", color: opsTab === tab ? "#7D1F3C" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s" }}>
                       {label}
                     </button>
                   ))}
                 </div>
               </div>
-              {/* العناصر */}
-              {items.length === 0 ? (
-                <div style={{ padding: "10px 14px", fontSize: 11, color: "var(--muted)", textAlign: "center" }}>✓ لا توجد إجراءات مطلوبة في هذه المرحلة</div>
-              ) : (
-                <div style={{ display: "flex", gap: 0, overflowX: "auto", padding: "8px 10px" }}>
-                  {items.map((item, i) => (
-                    <div key={i} onClick={item.filter} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--paper)", marginLeft: 6, flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap" }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}>
-                      <span style={{ fontSize: 14 }}>{item.icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink)" }}>{item.label}</span>
-                      <span style={{ fontSize: 14, fontWeight: 900, color: "#DC2626", minWidth: 20, textAlign: "center" }}>{item.count}</span>
+              {/* القائمة */}
+              <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
+                {items.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--muted)", fontSize: 11 }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: 8 }}><polyline points="20 6 9 17 4 12"/></svg>
+                    <div>لا توجد إجراءات مطلوبة</div>
+                  </div>
+                ) : items.map((item, i) => (
+                  <div key={i} onClick={() => setOpsFilter(opsFilter === item.key ? null : item.key)}
+                    style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 10px", borderRadius: 10, cursor: "pointer", marginBottom: 4, border: `1px solid ${opsFilter === item.key ? "rgba(125,31,60,.2)" : "transparent"}`, background: opsFilter === item.key ? "rgba(125,31,60,.04)" : "transparent", transition: "all .15s" }}
+                    onMouseEnter={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
+                    onMouseLeave={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 9, background: item.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={item.color} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
                     </div>
-                  ))}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)", marginBottom: 2, lineHeight: 1.3 }}>{item.label}</div>
+                      <div style={{ fontSize: 9, color: "var(--muted)" }}>{item.desc}</div>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: item.color, flexShrink: 0, lineHeight: 1, marginTop: 4 }}>{item.count}</div>
+                  </div>
+                ))}
+              </div>
+              {/* فوتر */}
+              {opsFilter && (
+                <div style={{ padding: "8px 14px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
+                  <button onClick={() => setOpsFilter(null)} style={{ width: "100%", padding: "6px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--ivory)", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "var(--muted)" }}>إلغاء الفلتر وعرض الكل</button>
                 </div>
               )}
             </div>
           );
         })()}
+        {/* ══ المحتوى الرئيسي ══ */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <PassengersStats passengers={passengers} />
+
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             {/* البحث */}
@@ -1201,6 +1225,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               </tbody>
             </table>
           )}
+        </div>
         </div>
       </div>
 
