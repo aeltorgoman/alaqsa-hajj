@@ -842,10 +842,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           </div>
         );
       })()}
-      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", height: "100%" }}>
 
         {/* ══ المحتوى الرئيسي ══ */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", marginLeft: selected ? 0 : 280, transition: "margin-left .2s ease" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <PassengersStats passengers={passengers} />
 
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
@@ -1181,7 +1181,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           const totalAlerts = [...regItems, ...distItems, ...travelItems].reduce((s, i) => s + i.count, 0);
 
           return (
-            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "fixed", left: 0, top: "var(--topbar-height)", bottom: 0, zIndex: 10 }}>
+            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease" }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -1231,7 +1231,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        <div style={{ width: 280, borderRight: "0.5px solid var(--border)", overflowY: "auto", padding: 12, flexShrink: 0 }}>
+        <div style={{ width: 280, borderRight: "0.5px solid var(--border)", overflowY: "auto", padding: 12, flexShrink: 0, height: "100%" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 600 }}>ملف الحاج</div>
             <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 16 }}>✕</button>
