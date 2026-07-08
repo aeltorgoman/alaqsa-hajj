@@ -1135,7 +1135,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           )}
         </div>
         </div>
-      </div>
 
         {/* ══ مركز العمليات — جانبي بالطول ══ */}
         {(() => {
@@ -1230,6 +1229,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             </div>
           );
         })()}
+      </div>
       {selected && !editing && (
         <div style={{ width: 280, borderRight: "0.5px solid var(--border)", overflowY: "auto", padding: 12, flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
