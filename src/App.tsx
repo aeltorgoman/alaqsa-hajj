@@ -114,7 +114,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)" }}>
 
       {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
       {page === "dash" && (
@@ -122,9 +122,9 @@ export default function App() {
       )}
 
       {/* الجسم — السايدبار + المحتوى */}
-      <div style={{ flex: 1, display: "flex", alignItems: "flex-start" }}>
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
         {/* السايدبار ثابت */}
-        <div style={{ position: "sticky", top: 0, height: "100vh", flexShrink: 0 }}>
+        <div style={{ height: "100%", flexShrink: 0 }}>
           <Sidebar
             page={page} setPage={setPage}
             count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}
@@ -133,13 +133,13 @@ export default function App() {
           />
         </div>
 
-        {/* المحتوى — يتمرر بشكل طبيعي */}
-        <div style={{ flex: 1, minWidth: 0, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        {/* المحتوى */}
+        <div style={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {page !== "dash" && (
             <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />
           )}
           {isFull ? (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
               {renderPage()}
             </div>
           ) : (
