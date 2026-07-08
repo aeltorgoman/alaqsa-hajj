@@ -1182,7 +1182,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           const totalAlerts = [...regItems, ...distItems, ...travelItems].reduce((s, i) => s + i.count, 0);
 
           return (
-            <div style={{ width: selected ? 0 : 210, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease" }}>
+            <div style={{ width: selected ? 0 : 210, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "sticky", top: 0, alignSelf: "flex-start", maxHeight: "100vh" }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
