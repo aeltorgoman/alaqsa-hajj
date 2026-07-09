@@ -1037,6 +1037,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                 <tr style={{ background: "var(--bg-2)", color: "var(--muted)" }}>
                   <th style={{ padding: "8px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11 }}>م</th>
+                  <th style={{ padding: "7px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11, width: 36 }}>حالة</th>
                   {COLS.map(col => <th key={col.key} style={{ padding: "7px 10px", border: "0.5px solid var(--line)", whiteSpace: "nowrap", textAlign: "right", fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>{col.label}</th>)}
                   <th style={{ padding: "8px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11 }}>إجراءات</th>
                 </tr>
@@ -1107,6 +1108,32 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                         </div>
                       )}
                     </td>
+                    {/* ══ مؤشر الحالة ══ */}
+                    {(() => {
+                      const issues: string[] = [];
+                      if (isExpired(p.expiry)) issues.push("جواز منتهي الصلاحية");
+                      if (isExpiringSoon(p.expiry) && !isExpired(p.expiry)) issues.push("جواز يقترب من الانتهاء");
+                      if (!p.photo_url) issues.push("بدون صورة شخصية");
+                      if (!p.passport_url) issues.push("جواز لم يُرفع");
+                      if (!p.phone) issues.push("بدون رقم هاتف");
+
+                      const color = isExpired(p.expiry) ? "#DC2626" :
+                                    isExpiringSoon(p.expiry) ? "#D97706" :
+                                    issues.length > 0 ? "#EAB308" : "#22C55E";
+                      const title = issues.length > 0 ? issues.join(" · ") : "جاهز";
+
+                      return (
+                        <td style={{ padding: "5px 8px", border: "0.5px solid var(--line)", textAlign: "center", width: 36 }}>
+                          <div
+                            title={title}
+                            onClick={e => { e.stopPropagation(); setSelected(p); }}
+                            style={{ width: 12, height: 12, borderRadius: "50%", background: color, margin: "0 auto", cursor: "pointer", boxShadow: `0 0 0 2px ${color}30`, transition: "transform .15s" }}
+                            onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1.3)"}
+                            onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"}
+                          />
+                        </td>
+                      );
+                    })()}
                     {COLS.map(col => (
                       <td key={col.key} style={{ padding: "5px 8px", border: "0.5px solid var(--line)", whiteSpace: "nowrap", fontSize: 12, color: "var(--ink)" }}>
                         {/* باجات ملونة للباص والطيران */}
