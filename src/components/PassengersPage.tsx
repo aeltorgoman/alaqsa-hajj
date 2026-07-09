@@ -183,7 +183,23 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         // نوع الغرفة والإطلالة
         const hotelMatch = `${p.services?.hotel_type || ""} ${p.services?.hotel_view || ""}`.toLowerCase().includes(q);
 
-        if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch && !roomMatch) return false;
+        if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch && !roomMatch) {
+          // Smart Search — كلمات طبيعية
+          const smartMatch = (() => {
+            if (["بدون صورة", "ناقص صورة"].includes(q)) return !p.photo_url;
+            if (["بدون تليفون", "بدون هاتف"].includes(q)) return !p.phone;
+            if (["جواز منتهي", "جواز منتهي الصلاحية"].includes(q)) return !!(p.expiry && isExpired(p.expiry));
+            if (["جواز قريب", "ينتهي قريبا", "ينتهي قريباً"].includes(q)) return !!(p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry));
+            if (["بدون رحلة", "بدون طيران"].includes(q)) return !(p as any).flight_id;
+            if (["بدون باص", "بدون حافلة"].includes(q)) return !(p as any).bus_id;
+            if (["بدون فندق", "بدون غرفة"].includes(q)) return !(p as any).room_id;
+            if (["بدون تذكرة"].includes(q)) return !p.flight_ticket_url;
+            if (["بدون تصريح"].includes(q)) return !p.hajj_permit_url;
+            if (["بدون جواز", "جواز غير مرفوع"].includes(q)) return !p.passport_url;
+            return false;
+          })();
+          if (!smartMatch) return false;
+        }
       }
       for (const [key, val] of Object.entries(filters)) {
         if (!val) continue;
@@ -1155,70 +1171,81 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           const noTicket = hajj.filter(p => !p.flight_ticket_url).length;
           const noPermit = hajj.filter(p => !p.hajj_permit_url).length;
 
-          const regItems = [
-            { key: "no_photo", label: "حجاج بدون صورة شخصية", desc: "مستند مطلوب للتسجيل", count: noPhoto, icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
-            { key: "no_passport_file", label: "جوازات لم يتم رفعها", desc: "مستندات مفقودة تحتاج إجراء", count: noPassportFile, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
-            { key: "expired_passport", label: "جوازات منتهية الصلاحية", desc: "يحتاج تجديد عاجل", count: expiredPassport, icon: `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
-            { key: "expiring_soon", label: "جوازات تقترب من الانتهاء", desc: "أقل من ٦ أشهر على الانتهاء", count: expiringSoon, icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
-            { key: "no_phone", label: "حجاج بدون رقم هاتف", desc: "بيانات التواصل مفقودة", count: noPhone, icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
-            { key: "dup_phones", label: "أرقام هواتف مكررة", desc: "يحتاج مراجعة ومطابقة", count: dupPhones, icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, color: "#7c3aed", bg: "rgba(124,58,237,.08)" },
-          ].filter(i => i.count > 0);
+          // نظام الأولويات
+          const criticalItems = [
+            expiredPassport > 0 && { key: "expired_passport", label: "جوازات منتهية الصلاحية", desc: "يحتاج تجديد فوري", count: expiredPassport, icon: `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, priority: "critical" as const },
+            expiringSoon > 0 && { key: "expiring_soon", label: "جوازات تنتهي خلال ٦ أشهر", desc: "تحتاج متابعة عاجلة", count: expiringSoon, icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, priority: "critical" as const },
+          ].filter(Boolean) as any[];
 
-          const distItems = [
-            { key: "no_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
-            { key: "no_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
-            { key: "no_room", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, color: "#D97706", bg: "rgba(217,119,6,.08)" },
-            { key: "no_mina", label: "حجاج بدون مخيم منى", desc: "لم يتم التوزيع بعد", count: noMina, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, color: "#2563EB", bg: "rgba(37,99,235,.08)" },
-            { key: "no_arafa", label: "حجاج بدون مخيم عرفة", desc: "لم يتم التوزيع بعد", count: noArafa, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, color: "#2563EB", bg: "rgba(37,99,235,.08)" },
-          ].filter(i => i.count > 0);
+          const importantItems = [
+            noPhoto > 0 && { key: "no_photo", label: "صور شخصية ناقصة", desc: "مستند مطلوب للتسجيل", count: noPhoto, icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, priority: "important" as const },
+            noPassportFile > 0 && { key: "no_passport_file", label: "جوازات لم يتم رفعها", desc: "مستندات مفقودة", count: noPassportFile, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, priority: "important" as const },
+            noPhone > 0 && { key: "no_phone", label: "حجاج بدون رقم هاتف", desc: "بيانات التواصل مفقودة", count: noPhone, icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, priority: "important" as const },
+            dupPhones > 0 && { key: "dup_phones", label: "أرقام هواتف مكررة", desc: "يحتاج مراجعة ومطابقة", count: dupPhones, icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>`, priority: "important" as const },
+            noFlight > 0 && { key: "no_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, priority: "important" as const },
+            noBus > 0 && { key: "no_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>`, priority: "important" as const },
+            noRoom > 0 && { key: "no_room", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
+            noTicket > 0 && { key: "no_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>`, priority: "important" as const },
+            noPermit > 0 && { key: "no_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, priority: "important" as const },
+          ].filter(Boolean) as any[];
 
-          const travelItems = [
-            { key: "no_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
-            { key: "no_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, color: "#DC2626", bg: "rgba(220,38,38,.08)" },
-          ].filter(i => i.count > 0);
+          // حجاج اليوم
+          const today = new Date().toDateString();
+          const addedToday = hajj.filter(p => (p as any).created_at && new Date((p as any).created_at).toDateString() === today).length;
+          const infoItems = [
+            addedToday > 0 && { key: "added_today", label: `تم تسجيل ${addedToday} حاج اليوم`, desc: "إضافة حديثة", count: addedToday, icon: `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>`, priority: "info" as const },
+          ].filter(Boolean) as any[];
 
-          const items = opsTab === "reg" ? regItems : opsTab === "dist" ? distItems : travelItems;
-          const totalAlerts = [...regItems, ...distItems, ...travelItems].reduce((s, i) => s + i.count, 0);
+          const allItems = [...criticalItems, ...importantItems, ...infoItems];
+          const totalAlerts = criticalItems.length + importantItems.length;
+
+          const priorityConfig = {
+            critical: { color: "#DC2626", bg: "rgba(220,38,38,.08)", label: "حرج", dot: "#DC2626" },
+            important: { color: "#D97706", bg: "rgba(217,119,6,.08)", label: "مهم", dot: "#D97706" },
+            info: { color: "#2563EB", bg: "rgba(37,99,235,.08)", label: "معلومة", dot: "#2563EB" },
+          };
 
           return (
             <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "fixed", left: 0, top: 46, bottom: 0, zIndex: 10 }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "12px 14px", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,.9)", animation: "blink 2s infinite" }} />
-                  <span style={{ fontSize: 13, fontWeight: 900, color: "white", flex: 1 }}>مركز العمليات</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: totalAlerts > 0 ? "#fca5a5" : "#86efac", animation: "blink 2s infinite" }} />
+                  <span style={{ fontSize: 13, fontWeight: 900, color: "white", flex: 1 }}>غرفة العمليات</span>
                   {totalAlerts > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "white", padding: "2px 8px", borderRadius: 99 }}>{totalAlerts}</span>}
                 </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {([["reg", "التسجيل"], ["dist", "التوزيع"], ["travel", "السفر"]] as const).map(([tab, label]) => (
-                    <button key={tab} onClick={() => { setOpsTab(tab); setOpsFilter(null); }} style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${opsTab === tab ? "transparent" : "rgba(255,255,255,.2)"}`, background: opsTab === tab ? "rgba(255,255,255,.9)" : "transparent", color: opsTab === tab ? "#7D1F3C" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s" }}>
-                      {label}
-                    </button>
-                  ))}
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginBottom: 0 }}>
+                  {totalAlerts > 0 ? `اليوم لديك ${totalAlerts} مهمة تحتاج متابعة` : "كل شيء على ما يرام ✓"}
                 </div>
               </div>
               {/* القائمة */}
               <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
-                {items.length === 0 ? (
+                {allItems.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--muted)", fontSize: 11 }}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: 8 }}><polyline points="20 6 9 17 4 12"/></svg>
-                    <div>لا توجد إجراءات مطلوبة</div>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: 8 }}><polyline points="20 6 9 17 4 12"/></svg>
+                    <div>لا توجد مهام اليوم</div>
                   </div>
-                ) : items.map((item, i) => (
-                  <div key={i} onClick={() => setOpsFilter(opsFilter === item.key ? null : item.key)}
-                    style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 10px", borderRadius: 10, cursor: "pointer", marginBottom: 4, border: `1px solid ${opsFilter === item.key ? "rgba(125,31,60,.2)" : "transparent"}`, background: opsFilter === item.key ? "rgba(125,31,60,.04)" : "transparent", transition: "all .15s" }}
-                    onMouseEnter={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
-                    onMouseLeave={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 9, background: item.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={item.color} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
+                ) : allItems.map((item: any, i: number) => {
+                  const cfg = priorityConfig[item.priority as keyof typeof priorityConfig];
+                  return (
+                    <div key={i} onClick={() => setOpsFilter(opsFilter === item.key ? null : item.key)}
+                      style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 10px", borderRadius: 9, cursor: "pointer", marginBottom: 3, border: `1px solid ${opsFilter === item.key ? cfg.color + "40" : "transparent"}`, background: opsFilter === item.key ? cfg.bg : "transparent", transition: "all .15s" }}
+                      onMouseEnter={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
+                      onMouseLeave={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.dot, flexShrink: 0, marginTop: 4 }} />
+                        <div style={{ width: 30, height: 30, borderRadius: 8, background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
+                        </div>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3, marginBottom: 2 }}>{item.label}</div>
+                        <div style={{ fontSize: 9, color: "var(--muted)" }}>{item.desc}</div>
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: cfg.color, flexShrink: 0, lineHeight: 1, marginTop: 4 }}>{item.count}</div>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)", marginBottom: 2, lineHeight: 1.3 }}>{item.label}</div>
-                      <div style={{ fontSize: 9, color: "var(--muted)" }}>{item.desc}</div>
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: item.color, flexShrink: 0, lineHeight: 1, marginTop: 4 }}>{item.count}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {/* فوتر */}
               {opsFilter && (
