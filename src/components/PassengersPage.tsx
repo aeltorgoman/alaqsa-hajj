@@ -71,6 +71,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
+  const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
   const [opsFilter, setOpsFilter] = useState<string | null>(null);
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
@@ -1198,6 +1199,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           ].filter(Boolean) as any[];
 
           const allItems = [...criticalItems, ...importantItems, ...infoItems];
+          const regKeys = ["no_photo", "no_passport_file", "expired_passport", "expiring_soon", "no_phone", "dup_phones"];
+          const distKeys = ["no_flight", "no_bus", "no_room", "no_mina", "no_arafa"];
+          const travelKeys = ["no_ticket", "no_permit", "added_today"];
+          const items = opsTab === "reg" ? allItems.filter(i => regKeys.includes(i.key)) :
+                        opsTab === "dist" ? allItems.filter(i => distKeys.includes(i.key)) :
+                        allItems.filter(i => travelKeys.includes(i.key));
           const totalAlerts = criticalItems.length + importantItems.length;
 
           const priorityConfig = {
@@ -1215,18 +1222,25 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   <span style={{ fontSize: 13, fontWeight: 900, color: "white", flex: 1 }}>غرفة العمليات</span>
                   {totalAlerts > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "white", padding: "2px 8px", borderRadius: 99 }}>{totalAlerts}</span>}
                 </div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginBottom: 0 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginBottom: 8 }}>
                   {totalAlerts > 0 ? `اليوم لديك ${totalAlerts} مهمة تحتاج متابعة` : "كل شيء على ما يرام ✓"}
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {([["reg", "التسجيل"], ["dist", "التوزيع"], ["travel", "السفر"]] as const).map(([tab, label]) => (
+                    <button key={tab} onClick={() => { setOpsTab(tab); setOpsFilter(null); }} style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${opsTab === tab ? "transparent" : "rgba(255,255,255,.2)"}`, background: opsTab === tab ? "rgba(255,255,255,.9)" : "transparent", color: opsTab === tab ? "#7D1F3C" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s" }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
               {/* القائمة */}
               <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
-                {allItems.length === 0 ? (
+                {items.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--muted)", fontSize: 11 }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: 8 }}><polyline points="20 6 9 17 4 12"/></svg>
                     <div>لا توجد مهام اليوم</div>
                   </div>
-                ) : allItems.map((item: any, i: number) => {
+                ) : items.map((item: any, i: number) => {
                   const cfg = priorityConfig[item.priority as keyof typeof priorityConfig];
                   return (
                     <div key={i} onClick={() => setOpsFilter(opsFilter === item.key ? null : item.key)}
