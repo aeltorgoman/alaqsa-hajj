@@ -71,7 +71,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
-  const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
   const [opsFilter, setOpsFilter] = useState<string | null>(null);
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
@@ -1185,6 +1184,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             noFlight > 0 && { key: "no_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, priority: "important" as const },
             noBus > 0 && { key: "no_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>`, priority: "important" as const },
             noRoom > 0 && { key: "no_room", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
+            noMina > 0 && { key: "no_mina", label: "حجاج بدون مخيم منى", desc: "لم يتم التوزيع بعد", count: noMina, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
+            noArafa > 0 && { key: "no_arafa", label: "حجاج بدون مخيم عرفة", desc: "لم يتم التوزيع بعد", count: noArafa, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
             noTicket > 0 && { key: "no_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>`, priority: "important" as const },
             noPermit > 0 && { key: "no_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, priority: "important" as const },
           ].filter(Boolean) as any[];
