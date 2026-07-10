@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
+import type { TablesUpdate } from "../types/database";
 import type { Passenger, Camp } from "../types";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -100,7 +101,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
 
   const removeP = async (pId: number) => {
-    await supabase.from("passengers").update({ [campIdKey]: null }).eq("id", pId);
+    await supabase.from("passengers").update({ [campIdKey]: null } as TablesUpdate<"passengers">).eq("id", pId);
     setPassengers(passengers.map(p => p.id === pId ? { ...p, [campIdKey]: null } : p));
   };
 
@@ -110,7 +111,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const fc = camps.find(c => c.id === (passengers.find(p => p.id === pId) as any)?.[campIdKey]);
     const tc = camps.find(c => c.id === newCampId);
     if (fc && tc && fc.gender !== tc.gender && tc.type !== "خاص") return;
-    await supabase.from("passengers").update({ [campIdKey]: newCampId }).eq("id", pId);
+    await supabase.from("passengers").update({ [campIdKey]: newCampId } as TablesUpdate<"passengers">).eq("id", pId);
     setPassengers(passengers.map(p => p.id === pId ? { ...p, [campIdKey]: newCampId } : p));
   };
 
@@ -136,7 +137,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const handleDrop = async (campId: number) => {
     const fromId = dragPassengerId.current;
     if (dragType.current === "add" && fromId) {
-      await supabase.from("passengers").update({ [campIdKey]: campId }).eq("id", fromId);
+      await supabase.from("passengers").update({ [campIdKey]: campId } as TablesUpdate<"passengers">).eq("id", fromId);
       setPassengers(passengers.map(x => x.id === fromId ? { ...x, [campIdKey]: campId } : x));
       setDraggingId(null); dragPassengerId.current = null; dragOverPassengerId.current = null;
       return;
@@ -378,7 +379,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     ) : addFiltered.map(p => (
                       <div key={p.id}
                         draggable onDragStart={() => handleDragStartAdd(p.id)} onDragEnd={handleDragEnd}
-                        onClick={async () => { await supabase.from("passengers").update({ [campIdKey]: camp.id }).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x)); }}
+                        onClick={async () => { await supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x)); }}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? `${campColor}05` : "transparent" }}
                         onMouseEnter={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
                         onMouseLeave={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
