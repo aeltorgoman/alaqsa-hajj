@@ -79,10 +79,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaFlights, setMetaFlights] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from("buses").select("id,name").then(({ data }) => { if (data) setMetaBuses(data); });
-    supabase.from("rooms").select("id,number").then(({ data }) => { if (data) setMetaRooms(data); });
-    supabase.from("camps").select("id,name,page_type").then(({ data }) => { if (data) setMetaCamps(data); });
-    supabase.from("flights").select("id,name,type").then(({ data }) => { if (data) setMetaFlights(data); });
+    supabase.from("buses").select("id,name").then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
+    supabase.from("rooms").select("id,number").then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
+    supabase.from("camps").select("id,name,page_type").then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
+    supabase.from("flights").select("id,name,type").then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
   }, []);
 
   // استقبال scan من Dashboard
