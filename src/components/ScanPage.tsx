@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import type { TablesUpdate } from "../types/database";
 import type { Passenger } from "../types";
 import { makeShort, scanDocument, uploadDoc, btnP, btnS, inp } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
@@ -125,7 +126,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
         if (idCardFile) urls.national_id_url = await uploadDoc(idCardFile, pid, "idcard");
         if (docs.photo) urls.photo_url = await uploadDoc(docs.photo, pid, "photo");
         if (docs.contract) urls.contract_url = await uploadDoc(docs.contract, pid, "contract");
-        if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls).eq("id", pid);
+        if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls as TablesUpdate<"passengers">).eq("id", pid);
       } catch (uploadErr) {
         console.error("Upload error:", uploadErr);
         showAlert("warning", "تم حفظ البيانات بنجاح لكن تعذر رفع بعض الملفات.");
