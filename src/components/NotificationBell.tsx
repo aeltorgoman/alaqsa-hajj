@@ -53,9 +53,9 @@ function NotificationBell() {
 
     const ch = supabase
       .channel("hajj-notif-bell")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "passengers" }, p => push("add",    p.new as Record<string, unknown>))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "passengers" }, p => push("update", p.new as Record<string, unknown>))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "passengers" }, p => push("delete", (p.old || {}) as Record<string, unknown>))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "passengers" }, (p: { new: unknown; old?: unknown }) => push("add",    p.new as Record<string, unknown>))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "passengers" }, (p: { new: unknown; old?: unknown }) => push("update", p.new as Record<string, unknown>))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "passengers" }, (p: { new?: unknown; old?: unknown }) => push("delete", (p.old || {}) as Record<string, unknown>))
       .subscribe();
 
     return () => { supabase.removeChannel(ch); };
