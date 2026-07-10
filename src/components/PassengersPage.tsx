@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
+import type { TablesUpdate } from "../types/database";
 import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
@@ -401,7 +402,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (docKind === "hajj_permit") {
       const url = await uploadDoc(file, passenger.id, "hajj_permit");
       if (url) {
-        await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id);
+        await supabase.from("passengers").update({ hajj_permit_url: url } as unknown as TablesUpdate<"passengers">).eq("id", passenger.id);
         const updated = { ...passenger, hajj_permit_url: url } as Passenger;
         setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم حفظ تصريح الحج في ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
@@ -597,7 +598,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           setPermitConfirm({ url, field, passenger: matched, idNum });
         } else {
           // مش لاقي حاج → ارفع على الحاج الحالي بدون تأكيد
-          await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
+          await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
           const updated = { ...p, [field]: url };
           setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
           setSelected(updated);
@@ -607,7 +608,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     } else {
       const url = await uploadDoc(file, p.id, docType);
       if (url) {
-        await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
+        await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
         const updated = { ...p, [field]: url };
         setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
         setSelected(updated);
@@ -617,7 +618,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   const saveDocUpdates = async (p: Passenger, updates: Partial<Passenger>) => {
-    await supabase.from("passengers").update(updates).eq("id", p.id);
+    await supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, ...updates };
     setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
     setSelected(updated);
@@ -634,7 +635,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (!ok) return;
     const path = getStoragePath(url);
     if (path) await supabase.storage.from("passengers-docs").remove([path]);
-    await supabase.from("passengers").update({ [field]: null }).eq("id", p.id);
+    await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, [field]: null };
     setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
     setSelected(updated);
@@ -1452,7 +1453,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={async () => {
                 const { passenger, url, field } = permitConfirm;
-                await supabase.from("passengers").update({ [field]: url }).eq("id", passenger.id);
+                await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", passenger.id);
                 const updated = { ...passenger, [field]: url };
                 setPassengers(passengers.map((x: Passenger) => x.id === passenger.id ? updated : x));
                 setSelected(updated);
