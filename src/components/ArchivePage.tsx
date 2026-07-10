@@ -51,7 +51,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
       supabase.from("camps").select("*").eq("season_id", season.id),
       supabase.from("rooms").select("*").eq("season_id", season.id),
     ]);
-    setData({ passengers: (p || []) as Passenger[], buses: b || [], camps: c || [], rooms: r || [] });
+    setData({ passengers: (p || []) as unknown as Passenger[], buses: b || [], camps: c || [], rooms: r || [] });
     setLoading(false);
   };
 
