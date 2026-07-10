@@ -16,6 +16,8 @@ import { ArchivePage } from "./components/ArchivePage";
 import { UsersPage } from "./components/UsersPage";
 import { FinancePage } from "./components/FinancePage";
 import { AdminsPage } from "./components/AdminsPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { LoadingSpinner } from "./components/LoadingSpinner";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -32,6 +34,7 @@ export default function App() {
 
   useEffect(() => { sessionStorage.setItem("hajj_page", page); }, [page]);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [passengersLoading, setPassengersLoading] = useState(true);
   const [globalShowManual, setGlobalShowManual] = useState(false);
 
   const handleLogin = (user: User) => {
@@ -71,6 +74,7 @@ export default function App() {
     const loadPassengers = async () => {
       const { data, error } = await supabase.from("passengers").select("*").order("sort_order", { ascending: true }).order("id", { ascending: true });
       if (!error && data) setPassengers(data.map(mapPassenger) as any);
+      setPassengersLoading(false);
     };
     loadPassengers();
     const channel = supabase.channel("passengers-realtime")
@@ -140,12 +144,16 @@ export default function App() {
           )}
           {isFull ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              {renderPage()}
+              <ErrorBoundary>
+                {passengersLoading ? <LoadingSpinner /> : renderPage()}
+              </ErrorBoundary>
             </div>
           ) : (
             <div style={{ background: "var(--ivory)", padding: "20px" }}>
               <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
-                {renderPage()}
+                <ErrorBoundary>
+                  {passengersLoading ? <LoadingSpinner /> : renderPage()}
+                </ErrorBoundary>
               </div>
             </div>
           )}
