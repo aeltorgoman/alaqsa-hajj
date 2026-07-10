@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { supabase } from "../supabase";
+import type { TablesUpdate } from "../types/database";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
@@ -151,10 +152,10 @@ function AdminsPage({
       supabase.from("camps").select("*").order("name"),
       supabase.from("flights").select("*").order("date"),
     ]);
-    if (b) setBuses(b);
-    if (r) setRooms(r);
-    if (c) setCamps(c);
-    if (f) setFlights(f);
+    if (b) setBuses(b as Bus[]);
+    if (r) setRooms(r as Room[]);
+    if (c) setCamps(c as Camp[]);
+    if (f) setFlights(f as Flight[]);
     setDataLoaded(true);
   };
 
@@ -331,14 +332,14 @@ function AdminsPage({
     const url = await uploadDoc(file, p.id, docType === "passport_doc" ? "passport_doc" : docType === "idcard" ? "idcard" : docType);
     setDocUploading(null);
     if (!url) return;
-    await supabase.from("passengers").update({ [field]: url }).eq("id", p.id);
+    await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, [field]: url };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setDocTarget(updated);
   };
 
   const handleAdminDocDelete = async (p: Passenger, field: string) => {
-    await supabase.from("passengers").update({ [field]: null }).eq("id", p.id);
+    await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, [field]: null };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setDocTarget(updated);
