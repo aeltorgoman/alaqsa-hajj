@@ -276,13 +276,16 @@ export type Database = {
           contract_url: string | null
           created_at: string
           created_by: string | null
+          custom_price: number | null
           dob: string | null
           expiry: string | null
           family_id: string | null
           flight: string | null
           flight_class: string | null
           flight_id: number | null
+          flight_ticket_url: string | null
           gender: string | null
+          hajj_permit_url: string | null
           hotel_type: string | null
           hotel_view: string | null
           id: number
@@ -316,13 +319,16 @@ export type Database = {
           contract_url?: string | null
           created_at?: string
           created_by?: string | null
+          custom_price?: number | null
           dob?: string | null
           expiry?: string | null
           family_id?: string | null
           flight?: string | null
           flight_class?: string | null
           flight_id?: number | null
+          flight_ticket_url?: string | null
           gender?: string | null
+          hajj_permit_url?: string | null
           hotel_type?: string | null
           hotel_view?: string | null
           id?: number
@@ -356,13 +362,16 @@ export type Database = {
           contract_url?: string | null
           created_at?: string
           created_by?: string | null
+          custom_price?: number | null
           dob?: string | null
           expiry?: string | null
           family_id?: string | null
           flight?: string | null
           flight_class?: string | null
           flight_id?: number | null
+          flight_ticket_url?: string | null
           gender?: string | null
+          hajj_permit_url?: string | null
           hotel_type?: string | null
           hotel_view?: string | null
           id?: number
