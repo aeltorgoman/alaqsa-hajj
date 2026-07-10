@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, User } from "../types";
 import { Modal } from "./Modal";
+import { AlertModal, useAlert } from "./AlertModal";
 import { btnS, inp } from "../utils";
 
 function ArchivePage({ currentUser }: { currentUser: User }) {
@@ -14,6 +15,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   const [closeStep, setCloseStep] = useState(1);
   const [newSeasonName, setNewSeasonName] = useState("");
   const [closing, setClosing] = useState(false);
+  const { alert: alertState, showAlert } = useAlert();
 
   useEffect(() => {
     supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false })
@@ -54,11 +56,11 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   };
 
   const closeSeason = async () => {
-    if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; }
+    if (!newSeasonName.trim()) { showAlert("warning", "يرجى كتابة اسم الموسم الجديد."); return; }
     setClosing(true);
     // جيب الموسم الحالي
     const { data: current } = await supabase.from("seasons").select("*").is("closed_at", null).single();
-    if (!current) { alert("مفيش موسم مفتوح!"); setClosing(false); return; }
+    if (!current) { showAlert("error", "لا يوجد موسم مفتوح حالياً."); setClosing(false); return; }
     // قفّل الموسم الحالي
     await supabase.from("seasons").update({ closed_at: new Date().toISOString(), closed_by: currentUser.name }).eq("id", current.id);
     // افتح موسم جديد
@@ -76,7 +78,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
     const { data: closedSeasons } = await supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false });
     if (closedSeasons) setSeasons(closedSeasons);
     setShowClose(false); setNewSeasonName(""); setClosing(false);
-    alert(`✅ تم إقفال الموسم الحالي وبدأ موسم ${newSeasonName}!`);
+    showAlert("success", `تم إقفال الموسم الحالي وبدء موسم ${newSeasonName}.`);
   };
 
   const getBusPassengers = (busId: number) => data.passengers.filter(p => p.bus_id === busId);
@@ -92,6 +94,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   if (!selected) {
     return (
       <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+        <AlertModal alert={alertState} onClose={() => showAlert(null)} />
         {currentUser.permissions.view_archive && (
           <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div><div style={{ fontSize: 13, fontWeight: 600 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
@@ -155,7 +158,7 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
                 <input style={inp} value={newSeasonName} onChange={e => setNewSeasonName(e.target.value)} placeholder="مثال: 1449" autoFocus />
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { if (!newSeasonName.trim()) { alert("اكتب اسم الموسم الجديد!"); return; } setCloseStep(3); }} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>التالي ←</button>
+                <button onClick={() => { if (!newSeasonName.trim()) { showAlert("warning", "يرجى كتابة اسم الموسم الجديد."); return; } setCloseStep(3); }} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "9px 0", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600, flex: 1 }}>التالي ←</button>
                 <button onClick={() => setCloseStep(1)} style={btnS()}>→ رجوع</button>
               </div>
             </>
