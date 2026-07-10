@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import type { TablesUpdate } from "../types/database";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
@@ -133,7 +134,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // الدرجة بتتحدد من services.flight بتاع الحاج نفسه تلقائياً
 
   const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
-    await supabase.from("passengers").update({ [field]: null }).eq("id", pId);
+    await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", pId);
     setPassengers(passengers.map(p => p.id === pId ? { ...p, [field]: null } : p));
   };
 
@@ -617,7 +618,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       onClick={async () => {
                         const field = flightField(currentFlight?.type);
                         await Promise.all(filteredP.map(p =>
-                          supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" }).eq("id", p.id)
+                          supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id)
                         ));
                         setPassengers(passengers.map(x => {
                           const found = filteredP.find(p => p.id === x.id);
@@ -646,7 +647,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       <div key={p.id}
                         onClick={async () => {
                           const field = flightField(currentFlight?.type);
-                          await supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" }).eq("id", p.id);
+                          await supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id);
                           setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x));
                         }}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
