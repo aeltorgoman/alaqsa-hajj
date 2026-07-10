@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import { makeShort, scanDocument, uploadDoc, btnP, btnS, inp } from "../utils";
+import { AlertModal, useAlert } from "./AlertModal";
 
 function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage: (p: string) => void }) {
   const [loading, setLoading] = useState(false);
+  const { alert: alertState, showAlert } = useAlert();
   const [progress, setProgress] = useState(0);
   const [statusMsg, setStatusMsg] = useState("");
   const [showFields, setShowFields] = useState(false);
@@ -68,7 +70,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
         setLoading(false);
         setShowFields(true);
         setStatusMsg("❌ فشل في قراءة الجواز");
-        alert("حدث خطأ أثناء تحليل الجواز، يرجى المحاولة مرة أخرى أو إدخال البيانات يدوياً.");
+        showAlert("error", "حدث خطأ أثناء تحليل الجواز، يرجى المحاولة مرة أخرى أو إدخال البيانات يدوياً.");
         console.error("Scan error:", err);
       }
     };
@@ -84,7 +86,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
       if (parsed.national_id) setForm(prev => ({ ...prev, national_id: parsed.national_id }));
       if (parsed.id_expiry) setIdExpiry(parsed.id_expiry);
     } catch (err) {
-      alert("فشل في قراءة البطاقة الشخصية، يرجى إدخال البيانات يدوياً.");
+      showAlert("error", "تعذرت قراءة البطاقة الشخصية، يرجى إدخال البيانات يدوياً.");
       console.error("ID scan error:", err);
     }
     setIdScanLoading(false);
@@ -93,8 +95,8 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
   const handleSave = async () => {
     const dupPassport = form.passport && passengers.some(p => p.passport && p.passport === form.passport);
     const dupNational = form.national_id && passengers.some(p => p.national_id && p.national_id === form.national_id);
-    if (dupPassport) { alert("⚠️ رقم الجواز ده مسجل بالفعل!"); return; }
-    if (dupNational) { alert("⚠️ رقم البطاقة ده مسجل بالفعل!"); return; }
+    if (dupPassport) { showAlert("warning", "رقم الجواز مسجل بالفعل."); return; }
+    if (dupNational) { showAlert("warning", "رقم البطاقة مسجل بالفعل."); return; }
     setUploading(true);
     const short_en = makeShort(form.name_en);
     const short_ar = makeShort(form.name_ar);
@@ -111,7 +113,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
     }]).select();
     if (error) {
       console.error("Save error:", error);
-      alert(`❌ فشل في حفظ بيانات الحاج: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      showAlert("error", `فشل حفظ بيانات الحاج: ${error.message || "يرجى المحاولة مرة أخرى"}`);
       setUploading(false);
       return;
     }
@@ -126,7 +128,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
         if (Object.keys(urls).length > 0) await supabase.from("passengers").update(urls).eq("id", pid);
       } catch (uploadErr) {
         console.error("Upload error:", uploadErr);
-        alert("⚠️ تم حفظ البيانات بنجاح لكن فشل رفع بعض الملفات.");
+        showAlert("warning", "تم حفظ البيانات بنجاح لكن تعذر رفع بعض الملفات.");
       }
       setPassengers([...passengers, { id: pid, ...form, short_ar, short_en, services, rel: "", linked: -1, id_expiry: idExpiry, ...urls } as Passenger]);
       setSaved(true); setLocked(true); setTimeout(() => setPage("dash"), 1500);
@@ -151,6 +153,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%", position: "relative" }}>
+      <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {saved && <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: "var(--em7)", color: "var(--g3)", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> تم حفظ الحاج بنجاح!</div>}
       <div style={{ border: "0.5px solid #e5e5e5", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>جواز السفر</div>
