@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
+import type { TablesUpdate } from "../types/database";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 
@@ -498,7 +499,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     setSavingCustomPrice(true);
     const amt = Number(customPriceInput) || 0;
     const newServices = { ...selectedP.services, custom_price: String(amt) };
-    const { error } = await supabase.from("passengers").update({ services: newServices }).eq("id", selectedP.id);
+    const { error } = await supabase.from("passengers").update({ services: newServices } as unknown as TablesUpdate<"passengers">).eq("id", selectedP.id);
     if (!error) {
       setSelectedP({ ...selectedP, services: newServices });
       setEditingCustomPrice(false);
