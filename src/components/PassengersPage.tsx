@@ -402,7 +402,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (docKind === "hajj_permit") {
       const url = await uploadDoc(file, passenger.id, "hajj_permit");
       if (url) {
-        await supabase.from("passengers").update({ hajj_permit_url: url } as unknown as TablesUpdate<"passengers">).eq("id", passenger.id);
+        await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id);
         const updated = { ...passenger, hajj_permit_url: url } as Passenger;
         setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم حفظ تصريح الحج في ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
