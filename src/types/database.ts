@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          body: string
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: number
+          priority: string
+          show_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: never
+          priority?: string
+          show_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: never
+          priority?: string
+          show_at?: string
+        }
+        Relationships: []
+      }
       buses: {
         Row: {
           capacity: number | null
@@ -73,6 +103,9 @@ export type Database = {
       }
       company_config: {
         Row: {
+          admin_name: string | null
+          admin_phone: string | null
+          admin_whatsapp: string | null
           banner_image_url: string | null
           banner_position: string | null
           banner_position_x: string | null
@@ -90,6 +123,9 @@ export type Database = {
           tagline: string | null
         }
         Insert: {
+          admin_name?: string | null
+          admin_phone?: string | null
+          admin_whatsapp?: string | null
           banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
@@ -107,6 +143,9 @@ export type Database = {
           tagline?: string | null
         }
         Update: {
+          admin_name?: string | null
+          admin_phone?: string | null
+          admin_whatsapp?: string | null
           banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
@@ -554,6 +593,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_pilgrim_portal: {
+        Args: { p_doc: string; p_day: number; p_month: number; p_year: number }
+        Returns: Json
+      }
       create_user: {
         Args: {
           p_name: string
