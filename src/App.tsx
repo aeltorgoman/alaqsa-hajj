@@ -16,6 +16,7 @@ import { ArchivePage } from "./components/ArchivePage";
 import { UsersPage } from "./components/UsersPage";
 import { FinancePage } from "./components/FinancePage";
 import { AdminsPage } from "./components/AdminsPage";
+import { PortalPage } from "./components/PortalPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 
@@ -114,6 +115,7 @@ export default function App() {
       case "users":      return <UsersPage currentUser={currentUser} />;
       case "finance":    return <FinancePage passengers={passengers} currentUser={currentUser!} />;
       case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
+      case "portal":     return <PortalPage currentUser={currentUser!} />;
       default:           return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
     }
   };
