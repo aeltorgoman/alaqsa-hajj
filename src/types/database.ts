@@ -107,6 +107,12 @@ export type Database = {
           admin_phone: string | null
           admin_whatsapp: string | null
           banner_image_url: string | null
+          camp_arafa_address: string | null
+          camp_mina_address: string | null
+          city: string | null
+          country: string | null
+          hotel_address: string | null
+          hotel_name: string | null
           banner_position: string | null
           banner_position_x: string | null
           color_accent: string | null
@@ -129,12 +135,18 @@ export type Database = {
           banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
+          camp_arafa_address?: string | null
+          camp_mina_address?: string | null
+          city?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
           contact_email?: string | null
           contact_phone?: string | null
+          country?: string | null
           features?: Json | null
+          hotel_address?: string | null
+          hotel_name?: string | null
           id?: number
           logo_url?: string | null
           name_ar?: string
@@ -149,12 +161,18 @@ export type Database = {
           banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
+          camp_arafa_address?: string | null
+          camp_mina_address?: string | null
+          city?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
           contact_email?: string | null
           contact_phone?: string | null
+          country?: string | null
           features?: Json | null
+          hotel_address?: string | null
+          hotel_name?: string | null
           id?: number
           logo_url?: string | null
           name_ar?: string
