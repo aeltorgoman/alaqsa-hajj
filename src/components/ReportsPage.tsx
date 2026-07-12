@@ -1441,76 +1441,94 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomNo   = room?.number || "—";
               const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
               const busName  = bus?.name || "";
+              const logoHtml = logoUrl
+                ? `<img src="${logoUrl}" style="width:56px;height:56px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};padding:2px;" />`
+                : `<div style="width:56px;height:56px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
               const stk = () => `
                 <div style="width:100%;height:calc(100%/3);box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;overflow:hidden;position:relative;">
-                  <div style="position:absolute;inset:0;opacity:.035;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
-                  <div style="position:absolute;inset:7px;border:2px solid ${primaryColor};border-radius:9px;pointer-events:none;"></div>
-                  <div style="position:absolute;inset:11px;border:1px solid ${accentColor};border-radius:6px;pointer-events:none;opacity:.6;"></div>
-                  <!-- رقم الغرفة يسار -->
-                  <div style="width:22%;margin:12px 0 12px 12px;background:#F8F2E4;border:1.5px solid ${accentColor};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                    <div style="font-size:36pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
-                    <div style="font-size:7pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:2px 8px;margin-top:3px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                  <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
+                  <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
+                  <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.55;"></div>
+                  <!-- هوية الحملة يمين — أكبر -->
+                  <div style="width:26%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border-right:2px solid ${accentColor};">
+                    ${logoHtml}
+                    <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                    <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
+                    <div style="font-size:8.5pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                   </div>
                   <!-- البيانات وسط -->
-                  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:10px 8px;gap:0;">
-                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
-                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الحاج</span>
-                      <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${p.name_ar}</span>
+                  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:12px 10px;gap:0;">
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الحاج</span>
+                      <span style="font-size:13pt;font-weight:900;color:#241318;font-family:Cairo,sans-serif;">${p.name_ar}</span>
                     </div>
-                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
-                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;"></span>
-                      <span style="font-size:8pt;font-weight:600;color:#7A6570;direction:ltr;font-family:Arial,sans-serif;">${p.name_en || ""}</span>
+                    <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;"></span>
+                      <span style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;font-family:Arial,sans-serif;">${p.name_en || ""}</span>
                     </div>
-                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
-                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الفندق</span>
-                      <span style="font-size:10pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الفندق</span>
+                      <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
                     </div>
-                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;">
-                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الهاتف</span>
-                      <span style="font-size:10pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+                      <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الهاتف</span>
+                      <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
                     </div>
                   </div>
-                  <!-- هوية الحملة يمين -->
-                  <div style="width:22%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px 6px;border-right:1.5px solid ${accentColor};">
-                    ${logoUrl ? `<img src="${logoUrl}" style="width:40px;height:40px;object-fit:contain;border-radius:50%;border:2px solid ${accentColor};padding:2px;" />` : `<div style="width:40px;height:40px;border-radius:50%;border:2px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`}
-                    <div style="font-size:11.5pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                    <div style="font-size:7pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
-                    <div style="font-size:7.5pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
+                  <!-- رقم الغرفة يسار — أكبر بكثير -->
+                  <div style="width:26%;margin:10px 10px 10px 0;background:#F8F2E4;border:2px solid ${accentColor};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                    <div style="font-size:10pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+                    <div style="font-size:48pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
+                    <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.1);border-radius:99px;padding:3px 10px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
                   </div>
                 </div>`;
               return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${stk()}${stk()}${stk()}</div>`;
             };
 
-            /* ─── دالة بناء HTML ورقة التاجات لحاج واحد ─── */
+            /* ─── دالة بناء HTML ورقة التاجات — وجهان بخط طي ─── */
             const buildTagsPage = (p: Passenger) => {
               const room = rooms.find(r => r.id === p.room_id);
               const bus  = buses.find(b => b.id === p.bus_id);
               const roomNo   = room?.number || "—";
               const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
               const busName  = bus?.name || "";
-              const tag = () => `
-                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;page-break-inside:avoid;">
-                  <div style="position:absolute;inset:0;opacity:.035;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
-                  <div style="position:absolute;inset:7px;border:2px solid ${primaryColor};border-radius:9px;pointer-events:none;"></div>
-                  <div style="position:absolute;inset:11px;border:1px solid ${accentColor};border-radius:6px;pointer-events:none;opacity:.5;"></div>
-                  <!-- ثقب الشريط -->
-                  <div style="width:24px;height:9px;border-radius:99px;background:#E8D5C4;margin-top:18px;z-index:2;flex-shrink:0;"></div>
-                  <!-- شعار + هوية -->
-                  ${logoUrl ? `<img src="${logoUrl}" style="width:40px;height:40px;object-fit:contain;border-radius:50%;border:2px solid ${accentColor};margin:10px auto 5px;padding:2px;" />` : `<div style="width:40px;height:40px;border-radius:50%;border:2px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;margin:10px auto 5px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`}
-                  <div style="font-size:10pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;padding:0 6px;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                  <div style="font-size:7pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
-                  <div style="width:65%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);margin:8px auto;"></div>
-                  <div style="font-size:8pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                  <div style="font-size:52pt;font-weight:900;color:${primaryColor};line-height:1;text-align:center;font-family:Cairo,sans-serif;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);margin:4px 0;">${roomNo}</div>
-                  <div style="font-size:7.5pt;font-weight:800;color:#241318;background:rgba(125,31,60,.07);border-radius:99px;padding:2px 10px;margin-top:3px;font-family:Cairo,sans-serif;">${roomFloor}</div>
-                  <div style="width:65%;height:1px;background:linear-gradient(90deg,transparent,#E8D5C4,transparent);margin:8px auto;"></div>
-                  <div style="font-size:10pt;font-weight:900;color:#241318;text-align:center;padding:0 7px;line-height:1.6;font-family:Cairo,sans-serif;">${p.name_ar}</div>
-                  <div style="font-size:7.5pt;font-weight:700;color:#7A6570;text-align:center;padding:0 5px;margin-top:3px;line-height:1.6;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
-                  ${busName ? `<div style="font-size:8pt;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.07);border:1px solid rgba(125,31,60,.22);border-radius:99px;padding:3px 10px;margin-top:5px;font-family:Cairo,sans-serif;">أوتوبيس ${busName}</div>` : ""}
-                  <div style="font-size:7pt;font-weight:700;color:#7A6570;margin-top:auto;margin-bottom:16px;direction:ltr;">${p.phone || ""}</div>
+              const logoHtml = logoUrl
+                ? `<img src="${logoUrl}" style="width:52px;height:52px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};padding:2px;" />`
+                : `<div style="width:52px;height:52px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+              /* كل رقم في div منفصل عمودياً — بدون writing-mode */
+              const digits = roomNo.split("").map(d =>
+                `<div style="font-size:58pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${d}</div>`
+              ).join("");
+              /* وجه واحد من التاج */
+              const face = (flipped: boolean) => `
+                <div style="width:calc(100%/3);height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;${flipped ? "transform:rotate(180deg);" : ""}">
+                  <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
+                  <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
+                  <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;"></div>
+                  <div style="width:28px;height:10px;border-radius:99px;background:#E8D5C4;margin-top:20px;z-index:2;flex-shrink:0;"></div>
+                  <div style="margin:12px auto 6px;">${logoHtml}</div>
+                  <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;padding:0 8px;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                  <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;margin-top:3px;">${config.season_label || ""}</div>
+                  <div style="width:70%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);margin:10px auto;"></div>
+                  <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+                  <div style="display:flex;flex-direction:column;align-items:center;margin:4px 0;">${digits}</div>
+                  <div style="font-size:9pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;margin-top:4px;font-family:Cairo,sans-serif;">${roomFloor}</div>
+                  <div style="width:70%;height:1px;background:linear-gradient(90deg,transparent,#E8D5C4,transparent);margin:10px auto;"></div>
+                  <div style="font-size:12pt;font-weight:900;color:#241318;text-align:center;padding:0 8px;line-height:1.6;font-family:Cairo,sans-serif;">${p.name_ar}</div>
+                  <div style="font-size:9pt;font-weight:700;color:#7A6570;text-align:center;padding:0 6px;margin-top:4px;line-height:1.6;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
+                  ${busName ? `<div style="font-size:9pt;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1px solid rgba(125,31,60,.25);border-radius:99px;padding:4px 12px;margin-top:6px;font-family:Cairo,sans-serif;">أوتوبيس ${busName}</div>` : ""}
+                  <div style="font-size:8pt;font-weight:700;color:#7A6570;margin-top:auto;margin-bottom:18px;direction:ltr;">${p.phone || ""}</div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}</div>`;
+              /* خط الطي بين الوجهين */
+              const foldLine = `<div style="width:2px;background:repeating-linear-gradient(180deg,${accentColor} 0px,${accentColor} 6px,transparent 6px,transparent 12px);opacity:.7;flex-shrink:0;"></div>`;
+              /* كل تاج = وجه عادي + خط طي + وجه مقلوب */
+              const singleTag = () => `
+                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;display:flex;flex-direction:row;overflow:hidden;">
+                  ${face(false)}
+                  ${foldLine}
+                  ${face(true)}
+                </div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${singleTag()}${singleTag()}${singleTag()}</div>`;
             };
 
             /* ─── دالة الطباعة الفعلية ─── */
