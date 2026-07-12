@@ -127,6 +127,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [stkFilter, setStkFilter] = useState<"all" | "bus" | "room" | "one">("all");
   const [stkBusId, setStkBusId] = useState<number | null>(null);
   const [stkRoomId, setStkRoomId] = useState<number | null>(null);
+  // @ts-ignore
   const [stkPassId, setStkPassId] = useState<number | null>(null);
   const [stkTypes, setStkTypes] = useState({ sticker: true, hand_tag: true, long_tag: true });
   // @ts-ignore — مستخدم داخل IIFE في JSX
