@@ -1541,13 +1541,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;z-index:1;opacity:.55;"></div>
                   <div style="width:30px;height:11px;border-radius:99px;background:#E8D5C4;margin:22px auto 0;flex-shrink:0;position:relative;z-index:2;"></div>
                   <div style="display:flex;flex-direction:column;align-items:center;padding:14px 10px 12px;gap:5px;flex-shrink:0;border-bottom:2px solid ${accentColor};">
-                    ${mkLogo(60)}
-                    <div style="font-size:15pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.2;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
+                    ${mkLogo(50)}
+                    <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.2;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
                     <div style="font-size:8.5pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
                   </div>
                   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;flex-shrink:0;border-bottom:1.5px dashed #E8D5C4;">
                     <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;margin-bottom:4px;">الغرفة</div>
-                    <div style="font-size:76pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;text-align:center;">${roomNo}</div>
+                    <div style="font-size:54pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;text-align:center;">${roomNo}</div>
                     <div style="font-size:9pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:4px 14px;margin-top:6px;font-family:Cairo,sans-serif;">${roomFloor}</div>
                   </div>
                   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 10px;gap:6px;background:#F8F2E4;">
