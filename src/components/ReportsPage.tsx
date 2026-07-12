@@ -129,6 +129,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [stkRoomId, setStkRoomId] = useState<number | null>(null);
   const [stkPassId, setStkPassId] = useState<number | null>(null);
   const [stkTypes, setStkTypes] = useState({ sticker: true, hand_tag: true, long_tag: true });
+  const [stkDrawerOpen, setStkDrawerOpen] = useState(false);
+  const [stkSearch, setStkSearch] = useState("");
+  const [stkSelected, setStkSelected] = useState<Set<number>>(() => new Set());
+  const [printDates, setPrintDates] = useState<Record<number, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("stk_print_dates") || "{}"); } catch { return {}; }
+  });
 
   // ===== WhatsApp State =====
   const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
@@ -1447,16 +1453,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomNo   = room?.number || "—";
               const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
               const busName  = bus?.name || "";
-              const logoHtml = mkLogo(56);
+              const logoHtml = mkLogo(62);
+              const shortName = p.short_ar || p.name_ar || "";
               const stk = () => `
                 <div style="width:100%;height:calc(100%/3);box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;overflow:hidden;position:relative;">
                   <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
                   <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
                   <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.55;"></div>
-                  <!-- هوية الحملة يمين — أكبر -->
-                  <div style="width:26%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border-right:2px solid ${accentColor};">
+                  <!-- هوية الحملة يمين —  -->
+                  <div style="width:32%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px 8px;border-right:2px solid ${accentColor};">
                     ${logoHtml}
-                    <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                    <div style="font-size:14pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
                     <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
                     <div style="font-size:8.5pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                   </div>
@@ -1464,7 +1471,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:12px 10px;gap:0;">
                     <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed #E8D5C4;">
                       <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الحاج</span>
-                      <span style="font-size:13pt;font-weight:900;color:#241318;font-family:Cairo,sans-serif;">${p.name_ar}</span>
+                      <span style="font-size:13pt;font-weight:900;color:#241318;font-family:Cairo,sans-serif;">${shortName}</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
                       <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;"></span>
@@ -1473,6 +1480,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed #E8D5C4;">
                       <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الفندق</span>
                       <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">العنوان</span>
+                      <span style="font-size:9pt;font-weight:700;color:#7A6570;font-family:Cairo,sans-serif;">${(config as any).hotel_address || ""}</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
                       <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الهاتف</span>
@@ -1496,33 +1507,35 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomNo    = room?.number || "—";
               const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
               const busName   = bus?.name || "";
-              /* شريط واحد: عريض أفقي 210mm × 99mm */
+              const handShort = p.short_ar || p.name_ar || "";
+              /* كل شريط: 297mm طول × 70mm عرض — يُطبع landscape ويُقص ويُلف */
               const strip = () => `
-                <div style="width:100%;height:calc(100%/3);box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;align-items:center;overflow:hidden;position:relative;">
-                  <div style="position:absolute;inset:0;opacity:.03;background-image:${patBg};pointer-events:none;"></div>
-                  <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
-                  <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;"></div>
-                  <!-- هوية الحملة يمين -->
-                  <div style="width:20%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px 6px;border-right:1.5px solid ${accentColor};height:100%;box-sizing:border-box;">
-                    ${mkLogo(46)}
-                    <div style="font-size:12pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                    <div style="font-size:7.5pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
+                <div style="width:297mm;height:70mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;align-items:stretch;overflow:hidden;position:relative;flex-shrink:0;">
+                  <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:1;"></div>
+                  <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:1;"></div>
+                  <!-- هوية الحملة -->
+                  <div style="width:22%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border-left:2px solid ${accentColor};height:100%;box-sizing:border-box;">
+                    ${mkLogo(52)}
+                    <div style="font-size:14pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
+                    <div style="font-size:9pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
+                    <div style="font-size:9pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                   </div>
-                  <!-- رقم الغرفة ضخم في القلب -->
-                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;">
-                    <div style="font-size:8pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;margin-bottom:4px;">الغرفة</div>
-                    <div style="font-size:64pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;letter-spacing:2px;">${roomNo}</div>
-                    <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 12px;margin-top:5px;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                  <!-- رقم الغرفة ضخم -->
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;gap:4px;">
+                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+                    <div style="font-size:44pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;letter-spacing:3px;">${roomNo}</div>
+                    <div style="font-size:9pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
                   </div>
-                  <!-- اسم الحاج يسار -->
-                  <div style="width:26%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px 6px;border-left:1.5px solid ${accentColor};height:100%;box-sizing:border-box;">
-                    <div style="font-size:12pt;font-weight:900;color:#241318;text-align:center;line-height:1.5;font-family:Cairo,sans-serif;">${p.name_ar}</div>
-                    <div style="font-size:7.5pt;font-weight:600;color:#7A6570;text-align:center;direction:ltr;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
-                    <div style="font-size:8pt;font-weight:700;color:#7A6570;text-align:center;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
-                    <div style="font-size:7.5pt;font-weight:700;color:#7A6570;direction:ltr;">${p.phone || ""}</div>
+                  <!-- اسم الحاج -->
+                  <div style="width:18%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 8px;border-right:2px solid ${accentColor};height:100%;box-sizing:border-box;">
+                    <div style="font-size:13pt;font-weight:900;color:#241318;text-align:center;line-height:1.5;font-family:Cairo,sans-serif;">${handShort}</div>
+                    <div style="width:70%;height:1px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
+                    <div style="font-size:8.5pt;font-weight:700;color:#7A6570;text-align:center;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
+                    <div style="font-size:8pt;font-weight:700;color:#7A6570;direction:ltr;">${p.phone || ""}</div>
                   </div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${strip()}${strip()}${strip()}</div>`;
+              /* ورقة landscape: 3 شرائط فوق بعض */
+              return `<div style="width:297mm;height:210mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${strip()}${strip()}${strip()}</div>`;
             };
 
             /* ══ ورقة ٣: التاج الطولي الكلاسيكي (3 تاجات جنب بعض) ══ */
@@ -1563,17 +1576,26 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             };
 
             /* ─── دالة الطباعة الفعلية ─── */
+            const finalPassengers = stkDrawerOpen || stkSelected.size > 0
+              ? passengers.filter(pp => stkSelected.has(pp.id))
+              : stkPassengers;
+
             const doPrint = () => {
-              if (!stkPassengers.length) { showAlert("warning", "لا يوجد حجاج في هذا التصفية."); return; }
+              if (!finalPassengers.length) { showAlert("warning", "يرجى اختيار حاج واحد على الأقل."); return; }
               let html = "";
-              for (const p of stkPassengers) {
+              const now = new Date().toLocaleDateString("ar-EG");
+              const newDates: Record<number, string> = { ...printDates };
+              for (const p of finalPassengers) {
                 if (stkTypes.sticker)  html += buildStickerPage(p);
-                if (stkTypes.hand_tag) html += buildHandTagPage(p);
+                if (stkTypes.hand_tag) html += buildHandTagPage(p).replace('<div style="width:297mm', '<div class="landscape-page" style="width:297mm');
                 if (stkTypes.long_tag) html += buildLongTagPage(p);
+                newDates[p.id] = now;
               }
+              setPrintDates(newDates);
+              localStorage.setItem("stk_print_dates", JSON.stringify(newDates));
               const full = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
                 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
-                <style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style>
+                <style>@page{size:A4;margin:0}@page landscape{size:A4 landscape;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.landscape-page{page:landscape;}</style>
                 </head><body>${html}</body></html>`;
               printInPage(full);
             };
