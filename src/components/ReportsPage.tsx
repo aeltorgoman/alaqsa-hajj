@@ -123,6 +123,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
   const [docPersonFilter, setDocPersonFilter] = useState<"all" | "hajj" | "admin">("all");
 
+  /* ─── مطبوعات الشنط ─── */
+  const [stkFilter, setStkFilter] = useState<"all" | "bus" | "room" | "one">("all");
+  const [stkBusId, setStkBusId] = useState<number | null>(null);
+  const [stkRoomId, setStkRoomId] = useState<number | null>(null);
+  const [stkPassId, setStkPassId] = useState<number | null>(null);
+  const [stkTypes, setStkTypes] = useState({ sticker: true, hand_tag: true, long_tag: true });
+
   // ===== WhatsApp State =====
   const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
   const [waPhoneId, setWaPhoneId] = useState(() => localStorage.getItem("wa_phone_id") || "");
@@ -791,6 +798,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             {[
               { id:"documents", label:"طباعة المستندات", sub:"جواز · بطاقة · تصريح · تذكرة", bg:"rgba(125,31,60,0.08)", color:"var(--primary)", icon:`<path d="M3 3h18v18H3z M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M8 16s1-2 4-2 4 2 4 2"/>` },
               { id:"whatsapp",  label:"رسائل WhatsApp",  sub:"إرسال رسائل مخصصة للحجاج",    bg:"rgba(37,211,102,0.08)", color:"#25D366", icon:`<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>` },
+              { id:"stickers",   label:"مطبوعات الشنط",   sub:"استيكر · تاج اليد · التاج الطولي", bg:"rgba(212,160,23,0.1)", color:"#8a6a10", icon:`<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>` },
             ].map(qa => (
               <div key={qa.id} onClick={() => { setActiveReport(qa.id); setFlightSubReport(null); }}
                 style={{ flex:1, display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderRadius:12, border:"1.5px solid var(--line)", background:"var(--paper)", cursor:"pointer", transition:"all 0.15s" }}
@@ -1412,6 +1420,196 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               )}
             </>
           )}
+
+          {/* ═══════════════════════════════════════════════════
+              مطبوعات الشنط — استيكر + تاج اليد + التاج الطولي
+              ═══════════════════════════════════════════════════ */}
+          {activeReport === "stickers" && (() => {
+            /* ─── بناء قائمة الحجاج المستهدفين ─── */
+            const stkPassengers = (() => {
+              if (stkFilter === "all") return passengers;
+              if (stkFilter === "bus")  return passengers.filter(p => (p as any).bus_id === stkBusId);
+              if (stkFilter === "room") return passengers.filter(p => (p as any).room_id === stkRoomId);
+              if (stkFilter === "one")  return passengers.filter(p => p.id === stkPassId);
+              return passengers;
+            })();
+
+            /* ─── دالة بناء HTML ورقة الاستيكرات لحاج واحد ─── */
+            const buildStickerPage = (p: Passenger) => {
+              const room = rooms.find(r => r.id === (p as any).room_id);
+              const bus  = buses.find(b => b.id === (p as any).bus_id);
+              const roomNo   = room?.number || "—";
+              const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
+              const busName  = bus?.name || "";
+              const stk = () => `
+                <div style="width:100%;height:calc(100%/3);box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;overflow:hidden;position:relative;">
+                  <div style="position:absolute;inset:0;opacity:.035;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
+                  <div style="position:absolute;inset:7px;border:2px solid ${primaryColor};border-radius:9px;pointer-events:none;"></div>
+                  <div style="position:absolute;inset:11px;border:1px solid ${accentColor};border-radius:6px;pointer-events:none;opacity:.6;"></div>
+                  <!-- رقم الغرفة يسار -->
+                  <div style="width:22%;margin:12px 0 12px 12px;background:#F8F2E4;border:1.5px solid ${accentColor};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+                    <div style="font-size:36pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
+                    <div style="font-size:7pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:2px 8px;margin-top:3px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                  </div>
+                  <!-- البيانات وسط -->
+                  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:10px 8px;gap:0;">
+                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الحاج</span>
+                      <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${p.name_ar}</span>
+                    </div>
+                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;"></span>
+                      <span style="font-size:8pt;font-weight:600;color:#7A6570;direction:ltr;font-family:Arial,sans-serif;">${p.name_en || ""}</span>
+                    </div>
+                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
+                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الفندق</span>
+                      <span style="font-size:10pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${(config as any).hotel_name || companyName}</span>
+                    </div>
+                    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;">
+                      <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الهاتف</span>
+                      <span style="font-size:10pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
+                    </div>
+                  </div>
+                  <!-- هوية الحملة يمين -->
+                  <div style="width:22%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px 6px;border-right:1.5px solid ${accentColor};">
+                    ${logoUrl ? `<img src="${logoUrl}" style="width:40px;height:40px;object-fit:contain;border-radius:50%;border:2px solid ${accentColor};padding:2px;" />` : `<div style="width:40px;height:40px;border-radius:50%;border:2px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`}
+                    <div style="font-size:11.5pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                    <div style="font-size:7pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
+                    <div style="font-size:7.5pt;font-weight:800;color:#241318;direction:ltr;">${(config as any).admin_phone || ""}</div>
+                  </div>
+                </div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${stk()}${stk()}${stk()}</div>`;
+            };
+
+            /* ─── دالة بناء HTML ورقة التاجات لحاج واحد ─── */
+            const buildTagsPage = (p: Passenger) => {
+              const room = rooms.find(r => r.id === (p as any).room_id);
+              const bus  = buses.find(b => b.id === (p as any).bus_id);
+              const roomNo   = room?.number || "—";
+              const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
+              const busName  = bus?.name || "";
+              const tag = () => `
+                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;page-break-inside:avoid;">
+                  <div style="position:absolute;inset:0;opacity:.035;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
+                  <div style="position:absolute;inset:7px;border:2px solid ${primaryColor};border-radius:9px;pointer-events:none;"></div>
+                  <div style="position:absolute;inset:11px;border:1px solid ${accentColor};border-radius:6px;pointer-events:none;opacity:.5;"></div>
+                  <!-- ثقب الشريط -->
+                  <div style="width:24px;height:9px;border-radius:99px;background:#E8D5C4;margin-top:18px;z-index:2;flex-shrink:0;"></div>
+                  <!-- شعار + هوية -->
+                  ${logoUrl ? `<img src="${logoUrl}" style="width:40px;height:40px;object-fit:contain;border-radius:50%;border:2px solid ${accentColor};margin:10px auto 5px;padding:2px;" />` : `<div style="width:40px;height:40px;border-radius:50%;border:2px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;margin:10px auto 5px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`}
+                  <div style="font-size:10pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;padding:0 6px;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                  <div style="font-size:7pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
+                  <div style="width:65%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);margin:8px auto;"></div>
+                  <div style="font-size:8pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+                  <div style="font-size:52pt;font-weight:900;color:${primaryColor};line-height:1;text-align:center;font-family:Cairo,sans-serif;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);margin:4px 0;">${roomNo}</div>
+                  <div style="font-size:7.5pt;font-weight:800;color:#241318;background:rgba(125,31,60,.07);border-radius:99px;padding:2px 10px;margin-top:3px;font-family:Cairo,sans-serif;">${roomFloor}</div>
+                  <div style="width:65%;height:1px;background:linear-gradient(90deg,transparent,#E8D5C4,transparent);margin:8px auto;"></div>
+                  <div style="font-size:10pt;font-weight:900;color:#241318;text-align:center;padding:0 7px;line-height:1.6;font-family:Cairo,sans-serif;">${p.name_ar}</div>
+                  <div style="font-size:7.5pt;font-weight:700;color:#7A6570;text-align:center;padding:0 5px;margin-top:3px;line-height:1.6;font-family:Cairo,sans-serif;">${(config as any).hotel_name || companyName}</div>
+                  ${busName ? `<div style="font-size:8pt;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.07);border:1px solid rgba(125,31,60,.22);border-radius:99px;padding:3px 10px;margin-top:5px;font-family:Cairo,sans-serif;">أوتوبيس ${busName}</div>` : ""}
+                  <div style="font-size:7pt;font-weight:700;color:#7A6570;margin-top:auto;margin-bottom:16px;direction:ltr;">${p.phone || ""}</div>
+                </div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}</div>`;
+            };
+
+            /* ─── دالة الطباعة الفعلية ─── */
+            const doPrint = () => {
+              if (!stkPassengers.length) { showAlert("warning", "لا يوجد حجاج في هذا التصفية."); return; }
+              let html = "";
+              for (const p of stkPassengers) {
+                if (stkTypes.sticker)  html += buildStickerPage(p);
+                if (stkTypes.hand_tag) html += buildTagsPage(p);
+              }
+              const full = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+                <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
+                <style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style>
+                </head><body>${html}</body></html>`;
+              printInPage(full);
+            };
+
+            return (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 14 }}>مطبوعات الشنط</div>
+
+                {/* اختيار الحجاج */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10 }}>اختيار الحجاج</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[
+                      { id: "all", label: `الكل (${passengers.length})` },
+                      { id: "bus",  label: "أوتوبيس محدد" },
+                      { id: "room", label: "غرفة محددة" },
+                      { id: "one",  label: "حاج واحد" },
+                    ].map(o => (
+                      <button key={o.id} onClick={() => setStkFilter(o.id as typeof stkFilter)}
+                        style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkFilter === o.id ? "var(--primary)" : "var(--line)"}`, background: stkFilter === o.id ? "var(--primary)" : "var(--paper)", color: stkFilter === o.id ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {stkFilter === "bus" && (
+                    <select value={stkBusId ?? ""} onChange={e => setStkBusId(Number(e.target.value) || null)}
+                      style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
+                      <option value="">اختر الأوتوبيس...</option>
+                      {buses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  )}
+                  {stkFilter === "room" && (
+                    <select value={stkRoomId ?? ""} onChange={e => setStkRoomId(Number(e.target.value) || null)}
+                      style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
+                      <option value="">اختر الغرفة...</option>
+                      {rooms.map(r => <option key={r.id} value={r.id}>غرفة {r.number}{r.floor ? ` — الدور ${r.floor}` : ""}</option>)}
+                    </select>
+                  )}
+                  {stkFilter === "one" && (
+                    <select value={stkPassId ?? ""} onChange={e => setStkPassId(Number(e.target.value) || null)}
+                      style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
+                      <option value="">اختر الحاج...</option>
+                      {passengers.map(p => <option key={p.id} value={p.id}>{p.name_ar}</option>)}
+                    </select>
+                  )}
+                  <div style={{ marginTop: 10, fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)" }}>
+                    {stkPassengers.length} حاج محدد
+                  </div>
+                </div>
+
+                {/* اختيار نوع الورقة */}
+                <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10 }}>نوع الورقة المطبوعة</div>
+                  {[
+                    { key: "sticker",  label: "ورقة الاستيكرات", sub: "3 استيكرات للشنط الثلاث" },
+                    { key: "hand_tag", label: "ورقة التاجات",     sub: "3 تاجات يد للمقابض" },
+                  ].map(t => (
+                    <div key={t.key} onClick={() => setStkTypes(prev => ({ ...prev, [t.key]: !prev[t.key as keyof typeof prev] }))}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 2px", borderBottom: "1px dashed var(--line)", cursor: "pointer" }}>
+                      <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${stkTypes[t.key as keyof typeof stkTypes] ? "var(--primary)" : "var(--line)"}`, background: stkTypes[t.key as keyof typeof stkTypes] ? "var(--primary)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all .2s" }}>
+                        {stkTypes[t.key as keyof typeof stkTypes] && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{t.label}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t.sub}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ملخص + زرار الطباعة */}
+                <div style={{ background: "rgba(212,160,23,.06)", border: "1px solid rgba(212,160,23,.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8a6a10" }}>
+                    إجمالي الأوراق: {stkPassengers.length * [stkTypes.sticker, stkTypes.hand_tag].filter(Boolean).length} ورقة A4 لاصقة
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                    {stkPassengers.length} حاج × {[stkTypes.sticker && "استيكر", stkTypes.hand_tag && "تاجات"].filter(Boolean).join(" + ")} = {stkPassengers.length * [stkTypes.sticker, stkTypes.hand_tag].filter(Boolean).length} ورقة
+                  </div>
+                </div>
+
+                <button onClick={doPrint} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: "var(--primary)", color: "#fff", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+                  طباعة {stkPassengers.length * [stkTypes.sticker, stkTypes.hand_tag].filter(Boolean).length} ورقة
+                </button>
+              </>
+            );
+          })()}
 
           {/* ===== WhatsApp ===== */}
           {activeReport === "whatsapp" && (
