@@ -1460,7 +1460,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const logoHtml = mkLogo(62);
               const shortName = p.short_ar || p.name_ar || "";
               const stk = () => `
-                <div style="width:100%;height:calc(100%/3);box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;overflow:hidden;position:relative;">
+                <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;overflow:hidden;position:relative;">
                   <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
                   <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
                   <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.55;"></div>
@@ -1608,6 +1608,51 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               <>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 14 }}>مطبوعات الشنط</div>
 
+                {/* Drawer جانبي */}
+                {stkDrawerOpen && (
+                  <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}>
+                    <div onClick={() => setStkDrawerOpen(false)} style={{ flex: 1, background: "rgba(0,0,0,.45)" }} />
+                    <div style={{ width: 320, background: "var(--paper)", display: "flex", flexDirection: "column", boxShadow: "-8px 0 30px rgba(0,0,0,.2)", height: "100%", overflowY: "auto" }}>
+                      <div style={{ padding: "16px 16px 10px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)" }}>اختيار الحجاج</div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => setStkSelected(new Set(passengers.map(pp => pp.id)))}
+                            style={{ fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", fontFamily: "inherit" }}>تحديد الكل</button>
+                          <button onClick={() => setStkSelected(new Set())}
+                            style={{ fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", fontFamily: "inherit" }}>إلغاء الكل</button>
+                        </div>
+                      </div>
+                      <div style={{ padding: "10px 16px" }}>
+                        <input value={stkSearch} onChange={e => setStkSearch(e.target.value)} placeholder="بحث بالاسم..."
+                          style={{ width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)", boxSizing: "border-box" }} />
+                      </div>
+                      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
+                        {passengers.filter(pp => !stkSearch || (pp.name_ar || "").includes(stkSearch)).map(pp => {
+                          const checked = stkSelected.has(pp.id);
+                          const lastPrint = printDates[pp.id];
+                          return (
+                            <div key={pp.id} onClick={() => setStkSelected(prev => { const n = new Set(prev); if (n.has(pp.id)) { n.delete(pp.id); } else { n.add(pp.id); } return n; })}
+                              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 4px", borderBottom: "1px dashed var(--line)", cursor: "pointer" }}>
+                              <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${checked ? "var(--primary)" : "var(--line)"}`, background: checked ? "var(--primary)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                {checked && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{pp.name_ar}</div>
+                                {lastPrint && <div style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, marginTop: 1 }}>آخر طباعة: {lastPrint}</div>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)" }}>{stkSelected.size} حاج محدد</div>
+                        <button onClick={() => setStkDrawerOpen(false)}
+                          style={{ padding: "8px 20px", borderRadius: 99, border: "none", background: "var(--primary)", color: "#fff", fontFamily: "inherit", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>تأكيد</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* اختيار الحجاج */}
                 <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10 }}>اختيار الحجاج</div>
@@ -1616,37 +1661,33 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       { id: "all", label: `الكل (${passengers.length})` },
                       { id: "bus",  label: "أوتوبيس محدد" },
                       { id: "room", label: "غرفة محددة" },
-                      { id: "one",  label: "حاج واحد" },
                     ].map(o => (
-                      <button key={o.id} onClick={() => setStkFilter(o.id as typeof stkFilter)}
-                        style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkFilter === o.id ? "var(--primary)" : "var(--line)"}`, background: stkFilter === o.id ? "var(--primary)" : "var(--paper)", color: stkFilter === o.id ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                      <button key={o.id} onClick={() => { setStkFilter(o.id as typeof stkFilter); setStkSelected(new Set()); }}
+                        style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkFilter === o.id && stkSelected.size === 0 ? "var(--primary)" : "var(--line)"}`, background: stkFilter === o.id && stkSelected.size === 0 ? "var(--primary)" : "var(--paper)", color: stkFilter === o.id && stkSelected.size === 0 ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                         {o.label}
                       </button>
                     ))}
+                    <button onClick={() => setStkDrawerOpen(true)}
+                      style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkSelected.size > 0 ? "var(--primary)" : "var(--line)"}`, background: stkSelected.size > 0 ? "var(--primary)" : "var(--paper)", color: stkSelected.size > 0 ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                      {stkSelected.size > 0 ? `اختيار يدوي (${stkSelected.size})` : "اختيار يدوي"}
+                    </button>
                   </div>
-                  {stkFilter === "bus" && (
+                  {stkFilter === "bus" && stkSelected.size === 0 && (
                     <select value={stkBusId ?? ""} onChange={e => setStkBusId(Number(e.target.value) || null)}
                       style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
                       <option value="">اختر الأوتوبيس...</option>
                       {buses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
                   )}
-                  {stkFilter === "room" && (
+                  {stkFilter === "room" && stkSelected.size === 0 && (
                     <select value={stkRoomId ?? ""} onChange={e => setStkRoomId(Number(e.target.value) || null)}
                       style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
                       <option value="">اختر الغرفة...</option>
                       {rooms.map(r => <option key={r.id} value={r.id}>غرفة {r.number}{r.floor ? ` — الدور ${r.floor}` : ""}</option>)}
                     </select>
                   )}
-                  {stkFilter === "one" && (
-                    <select value={stkPassId ?? ""} onChange={e => setStkPassId(Number(e.target.value) || null)}
-                      style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
-                      <option value="">اختر الحاج...</option>
-                      {passengers.map(p => <option key={p.id} value={p.id}>{p.name_ar}</option>)}
-                    </select>
-                  )}
                   <div style={{ marginTop: 10, fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)" }}>
-                    {stkPassengers.length} حاج محدد
+                    {finalPassengers.length} حاج محدد
                   </div>
                 </div>
 
