@@ -1532,30 +1532,30 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomNo    = room?.number || "—";
               const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
               const busName   = bus?.name || "";
+              const shortName = p.short_ar || p.name_ar || "";
+              const hotelName = config.hotel_name || companyName;
+              const hotelAddr = (config as any).hotel_address || "";
               const tag = () => `
-                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;">
-                  <div style="position:absolute;inset:0;opacity:.03;background-image:${patBg};pointer-events:none;"></div>
-                  <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
-                  <!-- ثقب الشريط -->
-                  <div style="width:28px;height:10px;border-radius:99px;background:#E8D5C4;margin:20px auto 0;flex-shrink:0;position:relative;z-index:2;"></div>
-                  <!-- هيدر بوردو -->
-                  <div style="background:linear-gradient(160deg,${primaryColor},#3d0f1f);display:flex;flex-direction:column;align-items:center;padding:12px 8px 16px;gap:6px;position:relative;flex-shrink:0;">
-                    <div style="position:absolute;inset:0;opacity:.07;background-image:${patBg};pointer-events:none;"></div>
-                    ${mkLogo(52)}
-                    <div style="font-size:13pt;font-weight:700;color:#fff;text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;position:relative;">${companyName}</div>
-                    <div style="font-size:8pt;font-weight:700;color:#F0C84A;text-align:center;position:relative;">${config.season_label || ""}</div>
+                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;display:flex;flex-direction:column;background:#fff;overflow:hidden;position:relative;">
+                  <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:1;"></div>
+                  <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;z-index:1;opacity:.55;"></div>
+                  <div style="width:30px;height:11px;border-radius:99px;background:#E8D5C4;margin:22px auto 0;flex-shrink:0;position:relative;z-index:2;"></div>
+                  <div style="display:flex;flex-direction:column;align-items:center;padding:14px 10px 12px;gap:5px;flex-shrink:0;border-bottom:2px solid ${accentColor};">
+                    ${mkLogo(60)}
+                    <div style="font-size:15pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.2;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
+                    <div style="font-size:8.5pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
                   </div>
-                  <!-- جسم أبيض: رقم الغرفة -->
-                  <div style="flex:1;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 8px;position:relative;">
-                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                    <div style="font-size:72pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;text-align:center;">${roomNo}</div>
-                    <div style="font-size:8.5pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 12px;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;flex-shrink:0;border-bottom:1.5px dashed #E8D5C4;">
+                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;margin-bottom:4px;">الغرفة</div>
+                    <div style="font-size:76pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;text-align:center;">${roomNo}</div>
+                    <div style="font-size:9pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:4px 14px;margin-top:6px;font-family:Cairo,sans-serif;">${roomFloor}</div>
                   </div>
-                  <!-- شريط عاجي: بيانات الحاج -->
-                  <div style="background:#F8F2E4;border-top:2px solid ${accentColor};display:flex;flex-direction:column;align-items:center;padding:12px 8px;gap:5px;flex-shrink:0;">
-                    <div style="font-size:12pt;font-weight:900;color:#241318;text-align:center;line-height:1.5;font-family:Cairo,sans-serif;">${p.name_ar}</div>
-                    <div style="font-size:7.5pt;font-weight:600;color:#7A6570;direction:ltr;text-align:center;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
-                    <div style="font-size:8.5pt;font-weight:700;color:#241318;text-align:center;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 10px;gap:6px;background:#F8F2E4;">
+                    <div style="font-size:13pt;font-weight:900;color:#241318;text-align:center;line-height:1.5;font-family:Cairo,sans-serif;">${shortName}</div>
+                    <div style="width:60%;height:1px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
+                    <div style="font-size:9pt;font-weight:700;color:#241318;text-align:center;font-family:Cairo,sans-serif;">${hotelName}</div>
+                    ${hotelAddr ? `<div style="font-size:8pt;font-weight:600;color:#7A6570;text-align:center;font-family:Cairo,sans-serif;">${hotelAddr}</div>` : ""}
+                    ${busName ? `<div style="font-size:8.5pt;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1px solid rgba(125,31,60,.2);border-radius:99px;padding:3px 12px;font-family:Cairo,sans-serif;">أوتوبيس ${busName}</div>` : ""}
                     ${p.phone ? `<div style="font-size:8pt;font-weight:700;color:#7A6570;direction:ltr;">${p.phone}</div>` : ""}
                   </div>
                 </div>`;
