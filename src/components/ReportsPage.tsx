@@ -129,8 +129,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [stkRoomId, setStkRoomId] = useState<number | null>(null);
   const [stkPassId, setStkPassId] = useState<number | null>(null);
   const [stkTypes, setStkTypes] = useState({ sticker: true, hand_tag: true, long_tag: true });
+  // @ts-ignore — مستخدم داخل IIFE في JSX
   const [stkDrawerOpen, setStkDrawerOpen] = useState(false);
+  // @ts-ignore — مستخدم داخل IIFE في JSX
   const [stkSearch, setStkSearch] = useState("");
+  // @ts-ignore — مستخدم داخل IIFE في JSX
   const [stkSelected, setStkSelected] = useState<Set<number>>(() => new Set());
   const [printDates, setPrintDates] = useState<Record<number, string>>(() => {
     try { return JSON.parse(localStorage.getItem("stk_print_dates") || "{}"); } catch { return {}; }
@@ -1444,6 +1447,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             const mkLogo = (size: number) => logoUrl
               ? `<img src="${logoUrl}" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};padding:2px;" />`
               : `<div style="width:${size}px;height:${size}px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="${Math.round(size*.55)}" height="${Math.round(size*.55)}" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+            // @ts-ignore
             const patBg = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E')`;
 
             /* ══ ورقة ١: الاستيكر العريض (3 استيكرات رأسياً) ══ */
