@@ -88,7 +88,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   // الرجوع لقائمة التقارير لو ضغط المستخدم على "التقارير" في القايمة الجانبية وهو بالفعل داخل تقرير
   useEffect(() => {
-    if (resetKey !== undefined) setActiveReport(null);
+    if (resetKey !== undefined) { const t = setTimeout(() => setActiveReport(null), 0); return () => clearTimeout(t); }
   }, [resetKey]);
 
   const [buses, setBuses] = useState<Bus[]>([]);
@@ -162,17 +162,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     { key: "expiry", label: "انتهاء الجواز", get: (p: Passenger) => p.expiry },
     { key: "phone", label: "التليفون", get: (p: Passenger) => p.phone },
     { key: "bus", label: "نوع الباص", get: (p: Passenger) => p.services?.bus },
-    { key: "bus_name", label: "رقم الباص", get: (p: Passenger) => buses.find(b => b.id === (p as any).bus_id)?.name || "" },
+    { key: "bus_name", label: "رقم الباص", get: (p: Passenger) => buses.find(b => b.id === p.bus_id)?.name || "" },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
     { key: "flight_dep", label: "رحلة الذهاب", get: (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || "" },
     { key: "flight_ret", label: "رحلة الإياب", get: (p: Passenger) => flights.find(f => f.id === p.return_flight_id)?.name || "" },
     { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
     { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
-    { key: "room_number", label: "رقم الغرفة", get: (p: Passenger) => rooms.find(r => r.id === (p as any).room_id)?.number || "" },
+    { key: "room_number", label: "رقم الغرفة", get: (p: Passenger) => rooms.find(r => r.id === p.room_id)?.number || "" },
     { key: "camp_mina", label: "منى (نوع)", get: (p: Passenger) => p.services?.camp_mina },
-    { key: "camp_mina_name", label: "مخيم منى", get: (p: Passenger) => camps.find(c => c.id === (p as any).camp_mina_id)?.name || "" },
+    { key: "camp_mina_name", label: "مخيم منى", get: (p: Passenger) => camps.find(c => c.id === p.camp_mina_id)?.name || "" },
     { key: "camp_arafa", label: "عرفة (نوع)", get: (p: Passenger) => p.services?.camp_arafa },
-    { key: "camp_arafa_name", label: "مخيم عرفة", get: (p: Passenger) => camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "" },
+    { key: "camp_arafa_name", label: "مخيم عرفة", get: (p: Passenger) => camps.find(c => c.id === p.camp_arafa_id)?.name || "" },
   ];
   const [selectedCols, setSelectedCols] = useState<string[]>(ALL_COLS.map(c => c.key));
   const toggleCol = (key: string) => setSelectedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -201,7 +201,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         setSelectedBusIds(new Set(validBuses.map(x => x.id)));
       }
       if (c) {
-        const validCamps = (c as Camp[]).filter(x => x.type || passengers.some(p => (p as any).camp_mina_id === x.id || (p as any).camp_arafa_id === x.id));
+        const validCamps = (c as Camp[]).filter(x => x.type || passengers.some(p => p.camp_mina_id === x.id || p.camp_arafa_id === x.id));
         setCamps(validCamps);
         setSelectedMinaCampIds(new Set(validCamps.filter(x => x.page_type === "منى").map(x => x.id)));
         setSelectedArafaCampIds(new Set(validCamps.filter(x => x.page_type === "عرفة").map(x => x.id)));
@@ -252,7 +252,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // تقرير الطيران — خطوط الطيران (airline list)
   // ============================================================
   const getAirlineHTML = () => {
-    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || (p as any).flight_id));
+    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id));
     const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const rows = list.map((p, i) => {
       const nat = natCode(p.nat);
@@ -265,7 +265,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   };
 
   const exportAirlineXLSX = () => {
-    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || (p as any).flight_id));
+    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id));
     const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
@@ -354,7 +354,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       styleTitleRow(ws, 0, 4, primaryColor);
       styleHeaderRow(ws, 1, 4, primaryColor);
       freezeHeaderRow(ws, 2);
-      let name = safeSheetName(`${bus.name}${bus.type === "VIP" ? " VIP" : ""}`);
+      const name = safeSheetName(`${bus.name}${bus.type === "VIP" ? " VIP" : ""}`);
       let n = name, i = 2;
       while (usedNames.has(n)) { n = safeSheetName(`${name} ${i++}`); }
       usedNames.add(n);
@@ -409,7 +409,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       styleTitleRow(ws, 0, 4, primaryColor);
       styleHeaderRow(ws, 1, 4, primaryColor);
       freezeHeaderRow(ws, 2);
-      let name = safeSheetName(camp.name);
+      const name = safeSheetName(camp.name);
       let n = name, i = 2;
       while (usedNames.has(n)) { n = safeSheetName(`${name} ${i++}`); }
       usedNames.add(n);
@@ -569,7 +569,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         }
         runWhenFontReady();
       })();
-    <\/script>`;
+    </script>`;
 
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML + autoFitScript, landscape, false, showPattern ? 0.04 : 0);
@@ -768,11 +768,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // KPI calculations للـ gateway
   // ============================================================
   const hajjTotal = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length || 1;
-  const withFlight = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).flight_id != null).length;
-  const withBus    = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).bus_id != null).length;
-  const withMina   = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).camp_mina_id != null).length;
-  const withArafa  = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).camp_arafa_id != null).length;
-  const withRoom   = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && (p as any).room_id != null).length;
+  const withFlight = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.flight_id != null).length;
+  const withBus    = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.bus_id != null).length;
+  const withMina   = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.camp_mina_id != null).length;
+  const withArafa  = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.camp_arafa_id != null).length;
+  const withRoom   = passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.room_id != null).length;
   const noFlight   = hajjTotal - withFlight;
   const noBus      = hajjTotal - withBus;
   const noMina     = hajjTotal - withMina;
@@ -1428,16 +1428,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             /* ─── بناء قائمة الحجاج المستهدفين ─── */
             const stkPassengers = (() => {
               if (stkFilter === "all") return passengers;
-              if (stkFilter === "bus")  return passengers.filter(p => (p as any).bus_id === stkBusId);
-              if (stkFilter === "room") return passengers.filter(p => (p as any).room_id === stkRoomId);
+              if (stkFilter === "bus")  return passengers.filter(p => p.bus_id === stkBusId);
+              if (stkFilter === "room") return passengers.filter(p => p.room_id === stkRoomId);
               if (stkFilter === "one")  return passengers.filter(p => p.id === stkPassId);
               return passengers;
             })();
 
             /* ─── دالة بناء HTML ورقة الاستيكرات لحاج واحد ─── */
             const buildStickerPage = (p: Passenger) => {
-              const room = rooms.find(r => r.id === (p as any).room_id);
-              const bus  = buses.find(b => b.id === (p as any).bus_id);
+              const room = rooms.find(r => r.id === p.room_id);
+              const bus  = buses.find(b => b.id === p.bus_id);
               const roomNo   = room?.number || "—";
               const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
               const busName  = bus?.name || "";
@@ -1464,7 +1464,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     </div>
                     <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed #E8D5C4;">
                       <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الفندق</span>
-                      <span style="font-size:10pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${(config as any).hotel_name || companyName}</span>
+                      <span style="font-size:10pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
                     </div>
                     <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0;">
                       <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:52px;font-family:Cairo,sans-serif;">الهاتف</span>
@@ -1476,7 +1476,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     ${logoUrl ? `<img src="${logoUrl}" style="width:40px;height:40px;object-fit:contain;border-radius:50%;border:2px solid ${accentColor};padding:2px;" />` : `<div style="width:40px;height:40px;border-radius:50%;border:2px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`}
                     <div style="font-size:11.5pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
                     <div style="font-size:7pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
-                    <div style="font-size:7.5pt;font-weight:800;color:#241318;direction:ltr;">${(config as any).admin_phone || ""}</div>
+                    <div style="font-size:7.5pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                   </div>
                 </div>`;
               return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${stk()}${stk()}${stk()}</div>`;
@@ -1484,8 +1484,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
             /* ─── دالة بناء HTML ورقة التاجات لحاج واحد ─── */
             const buildTagsPage = (p: Passenger) => {
-              const room = rooms.find(r => r.id === (p as any).room_id);
-              const bus  = buses.find(b => b.id === (p as any).bus_id);
+              const room = rooms.find(r => r.id === p.room_id);
+              const bus  = buses.find(b => b.id === p.bus_id);
               const roomNo   = room?.number || "—";
               const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
               const busName  = bus?.name || "";
@@ -1506,7 +1506,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="font-size:7.5pt;font-weight:800;color:#241318;background:rgba(125,31,60,.07);border-radius:99px;padding:2px 10px;margin-top:3px;font-family:Cairo,sans-serif;">${roomFloor}</div>
                   <div style="width:65%;height:1px;background:linear-gradient(90deg,transparent,#E8D5C4,transparent);margin:8px auto;"></div>
                   <div style="font-size:10pt;font-weight:900;color:#241318;text-align:center;padding:0 7px;line-height:1.6;font-family:Cairo,sans-serif;">${p.name_ar}</div>
-                  <div style="font-size:7.5pt;font-weight:700;color:#7A6570;text-align:center;padding:0 5px;margin-top:3px;line-height:1.6;font-family:Cairo,sans-serif;">${(config as any).hotel_name || companyName}</div>
+                  <div style="font-size:7.5pt;font-weight:700;color:#7A6570;text-align:center;padding:0 5px;margin-top:3px;line-height:1.6;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
                   ${busName ? `<div style="font-size:8pt;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.07);border:1px solid rgba(125,31,60,.22);border-radius:99px;padding:3px 10px;margin-top:5px;font-family:Cairo,sans-serif;">أوتوبيس ${busName}</div>` : ""}
                   <div style="font-size:7pt;font-weight:700;color:#7A6570;margin-top:auto;margin-bottom:16px;direction:ltr;">${p.phone || ""}</div>
                 </div>`;
@@ -1730,11 +1730,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     const p = passengers[0];
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
-                      .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
+                      .replace("{الباص}", buses.find(b => b.id === p.bus_id)?.name || "—")
                       .replace("{الرحلة}", flightNameFor(p))
-                      .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
-                      .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
-                      .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
+                      .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
+                      .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
+                      .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
                     const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
                       method: "POST",
                       headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
@@ -1762,11 +1762,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   try {
                     const text = waTemplate
                       .replace("{الاسم}", p.short_ar || p.name_ar)
-                      .replace("{الباص}", buses.find(b => b.id === (p as any).bus_id)?.name || "—")
+                      .replace("{الباص}", buses.find(b => b.id === p.bus_id)?.name || "—")
                       .replace("{الرحلة}", flightNameFor(p))
-                      .replace("{الغرفة}", rooms.find(r => r.id === (p as any).room_id)?.number || "—")
-                      .replace("{منى}", camps.find(c => c.id === (p as any).camp_mina_id)?.name || "—")
-                      .replace("{عرفة}", camps.find(c => c.id === (p as any).camp_arafa_id)?.name || "—");
+                      .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
+                      .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
+                      .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
                     const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
                       method: "POST",
                       headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
@@ -1774,16 +1774,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     });
                     if (res.ok) {
                       // بعت التصريح لو مختار
-                      if (waSendDocs.permit && (p as any).hajj_permit_url) {
-                        const path = (p as any).hajj_permit_url.split("/passengers-docs/")[1]?.split("?")[0];
+                      if (waSendDocs.permit && p.hajj_permit_url) {
+                        const path = p.hajj_permit_url.split("/passengers-docs/")[1]?.split("?")[0];
                         if (path) {
                           const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, 60 * 60 * 24 * 30);
                           if (data?.signedUrl) await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, { method: "POST", headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تصريح السفر" } }) });
                         }
                       }
                       // بعت التذكرة لو مختارة
-                      if (waSendDocs.ticket && (p as any).flight_ticket_url) {
-                        const path = (p as any).flight_ticket_url.split("/passengers-docs/")[1]?.split("?")[0];
+                      if (waSendDocs.ticket && p.flight_ticket_url) {
+                        const path = p.flight_ticket_url.split("/passengers-docs/")[1]?.split("?")[0];
                         if (path) {
                           const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, 60 * 60 * 24 * 30);
                           if (data?.signedUrl) await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, { method: "POST", headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تذكرة الطيران" } }) });
