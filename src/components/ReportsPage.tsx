@@ -54,7 +54,7 @@ function natCode(nat: string | undefined | null): string {
 
 function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
   const { alert: alertState, showAlert } = useAlert();
-  const passengers = [...rawPassengers].sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+  const passengers = [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0)));
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
   // الحجاج المرتبطين برحلة معينة — ذهاب عبر flight_id، إياب عبر return_flight_id (مستقلين)
@@ -252,7 +252,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // تقرير الطيران — خطوط الطيران (airline list)
   // ============================================================
   const getAirlineHTML = () => {
-    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id));
+    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && (wantsFirstClass(p) || p.flight_id));
     const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const rows = list.map((p, i) => {
       const nat = natCode(p.nat);
@@ -265,7 +265,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   };
 
   const exportAirlineXLSX = () => {
-    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id));
+    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && (wantsFirstClass(p) || p.flight_id));
     const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
@@ -346,7 +346,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     selBuses.forEach(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
       const title = `باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`;
-      const aoa: any[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
+      const aoa: (string | number | null)[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
       bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
       if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
       const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -377,7 +377,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
     const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
     const sections = pageCamps.map(camp => {
-      const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
+      const cp = passengers.filter(p => (p as Record<string, unknown>)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
       return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
     });
@@ -391,14 +391,14 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
     pageCamps.forEach(camp => {
-      const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
+      const cp = passengers.filter(p => (p as Record<string, unknown>)[campIdKey] === camp.id);
       const isMale = camp.gender === "ذكر";
       const half = Math.ceil(cp.length / 2);
       const col1 = cp.slice(0, half);
       const col2 = cp.slice(half);
       const maxRows = Math.max(col1.length, col2.length);
       const title = `مخيم ${pageType} ${camp.name} — ${isMale ? "رجال" : "نساء"}`;
-      const aoa: any[][] = [[title], ["م", "اسم الحاج", "م", "اسم الحاج"]];
+      const aoa: (string | number | null)[][] = [[title], ["م", "اسم الحاج", "م", "اسم الحاج"]];
       for (let i = 0; i < maxRows; i++) {
         const p1 = col1[i], p2 = col2[i];
         aoa.push([p1 ? i + 1 : "", p1 ? (p1.short_ar || p1.name_ar) : "", p2 ? half + i + 1 : "", p2 ? (p2.short_ar || p2.name_ar) : ""]);
@@ -417,8 +417,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     });
     addSummarySheet(wb, XLSX, `تقرير مخيمات ${pageType}`, companyName, [
       ["إجمالي عدد المخيمات", pageCamps.length],
-      ["إجمالي عدد الحجاج", passengers.filter(p => (p as any)[campIdKey]).length],
-      ...pageCamps.map(c => [`${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})`, passengers.filter(p => (p as any)[campIdKey] === c.id).length]),
+      ["إجمالي عدد الحجاج", passengers.filter(p => (p as Record<string, unknown>)[campIdKey]).length],
+      ...pageCamps.map(c => [`${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})`, passengers.filter(p => (p as Record<string, unknown>)[campIdKey] === c.id).length]),
     ]);
     XLSX.writeFile(wb, `تقرير_مخيمات_${pageType}.xlsx`);
   };
@@ -522,7 +522,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         const maxCapInPage = Math.max(1, ...pageRooms.map(r => Math.max(roomOccupancy(r), 1)));
         const fontSize = getRoomFontSize(maxCapInPage);
         const padded = [...pageRooms];
-        while (padded.length < PER_PAGE) padded.push(null as any);
+        while (padded.length < PER_PAGE) padded.push(null);
         const cells = padded.map(room =>
           room
             ? renderRoomBlock(room, fontSize)
@@ -586,15 +586,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     // كل غرفة تاخد عمودين: رقم الغرفة/النوع + الأسماء
     // الترتيب: غرفة1 | غرفة2 | غرفة3 | غرفة4 ... كل 4 غرف في صف
 
-    const aoa: any[][] = [];
+    const aoa: (string | number | null)[][] = [];
 
     for (let i = 0; i < filtered.length; i += COLS) {
       const rowRooms = filtered.slice(i, i + COLS);
       // بادينج لو أقل من 4
-      while (rowRooms.length < COLS) rowRooms.push(null as any);
+      while (rowRooms.length < COLS) rowRooms.push(null);
 
       // صف header الغرف
-      const headerRow: any[] = [];
+      const headerRow: (string | number | null)[] = [];
       rowRooms.forEach(room => {
         if (room) {
           headerRow.push(`غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""} (${room.type})`);
@@ -606,13 +606,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       aoa.push(headerRow);
 
       // صف عناوين الأعمدة
-      const subHeader: any[] = [];
+      const subHeader: (string | number | null)[] = [];
       rowRooms.forEach(() => { subHeader.push("م"); subHeader.push("الاسم"); });
       aoa.push(subHeader);
 
       // صفوف الحجاج (4 صفوف ثابتة)
       for (let g = 0; g < MAX_GUESTS; g++) {
-        const guestRow: any[] = [];
+        const guestRow: (string | number | null)[] = [];
         rowRooms.forEach(room => {
           if (room) {
             const rp = passengers.filter(p => p.room_id === room.id && (!p.passenger_type || p.passenger_type === "حاج"));
@@ -673,7 +673,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   const SelectionPanel = ({
     title, items, selected, setSelected, panelKey, alwaysOpen
-  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<any>; setSelected: (s: Set<any>) => void; panelKey: string; alwaysOpen?: boolean }) => {
+  }: { title: string; items: { id: number | string; label: string }[]; selected: Set<number | string>; setSelected: (s: Set<number | string>) => void; panelKey: string; alwaysOpen?: boolean }) => {
     const allSelected = items.length > 0 && items.every(it => selected.has(it.id));
     const open = alwaysOpen || openPanels.has(panelKey);
     return (
@@ -728,7 +728,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   ];
   const docTypeLabel = DOC_TYPES.find(d => d.key === docType)?.label || "";
   const isAdminPerson = (p: Passenger) => !!p.passenger_type && p.passenger_type !== "حاج";
-  const docListAll = passengers.filter(p => (p as any)[docType]);
+  const docListAll = passengers.filter(p => (p as Record<string, unknown>)[docType]);
   const docList = docListAll.filter(p =>
     docPersonFilter === "all" ? true :
     docPersonFilter === "admin" ? isAdminPerson(p) :
@@ -753,7 +753,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
           <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
             <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}</div>
             <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
-              <img src="${(p as any)[docType]}" style="max-width:100%;max-height:100%;object-fit:contain" />
+              <img src="${(p as Record<string, unknown>)[docType] as string}" style="max-width:100%;max-height:100%;object-fit:contain" />
             </div>
           </div>`).join("")}
       </div>`).join("");
@@ -919,7 +919,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     { id: "airline", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`, name: "تقرير خطوط الطيران", desc: "كشف الحجاج لإرساله لشركة الطيران" },
                     { id: "per_flight", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`, name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
                   ].map(sub => (
-                    <div key={sub.id} onClick={() => setFlightSubReport(sub.id as any)}
+                    <div key={sub.id} onClick={() => setFlightSubReport(sub.id as "airline" | "per_flight")}
                       style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
                       onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
                       onMouseLeave={e => e.currentTarget.style.background = "var(--bg-card)"}>
@@ -1244,7 +1244,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>نطاق التقرير</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                   {[["all", "كل الغرف"], ["type", "نوع معين"]].map(([val, label]) => (
-                    <div key={val} onClick={() => setHotelPrintFilter(val as any)}
+                    <div key={val} onClick={() => setHotelPrintFilter(val as "all" | "type")}
                       style={{ flex: 1, minWidth: 80, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${hotelPrintFilter === val ? "var(--info)" : "var(--border)"}`, background: hotelPrintFilter === val ? "var(--male-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: hotelPrintFilter === val ? "var(--info)" : "var(--text-muted)" }}>
                       {label}
                     </div>
@@ -1347,7 +1347,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 {DOC_TYPES.map(d => (
                   <div key={d.key} onClick={() => setDocType(d.key)}
                     style={{ flex: 1, minWidth: 90, padding: "8px 10px", borderRadius: 8, border: `1.5px solid ${docType === d.key ? "var(--em7)" : "var(--border)"}`, background: docType === d.key ? "var(--success-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: docType === d.key ? "var(--em7)" : "var(--text-muted)" }}>
-                    {d.label} ({passengers.filter(p => (p as any)[d.key]).length})
+                    {d.label} ({passengers.filter(p => (p as Record<string, unknown>)[d.key]).length})
                   </div>
                 ))}
               </div>
@@ -1412,10 +1412,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 </>
               )}
 
-              {passengers.filter(p => !(p as any)[docType]).length > 0 && (
+              {passengers.filter(p => !(p as Record<string, unknown>)[docType]).length > 0 && (
                 <div style={{ marginTop: 12, padding: "10px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ marginLeft: 6 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  {passengers.filter(p => !(p as any)[docType]).length} حاج مش عندهم {docTypeLabel} مرفوع
+                  {passengers.filter(p => !(p as Record<string, unknown>)[docType]).length} حاج مش عندهم {docTypeLabel} مرفوع
                 </div>
               )}
             </>
@@ -1662,7 +1662,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                         {waSendDocs[doc.key] && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                       </div>
                       <span style={{ fontSize: 12 }}>{doc.label}</span>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: "auto" }}>{passengers.filter(p => (p as any)[doc.field]).length} حاج</span>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: "auto" }}>{passengers.filter(p => (p as Record<string, unknown>)[doc.field]).length} حاج</span>
                     </div>
                   ))}
                 </div>
@@ -1682,7 +1682,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 {waSelectMode === "select" && (
                   <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8 }}>
                     {passengers.filter(p => p.phone).map(p => (
-                      <div key={p.id} onClick={() => setWaSelectedIds(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
+                      <div key={p.id} onClick={() => setWaSelectedIds(prev => { const n = new Set(prev); if (n.has(p.id)) { n.delete(p.id); } else { n.add(p.id); } return n; })}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "0.5px solid var(--line)", cursor: "pointer", background: waSelectedIds.has(p.id) ? "rgba(125,31,60,0.05)" : "transparent" }}>
                         <div style={{ width: 15, height: 15, borderRadius: 4, border: `2px solid ${waSelectedIds.has(p.id) ? "var(--em7)" : "var(--line)"}`, background: waSelectedIds.has(p.id) ? "var(--em7)" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           {waSelectedIds.has(p.id) && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -1702,11 +1702,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style={{ fontSize: 12, whiteSpace: "pre-wrap", lineHeight: 1.8, direction: "rtl" }}>
                     {waTemplate
                       .replace("{الاسم}", passengers[0].short_ar || passengers[0].name_ar)
-                      .replace("{الباص}", buses.find(b => b.id === (passengers[0] as any).bus_id)?.name || "—")
+                      .replace("{الباص}", buses.find(b => b.id === passengers[0]?.bus_id)?.name || "—")
                       .replace("{الرحلة}", flightNameFor(passengers[0]))
-                      .replace("{الغرفة}", rooms.find(r => r.id === (passengers[0] as any).room_id)?.number || "—")
-                      .replace("{منى}", camps.find(c => c.id === (passengers[0] as any).camp_mina_id)?.name || "—")
-                      .replace("{عرفة}", camps.find(c => c.id === (passengers[0] as any).camp_arafa_id)?.name || "—")
+                      .replace("{الغرفة}", rooms.find(r => r.id === passengers[0]?.room_id)?.number || "—")
+                      .replace("{منى}", camps.find(c => c.id === passengers[0]?.camp_mina_id)?.name || "—")
+                      .replace("{عرفة}", camps.find(c => c.id === passengers[0]?.camp_arafa_id)?.name || "—")
                     }
                   </div>
                   {(waSendDocs.permit || waSendDocs.ticket) && (
