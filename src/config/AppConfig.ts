@@ -10,6 +10,16 @@ export interface AppConfig {
   contact_phone: string;
   contact_email: string;
   season_label: string;
+  /* حقول بوابة الحاج */
+  admin_name?: string | null;
+  admin_phone?: string | null;
+  admin_whatsapp?: string | null;
+  hotel_name?: string | null;
+  hotel_address?: string | null;
+  camp_mina_address?: string | null;
+  camp_arafa_address?: string | null;
+  country?: string | null;
+  city?: string | null;
   features: {
     scan: boolean;
     buses: boolean;
