@@ -1513,34 +1513,37 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
               const busName   = bus?.name || "";
               const handShort = p.short_ar || p.name_ar || "";
-              /* كل شريط: 297mm طول × 70mm عرض — يُطبع landscape ويُقص ويُلف */
-              const strip = () => `
-                <div style="width:297mm;height:70mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;align-items:stretch;overflow:hidden;position:relative;flex-shrink:0;">
+              /* كل شريط طولي: 70mm عرض × 297mm طول في ورقة portrait
+                 المحتوى الداخلي أفقي 297mm × 70mm ثم يتدار 90° */
+              const tag = () => `
+                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;overflow:hidden;position:relative;background:#fff;">
                   <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:1;"></div>
-                  <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:1;"></div>
-                  <!-- هوية الحملة -->
-                  <div style="width:22%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 8px;border-left:2px solid ${accentColor};height:100%;box-sizing:border-box;">
-                    ${mkLogo(52)}
-                    <div style="font-size:14pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
-                    <div style="font-size:9pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
-                    <div style="font-size:9pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
-                  </div>
-                  <!-- رقم الغرفة ضخم -->
-                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;gap:4px;">
-                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                    <div style="font-size:44pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;letter-spacing:3px;">${roomNo}</div>
-                    <div style="font-size:9pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
-                  </div>
-                  <!-- اسم الحاج -->
-                  <div style="width:18%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 8px;border-right:2px solid ${accentColor};height:100%;box-sizing:border-box;">
-                    <div style="font-size:13pt;font-weight:900;color:#241318;text-align:center;line-height:1.5;font-family:Cairo,sans-serif;">${handShort}</div>
-                    <div style="width:70%;height:1px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
-                    <div style="font-size:8.5pt;font-weight:700;color:#7A6570;text-align:center;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
-                    <div style="font-size:8pt;font-weight:700;color:#7A6570;direction:ltr;">${p.phone || ""}</div>
+                  <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;z-index:1;opacity:.55;"></div>
+                  <!-- المحتوى المتدار: عرضه = طول الشريط، وضعه بالتحويل -->
+                  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);width:297mm;height:70mm;display:flex;align-items:stretch;direction:rtl;">
+                    <!-- رقم الغرفة -->
+                    <div style="flex:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;border-left:2px solid ${accentColor};">
+                      <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+                      <div style="font-size:52pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;letter-spacing:2px;">${roomNo}</div>
+                      <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:2px 12px;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                    </div>
+                    <!-- اسم الحاج والبيانات -->
+                    <div style="flex:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0 16px;background:#F8F2E4;border-left:2px solid ${accentColor};">
+                      <div style="font-size:20pt;font-weight:900;color:#241318;text-align:center;line-height:1.4;font-family:Cairo,sans-serif;white-space:nowrap;">${handShort}</div>
+                      <div style="width:80%;height:1px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
+                      <div style="font-size:12pt;font-weight:700;color:#241318;text-align:center;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
+                      <div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;">${p.phone || ""}</div>
+                    </div>
+                    <!-- شعار الحملة -->
+                    <div style="flex:1.5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 10px;">
+                      ${mkLogo(52)}
+                      <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
+                      <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
+                      <div style="font-size:8pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
+                    </div>
                   </div>
                 </div>`;
-              /* ورقة landscape: 3 شرائط فوق بعض */
-              return `<div style="width:297mm;height:210mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${strip()}${strip()}${strip()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}</div>`;
             };
 
             /* ══ ورقة ٣: التاج الطولي الكلاسيكي (3 تاجات جنب بعض) ══ */
@@ -1592,7 +1595,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const newDates: Record<number, string> = { ...printDates };
               for (const p of finalPassengers) {
                 if (stkTypes.sticker)  html += buildStickerPage(p);
-                if (stkTypes.hand_tag) html += buildHandTagPage(p).replace('<div style="width:297mm', '<div class="landscape-page" style="width:297mm');
+                if (stkTypes.hand_tag) html += buildHandTagPage(p);
                 if (stkTypes.long_tag) html += buildLongTagPage(p);
                 newDates[p.id] = now;
               }
