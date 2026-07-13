@@ -1458,7 +1458,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomNo   = room?.number || "—";
               const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
               const busName  = bus?.name || "";
-              const logoHtml = mkLogo(70);
+              const logoHtml = mkLogo(92);
               const shortName = p.short_ar || p.name_ar || "";
               const stk = () => `
                 <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;">
@@ -1468,9 +1468,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <!-- هوية الحملة يمين — أكبر -->
                   <div style="width:36%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px 8px;border-right:2px solid ${accentColor};">
                     ${logoHtml}
-                    <div style="font-size:14pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                    <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
-                    <div style="font-size:8.5pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
+                    <div style="font-size:19pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                    <div style="font-size:10.5pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
+                    <div style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                   </div>
                   <!-- البيانات وسط -->
                   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:12px 10px;gap:0;">
