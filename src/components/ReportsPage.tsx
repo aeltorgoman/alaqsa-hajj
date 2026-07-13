@@ -1465,12 +1465,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
                   <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
                   <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.55;"></div>
-                  <!-- هوية الحملة يمين — أكبر -->
-                  <div style="width:36%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:10px 8px;border-right:2px solid ${accentColor};">
-                    ${logoHtml}
-                    <div style="font-size:19pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                    <div style="font-size:10.5pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
-                    <div style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
+                  <!-- هوية الحملة يمين — أكبر وموزعة على كامل الارتفاع -->
+                  <div style="width:36%;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:14px 10px;border-right:2px solid ${accentColor};">
+                    <div style="transform:scale(1.35);">${logoHtml}</div>
+                    <div style="font-size:24pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                    <div style="font-size:13pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
+                    <div style="font-size:14pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                   </div>
                   <!-- البيانات وسط -->
                   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:12px 10px;gap:0;">
