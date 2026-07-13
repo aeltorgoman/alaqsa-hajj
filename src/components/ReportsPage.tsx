@@ -1461,7 +1461,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const logoHtml = mkLogo(62);
               const shortName = p.short_ar || p.name_ar || "";
               const stk = () => `
-                <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;overflow:hidden;position:relative;">
+                <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;">
                   <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
                   <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
                   <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.55;"></div>
@@ -1502,7 +1502,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.1);border-radius:99px;padding:3px 10px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
                   </div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:column;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${stk()}${stk()}${stk()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:block;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;">${stk()}${stk()}${stk()}</div>`;
             };
 
             /* ══ ورقة ٢: تاج اليد — 3 شرائط أفقية (وجه واحد يلتف ويلتصق) ══ */
@@ -1581,7 +1581,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             };
 
             /* ─── دالة الطباعة الفعلية ─── */
-            const finalPassengers = stkDrawerOpen || stkSelected.size > 0
+            const finalPassengers = stkSelected.size > 0
               ? passengers.filter(pp => stkSelected.has(pp.id))
               : stkPassengers;
 
