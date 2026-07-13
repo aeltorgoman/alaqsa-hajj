@@ -1555,7 +1555,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;">${strip()}${strip()}${strip()}</div>`;
             };
 
-            /* ══ ورقة ٣: التاج المعلق A6 — 4 تاجات في الورقة (2×2) ══ */
+            /* ══ ورقة ٣: التاج المعلق A6 — نقل حرفي للعينة المعتمدة "الكلاسيكي" ══ */
             const buildLongTagPage = (p: Passenger) => {
               const room = rooms.find(r => r.id === p.room_id);
               const bus  = buses.find(b => b.id === p.bus_id);
@@ -1564,40 +1564,43 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const busName   = bus?.name || "";
               const shortName = p.short_ar || p.name_ar || "";
               const hotelName = config.hotel_name || companyName;
+              /* نفس نسب العينة (44px شعار) بس مكبّر شوية بناءً على الطلب */
               const logoEl = logoUrl
-                ? `<img src="${logoUrl}" style="width:78px;height:78px;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
-                : `<div style="width:78px;height:78px;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+                ? `<img src="${logoUrl}" style="width:52pt;height:52pt;object-fit:contain;border-radius:50%;border:2px solid #F0C84A;background:rgba(240,200,74,.12);" />`
+                : `<div style="width:52pt;height:52pt;border-radius:50%;border:2px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
               const busIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3l1-4-1.4-5C20.6 7.8 19.7 7 18.6 7H4a2 2 0 0 0-2 2v9h3"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg>';
               const phoneIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.07 4.18 2 2 0 0 1 5.11 2h3a2 2 0 0 1 2 1.72l.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45l2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
-              /* كارت A6: 105×148mm — 4 في ورقة A4 (2 عمود × 2 صف) */
+              const patBg2 = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Cg fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%221%22%3E%3Cpath d=%22M32 8l6 12 13 2.5-9 10.5 2 14-12-6-12 6 2-14-9-10.5L26 20z%22/%3E%3C/g%3E%3C/svg%3E')`;
+              /* كارت A6 حقيقي: 105×148mm — نفس بنية العينة بالحرف، مع حواف دائرية 8pt */
               const tag = () => `
-                <div style="width:105mm;height:148mm;box-sizing:border-box;border:1.5px dashed #E8D5C4;overflow:hidden;position:relative;background:#fff;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;">
+                <div style="width:105mm;height:148mm;box-sizing:border-box;border-radius:8pt;overflow:hidden;position:relative;background:#fff;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;box-shadow:0 0 0 1px #E8D5C4;">
                   <!-- ثقب -->
-                  <div style="width:26px;height:9px;border-radius:99px;background:#241318;box-shadow:inset 0 2px 3px rgba(0,0,0,.5);margin:8px auto 0;flex-shrink:0;position:relative;z-index:3;"></div>
-                  <!-- هيدر بوردو — الشعار هو الأهم، ياخد أكبر مساحة -->
-                  <div style="flex:1.3;background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px 12px;text-align:center;position:relative;">
-                    ${logoEl}
-                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:16pt;font-weight:700;">${companyName}</div>
-                    <div style="font-size:8pt;color:#F0C84A;font-weight:700;">${config.season_label || ""}</div>
+                  <div style="position:absolute;top:10pt;left:50%;transform:translateX(-50%);width:37pt;height:13pt;border-radius:99px;background:#241318;z-index:5;"></div>
+                  <!-- هيدر بوردو -->
+                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:28pt 17pt 15pt;text-align:center;position:relative;flex-shrink:0;">
+                    <div style="display:flex;justify-content:center;margin-bottom:7pt;">${logoEl}</div>
+                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:24pt;font-weight:700;">${companyName}</div>
+                    <div style="font-size:11pt;color:#F0C84A;font-weight:700;margin-top:2pt;">${config.season_label || ""}</div>
                   </div>
-                  <!-- رقم الغرفة — مساحة مضغوطة على قدر المحتوى -->
-                  <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px 8px;position:relative;">
-                    <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                    <div style="font-family:Cairo,sans-serif;font-size:60pt;font-weight:900;color:${primaryColor};line-height:1;">${roomNo}</div>
-                    <div style="font-size:9pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
+                  <!-- رقم الغرفة -->
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;">
+                    <div style="position:absolute;inset:0;opacity:.05;background-image:${patBg2};pointer-events:none;"></div>
+                    <div style="font-size:14pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;position:relative;">الغرفة</div>
+                    <div style="font-family:Cairo,sans-serif;font-size:105pt;font-weight:900;color:${primaryColor};line-height:1;margin:2pt 0;position:relative;">${roomNo}</div>
+                    <div style="font-size:16pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
                   </div>
                   <!-- شريط عاجي: بيانات الحاج -->
-                  <div style="background:#F8F2E4;border-top:2px solid ${accentColor};padding:10px 14px;text-align:center;flex-shrink:0;">
-                    <div style="font-family:Cairo,sans-serif;font-size:12pt;font-weight:900;color:#241318;">${shortName}</div>
-                    ${p.name_en ? `<div style="font-size:8pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1px;">${p.name_en}</div>` : ""}
-                    <div style="display:flex;justify-content:center;gap:12px;margin-top:7px;font-size:9pt;font-weight:700;color:#8a6a10;">
+                  <div style="background:#F8F2E4;border-top:2px solid ${accentColor};padding:13pt 18pt;text-align:center;flex-shrink:0;">
+                    <div style="font-family:Cairo,sans-serif;font-size:18pt;font-weight:900;color:#241318;">${shortName}</div>
+                    ${p.name_en ? `<div style="font-size:11.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1pt;">${p.name_en}</div>` : ""}
+                    <div style="display:flex;justify-content:center;gap:15pt;margin-top:9pt;font-size:12pt;font-weight:700;color:#8a6a10;">
                       ${busName ? `<span style="display:flex;align-items:center;gap:4px;">${busIcon} أوتوبيس ${busName}</span>` : ""}
                       ${config.admin_phone ? `<span style="display:flex;align-items:center;gap:4px;direction:ltr;">${phoneIcon} ${config.admin_phone}</span>` : ""}
                     </div>
                   </div>
                 </div>`;
               /* 4 تاجات في ورقة A4: شبكة 2×2 */
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;gap:0;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}${tag()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}${tag()}</div>`;
             };
 
             /* ─── دالة الطباعة الفعلية ─── */
