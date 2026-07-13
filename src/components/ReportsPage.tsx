@@ -1513,37 +1513,100 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
               const busName   = bus?.name || "";
               const handShort = p.short_ar || p.name_ar || "";
-              /* كل شريط طولي: 70mm عرض × 297mm طول في ورقة portrait
-                 المحتوى الداخلي أفقي 297mm × 70mm ثم يتدار 90° */
-              const tag = () => `
-                <div style="width:calc(100%/3);height:100%;border-left:2px dashed #E8D5C4;box-sizing:border-box;overflow:hidden;position:relative;background:#fff;">
-                  <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:1;"></div>
-                  <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;z-index:1;opacity:.55;"></div>
-                  <!-- المحتوى المتدار: عرضه = طول الشريط، وضعه بالتحويل -->
-                  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);width:297mm;height:70mm;display:flex;align-items:stretch;direction:rtl;">
-                    <!-- رقم الغرفة -->
-                    <div style="flex:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 12px;border-left:2px solid ${accentColor};">
-                      <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                      <div style="font-size:52pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;letter-spacing:2px;">${roomNo}</div>
-                      <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:2px 12px;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
-                    </div>
-                    <!-- اسم الحاج والبيانات -->
-                    <div style="flex:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:0 16px;background:#F8F2E4;border-left:2px solid ${accentColor};">
-                      <div style="font-size:20pt;font-weight:900;color:#241318;text-align:center;line-height:1.4;font-family:Cairo,sans-serif;white-space:nowrap;">${handShort}</div>
-                      <div style="width:80%;height:1px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
-                      <div style="font-size:12pt;font-weight:700;color:#241318;text-align:center;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</div>
-                      <div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;">${p.phone || ""}</div>
-                    </div>
-                    <!-- شعار الحملة -->
-                    <div style="flex:1.5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 10px;">
-                      ${mkLogo(52)}
-                      <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
-                      <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;">${config.season_label || ""}</div>
-                      <div style="font-size:8pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
-                    </div>
-                  </div>
-                </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}</div>`;
+              const hotelName = config.hotel_name || companyName;
+              // @ts-ignore
+              const adminPh   = config.admin_phone || "";
+              // @ts-ignore
+              const season    = config.season_label || "";
+              /* SVG: ورقة A4 portrait 210×297mm
+                 viewBox 0 0 210 297 (بالمليمتر مباشرة)
+                 3 شرائط طولية: كل شريط عرضه 70mm وطوله 297mm
+                 الكلام في كل شريط مكتوب بـ transform="rotate(-90, cx, cy)"
+                 بحيث يُقرأ من أسفل لفوق لما الشريط معلق */
+
+              /* دالة رسم شريط واحد بـ x offset */
+              const svgTag = (x: number) => {
+                const cx = x + 35; // مركز الشريط أفقياً
+                // الأقسام الثلاثة بالـ mm من أسفل لفوق (لأن المحتوى متدار):
+                // قسم الشعار: أعلى الشريط (y=10..90) → لما يتدار يبان في آخر الشريط
+                // قسم الاسم: وسط (y=90..210)
+                // قسم الغرفة: أسفل (y=210..297)
+                // @ts-ignore
+                const logoSvg = logoUrl
+                  ? `<image href="${logoUrl}" x="${cx-14}" y="14" width="28" height="28" clip-path="circle(14px at center)"/>`
+                  : `<circle cx="${cx}" cy="28" r="14" fill="#F8F2E4" stroke="${accentColor}" stroke-width="1.2"/>
+                     <path d="M${cx} ${22}l2 4 4.5 1-3.5 3.5.7 4.5-3.7-2-3.7 2 .7-4.5-3.5-3.5 4.5-1z" fill="none" stroke="${accentColor}" stroke-width="1"/>`;
+                return `
+                  <!-- شريط ${x/70+1} -->
+                  <g transform="translate(${x},0)">
+                    <!-- خلفية بيضاء -->
+                    <rect x="1" y="1" width="68" height="295" rx="5" fill="white"/>
+                    <!-- إطار بوردو -->
+                    <rect x="1" y="1" width="68" height="295" rx="5" fill="none" stroke="${primaryColor}" stroke-width="1.5"/>
+                    <!-- إطار ذهبي داخلي -->
+                    <rect x="3.5" y="3.5" width="63" height="290" rx="4" fill="none" stroke="${accentColor}" stroke-width="0.6" opacity="0.6"/>
+                    <!-- خط فاصل بين الغرفة والاسم -->
+                    <line x1="2" y1="200" x2="68" y2="200" stroke="${accentColor}" stroke-width="1" stroke-dasharray="3 2"/>
+                    <!-- خلفية عاجية لقسم الاسم -->
+                    <rect x="2" y="200" width="66" height="90" fill="#F8F2E4"/>
+                    <!-- خط فاصل بين الاسم والشعار -->
+                    <line x1="2" y1="200" x2="68" y2="200" stroke="${accentColor}" stroke-width="1"/>
+
+                    <!-- ═══ قسم الغرفة (أعلى الشريط y=5..200) ═══ -->
+                    <!-- كلمة "الغرفة" متدارة -->
+                    <text transform="rotate(-90,${cx},30)" x="${cx}" y="30"
+                      text-anchor="middle" dominant-baseline="middle"
+                      font-family="Cairo,sans-serif" font-size="7" font-weight="800" fill="#8a6a10">الغرفة</text>
+                    <!-- رقم الغرفة ضخم متدار -->
+                    <text transform="rotate(-90,${cx},105)" x="${cx}" y="105"
+                      text-anchor="middle" dominant-baseline="middle"
+                      font-family="Cairo,sans-serif" font-size="52" font-weight="900" fill="${primaryColor}">${roomNo}</text>
+                    <!-- الدور والأوتوبيس -->
+                    <rect x="${cx-28}" y="182" width="56" height="12" rx="6" fill="rgba(125,31,60,0.08)"/>
+                    <text transform="rotate(-90,${cx},188)" x="${cx}" y="188"
+                      text-anchor="middle" dominant-baseline="middle"
+                      font-family="Cairo,sans-serif" font-size="5.5" font-weight="800" fill="#241318">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</text>
+
+                    <!-- ═══ قسم الاسم (y=200..270) ═══ -->
+                    <!-- اسم الحاج -->
+                    <text transform="rotate(-90,${cx},225)" x="${cx}" y="225"
+                      text-anchor="middle" dominant-baseline="middle"
+                      font-family="Cairo,sans-serif" font-size="13" font-weight="900" fill="#241318">${handShort}</text>
+                    <!-- خط ذهبي -->
+                    <line x1="${cx-20}" y1="242" x2="${cx+20}" y2="242" stroke="${accentColor}" stroke-width="0.8" opacity="0.7"/>
+                    <!-- الفندق -->
+                    <text transform="rotate(-90,${cx},252)" x="${cx}" y="252"
+                      text-anchor="middle" dominant-baseline="middle"
+                      font-family="Cairo,sans-serif" font-size="7" font-weight="700" fill="#241318">${hotelName}</text>
+                    <!-- التليفون -->
+                    <text transform="rotate(-90,${cx},263)" x="${cx}" y="263"
+                      text-anchor="middle" dominant-baseline="middle"
+                      font-family="Cairo,sans-serif" font-size="6" font-weight="600" fill="#7A6570">${p.phone || ""}</text>
+
+                    <!-- ═══ قسم الشعار (y=270..295) ═══ -->
+                    <!-- حلقة الشعار -->
+                    ${logoUrl
+                      ? `<image href="${logoUrl}" x="${cx-13}" y="273" width="26" height="26" style="border-radius:50%;"/>`
+                      : `<circle cx="${cx}" cy="283" r="12" fill="#F8F2E4" stroke="${accentColor}" stroke-width="1.2"/>
+                         <path d="M${cx} ${277}l1.8 3.6 4 .8-3 2.8.6 3.8-3.4-1.7-3.4 1.7.6-3.8-3-2.8 4-.8z" fill="none" stroke="${accentColor}" stroke-width="0.9"/>`}
+                  </g>`;
+              };
+
+              const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297"
+                style="page-break-after:always;display:block;"
+                xmlns:xlink="http://www.w3.org/1999/xlink">
+                <defs>
+                  <style>@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&amp;display=swap');</style>
+                </defs>
+                <!-- خطوط القص بين الشرائط -->
+                <line x1="70" y1="0" x2="70" y2="297" stroke="#E8D5C4" stroke-width="0.6" stroke-dasharray="4 3"/>
+                <line x1="140" y1="0" x2="140" y2="297" stroke="#E8D5C4" stroke-width="0.6" stroke-dasharray="4 3"/>
+                ${svgTag(0)}
+                ${svgTag(70)}
+                ${svgTag(140)}
+              </svg>`;
+
+              return `<!---->${svgContent}`;
             };
 
             /* ══ ورقة ٣: التاج الطولي الكلاسيكي (3 تاجات جنب بعض) ══ */
