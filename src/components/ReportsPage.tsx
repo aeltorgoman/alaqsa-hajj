@@ -1465,12 +1465,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="position:absolute;inset:0;opacity:.03;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E');pointer-events:none;"></div>
                   <div style="position:absolute;inset:6px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;"></div>
                   <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.55;"></div>
-                  <!-- هوية الحملة يمين — أكبر وموزعة على كامل الارتفاع -->
-                  <div style="width:36%;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:14px 10px;border-right:2px solid ${accentColor};">
-                    <div style="transform:scale(1.35);">${logoHtml}</div>
-                    <div style="font-size:24pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                    <div style="font-size:13pt;font-weight:700;color:#8a6a10;text-align:center;line-height:1.5;">${tagline || config.season_label || ""}</div>
-                    <div style="font-size:14pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
+                  <!-- هوية الحملة يمين — الشعار والاسم هما الأهم -->
+                  <div style="width:36%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;border-right:2px solid ${accentColor};">
+                    <div style="transform:scale(1.55);margin-bottom:14px;">${logoHtml}</div>
+                    <div style="font-size:25pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.25;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                      <span style="font-size:8pt;font-weight:700;color:#8a6a10;">${tagline || config.season_label || ""}</span>
+                      <span style="font-size:8pt;font-weight:700;color:#8a6a10;">·</span>
+                      <span style="font-size:8pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</span>
+                    </div>
                   </div>
                   <!-- البيانات وسط -->
                   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:12px 10px;gap:0;">
@@ -1562,8 +1565,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const shortName = p.short_ar || p.name_ar || "";
               const hotelName = config.hotel_name || companyName;
               const logoEl = logoUrl
-                ? `<img src="${logoUrl}" style="width:44px;height:44px;object-fit:contain;border-radius:50%;border:2px solid #F0C84A;background:rgba(240,200,74,.12);" />`
-                : `<div style="width:44px;height:44px;border-radius:50%;border:2px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+                ? `<img src="${logoUrl}" style="width:78px;height:78px;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
+                : `<div style="width:78px;height:78px;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
               const busIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3l1-4-1.4-5C20.6 7.8 19.7 7 18.6 7H4a2 2 0 0 0-2 2v9h3"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg>';
               const phoneIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.07 4.18 2 2 0 0 1 5.11 2h3a2 2 0 0 1 2 1.72l.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45l2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
               /* كارت A6: 105×148mm — 4 في ورقة A4 (2 عمود × 2 صف) */
@@ -1571,17 +1574,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 <div style="width:105mm;height:148mm;box-sizing:border-box;border:1.5px dashed #E8D5C4;overflow:hidden;position:relative;background:#fff;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;">
                   <!-- ثقب -->
                   <div style="width:26px;height:9px;border-radius:99px;background:#241318;box-shadow:inset 0 2px 3px rgba(0,0,0,.5);margin:8px auto 0;flex-shrink:0;position:relative;z-index:3;"></div>
-                  <!-- هيدر بوردو -->
-                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:10px 12px 8px;text-align:center;position:relative;flex-shrink:0;">
-                    <div style="display:flex;justify-content:center;margin-bottom:5px;">${logoEl}</div>
-                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:14pt;font-weight:700;">${companyName}</div>
-                    <div style="font-size:7.5pt;color:#F0C84A;font-weight:700;margin-top:2px;">${config.season_label || ""}</div>
+                  <!-- هيدر بوردو — الشعار هو الأهم، ياخد أكبر مساحة -->
+                  <div style="flex:1.3;background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px 12px;text-align:center;position:relative;">
+                    ${logoEl}
+                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:16pt;font-weight:700;">${companyName}</div>
+                    <div style="font-size:8pt;color:#F0C84A;font-weight:700;">${config.season_label || ""}</div>
                   </div>
-                  <!-- رقم الغرفة -->
-                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;">
+                  <!-- رقم الغرفة — مساحة مضغوطة على قدر المحتوى -->
+                  <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px 8px;position:relative;">
                     <div style="font-size:9pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                    <div style="font-family:Cairo,sans-serif;font-size:66pt;font-weight:900;color:${primaryColor};line-height:1;margin:2px 0;">${roomNo}</div>
-                    <div style="font-size:10pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
+                    <div style="font-family:Cairo,sans-serif;font-size:60pt;font-weight:900;color:${primaryColor};line-height:1;">${roomNo}</div>
+                    <div style="font-size:9pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
                   </div>
                   <!-- شريط عاجي: بيانات الحاج -->
                   <div style="background:#F8F2E4;border-top:2px solid ${accentColor};padding:10px 14px;text-align:center;flex-shrink:0;">
