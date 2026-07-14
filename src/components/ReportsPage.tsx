@@ -1507,7 +1507,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.1);border-radius:99px;padding:3px 10px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
                   </div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;">${stk()}${stk()}${stk()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="sticker">${stk()}${stk()}${stk()}</div>`;
             };
 
             /* ══ ورقة ٢: تاج اليد — 3 شرائط أفقية (وجه واحد يلتف ويلتصق) ══ */
@@ -1554,7 +1554,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     </div>
                   </div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;">${strip()}${strip()}${strip()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="hand">${strip()}${strip()}${strip()}</div>`;
             };
 
             /* ══ ورقة ٣: التاج المعلق A6 — نقل حرفي للعينة المعتمدة "الكلاسيكي" ══ */
@@ -1578,9 +1578,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 <div style="width:89.3mm;height:125.8mm;box-sizing:border-box;border-radius:6.8pt;overflow:hidden;position:relative;background:#fff;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;box-shadow:0 0 0 1px #E8D5C4;margin:3mm;">
                   <!-- ثقب -->
                   <div style="position:absolute;top:8.5pt;left:50%;transform:translateX(-50%);width:31pt;height:11pt;border-radius:99px;background:#241318;z-index:5;"></div>
-                  <!-- هيدر بوردو — نسبة أكبر من الكارت عشان الشعار ميتقصش -->
-                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:13pt 9pt 7pt;text-align:center;position:relative;flex-shrink:0;">
-                    <div style="display:flex;justify-content:center;margin-bottom:2pt;">${logoEl}</div>
+                  <!-- هيدر بوردو — الشعار تحت الثقب مباشرة -->
+                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:4pt 9pt 7pt;text-align:center;position:relative;flex-shrink:0;">
+                    <div style="display:flex;justify-content:center;margin-top:14pt;margin-bottom:2pt;">${logoEl}</div>
                     <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:17pt;font-weight:700;line-height:1;">${companyName}</div>
                     <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${config.season_label || ""}</div>
                   </div>
@@ -1602,7 +1602,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   </div>
                 </div>`;
               /* 4 تاجات في ورقة A4: شبكة 2×2 */
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}${tag()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Cairo,sans-serif;direction:rtl;" data-page="long">${tag()}${tag()}${tag()}${tag()}</div>`;
             };
 
             /* ─── دالة الطباعة الفعلية ─── */
@@ -1627,7 +1627,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               localStorage.setItem("stk_print_dates", JSON.stringify(newDates));
               const full = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
                 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
-                <style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}div[data-last="1"]{page-break-after:avoid!important}</style>
+                <style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}[data-page]{page-break-after:always}[data-page]:last-child{page-break-after:avoid}</style>
                 </head><body>${html}</body></html>`;
               printInPage(full);
             };
