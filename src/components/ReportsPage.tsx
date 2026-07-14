@@ -1495,16 +1495,20 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">العنوان</span>
                       <span style="font-size:9pt;font-weight:700;color:#7A6570;font-family:Cairo,sans-serif;">${(config as any).hotel_address || ""}</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
+                    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed #E8D5C4;">
                       <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;">الهاتف</span>
                       <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
+                      <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:46px;font-family:Cairo,sans-serif;flex-shrink:0;"></span>
+                      <span style="font-size:10pt;font-weight:700;color:#241318;font-family:Cairo,sans-serif;">${busName ? `باص ${busName}` : ""}${busName && camps.find((c: Camp) => c.id === p.camp_mina_id)?.name ? " · " : ""}${camps.find((c: Camp) => c.id === p.camp_mina_id)?.name ? `منى ${camps.find((c: Camp) => c.id === p.camp_mina_id)?.name}` : ""}</span>
                     </div>
                   </div>
                   <!-- رقم الغرفة يسار — أكبر بكثير -->
                   <div style="width:30%;margin:10px 10px 10px 0;background:#F8F2E4;border:2px solid ${accentColor};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
                     <div style="font-size:10pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
                     <div style="font-size:56pt;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
-                    <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.1);border-radius:99px;padding:3px 10px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                    <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.1);border-radius:99px;padding:3px 10px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · باص ${busName}` : ""}</div>
                   </div>
                 </div>`;
               return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="sticker">${stk()}${stk()}${stk()}</div>`;
@@ -1535,7 +1539,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 16px;flex-shrink:0;min-width:95mm;">
                       <div style="font-size:13px;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
                       <div style="font-size:98px;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
-                      <div style="font-size:12px;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;margin-top:4px;white-space:nowrap;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
+                      <div style="font-size:12px;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;margin-top:4px;white-space:nowrap;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · باص ${busName}` : ""}</div>
                     </div>
                     <!-- قسم بيانات الحاج -->
                     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 12px;border-left:2px solid #E8D5C4;border-right:2px solid #E8D5C4;background:#F8F2E4;">
@@ -1543,7 +1547,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       <div style="width:80%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
                       <div style="font-size:14px;font-weight:700;color:#241318;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelName}</div>
                       ${hotelAddr ? `<div style="font-size:11px;font-weight:600;color:#7A6570;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelAddr}</div>` : ""}
-                      ${busName ? `<div style="font-size:13px;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1.5px solid rgba(125,31,60,.25);border-radius:99px;padding:3px 14px;white-space:nowrap;font-family:Cairo,sans-serif;">أوتوبيس ${busName}</div>` : ""}
+                      ${busName ? `<div style="font-size:13px;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1.5px solid rgba(125,31,60,.25);border-radius:99px;padding:3px 14px;white-space:nowrap;font-family:Cairo,sans-serif;">باص ${busName}${(() => { const mn = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || ""; return mn ? ` · منى ${mn}` : ""; })()}</div>` : ""}
                     </div>
                     <!-- قسم الشعار -->
                     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 10px;flex-shrink:0;min-width:75mm;">
@@ -1570,6 +1574,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const logoEl = logoUrl
                 ? `<img src="${logoUrl}" style="width:90pt;height:90pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
                 : `<div style="width:90pt;height:90pt;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+              // @ts-ignore
               const busIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3l1-4-1.4-5C20.6 7.8 19.7 7 18.6 7H4a2 2 0 0 0-2 2v9h3"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg>';
               // @ts-ignore
               const phoneIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.07 4.18 2 2 0 0 1 5.11 2h3a2 2 0 0 1 2 1.72l.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45l2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
@@ -1597,9 +1602,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="font-family:Cairo,sans-serif;font-size:12pt;font-weight:700;color:#8a6a10;margin-bottom:2pt;">${hotelName}</div>
                     <div style="font-family:Cairo,sans-serif;font-size:13.5pt;font-weight:900;color:#241318;line-height:1.1;">${shortName}</div>
                     ${p.name_en ? `<div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1pt;line-height:1;">${p.name_en}</div>` : ""}
-                    <div style="display:flex;justify-content:center;gap:8pt;margin-top:4pt;font-size:9pt;font-weight:700;color:#8a6a10;flex-wrap:wrap;">
-                      ${busName ? `<span style="display:flex;align-items:center;gap:3px;">${busIcon} ${busName}</span>` : ""}
-                      ${(() => { const minaName = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || ""; return minaName ? `<span style="display:flex;align-items:center;gap:3px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3L2 21h20L12 3z"/><path d="M12 13l-4 8M12 13l4 8"/></svg> ${minaName}</span>` : ""; })()}
+                    <div style="display:flex;justify-content:center;gap:10pt;margin-top:4pt;font-size:9pt;font-weight:700;color:#8a6a10;flex-wrap:wrap;">
+                      ${busName ? `<span>باص ${busName}</span>` : ""}
+                      ${(() => { const minaName = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || ""; return minaName ? `<span>منى ${minaName}</span>` : ""; })()}
                     </div>
                   </div>
                 </div>`;
