@@ -1571,6 +1571,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 ? `<img src="${logoUrl}" style="width:90pt;height:90pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
                 : `<div style="width:90pt;height:90pt;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
               const busIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3l1-4-1.4-5C20.6 7.8 19.7 7 18.6 7H4a2 2 0 0 0-2 2v9h3"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg>';
+              // @ts-ignore
               const phoneIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.07 4.18 2 2 0 0 1 5.11 2h3a2 2 0 0 1 2 1.72l.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45l2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
               const patBg2 = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Cg fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%221%22%3E%3Cpath d=%22M32 8l6 12 13 2.5-9 10.5 2 14-12-6-12 6 2-14-9-10.5L26 20z%22/%3E%3C/g%3E%3C/svg%3E')`;
               /* كارت مصغّر بنسبة 85% من A6: 89.3×125.8mm — 4 في الورقة بفراغات حواليهم */
@@ -1580,7 +1581,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="position:absolute;top:8.5pt;left:50%;transform:translateX(-50%);width:31pt;height:11pt;border-radius:99px;background:#241318;z-index:5;"></div>
                   <!-- هيدر بوردو — الشعار تحت الثقب مباشرة -->
                   <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:4pt 9pt 7pt;text-align:center;position:relative;flex-shrink:0;">
-                    <div style="display:flex;justify-content:center;margin-top:14pt;margin-bottom:2pt;">${logoEl}</div>
+                    <div style="display:flex;justify-content:center;margin-top:17pt;margin-bottom:2pt;">${logoEl}</div>
                     <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:17pt;font-weight:700;line-height:1;">${companyName}</div>
                     <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${config.season_label || ""}</div>
                   </div>
@@ -1588,16 +1589,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;position:relative;">
                     <div style="position:absolute;inset:0;opacity:.05;background-image:${patBg2};pointer-events:none;"></div>
                     <div style="font-size:11pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;position:relative;line-height:1;">الغرفة</div>
-                    <div style="font-family:Cairo,sans-serif;font-size:89pt;font-weight:900;color:${primaryColor};line-height:0.9;position:relative;">${roomNo}</div>
-                    <div style="font-size:12pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;line-height:1;margin-top:2pt;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
+                    <div style="font-family:Cairo,sans-serif;font-size:98pt;font-weight:900;color:${primaryColor};line-height:0.9;position:relative;">${roomNo}</div>
+                    <div style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;line-height:1;margin-top:2pt;">${roomFloor}</div>
                   </div>
                   <!-- شريط عاجي: بيانات الحاج -->
                   <div style="background:#F8F2E4;border-top:2px solid ${accentColor};padding:8pt 12pt;text-align:center;flex-shrink:0;">
+                    <div style="font-family:Cairo,sans-serif;font-size:12pt;font-weight:700;color:#8a6a10;margin-bottom:2pt;">${hotelName}</div>
                     <div style="font-family:Cairo,sans-serif;font-size:13.5pt;font-weight:900;color:#241318;line-height:1.1;">${shortName}</div>
                     ${p.name_en ? `<div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1pt;line-height:1;">${p.name_en}</div>` : ""}
-                    <div style="display:flex;justify-content:center;gap:10pt;margin-top:4pt;font-size:9pt;font-weight:700;color:#8a6a10;">
-                      ${busName ? `<span style="display:flex;align-items:center;gap:4px;">${busIcon} أوتوبيس ${busName}</span>` : ""}
-                      ${config.admin_phone ? `<span style="display:flex;align-items:center;gap:4px;direction:ltr;">${phoneIcon} ${config.admin_phone}</span>` : ""}
+                    <div style="display:flex;justify-content:center;gap:8pt;margin-top:4pt;font-size:9pt;font-weight:700;color:#8a6a10;flex-wrap:wrap;">
+                      ${busName ? `<span style="display:flex;align-items:center;gap:3px;">${busIcon} ${busName}</span>` : ""}
+                      ${(() => { const minaName = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || ""; return minaName ? `<span style="display:flex;align-items:center;gap:3px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3L2 21h20L12 3z"/><path d="M12 13l-4 8M12 13l4 8"/></svg> ${minaName}</span>` : ""; })()}
                     </div>
                   </div>
                 </div>`;
