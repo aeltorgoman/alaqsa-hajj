@@ -320,7 +320,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       const headers = ["م", "اسم الحاج / الحاجة", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"];
       const info = [["الرحلة:", flight.name], ["الخط:", flight.airline], ["التاريخ:", flight.date], ["الوقت:", flight.time], ["من:", flight.from_airport], ["إلى:", flight.to_airport], []];
       const rows = fp.map((p, i) => [
-        i + 1, p.short_ar || p.name_ar, p.nat, p.passport, p.phone || "—", p.gender,
+        i + 1, p.name_en || p.name_ar, p.nat, p.passport, p.phone || "—", p.gender,
         wantsFirstClass(p) ? "درجة أولى" : "اقتصادية"
       ]);
       const ws = XLSX.utils.aoa_to_sheet([...info, headers, ...rows]);
