@@ -125,7 +125,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   /* ─── مطبوعات الشنط ─── */
   const [stkFilter, setStkFilter] = useState<"all" | "bus" | "room" | "one">("all");
+  // @ts-ignore
   const [stkBusId, setStkBusId] = useState<number | null>(null);
+  // @ts-ignore
   const [stkRoomId, setStkRoomId] = useState<number | null>(null);
   // @ts-ignore
   const [stkPassId, setStkPassId] = useState<number | null>(null);
@@ -1505,7 +1507,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="font-size:8pt;font-weight:800;color:#241318;background:rgba(125,31,60,.1);border-radius:99px;padding:3px 10px;text-align:center;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · أوتوبيس ${busName}` : ""}</div>
                   </div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:block;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;">${stk()}${stk()}${stk()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;">${stk()}${stk()}${stk()}</div>`;
             };
 
             /* ══ ورقة ٢: تاج اليد — 3 شرائط أفقية (وجه واحد يلتف ويلتصق) ══ */
@@ -1552,7 +1554,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     </div>
                   </div>
                 </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;">${strip()}${strip()}${strip()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;page-break-after:always;">${strip()}${strip()}${strip()}</div>`;
             };
 
             /* ══ ورقة ٣: التاج المعلق A6 — نقل حرفي للعينة المعتمدة "الكلاسيكي" ══ */
@@ -1582,12 +1584,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:17pt;font-weight:700;line-height:1;">${companyName}</div>
                     <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${config.season_label || ""}</div>
                   </div>
-                  <!-- رقم الغرفة — فراغ أقل بين التسمية والرقم -->
-                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;">
+                  <!-- رقم الغرفة — فراغات مضغوطة -->
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;position:relative;">
                     <div style="position:absolute;inset:0;opacity:.05;background-image:${patBg2};pointer-events:none;"></div>
-                    <div style="font-size:12pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;position:relative;margin-bottom:0;">الغرفة</div>
-                    <div style="font-family:Cairo,sans-serif;font-size:89pt;font-weight:900;color:${primaryColor};line-height:1;margin:0;position:relative;">${roomNo}</div>
-                    <div style="font-size:13.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
+                    <div style="font-size:11pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;position:relative;line-height:1;">الغرفة</div>
+                    <div style="font-family:Cairo,sans-serif;font-size:89pt;font-weight:900;color:${primaryColor};line-height:0.9;position:relative;">${roomNo}</div>
+                    <div style="font-size:12pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;line-height:1;margin-top:2pt;">${roomFloor}${hotelName ? ` — ${hotelName}` : ""}</div>
                   </div>
                   <!-- شريط عاجي: بيانات الحاج -->
                   <div style="background:#F8F2E4;border-top:2px solid ${accentColor};padding:8pt 12pt;text-align:center;flex-shrink:0;">
@@ -1600,7 +1602,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   </div>
                 </div>`;
               /* 4 تاجات في ورقة A4: شبكة 2×2 */
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;page-break-after:always;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}${tag()}</div>`;
+              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Cairo,sans-serif;direction:rtl;">${tag()}${tag()}${tag()}${tag()}</div>`;
             };
 
             /* ─── دالة الطباعة الفعلية ─── */
@@ -1613,6 +1615,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               let html = "";
               const now = new Date().toLocaleDateString("ar-EG");
               const newDates: Record<number, string> = { ...printDates };
+              // @ts-ignore
+              const pagesPerPassenger = [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length;
               for (const p of finalPassengers) {
                 if (stkTypes.sticker)  html += buildStickerPage(p);
                 if (stkTypes.hand_tag) html += buildHandTagPage(p);
@@ -1623,7 +1627,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               localStorage.setItem("stk_print_dates", JSON.stringify(newDates));
               const full = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
                 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
-                <style>@page{size:A4;margin:0}@page landscape{size:A4 landscape;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.landscape-page{page:landscape;}</style>
+                <style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}div[data-last="1"]{page-break-after:avoid!important}</style>
                 </head><body>${html}</body></html>`;
               printInPage(full);
             };
@@ -1681,35 +1685,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-muted)", marginBottom: 10 }}>اختيار الحجاج</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {[
-                      { id: "all", label: `الكل (${passengers.length})` },
-                      { id: "bus",  label: "أوتوبيس محدد" },
-                      { id: "room", label: "غرفة محددة" },
-                    ].map(o => (
-                      <button key={o.id} onClick={() => { setStkFilter(o.id as typeof stkFilter); setStkSelected(new Set()); }}
-                        style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkFilter === o.id && stkSelected.size === 0 ? "var(--primary)" : "var(--line)"}`, background: stkFilter === o.id && stkSelected.size === 0 ? "var(--primary)" : "var(--paper)", color: stkFilter === o.id && stkSelected.size === 0 ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                        {o.label}
-                      </button>
-                    ))}
+                    <button onClick={() => { setStkFilter("all"); setStkSelected(new Set()); }}
+                      style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkFilter === "all" && stkSelected.size === 0 ? "var(--primary)" : "var(--line)"}`, background: stkFilter === "all" && stkSelected.size === 0 ? "var(--primary)" : "var(--paper)", color: stkFilter === "all" && stkSelected.size === 0 ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                      الكل ({passengers.length})
+                    </button>
                     <button onClick={() => setStkDrawerOpen(true)}
                       style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${stkSelected.size > 0 ? "var(--primary)" : "var(--line)"}`, background: stkSelected.size > 0 ? "var(--primary)" : "var(--paper)", color: stkSelected.size > 0 ? "#fff" : "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
                       {stkSelected.size > 0 ? `اختيار يدوي (${stkSelected.size})` : "اختيار يدوي"}
                     </button>
                   </div>
-                  {stkFilter === "bus" && stkSelected.size === 0 && (
-                    <select value={stkBusId ?? ""} onChange={e => setStkBusId(Number(e.target.value) || null)}
-                      style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
-                      <option value="">اختر الأوتوبيس...</option>
-                      {buses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
-                  )}
-                  {stkFilter === "room" && stkSelected.size === 0 && (
-                    <select value={stkRoomId ?? ""} onChange={e => setStkRoomId(Number(e.target.value) || null)}
-                      style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", background: "var(--paper)", color: "var(--ink)" }}>
-                      <option value="">اختر الغرفة...</option>
-                      {rooms.map(r => <option key={r.id} value={r.id}>غرفة {r.number}{r.floor ? ` — الدور ${r.floor}` : ""}</option>)}
-                    </select>
-                  )}
+
                   <div style={{ marginTop: 10, fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)" }}>
                     {finalPassengers.length} حاج محدد
                   </div>
@@ -1739,15 +1724,15 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 {/* ملخص + زرار الطباعة */}
                 <div style={{ background: "rgba(212,160,23,.06)", border: "1px solid rgba(212,160,23,.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: "#8a6a10" }}>
-                    إجمالي الأوراق: {stkPassengers.length * [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length} ورقة A4 لاصقة
+                    إجمالي الأوراق: {finalPassengers.length * [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length} ورقة A4 لاصقة
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
-                    {stkPassengers.length} حاج × {[stkTypes.sticker && "استيكر عريض", stkTypes.hand_tag && "تاج يد", stkTypes.long_tag && "تاج طولي"].filter(Boolean).join(" + ")} = {stkPassengers.length * [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length} ورقة
+                    {finalPassengers.length} حاج × {[stkTypes.sticker && "استيكر عريض", stkTypes.hand_tag && "تاج يد", stkTypes.long_tag && "تاج طولي"].filter(Boolean).join(" + ")} = {finalPassengers.length * [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length} ورقة
                   </div>
                 </div>
 
                 <button onClick={doPrint} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: "var(--primary)", color: "#fff", fontFamily: "inherit", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
-                  طباعة {stkPassengers.length * [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length} ورقة
+                  طباعة {finalPassengers.length * [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length} ورقة
                 </button>
               </>
             );
