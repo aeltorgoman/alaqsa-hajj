@@ -12,7 +12,7 @@ import { supabase } from "../supabase";
    ═══════════════════════════════════════════════════════════════ */
 
 type PortalData = {
-  pilgrim: { name_ar: string; name_en: string; gender: string; photo_url: string | null; hajj_permit_url: string | null; flight_ticket_url: string | null; hotel_type: string | null; hotel_view: string | null; camp_mina: string | null; camp_arafa: string | null; phone: string | null };
+  pilgrim: { name_ar: string; name_en: string; short_ar?: string | null; gender: string; photo_url: string | null; hajj_permit_url: string | null; flight_ticket_url: string | null; hotel_type: string | null; hotel_view: string | null; camp_mina: string | null; camp_arafa: string | null; camp_mina_name?: string | null; camp_arafa_name?: string | null; phone: string | null };
   bus: { name: string; type: string } | null;
   room: { number: string; floor: string; type: string } | null;
   roommates: { name: string; is_family: boolean }[];
@@ -206,7 +206,7 @@ function PilgrimPortal() {
           : <Icon d={ICONS.star} size={36} color={GOLD_BRIGHT} sw={1.4} />}
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontFamily: fontT, fontSize: 24, fontWeight: 700, color: "#fff", lineHeight: 1.25 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
+        <div style={{ fontFamily: fontT, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.25 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
         <div style={{ fontFamily: font, fontSize: 13.5, fontWeight: 700, color: GOLD_BRIGHT, marginTop: 3 }}>
           بوابة الحاج{cfg?.season_label ? ` — ${cfg.season_label}` : ""}
         </div>
@@ -323,19 +323,19 @@ function PilgrimPortal() {
   /* ═══════════ مكونات مشتركة ═══════════ */
   const p = data.pilgrim;
   const card: React.CSSProperties = { background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, padding: 19, marginBottom: 14, boxShadow: "0 5px 20px rgba(93,16,41,.08)" };
-  const cardH = (icon: string, title: string, sub?: string) => (
+  const cardH = (icon: string, title: string, sub?: string, bigTitle = false) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
       <div style={{ width: 46, height: 46, borderRadius: 13, background: `${gold}1e`, border: `1.5px solid ${gold}55`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD_DARK, flexShrink: 0 }}><Icon d={icon} size={23} /></div>
       <div>
-        <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 18, color: INK }}>{title}</div>
+        <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: bigTitle ? 22 : 18, color: INK }}>{title}</div>
         {sub && <div style={{ fontSize: 13.5, fontWeight: 600, color: LABEL, marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
   );
   const row = (k: string, v: string, big = false) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 2px", borderBottom: `1px dashed ${LINE}` }}>
-      <span style={{ fontSize: 14.5, fontWeight: 600, color: LABEL }}>{k}</span>
-      <span style={{ fontFamily: big ? fontD : font, fontWeight: big ? 900 : 700, fontSize: big ? 21 : 15.5, color: big ? brand : INK }}>{v}</span>
+      <span style={{ fontSize: 16, fontWeight: 700, color: LABEL }}>{k}</span>
+      <span style={{ fontFamily: big ? fontD : font, fontWeight: big ? 900 : 700, fontSize: big ? 24 : 17, color: big ? brand : INK }}>{v}</span>
     </div>
   );
   const addressLink = (address: string) => (
@@ -381,17 +381,17 @@ function PilgrimPortal() {
               <div style={{ width: 52, height: 52, borderRadius: "50%", border: `2.5px solid ${GOLD_BRIGHT}`, background: "rgba(240,200,74,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {cfg?.logo_url ? <img src={cfg.logo_url} alt="" style={{ width: 34, height: 34, objectFit: "contain" }} /> : <Icon d={ICONS.star} size={26} color={GOLD_BRIGHT} sw={1.5} />}
               </div>
-              <div style={{ fontFamily: fontT, fontSize: 26, fontWeight: 700 }}>{cfg?.name_ar || "الحملة"}</div>
+              <div style={{ fontFamily: fontT, fontSize: 30, fontWeight: 700 }}>{cfg?.name_ar || "الحملة"}</div>
             </div>
             <div style={{ fontSize: 13, color: GOLD_BRIGHT, letterSpacing: 2.5, fontWeight: 700, direction: "ltr" }}>HAJJ GROUP{cfg?.country ? ` — ${cfg.country.toUpperCase()}` : ""}</div>
 
-            <div style={{ fontFamily: fontD, fontSize: 33, fontWeight: 900, marginTop: 24, lineHeight: 1.4 }}>{p.name_ar}</div>
+            <div style={{ fontFamily: fontD, fontSize: 36, fontWeight: 900, marginTop: 24, lineHeight: 1.4 }}>{p.name_ar}</div>
             <div style={{ fontSize: 17.5, direction: "ltr", color: "#fff", marginTop: 6, fontWeight: 600 }}>{p.name_en}</div>
 
             <div style={{ background: "rgba(240,200,74,.13)", border: `1.5px solid ${GOLD_BRIGHT}88`, borderRadius: 15, padding: "14px 15px", marginTop: 22, fontSize: 15.5, fontWeight: 700, lineHeight: 2.1, textAlign: "right", color: "#fff" }}>
               {(cfg?.hotel_name || data.room) && <div>الفندق: {cfg?.hotel_name || ""} {data.room ? `— غرفة ${data.room.number}` : ""}</div>}
-              {p.camp_mina && <div>مخيم منى: {p.camp_mina}{cfg?.camp_mina_address ? ` — ${cfg.camp_mina_address}` : ""}</div>}
-              {p.camp_arafa && <div>مخيم عرفات: {p.camp_arafa}{cfg?.camp_arafa_address ? ` — ${cfg.camp_arafa_address}` : ""}</div>}
+              {(p.camp_mina_name || p.camp_mina) && <div>مخيم منى: {p.camp_mina_name || p.camp_mina}{cfg?.camp_mina_address ? ` — ${cfg.camp_mina_address}` : ""}</div>}
+              {(p.camp_arafa_name || p.camp_arafa) && <div>مخيم عرفات: {p.camp_arafa_name || p.camp_arafa}{cfg?.camp_arafa_address ? ` — ${cfg.camp_arafa_address}` : ""}</div>}
             </div>
 
             {cfg?.admin_phone && <>
@@ -420,10 +420,10 @@ function PilgrimPortal() {
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {p.photo_url
               ? <img src={p.photo_url} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,.55)" }} />
-              : <div style={{ width: 60, height: 60, borderRadius: "50%", background: GOLD_BRIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{p.name_ar?.charAt(0)}</div>}
+              : <div style={{ width: 60, height: 60, borderRadius: "50%", background: GOLD_BRIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{(p.short_ar || p.name_ar)?.charAt(0)}</div>}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14.5, color: GOLD_BRIGHT, fontWeight: 800 }}>{p.gender === "أنثى" ? "حياك الله يا حاجة" : "حياك الله يا حاج"}</div>
-              <div style={{ fontFamily: fontD, fontSize: 22, fontWeight: 900, marginTop: 2, lineHeight: 1.4, color: "#fff" }}>{p.name_ar}</div>
+              <div style={{ fontFamily: fontD, fontSize: 24, fontWeight: 900, marginTop: 2, lineHeight: 1.4, color: "#fff" }}>{p.short_ar || p.name_ar}</div>
             </div>
             <button onClick={logout} style={{ background: "rgba(255,255,255,.13)", border: "1.5px solid rgba(255,255,255,.35)", color: "#fff", borderRadius: 99, fontSize: 13.5, padding: "8px 17px", cursor: "pointer", fontFamily: fontD, fontWeight: 800 }}>خروج</button>
           </div>
@@ -536,7 +536,7 @@ function PilgrimPortal() {
               {data.roommates.map((m, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 2px", borderBottom: i < data.roommates.length - 1 ? `1px dashed ${LINE}` : "none" }}>
                   <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: GOLD_DARK, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{m.name?.charAt(0)}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: INK, flex: 1 }}>{m.name}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: INK, flex: 1 }}>{m.name}</div>
                   {m.is_family && <span style={{ fontSize: 12.5, background: GOLD_BRIGHT, color: brandDeep, padding: "4px 14px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>عائلتك</span>}
                 </div>
               ))}
@@ -548,14 +548,14 @@ function PilgrimPortal() {
             <div style={{ padding: "11px 2px", borderBottom: `1px dashed ${LINE}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 600, color: LABEL }}>مخيم منى</span>
-                <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 18.5, color: brand }}>{p.camp_mina || "لم يُحدد بعد"}</span>
+                <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 22, color: brand }}>{p.camp_mina_name || p.camp_mina || "لم يُحدد بعد"}</span>
               </div>
               {cfg?.camp_mina_address && addressLink(cfg.camp_mina_address)}
             </div>
             <div style={{ padding: "11px 2px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 600, color: LABEL }}>مخيم عرفات</span>
-                <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 18.5, color: brand }}>{p.camp_arafa || "لم يُحدد بعد"}</span>
+                <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 22, color: brand }}>{p.camp_arafa_name || p.camp_arafa || "لم يُحدد بعد"}</span>
               </div>
               {cfg?.camp_arafa_address && addressLink(cfg.camp_arafa_address)}
             </div>
@@ -592,7 +592,7 @@ function PilgrimPortal() {
           const on = tab === t.id;
           return (
             <button key={t.id} onClick={() => { setTab(t.id as typeof tab); if (t.id === "alerts") { setSeenAlerts(data.announcements.length); localStorage.setItem("portal_seen_alerts", String(data.announcements.length)); } }}
-              style={{ flex: 1, border: "none", background: on ? `${brand}15` : "none", borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: fontD, fontSize: 15.5, fontWeight: 900, color: on ? brand : LABEL, cursor: "pointer", padding: "11px 0 9px", position: "relative", margin: "0 3px", transition: "background .2s,color .2s" }}>
+              style={{ flex: 1, border: "none", background: on ? `${brand}15` : "none", borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: fontD, fontSize: 17, fontWeight: 900, color: on ? brand : LABEL, cursor: "pointer", padding: "11px 0 9px", position: "relative", margin: "0 3px", transition: "background .2s,color .2s" }}>
               <Icon d={t.icon} size={28} color={on ? brand : LABEL} sw={on ? 2.3 : 2} />
               {t.label}
               {t.id === "alerts" && unread > 0 && <span style={{ position: "absolute", top: 7, left: "calc(50% - 24px)", width: 12, height: 12, borderRadius: "50%", background: "#C1121F", border: "2.5px solid #fff" }} />}
