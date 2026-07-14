@@ -1566,8 +1566,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const hotelName = config.hotel_name || companyName;
               /* نفس نسب العينة (44px شعار) بس مكبّر شوية بناءً على الطلب */
               const logoEl = logoUrl
-                ? `<img src="${logoUrl}" style="width:52pt;height:52pt;object-fit:contain;border-radius:50%;border:2px solid #F0C84A;background:rgba(240,200,74,.12);" />`
-                : `<div style="width:52pt;height:52pt;border-radius:50%;border:2px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+                ? `<img src="${logoUrl}" style="width:76pt;height:76pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
+                : `<div style="width:76pt;height:76pt;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
               const busIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3l1-4-1.4-5C20.6 7.8 19.7 7 18.6 7H4a2 2 0 0 0-2 2v9h3"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg>';
               const phoneIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.07 4.18 2 2 0 0 1 5.11 2h3a2 2 0 0 1 2 1.72l.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45l2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
               const patBg2 = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Cg fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%221%22%3E%3Cpath d=%22M32 8l6 12 13 2.5-9 10.5 2 14-12-6-12 6 2-14-9-10.5L26 20z%22/%3E%3C/g%3E%3C/svg%3E')`;
@@ -1577,10 +1577,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   <!-- ثقب -->
                   <div style="position:absolute;top:10pt;left:50%;transform:translateX(-50%);width:37pt;height:13pt;border-radius:99px;background:#241318;z-index:5;"></div>
                   <!-- هيدر بوردو -->
-                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:28pt 17pt 15pt;text-align:center;position:relative;flex-shrink:0;">
-                    <div style="display:flex;justify-content:center;margin-bottom:7pt;">${logoEl}</div>
-                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:24pt;font-weight:700;">${companyName}</div>
-                    <div style="font-size:11pt;color:#F0C84A;font-weight:700;margin-top:2pt;">${config.season_label || ""}</div>
+                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:20pt 14pt 12pt;text-align:center;position:relative;flex-shrink:0;">
+                    <div style="display:flex;justify-content:center;margin-bottom:5pt;">${logoEl}</div>
+                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:25pt;font-weight:700;line-height:1.15;">${companyName}</div>
+                    <div style="font-size:11.5pt;color:#F0C84A;font-weight:700;margin-top:3pt;">${config.season_label || ""}</div>
                   </div>
                   <!-- رقم الغرفة -->
                   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;">
