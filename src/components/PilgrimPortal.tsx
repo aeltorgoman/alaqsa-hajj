@@ -16,6 +16,7 @@ type PortalData = {
   bus: { name: string; type: string } | null;
   room: { number: string; floor: string; type: string } | null;
   roommates: { name: string; is_family: boolean }[];
+  family: { name: string; short_ar?: string | null; gender: string; room_number: string | null; room_floor: string | null; bus_name: string | null; camp_mina_name: string | null; camp_arafa_name: string | null }[];
   flight_go: FlightInfo | null;
   flight_back: FlightInfo | null;
   config: PortalConfig | null;
@@ -23,7 +24,7 @@ type PortalData = {
 };
 type Ann = { id: number; body: string; priority: string; show_at: string };
 type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
-type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; season_label: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; features: Record<string, boolean> | null; country: string | null; city: string | null; hotel_name: string | null; hotel_address: string | null; camp_mina_address: string | null; camp_arafa_address: string | null };
+type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; season_label: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; features: Record<string, boolean> | null; country: string | null; city: string | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; camp_mina_address: string | null; camp_mina_url: string | null; camp_arafa_address: string | null; camp_arafa_url: string | null };
 
 /* أقرب يوم عرفة: القادم، أو الفائت خلال ٤٠ يوماً (فترة ما بعد الحج) */
 function getSeasonArafa(): Date {
@@ -200,13 +201,13 @@ function PilgrimPortal() {
   /* ═══ شريط هوية الحملة ═══ */
   const brandBar = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "16px 16px 14px" }}>
-      <div style={{ width: 70, height: 70, borderRadius: "50%", border: `2.5px solid ${GOLD_BRIGHT}`, background: "rgba(240,200,74,.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 6px rgba(240,200,74,.07)" }}>
+      <div style={{ width: 88, height: 88, borderRadius: "50%", border: `3px solid ${GOLD_BRIGHT}`, background: "rgba(240,200,74,.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 0 0 8px rgba(240,200,74,.07)" }}>
         {cfg?.logo_url
-          ? <img src={cfg.logo_url} alt="" style={{ width: 48, height: 48, objectFit: "contain" }} />
+          ? <img src={cfg.logo_url} alt="" style={{ width: 62, height: 62, objectFit: "contain" }} />
           : <Icon d={ICONS.star} size={36} color={GOLD_BRIGHT} sw={1.4} />}
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontFamily: fontT, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.25 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
+        <div style={{ fontFamily: fontT, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1.25 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
         <div style={{ fontFamily: font, fontSize: 13.5, fontWeight: 700, color: GOLD_BRIGHT, marginTop: 3 }}>
           بوابة الحاج{cfg?.season_label ? ` — ${cfg.season_label}` : ""}
         </div>
@@ -338,8 +339,8 @@ function PilgrimPortal() {
       <span style={{ fontFamily: big ? fontD : font, fontWeight: big ? 900 : 700, fontSize: big ? 24 : 17, color: big ? brand : INK }}>{v}</span>
     </div>
   );
-  const addressLink = (address: string) => (
-    <a href={mapsUrl(address)} target="_blank" rel="noreferrer"
+  const addressLink = (address: string, url?: string | null) => (
+    <a href={url || mapsUrl(address)} target="_blank" rel="noreferrer"
       style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, background: `${gold}18`, border: `1.5px solid ${gold}66`, borderRadius: 13, padding: "12px 14px", textDecoration: "none" }}>
       <div style={{ width: 32, height: 32, borderRadius: 9, background: gold, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon d={ICONS.pin} size={18} color="#fff" />
@@ -527,8 +528,29 @@ function PilgrimPortal() {
               {data.room.floor ? row("الدور", data.room.floor) : null}
               {data.room.type ? row("النوع", data.room.type) : null}
             </> : <div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 6 }}>لم يتم تسكينك بعد</div>}
-            {cfg?.hotel_address && addressLink(cfg.hotel_address)}
+            {cfg?.hotel_address && addressLink(cfg.hotel_address, cfg.hotel_url)}
           </div>
+
+          {data.family?.length > 0 && (
+            <div style={{ ...card, border: `2px solid ${gold}88` }}>
+              {cardH(ICONS.users, "أفراد الأسرة", `${data.family.length} من عائلتك`)}
+              {data.family.map((m, i) => (
+                <div key={i} style={{ padding: "12px 2px", borderBottom: i < data.family.length - 1 ? `1px dashed ${LINE}` : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: GOLD_DARK, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{(m.short_ar || m.name)?.charAt(0)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>{m.short_ar || m.name}</div>
+                      <div style={{ fontSize: 13, color: LABEL, fontWeight: 600, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {m.room_number && <span>غرفة {m.room_number}{m.room_floor ? ` — الدور ${m.room_floor}` : ""}</span>}
+                        {m.bus_name && <span>باص {m.bus_name}</span>}
+                        {m.camp_mina_name && <span>منى {m.camp_mina_name}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {showRoommates && data.roommates?.length > 0 && (
             <div style={card}>
@@ -550,14 +572,14 @@ function PilgrimPortal() {
                 <span style={{ fontSize: 14.5, fontWeight: 600, color: LABEL }}>مخيم منى</span>
                 <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 22, color: brand }}>{p.camp_mina_name || p.camp_mina || "لم يُحدد بعد"}</span>
               </div>
-              {cfg?.camp_mina_address && addressLink(cfg.camp_mina_address)}
+              {cfg?.camp_mina_address && addressLink(cfg.camp_mina_address, cfg.camp_mina_url)}
             </div>
             <div style={{ padding: "11px 2px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 600, color: LABEL }}>مخيم عرفات</span>
                 <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 22, color: brand }}>{p.camp_arafa_name || p.camp_arafa || "لم يُحدد بعد"}</span>
               </div>
-              {cfg?.camp_arafa_address && addressLink(cfg.camp_arafa_address)}
+              {cfg?.camp_arafa_address && addressLink(cfg.camp_arafa_address, cfg.camp_arafa_url)}
             </div>
           </div>
         </>}
