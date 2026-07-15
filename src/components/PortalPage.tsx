@@ -109,14 +109,17 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [city, setCity] = useState("");
   const [hotelName, setHotelName] = useState("");
   const [hotelAddress, setHotelAddress] = useState("");
+  const [hotelUrl, setHotelUrl] = useState("");
   const [minaAddress, setMinaAddress] = useState("");
+  const [minaUrl, setMinaUrl] = useState("");
   const [arafaAddress, setArafaAddress] = useState("");
+  const [arafaUrl, setArafaUrl] = useState("");
   const [features, setFeatures] = useState<Record<string, boolean>>({});
   const [savingCfg, setSavingCfg] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,camp_mina_address,camp_arafa_address").order("id").limit(1).single();
+      const { data } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,hotel_url,camp_mina_address,camp_mina_url,camp_arafa_address,camp_arafa_url").order("id").limit(1).single() as any;
       if (data) {
         setCfgId(data.id);
         setAdminName(data.admin_name || "");
@@ -126,8 +129,11 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         setCity(data.city || "");
         setHotelName(data.hotel_name || "");
         setHotelAddress(data.hotel_address || "");
+        setHotelUrl(data.hotel_url || "");
         setMinaAddress(data.camp_mina_address || "");
+        setMinaUrl(data.camp_mina_url || "");
         setArafaAddress(data.camp_arafa_address || "");
+        setArafaUrl(data.camp_arafa_url || "");
         setFeatures((data.features as Record<string, boolean>) || {});
       }
     })();
@@ -136,7 +142,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   async function saveSettings() {
     if (cfgId == null) return;
     setSavingCfg(true);
-    const { error } = await supabase.from("company_config").update({
+    // @ts-ignore
+    const { error } = await (supabase.from("company_config") as any).update({
       admin_name: adminName.trim() || null,
       admin_phone: adminPhone.trim() || null,
       admin_whatsapp: adminWa.trim() || null,
@@ -144,8 +151,11 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       city: city.trim() || null,
       hotel_name: hotelName.trim() || null,
       hotel_address: hotelAddress.trim() || null,
+      hotel_url: hotelUrl.trim() || null,
       camp_mina_address: minaAddress.trim() || null,
+      camp_mina_url: minaUrl.trim() || null,
       camp_arafa_address: arafaAddress.trim() || null,
+      camp_arafa_url: arafaUrl.trim() || null,
       features,
     }).eq("id", cfgId);
     setSavingCfg(false);
@@ -304,8 +314,11 @@ function PortalPage({ currentUser }: { currentUser: User }) {
             <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>المدينة</div><input value={city} onChange={e => setCity(e.target.value)} placeholder="الدوحة" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
             <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>اسم الفندق</div><input value={hotelName} onChange={e => setHotelName(e.target.value)} placeholder="أبراج الصفوة" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
             <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>عنوان الفندق</div><input value={hotelAddress} onChange={e => setHotelAddress(e.target.value)} placeholder="شارع أجياد، أمام الحرم المكي" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
+            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رابط الفندق على الخريطة</div><input value={hotelUrl} onChange={e => setHotelUrl(e.target.value)} placeholder="https://maps.google.com/..." style={{ ...inp, width: "100%", boxSizing: "border-box", direction: "ltr" }} /></div>
             <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>عنوان مخيم منى</div><input value={minaAddress} onChange={e => setMinaAddress(e.target.value)} placeholder="شارع الملك فهد، مخيمات مؤسسة حجاج الدول العربية" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
+            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رابط مخيم منى على الخريطة</div><input value={minaUrl} onChange={e => setMinaUrl(e.target.value)} placeholder="https://maps.google.com/..." style={{ ...inp, width: "100%", boxSizing: "border-box", direction: "ltr" }} /></div>
             <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>عنوان مخيم عرفات</div><input value={arafaAddress} onChange={e => setArafaAddress(e.target.value)} placeholder="طريق نمرة، القطعة رقم..." style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
+            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رابط مخيم عرفات على الخريطة</div><input value={arafaUrl} onChange={e => setArafaUrl(e.target.value)} placeholder="https://maps.google.com/..." style={{ ...inp, width: "100%", boxSizing: "border-box", direction: "ltr" }} /></div>
           </div>
         </div>
 
