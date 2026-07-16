@@ -1447,6 +1447,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             })();
 
             /* ══ دوال مساعدة مشتركة ══ */
+            // @ts-ignore
             const mkLogo = (size: number) => logoUrl
               ? `<img src="${logoUrl}" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};padding:2px;" />`
               : `<div style="width:${size}px;height:${size}px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="${Math.round(size*.55)}" height="${Math.round(size*.55)}" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
@@ -1463,57 +1464,55 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               const busName   = bus?.name || "";
               const minaName  = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || "";
               const shortName = p.short_ar || p.name_ar || "";
-              const logoHtml  = mkLogo(76);
-              const IMPACT = "Impact,Arial Black,sans-serif";
+              const IMPACT    = "Impact,Arial Black,sans-serif";
+              /* الشعار: صورة حقيقية أو fallback SVG */
+              const logoImgEl = logoUrl
+                ? `<img src="${logoUrl}" style="width:100%;flex:1;object-fit:contain;min-height:0;display:block;" />`
+                : `<div style="width:100%;flex:1;display:flex;align-items:center;justify-content:center;min-height:0;"><svg viewBox="0 0 24 24" style="width:70%;height:70%;" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
               const stk = () => `
-                <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;direction:rtl;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;">
-                  <div style="position:absolute;inset:6px;border:2px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:1;"></div>
-                  <div style="position:absolute;inset:10px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:1;"></div>
+                <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;direction:rtl;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;flex-shrink:0;">
+                  <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:2;"></div>
+                  <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:2;"></div>
 
-                  <!-- قسم رقم الغرفة — يمين بخلفية بوردو -->
-                  <div style="width:115px;flex-shrink:0;background:linear-gradient(160deg,${primaryColor},#3d0f1f);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:14px 10px;text-align:center;border-radius:8px 0 0 8px;">
-                    <div>
-                      <div style="font-size:8pt;font-weight:700;color:#F0C84A;letter-spacing:1px;margin-bottom:2px;">الغرفة</div>
-                      <div style="font-size:52pt;font-weight:900;color:#fff;line-height:1;font-family:${IMPACT};">${roomNo}</div>
-                      <div style="font-size:9pt;font-weight:700;color:rgba(255,255,255,.85);margin-top:3px;font-family:Cairo,sans-serif;">${roomFloor}</div>
-                    </div>
-                    <div style="width:100%;border-top:1px solid rgba(255,255,255,.2);padding-top:8px;">
-                      ${busName ? `<div style="font-size:9pt;font-weight:800;color:#F0C84A;font-family:${IMPACT};">باص ${busName}</div>` : ""}
-                      ${minaName ? `<div style="font-size:8pt;font-weight:700;color:rgba(255,255,255,.8);font-family:Cairo,sans-serif;margin-top:2px;">منى ${minaName}</div>` : ""}
+                  <!-- قسم الشعار — يمين -->
+                  <div style="width:28%;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#F8F2E4;padding:10px 10px 8px;border-left:2px solid ${accentColor};">
+                    ${logoImgEl}
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;padding-top:4px;flex-shrink:0;">
+                      <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.1;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+                      <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;font-family:Cairo,sans-serif;">${config.season_label || ""}</div>
+                      <div style="font-size:10pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
                     </div>
                   </div>
 
                   <!-- قسم البيانات — وسط -->
-                  <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;background:#fff;">
-                    <!-- هيدر: اسم الحاج -->
-                    <div style="border-bottom:1px dashed #E8D5C4;padding-bottom:8px;">
-                      <div style="font-size:14pt;font-weight:900;color:#241318;font-family:Cairo,sans-serif;line-height:1.3;">${shortName}</div>
-                      <div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:2px;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
+                  <div style="flex:1;padding:12pt 14pt;display:flex;flex-direction:column;justify-content:space-between;border-left:2px dashed #E8D5C4;">
+                    <div>
+                      <div style="font-size:15pt;font-weight:900;color:#1a0a10;line-height:1.3;font-family:Cairo,sans-serif;">${shortName}</div>
+                      <div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:2px;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
                     </div>
-                    <!-- بيانات السكن -->
-                    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:6px 0;">
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="font-size:8pt;color:#8a6a10;font-weight:700;min-width:40px;font-family:Cairo,sans-serif;">الفندق</span>
-                        <span style="font-size:10.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
+                    <div style="display:flex;flex-direction:column;gap:0;">
+                      <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;">
+                        <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
+                        <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
                       </div>
-                      ${(config as any).hotel_address ? `<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:8pt;color:#8a6a10;font-weight:700;min-width:40px;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:8.5pt;font-weight:600;color:#7A6570;font-family:Cairo,sans-serif;">${(config as any).hotel_address}</span></div>` : ""}
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="font-size:8pt;color:#8a6a10;font-weight:700;min-width:40px;font-family:Cairo,sans-serif;">الهاتف</span>
-                        <span style="font-size:10.5pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
+                      ${(config as any).hotel_address ? `<div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;"><span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${(config as any).hotel_address}</span></div>` : ""}
+                      <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;">
+                        <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
+                        <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
                       </div>
-                    </div>
-                    <!-- فوتر -->
-                    <div style="border-top:1px solid #E8D5C4;padding-top:6px;display:flex;justify-content:space-between;align-items:center;">
-                      <span style="font-size:8pt;font-weight:700;color:#475569;font-family:Cairo,sans-serif;">ندير التفاصيل لتتفرغوا للعبادة</span>
-                      <span style="font-size:8pt;font-weight:900;color:${primaryColor};direction:ltr;font-family:Arial,sans-serif;">${config.admin_phone || ""}</span>
                     </div>
                   </div>
 
-                  <!-- قسم الشعار — يسار -->
-                  <div style="width:105px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 8px;border-right:2px solid ${accentColor};background:#F8F2E4;">
-                    ${logoHtml}
-                    <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.25;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                    <div style="font-size:7.5pt;font-weight:700;color:#8a6a10;text-align:center;font-family:Cairo,sans-serif;">${config.season_label || ""}</div>
+                  <!-- قسم رقم الغرفة — يسار -->
+                  <div style="width:26%;flex-shrink:0;background:#7D1F3C;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12pt 8pt;gap:3px;">
+                    <div style="font-size:9pt;font-weight:800;color:#F0C84A;letter-spacing:2px;font-family:Cairo,sans-serif;">الغرفة</div>
+                    <div style="font-size:58pt;font-weight:900;color:#fff;line-height:1;font-family:${IMPACT};">${roomNo}</div>
+                    <div style="font-size:10pt;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.15);padding:2px 10px;border-radius:99px;font-family:Cairo,sans-serif;">${roomFloor}</div>
+                    <div style="font-size:10pt;font-weight:800;color:#F0C84A;margin-top:5px;font-family:${IMPACT};display:flex;gap:5px;align-items:center;">
+                      ${busName ? `<span>باص ${busName}</span>` : ""}
+                      ${busName && minaName ? `<span style="color:rgba(255,255,255,.4);font-size:12pt;font-family:Cairo,sans-serif;font-weight:400;">·</span>` : ""}
+                      ${minaName ? `<span>منى ${minaName}</span>` : ""}
+                    </div>
                   </div>
                 </div>`;
               return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="sticker">${stk()}${stk()}${stk()}</div>`;
