@@ -124,7 +124,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
     },
     // يمين — شعار الحملة
     brand: {
-      position: "absolute" as const, top: 16, right: 20,
+      position: "absolute" as const, top: 0, bottom: 0, right: 20,
       display: "flex", alignItems: "center", gap: 11, zIndex: 2,
     },
     brandCircle: {
