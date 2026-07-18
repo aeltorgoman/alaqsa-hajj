@@ -66,7 +66,8 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
         padding: "0 16px", height: 46, flexShrink: 0,
         background: "linear-gradient(135deg,var(--primary),var(--em8))",
         boxShadow: "0 2px 12px rgba(0,0,0,.2)",
-        position: "relative", overflow: "hidden", zIndex: 10,
+        /* إزالة overflow:hidden لكي تظهر القوائم المنسدلة فوق محتوى الصفحة */
+        position: "relative", zIndex: 50,
       }}>
         {/* pattern خلفية خفيف */}
         <div style={{ position:"absolute", inset:0, background:"repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0px,rgba(255,255,255,.03) 1px,transparent 1px,transparent 8px)", pointerEvents:"none" }} />
