@@ -4,7 +4,7 @@ import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { AlertRotator } from "./AlertRotator";
 import { StatsRow, type StatCardData } from "./StatCard";
-import { SeasonPhaseCard, SeasonStations } from "./SeasonTimeline";
+import { SeasonPhaseCard, SeasonStations } from "./Seasontimeline";
 
 function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   passengers: Passenger[];
