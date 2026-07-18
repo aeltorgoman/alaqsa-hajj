@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 /* ─── types ─── */
 type AlertType = "error" | "success" | "warning" | "info";
@@ -47,6 +47,13 @@ const LABELS: Record<AlertType, string> = {
 
 /* ─── AlertModal component ─── */
 function AlertModal({ alert, onClose }: { alert: AlertState | null; onClose: () => void }) {
+  /* إغلاق تلقائي بعد 3.5 ثانية */
+  useEffect(() => {
+    if (!alert) return;
+    const timer = setTimeout(() => onClose(), 3500);
+    return () => clearTimeout(timer);
+  }, [alert, onClose]);
+
   if (!alert) return null;
 
   const c = COLORS[alert.type];
