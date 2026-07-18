@@ -4,6 +4,7 @@ import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { AlertRotator } from "./AlertRotator";
 import { StatsRow, type StatCardData } from "./StatCard";
+import { SeasonPhaseCard, SeasonStations } from "./SeasonTimeline";
 
 function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   passengers: Passenger[];
@@ -115,6 +116,10 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               </div>
             </div>
           </div>
+
+        {/* الخط الزمني للموسم — نموذجان للمقارنة */}
+        <SeasonPhaseCard passengers={passengers} setPage={navTo} />
+        <SeasonStations passengers={passengers} />
 
         {/* 2) كروت الإحصاء */}
         <div style={{ flexShrink: 0, margin: "0 -14px" }}>
