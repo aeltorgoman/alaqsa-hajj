@@ -113,8 +113,6 @@ function useSeasonPhases(passengers: Passenger[]) {
     /* نسبة تقدم الموسم ككل: كل مرحلة مكتملة = ٢٥٪ + نسبة المرحلة الحالية */
     const seasonPct = Math.min(100, Math.round(currentIdx * 25 + phases[currentIdx].pct * 0.25));
 
-    const nextPhase = phases[currentIdx + 1] || null;
-
     return { phases, currentIdx, seasonPct, daysToTravel, total, fullyDist, hajj };
   }, [passengers, flights]);
 }
