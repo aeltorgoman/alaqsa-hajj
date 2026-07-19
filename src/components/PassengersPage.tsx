@@ -74,6 +74,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [editing, setEditing] = useState<Passenger | null>(null);
   const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
   const [opsFilter, setOpsFilter] = useState<string | null>(null);
+  const [profileTab, setProfileTab] = useState<"data" | "svc" | "docs" | "family">("data");
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
   const [metaCamps, setMetaCamps] = useState<any[]>([]);
@@ -132,15 +133,20 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   });
   const setFilter = (key: string, val: string) => setFilters(prev => val ? { ...prev, [key]: val } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
 
+  /* خيارات الفلاتر مولدة ديناميكياً من البيانات الفعلية */
+  const optsFrom = (get: (p: Passenger) => string | undefined | null, withNone = false) => {
+    const vals = [...new Set(passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").map(get).map(v => (v || "").trim()).filter(Boolean))] as string[];
+    return withNone ? [...vals, "بدون"] : vals;
+  };
   const QUICK_FILTERS = [
-    { key: "gender", label: "الجنس", opts: ["ذكر", "أنثى"] },
-    { key: "bus", label: "الباص", opts: ["عادي", "VIP", "بدون"] },
-    { key: "flight", label: "الطيران", opts: ["عادي", "درجة أولى", "بدون"] },
-    { key: "hotel_type", label: "نوع الغرفة", opts: ["فردية", "ثنائية", "ثلاثية", "رباعية"] },
-    { key: "hotel_view", label: "الإطلالة", opts: ["مطلة", "غير مطلة"] },
-    { key: "camp_mina", label: "منى", opts: ["عادي", "خاص", "بدون"] },
-    { key: "camp_arafa", label: "عرفة", opts: ["عادي", "خاص", "بدون"] },
-    { key: "nat", label: "الجنسية", opts: [...new Set(passengers.map(p => p.nat).filter(Boolean))] },
+    { key: "gender", label: "الجنس", opts: optsFrom(p => p.gender) },
+    { key: "bus", label: "الباص", opts: optsFrom(p => p.services?.bus, true) },
+    { key: "flight", label: "الطيران", opts: optsFrom(p => p.services?.flight, true) },
+    { key: "hotel_type", label: "نوع الغرفة", opts: optsFrom(p => p.services?.hotel_type) },
+    { key: "hotel_view", label: "الإطلالة", opts: optsFrom(p => p.services?.hotel_view) },
+    { key: "camp_mina", label: "منى", opts: optsFrom(p => p.services?.camp_mina, true) },
+    { key: "camp_arafa", label: "عرفة", opts: optsFrom(p => p.services?.camp_arafa, true) },
+    { key: "nat", label: "الجنسية", opts: optsFrom(p => p.nat) },
   ];
 
   const filtered = useMemo(() => passengers
@@ -940,6 +946,27 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             )}
           </div>
           <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length} حاج</div>
+          {/* شريط توزيع الباقات المضغوط */}
+          {(() => {
+            const hj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+            const cnts: Record<string, number> = {};
+            hj.forEach(p => { const t = p.services?.hotel_type?.trim(); if (t) cnts[t] = (cnts[t] || 0) + 1; });
+            const ents = Object.entries(cnts).sort((a, b) => b[1] - a[1]);
+            if (!ents.length) return null;
+            const PKG_C: Record<string, string> = { "ثنائية": "#7D1F3C", "ثلاثية": "#D4A017", "رباعية": "#2A9D8F", "فردية": "#1565C0", "خاص": "#7E57C2" };
+            return (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 10.5, fontWeight: 800, color: "var(--muted)" }}>الباقات:</span>
+                {ents.map(([pkg, c]) => (
+                  <span key={pkg}
+                    onClick={() => setFilter("hotel_type", filters["hotel_type"] === pkg ? "" : pkg)}
+                    style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, cursor: "pointer", background: filters["hotel_type"] === pkg ? (PKG_C[pkg] || "var(--muted)") : "var(--paper)", color: filters["hotel_type"] === pkg ? "#fff" : (PKG_C[pkg] || "var(--muted)"), border: `1.5px solid ${PKG_C[pkg] || "var(--line)"}` }}>
+                    {pkg} · {c}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {viewMode === "list" ? (
@@ -1248,18 +1275,18 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           return (
             <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "fixed", left: 0, top: 46, bottom: 0, zIndex: 10 }}>
               {/* هيدر */}
-              <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "12px 14px", flexShrink: 0 }}>
+              <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-light))", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: totalAlerts > 0 ? "#fca5a5" : "#86efac", animation: "blink 2s infinite" }} />
-                  <span style={{ fontSize: 13, fontWeight: 900, color: "white", flex: 1 }}>غرفة العمليات</span>
-                  {totalAlerts > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "white", padding: "2px 8px", borderRadius: 99 }}>{totalAlerts}</span>}
+                  <span style={{ fontSize: 13, fontWeight: 900, color: "var(--text-inverse)", flex: 1 }}>غرفة العمليات</span>
+                  {totalAlerts > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "var(--text-inverse)", padding: "2px 8px", borderRadius: 99 }}>{totalAlerts}</span>}
                 </div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginBottom: 8 }}>
-                  {totalAlerts > 0 ? `اليوم لديك ${totalAlerts} مهمة تحتاج متابعة` : "كل شيء على ما يرام ✓"}
+                  {totalAlerts > 0 ? `اليوم لديك ${totalAlerts} ${totalAlerts >= 3 && totalAlerts <= 10 ? "مهمات" : totalAlerts === 2 ? "مهمتان" : "مهمة"} تحتاج إلى متابعة` : "كل شيء على ما يرام ✓"}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
                   {([["reg", "التسجيل"], ["dist", "التوزيع"], ["travel", "السفر"]] as const).map(([tab, label]) => (
-                    <button key={tab} onClick={() => { setOpsTab(tab); setOpsFilter(null); }} style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${opsTab === tab ? "transparent" : "rgba(255,255,255,.2)"}`, background: opsTab === tab ? "rgba(255,255,255,.9)" : "transparent", color: opsTab === tab ? "#7D1F3C" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s" }}>
+                    <button key={tab} onClick={() => { setOpsTab(tab); setOpsFilter(null); }} style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${opsTab === tab ? "transparent" : "rgba(255,255,255,.2)"}`, background: opsTab === tab ? "rgba(255,255,255,.9)" : "transparent", color: opsTab === tab ? "var(--primary)" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s" }}>
                       {label}
                     </button>
                   ))}
@@ -1306,17 +1333,38 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       </div>
       {selected && !editing && (
         <div style={{ width: 280, borderRight: "0.5px solid var(--border)", overflowY: "auto", padding: 12, flexShrink: 0, position: "fixed", left: 0, top: 46, bottom: 0, zIndex: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>ملف الحاج</div>
-            <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 16 }}>✕</button>
-          </div>
-          <div style={{ textAlign: "center", marginBottom: 12, background: "var(--bg-2)", borderRadius: 10, padding: 12 }}>
-            {(selected as any).photo_url ? (
-              <img src={(selected as any).photo_url} alt={selected.name_ar} style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", margin: "0 auto", display: "block", border: "2px solid #5DCAA5" }} />
-            ) : <Avatar name={selected.name_ar} gender={selected.gender} size={48} />}
-            <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>{selected.name_ar}</div>
-            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{selected.name_en}</div>
-          </div>
+          {(() => {
+            const docsArr = [(selected as any).photo_url, (selected as any).passport_url, (selected as any).national_id_url, (selected as any).contract_url, (selected as any).flight_ticket_url, (selected as any).hajj_permit_url];
+            const docsDone = docsArr.filter(Boolean).length;
+            const docsPct = Math.round(docsDone / docsArr.length * 100);
+            const missing = docsArr.length - docsDone;
+            return (
+              <div style={{ margin: "-12px -12px 10px", background: "linear-gradient(145deg, var(--primary), var(--primary-dark))", padding: "16px 14px 0", color: "var(--text-inverse)", position: "relative" }}>
+                <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 10, left: 10, width: 26, height: 26, borderRadius: 8, background: "rgba(255,255,255,.12)", border: "none", cursor: "pointer", color: "var(--text-inverse)", fontSize: 14 }}>✕</button>
+                <div style={{ fontSize: 15.5, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30 }}>{selected.name_ar}</div>
+                <div style={{ fontSize: 9.5, opacity: .65, letterSpacing: ".04em", marginTop: 2 }}>{selected.name_en}</div>
+                <div style={{ display: "flex", gap: 5, marginTop: 8, flexWrap: "wrap" }}>
+                  {selected.nat && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "rgba(212,160,23,.25)", border: "1px solid var(--accent)", color: "#F3D98B" }}>{selected.nat}</span>}
+                  {selected.gender && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.2)" }}>{selected.gender}</span>}
+                  {selected.passport && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.2)" }}>جواز {selected.passport}</span>}
+                </div>
+                <div style={{ background: "rgba(0,0,0,.25)", margin: "10px -14px 0", padding: "8px 14px 10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 5 }}>
+                    <span>اكتمال الملف</span>
+                    <span style={{ color: "#F3D98B" }}>{docsPct}٪{missing > 0 ? ` · ${missing === 1 ? "مستند ناقص" : missing === 2 ? "مستندان ناقصان" : `${missing} مستندات ناقصة`}` : " · مكتمل"}</span>
+                  </div>
+                  <div style={{ height: 6, background: "rgba(255,255,255,.15)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${docsPct}%`, borderRadius: 99, background: "linear-gradient(to left, var(--accent), #F3D98B)" }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", margin: "0 -14px", background: "rgba(0,0,0,.15)" }}>
+                  {([["data", "البيانات"], ["svc", "الخدمات"], ["docs", "المستندات"], ["family", "الأقارب"]] as const).map(([t, l]) => (
+                    <button key={t} onClick={() => setProfileTab(t)} style={{ flex: 1, padding: "9px 2px", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 800, fontFamily: "var(--font-body)", background: profileTab === t ? "var(--paper)" : "transparent", color: profileTab === t ? "var(--primary)" : "rgba(255,255,255,.75)", borderRadius: profileTab === t ? "8px 8px 0 0" : 0 }}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {(isExpired(selected.expiry) || isExpired((selected as any).id_expiry)) ? (
             <div style={{ background: "var(--female-bg)", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--danger)", fontWeight: 700, textAlign: "center" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
@@ -1326,27 +1374,35 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
             </div>
           )}
-          {[["الجواز", selected.passport], ["البطاقة", selected.national_id], ["الجنسية", selected.nat], ["الجنس", selected.gender], ["الميلاد", selected.dob], ["انتهاء الجواز", selected.expiry], ["التليفون", selected.phone]].filter(([, v]) => v).map(([icon, val]) => (
-            <div key={icon as string} style={{ background: "var(--bg-2)", borderRadius: 8, padding: "6px 10px", marginBottom: 4, fontSize: 11 }}>{icon as string} {val as string}</div>
-          ))}
-          <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginTop: 8, marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 6 }}>الخدمات</div>
-            {[
-              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null],
-              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null],
-              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null],
-              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null],
-              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null],
-            ].map(([lbl, cls, assign]) => (
-              <div key={lbl as string} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, padding: "4px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                <span style={{ color: "var(--text-muted)", minWidth: 40 }}>{lbl as string}</span>
-                <span style={{ fontWeight: 500, color: (cls === "VIP" || cls === "درجة أولى" || cls === "خاص") ? "var(--warning)" : "var(--text)" }}>{cls as string}</span>
-                {assign ? <span style={{ fontSize: 10, fontWeight: 600, color: "var(--primary)", background: "rgba(125,31,60,.07)", padding: "1px 7px", borderRadius: 99 }}>{assign as string}</span> : <span />}
+          {profileTab === "data" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+              {([["الجواز", selected.passport], ["البطاقة", selected.national_id], ["الجنسية", selected.nat], ["الجنس", selected.gender], ["الميلاد", selected.dob], ["انتهاء الجواز", selected.expiry], ["التليفون", selected.phone]] as [string, string | undefined][]).filter(([, v]) => v).map(([lbl, val]) => (
+                <div key={lbl} style={{ background: "var(--ivory)", borderRadius: 9, padding: "7px 10px", gridColumn: lbl === "التليفون" ? "span 2" : undefined }}>
+                  <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700 }}>{lbl}</div>
+                  <div style={{ fontSize: 12, fontWeight: 900, color: "var(--ink)", marginTop: 1 }} dir={lbl === "التليفون" ? "ltr" : undefined}>{val}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {profileTab === "svc" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 10 }}>
+            {([
+              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null, "var(--info-bg)", "var(--info)", false],
+              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null, "var(--warning-bg)", "var(--warning)", false],
+              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null, "var(--success-bg)", "var(--success)", false],
+              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null, "#f3e5f5", "#7B1FA2", false],
+              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "var(--ivory)", "var(--primary)", true],
+            ] as [string, string | undefined, string | null, string, string, boolean][]).map(([lbl, cls, assign, bg, fg, full]) => (
+              <div key={lbl} style={{ background: bg, border: "1px solid var(--line)", borderRadius: 11, padding: "9px 11px", gridColumn: full ? "span 2" : undefined }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", marginBottom: 2 }}>{lbl}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 900, color: fg }}>{[cls, assign].filter(Boolean).join(" · ") || "غير محدد"}</div>
+                {!assign && <div style={{ fontSize: 9, fontWeight: 700, color: "var(--danger)", marginTop: 1 }}>بانتظار التوزيع</div>}
               </div>
             ))}
           </div>
-          <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>المستندات</div>
+          )}
+          {profileTab === "docs" && (
+          <div style={{ marginBottom: 10 }}>
             {([
               ["صورة شخصية", (selected as any).photo_url, "photo_url", "photo", "image/*"],
               ["جواز السفر", (selected as any).passport_url, "passport_url", "passport_doc", "image/*"],
@@ -1355,29 +1411,36 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               ["تذكرة الطيران", (selected as any).flight_ticket_url, "flight_ticket_url", "flight_ticket", "image/*,application/pdf"],
               ["تصريح الحاج", (selected as any).hajj_permit_url, "hajj_permit_url", "hajj_permit", "image/*,application/pdf"],
             ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
-              <div key={label} style={{ padding: "7px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 11, color: url ? "var(--text)" : "var(--text-muted)" }}>{label}</span>
-                  {docUploading === docType ? (
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...</span>
-                  ) : url ? (
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => setDocViewer({ url, label })} style={{ background: "var(--male-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--info)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>
-                      <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬇️</button>
-                      <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
-                    </div>
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 6 }}>
+                <div style={{ width: 24, height: 24, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: url ? "var(--success-bg)" : "var(--danger-bg)" }}>
+                  {url ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                   ) : (
-                    <>
-                      <input id={`upload-${docType}`} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
-                      <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> رفع</button>
-                    </>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                   )}
                 </div>
+                <span style={{ flex: 1, fontSize: 11, fontWeight: 800, color: url ? "var(--ink)" : "var(--muted)" }}>{label}</span>
+                {docUploading === docType ? (
+                  <span style={{ fontSize: 9.5, color: "var(--muted)" }}>جاري الرفع...</span>
+                ) : url ? (
+                  <div style={{ display: "flex", gap: 3 }}>
+                    <button onClick={() => setDocViewer({ url, label })} style={{ background: "var(--male-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--info)", fontWeight: 800 }}>عرض</button>
+                    <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                    <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--danger)" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                  </div>
+                ) : (
+                  <>
+                    <input id={`upload-${docType}`} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
+                    <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "var(--danger-bg)", border: "none", padding: "3px 9px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--danger)", fontWeight: 800 }}>رفع</button>
+                  </>
+                )}
               </div>
             ))}
           </div>
+          )}
           {/* الأقارب */}
-          <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+          {profileTab === "family" && (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 500 }}>الأقارب</div>
               <button onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ background: "var(--success-bg)", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>+ ربط</button>
@@ -1396,6 +1459,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               ))
             )}
           </div>
+          )}
 
           {(selected.created_by || selected.updated_by) && (
             <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 10, padding: "0 2px", lineHeight: 1.6 }}>
