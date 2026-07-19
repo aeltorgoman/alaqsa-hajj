@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
-import { Avatar } from "./Avatar";
+
 import { AlertRotator } from "./AlertRotator";
 import { SeasonPhaseCard, PackagesCard, TotalPilgrimsCard } from "./Seasontimeline";
 
@@ -86,17 +86,14 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "var(--em8)", flex: 1 }}>آخر الحجاج المسجلين</div>
               <span onClick={() => navTo("passengers")} style={{ fontSize: 11, color: "var(--g6)", cursor: "pointer", fontWeight: 600 }}>عرض الكل</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, overflowY: "auto", flex: 1, padding: "4px 6px" }}>
-              {recent.slice(0, 6).map(p => (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, overflowY: "auto", flex: 1, padding: "4px 6px" }}>
+              {recent.slice(0, 10).map(p => (
                 <div key={p.id} onClick={() => navTo("passengers")}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", direction: "rtl" }}
+                  style={{ display: "flex", flexDirection: "column", padding: "7px 10px", borderRadius: 8, cursor: "pointer", direction: "rtl", minWidth: 0 }}
                   onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                  <Avatar name={p.name_ar} gender={p.gender} size={28} />
-                  <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</div>
-                    <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nat}</div>
-                  </div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nat}</div>
                 </div>
               ))}
             </div>
