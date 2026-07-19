@@ -54,25 +54,30 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
   }
 
   const [countdown, setCountdown] = useState(calcDiff);
-  const [showThemes, setShowThemes]     = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [themePos, setThemePos]         = useState({ top: 54, left: 14 });
-  const [userPos, setUserPos]           = useState({ top: 54, left: 14 });
-  const themeRef = useRef<HTMLDivElement>(null);
-  const userRef  = useRef<HTMLDivElement>(null);
+  const [showThemes, setShowThemes]       = useState(false);
+  const [showUserMenu, setShowUserMenu]   = useState(false);
+  const [showSettings, setShowSettings]   = useState(false);
+  const [themePos, setThemePos]           = useState({ top: 54, left: 14 });
+  const [userPos, setUserPos]             = useState({ top: 54, left: 14 });
+  const [settingsPos, setSettingsPos]     = useState({ top: 54, left: 14 });
+  const themeRef    = useRef<HTMLDivElement>(null);
+  const userRef     = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   // إغلاق عند الضغط برا
   useEffect(() => {
     if (!showThemes && !showUserMenu) return;
     const h = (e: MouseEvent) => {
-      if (themeRef.current && !themeRef.current.contains(e.target as Node)) setShowThemes(false);
-      if (userRef.current  && !userRef.current.contains(e.target as Node))  setShowUserMenu(false);
+      if (themeRef.current    && !themeRef.current.contains(e.target as Node))    setShowThemes(false);
+      if (userRef.current     && !userRef.current.contains(e.target as Node))     setShowUserMenu(false);
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setShowSettings(false);
     };
     document.addEventListener("mousedown", h);
-    const t1 = showThemes    ? setTimeout(() => setShowThemes(false), 8000)    : null;
-    const t2 = showUserMenu  ? setTimeout(() => setShowUserMenu(false), 8000)  : null;
-    return () => { document.removeEventListener("mousedown", h); if(t1) clearTimeout(t1); if(t2) clearTimeout(t2); };
-  }, [showThemes, showUserMenu]);
+    const t1 = showThemes   ? setTimeout(() => setShowThemes(false), 8000)   : null;
+    const t2 = showUserMenu ? setTimeout(() => setShowUserMenu(false), 8000) : null;
+    const t3 = showSettings ? setTimeout(() => setShowSettings(false), 8000) : null;
+    return () => { document.removeEventListener("mousedown", h); if(t1) clearTimeout(t1); if(t2) clearTimeout(t2); if(t3) clearTimeout(t3); };
+  }, [showThemes, showUserMenu, showSettings]);
 
   useEffect(() => {
     const timer = setInterval(() => setCountdown(calcDiff()), 1000);
@@ -161,12 +166,40 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
 
       {/* ── يسار أعلى: مستخدم + أيقونات ── */}
       <div style={S.userStrip}>
-        {/* 1. إعدادات */}
-        <div style={S.iconBtn} onClick={() => setPage("users")}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+        {/* 1. إعدادات — dropdown */}
+        <div ref={settingsRef} style={{ position: "relative", flexShrink: 0 }}>
+          <div style={S.iconBtn} onClick={() => {
+            if (!showSettings && settingsRef.current) {
+              const r = settingsRef.current.getBoundingClientRect();
+              setSettingsPos({ top: r.bottom + 8, left: Math.max(8, r.left - 140 + r.width) });
+            }
+            setShowSettings(s => !s);
+            setShowThemes(false);
+            setShowUserMenu(false);
+          }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="1.8" strokeLinecap="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </div>
+          {showSettings && (
+            <div style={{ position: "fixed", top: settingsPos.top, left: settingsPos.left, zIndex: 9999, background: "var(--paper)", borderRadius: 12, boxShadow: "var(--shadow-xl)", border: "1px solid var(--line)", minWidth: 180, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px 6px", fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.08em", borderBottom: "1px solid var(--line)" }}>الإعدادات</div>
+              {[
+                { label: "إدارة المستخدمين", page: "users", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>` },
+                { label: "الأرشيف", page: "archive", icon: `<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>` },
+              ].map(item => (
+                <div key={item.page}
+                  onClick={() => { setShowSettings(false); setPage(item.page); }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
+                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         {/* 2. ثيم */}
         <div ref={themeRef} style={{ position:"relative", flexShrink:0 }}>
