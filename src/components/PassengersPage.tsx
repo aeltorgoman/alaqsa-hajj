@@ -125,7 +125,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   // فلتر متعدد
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() => {
+    const pkg = sessionStorage.getItem("__hajj_pkg_filter__");
+    if (pkg) { sessionStorage.removeItem("__hajj_pkg_filter__"); return { hotel_type: pkg } as Record<string, string>; }
+    return {} as Record<string, string>;
+  });
   const setFilter = (key: string, val: string) => setFilters(prev => val ? { ...prev, [key]: val } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
 
   const QUICK_FILTERS = [
