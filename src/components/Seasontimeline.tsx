@@ -148,7 +148,7 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
       <div style={{ padding: "15px 18px", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
 
         {/* القوس المتدرج */}
-        <div style={{ position: "relative", width: 132, height: 82, flexShrink: 0 }}>
+        <div style={{ position: "relative", width: 170, height: 106, flexShrink: 0 }}>
           <svg viewBox="0 0 132 82" style={{ width: "100%", height: "100%" }}>
             <defs>
               <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -159,7 +159,7 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
             <path d="M 12 72 A 54 54 0 0 1 120 72" fill="none" stroke="var(--ivory2)" strokeWidth="10" strokeLinecap="round" />
             <path d="M 12 72 A 54 54 0 0 1 120 72" fill="none" stroke={`url(#${gradId})`} strokeWidth="10" strokeLinecap="round"
               strokeDasharray={`${arcLen} ${C * 2}`} />
-            {seasonPct > 3 && <circle cx={dotX} cy={dotY} r="6" fill={accent} stroke="var(--paper)" strokeWidth="2.5" />}
+            {seasonPct > 3 && <circle cx={dotX} cy={dotY} r="7" fill="#D4A017" stroke="var(--paper)" strokeWidth="2.5" />}
           </svg>
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 4 }}>
             {daysToTravel != null && daysToTravel > 0 ? (
@@ -186,7 +186,7 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
             <div style={{ width: 34, height: 34, borderRadius: 9, background: `linear-gradient(135deg, ${primary}, ${primary}cc)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ivory)" strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: current.icon }} />
             </div>
-            <span style={{ fontSize: 21, fontWeight: 900, color: "var(--ink)", fontFamily: "var(--font-heading)" }}>{current.label}</span>
+            <span style={{ fontSize: 28, fontWeight: 900, color: "var(--ink)", fontFamily: "var(--font-heading)" }}>{current.label}</span>
             <span style={{ fontSize: 12, background: `${accent}26`, color: accent, padding: "2px 11px", borderRadius: 99, fontWeight: 800, border: `1px solid ${accent}4d`, filter: "brightness(0.85)" }}>{current.pct}٪</span>
           </div>
           <div style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>{current.sub}</div>
@@ -217,9 +217,9 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
                 <div key={ph.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 86 }}>
                   <div style={{
                     width: 25, height: 25, borderRadius: "50%",
-                    background: done ? primary : isCurrent ? accent : "var(--paper)",
+                    background: done ? primary : isCurrent ? "#D4A017" : "var(--paper)",
                     border: done || isCurrent ? "none" : "2px solid var(--line)",
-                    boxShadow: isCurrent ? `0 0 0 4px ${accent}33` : "none",
+                    boxShadow: isCurrent ? "0 0 0 4px #D4A01733" : "none",
                     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                   }}>
                     {done ? (
@@ -231,8 +231,7 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
                   <span style={{
                     fontSize: 12,
                     fontWeight: isCurrent ? 900 : done ? 800 : 700,
-                    color: done ? "var(--ink)" : isCurrent ? accent : "var(--muted)",
-                    filter: isCurrent ? "brightness(0.8)" : "none",
+                    color: done ? "var(--ink)" : isCurrent ? "#D4A017" : "var(--muted)",
                   }}>{ph.label}</span>
                 </div>
               );
