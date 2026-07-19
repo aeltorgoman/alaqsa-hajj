@@ -90,10 +90,10 @@ export function StatCard({ label, num, sub, tone, icon, featured = false }: Stat
             </div>
             <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{label}</div>
           </div>
-          {/* الرقم */}
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 32, fontWeight: 900, color: accentColor, lineHeight: 1, letterSpacing: "-1px" }}>{num}</div>
+          {/* الرقم — كبير ومميز */}
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 48, fontWeight: 900, color: accentColor, lineHeight: 1, letterSpacing: "-2px", marginBottom: 2 }}>{num}</div>
           {/* النص الفرعي */}
-          <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 4 }}>{sub}</div>
+          <div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700, marginTop: 5 }}>{sub}</div>
         </div>
       </div>
     );
@@ -122,8 +122,8 @@ export function StatCard({ label, num, sub, tone, icon, featured = false }: Stat
         </div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,.85)", fontWeight: 700 }}>{label}</div>
       </div>
-      <div style={{ fontFamily: "var(--font-heading)", fontSize: 36, fontWeight: 900, color: "white", lineHeight: 1, letterSpacing: "-1px" }}>{num}</div>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,.72)", fontWeight: 600, marginTop: 5 }}>{sub}</div>
+      <div style={{ fontFamily: "var(--font-heading)", fontSize: 52, fontWeight: 900, color: "white", lineHeight: 1, letterSpacing: "-2px" }}>{num}</div>
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,.72)", fontWeight: 600, marginTop: 6 }}>{sub}</div>
     </div>
   );
 }
