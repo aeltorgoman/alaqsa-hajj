@@ -987,27 +987,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             )}
           </div>
           <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length} حاج</div>
-          {/* شريط توزيع الباقات المضغوط */}
-          {(() => {
-            const hj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
-            const cnts: Record<string, number> = {};
-            hj.forEach(p => { const t = p.services?.hotel_type?.trim(); if (t) cnts[t] = (cnts[t] || 0) + 1; });
-            const ents = Object.entries(cnts).sort((a, b) => b[1] - a[1]);
-            if (!ents.length) return null;
-            const PKG_C: Record<string, string> = { "ثنائية": "#7D1F3C", "ثلاثية": "#D4A017", "رباعية": "#2A9D8F", "فردية": "#1565C0", "خاص": "#7E57C2" };
-            return (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 10.5, fontWeight: 800, color: "var(--muted)" }}>الباقات:</span>
-                {ents.map(([pkg, c]) => (
-                  <span key={pkg}
-                    onClick={() => setFilter("hotel_type", filters["hotel_type"] === pkg ? "" : pkg)}
-                    style={{ fontSize: 10.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, cursor: "pointer", background: filters["hotel_type"] === pkg ? (PKG_C[pkg] || "var(--muted)") : "var(--paper)", color: filters["hotel_type"] === pkg ? "#fff" : (PKG_C[pkg] || "var(--muted)"), border: `1.5px solid ${PKG_C[pkg] || "var(--line)"}` }}>
-                    {pkg} · {c}
-                  </span>
-                ))}
-              </div>
-            );
-          })()}
+
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
           {viewMode === "list" ? (
@@ -1387,25 +1367,25 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             const docsPct = Math.round(docsDone / docsArr.length * 100);
             const missing = docsArr.length - docsDone;
             return (
-              <div style={{ margin: "-12px -12px 10px", background: "linear-gradient(145deg, var(--primary), var(--primary-dark))", padding: "16px 14px 0", color: "var(--text-inverse)", position: "relative" }}>
+              <div style={{ margin: "-12px -12px 10px", background: "linear-gradient(160deg, #3D0F1E 0%, #7D1F3C 60%, #9A2F4E 100%)", padding: "16px 14px 0", color: "var(--text-inverse)", position: "relative" }}>
                 <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 10, left: 10, width: 26, height: 26, borderRadius: 8, background: "rgba(255,255,255,.12)", border: "none", cursor: "pointer", color: "var(--text-inverse)", fontSize: 14 }}>✕</button>
-                <div style={{ fontSize: 15.5, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30 }}>{selected.name_ar}</div>
-                <div style={{ fontSize: 9.5, opacity: .65, letterSpacing: ".04em", marginTop: 2 }}>{selected.name_en}</div>
-                <div style={{ display: "flex", gap: 5, marginTop: 8, flexWrap: "wrap" }}>
-                  {selected.nat && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "rgba(212,160,23,.25)", border: "1px solid var(--accent)", color: "#F3D98B" }}>{selected.nat}</span>}
-                  {selected.gender && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.2)" }}>{selected.gender}</span>}
-                  {selected.passport && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.2)" }}>جواز {selected.passport}</span>}
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: 19, fontWeight: 700, lineHeight: 1.3, paddingLeft: 30 }}>{selected.name_ar}</div>
+                <div style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".05em", marginTop: 2 }}>{selected.name_en}</div>
+                <div style={{ display: "flex", gap: 5, marginTop: 9, flexWrap: "wrap" }}>
+                  {selected.nat && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(212,160,23,.28)", border: "1px solid rgba(212,160,23,.5)", color: "#F3D98B" }}>{selected.nat}</span>}
+                  {selected.gender && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>{selected.gender}</span>}
+                  {selected.passport && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>جواز {selected.passport}</span>}
                 </div>
-                <div style={{ background: "rgba(0,0,0,.25)", margin: "10px -14px 0", padding: "8px 14px 10px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 5 }}>
-                    <span>اكتمال الملف</span>
+                <div style={{ background: "rgba(0,0,0,.3)", margin: "9px -14px 0", padding: "8px 14px 10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 800, marginBottom: 5 }}>
+                    <span style={{ color: "rgba(255,255,255,.8)" }}>اكتمال الملف</span>
                     <span style={{ color: "#F3D98B" }}>{docsPct}٪{missing > 0 ? ` · ${missing === 1 ? "مستند ناقص" : missing === 2 ? "مستندان ناقصان" : `${missing} مستندات ناقصة`}` : " · مكتمل"}</span>
                   </div>
                   <div style={{ height: 6, background: "rgba(255,255,255,.15)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${docsPct}%`, borderRadius: 99, background: "linear-gradient(to left, var(--accent), #F3D98B)" }} />
+                    <div style={{ height: "100%", width: `${docsPct}%`, borderRadius: 99, background: "linear-gradient(to left, #F3D98B, #D4A017)" }} />
                   </div>
                 </div>
-                <div style={{ display: "flex", margin: "0 -14px", background: "rgba(0,0,0,.15)" }}>
+                <div style={{ display: "flex", margin: "0 -14px", background: "rgba(0,0,0,.18)" }}>
                   {([["data", "البيانات"], ["svc", "الخدمات"], ["docs", "المستندات"], ["family", "الأقارب"]] as const).map(([t, l]) => (
                     <button key={t} onClick={() => setProfileTab(t)} style={{ flex: 1, padding: "9px 2px", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 800, fontFamily: "var(--font-body)", background: profileTab === t ? "var(--paper)" : "transparent", color: profileTab === t ? "var(--primary)" : "rgba(255,255,255,.75)", borderRadius: profileTab === t ? "8px 8px 0 0" : 0 }}>{l}</button>
                   ))}
@@ -1424,27 +1404,27 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           )}
           {profileTab === "data" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {([["الجواز", selected.passport], ["البطاقة", selected.national_id], ["الجنسية", selected.nat], ["الجنس", selected.gender], ["الميلاد", selected.dob], ["انتهاء الجواز", selected.expiry], ["التليفون", selected.phone]] as [string, string | undefined][]).filter(([, v]) => v).map(([lbl, val]) => (
-                <div key={lbl} style={{ background: "var(--ivory)", borderRadius: 9, padding: "7px 10px", gridColumn: lbl === "التليفون" ? "span 2" : undefined }}>
-                  <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700 }}>{lbl}</div>
-                  <div style={{ fontSize: 12, fontWeight: 900, color: "var(--ink)", marginTop: 1 }} dir={lbl === "التليفون" ? "ltr" : undefined}>{val}</div>
+              {([[" الجواز", selected.passport, false], ["البطاقة", selected.national_id, false], ["الجنسية", selected.nat, false], ["الجنس", selected.gender, false], ["الميلاد", selected.dob, false], ["انتهاء الجواز", selected.expiry, isExpired(selected.expiry)], ["التليفون", selected.phone, false]] as [string, string | undefined, boolean][]).filter(([, v]) => v !== undefined && v !== "").map(([lbl, val, isDanger]) => (
+                <div key={lbl} style={{ background: isDanger ? "#FFEBEE" : "var(--ivory)", border: isDanger ? "1.5px solid #FFCDD2" : "1px solid var(--line)", borderRadius: 10, padding: "8px 11px", gridColumn: lbl.trim() === "التليفون" ? "span 2" : undefined }}>
+                  <div style={{ fontSize: 9.5, color: isDanger ? "#B71C1C" : "var(--muted)", fontWeight: 800, marginBottom: 2 }}>{lbl.trim()}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 900, color: isDanger ? "#B71C1C" : "var(--ink)" }} dir={lbl.trim() === "التليفون" ? "ltr" : undefined}>{val}</div>
                 </div>
               ))}
             </div>
           )}
           {profileTab === "svc" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             {([
-              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null, "var(--info-bg)", "var(--info)", false],
-              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null, "var(--warning-bg)", "var(--warning)", false],
-              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null, "var(--success-bg)", "var(--success)", false],
-              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null, "#f3e5f5", "#7B1FA2", false],
-              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "var(--ivory)", "var(--primary)", true],
-            ] as [string, string | undefined, string | null, string, string, boolean][]).map(([lbl, cls, assign, bg, fg, full]) => (
-              <div key={lbl} style={{ background: bg, border: "1px solid var(--line)", borderRadius: 11, padding: "9px 11px", gridColumn: full ? "span 2" : undefined }}>
-                <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", marginBottom: 2 }}>{lbl}</div>
-                <div style={{ fontSize: 12.5, fontWeight: 900, color: fg }}>{[cls, assign].filter(Boolean).join(" · ") || "غير محدد"}</div>
-                {!assign && <div style={{ fontSize: 9, fontWeight: 700, color: "var(--danger)", marginTop: 1 }}>بانتظار التوزيع</div>}
+              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null, "#E3F2FD", "#1.5px solid #90CAF9", "#0D47A1", "#1565C0", false],
+              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null, "#FFF8E1", "1.5px solid #FFD54F", "#8B6700", "#B8880F", false],
+              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null, "#E8F5E9", "1.5px solid #A5D6A7", "#1B5E20", "#2E7D32", false],
+              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null, "#F3E5F5", "1.5px solid #CE93D8", "#6A1B9A", "#7B1FA2", false],
+              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", true],
+            ] as [string, string | undefined, string | null, string, string, string, string, boolean][]).map(([lbl, cls, assign, bg, border, valColor, lblColor, full]) => (
+              <div key={lbl} style={{ background: bg, border, borderRadius: 12, padding: "11px 12px", gridColumn: full ? "span 2" : undefined }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: lblColor, marginBottom: 4 }}>{lbl}{cls ? ` · ${cls}` : ""}</div>
+                <div style={{ fontSize: 14, fontWeight: 900, color: valColor, lineHeight: 1.2 }}>{assign || "لم يُوزع بعد"}</div>
+                {!assign && <div style={{ fontSize: 9.5, fontWeight: 800, color: "#B71C1C", marginTop: 3 }}>بانتظار التوزيع</div>}
               </div>
             ))}
           </div>
@@ -1497,12 +1477,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <div style={{ fontSize: 10, color: "var(--text-muted)" }}>لا يوجد أقارب مرتبطين</div>
             ) : (
               getFamilyMembers(selected).map(fm => (
-                <div key={fm.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                  <div onClick={() => setSelected(fm)} style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, cursor: "pointer" }}>
-                    <Avatar name={fm.name_ar} gender={fm.gender} size={24} />
-                    <span style={{ fontSize: 11 }}>{fm.short_ar || fm.name_ar}</span>
+                <div key={fm.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)", marginBottom: 6 }}>
+                  <div onClick={() => setSelected(fm)} style={{ flex: 1, cursor: "pointer", minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fm.short_ar || fm.name_ar}</div>
+                    <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 1 }}>{fm.gender}</div>
                   </div>
-                  <button onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط مع هذا الشخص" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--border)", fontSize: 12 }}>✕</button>
+                  <button onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط" style={{ background: "#FFEBEE", border: "none", cursor: "pointer", color: "#B71C1C", width: 26, height: 26, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
                 </div>
               ))
             )}
