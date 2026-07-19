@@ -6,7 +6,7 @@ import type { Passenger, User } from "../types";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
-import { StatsRow, type StatCardData } from "./StatCard";
+import { StatCard, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { makeShort, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
@@ -61,7 +61,48 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
       tone: "success"
     },
   ];
-  return <StatsRow cards={cards} />;
+  const PKG_COLORS: Record<string, string> = { "ثنائية": "#7D1F3C", "ثلاثية": "#D4A017", "رباعية": "#2A9D8F", "فردية": "#1565C0", "خاص": "#7E57C2" };
+  const pkgCounts: Record<string, number> = {};
+  passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").forEach(p => {
+    const t = p.services?.hotel_type?.trim(); if (t) pkgCounts[t] = (pkgCounts[t] || 0) + 1;
+  });
+  const pkgEntries = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1]);
+  const pkgMax = pkgEntries[0]?.[1] || 1;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cards.length}, 1fr) 1.6fr`, gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+      {cards.map(c => <StatCard key={c.label} {...c} />)}
+      {/* كارت توزيع الباقات */}
+      <div style={{ background: "var(--paper)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)", boxShadow: "0 1px 4px rgba(0,0,0,.06)", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "var(--warning-bg)", borderBottom: "1px solid var(--line)" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          </svg>
+          <span style={{ fontFamily: "var(--font-heading)", fontSize: 13, fontWeight: 800, color: "var(--ink)", flex: 1 }}>توزيع الباقات</span>
+          <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700 }}>{total} حاج</span>
+        </div>
+        <div style={{ padding: "8px 12px", flex: 1, display: "flex", flexDirection: "column", gap: 5 }}>
+          {pkgEntries.length === 0 ? (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 11 }}>لا توجد باقات بعد</div>
+          ) : pkgEntries.map(([pkg, count]) => {
+            const color = PKG_COLORS[pkg] || "#8a7d68";
+            const w = Math.max(8, Math.round(count / pkgMax * 100));
+            return (
+              <div key={pkg} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ width: 44, fontSize: 11.5, fontWeight: 800, color: "var(--ink)", flexShrink: 0 }}>{pkg}</span>
+                <div style={{ flex: 1, height: 18, background: "var(--ivory)", borderRadius: 5, overflow: "hidden" }}>
+                  <div style={{ width: `${w}%`, height: "100%", background: `linear-gradient(to left, ${color}, ${color}cc)`, borderRadius: 5, display: "flex", alignItems: "center", paddingRight: 7 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 900, color: "#fff" }}>{count}</span>
+                  </div>
+                </div>
+                <span style={{ width: 30, fontSize: 10.5, color: "var(--muted)", fontWeight: 700, textAlign: "left", flexShrink: 0 }}>{total ? Math.round(count/total*100) : 0}٪</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
@@ -1065,15 +1106,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               ))}
             </div>
           ) : (
-            <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "max-content", width: "100%" }}>
+            <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: 11, minWidth: "max-content", width: "100%", borderRadius: 14, overflow: "hidden" }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
-                <tr style={{ background: "var(--bg-2)", color: "var(--muted)" }}>
-                  <th style={{ padding: "8px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11 }}>م</th>
-                  <th style={{ padding: "7px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11, width: 36 }}>حالة</th>
-                  {COLS.map(col => <th key={col.key} style={{ padding: "7px 10px", border: "0.5px solid var(--line)", whiteSpace: "nowrap", textAlign: "right", fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>{col.label}</th>)}
-                  <th style={{ padding: "8px 10px", border: "0.5px solid var(--line)", textAlign: "center", fontWeight: 600, fontSize: 11 }}>إجراءات</th>
+                <tr style={{ background: "linear-gradient(180deg, var(--primary), var(--primary-dark))", color: "var(--text-inverse)" }}>
+                  <th style={{ padding: "10px 10px", textAlign: "center", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>م</th>
+                  <th style={{ padding: "9px 10px", textAlign: "center", fontWeight: 800, fontSize: 11, width: 36 }}>حالة</th>
+                  {COLS.map(col => <th key={col.key} style={{ padding: "9px 12px", whiteSpace: "nowrap", textAlign: "right", fontSize: 11, fontWeight: 800 }}>{col.label}</th>)}
+                  <th style={{ padding: "10px 10px", textAlign: "center", fontWeight: 800, fontSize: 11 }}>إجراءات</th>
                 </tr>
-
               </thead>
               <tbody>
                 {filtered.map((p, i) => (
@@ -1100,7 +1140,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
                     }}
                     onClick={() => setSelected(p)}
-                    style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--bg-card)" : "var(--bg-2)" }}>
+                    style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--paper)" : "var(--ivory)", borderBottom: "1px solid var(--line)", transition: "background .12s" }}
+                    onMouseEnter={e => { if (selected?.id !== p.id) (e.currentTarget as HTMLTableRowElement).style.background = "color-mix(in srgb, var(--accent) 8%, var(--paper))"; }}
+                    onMouseLeave={e => { if (selected?.id !== p.id) (e.currentTarget as HTMLTableRowElement).style.background = i % 2 === 0 ? "var(--paper)" : "var(--ivory)"; }}>
                     <td style={{ padding: "6px 8px", border: "0.5px solid var(--border)", textAlign: "center", color: "var(--muted)", userSelect: "none" }}>
                       {editingOrderId === p.id ? (
                         <input
@@ -1167,7 +1209,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       );
                     })()}
                     {COLS.map(col => (
-                      <td key={col.key} style={{ padding: "5px 8px", border: "0.5px solid var(--line)", whiteSpace: "nowrap", fontSize: 12, color: "var(--ink)" }}>
+                      <td key={col.key} style={{ padding: "7px 12px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", whiteSpace: "nowrap", fontSize: 12, color: col.key === "name_ar" ? "var(--primary)" : "var(--ink)", fontWeight: col.key === "name_ar" ? 900 : 700 }}>
                         {/* باجات ملونة للباص والطيران */}
                         {(col.key === "bus" || col.key === "flight") ? (() => {
                           const val = getVal(p, col.key, col.get);
@@ -1189,17 +1231,23 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                         {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
                       </td>
                     ))}
-                    <td style={{ padding: "5px 8px", border: "0.5px solid var(--line)", textAlign: "center" }}>
-                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} title="تعديل" style={{ width: 26, height: 26, borderRadius: 6, border: "0.5px solid var(--line)", background: "transparent", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center" }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--male-bg)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--info)"; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--muted)"; }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <td style={{ padding: "5px 10px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", textAlign: "center" }}>
+                      <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
+                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} title="تعديل"
+                          style={{ width: 30, height: 30, borderRadius: 9, border: "none", background: "#BBDEFB", cursor: "pointer", color: "#0D47A1", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
+                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#0D47A1"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
+                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#BBDEFB"; b.style.color = "#0D47A1"; b.style.transform = "scale(1)"; }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                          </svg>
                         </button>
-                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف" style={{ width: 26, height: 26, borderRadius: 6, border: "0.5px solid var(--line)", background: "transparent", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center" }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--female-bg)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--danger)"; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--muted)"; }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف"
+                          style={{ width: 30, height: 30, borderRadius: 9, border: "none", background: "#FFCDD2", cursor: "pointer", color: "#B71C1C", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
+                          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#B71C1C"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
+                          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#FFCDD2"; b.style.color = "#B71C1C"; b.style.transform = "scale(1)"; }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          </svg>
                         </button>
                       </div>
                     </td>
