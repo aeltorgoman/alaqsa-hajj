@@ -128,7 +128,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
       display: "flex", alignItems: "center", gap: 11, zIndex: 2,
     },
     brandCircle: {
-      width: 130, height: 130, borderRadius: "50%",
+      width: 155, height: 155, borderRadius: "50%",
       background: "rgba(93,24,48,.85)", border: "2px solid #d4ac4f",
       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       overflow: "hidden" as const,
@@ -244,8 +244,8 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
           }
         </div>
         <div>
-          <div style={{ fontSize: 10, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 3 }}>نظام إدارة الحج</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 4, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
+          <div style={{ fontSize: 12, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 4 }}>نظام إدارة الحج</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", lineHeight: 1.4 }}>{config.tagline || "نُدير التفاصيل لتتفرّغوا للعبادة"}</div>
         </div>
       </div>
