@@ -20,7 +20,7 @@ interface PhaseInfo {
 function useSeasonPhases(passengers: Passenger[]) {
   const [flights, setFlights] = useState<Flight[]>([]);
   useEffect(() => {
-    supabase.from("flights").select("*").then(({ data }: { data: Flight[] | null }) => { if (data) setFlights(data); });
+    supabase.from("flights").select("*").then(({ data }) => { if (data) setFlights(data as unknown as Flight[]); });
   }, []);
 
   return useMemo(() => {
