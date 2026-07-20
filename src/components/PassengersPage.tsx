@@ -823,7 +823,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100%", overflow: "hidden", fontSize: 13 }}>
       {autoScanning && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}>
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: "24px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
@@ -1301,7 +1301,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           };
 
           return (
-            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease" }}>
+            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "sticky", top: 0, alignSelf: "flex-start", height: "100%" }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-light))", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -1360,7 +1360,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        <div style={{ width: 280, borderRight: "1px solid var(--line)", overflowY: "auto", padding: 12, flexShrink: 0 }}>
+        <div style={{ width: 280, borderRight: "1px solid var(--line)", overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, alignSelf: "flex-start", height: "100%" }}>
           {(() => {
             const docsArr = [(selected as any).photo_url, (selected as any).passport_url, (selected as any).national_id_url, (selected as any).contract_url, (selected as any).flight_ticket_url, (selected as any).hajj_permit_url];
             const docsDone = docsArr.filter(Boolean).length;
@@ -1369,7 +1369,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             return (
               <div style={{ margin: "-12px -12px 10px", background: "linear-gradient(160deg, #3D0F1E 0%, #7D1F3C 60%, #9A2F4E 100%)", padding: "16px 14px 0", color: "var(--text-inverse)", position: "relative" }}>
                 <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 10, left: 10, width: 26, height: 26, borderRadius: 8, background: "rgba(255,255,255,.12)", border: "none", cursor: "pointer", color: "var(--text-inverse)", fontSize: 14 }}>✕</button>
-                <div style={{ fontFamily: "var(--font-heading)", fontSize: 19, fontWeight: 700, lineHeight: 1.3, paddingLeft: 30 }}>{selected.name_ar}</div>
+                <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30, fontFamily: "Cairo, sans-serif" }}>{selected.name_ar}</div>
                 <div style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".05em", marginTop: 2 }}>{selected.name_en}</div>
                 <div style={{ display: "flex", gap: 5, marginTop: 9, flexWrap: "wrap" }}>
                   {selected.nat && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(212,160,23,.28)", border: "1px solid rgba(212,160,23,.5)", color: "#F3D98B" }}>{selected.nat}</span>}
