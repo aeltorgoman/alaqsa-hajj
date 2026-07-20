@@ -913,7 +913,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
 
         {/* ══ المحتوى الرئيسي ══ */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", marginLeft: selected ? 280 : 280, transition: "margin-left .2s ease" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <PassengersStats passengers={passengers} />
 
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
@@ -1301,7 +1301,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           };
 
           return (
-            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "fixed", left: 0, top: 46, bottom: 0, zIndex: 10 }}>
+            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--line)", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease" }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-light))", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -1360,7 +1360,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        <div style={{ width: 280, borderRight: "0.5px solid var(--border)", overflowY: "auto", padding: 12, flexShrink: 0, position: "fixed", left: 0, top: 46, bottom: 0, zIndex: 10 }}>
+        <div style={{ width: 280, borderRight: "1px solid var(--line)", overflowY: "auto", padding: 12, flexShrink: 0 }}>
           {(() => {
             const docsArr = [(selected as any).photo_url, (selected as any).passport_url, (selected as any).national_id_url, (selected as any).contract_url, (selected as any).flight_ticket_url, (selected as any).hajj_permit_url];
             const docsDone = docsArr.filter(Boolean).length;
