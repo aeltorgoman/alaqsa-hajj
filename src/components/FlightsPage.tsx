@@ -271,7 +271,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           </div>
 
           {/* ══ يسار — البيانات والأزرار ══ */}
-          <div style={{ flex: 1, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ flex: 1, padding: "11px 14px", display: "flex", flexDirection: "column", gap: 7 }}>
             {/* الاسم والتاريخ */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <div>
@@ -309,25 +309,45 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
             </div>
 
-            {/* شيبس الدرجات */}
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {firstClassCount > 0 && (
-                <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: 10, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "white", boxShadow: "0 2px 6px rgba(212,160,23,.3)", display: "flex", alignItems: "center", gap: 4 }}>
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  درجة أولى — {firstClassCount}
-                </span>
-              )}
-              {economyCount > 0 && (
-                <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: 10, fontWeight: 800, background: "var(--bg-2)", color: "var(--muted)", border: "1px solid var(--line)" }}>
-                  سياحية — {economyCount}
-                </span>
-              )}
-              {fp.length === 0 && (
+            {/* صف الإحصائيات المصغر */}
+            {fp.length > 0 ? (
+              <>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {([
+                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "var(--male-bg)", "var(--male-fg)"],
+                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "var(--female-bg)", "var(--female-fg)"],
+                    [firstClassCount, "درجة أولى", "#FFF8E1", "#B8880F"],
+                    [economyCount, "سياحية", "var(--ivory)", "var(--ink)"],
+                  ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
+                    <div key={l} style={{ flex: 1, borderRadius: 9, padding: "5px 9px", display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--line)", background: bg }}>
+                      <span style={{ fontSize: 15, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)" }}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* مؤشر جاهزية التذاكر */}
+                {(() => {
+                  const withTicket = fp.filter(p => (p as any).flight_ticket_url).length;
+                  const pct = fp.length ? Math.round(withTicket / fp.length * 100) : 0;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--ivory)", borderRadius: 9, padding: "6px 11px", border: "1px solid var(--line)" }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--ink)", flexShrink: 0 }}>جاهزية التذاكر</span>
+                      <div style={{ flex: 1, height: 6, background: "var(--line)", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: "linear-gradient(90deg,#2E7D32,#66BB6A)" }} />
+                      </div>
+                      <span style={{ fontSize: 10.5, fontWeight: 900, color: "var(--success)", flexShrink: 0 }}>{pct}٪</span>
+                      <span style={{ fontSize: 8.5, color: "var(--muted)", flexShrink: 0 }}>{withTicket} من {fp.length} مرفوعة</span>
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (
+              <div style={{ display: "flex" }}>
                 <span style={{ padding: "3px 10px", borderRadius: 99, fontSize: 10, fontWeight: 700, background: "var(--danger-bg)", color: "var(--danger)" }}>
                   لم يبدأ التوزيع
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* أسفل: عدد الحجاج + بار + إضافة */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: "auto" }}>
