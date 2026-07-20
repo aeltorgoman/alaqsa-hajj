@@ -823,7 +823,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", fontSize: 13 }}>
       {autoScanning && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}>
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: "24px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
@@ -910,7 +910,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           </div>
         );
       })()}
-      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "flex-start" }}>
 
         {/* ══ المحتوى الرئيسي ══ */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, marginLeft: 280 }}>
@@ -1369,6 +1369,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             return (
               <div style={{ margin: "-12px -12px 10px", background: "linear-gradient(160deg, #3D0F1E 0%, #7D1F3C 60%, #9A2F4E 100%)", padding: "16px 14px 0", color: "var(--text-inverse)", position: "relative" }}>
                 <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 10, left: 10, width: 26, height: 26, borderRadius: 8, background: "rgba(255,255,255,.12)", border: "none", cursor: "pointer", color: "var(--text-inverse)", fontSize: 14 }}>✕</button>
+                <div onClick={() => setSelected(null)} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.65)", marginBottom: 7, cursor: "pointer" }}>
+                  <span>غرفة العمليات</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  <span style={{ color: "#F3D98B" }}>ملف الحاج</span>
+                </div>
                 <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30, fontFamily: "Cairo, sans-serif" }}>{selected.name_ar}</div>
                 <div style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".05em", marginTop: 2 }}>{selected.name_en}</div>
                 <div style={{ display: "flex", gap: 5, marginTop: 9, flexWrap: "wrap" }}>
