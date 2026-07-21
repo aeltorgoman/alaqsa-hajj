@@ -371,7 +371,14 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
                         </span>
                         <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 900, color: "var(--primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+                            {p.services?.hotel_type && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "1px 7px", borderRadius: 99, background: "#FFF8E1", color: "#B8880F" }}>{p.services.hotel_type}{p.services?.hotel_view ? ` · ${p.services.hotel_view}` : ""}</span>}
+                            {p.services?.camp_mina && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "1px 7px", borderRadius: 99, background: "#e8f5e9", color: "#1B5E20" }}>{p.services.camp_mina}</span>}
+                            {(() => { const fam = p.family_id ? passengers.find((x: any) => x.id !== p.id && x.family_id === p.family_id) : null; return fam ? <span style={{ fontSize: 9.5, fontWeight: 800, padding: "1px 7px", borderRadius: 99, background: "#e3f2fd", color: "#1565C0" }}>مع {(fam as any).short_ar || (fam as any).name_ar.split(" ")[0]}</span> : null; })()}
+                          </div>
+                        </div>
                         {vipMismatch(p) && (
                           <span style={{ fontSize: 9, fontWeight: 700, color: "#C62828", background: "rgba(198,40,40,.08)", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>
                             {isVIP ? "ليس VIP" : "VIP"}
@@ -387,6 +394,39 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     ))}
                   </div>
                 </div>
+
+                {/* اقتراحات ذكية */}
+                {(() => {
+                  const roomIds = new Set(bp.map((p: any) => p.room_id).filter(Boolean));
+                  const minaIds = new Set(bp.map((p: any) => p.camp_mina_id).filter(Boolean));
+                  const suggestions = passengers.filter(p =>
+                    p.bus_id !== bus.id &&
+                    (!p.passenger_type || p.passenger_type === "حاج") &&
+                    (((p as any).room_id && roomIds.has((p as any).room_id)) || ((p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id)))
+                  ).slice(0, 3);
+                  if (!suggestions.length) return null;
+                  return (
+                    <div style={{ flexShrink: 0, borderTop: "2px solid var(--line)", background: "var(--ivory)", padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: "#1565C0", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg>
+                        اقتراحات ذكية
+                      </div>
+                      {suggestions.map(p => {
+                        const sharedRoom = (p as any).room_id && roomIds.has((p as any).room_id);
+                        const sharedMina = (p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id);
+                        return (
+                          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 9px", borderRadius: 9, border: `1.5px solid ${sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom ? "#FFFDE7" : "#F1F8E9", marginBottom: 5 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)" }}>{(p as any).short_ar || p.name_ar}</div>
+                              <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, marginTop: 1 }}>{sharedRoom ? "نفس الغرفة" : ""}{sharedRoom && sharedMina ? " · " : ""}{sharedMina ? "نفس خيمة منى" : ""}</div>
+                            </div>
+                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "5px 11px", borderRadius: 8, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap" }}>+ إضافة للباص</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 {/* شمال: إضافة مسافرين */}
                 <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
