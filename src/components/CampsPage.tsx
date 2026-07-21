@@ -58,6 +58,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
+  const [dismissedCampSuggestions, setDismissedCampSuggestions] = useState(new Set<number>());
   const [campSearch, setCampSearch] = useState("");
   const [addSearch, setAddSearch] = useState("");
   const dragType = useRef<"reorder"|"add">("reorder");
@@ -298,7 +299,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const addFiltered = genderPool.filter(p => (p as any)[campIdKey] == null && (!p.passenger_type || p.passenger_type === "حاج") && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
         return (
           <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", minHeight: "60vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
               {/* هيدر */}
               <div style={{ background: `linear-gradient(135deg,${campColor},${campColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", left: -10, bottom: -14, opacity: .08 }}><IconSvg /></div>
@@ -313,17 +314,17 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: "white" }} onDoubleClick={() => setEditingCampId(camp.id)}>مخيم {camp.name}</div>
+                        <div style={{ fontSize: 26, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }} onDoubleClick={() => setEditingCampId(camp.id)}>مخيم {camp.name}</div>
                         {isSpecial && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>خاص</span>}
                       </div>
                     )}
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 3 }}>{cp.length} مسافر · {camp.gender === "ذكر" ? "رجال" : "نساء"}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.85)", marginTop: 4 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`} · {camp.gender === "ذكر" ? "رجال" : "نساء"}</div>
                   </div>
-                  <button onClick={() => printCamp(camp)} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  <button onClick={() => printCamp(camp)} title="طباعة" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="9" y1="21" x2="12" y2="21"/><circle cx="18" cy="11.5" r="1" fill="currentColor"/></svg>
                   </button>
-                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف مخيم ${camp.name}؟`, { title: "حذف المخيم" }); if (ok) { deleteCamp(camp.id); setSelectedCampId(null); } }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف مخيم ${camp.name}؟`, { title: "حذف المخيم" }); if (ok) { deleteCamp(camp.id); setSelectedCampId(null); } }} title="حذف المخيم" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                   <button onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
                 </div>
@@ -335,7 +336,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid var(--line)" }}>
                   <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: campColor, background: `${campColor}12`, padding: "2px 8px", borderRadius: 99 }}>{cp.length} مسافر</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: campColor, background: `${campColor}12`, padding: "2px 8px", borderRadius: 99 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
                   </div>
                   <div style={{ flex: 1, overflowY: "auto" }} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(camp.id)}>
                     {cp.length === 0 ? (
@@ -361,6 +362,62 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                   </div>
                 </div>
 
+                {/* اقتراحات ذكية */}
+                {(() => {
+                  const busIds = new Set(cp.map((p: any) => p.bus_id).filter(Boolean));
+                  const roomIds = new Set(cp.map((p: any) => p.room_id).filter(Boolean));
+                  const famIds = new Set(cp.filter((p: any) => p.family_id).map((p: any) => p.family_id));
+                  const allSuggestions = passengers
+                    .filter(p =>
+                      (p as any)[campIdKey] !== camp.id &&
+                      !dismissedCampSuggestions.has(p.id!) &&
+                      (!p.passenger_type || p.passenger_type === "حاج") &&
+                      (camp.type === "خاص" || p.gender === camp.gender) &&
+                      ((p.family_id && famIds.has(p.family_id)) ||
+                       ((p as any).bus_id && busIds.has((p as any).bus_id)) ||
+                       ((p as any).room_id && roomIds.has((p as any).room_id)))
+                    )
+                    .sort((a, b) => {
+                      const sc = (x: any) => (x.family_id && famIds.has(x.family_id) ? 4 : 0) + (x.bus_id && busIds.has(x.bus_id) ? 2 : 0) + (x.room_id && roomIds.has(x.room_id) ? 1 : 0);
+                      return sc(b) - sc(a);
+                    });
+                  if (!allSuggestions.length) return null;
+                  return (
+                    <div style={{ flexShrink: 0, borderTop: "2px solid var(--line)", background: "var(--ivory)", padding: "8px 12px" }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: "#1565C0", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg>
+                        اقتراحات ذكية
+                        <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700 }}>({allSuggestions.length})</span>
+                      </div>
+                      <div style={{ maxHeight: 114, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                        {allSuggestions.map(p => {
+                          const hasFam = p.family_id && famIds.has(p.family_id);
+                          const hasBus = (p as any).bus_id && busIds.has((p as any).bus_id);
+                          const hasRoom = (p as any).room_id && roomIds.has((p as any).room_id);
+                          const reason = hasFam ? "صلة قرابة" : hasBus ? "نفس الباص" : "نفس الغرفة";
+                          const matchPax = cp.find((x: any) => hasFam ? x.family_id === p.family_id : hasBus ? (x as any).bus_id === (p as any).bus_id : (x as any).room_id === (p as any).room_id);
+                          const matchName = (matchPax as any)?.short_ar || (matchPax as any)?.name_ar?.split(" ").slice(0,2).join(" ") || "";
+                          const isTypeMismatch = camp.type === "خاص" && (p.services as any)?.[serviceKey] !== "خاص";
+                          return (
+                            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${hasFam ? "#A5D6A7" : hasBus ? "#90CAF9" : "#FFD54F"}`, background: hasFam ? "#F1F8E9" : hasBus ? "#E3F2FD" : "#FFFDE7" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)" }}>{(p as any).short_ar || p.name_ar}</span>
+                                <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", marginRight: 5 }}>· {reason}{matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}</span>
+                              </div>
+                              <button onClick={async () => {
+                                if (isTypeMismatch) { showAlert("warning", `تنبيه: ${(p as any).short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); }
+                                await supabase.from("passengers").update({ [campIdKey]: camp.id } as any).eq("id", p.id);
+                                setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x));
+                              }} style={{ padding: "3px 9px", borderRadius: 7, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>+ إضافة</button>
+                              <button onClick={() => setDismissedCampSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* شمال: إضافة */}
                 <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
@@ -379,7 +436,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     ) : addFiltered.map(p => (
                       <div key={p.id}
                         draggable onDragStart={() => handleDragStartAdd(p.id)} onDragEnd={handleDragEnd}
-                        onClick={async () => { await supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x)); }}
+                        onClick={async () => { if (camp.type === "خاص" && (p.services as any)?.[serviceKey] !== "خاص") { showAlert("warning", `تنبيه: ${(p as any).short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); } await supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x)); }}
                         style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? `${campColor}05` : "transparent" }}
                         onMouseEnter={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
                         onMouseLeave={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
