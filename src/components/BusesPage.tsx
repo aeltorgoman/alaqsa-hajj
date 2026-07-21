@@ -305,7 +305,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const addFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
-          <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onKeyDown={e => { if (e.key === "Escape") { setSelectedBusId(null); setDrawerPSearch(""); } }} tabIndex={-1} onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
               {/* ══ هيدر ملون ══ */}
@@ -521,7 +521,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
       {/* مودال إضافة مسافرين — نفس أسلوب الغرفة */}
       {showAddP && (
-        <div onClick={() => setShowAddP(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div onClick={() => setShowAddP(false)} onKeyDown={e => { if (e.key === "Escape") setShowAddP(false); }} tabIndex={-1} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 18, width: "90%", maxWidth: 520, maxHeight: "82vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,.3)" }}>
             {/* هيدر */}
             <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
