@@ -327,17 +327,17 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: "white", lineHeight: 1 }} onDoubleClick={() => setEditingBusId(bus.id)}>{bus.name}</div>
+                        <div style={{ fontSize: 26, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }} onDoubleClick={() => setEditingBusId(bus.id)}>{bus.name}</div>
                         {isVIP && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>VIP ✦</span>}
                       </div>
                     )}
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.75)", marginTop: 3 }}>{bp.length} مسافر · {available} مقعد متبقٍ</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.85)", marginTop: 4 }}>{bp.length === 1 ? `${bp.length} مسافر` : bp.length === 2 ? `${bp.length} مسافران` : `${bp.length} مسافرين`} · {available} مقعد متبقٍ</div>
                   </div>
-                  <button onClick={() => printBus(bus)} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  <button onClick={() => printBus(bus)} title="طباعة" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="9" y1="21" x2="12" y2="21"/><circle cx="18" cy="11.5" r="1" fill="currentColor"/></svg>
                   </button>
-                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} title="حذف الباص" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                   <button onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
                 </div>
@@ -360,7 +360,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid var(--line)" }}>
                   <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: busColor, background: `${busColor}12`, padding: "2px 8px", borderRadius: 99 }}>{bp.length} مسافر</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: busColor, background: `${busColor}12`, padding: "2px 8px", borderRadius: 99 }}>{bp.length === 1 ? `${bp.length} مسافر` : bp.length === 2 ? `${bp.length} مسافران` : `${bp.length} مسافرين`}</span>
                   </div>
                   <div style={{ flex: 1, overflowY: "auto" }} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(bus.id)}>
                     {bp.length === 0 ? (
@@ -402,7 +402,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       (((p as any).room_id && roomIds.has((p as any).room_id)) || ((p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id)))
                     )
                     .sort((a, b) => {
-                      const sc = (x: any) => (x.room_id && roomIds.has(x.room_id) ? 2 : 0) + (x.camp_mina_id && minaIds.has(x.camp_mina_id) ? 1 : 0);
+                      const sc = (x: any) => {
+                        const famIds = new Set(bp.filter((q: any) => q.family_id).map((q: any) => q.family_id));
+                        const kin = x.family_id && famIds.has(x.family_id) ? 4 : 0;
+                        const room = x.room_id && roomIds.has(x.room_id) ? 2 : 0;
+                        const mina = x.camp_mina_id && minaIds.has(x.camp_mina_id) ? 1 : 0;
+                        return kin + room + mina;
+                      };
                       return sc(b) - sc(a);
                     });
                   if (!allSuggestions.length) return null;
