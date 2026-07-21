@@ -305,7 +305,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
           <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "96%", maxWidth: 900, maxHeight: "96vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
               {/* ══ هيدر ملون ══ */}
               <div style={{ background: `linear-gradient(135deg,${busColor},${busColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
@@ -373,11 +373,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 900, color: "var(--primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
-                            {p.services?.hotel_type && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "1px 7px", borderRadius: 99, background: "#FFF8E1", color: "#B8880F" }}>{p.services.hotel_type}{p.services?.hotel_view ? ` · ${p.services.hotel_view}` : ""}</span>}
-                            {p.services?.camp_mina && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "1px 7px", borderRadius: 99, background: "#e8f5e9", color: "#1B5E20" }}>{p.services.camp_mina}</span>}
-                            {(() => { const fam = p.family_id ? passengers.find((x: any) => x.id !== p.id && x.family_id === p.family_id) : null; return fam ? <span style={{ fontSize: 9.5, fontWeight: 800, padding: "1px 7px", borderRadius: 99, background: "#e3f2fd", color: "#1565C0" }}>مع {(fam as any).short_ar || (fam as any).name_ar.split(" ")[0]}</span> : null; })()}
-                          </div>
+
                         </div>
                         {vipMismatch(p) && (
                           <span style={{ fontSize: 9, fontWeight: 700, color: "#C62828", background: "rgba(198,40,40,.08)", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>
@@ -415,7 +411,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         return (
                           <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom ? "#FFFDE7" : "#F1F8E9", marginBottom: 4 }}>
                             <span style={{ fontSize: 12, fontWeight: 900, color: "var(--ink)", flex: "0 0 auto" }}>{(p as any).short_ar || p.name_ar}</span>
-                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", flex: 1 }}>· {sharedRoom ? "نفس الغرفة" : ""}{sharedRoom && sharedMina ? " و" : ""}{sharedMina ? "نفس خيمة منى" : ""}</span>
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", flex: 1 }}>
+                              · {sharedRoom && sharedMina ? "نفس الغرفة وخيمة منى" : sharedRoom ? "نفس الغرفة" : "نفس خيمة منى"}
+                              {" مع "}
+                              <span style={{ color: "var(--primary)", fontWeight: 800 }}>
+                                {bp.find((x: any) => sharedRoom ? (x as any).room_id === (p as any).room_id : (x as any).camp_mina_id === (p as any).camp_mina_id)?.short_ar || bp.find((x: any) => sharedRoom ? (x as any).room_id === (p as any).room_id : (x as any).camp_mina_id === (p as any).camp_mina_id)?.name_ar || ""}
+                              </span>
+                            </span>
                             <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>+ إضافة</button>
                           </div>
                         );
