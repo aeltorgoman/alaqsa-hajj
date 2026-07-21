@@ -116,16 +116,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
   const [opsFilter, setOpsFilter] = useState<string | null>(null);
   const [profileTab, setProfileTab] = useState<"data" | "svc" | "docs" | "family">("data");
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (selected) { setSelected(null); return; }
-      if (editing) { setEditing(null); return; }
-      if (docViewer) { setDocViewer(null); return; }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [selected, editing, docViewer]);
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
   const [metaCamps, setMetaCamps] = useState<any[]>([]);
@@ -336,6 +326,16 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (docViewer) { setDocViewer(null); return; }
+      if (editing) { setEditing(null); return; }
+      if (selected) { setSelected(null); return; }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selected, editing, docViewer]);
   const [showManual, setShowManual] = useState(false);
   const DEFAULT_MANUAL_FORM = { name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" };
   const DEFAULT_MANUAL_SERVICES = { bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" };
