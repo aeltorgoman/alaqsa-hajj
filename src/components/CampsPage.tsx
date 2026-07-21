@@ -393,7 +393,6 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                         {allSuggestions.map(p => {
                           const hasFam = p.family_id && famIds.has(p.family_id);
                           const hasBus = (p as any).bus_id && busIds.has((p as any).bus_id);
-                          const hasRoom = (p as any).room_id && roomIds.has((p as any).room_id);
                           const reason = hasFam ? "صلة قرابة" : hasBus ? "نفس الباص" : "نفس الغرفة";
                           const matchPax = cp.find((x: any) => hasFam ? x.family_id === p.family_id : hasBus ? (x as any).bus_id === (p as any).bus_id : (x as any).room_id === (p as any).room_id);
                           const matchName = (matchPax as any)?.short_ar || (matchPax as any)?.name_ar?.split(" ").slice(0,2).join(" ") || "";
