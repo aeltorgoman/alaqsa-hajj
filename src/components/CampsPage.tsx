@@ -208,7 +208,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       </div>
       {filteredGroup.length === 0
         ? <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div>
-        : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 12 }}>
+        : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 12 }}>
           {filteredGroup.map(camp => {
             const cp = getCampPassengers(camp.id);
             const isSpecial = camp.type === "خاص";
@@ -231,7 +231,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     <IconSvg />
                   </div>
                   <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: "white", lineHeight: 1 }}>مخيم {camp.name}</div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }}>مخيم {camp.name}</div>
                     {isSpecial && <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>خاص</span>}
                   </div>
                 </div>
@@ -244,7 +244,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     </div>
                   ) : (
                     <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                      <span style={{ fontSize: 28, fontWeight: 900, color: campColor, lineHeight: 1 }}>{cp.length}</span>
+                      <span style={{ fontSize: 36, fontWeight: 900, color: campColor, lineHeight: 1, fontFamily: "var(--font-heading)" }}>{cp.length}</span>
                       <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>مسافر</span>
                     </div>
                   )}
@@ -298,7 +298,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const genderPool = camp.type === "خاص" ? passengers : passengers.filter(p => p.gender === camp.gender);
         const addFiltered = genderPool.filter(p => (p as any)[campIdKey] == null && (!p.passenger_type || p.passenger_type === "حاج") && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
         return (
-          <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} onKeyDown={e => { if (e.key === "Escape") { setSelectedCampId(null); setAddSearch(""); } }} tabIndex={-1} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
               {/* هيدر */}
               <div style={{ background: `linear-gradient(135deg,${campColor},${campColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
