@@ -305,7 +305,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
           <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "96%", maxWidth: 900, maxHeight: "96vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
               {/* ══ هيدر ملون ══ */}
               <div style={{ background: `linear-gradient(135deg,${busColor},${busColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
@@ -398,10 +398,10 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   const roomIds = new Set(bp.map((p: any) => p.room_id).filter(Boolean));
                   const minaIds = new Set(bp.map((p: any) => p.camp_mina_id).filter(Boolean));
                   const suggestions = passengers.filter(p =>
-                    p.bus_id !== bus.id &&
+                    p.bus_id == null &&
                     (!p.passenger_type || p.passenger_type === "حاج") &&
                     (((p as any).room_id && roomIds.has((p as any).room_id)) || ((p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id)))
-                  ).slice(0, 3);
+                  ).slice(0, 4);
                   if (!suggestions.length) return null;
                   return (
                     <div style={{ flexShrink: 0, borderTop: "2px solid var(--line)", background: "var(--ivory)", padding: "8px 12px" }}>
@@ -413,12 +413,10 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         const sharedRoom = (p as any).room_id && roomIds.has((p as any).room_id);
                         const sharedMina = (p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id);
                         return (
-                          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 9px", borderRadius: 9, border: `1.5px solid ${sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom ? "#FFFDE7" : "#F1F8E9", marginBottom: 5 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)" }}>{(p as any).short_ar || p.name_ar}</div>
-                              <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, marginTop: 1 }}>{sharedRoom ? "نفس الغرفة" : ""}{sharedRoom && sharedMina ? " · " : ""}{sharedMina ? "نفس خيمة منى" : ""}</div>
-                            </div>
-                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "5px 11px", borderRadius: 8, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap" }}>+ إضافة للباص</button>
+                          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom ? "#FFFDE7" : "#F1F8E9", marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 900, color: "var(--ink)", flex: "0 0 auto" }}>{(p as any).short_ar || p.name_ar}</span>
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", flex: 1 }}>· {sharedRoom ? "نفس الغرفة" : ""}{sharedRoom && sharedMina ? " و" : ""}{sharedMina ? "نفس خيمة منى" : ""}</span>
+                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>+ إضافة</button>
                           </div>
                         );
                       })}
