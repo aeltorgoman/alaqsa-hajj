@@ -351,6 +351,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     return mkHTML("تقرير الباصات", joinSections(sections), false, true);
   };
 
+  const getSingleBusHTML = (bus: any) => {
+    const bp = passengers.filter(p => p.bus_id === bus.id);
+    const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
+    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
+    return mkHTML(`باص ${bus.name}`, section, false, true);
+  };
+
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
     const wb = XLSX.utils.book_new();
@@ -1081,39 +1088,70 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     selected={selectedBusIds}
                     setSelected={(s) => setSelectedBusIds(s as Set<number>)}
                   />
-                  {buses.map((bus, idx) => {
-                    const bp = passengers.filter(p => p.bus_id === bus.id);
-                    const isOpen = expandedItems.has(bus.id);
-                    const busColor = bus.type === "VIP" ? VIP_ICON_COLOR : ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
-                    return (
-                      <div key={bus.id} style={{ border: "0.5px solid var(--border)", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div onClick={() => toggleExpandedItem(bus.id)} style={{ padding: "8px 12px", background: bus.type === "VIP" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
-                            <div style={{ width: 28, height: 28, borderRadius: 8, background: busColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                    {buses.map((bus) => {
+                      const bp = passengers.filter(p => p.bus_id === bus.id);
+                      const isOpen = expandedItems.has(bus.id);
+                      const isVip = bus.type === "VIP";
+                      const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
+                      const fillCls = isVip ? "#D4A017" : "#1976D2";
+                      const capacity = (bus as any).capacity || 50;
+                      const pct = capacity ? Math.round(bp.length / capacity * 100) : 0;
+                      return isOpen ? (
+                        <div key={bus.id} style={{ gridColumn: "1 / -1", borderRadius: 14, overflow: "hidden", border: "1.5px solid #90CAF9", background: "var(--paper)" }}>
+                          <div onClick={() => toggleExpandedItem(bus.id)} style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name} {isVip && "⭐"} ▾</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, opacity: .85 }}>{bp.length === 1 ? `${bp.length} مسافر` : bp.length === 2 ? `${bp.length} مسافران` : `${bp.length} مسافرين`} · إشغال {pct}٪</span>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleBusHTML(bus)); }} title="طباعة هذا الباص" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                              </button>
                             </div>
-                            <div style={{ fontSize: 13, fontWeight: 500 }}>{bus.name} {bus.type === "VIP" && <span style={{ fontSize: 10, background: "var(--warning-bg)", color: "var(--warning)", padding: "1px 6px", borderRadius: 99 }}>VIP</span>}</div>
                           </div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{bp.length} مسافر</div>
-                        </div>
-                        {isOpen && bp.length > 0 && (
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: primaryColor, color: "#fff" }}>
-                              <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>اسم الحاج / الحاجة</th>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead><tr style={{ background: "var(--ivory2)" }}>
+                              <th style={{ padding: "8px 13px", textAlign: "center", width: 36, color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>م</th>
+                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الاسم</th>
+                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الجنسية</th>
                             </tr></thead>
                             <tbody>{bp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.short_ar || p.name_ar}</td>
+                              <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
+                                <td style={{ padding: "8px 13px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>{i + 1}</td>
+                                <td style={{ padding: "8px 13px", color: "var(--primary)", fontWeight: 900, fontSize: 12 }}>{(p as any).short_ar || p.name_ar}</td>
+                                <td style={{ padding: "8px 13px", color: "var(--muted)", fontSize: 11 }}>{p.nat}</td>
                               </tr>
                             )}</tbody>
                           </table>
-                        )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      ) : (
+                        <div key={bus.id} onClick={() => toggleExpandedItem(bus.id)} style={{ borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", transition: ".15s" }}>
+                          <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, color: "#fff" }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name}{isVip && " ⭐"}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              {isVip && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleBusHTML(bus)); }} title="طباعة هذا الباص" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ padding: "11px 13px" }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
+                              <span style={{ fontSize: 24, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-heading)" }}>{bp.length}</span>
+                              <span style={{ fontSize: 13, color: "var(--muted)" }}>/</span>
+                              <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{capacity} مقعد</span>
+                            </div>
+                            <div style={{ height: 7, borderRadius: 99, background: "var(--ivory2)", overflow: "hidden", marginBottom: 4 }}>
+                              <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: fillCls }} />
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
+                              <span>إشغال {pct}٪</span>
+                              <span style={{ color: "#1565C0", fontWeight: 800 }}>اضغط للتفاصيل ▾</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </>
               }
             </>
