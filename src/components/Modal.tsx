@@ -1,6 +1,12 @@
 import React from "react";
 
 function Modal({ show, onClose, title, children, maxWidth = 420 }: { show: boolean; onClose: () => void; title: string; children?: React.ReactNode; maxWidth?: number; }) {
+  React.useEffect(() => {
+    if (!show) return;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [show, onClose]);
   if (!show) return null;
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
