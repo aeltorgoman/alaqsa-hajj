@@ -403,6 +403,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     return mkHTML(`مخيمات ${pageType}`, joinSections(sections), false, true);
   };
 
+  const getSingleCampHTML = (camp: any, cp: any[], pageType: string) => {
+    const isMale = camp.gender === "ذكر";
+    const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
+    const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
+    return mkHTML(`مخيم ${pageType} ${camp.name}`, section, false, true);
+  };
+
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
