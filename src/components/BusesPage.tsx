@@ -54,6 +54,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [showAddP, setShowAddP] = useState(false);
   const [currentBusId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
+  const [dismissedSuggestions, setDismissedSuggestions] = useState(new Set<number>());
   const [pSearch, setPSearch] = useState("");
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
   const [drawerPSearch, setDrawerPSearch] = useState("");
@@ -393,35 +394,44 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 {(() => {
                   const roomIds = new Set(bp.map((p: any) => p.room_id).filter(Boolean));
                   const minaIds = new Set(bp.map((p: any) => p.camp_mina_id).filter(Boolean));
-                  const suggestions = passengers.filter(p =>
-                    p.bus_id == null &&
-                    (!p.passenger_type || p.passenger_type === "حاج") &&
-                    (((p as any).room_id && roomIds.has((p as any).room_id)) || ((p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id)))
-                  ).slice(0, 4);
-                  if (!suggestions.length) return null;
+                  const allSuggestions = passengers
+                    .filter(p =>
+                      p.bus_id !== bus.id &&
+                      !dismissedSuggestions.has(p.id!) &&
+                      (!p.passenger_type || p.passenger_type === "حاج") &&
+                      (((p as any).room_id && roomIds.has((p as any).room_id)) || ((p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id)))
+                    )
+                    .sort((a, b) => {
+                      const sc = (x: any) => (x.room_id && roomIds.has(x.room_id) ? 2 : 0) + (x.camp_mina_id && minaIds.has(x.camp_mina_id) ? 1 : 0);
+                      return sc(b) - sc(a);
+                    });
+                  if (!allSuggestions.length) return null;
                   return (
                     <div style={{ flexShrink: 0, borderTop: "2px solid var(--line)", background: "var(--ivory)", padding: "8px 12px" }}>
                       <div style={{ fontSize: 10, fontWeight: 900, color: "#1565C0", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg>
                         اقتراحات ذكية
+                        <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700 }}>({allSuggestions.length})</span>
                       </div>
-                      {suggestions.map(p => {
+                      <div style={{ maxHeight: 114, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {allSuggestions.map(p => {
                         const sharedRoom = (p as any).room_id && roomIds.has((p as any).room_id);
                         const sharedMina = (p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id);
+                        const matchPax = bp.find((x: any) => sharedRoom ? (x as any).room_id === (p as any).room_id : (x as any).camp_mina_id === (p as any).camp_mina_id);
+                        const matchName = (matchPax as any)?.short_ar || (matchPax as any)?.name_ar?.split(" ").slice(0,2).join(" ") || "";
                         return (
-                          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom ? "#FFFDE7" : "#F1F8E9", marginBottom: 4 }}>
-                            <span style={{ fontSize: 12, fontWeight: 900, color: "var(--ink)", flex: "0 0 auto" }}>{(p as any).short_ar || p.name_ar}</span>
-                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", flex: 1 }}>
+                          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${sharedRoom && sharedMina ? "#81C784" : sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom && sharedMina ? "#F1F8E9" : sharedRoom ? "#FFFDE7" : "#F9FBE7" }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)", flexShrink: 0 }}>{(p as any).short_ar || p.name_ar}</span>
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               · {sharedRoom && sharedMina ? "نفس الغرفة وخيمة منى" : sharedRoom ? "نفس الغرفة" : "نفس خيمة منى"}
-                              {" مع "}
-                              <span style={{ color: "var(--primary)", fontWeight: 800 }}>
-                                {bp.find((x: any) => sharedRoom ? (x as any).room_id === (p as any).room_id : (x as any).camp_mina_id === (p as any).camp_mina_id)?.short_ar || bp.find((x: any) => sharedRoom ? (x as any).room_id === (p as any).room_id : (x as any).camp_mina_id === (p as any).camp_mina_id)?.name_ar || ""}
-                              </span>
+                              {matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}
                             </span>
-                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>+ إضافة</button>
+                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "3px 9px", borderRadius: 7, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>+ إضافة</button>
+                            <button onClick={() => setDismissedSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
                           </div>
                         );
                       })}
+                      </div>
                     </div>
                   );
                 })()}
