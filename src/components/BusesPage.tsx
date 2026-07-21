@@ -393,8 +393,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       </div>
                     ))}
                   </div>
-                </div>
-
                 {/* اقتراحات ذكية */}
                 {(() => {
                   const roomIds = new Set(bp.map((p: any) => p.room_id).filter(Boolean));
@@ -427,6 +425,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     </div>
                   );
                 })()}
+                </div>
 
                 {/* شمال: إضافة مسافرين */}
                 <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
