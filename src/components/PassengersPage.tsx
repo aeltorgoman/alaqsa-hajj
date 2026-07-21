@@ -116,6 +116,16 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
   const [opsFilter, setOpsFilter] = useState<string | null>(null);
   const [profileTab, setProfileTab] = useState<"data" | "svc" | "docs" | "family">("data");
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (selected) { setSelected(null); return; }
+      if (editing) { setEditing(null); return; }
+      if (docViewer) { setDocViewer(null); return; }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selected, editing, docViewer]);
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
   const [metaCamps, setMetaCamps] = useState<any[]>([]);
