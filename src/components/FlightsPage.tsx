@@ -547,7 +547,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
       {/* ===== مودال إضافة مسافرين ===== */}
       {showAddP && (
-        <div onClick={() => setShowAddP(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div onClick={() => setShowAddP(false)} onKeyDown={e => { if (e.key === "Escape") setShowAddP(false); }} tabIndex={-1} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
             {/* ══ هيدر ملون بشكل تذكرة الطيران ══ */}
