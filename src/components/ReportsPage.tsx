@@ -1177,45 +1177,66 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     selected={selectedMinaCampIds}
                     setSelected={(s) => setSelectedMinaCampIds(s as Set<number>)}
                   />
-                  {camps.filter(c => c.page_type === "منى").map(camp => {
-                    const cp = passengers.filter(p => p.camp_mina_id === camp.id);
-                    const isMale = camp.gender === "ذكر";
-                    const isOpen = expandedItems.has(camp.id);
-                    const genderCamps = camps.filter(c => c.page_type === "منى" && c.gender === camp.gender);
-                    const campIdx = genderCamps.findIndex(c => c.id === camp.id);
-                    const campColor = ICON_COLOR_CYCLE[campIdx % ICON_COLOR_CYCLE.length];
-                    return (
-                      <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div onClick={() => toggleExpandedItem(camp.id)} style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", cursor: "pointer" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
-                            <div style={{ width: 28, height: 28, borderRadius: 8, background: campColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                    {camps.filter(c => c.page_type === "منى").map(camp => {
+                      const cp = passengers.filter(p => p.camp_mina_id === camp.id);
+                      const isMale = camp.gender === "ذكر";
+                      const isSpecial = camp.type === "خاص";
+                      const isOpen = expandedItems.has(camp.id);
+                      const stripBg = isSpecial ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#2E7D32,#1B5E20)";
+                      return isOpen ? (
+                        <div key={camp.id} style={{ gridColumn: "1 / -1", borderRadius: 14, overflow: "hidden", border: `1.5px solid ${isSpecial ? "#FFD54F" : "#A5D6A7"}`, background: "var(--paper)" }}>
+                          <div onClick={() => toggleExpandedItem(camp.id)} style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>مخيم {camp.name} ▾</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                              </button>
                             </div>
-                            مخيم {camp.name}
-                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)" }}>{isMale ? "رجال" : "نساء"}</span>
-                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
-                        </div>
-                        {isOpen && cp.length > 0 && (
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: primaryColor, color: "#fff" }}>
-                              <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead><tr style={{ background: "var(--ivory2)" }}>
+                              <th style={{ padding: "8px 13px", textAlign: "center", width: 36, color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>م</th>
+                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الاسم</th>
+                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الجنسية</th>
                             </tr></thead>
                             <tbody>{cp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.short_ar || p.name_ar}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.nat}</td>
+                              <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
+                                <td style={{ padding: "8px 13px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>{i + 1}</td>
+                                <td style={{ padding: "8px 13px", color: "var(--primary)", fontWeight: 900 }}>{(p as any).short_ar || p.name_ar}</td>
+                                <td style={{ padding: "8px 13px", color: "var(--muted)", fontSize: 11 }}>{p.nat}</td>
                               </tr>
                             )}</tbody>
                           </table>
-                        )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      ) : (
+                        <div key={camp.id} onClick={() => toggleExpandedItem(camp.id)} style={{ borderRadius: 14, overflow: "hidden", border: `1.5px solid ${isSpecial ? "#FFD54F" : "var(--line)"}`, background: "var(--paper)", cursor: "pointer" }}>
+                          <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, color: "#fff" }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{camp.name}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
+                              {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ padding: "11px 13px" }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 6 }}>
+                              <span style={{ fontSize: 24, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-heading)" }}>{cp.length}</span>
+                              <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>مسافر</span>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
+                              <span>{camp.type}</span>
+                              <span style={{ color: "#2E7D32", fontWeight: 800 }}>اضغط للتفاصيل ▾</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </>
               }
             </>
@@ -1241,45 +1262,66 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     selected={selectedArafaCampIds}
                     setSelected={(s) => setSelectedArafaCampIds(s as Set<number>)}
                   />
-                  {camps.filter(c => c.page_type === "عرفة").map(camp => {
-                    const cp = passengers.filter(p => p.camp_arafa_id === camp.id);
-                    const isMale = camp.gender === "ذكر";
-                    const isOpen = expandedItems.has(camp.id);
-                    const genderCamps = camps.filter(c => c.page_type === "عرفة" && c.gender === camp.gender);
-                    const campIdx = genderCamps.findIndex(c => c.id === camp.id);
-                    const campColor = ICON_COLOR_CYCLE[campIdx % ICON_COLOR_CYCLE.length];
-                    return (
-                      <div key={camp.id} style={{ border: `0.5px solid ${camp.type === "خاص" ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div onClick={() => toggleExpandedItem(camp.id)} style={{ padding: "8px 12px", background: camp.type === "خاص" ? "var(--warning-bg)" : "var(--bg-2)", display: "flex", justifyContent: "space-between", cursor: "pointer" }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
-                            <div style={{ width: 28, height: 28, borderRadius: 8, background: campColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                    {camps.filter(c => c.page_type === "عرفة").map(camp => {
+                      const cp = passengers.filter(p => p.camp_arafa_id === camp.id);
+                      const isMale = camp.gender === "ذكر";
+                      const isSpecial = camp.type === "خاص";
+                      const isOpen = expandedItems.has(camp.id);
+                      const stripBg = isSpecial ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#6A1B9A,#4A148C)";
+                      return isOpen ? (
+                        <div key={camp.id} style={{ gridColumn: "1 / -1", borderRadius: 14, overflow: "hidden", border: `1.5px solid ${isSpecial ? "#FFD54F" : "#CE93D8"}`, background: "var(--paper)" }}>
+                          <div onClick={() => toggleExpandedItem(camp.id)} style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>مخيم {camp.name} ▾</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                              </button>
                             </div>
-                            مخيم {camp.name}
-                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: isMale ? "var(--male-bg)" : "var(--female-bg)", color: isMale ? "var(--info)" : "var(--female-fg)" }}>{isMale ? "رجال" : "نساء"}</span>
-                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>({camp.type}) · {cp.length} مسافر</span>
                           </div>
-                        </div>
-                        {isOpen && cp.length > 0 && (
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: primaryColor, color: "#fff" }}>
-                              <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>الجنسية</th>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead><tr style={{ background: "var(--ivory2)" }}>
+                              <th style={{ padding: "8px 13px", textAlign: "center", width: 36, color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>م</th>
+                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الاسم</th>
+                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الجنسية</th>
                             </tr></thead>
                             <tbody>{cp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.short_ar || p.name_ar}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.nat}</td>
+                              <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
+                                <td style={{ padding: "8px 13px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>{i + 1}</td>
+                                <td style={{ padding: "8px 13px", color: "var(--primary)", fontWeight: 900 }}>{(p as any).short_ar || p.name_ar}</td>
+                                <td style={{ padding: "8px 13px", color: "var(--muted)", fontSize: 11 }}>{p.nat}</td>
                               </tr>
                             )}</tbody>
                           </table>
-                        )}
-                      </div>
-                    );
-                  })}
+                        </div>
+                      ) : (
+                        <div key={camp.id} onClick={() => toggleExpandedItem(camp.id)} style={{ borderRadius: 14, overflow: "hidden", border: `1.5px solid ${isSpecial ? "#FFD54F" : "var(--line)"}`, background: "var(--paper)", cursor: "pointer" }}>
+                          <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, color: "#fff" }}>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{camp.name}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
+                              {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ padding: "11px 13px" }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 6 }}>
+                              <span style={{ fontSize: 24, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-heading)" }}>{cp.length}</span>
+                              <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>مسافر</span>
+                            </div>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", display: "flex", justifyContent: "space-between" }}>
+                              <span>{camp.type}</span>
+                              <span style={{ color: "#6A1B9A", fontWeight: 800 }}>اضغط للتفاصيل ▾</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </>
               }
             </>
