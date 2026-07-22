@@ -82,6 +82,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [showAddP, setShowAddP] = useState(false);
   const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
   const [pSearch, setPSearch] = useState("");
+  const [selectedP, setSelectedP] = useState(new Set<number>());
 
   useEffect(() => {
     supabase.from("flights").select("*").order("created_at").then(({ data }: any) => {
