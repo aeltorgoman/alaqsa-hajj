@@ -150,7 +150,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 `السلام عليكم {الاسم}،
 تفاصيل رحلتك:
 🚌 الباص: {الباص}
-✈️ الرحلة: {الرحلة}
+الرحلة: {الرحلة}
 🏨 الغرفة: {الغرفة}
 ⛺ مخيم منى: {منى}
 ⛺ مخيم عرفة: {عرفة}
@@ -264,7 +264,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // ============================================================
   // تقرير الطيران — خطوط الطيران (airline list)
   // ============================================================
-  const getAirlineHTML = () => {
+  const REPORT_AIRLINE_LOGOS: Record<string, string> = {
+  qatar: "https://upload.wikimedia.org/wikipedia/en/thumb/9/9b/Qatar_Airways_Logo.svg/120px-Qatar_Airways_Logo.svg.png",
+};
+const getReportAirlineLogo = (airline: string): string | null => {
+  const a = (airline || "").toLowerCase();
+  if (a.includes("qatar")) return REPORT_AIRLINE_LOGOS.qatar;
+  return null;
+};
+
+const getAirlineHTML = () => {
     const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id || p.return_flight_id));
     const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const rows = list.map((p, i) => {
@@ -347,7 +356,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
     const sections = selBuses.map(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      return makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
+      return makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
     });
     return mkHTML("تقرير الباصات", joinSections(sections), false, true);
   };
@@ -355,7 +364,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const getSingleBusHTML = (bus: any) => {
     const bp = passengers.filter(p => p.bus_id === bus.id);
     const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
-    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
+    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
     return mkHTML(`باص ${bus.name}`, section, false, true);
   };
 
@@ -365,7 +374,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const usedNames = new Set<string>();
     selBuses.forEach(bus => {
       const bp = passengers.filter(p => p.bus_id === bus.id);
-      const title = `باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`;
+      const title = `باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`;
       const aoa: (string | number | null)[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
       bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
       if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
@@ -1027,7 +1036,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                                   <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.passport}</td>
                                   <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.phone || "—"}</td>
                                   <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{wantsFirstClass(p) ? "⭐ درجة أولى" : ""}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{wantsFirstClass(p) ? "درجة أولى" : ""}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1073,11 +1082,18 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                             <div key={flight.id} style={{ border: "1px solid var(--line)", borderRadius: 14, marginBottom: 12, overflow: "hidden", background: "var(--paper)" }}>
                               {/* هيدر الكارت — شبيه صفحة التنظيم */}
                               <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-dark))", padding: "12px 16px 0", color: "var(--text-inverse)", position: "relative" }}>
-                                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 12 }}>
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                                  {/* شعار الشركة */}
+                                  {getReportAirlineLogo(flight.airline || "") && (
+                                    <div style={{ width: 52, height: 52, borderRadius: 10, background: "rgba(255,255,255,.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: 5, flexShrink: 0 }}>
+                                      <img src={getReportAirlineLogo(flight.airline || "")!} alt={flight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                    </div>
+                                  )}
                                   {/* معلومات الشركة */}
                                   <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 800, opacity: .75, marginBottom: 3 }}>{flight.airline} · {flight.name}</div>
-                                    <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 2 }}>{flight.type === "ذهاب" ? "رحلة ذهاب" : "رحلة إياب"}</div>
+                                    <div style={{ fontSize: 11, fontWeight: 800, opacity: .7, marginBottom: 2 }}>{flight.airline}</div>
+                                    <div style={{ fontSize: 15, fontWeight: 900, marginBottom: 2 }}>{flight.type === "ذهاب" ? "رحلة ذهاب" : "رحلة إياب"} — {flight.name}</div>
+                                    {flight.date && <div style={{ fontSize: 10, opacity: .65 }}>{flight.date}{flight.time ? ` · ${flight.time}` : ""}</div>}
                                   </div>
                                   {/* أيقونة طباعة */}
                                   <button onClick={e => { e.stopPropagation(); const br = { logoUrl, companyName, tagline, primaryColor, accentColor }; printInPage(mkHTML(`تقرير رحلة ${flight.name}`, makeTwoLogoSectionHTML(`رحلة ${flight.name} — ${flight.type}`, `${flight.airline} · ${flight.date}`, renderNamesTable(fp, "اسم الحاج / الحاجة", primaryColor), br), false, true)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -1128,7 +1144,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                                       <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.passport}</td>
                                       <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.phone || "—"}</td>
                                       <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.gender}</td>
-                                      <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.services?.flight === "درجة أولى" ? "⭐ أولى" : "اقتصادية"}</td>
+                                      <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.services?.flight === "درجة أولى" ? "أولى" : "اقتصادية"}</td>
                                     </tr>
                                   )}</tbody>
                                 </table>
@@ -1159,7 +1175,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     title="الباصات المطلوبة في التقرير"
                     panelKey="buses"
                     alwaysOpen
-                    items={buses.map(b => ({ id: b.id, label: `${b.name}${b.type === "VIP" ? " ⭐" : ""}` }))}
+                    items={buses.map(b => ({ id: b.id, label: `${b.name}${b.type === "VIP" ? " — VIP" : ""}` }))}
                     selected={selectedBusIds}
                     setSelected={(s) => setSelectedBusIds(s as Set<number>)}
                   />
@@ -1172,36 +1188,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       const fillCls = isVip ? "#D4A017" : "#1976D2";
                       const capacity = (bus as any).capacity || 50;
                       const pct = capacity ? Math.round(bp.length / capacity * 100) : 0;
-                      return isOpen ? (
-                        <div key={bus.id} style={{ gridColumn: "1 / -1", borderRadius: 14, overflow: "hidden", border: "1.5px solid #90CAF9", background: "var(--paper)" }}>
-                          <div onClick={() => toggleExpandedItem(bus.id)} style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
-                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name} {isVip && "⭐"} ▾</span>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, opacity: .85 }}>{bp.length === 1 ? `${bp.length} مسافر` : bp.length === 2 ? `${bp.length} مسافران` : `${bp.length} مسافرين`} · إشغال {pct}٪</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleBusHTML(bus)); }} title="طباعة هذا الباص" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
-                              </button>
-                            </div>
-                          </div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                            <thead><tr style={{ background: "var(--ivory2)" }}>
-                              <th style={{ padding: "8px 13px", textAlign: "center", width: 36, color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>م</th>
-                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الاسم</th>
-                              <th style={{ padding: "8px 13px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الجنسية</th>
-                            </tr></thead>
-                            <tbody>{bp.map((p, i) =>
-                              <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
-                                <td style={{ padding: "8px 13px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>{i + 1}</td>
-                                <td style={{ padding: "8px 13px", color: "var(--primary)", fontWeight: 900, fontSize: 12 }}>{(p as any).short_ar || p.name_ar}</td>
-                                <td style={{ padding: "8px 13px", color: "var(--muted)", fontSize: 11 }}>{p.nat}</td>
-                              </tr>
-                            )}</tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <div key={bus.id} onClick={() => toggleExpandedItem(bus.id)} style={{ borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", transition: ".15s" }}>
+                      return (
+                        <div key={bus.id} onClick={() => toggleExpandedItem(bus.id)} style={{ borderRadius: 14, overflow: "hidden", border: `1.5px solid ${isOpen ? "#90CAF9" : "var(--line)"}`, background: "var(--paper)", cursor: "pointer", transition: ".15s" }}>
                           <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, color: "#fff" }}>
-                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name}{isVip && " ⭐"}</span>
+                            <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name}{isVip && " — VIP"}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               {isVip && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
                               <button onClick={e => { e.stopPropagation(); printInPage(getSingleBusHTML(bus)); }} title="طباعة هذا الباص" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1227,6 +1217,34 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       );
                     })}
                   </div>
+                  {/* التفاصيل تحت صف الكروت */}
+                  {buses.filter(bus => expandedItems.has(bus.id) && selectedBusIds.has(bus.id)).map(bus => {
+                    const bp = passengers.filter(p => p.bus_id === bus.id);
+                    const isVip = bus.type === "VIP";
+                    const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
+                    return (
+                      <div key={`detail-${bus.id}`} style={{ borderRadius: 14, overflow: "hidden", border: "1.5px solid #90CAF9", background: "var(--paper)", marginBottom: 8 }}>
+                        <div onClick={() => toggleExpandedItem(bus.id)} style={{ height: 38, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
+                          <span style={{ fontSize: 15, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name}{isVip ? " — VIP" : ""} ▲</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{bp.length === 1 ? `${bp.length} مسافر` : bp.length === 2 ? `${bp.length} مسافران` : `${bp.length} مسافرين`}</span>
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead><tr style={{ background: "var(--ivory2)" }}>
+                            <th style={{ padding: "7px 12px", textAlign: "center", width: 36, color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>م</th>
+                            <th style={{ padding: "7px 12px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الاسم</th>
+                            <th style={{ padding: "7px 12px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>الجنسية</th>
+                          </tr></thead>
+                          <tbody>{bp.map((p, i) =>
+                            <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
+                              <td style={{ padding: "7px 12px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>{i + 1}</td>
+                              <td style={{ padding: "7px 12px", color: "var(--primary)", fontWeight: 900 }}>{(p as any).short_ar || p.name_ar}</td>
+                              <td style={{ padding: "7px 12px", color: "var(--muted)", fontSize: 11 }}>{p.nat}</td>
+                            </tr>
+                          )}</tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
                 </>
               }
             </>
@@ -1912,7 +1930,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ width: 9, height: 9, borderRadius: "50%", background: waToken && waPhoneId ? "#25D366" : "#ccc" }} />
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{waToken && waPhoneId ? "API متصل ✓" : "API غير مضبوط"}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{waToken && waPhoneId ? "API متصل ✔" : "API غير مضبوط"}</span>
                   </div>
                   <button onClick={() => setWaShowSettings(p => !p)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
                     {waShowSettings ? "إخفاء" : "إعدادات API"}
@@ -2100,7 +2118,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               {waResults.length > 0 && (
                 <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", fontSize: 12, fontWeight: 600, display: "flex", gap: 14 }}>
-                    <span style={{ color: "#25D366" }}>✓ {waResults.filter(r => r.status === "success").length} نجح</span>
+                    <span style={{ color: "#25D366" }}>✔ {waResults.filter(r => r.status === "success").length} نجح</span>
                     <span style={{ color: "var(--danger)" }}>✗ {waResults.filter(r => r.status === "error").length} فشل</span>
                     <span style={{ color: "var(--text-muted)" }}>⏳ {waResults.filter(r => r.status === "pending").length} منتظر</span>
                   </div>
@@ -2108,7 +2126,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                     {waResults.map((r, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderBottom: "0.5px solid var(--line)" }}>
                         <span style={{ color: r.status === "success" ? "#25D366" : r.status === "error" ? "var(--danger)" : "var(--text-muted)" }}>
-                          {r.status === "success" ? "✓" : r.status === "error" ? "✗" : "⏳"}
+                          {r.status === "success" ? "✔" : r.status === "error" ? "✗" : "⏳"}
                         </span>
                         <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
                         <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{r.phone}</span>
@@ -2120,7 +2138,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
               {passengers.filter(p => !p.phone).length > 0 && (
                 <div style={{ marginTop: 12, padding: "8px 14px", background: "var(--warning-bg)", borderRadius: 10, fontSize: 11, color: "var(--warning)" }}>
-                  ⚠️ {passengers.filter(p => !p.phone).length} حاج مش عندهم رقم — مش هيتبعتلهم
+                  {passengers.filter(p => !p.phone).length} حاج مش عندهم رقم — مش هيتبعتلهم
                 </div>
               )}
             </>
