@@ -389,7 +389,7 @@ function AdminsPage({
       camp_arafa_id:    p.camp_arafa_id    ? String(p.camp_arafa_id)    : "",
       flight_id:        p.flight_id        ? String(p.flight_id)        : "",
       return_flight_id: p.return_flight_id ? String(p.return_flight_id) : "",
-      wants_flight: !!(p.flight_id || p.return_flight_id || (p as any).services?.flight === "طيران"),
+      wants_flight: !!(p.flight_id || p.return_flight_id || (p as any).wants_flight || (p as any).services?.flight === "طيران"),
     });
     setAssignTarget(p);
   };
