@@ -429,6 +429,15 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                       {addSearch && <button onClick={() => setAddSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13 }}>✕</button>}
                     </div>
                   </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderBottom: "1px solid var(--line)", background: "var(--ivory)", flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{addFiltered.length} مسافر</span>
+                    <button onClick={() => {
+                      if (selectedAdd.size === addFiltered.length) setSelectedAdd(new Set());
+                      else setSelectedAdd(new Set(addFiltered.map(p => p.id)));
+                    }} style={{ fontSize: 11, fontWeight: 800, color: "var(--primary)", background: "none", border: "none", cursor: "pointer" }}>
+                      {selectedAdd.size === addFiltered.length && addFiltered.length > 0 ? "إلغاء تحديد الكل" : "تحديد الكل"}
+                    </button>
+                  </div>
                   <div style={{ flex: 1, overflowY: "auto" }}>
                     {addFiltered.length === 0 ? (
                       <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)", fontSize: 11 }}>{addSearch ? "لا توجد نتائج" : "جميع الحجاج موزعون"}</div>
