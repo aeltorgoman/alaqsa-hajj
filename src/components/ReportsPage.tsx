@@ -942,17 +942,27 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
               {!flightSubReport ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
-                    { id: "airline", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`, name: "تقرير خطوط الطيران", desc: "كشف الحجاج لإرساله لشركة الطيران" },
-                    { id: "per_flight", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--em7)" strokeWidth="1.7" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`, name: "تقرير كل رحلة", desc: "قائمة الحجاج على كل رحلة مع تفاصيلها" },
+                    { id: "airline", num: passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length, label: "إجمالي الحجاج", sub: "كشف لإرسال شركة الطيران", color: "var(--primary)", name: "تقرير خطوط الطيران", icon: `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>` },
+                    { id: "per_flight", num: flights.length, label: "رحلة", sub: "قائمة الحجاج لكل رحلة", color: "#1565C0", name: "تقرير كل رحلة", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
                   ].map(sub => (
                     <div key={sub.id} onClick={() => setFlightSubReport(sub.id as "airline" | "per_flight")}
-                      style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, background: "var(--bg-card)" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "var(--bg-2)"}
-                      onMouseLeave={e => e.currentTarget.style.background = "var(--bg-card)"}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--male-bg)", display: "flex", alignItems: "center", justifyContent: "center" }} dangerouslySetInnerHTML={{ __html: sub.icon }} />
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{sub.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{sub.desc}</div>
+                      style={{ border: `1px solid var(--line)`, borderRadius: 14, overflow: "hidden", cursor: "pointer", background: "var(--paper)", boxShadow: "0 2px 8px rgba(0,0,0,.05)", transition: ".15s" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 20px rgba(0,0,0,.1)"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,.05)"; }}>
+                      <div style={{ height: 6, background: sub.color }} />
+                      <div style={{ padding: "14px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--muted)" }}>{sub.name}</span>
+                          <div style={{ width: 32, height: 32, borderRadius: 9, background: `${sub.color}18`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={sub.color} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: sub.icon }} />
+                          </div>
+                        </div>
+                        <div style={{ fontFamily: "var(--font-heading)", fontSize: 36, fontWeight: 900, color: sub.color, lineHeight: 1, marginBottom: 4 }}>{sub.num}</div>
+                        <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{sub.label}</div>
+                        <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{sub.sub}</div>
+                      </div>
+                      <div style={{ padding: "8px 16px", borderTop: "1px solid var(--line)", background: "var(--ivory)", display: "flex", justifyContent: "flex-end" }}>
+                        <span style={{ fontSize: 11, color: sub.color, fontWeight: 800 }}>فتح التقرير ←</span>
                       </div>
                     </div>
                   ))}
@@ -964,35 +974,44 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                   {/* خطوط الطيران */}
                   {flightSubReport === "airline" && (
                     <>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>تقرير خطوط الطيران</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)", marginBottom: 12 }}>تقرير خطوط الطيران</div>
                       <ExportButtons
                         title="تقرير خطوط الطيران"
                         onExcel={exportAirlineXLSX}
                         onPrint={() => printInPage(getAirlineHTML())}
                       />
-                      <div style={{ overflowX: "auto", marginBottom: 12 }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
-                          <thead>
-                            <tr style={{ background: primaryColor, color: "#fff" }}>
-                              {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"].map(h =>
-                                <th key={h} style={{ padding: "8px 10px", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => (
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{i + 1}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)", fontWeight: 500 }}>{p.name_en}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{natCode(p.nat)}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.passport}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.phone || "—"}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
+                      {/* accordion الجدول */}
+                      <div style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+                        <div onClick={() => toggleExpandedItem(-999)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "linear-gradient(135deg, var(--primary), var(--primary-dark))", cursor: "pointer", color: "#fff" }}>
+                          <span style={{ fontSize: 13, fontWeight: 800 }}>قائمة الركاب</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{passengers.filter(p => p.services?.flight !== "بدون").length} مسافر · {expandedItems.has(-999) ? "▲" : "▼"}</span>
+                        </div>
+                        {expandedItems.has(-999) && (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
+                            <thead>
+                              <tr style={{ background: "var(--ivory2)" }}>
+                                {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"].map(h =>
+                                  <th key={h} style={{ padding: "8px 10px", textAlign: "left", whiteSpace: "nowrap", color: "var(--muted)", fontWeight: 800, fontSize: 10.5 }}>{h}</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => (
+                                <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
+                                  <td style={{ padding: "6px 10px" }}>{i + 1}</td>
+                                  <td style={{ padding: "6px 10px", fontWeight: 700, color: "var(--ink)" }}>{p.name_en}</td>
+                                  <td style={{ padding: "6px 10px" }}>{natCode(p.nat)}</td>
+                                  <td style={{ padding: "6px 10px" }}>{p.passport}</td>
+                                  <td style={{ padding: "6px 10px" }}>{p.phone || "—"}</td>
+                                  <td style={{ padding: "6px 10px" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
                                 <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{wantsFirstClass(p) ? "⭐ FIRST" : ""}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -1019,50 +1038,76 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                       )}
                       {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                         flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
-                        flights.map((flight, idx) => {
+                        flights.map((flight) => {
                           const fp = passengersOfFlight(flight);
-                          const flightColor = ICON_COLOR_CYCLE[idx % ICON_COLOR_CYCLE.length];
                           const isOpen = expandedItems.has(flight.id);
+                          const fromIATA = (flight.from_airport || "").split(" ")[0] || flight.from_airport || "";
+                          const toIATA = (flight.to_airport || "").split(" ")[0] || flight.to_airport || "";
+                          const isReturn = flight.type === "إياب";
+                          const firstClass = fp.filter(p => p.services?.flight === "درجة أولى").length;
+                          const economy = fp.length - firstClass;
                           return (
-                            <div key={flight.id} style={{ border: "0.5px solid var(--border)", borderRadius: 10, marginBottom: 12, overflow: "hidden" }}>
-                              <div onClick={() => toggleExpandedItem(flight.id)} style={{ background: "var(--male-bg)", padding: "10px 14px", borderBottom: isOpen ? "0.5px solid #dce8f8" : "none", display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)", marginTop: 9, flexShrink: 0 }}><polyline points="9 18 15 12 9 6"/></svg>
-                                <div style={{ width: 30, height: 30, borderRadius: 8, background: flightColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                            <div key={flight.id} style={{ border: "1px solid var(--line)", borderRadius: 14, marginBottom: 12, overflow: "hidden", background: "var(--paper)" }}>
+                              {/* هيدر الكارت — شبيه صفحة التنظيم */}
+                              <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-dark))", padding: "12px 16px 0", color: "var(--text-inverse)", position: "relative" }}>
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 12 }}>
+                                  {/* معلومات الشركة */}
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 800, opacity: .75, marginBottom: 3 }}>{flight.airline} · {flight.name}</div>
+                                    <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 2 }}>{flight.type === "ذهاب" ? "رحلة ذهاب" : "رحلة إياب"}</div>
+                                  </div>
+                                  {/* أيقونة طباعة */}
+                                  <button onClick={e => { e.stopPropagation(); const br = { logoUrl, companyName, tagline, primaryColor, accentColor }; printInPage(mkHTML(`تقرير رحلة ${flight.name}`, makeTwoLogoSectionHTML(`رحلة ${flight.name} — ${flight.type}`, `${flight.airline} · ${flight.date}`, renderNamesTable(fp, "اسم الحاج / الحاجة", primaryColor), br), false, true)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+                                  </button>
                                 </div>
-                                <div>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--info)" }}>{flight.name} — {flight.type}</div>
-                                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                                    <span style={{display:"flex",alignItems:"center",gap:4}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> {flight.airline}</span>
-                                    <span style={{display:"flex",alignItems:"center",gap:4}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {flight.date}</span>
-                                    <span>⏰ {flight.time}</span>
-                                    <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> {flight.from_airport} → {flight.to_airport}</span>
-                                    <span style={{ color: "var(--info)", fontWeight: 500 }}>{fp.length} حاج</span>
+                                {/* مسار الرحلة */}
+                                <div style={{ display: "flex", alignItems: "center", gap: 0, background: "rgba(0,0,0,.18)", borderRadius: 10, padding: "10px 14px", marginBottom: 0 }}>
+                                  <div style={{ textAlign: "center", minWidth: 60 }}>
+                                    <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{isReturn ? toIATA : fromIATA}</div>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{flight.time || ""}</div>
+                                  </div>
+                                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 10px" }}>
+                                    <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,.3)", position: "relative", marginBottom: 4 }}>
+                                      <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%,-55%)${isReturn ? " scaleX(-1)" : ""}` }}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+                                      </div>
+                                    </div>
+                                    <div style={{ fontFamily: "monospace", fontSize: 9, color: "rgba(255,255,255,.55)" }}>{flight.date || ""}</div>
+                                  </div>
+                                  <div style={{ textAlign: "center", minWidth: 60 }}>
+                                    <div style={{ fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 700, color: "rgba(255,255,255,.9)", lineHeight: 1 }}>{isReturn ? fromIATA : toIATA}</div>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{(flight as any).arrival_time || ""}</div>
                                   </div>
                                 </div>
                               </div>
+                              {/* جسم الكارت */}
+                              <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--line)", cursor: "pointer" }} onClick={() => toggleExpandedItem(flight.id)}>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  {firstClass > 0 && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "#FFF8E1", color: "#B8880F" }}>درجة أولى · {firstClass}</span>}
+                                  {economy > 0 && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 9px", borderRadius: 99, background: "var(--ivory)", color: "var(--muted)", border: "1px solid var(--line)" }}>سياحية · {economy}</span>}
+                                </div>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--primary)", marginRight: "auto" }}>{fp.length === 1 ? `${fp.length} مسافر` : fp.length === 2 ? `${fp.length} مسافران` : `${fp.length} مسافرين`}</span>
+                                <span style={{ fontSize: 10, color: "var(--blue)", fontWeight: 800 }}>{isOpen ? "▲ إغلاق" : "▼ تفاصيل"}</span>
+                              </div>
                               {isOpen && fp.length > 0 && (
-                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                                  <thead>
-                                    <tr style={{ background: primaryColor, color: "#fff" }}>
-                                      {["م", "اسم الحاج / الحاجة", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"].map(h =>
-                                        <th key={h} style={{ padding: "5px 10px", textAlign: "right" }}>{h}</th>
-                                      )}
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                                  <thead><tr style={{ background: "var(--ivory2)" }}>
+                                    {["م", "اسم الحاج / الحاجة", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"].map(h =>
+                                      <th key={h} style={{ padding: "8px 12px", textAlign: "right", color: "var(--muted)", fontSize: 10.5, fontWeight: 800 }}>{h}</th>
+                                    )}
+                                  </tr></thead>
+                                  <tbody>{fp.map((p, i) =>
+                                    <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
+                                      <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>{i + 1}</td>
+                                      <td style={{ padding: "8px 12px", color: "var(--primary)", fontWeight: 900 }}>{p.short_ar || p.name_ar}</td>
+                                      <td style={{ padding: "8px 12px", color: "var(--muted)", fontSize: 11 }}>{p.nat}</td>
+                                      <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.passport}</td>
+                                      <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.phone || "—"}</td>
+                                      <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.gender}</td>
+                                      <td style={{ padding: "8px 12px", fontSize: 11 }}>{p.services?.flight === "درجة أولى" ? "⭐ أولى" : "اقتصادية"}</td>
                                     </tr>
-                                  </thead>
-                                  <tbody>
-                                    {fp.map((p, i) => (
-                                      <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)", textAlign: "center" }}>{i + 1}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.short_ar || p.name_ar}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.nat}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.passport}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.phone || "—"}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender}</td>
-                                        <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{wantsFirstClass(p) ? "درجة أولى" : "اقتصادية"}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
+                                  )}</tbody>
                                 </table>
                               )}
                             </div>
