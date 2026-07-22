@@ -273,7 +273,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
   return null;
 };
 
-const getAirlineHTML = () => {
+  const getAirlineHTML = () => {
     const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id || p.return_flight_id));
     const list = [...passengers.filter(p => (!p.passenger_type || p.passenger_type === "حاج") && p.services?.flight !== "بدون"), ...adminsWithFlight];
     const rows = list.map((p, i) => {
