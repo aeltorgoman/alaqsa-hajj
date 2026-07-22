@@ -118,6 +118,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   // تقرير الطيران — نوع التقرير الفرعي
   const [flightSubReport, setFlightSubReport] = useState<"airline" | "per_flight" | null>(null);
+  const [airlineSortKey, setAirlineSortKey] = useState<"default" | "name" | "gender">("default");
   const [docType, setDocType] = useState<"passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url">("passport_url");
   const [docSelected, setDocSelected] = useState<Record<string, Set<number>>>({});
   const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
@@ -940,7 +941,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الطيران</div>
               {!flightSubReport ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   {[
                     { id: "airline", num: passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length, label: "إجمالي الحجاج", sub: "كشف لإرسال شركة الطيران", color: "var(--primary)", name: "تقرير خطوط الطيران", icon: `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>` },
                     { id: "per_flight", num: flights.length, label: "رحلة", sub: "قائمة الحجاج لكل رحلة", color: "#1565C0", name: "تقرير كل رحلة", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
@@ -980,38 +981,60 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
                         onExcel={exportAirlineXLSX}
                         onPrint={() => printInPage(getAirlineHTML())}
                       />
+                      {/* خيارات الترتيب */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>ترتيب حسب:</span>
+                        {([["default", "الإضافة"], ["name", "الاسم أبجدياً"], ["gender", "الجنس"]] as const).map(([val, lbl]) => (
+                          <button key={val} onClick={() => setAirlineSortKey(val)}
+                            style={{ padding: "4px 11px", borderRadius: 8, border: `1.5px solid ${airlineSortKey === val ? "var(--primary)" : "var(--line)"}`, background: airlineSortKey === val ? "var(--primary)" : "var(--paper)", color: airlineSortKey === val ? "#fff" : "var(--muted)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
                       {/* accordion الجدول */}
                       <div style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
                         <div onClick={() => toggleExpandedItem(-999)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "linear-gradient(135deg, var(--primary), var(--primary-dark))", cursor: "pointer", color: "#fff" }}>
                           <span style={{ fontSize: 13, fontWeight: 800 }}>قائمة الركاب</span>
                           <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{passengers.filter(p => p.services?.flight !== "بدون").length} مسافر · {expandedItems.has(-999) ? "▲" : "▼"}</span>
                         </div>
-                        {expandedItems.has(-999) && (
+                        {expandedItems.has(-999) && (() => {
+                          const base = passengers.filter(p => p.services?.flight !== "بدون");
+                          const sorted = [...base].sort((a, b) => {
+                            if (airlineSortKey === "name") return (a.name_en || "").localeCompare(b.name_en || "");
+                            if (airlineSortKey === "gender") return (a.gender || "").localeCompare(b.gender || "");
+                            return 0;
+                          });
+                          const isAdmin = (p: any) => p.passenger_type && p.passenger_type !== "حاج";
+                          return (
                         <div style={{ overflowX: "auto" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                             <thead>
                               <tr style={{ background: "var(--ivory2)" }}>
-                                {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"].map(h =>
-                                  <th key={h} style={{ padding: "8px 10px", textAlign: "left", whiteSpace: "nowrap", color: "var(--muted)", fontWeight: 800, fontSize: 10.5 }}>{h}</th>
+                                {["م", "الاسم الكامل", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"].map(h =>
+                                  <th key={h} style={{ padding: "8px 10px", textAlign: "right", whiteSpace: "nowrap", color: "var(--muted)", fontWeight: 800, fontSize: 10.5 }}>{h}</th>
                                 )}
                               </tr>
                             </thead>
                             <tbody>
-                              {passengers.filter(p => p.services?.flight !== "بدون").map((p, i) => (
+                              {sorted.map((p, i) => (
                                 <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
-                                  <td style={{ padding: "6px 10px" }}>{i + 1}</td>
-                                  <td style={{ padding: "6px 10px", fontWeight: 700, color: "var(--ink)" }}>{p.name_en}</td>
-                                  <td style={{ padding: "6px 10px" }}>{natCode(p.nat)}</td>
-                                  <td style={{ padding: "6px 10px" }}>{p.passport}</td>
-                                  <td style={{ padding: "6px 10px" }}>{p.phone || "—"}</td>
-                                  <td style={{ padding: "6px 10px" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
-                                <td style={{ padding: "6px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{wantsFirstClass(p) ? "⭐ FIRST" : ""}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right", color: "var(--muted)" }}>{i + 1}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>
+                                    <span style={{ fontWeight: 700, color: "var(--ink)" }}>{p.name_en || p.name_ar}</span>
+                                    {isAdmin(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", marginRight: 5 }}>{p.passenger_type}</span>}
+                                  </td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{natCode(p.nat)}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.passport}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.phone || "—"}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{wantsFirstClass(p) ? "⭐ درجة أولى" : ""}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     </>
                   )}
