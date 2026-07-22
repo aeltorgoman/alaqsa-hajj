@@ -348,7 +348,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
                         </span>
                         <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1, display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</span>
                         {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>خاص</span>}
                         {sameCamps.length > 0 && (
                           <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 5px", fontFamily: "inherit", flexShrink: 0 }}>
@@ -440,7 +440,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                         onMouseEnter={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
                         onMouseLeave={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</div>
                         </div>
                         {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>خاص</span>}
                         <span style={{ fontSize: 16, color: campColor, fontWeight: 700, flexShrink: 0 }}>＋</span>
