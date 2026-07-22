@@ -322,8 +322,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     {editingBusId === bus.id ? (
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <input defaultValue={bus.name} id={`bus-modal-${bus.id}`} style={{ fontSize: 15, fontWeight: 800, padding: "4px 10px", borderRadius: 8, border: "none", outline: "none", width: 140, fontFamily: "var(--font-body)" }} autoFocus
-                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
-                        <button onClick={() => { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id); setBuses(buses.map(b => b.id === bus.id ? { ...b, name: v } : b)); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>✓</button>
+                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id).then(() => { setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, name: v } : b)); }); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
+                        <button onClick={() => { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id).then(() => { setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, name: v } : b)); }); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>حفظ</button>
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -538,6 +538,16 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} placeholder="ابحث عن مسافر..." value={pSearch} onChange={e => setPSearch(e.target.value)} autoFocus />
                 {pSearch && <button onClick={() => setPSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 14 }}>✕</button>}
               </div>
+            </div>
+            {/* تحديد الكل */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 18px", borderBottom: "1px solid var(--line)", background: "var(--ivory)", flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{filteredP.length} مسافر</span>
+              <button onClick={() => {
+                if (selectedP.size === filteredP.length) setSelectedP(new Set());
+                else setSelectedP(new Set(filteredP.map(p => p.id)));
+              }} style={{ fontSize: 11, fontWeight: 800, color: "var(--primary)", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>
+                {selectedP.size === filteredP.length && filteredP.length > 0 ? "إلغاء تحديد الكل" : "تحديد الكل"}
+              </button>
             </div>
             {/* قائمة المسافرين */}
             <div style={{ flex: 1, overflowY: "auto" }}>
