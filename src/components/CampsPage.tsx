@@ -59,6 +59,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
   const [dismissedCampSuggestions, setDismissedCampSuggestions] = useState(new Set<number>());
+  const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
   const [campSearch, setCampSearch] = useState("");
   const [addSearch, setAddSearch] = useState("");
   const dragType = useRef<"reorder"|"add">("reorder");
