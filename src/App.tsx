@@ -70,6 +70,7 @@ export default function App() {
     return_flight_id: p.return_flight_id || null,
     sort_order: p.sort_order || 0,
     passenger_type: p.passenger_type || "حاج",
+    wants_flight: p.wants_flight || false,
   });
 
   useEffect(() => {
