@@ -82,7 +82,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [showAddP, setShowAddP] = useState(false);
   const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
   const [pSearch, setPSearch] = useState("");
-  const [selectedP, setSelectedP] = useState(new Set<number>());
 
   useEffect(() => {
     supabase.from("flights").select("*").order("created_at").then(({ data }: any) => {
@@ -658,15 +657,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} placeholder="ابحث عن مسافر..." value={pSearch} onChange={e => setPSearch(e.target.value)} autoFocus />
                     {pSearch && <button onClick={() => setPSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13, lineHeight: 1 }}>✕</button>}
                   </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderBottom: "1px solid var(--line)", background: "var(--ivory)", flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{filteredP.length} مسافر</span>
-                  <button onClick={() => {
-                    if (selectedP.size === filteredP.length) setSelectedP(new Set());
-                    else setSelectedP(new Set(filteredP.map(p => p.id)));
-                  }} style={{ fontSize: 11, fontWeight: 800, color: "var(--primary)", background: "none", border: "none", cursor: "pointer" }}>
-                    {selectedP.size === filteredP.length && filteredP.length > 0 ? "إلغاء تحديد الكل" : "تحديد الكل"}
-                  </button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto" }}>
                   {filteredP.length === 0 ? (
