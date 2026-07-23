@@ -221,10 +221,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,.06)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
         >
           {/* ══ يمين — Timeline ══ */}
-          <div style={{ width: 420, flexShrink: 0, padding: "16px 20px", background: "var(--paper)", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ width: 400, flexShrink: 0, padding: "12px 16px", background: "var(--paper)", display: "flex", flexDirection: "column", gap: 8 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 90, height: 90, borderRadius: 16, background: "white", border: "2.5px solid #D4A017", boxShadow: "0 2px 12px rgba(212,160,23,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6 }}>
+              <div style={{ width: 76, height: 76, borderRadius: 14, background: "white", border: "2.5px solid #D4A017", boxShadow: "0 2px 12px rgba(212,160,23,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 5 }}>
                 {flight.airline && getAirlineLogoUrl(flight.airline) ? (
                   <img src={getAirlineLogoUrl(flight.airline)!} alt={flight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                 ) : (
@@ -319,9 +319,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     [firstClassCount, "درجة أولى", "#FFF8E1", "#B8880F"],
                     [economyCount, "سياحية", "var(--ivory)", "var(--ink)"],
                   ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
-                    <div key={l} style={{ flex: 1, borderRadius: 7, padding: "3px 7px", display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--line)", background: bg }}>
-                      <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
-                      <span style={{ fontSize: 8.5, fontWeight: 700, color: "var(--muted)" }}>{l}</span>
+                    <div key={l} style={{ flex: 1, borderRadius: 6, padding: "2px 6px", display: "flex", alignItems: "center", gap: 3, border: "1px solid var(--line)", background: bg }}>
+                      <span style={{ fontSize: 12, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: "var(--muted)" }}>{l}</span>
                     </div>
                   ))}
                 </div>
@@ -374,8 +374,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             </div>
           </div>
         </div>
-
-
       </div>
     );
   };
