@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, makeFlightSectionHTML, ROOM_COLORS, ROOM_TYPES, ROOM_ICON_COLORS, btnP, btnS } from "../utils";
+import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, makeFlightSectionHTML, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -165,27 +165,27 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   // الأعمدة لتقرير الحجاج
   const ALL_COLS = [
-    { key: "name_ar", label: "الاسم بالعربي", get: (p: Passenger) => p.name_ar },
-    { key: "name_en", label: "الاسم بالإنجليزي", get: (p: Passenger) => p.name_en },
-    { key: "passport", label: "رقم الجواز", get: (p: Passenger) => p.passport },
-    { key: "national_id", label: "رقم البطاقة", get: (p: Passenger) => p.national_id },
-    { key: "nat", label: "الجنسية", get: (p: Passenger) => p.nat },
-    { key: "gender", label: "الجنس", get: (p: Passenger) => p.gender },
-    { key: "dob", label: "تاريخ الميلاد", get: (p: Passenger) => p.dob },
-    { key: "expiry", label: "انتهاء الجواز", get: (p: Passenger) => p.expiry },
-    { key: "phone", label: "التليفون", get: (p: Passenger) => p.phone },
-    { key: "bus", label: "نوع الباص", get: (p: Passenger) => p.services?.bus },
-    { key: "bus_name", label: "رقم الباص", get: (p: Passenger) => buses.find(b => b.id === p.bus_id)?.name || "" },
-    { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
-    { key: "flight_dep", label: "رحلة الذهاب", get: (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || "" },
-    { key: "flight_ret", label: "رحلة الإياب", get: (p: Passenger) => flights.find(f => f.id === p.return_flight_id)?.name || "" },
-    { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
-    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
-    { key: "room_number", label: "رقم الغرفة", get: (p: Passenger) => rooms.find(r => r.id === p.room_id)?.number || "" },
-    { key: "camp_mina", label: "منى (نوع)", get: (p: Passenger) => p.services?.camp_mina },
-    { key: "camp_mina_name", label: "مخيم منى", get: (p: Passenger) => camps.find(c => c.id === p.camp_mina_id)?.name || "" },
-    { key: "camp_arafa", label: "عرفة (نوع)", get: (p: Passenger) => p.services?.camp_arafa },
-    { key: "camp_arafa_name", label: "مخيم عرفة", get: (p: Passenger) => camps.find(c => c.id === p.camp_arafa_id)?.name || "" },
+    { key: "name_ar", label: "الاسم بالعربي", group: "شخصية", get: (p: Passenger) => p.name_ar },
+    { key: "name_en", label: "الاسم بالإنجليزي", group: "شخصية", get: (p: Passenger) => p.name_en },
+    { key: "gender", label: "الجنس", group: "شخصية", get: (p: Passenger) => p.gender },
+    { key: "dob", label: "تاريخ الميلاد", group: "شخصية", get: (p: Passenger) => p.dob },
+    { key: "nat", label: "الجنسية", group: "شخصية", get: (p: Passenger) => p.nat },
+    { key: "phone", label: "التليفون", group: "شخصية", get: (p: Passenger) => p.phone },
+    { key: "passport", label: "رقم الجواز", group: "وثائق", get: (p: Passenger) => p.passport },
+    { key: "national_id", label: "رقم البطاقة", group: "وثائق", get: (p: Passenger) => p.national_id },
+    { key: "expiry", label: "انتهاء الجواز", group: "وثائق", get: (p: Passenger) => p.expiry },
+    { key: "bus", label: "نوع الباص", group: "خدمات", get: (p: Passenger) => p.services?.bus },
+    { key: "bus_name", label: "رقم الباص", group: "خدمات", get: (p: Passenger) => buses.find(b => b.id === p.bus_id)?.name || "" },
+    { key: "flight", label: "الطيران", group: "خدمات", get: (p: Passenger) => p.services?.flight },
+    { key: "flight_dep", label: "رحلة الذهاب", group: "خدمات", get: (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || "" },
+    { key: "flight_ret", label: "رحلة الإياب", group: "خدمات", get: (p: Passenger) => flights.find(f => f.id === p.return_flight_id)?.name || "" },
+    { key: "hotel_type", label: "نوع الغرفة", group: "خدمات", get: (p: Passenger) => p.services?.hotel_type },
+    { key: "hotel_view", label: "إطلالة الغرفة", group: "خدمات", get: (p: Passenger) => p.services?.hotel_view },
+    { key: "room_number", label: "رقم الغرفة", group: "خدمات", get: (p: Passenger) => rooms.find(r => r.id === p.room_id)?.number || "" },
+    { key: "camp_mina", label: "منى (نوع)", group: "خدمات", get: (p: Passenger) => p.services?.camp_mina },
+    { key: "camp_mina_name", label: "مخيم منى", group: "خدمات", get: (p: Passenger) => camps.find(c => c.id === p.camp_mina_id)?.name || "" },
+    { key: "camp_arafa", label: "عرفة (نوع)", group: "خدمات", get: (p: Passenger) => p.services?.camp_arafa },
+    { key: "camp_arafa_name", label: "مخيم عرفة", group: "خدمات", get: (p: Passenger) => camps.find(c => c.id === p.camp_arafa_id)?.name || "" },
   ];
   const [selectedCols, setSelectedCols] = useState<string[]>(ALL_COLS.map(c => c.key));
   const toggleCol = (key: string) => setSelectedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -466,6 +466,18 @@ const getReportAirlineLogo = (airline: string): string | null => {
     let r = rooms.filter(rm => selectedFloors.has(floorKey(rm)));
     if (hotelPrintFilter === "type") r = r.filter(rm => rm.type === hotelPrintType);
     return r;
+  };
+
+  // حالة الغرفة — نفس منطق صفحة التنظيم
+  const ROOM_TYPE_CAP: Record<string, number> = { "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "خماسية": 5, "فردية": 1, "مجلس": 0 };
+  const ROOM_STATUS_COLOR: Record<string, string> = { "مكتملة": "#7D1F3C", "قيد التسكين": "#1D4ED8", "جاهزة": "#059669", "مجلس": "#7C3AED" };
+  const getRoomStatus = (room: Room): string => {
+    if (room.type === "مجلس") return "مجلس";
+    const cap = ROOM_TYPE_CAP[room.type] || 0;
+    const occ = passengers.filter(p => p.room_id === room.id).length;
+    if (cap > 0 && occ >= cap) return "مكتملة";
+    if (occ > 0) return "قيد التسكين";
+    return "جاهزة";
   };
 
   const getHotelHTML = (opts?: { landscape?: boolean; showPattern?: boolean }) => {
@@ -906,42 +918,107 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {/* ===== تقرير الحجاج ===== */}
           {activeReport === "passengers_report" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الحجاج</div>
+              {/* شريط العنوان */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(42,157,143,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2A9D8F" strokeWidth="1.8" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 700, color: "var(--ink)" }}>تقرير الحجاج</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>كشف بيانات الحجاج قابل للتخصيص</div>
+                </div>
+              </div>
+
               <ExportButtons
                 title="تقرير الحجاج"
                 onExcel={exportPassengersXLSX}
                 onPrint={() => printInPage(getPassengersHTML())}
               />
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500 }}>اختر الأعمدة</div>
-                  <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer" }}>
+
+              {/* كارت اختيار الأعمدة — مجموعات */}
+              <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", marginBottom: 16, boxShadow: "0 2px 8px rgba(92,24,48,.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "linear-gradient(135deg, var(--em7), var(--em8))", color: "#fff" }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                    اختر الأعمدة
+                  </span>
+                  <span onClick={toggleAll} style={{ fontSize: 11, color: "var(--g3)", cursor: "pointer", fontWeight: 700 }}>
                     {selectedCols.length === ALL_COLS.length ? "إلغاء الكل" : "تحديد الكل"}
-                  </div>
+                  </span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  {ALL_COLS.map(col => (
-                    <div key={col.key} onClick={() => toggleCol(col.key)}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, cursor: "pointer", background: selectedCols.includes(col.key) ? "var(--success-bg)" : "var(--bg-2)", border: `0.5px solid ${selectedCols.includes(col.key) ? "var(--em7)" : "var(--border)"}` }}>
-                      <div style={{ width: 16, height: 16, borderRadius: 4, background: selectedCols.includes(col.key) ? "var(--em7)" : "var(--bg-card)", border: `1.5px solid ${selectedCols.includes(col.key) ? "var(--em7)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {selectedCols.includes(col.key) && <span style={{ color: "var(--bg-card)", fontSize: 10 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>}
+                <div style={{ padding: 14 }}>
+                  {([
+                    ["شخصية", "بيانات شخصية", `<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>`],
+                    ["وثائق", "الوثائق", `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`],
+                    ["خدمات", "الخدمات (باص · طيران · فندق · مخيمات)", `<path d="M12 2 2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>`],
+                  ] as [string, string, string][]).map(([grp, title, icon]) => (
+                    <div key={grp} style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--em7)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--g6)" strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: icon }} />
+                        {title}
+                        <span style={{ flex: 1, height: 1, background: "linear-gradient(90deg, var(--line), transparent)" }} />
                       </div>
-                      <span style={{ fontSize: 11 }}>{col.label}</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                        {ALL_COLS.filter(c => c.group === grp).map(col => {
+                          const on = selectedCols.includes(col.key);
+                          return (
+                            <div key={col.key} onClick={() => toggleCol(col.key)}
+                              style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 9, cursor: "pointer", fontSize: 11, background: on ? "#eef7f2" : "var(--ivory)", border: `1px solid ${on ? "#2A9D8F" : "var(--line)"}` }}>
+                              <div style={{ width: 16, height: 16, borderRadius: 5, background: on ? "#2A9D8F" : "var(--paper)", border: `1.5px solid ${on ? "#2A9D8F" : "var(--line)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                {on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                              </div>
+                              <span>{col.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>{filteredPassengers.length} حاج · {activeCols.length} عمود</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+
+              {/* شريط الفلاتر */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16, padding: "12px 14px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>الجنس:</span>
                 {["الكل", "ذكر", "أنثى"].map(g => (
-                  <div key={g} onClick={() => setFilterGender(g)} style={{ padding: "4px 12px", borderRadius: 99, fontSize: 11, fontWeight: 600, cursor: "pointer", background: filterGender === g ? "var(--em7)" : "var(--bg-2)", color: filterGender === g ? "#fff" : "var(--text-muted)", border: `1px solid ${filterGender === g ? "var(--em7)" : "var(--line)"}` }}>
-                    {g === "الكل" ? "الجنس: الكل" : g === "ذكر" ? "رجال" : "نساء"}
+                  <div key={g} onClick={() => setFilterGender(g)} style={{ padding: "5px 13px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: filterGender === g ? "var(--em7)" : "var(--ivory)", color: filterGender === g ? "#fff" : "var(--muted)", border: `1px solid ${filterGender === g ? "var(--em7)" : "var(--line)"}` }}>
+                    {g === "الكل" ? "الكل" : g === "ذكر" ? "رجال" : "نساء"}
                   </div>
                 ))}
-                <select value={filterNat} onChange={e => setFilterNat(e.target.value)} style={{ padding: "4px 10px", borderRadius: 99, fontSize: 11, border: "1px solid var(--line)", background: "var(--bg-2)", color: "var(--ink)", cursor: "pointer" }}>
-                  {nats.map(n => <option key={n} value={n}>{n === "الكل" ? "الجنسية: الكل" : n}</option>)}
+                <span style={{ width: 1, height: 20, background: "var(--line)" }} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>الجنسية:</span>
+                <select value={filterNat} onChange={e => setFilterNat(e.target.value)} style={{ padding: "5px 10px", borderRadius: 99, fontSize: 11, border: "1px solid var(--line)", background: "var(--ivory)", color: "var(--ink)", cursor: "pointer" }}>
+                  {nats.map(n => <option key={n} value={n}>{n === "الكل" ? "الكل" : n}</option>)}
                 </select>
+                <span style={{ marginRight: "auto", fontSize: 11, fontWeight: 700, color: "#fff", background: "var(--g5)", padding: "5px 12px", borderRadius: 99 }}>{filteredPassengers.length} حاج · {activeCols.length} عمود</span>
               </div>
+
+              {/* معاينة البيانات الحية */}
+              {activeCols.length > 0 && filteredPassengers.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    معاينة أول صفوف الكشف
+                  </div>
+                  <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", overflowX: "auto", boxShadow: "0 2px 8px rgba(92,24,48,.05)", marginBottom: 12 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead><tr style={{ background: "linear-gradient(135deg, var(--em7), var(--em8))", color: "#fff" }}>
+                        {activeCols.map(c => <th key={c.key} style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{c.label}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {filteredPassengers.slice(0, 3).map((p, i) => (
+                          <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,.05)" }}>
+                            {activeCols.map(c => <td key={c.key} style={{ padding: "7px 12px", borderBottom: "1px solid var(--line)", whiteSpace: "nowrap" }}>{c.get(p) || "—"}</td>)}
+                          </tr>
+                        ))}
+                        {filteredPassengers.length > 3 && (
+                          <tr><td colSpan={activeCols.length} style={{ padding: 6, textAlign: "center", fontSize: 10, color: "var(--muted)" }}>… و{filteredPassengers.length - 3} حاج آخرين في الكشف الكامل</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -1423,47 +1500,92 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {/* ===== تقرير الفندق ===== */}
           {activeReport === "hotel" && (
             <>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الفندق</div>
-              {/* فلتر الطباعة */}
-              <div style={{ border: "0.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>نطاق التقرير</div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                  {[["all", "كل الغرف"], ["type", "نوع معين"]].map(([val, label]) => (
-                    <div key={val} onClick={() => setHotelPrintFilter(val as "all" | "type")}
-                      style={{ flex: 1, minWidth: 80, padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${hotelPrintFilter === val ? "var(--info)" : "var(--border)"}`, background: hotelPrintFilter === val ? "var(--male-bg)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: hotelPrintFilter === val ? "var(--info)" : "var(--text-muted)" }}>
-                      {label}
-                    </div>
-                  ))}
+              {/* شريط العنوان */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(139,58,107,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8B3A6B" strokeWidth="1.8" strokeLinecap="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4M10 10h4M10 14h4"/></svg>
                 </div>
-                {hotelPrintFilter === "type" && (
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {ROOM_TYPES.map(t => {
-                      const [bg, clr] = ROOM_COLORS[t];
+                <div>
+                  <div style={{ fontFamily: "var(--font-heading)", fontSize: 17, fontWeight: 700, color: "var(--ink)" }}>تقرير الفندق</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>كشف التسكين حسب الطابق ونوع الغرفة</div>
+                </div>
+              </div>
+
+              {/* صف KPI */}
+              {(() => {
+                const shown = getFilteredRooms();
+                const cDone = shown.filter(r => getRoomStatus(r) === "مكتملة").length;
+                const cProg = shown.filter(r => getRoomStatus(r) === "قيد التسكين").length;
+                const cReady = shown.filter(r => getRoomStatus(r) === "جاهزة").length;
+                const kpis: [string, string, string][] = [
+                  [String(shown.length), "إجمالي الغرف", "var(--em7)"],
+                  [String(cDone), "مكتملة", "#059669"],
+                  [String(cProg), "قيد التسكين", "#1D4ED8"],
+                  [String(cReady), "جاهزة (شاغرة)", "var(--g6)"],
+                ];
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+                    {kpis.map(([num, lbl, clr]) => (
+                      <div key={lbl} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 8px rgba(92,24,48,.05)" }}>
+                        <div style={{ height: 4, background: clr }} />
+                        <div style={{ padding: "11px 13px" }}>
+                          <div style={{ fontFamily: "var(--font-heading)", fontSize: 26, fontWeight: 900, lineHeight: 1, color: clr }}>{num}</div>
+                          <div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700, marginTop: 3 }}>{lbl}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* نطاق التقرير — كارت برأس عنابي */}
+              <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", marginBottom: 16, boxShadow: "0 2px 8px rgba(92,24,48,.05)" }}>
+                <div style={{ padding: "11px 16px", background: "linear-gradient(135deg, #8B3A6B, #5C1830)", color: "#fff", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                  نطاق التقرير
+                </div>
+                <div style={{ padding: 14 }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    {[["all", "كل الغرف"], ["type", "نوع معين"]].map(([val, label]) => (
+                      <div key={val} onClick={() => setHotelPrintFilter(val as "all" | "type")}
+                        style={{ flex: 1, padding: "9px", borderRadius: 10, border: `1.5px solid ${hotelPrintFilter === val ? "var(--info)" : "var(--line)"}`, background: hotelPrintFilter === val ? "var(--male-bg)" : "var(--ivory)", cursor: "pointer", textAlign: "center", fontSize: 12, fontWeight: 700, color: hotelPrintFilter === val ? "var(--info)" : "var(--muted)" }}>
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  {hotelPrintFilter === "type" && (
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 12 }}>
+                      {ROOM_TYPES.map(t => {
+                        const [bg, clr] = ROOM_COLORS[t];
+                        return (
+                          <div key={t} onClick={() => setHotelPrintType(t)}
+                            style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${hotelPrintType === t ? clr : "var(--line)"}`, background: hotelPrintType === t ? bg : "var(--ivory)", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 700, color: hotelPrintType === t ? clr : "var(--muted)" }}>
+                            {t}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)", marginBottom: 8 }}>الطوابق المطلوبة في التقرير</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {floorItems.map(f => {
+                      const on = selectedFloors.has(f.id);
                       return (
-                        <div key={t} onClick={() => setHotelPrintType(t)}
-                          style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${hotelPrintType === t ? clr : "var(--border)"}`, background: hotelPrintType === t ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 11, color: hotelPrintType === t ? clr : "var(--text-muted)" }}>
-                          {t}
+                        <div key={f.id} onClick={() => { const s = new Set(selectedFloors); on ? s.delete(f.id) : s.add(f.id); setSelectedFloors(s); }}
+                          style={{ padding: "7px 14px", borderRadius: 9, border: `1.5px solid var(--em7)`, background: on ? "var(--em7)" : "var(--paper)", color: on ? "#fff" : "var(--em7)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                          {f.label}
                         </div>
                       );
                     })}
                   </div>
-                )}
+                </div>
               </div>
-
-              <SelectionPanel
-                title="الأدوار المطلوبة في التقرير"
-                panelKey="hotel"
-                alwaysOpen
-                items={floorItems}
-                selected={selectedFloors}
-                setSelected={(s) => setSelectedFloors(s as Set<string>)}
-              />
 
               <ExportButtons
                 onExcel={exportHotelXLSX}
                 onPrint={() => printInPage(getHotelHTML())}
               />
-              <div style={{ marginTop: -6, marginBottom: 12 }}>
+              <div style={{ marginTop: -6, marginBottom: 16 }}>
                 <button
                   onClick={() => printInPage(getHotelHTML({ landscape: true, showPattern: true }))}
                   style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", border: "1px dashed var(--accent-dark)", color: "var(--accent-dark)", padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: 11, cursor: "pointer", fontFamily: "var(--font-body)" }}
@@ -1473,42 +1595,80 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 </button>
               </div>
 
+              {/* مفتاح الألوان */}
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16, padding: "10px 14px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10 }}>
+                {([["مكتملة", "#7D1F3C"], ["قيد التسكين", "#1D4ED8"], ["جاهزة", "#059669"], ["مجلس", "#7C3AED"]] as [string, string][]).map(([lbl, clr]) => (
+                  <span key={lbl} style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5 }}>
+                    <i style={{ width: 10, height: 10, borderRadius: 3, background: clr, display: "inline-block" }} />{lbl}
+                  </span>
+                ))}
+              </div>
+
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
+                getFilteredRooms().length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>اختر طابقاً واحداً على الأقل</div> :
                 <>
-                  {getFilteredRooms().map(room => {
-                    const rp = passengers.filter(p => p.room_id === room.id);
-                    const [typeBg, typeClr] = ROOM_COLORS[room.type] || ["var(--bg-2)", "var(--text)"];
-                    const isOpen = expandedItems.has(room.id);
+                  {/* عرض بالطوابق — كروت مربّعة */}
+                  {[...new Set(getFilteredRooms().map(r => floorKey(r)))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)).map(floor => {
+                    const floorRooms = getFilteredRooms().filter(r => floorKey(r) === floor);
+                    const fDone = floorRooms.filter(r => getRoomStatus(r) === "مكتملة").length;
+                    const fReady = floorRooms.filter(r => getRoomStatus(r) === "جاهزة").length;
+                    const fOcc = floorRooms.reduce((s, r) => s + passengers.filter(p => p.room_id === r.id).length, 0);
                     return (
-                      <div key={room.id} style={{ border: "0.5px solid var(--border)", borderRadius: 10, marginBottom: 10, overflow: "hidden" }}>
-                        <div onClick={() => toggleExpandedItem(room.id)} style={{ padding: "7px 12px", background: "var(--bg-2)", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--text-muted)" }}><polyline points="9 18 15 12 9 6"/></svg>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: ROOM_ICON_COLORS[room.type] || "#999", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                      <div key={floor} style={{ marginBottom: 20 }}>
+                        {/* عنوان الطابق */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg, var(--em7), var(--em8))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-heading)", fontWeight: 900, fontSize: 14, flexShrink: 0 }}>{floor}</div>
+                          <div>
+                            <div style={{ fontFamily: "var(--font-heading)", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>طابق {floor}</div>
+                            <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{floorRooms.length} غرفة · {fOcc} حاج</div>
                           </div>
-                          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: typeBg, color: typeClr }}>{room.type}</span>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>غرفة {room.number} {room.floor && <span style={{ fontSize: 10, color: "var(--text-muted)" }}>ط{room.floor}</span>}</div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginRight: "auto" }}>{rp.length} مسافر</div>
+                          <span style={{ flex: 1, height: 1, background: "linear-gradient(90deg, var(--line), transparent)" }} />
+                          <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{fDone} مكتملة · {fReady} جاهزة</span>
                         </div>
-                        {isOpen && rp.length > 0 && (
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                            <thead><tr style={{ background: primaryColor, color: "#fff" }}>
-                              <th style={{ padding: "5px 10px", textAlign: "center", width: 30 }}>م</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>الاسم</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>الجنس</th>
-                              <th style={{ padding: "5px 10px", textAlign: "right" }}>طلب</th>
-                            </tr></thead>
-                            <tbody>{rp.map((p, i) =>
-                              <tr key={p.id} style={{ background: i % 2 === 0 ? "var(--paper)" : "rgba(212,160,23,0.08)" }}>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)", textAlign: "center", color: "var(--text-muted)" }}>{i + 1}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.short_ar || p.name_ar}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.gender}</td>
-                                <td style={{ padding: "5px 10px", border: "0.5px solid rgba(0,0,0,0.06)" }}>{p.services?.hotel_type} {p.services?.hotel_view}</td>
-                              </tr>
-                            )}</tbody>
-                          </table>
-                        )}
+                        {/* شبكة الغرف */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                          {floorRooms.map(room => {
+                            const rp = passengers.filter(p => p.room_id === room.id);
+                            const status = getRoomStatus(room);
+                            const color = ROOM_STATUS_COLOR[status] || "var(--em7)";
+                            const isMajlis = room.type === "مجلس";
+                            const isEmpty = rp.length === 0 && !isMajlis;
+                            const visible = rp.slice(0, 2);
+                            const extra = rp.length - 2;
+                            return (
+                              <div key={room.id} style={{ background: status === "مكتملة" ? "#f3f4f6" : "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.06)", display: "flex", flexDirection: "column", minHeight: 120, opacity: status === "مكتملة" ? .88 : 1 }}>
+                                <div style={{ height: 4, background: color, flexShrink: 0 }} />
+                                <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", flex: 1 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+                                    <span style={{ fontSize: 18, fontWeight: 900, color, lineHeight: 1, flexShrink: 0 }}>{room.number}</span>
+                                    {!isMajlis && <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700 }}>{room.type}</span>}
+                                    {isMajlis
+                                      ? <span style={{ fontSize: 9, color: "#7C3AED", fontWeight: 700, marginRight: "auto" }}>مجلس</span>
+                                      : <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, marginRight: "auto", whiteSpace: "nowrap", background: `${color}15`, color }}>{status}</span>}
+                                  </div>
+                                  {isMajlis ? (
+                                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED", opacity: .6 }}>
+                                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                    </div>
+                                  ) : isEmpty ? (
+                                    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "var(--muted)", fontWeight: 700 }}>— شاغرة —</div>
+                                  ) : (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                      {visible.map(p => (
+                                        <div key={p.id} style={{ fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                          <span style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar.split(" ").slice(0, 2).join(" ")}</span>
+                                        </div>
+                                      ))}
+                                      {extra > 0 && <div style={{ fontSize: 10, color, fontWeight: 800 }}>+{extra}</div>}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}
