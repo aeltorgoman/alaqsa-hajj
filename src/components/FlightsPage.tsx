@@ -313,10 +313,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               <>
                 <div style={{ display: "flex", gap: 5 }}>
                   {([
-                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "#93C5FD", "#1D4ED8"],
-                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "#F9A8D4", "#BE185D"],
-                    [firstClassCount, "درجة أولى", "#FBB624", "#7C2D00"],
-                    [economyCount, "سياحية", "#5EEAD4", "#0F766E"],
+                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "#BFDBFE", "#1D4ED8"],
+                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "#FBCFE8", "#BE185D"],
+                    [firstClassCount, "درجة أولى", "#FDE68A", "#92400E"],
+                    [economyCount, "سياحية", "#99F6E4", "#0F766E"],
                   ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
                     <div key={l} style={{ flex: 1, borderRadius: 6, padding: "2px 6px", display: "flex", alignItems: "center", gap: 3, border: "1px solid var(--line)", background: bg }}>
                       <span style={{ fontSize: 12, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
