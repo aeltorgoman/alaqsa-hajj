@@ -319,9 +319,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     [firstClassCount, "درجة أولى", "#FFF8E1", "#B8880F"],
                     [economyCount, "سياحية", "var(--ivory)", "var(--ink)"],
                   ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
-                    <div key={l} style={{ flex: 1, borderRadius: 8, padding: "4px 8px", display: "flex", alignItems: "center", gap: 5, border: "1px solid var(--line)", background: bg }}>
-                      <span style={{ fontSize: 14, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)" }}>{l}</span>
+                    <div key={l} style={{ flex: 1, borderRadius: 7, padding: "3px 7px", display: "flex", alignItems: "center", gap: 4, border: "1px solid var(--line)", background: bg }}>
+                      <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
+                      <span style={{ fontSize: 8.5, fontWeight: 700, color: "var(--muted)" }}>{l}</span>
                     </div>
                   ))}
                 </div>
@@ -350,7 +350,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             )}
 
             {/* أسفل: عدد الحجاج + الإداريين + إضافة */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
                   <div style={{ fontSize: 22, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}</div>
