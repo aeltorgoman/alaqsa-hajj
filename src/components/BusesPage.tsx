@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
-import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
@@ -51,11 +50,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [busType, setBusType] = useState("عادي");
   const [busCapacity, setBusCapacity] = useState("50");
   const [nameError, setNameError] = useState("");
-  const [showAddP, setShowAddP] = useState(false);
   const [currentBusId] = useState<number | null>(null);
   const [selectedP, setSelectedP] = useState(new Set<number>());
   const [dismissedSuggestions, setDismissedSuggestions] = useState(new Set<number>());
-  const [pSearch, setPSearch] = useState("");
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
   const [drawerPSearch, setDrawerPSearch] = useState("");
   const [busSearch, setBusSearch] = useState("");
@@ -95,19 +92,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     setBuses(prev => prev.filter(b => b.id !== id));
   };
 
-  const toggleSelectP = (id: number) => setSelectedP(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
-  const confirmAddP = async () => {
-    await Promise.all([...selectedP].map(id => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", id)));
-    setPassengers(passengers.map(p => selectedP.has(p.id) ? { ...p, bus_id: currentBusId } : p));
-    const familyToAdd = passengers.filter(p => !selectedP.has(p.id) && p.bus_id == null && [...selectedP].some(id => { const sel = passengers.find(x => x.id === id); return sel?.family_id && sel.family_id === p.family_id; }));
-    const familyOk = familyToAdd.length > 0 && await confirmAction(`سيتم تعيين حجاج بدون أقاربهم.\nهل تريد إضافة أقاربهم معهم أيضًا؟\n${familyToAdd.map(p => p.short_ar).join("، ")}`, { title: "إضافة الأقارب", danger: false });
-    if (familyOk) {
-      await Promise.all(familyToAdd.map(p => supabase.from("passengers").update({ bus_id: currentBusId }).eq("id", p.id)));
-      setPassengers((passengers as Passenger[]).map(p => familyToAdd.some((f: Passenger) => f.id === p.id) ? { ...p, bus_id: currentBusId } : p));
-    }
-    setShowAddP(false);
-  };
 
   const removeP = async (pId: number) => {
     await supabase.from("passengers").update({ bus_id: null }).eq("id", pId);
@@ -200,10 +185,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     printInPage(makeHTML("تقرير الباصات", joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
   };
 
-  const currentBus = buses.find(b => b.id === currentBusId);
-  const filteredP = passengers
-    .filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!pSearch || p.name_ar.includes(pSearch)))
-    .sort((a, b) => (a.short_ar || a.name_ar).localeCompare(b.short_ar || b.name_ar, "ar"));
 
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
