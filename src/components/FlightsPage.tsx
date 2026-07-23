@@ -251,7 +251,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
                   <div className={isTomorrow ? "plane-pulse" : "plane-float"}>
-                    <PlaneIcon size={16} color="#7D1F3C" flip={isReturn} />
+                    <PlaneIcon size={16} color="#7D1F3C" flip={false} />
                   </div>
                 </div>
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
@@ -314,10 +314,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               <>
                 <div style={{ display: "flex", gap: 5 }}>
                   {([
-                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "var(--male-bg)", "var(--male-fg)"],
-                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "var(--female-bg)", "var(--female-fg)"],
-                    [firstClassCount, "درجة أولى", "#FFF8E1", "#B8880F"],
-                    [economyCount, "سياحية", "var(--ivory)", "var(--ink)"],
+                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "#EFF6FF", "#1D4ED8"],
+                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "#FDF2F8", "#BE185D"],
+                    [firstClassCount, "درجة أولى", "#FEF3C7", "#92400E"],
+                    [economyCount, "سياحية", "#F0FDFA", "#0F766E"],
                   ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
                     <div key={l} style={{ flex: 1, borderRadius: 6, padding: "2px 6px", display: "flex", alignItems: "center", gap: 3, border: "1px solid var(--line)", background: bg }}>
                       <span style={{ fontSize: 12, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
@@ -575,34 +575,52 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 </div>
-                {/* Timeline — بشكل تذكرة الطيران */}
-                <div style={{ display: "flex", alignItems: "center", gap: 0, background: "rgba(0,0,0,.15)", borderRadius: 12, padding: "12px 16px" }}>
-                  {/* المغادرة */}
-                  <div style={{ textAlign: "center", minWidth: 70 }}>
-                    <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "white", lineHeight: 1 }}>{extractIATA(currentFlight?.from_airport || "")}</div>
-                    <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{extractCity(currentFlight?.from_airport || "")}</div>
-                    {currentFlight?.time && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{currentFlight.time}</div>}
-                  </div>
-                  {/* الخط */}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 12px" }}>
-                    <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,.3)", position: "relative", marginBottom: 4 }}>
-                      <div style={{ position: "absolute", top: "50%", left: "50%", transform: `translate(-50%,-55%)${currentFlight?.type === "إياب" ? " scaleX(-1)" : ""}` }}>
-                        <PlaneIcon size={16} color="white" />
+                {/* Timeline — بشكل تذكرة الطيران — الوصول دايماً يمين */}
+                {(() => {
+                  const isRet = currentFlight?.type === "إياب";
+                  const depIATA = extractIATA(currentFlight?.from_airport || "");
+                  const depCity = extractCity(currentFlight?.from_airport || "");
+                  const arrIATA = extractIATA(currentFlight?.to_airport || "");
+                  const arrCity = extractCity(currentFlight?.to_airport || "");
+                  const depTime = currentFlight?.time;
+                  const arrTime = (currentFlight as any)?.arrival_time;
+                  // في RTL: الوصول يمين = الأول في flex
+                  const rightIATA = isRet ? depIATA : arrIATA;
+                  const rightCity = isRet ? depCity : arrCity;
+                  const rightTime = isRet ? depTime : arrTime;
+                  const leftIATA  = isRet ? arrIATA : depIATA;
+                  const leftCity  = isRet ? arrCity : depCity;
+                  const leftTime  = isRet ? arrTime : depTime;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 0, background: "rgba(0,0,0,.15)", borderRadius: 12, padding: "12px 16px" }}>
+                      {/* الوصول — يمين */}
+                      <div style={{ textAlign: "center", minWidth: 70 }}>
+                        <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "white", lineHeight: 1 }}>{rightIATA || "—"}</div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{rightCity}</div>
+                        {rightTime && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{rightTime}</div>}
+                      </div>
+                      {/* الخط والطائرة */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 12px" }}>
+                        <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,.3)", position: "relative", marginBottom: 4 }}>
+                          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-55%)" }}>
+                            <PlaneIcon size={16} color="white" flip={false} />
+                          </div>
+                        </div>
+                        {currentFlight?.date && (
+                          <div style={{ fontFamily: "monospace", fontSize: 9, color: "rgba(255,255,255,.55)", textAlign: "center" }}>
+                            {(() => { const d = new Date(currentFlight.date); const m = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]; return `${String(d.getDate()).padStart(2,"0")} ${m[d.getMonth()]} ${d.getFullYear()}`; })()}
+                          </div>
+                        )}
+                      </div>
+                      {/* المغادرة — يسار */}
+                      <div style={{ textAlign: "center", minWidth: 70 }}>
+                        <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,.9)", lineHeight: 1 }}>{leftIATA || "—"}</div>
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{leftCity}</div>
+                        {leftTime && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{leftTime}</div>}
                       </div>
                     </div>
-                    {currentFlight?.date && (
-                      <div style={{ fontFamily: "monospace", fontSize: 9, color: "rgba(255,255,255,.55)", textAlign: "center" }}>
-                        {(() => { const d = new Date(currentFlight.date); const m = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]; return `${String(d.getDate()).padStart(2,"0")} ${m[d.getMonth()]} ${d.getFullYear()}`; })()}
-                      </div>
-                    )}
-                  </div>
-                  {/* الوصول */}
-                  <div style={{ textAlign: "center", minWidth: 70 }}>
-                    <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,.9)", lineHeight: 1 }}>{extractIATA(currentFlight?.to_airport || "")}</div>
-                    <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{extractCity(currentFlight?.to_airport || "")}</div>
-                    {(currentFlight as any)?.arrival_time && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{(currentFlight as any).arrival_time}</div>}
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -621,7 +639,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   ) : currentFlight && getFlightPassengers(currentFlight).map((p, i) => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--line)" }}>
                       <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1 }}>{p.short_ar || p.name_ar}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1, display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "#FEF3C7", color: "#92400E", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</span>
                       {((p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى") && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
                       <button onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
