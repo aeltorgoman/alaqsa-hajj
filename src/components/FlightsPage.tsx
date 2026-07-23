@@ -583,13 +583,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   const arrCity = extractCity(currentFlight?.to_airport || "");
                   const depTime = currentFlight?.time;
                   const arrTime = (currentFlight as any)?.arrival_time;
-                  // في RTL: الوصول يمين = الأول في flex
-                  const rightIATA = isRet ? depIATA : arrIATA;
-                  const rightCity = isRet ? depCity : arrCity;
-                  const rightTime = isRet ? depTime : arrTime;
-                  const leftIATA  = isRet ? arrIATA : depIATA;
-                  const leftCity  = isRet ? arrCity : depCity;
-                  const leftTime  = isRet ? arrTime : depTime;
+                  // الوصول دايماً يمين (arrIATA)، المغادرة دايماً يسار (depIATA)
+                  const rightIATA = arrIATA;
+                  const rightCity = arrCity;
+                  const rightTime = arrTime;
+                  const leftIATA  = depIATA;
+                  const leftCity  = depCity;
+                  const leftTime  = depTime;
                   return (
                     <div style={{ display: "flex", alignItems: "center", gap: 0, background: "rgba(0,0,0,.15)", borderRadius: 12, padding: "12px 16px" }}>
                       {/* الوصول — يمين */}
