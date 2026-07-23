@@ -243,9 +243,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             {/* Timeline المطارات — المغادرة يمين، الوصول يسار */}
             <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: toIATA === "DOH" ? "#7D1F3C" : toIATA === "JED" ? "#059669" : "var(--ink)", lineHeight: 1 }}>{toIATA || "—"}</div>
                 <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{toCity}</div>
-                {arrivalTime && <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 900, color: "#059669", marginTop: 4 }}>{arrivalTime}</div>}
+                {arrivalTime && <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 900, color: toIATA === "DOH" ? "#7D1F3C" : toIATA === "JED" ? "#059669" : "var(--ink)", marginTop: 4 }}>{arrivalTime}</div>}
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
@@ -256,9 +256,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
               </div>
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: fromIATA === "DOH" ? "#7D1F3C" : fromIATA === "JED" ? "#059669" : "var(--ink)", lineHeight: 1 }}>{fromIATA || "—"}</div>
                 <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{fromCity}</div>
-                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 900, color: "#7D1F3C", marginTop: 4 }}>{flight.time}</div>}
+                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 900, color: fromIATA === "DOH" ? "#7D1F3C" : fromIATA === "JED" ? "#059669" : "var(--ink)", marginTop: 4 }}>{flight.time}</div>}
               </div>
             </div>
           </div>
@@ -313,10 +313,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               <>
                 <div style={{ display: "flex", gap: 5 }}>
                   {([
-                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "#EFF6FF", "#1D4ED8"],
-                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "#FDF2F8", "#BE185D"],
-                    [firstClassCount, "درجة أولى", "#FEF3C7", "#92400E"],
-                    [economyCount, "سياحية", "#F0FDFA", "#0F766E"],
+                    [fp.filter(p => p.gender === "ذكر").length, "رجال", "#93C5FD", "#1D4ED8"],
+                    [fp.filter(p => p.gender === "أنثى").length, "نساء", "#F9A8D4", "#BE185D"],
+                    [firstClassCount, "درجة أولى", "#FBB624", "#7C2D00"],
+                    [economyCount, "سياحية", "#5EEAD4", "#0F766E"],
                   ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
                     <div key={l} style={{ flex: 1, borderRadius: 6, padding: "2px 6px", display: "flex", alignItems: "center", gap: 3, border: "1px solid var(--line)", background: bg }}>
                       <span style={{ fontSize: 12, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
@@ -593,7 +593,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <div style={{ display: "flex", alignItems: "center", gap: 0, background: "rgba(0,0,0,.15)", borderRadius: 12, padding: "12px 16px" }}>
                       {/* الوصول — يمين */}
                       <div style={{ textAlign: "center", minWidth: 70 }}>
-                        <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "white", lineHeight: 1 }}>{rightIATA || "—"}</div>
+                        <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: rightIATA === "JED" ? "#6EE7B7" : "white", lineHeight: 1 }}>{rightIATA || "—"}</div>
                         <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{rightCity}</div>
                         {rightTime && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{rightTime}</div>}
                       </div>
@@ -612,7 +612,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       </div>
                       {/* المغادرة — يسار */}
                       <div style={{ textAlign: "center", minWidth: 70 }}>
-                        <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,.9)", lineHeight: 1 }}>{leftIATA || "—"}</div>
+                        <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: leftIATA === "JED" ? "#6EE7B7" : "white", lineHeight: 1 }}>{leftIATA || "—"}</div>
                         <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", marginTop: 2 }}>{leftCity}</div>
                         {leftTime && <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.9)", marginTop: 3 }}>{leftTime}</div>}
                       </div>
