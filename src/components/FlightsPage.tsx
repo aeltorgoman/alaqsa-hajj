@@ -271,7 +271,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           </div>
 
           {/* ══ يسار — البيانات والأزرار ══ */}
-          <div style={{ flex: 1, padding: "11px 14px", display: "flex", flexDirection: "column", gap: 7 }}>
+          <div style={{ flex: 1, padding: "9px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
             {/* الاسم والتاريخ */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <div>
@@ -312,15 +312,15 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             {/* صف الإحصائيات المصغر */}
             {fp.length > 0 ? (
               <>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ display: "flex", gap: 5 }}>
                   {([
                     [fp.filter(p => p.gender === "ذكر").length, "رجال", "var(--male-bg)", "var(--male-fg)"],
                     [fp.filter(p => p.gender === "أنثى").length, "نساء", "var(--female-bg)", "var(--female-fg)"],
                     [firstClassCount, "درجة أولى", "#FFF8E1", "#B8880F"],
                     [economyCount, "سياحية", "var(--ivory)", "var(--ink)"],
                   ] as [number, string, string, string][]).map(([n, l, bg, fg]) => (
-                    <div key={l} style={{ flex: 1, borderRadius: 9, padding: "5px 9px", display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--line)", background: bg }}>
-                      <span style={{ fontSize: 15, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
+                    <div key={l} style={{ flex: 1, borderRadius: 8, padding: "4px 8px", display: "flex", alignItems: "center", gap: 5, border: "1px solid var(--line)", background: bg }}>
+                      <span style={{ fontSize: 14, fontWeight: 900, lineHeight: 1, color: fg }}>{n}</span>
                       <span style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)" }}>{l}</span>
                     </div>
                   ))}
@@ -330,9 +330,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   const withTicket = fp.filter(p => (p as any).flight_ticket_url).length;
                   const pct = fp.length ? Math.round(withTicket / fp.length * 100) : 0;
                   return (
-                    <div style={{ display: "flex", alignItems: "center", gap: 9, background: "var(--ivory)", borderRadius: 9, padding: "6px 11px", border: "1px solid var(--line)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--ivory)", borderRadius: 8, padding: "5px 10px", border: "1px solid var(--line)" }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: "var(--ink)", flexShrink: 0 }}>جاهزية التذاكر</span>
-                      <div style={{ flex: 1, height: 6, background: "var(--line)", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ flex: 1, height: 4, background: "var(--line)", borderRadius: 99, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: "linear-gradient(90deg,#2E7D32,#66BB6A)" }} />
                       </div>
                       <span style={{ fontSize: 10.5, fontWeight: 900, color: "var(--success)", flexShrink: 0 }}>{pct}٪</span>
@@ -353,14 +353,14 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: "auto" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <div style={{ fontSize: 26, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}</div>
                   <div style={{ fontSize: 10, color: "var(--muted)" }}>حاج</div>
                 </div>
                 {fp.filter(p => p.passenger_type && p.passenger_type !== "حاج").length > 0 && (
                   <>
                     <div style={{ fontSize: 14, color: "var(--line)", fontWeight: 300 }}>·</div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: "#B8880F", lineHeight: 1 }}>{fp.filter(p => p.passenger_type && p.passenger_type !== "حاج").length}</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: "#B8880F", lineHeight: 1 }}>{fp.filter(p => p.passenger_type && p.passenger_type !== "حاج").length}</div>
                       <div style={{ fontSize: 10, color: "var(--muted)" }}>إداري</div>
                     </div>
                   </>
