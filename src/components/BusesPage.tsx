@@ -50,8 +50,6 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [busType, setBusType] = useState("عادي");
   const [busCapacity, setBusCapacity] = useState("50");
   const [nameError, setNameError] = useState("");
-  const [currentBusId] = useState<number | null>(null);
-  const [selectedP, setSelectedP] = useState(new Set<number>());
   const [dismissedSuggestions, setDismissedSuggestions] = useState(new Set<number>());
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
   const [drawerPSearch, setDrawerPSearch] = useState("");
