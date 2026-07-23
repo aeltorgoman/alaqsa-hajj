@@ -174,7 +174,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ===== Boarding Pass Card =====
   const renderBoardingPass = (flight: Flight) => {
     const fp = getFlightPassengers(flight);
-    const isReturn = flight.type === "إياب";
     const fromIATA = extractIATA(flight.from_airport || "");
     const toIATA = extractIATA(flight.to_airport || "");
     const fromCity = extractCity(flight.from_airport || "");
