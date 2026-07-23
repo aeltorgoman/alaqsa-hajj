@@ -576,14 +576,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 </div>
                 {/* Timeline — بشكل تذكرة الطيران — الوصول دايماً يمين */}
                 {(() => {
-                  const isRet = currentFlight?.type === "إياب";
                   const depIATA = extractIATA(currentFlight?.from_airport || "");
                   const depCity = extractCity(currentFlight?.from_airport || "");
                   const arrIATA = extractIATA(currentFlight?.to_airport || "");
                   const arrCity = extractCity(currentFlight?.to_airport || "");
                   const depTime = currentFlight?.time;
                   const arrTime = (currentFlight as any)?.arrival_time;
-                  // الوصول دايماً يمين (arrIATA)، المغادرة دايماً يسار (depIATA)
+                  // الوصول دايماً يمين (to_airport)، المغادرة دايماً يسار (from_airport)
                   const rightIATA = arrIATA;
                   const rightCity = arrCity;
                   const rightTime = arrTime;
