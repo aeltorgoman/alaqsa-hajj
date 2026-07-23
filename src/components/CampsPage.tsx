@@ -445,18 +445,35 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     ) : addFiltered.map(p => (
                       <div key={p.id}
                         draggable onDragStart={() => handleDragStartAdd(p.id)} onDragEnd={handleDragEnd}
-                        onClick={async () => { if (camp.type === "خاص" && (p.services as any)?.[serviceKey] !== "خاص") { showAlert("warning", `تنبيه: ${(p as any).short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); } await supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", p.id); setPassengers(passengers.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x)); }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? `${campColor}05` : "transparent" }}
+                        onClick={() => { setSelectedAdd(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)", background: selectedAdd.has(p.id) ? `${campColor}12` : draggingId === p.id ? `${campColor}05` : "transparent" }}
                         onMouseEnter={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
                         onMouseLeave={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</div>
                         </div>
                         {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>خاص</span>}
-                        <span style={{ fontSize: 16, color: campColor, fontWeight: 700, flexShrink: 0 }}>＋</span>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${selectedAdd.has(p.id) ? campColor : "var(--line)"}`, background: selectedAdd.has(p.id) ? campColor : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
                       </div>
                     ))}
                   </div>
+                  {/* زر إضافة المحدد */}
+                  {selectedAdd.size > 0 && (
+                    <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
+                      <button onClick={async () => {
+                        const ids = [...selectedAdd];
+                        const mismatch = ids.filter(id => { const p = passengers.find(x => x.id === id); return camp.type === "خاص" && (p?.services as any)?.[serviceKey] !== "خاص"; });
+                        if (mismatch.length) showAlert("warning", `تنبيه: ${mismatch.length === 1 ? "حاج" : `${mismatch.length} حجاج`} طالبون خيمة عادية وليس خاصة`);
+                        await Promise.all(ids.map(id => supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", id)));
+                        setPassengers(passengers.map(x => selectedAdd.has(x.id) ? { ...x, [campIdKey]: camp.id } : x));
+                        setSelectedAdd(new Set());
+                      }} style={{ width: "100%", padding: "9px", borderRadius: 9, border: "none", background: campColor, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                        إضافة {selectedAdd.size === 1 ? "مسافر" : selectedAdd.size === 2 ? "مسافران" : `${selectedAdd.size} مسافرين`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
