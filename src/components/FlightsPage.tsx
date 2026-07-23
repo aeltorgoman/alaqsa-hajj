@@ -264,7 +264,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           </div>
 
           {/* ══ الفاصل المنقط ══ */}
-          <div style={{ width: 0, borderRight: "2px dashed var(--line)", flexShrink: 0, position: "relative", margin: "14px 0" }}>
+          <div style={{ width: 0, borderRight: "1px dashed rgba(0,0,0,.12)", flexShrink: 0, position: "relative", margin: "14px 0" }}>
             <div style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--line)", right: -11, top: -24 }} />
             <div style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", background: "var(--bg-2)", border: "1px solid var(--line)", right: -11, bottom: -24 }} />
           </div>
@@ -311,6 +311,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             {/* صف الإحصائيات المصغر */}
             {fp.length > 0 ? (
               <>
+                {/* إجمالي الركاب — العنصر الرئيسي */}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginBottom: 2 }}>
+                  <span style={{ fontSize: 32, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.length}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)" }}>راكب</span>
+                </div>
                 <div style={{ display: "flex", gap: 5 }}>
                   {([
                     [fp.filter(p => p.gender === "ذكر").length, "رجال", "#E8EDF5", "#2C4A7C"],
