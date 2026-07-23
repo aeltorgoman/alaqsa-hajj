@@ -221,10 +221,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,.06)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
         >
           {/* ══ يمين — Timeline ══ */}
-          <div style={{ width: 300, flexShrink: 0, padding: "16px 20px", background: "var(--paper)", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ width: 420, flexShrink: 0, padding: "16px 20px", background: "var(--paper)", display: "flex", flexDirection: "column", gap: 10 }}>
             {/* شعار + اسم الشركة */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 70, height: 70, borderRadius: 14, background: "white", border: "2.5px solid #D4A017", boxShadow: "0 2px 12px rgba(212,160,23,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6 }}>
+              <div style={{ width: 90, height: 90, borderRadius: 16, background: "white", border: "2.5px solid #D4A017", boxShadow: "0 2px 12px rgba(212,160,23,.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", padding: 6 }}>
                 {flight.airline && getAirlineLogoUrl(flight.airline) ? (
                   <img src={getAirlineLogoUrl(flight.airline)!} alt={flight.airline} style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                 ) : (
@@ -232,8 +232,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 )}
               </div>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
-                <div style={{ fontFamily: "monospace", fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{flight.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--ink)" }}>{flight.airline || "شركة الطيران"}</div>
+                <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "var(--muted)", marginTop: 2 }}>{flight.name}</div>
               </div>
               {isTomorrow && (
                 <span style={{ marginRight: "auto", fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(125,31,60,.1)", color: "#7D1F3C", border: "1px solid rgba(125,31,60,.2)" }}>
@@ -241,12 +241,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 </span>
               )}
             </div>
-            {/* Timeline المطارات */}
+            {/* Timeline المطارات — المغادرة يمين، الوصول يسار */}
             <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
-                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{fromCity}</div>
-                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: "#7D1F3C", marginTop: 3 }}>{flight.time}</div>}
+                <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{toCity}</div>
+                {arrivalTime && <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 900, color: "#059669", marginTop: 4 }}>{arrivalTime}</div>}
               </div>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "0 8px", position: "relative" }}>
                 <div style={{ width: "100%", height: 2, background: "linear-gradient(90deg, var(--line), #c8b8a0, var(--line))", borderRadius: 99, position: "relative" }}>
@@ -257,9 +257,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 {dateDisplay && <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 5, textAlign: "center", whiteSpace: "nowrap" }}>{dateDisplay}</div>}
               </div>
               <div style={{ flexShrink: 0, textAlign: "center", minWidth: 60 }}>
-                <div style={{ fontFamily: "monospace", fontSize: 24, fontWeight: 700, color: "#059669", lineHeight: 1 }}>{toIATA || "—"}</div>
-                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{toCity}</div>
-                {arrivalTime && <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 800, color: "#059669", marginTop: 3 }}>{arrivalTime}</div>}
+                <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fromIATA || "—"}</div>
+                <div style={{ fontSize: 9, color: "var(--muted)", marginTop: 2 }}>{fromCity}</div>
+                {flight.time && <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 900, color: "#7D1F3C", marginTop: 4 }}>{flight.time}</div>}
               </div>
             </div>
           </div>
@@ -276,7 +276,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
               <div>
                 <div
-                  style={{ fontSize: 15, fontWeight: 800, color: "var(--ink)", cursor: "pointer" }}
+                  style={{ fontSize: 17, fontWeight: 900, color: "var(--ink)", cursor: "pointer" }}
                   onDoubleClick={e => { e.stopPropagation(); setEditingFlightId(flight.id); }}
                 >
                   {editingFlightId === flight.id ? (
@@ -293,7 +293,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     </div>
                   ) : flight.name}
                 </div>
-                {dateDisplay && <div style={{ fontSize: 13, fontWeight: 700, color: "var(--em7)", marginTop: 2 }}>{dateDisplay}</div>}
+                {dateDisplay && <div style={{ fontSize: 16, fontWeight: 800, color: "var(--em7)", marginTop: 3 }}>{dateDisplay}</div>}
               </div>
               {/* أزرار التحكم */}
               <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
@@ -349,24 +349,28 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
               </div>
             )}
 
-            {/* أسفل: عدد الحجاج + بار + إضافة */}
+            {/* أسفل: عدد الحجاج + الإداريين + إضافة */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: "auto" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 3, flexShrink: 0 }}>
-                <div style={{ fontSize: 26, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.length}</div>
-                <div style={{ fontSize: 10, color: "var(--muted)" }}>مسافر</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ height: 5, borderRadius: 99, background: "var(--line)", overflow: "hidden", marginBottom: 3 }}>
-                  <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg,#7D1F3C,#A32D52)", width: `${Math.min(fp.length / Math.max(passengers.length, 1) * 100, 100)}%` }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)" }}>حاج</div>
                 </div>
-                <div style={{ fontFamily: "monospace", fontSize: 9, color: "var(--muted)" }}>{fp.length} حاج</div>
+                {fp.filter(p => p.passenger_type && p.passenger_type !== "حاج").length > 0 && (
+                  <>
+                    <div style={{ fontSize: 14, color: "var(--line)", fontWeight: 300 }}>·</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#B8880F", lineHeight: 1 }}>{fp.filter(p => p.passenger_type && p.passenger_type !== "حاج").length}</div>
+                      <div style={{ fontSize: 10, color: "var(--muted)" }}>إداري</div>
+                    </div>
+                  </>
+                )}
               </div>
+              <div style={{ flex: 1 }} />
               <button onClick={e => { e.stopPropagation(); openAddP(flight.id); }} style={{ height: 32, padding: "0 14px", borderRadius: 9, display: "inline-flex", alignItems: "center", gap: 5, background: "#7D1F3C", color: "white", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "var(--font-body)", flexShrink: 0 }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 إضافة
               </button>
-              {/* زر توسيع قائمة الحجاج */}
-              
             </div>
           </div>
         </div>
