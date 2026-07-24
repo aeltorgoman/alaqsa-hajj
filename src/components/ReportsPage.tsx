@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, makeFlightSectionHTML, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -192,14 +192,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [selectedCols, setSelectedCols] = useState<string[]>(ALL_COLS.map(c => c.key));
   const toggleCol = (key: string) => setSelectedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   const toggleAll = () => setSelectedCols(prev => prev.length === ALL_COLS.length ? [] : ALL_COLS.map(c => c.key));
-  const [filterGender, setFilterGender] = useState<string>("الكل");
   const [filterNat, setFilterNat] = useState<string>("الكل");
   const [filterPType, setFilterPType] = useState<string>("الكل");
   const nats = ["الكل", ...Array.from(new Set(passengers.map(p => p.nat).filter(Boolean)))];
   const filteredPassengers = passengers.filter(p => {
     const isHajj = !p.passenger_type || p.passenger_type === "حاج";
-    return (filterGender === "الكل" || p.gender === filterGender) &&
-      (filterNat === "الكل" || p.nat === filterNat) &&
+    return (filterNat === "الكل" || p.nat === filterNat) &&
       (filterPType === "الكل" || (filterPType === "حجاج" ? isHajj : !isHajj));
   });
   const activeCols = ALL_COLS.filter(c => selectedCols.includes(c.key));
@@ -324,9 +322,52 @@ const getReportAirlineLogo = (airline: string): string | null => {
     const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
     const sections = selFlights.map(flight => {
       const fp = passengersOfFlight(flight);
-      return makeFlightSectionHTML(flight, fp, { logoUrl, companyName, tagline, primaryColor, accentColor });
+      const typeLabel = flight.type === "إياب" ? "إياب" : "ذهاب";
+      // كارت بيانات الرحلة
+      const infoCard = `
+        <div style="border:1.5px solid ${primaryColor}33;border-radius:10px;padding:12px 16px;margin-bottom:12px;background:#fff">
+          <div style="font-size:15pt;font-weight:800;color:${primaryColor};text-align:right;margin-bottom:8px">${flight.name} — ${typeLabel}</div>
+          <table style="width:100%;font-size:10pt;color:#333">
+            <tr>
+              <td style="text-align:right;padding:2px 0"><span style="color:#888">الخط:</span> ${flight.airline || "—"}</td>
+              <td style="text-align:center;padding:2px 0"><span style="color:#888">التاريخ:</span> ${flight.date || "—"}</td>
+              <td style="text-align:left;padding:2px 0"><span style="color:#888">الوقت:</span> ${flight.time || "—"}</td>
+            </tr>
+            <tr>
+              <td style="text-align:right;padding:2px 0"><span style="color:#888">من:</span> ${flight.from_airport || "—"}</td>
+              <td style="text-align:center;padding:2px 0"><span style="color:#888">إلى:</span> ${flight.to_airport || "—"}</td>
+              <td style="text-align:left;padding:2px 0"><span style="color:#888">عدد الحجاج:</span> ${fp.length}</td>
+            </tr>
+          </table>
+        </div>`;
+      // الجدول المفصّل
+      const rows = fp.map((p, i) =>
+        `<tr style="background:${i % 2 === 0 ? "#fff" : "rgba(212,160,23,0.06)"}">
+          <td style="text-align:center;padding:5pt 6pt;border-bottom:1px solid #eee">${i + 1}</td>
+          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee;font-weight:600">${p.short_ar || p.name_ar}</td>
+          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.nat || "—"}</td>
+          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.passport || "—"}</td>
+          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.phone || "—"}</td>
+          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.gender || "—"}</td>
+          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${wantsFirstClass(p) ? "درجة أولى" : "اقتصادية"}</td>
+        </tr>`
+      ).join("");
+      const table = `
+        <table style="width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:20px">
+          <tr>
+            <th style="text-align:center;width:25pt;background:${primaryColor};color:#fff;padding:6pt 4pt">م</th>
+            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">اسم الحاج / الحاجة</th>
+            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">الجنسية</th>
+            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">رقم الجواز</th>
+            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">التليفون</th>
+            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">الجنس</th>
+            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">الدرجة</th>
+          </tr>
+          ${rows}
+        </table>`;
+      return infoCard + table;
     });
-    return mkHTML("تقرير الرحلات", joinSections(sections), false);
+    return mkHTML("تقرير الرحلة", sections.join('<div style="page-break-after:always"></div>'), false);
   };
 
   const exportPerFlightXLSX = () => {
@@ -986,13 +1027,6 @@ const getReportAirlineLogo = (airline: string): string | null => {
 
               {/* شريط الفلاتر */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16, padding: "12px 14px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>الجنس:</span>
-                {["الكل", "ذكر", "أنثى"].map(g => (
-                  <div key={g} onClick={() => setFilterGender(g)} style={{ padding: "5px 13px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: filterGender === g ? "var(--em7)" : "var(--ivory)", color: filterGender === g ? "#fff" : "var(--muted)", border: `1px solid ${filterGender === g ? "var(--em7)" : "var(--line)"}` }}>
-                    {g === "الكل" ? "الكل" : g === "ذكر" ? "رجال" : "نساء"}
-                  </div>
-                ))}
-                <span style={{ width: 1, height: 20, background: "var(--line)" }} />
                 <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>النوع:</span>
                 {["الكل", "حجاج", "إداريون"].map(t => (
                   <div key={t} onClick={() => setFilterPType(t)} style={{ padding: "5px 13px", borderRadius: 99, fontSize: 11, fontWeight: 700, cursor: "pointer", background: filterPType === t ? "var(--em7)" : "var(--ivory)", color: filterPType === t ? "#fff" : "var(--muted)", border: `1px solid ${filterPType === t ? "var(--em7)" : "var(--line)"}` }}>
@@ -1106,28 +1140,28 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           });
                           const isAdmin = (p: any) => p.passenger_type && p.passenger_type !== "حاج";
                           return (
-                        <div style={{ overflowX: "auto" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                        <div style={{ overflowX: "auto", direction: "ltr" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, direction: "ltr" }}>
                             <thead>
                               <tr style={{ background: "var(--ivory2)" }}>
-                                {["م", "الاسم الكامل", "الجنسية", "رقم الجواز", "التليفون", "الجنس", "الدرجة"].map(h =>
-                                  <th key={h} style={{ padding: "8px 10px", textAlign: "right", whiteSpace: "nowrap", color: "var(--muted)", fontWeight: 800, fontSize: 10.5 }}>{h}</th>
+                                {["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"].map((h, hi) =>
+                                  <th key={h} style={{ padding: "8px 10px", textAlign: hi === 0 ? "center" : "left", whiteSpace: "nowrap", color: "var(--muted)", fontWeight: 800, fontSize: 10.5 }}>{h}</th>
                                 )}
                               </tr>
                             </thead>
                             <tbody>
                               {sorted.map((p, i) => (
                                 <tr key={p.id} style={{ borderBottom: "1px solid var(--line)", background: i % 2 === 0 ? "var(--paper)" : "var(--ivory)" }}>
-                                  <td style={{ padding: "6px 10px", textAlign: "right", color: "var(--muted)" }}>{i + 1}</td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>
+                                  <td style={{ padding: "6px 10px", textAlign: "center", color: "var(--muted)" }}>{i + 1}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "left" }}>
                                     <span style={{ fontWeight: 700, color: "var(--ink)" }}>{p.name_en || p.name_ar}</span>
-                                    {isAdmin(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", marginRight: 5 }}>{p.passenger_type}</span>}
+                                    {isAdmin(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", marginLeft: 5 }}>{p.passenger_type}</span>}
                                   </td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{natCode(p.nat)}</td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.passport}</td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.phone || "—"}</td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
-                                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{wantsFirstClass(p) ? "درجة أولى" : ""}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "left" }}>{natCode(p.nat)}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "left" }}>{p.passport}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "left" }}>{p.phone || "—"}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "left" }}>{p.gender === "ذكر" ? "MR." : "MRS."}</td>
+                                  <td style={{ padding: "6px 10px", textAlign: "left" }}>{wantsFirstClass(p) ? "FIRST CLASS" : ""}</td>
                               </tr>
                             ))}
                           </tbody>
