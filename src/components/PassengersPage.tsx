@@ -137,6 +137,15 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
   }, []);
 
+  // استقبال فلتر البحث من الكارت الذكي في الداشبورد
+  useEffect(() => {
+    const term = (window as any).__hajj_pending_search__;
+    if (term) {
+      (window as any).__hajj_pending_search__ = null;
+      setSearch(term);
+    }
+  }, []);
+
   // فتح مودال الإضافة اليدوية من الداشبورد
   useEffect(() => {
     if (globalShowManual) {
