@@ -176,7 +176,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   /* خيارات الفلاتر مولدة ديناميكياً من البيانات الفعلية */
   const optsFrom = (get: (p: Passenger) => string | undefined | null, withNone = false) => {
-    const vals = [...new Set(passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").map(get).map(v => (v || "").trim()).filter(Boolean))] as string[];
+    const vals = [...new Set(passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").map(get).map(v => (v || "").trim()).filter(Boolean))].filter(v => v !== "بدون") as string[];
     return withNone ? [...vals, "بدون"] : vals;
   };
   const QUICK_FILTERS = [
@@ -833,7 +833,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", fontSize: 13, zoom: 0.9 }}>
       {autoScanning && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400 }}>
           <div style={{ background: "var(--paper)", borderRadius: 14, padding: "24px 32px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
@@ -1434,7 +1434,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null, "#FFF8E1", "1.5px solid #FFD54F", "#8B6700", "#B8880F", false],
               ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null, "#E8F5E9", "1.5px solid #A5D6A7", "#1B5E20", "#2E7D32", false],
               ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null, "#F3E5F5", "1.5px solid #CE93D8", "#6A1B9A", "#7B1FA2", false],
-              ["الطيران", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", true],
+              ["طيران الذهاب", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", false],
+              ["طيران العودة", selected.services?.flight,    (selected as any).return_flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).return_flight_id)?.name || `رحلة #${(selected as any).return_flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", false],
             ] as [string, string | undefined, string | null, string, string, string, string, boolean][]).map(([lbl, cls, assign, bg, border, valColor, lblColor, full]) => (
               <div key={lbl} style={{ background: bg, border, borderRadius: 12, padding: "11px 12px", gridColumn: full ? "span 2" : undefined }}>
                 <div style={{ fontSize: 9.5, fontWeight: 800, color: lblColor, marginBottom: 4 }}>{lbl}{cls ? ` · ${cls}` : ""}</div>
