@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -319,55 +319,16 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // تقرير الطيران — كل رحلة
   // ============================================================
   const getPerFlightHTML = () => {
+    const branding = { logoUrl, companyName, tagline, primaryColor, accentColor };
     const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
-    const sections = selFlights.map(flight => {
+    // نفس نداء صفحة تنظيم الطيران بالظبط
+    if (selFlights.length === 1) {
+      const flight = selFlights[0];
       const fp = passengersOfFlight(flight);
-      const typeLabel = flight.type === "إياب" ? "إياب" : "ذهاب";
-      // كارت بيانات الرحلة
-      const infoCard = `
-        <div style="border:1.5px solid ${primaryColor}33;border-radius:10px;padding:12px 16px;margin-bottom:12px;background:#fff">
-          <div style="font-size:15pt;font-weight:800;color:${primaryColor};text-align:right;margin-bottom:8px">${flight.name} — ${typeLabel}</div>
-          <table style="width:100%;font-size:10pt;color:#333">
-            <tr>
-              <td style="text-align:right;padding:2px 0"><span style="color:#888">الخط:</span> ${flight.airline || "—"}</td>
-              <td style="text-align:center;padding:2px 0"><span style="color:#888">التاريخ:</span> ${flight.date || "—"}</td>
-              <td style="text-align:left;padding:2px 0"><span style="color:#888">الوقت:</span> ${flight.time || "—"}</td>
-            </tr>
-            <tr>
-              <td style="text-align:right;padding:2px 0"><span style="color:#888">من:</span> ${flight.from_airport || "—"}</td>
-              <td style="text-align:center;padding:2px 0"><span style="color:#888">إلى:</span> ${flight.to_airport || "—"}</td>
-              <td style="text-align:left;padding:2px 0"><span style="color:#888">عدد الحجاج:</span> ${fp.length}</td>
-            </tr>
-          </table>
-        </div>`;
-      // الجدول المفصّل
-      const rows = fp.map((p, i) =>
-        `<tr style="background:${i % 2 === 0 ? "#fff" : "rgba(212,160,23,0.06)"}">
-          <td style="text-align:center;padding:5pt 6pt;border-bottom:1px solid #eee">${i + 1}</td>
-          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee;font-weight:600">${p.short_ar || p.name_ar}</td>
-          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.nat || "—"}</td>
-          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.passport || "—"}</td>
-          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.phone || "—"}</td>
-          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${p.gender || "—"}</td>
-          <td style="text-align:right;padding:5pt 8pt;border-bottom:1px solid #eee">${wantsFirstClass(p) ? "درجة أولى" : "اقتصادية"}</td>
-        </tr>`
-      ).join("");
-      const table = `
-        <table style="width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:20px">
-          <tr>
-            <th style="text-align:center;width:25pt;background:${primaryColor};color:#fff;padding:6pt 4pt">م</th>
-            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">اسم الحاج / الحاجة</th>
-            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">الجنسية</th>
-            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">رقم الجواز</th>
-            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">التليفون</th>
-            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">الجنس</th>
-            <th style="text-align:right;background:${primaryColor};color:#fff;padding:6pt 8pt">الدرجة</th>
-          </tr>
-          ${rows}
-        </table>`;
-      return infoCard + table;
-    });
-    return mkHTML("تقرير الرحلة", sections.join('<div style="page-break-after:always"></div>'), false);
+      return makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), false, logoUrl, companyName, tagline, primaryColor, accentColor);
+    }
+    const sections = selFlights.map(flight => makeFlightSectionHTML(flight, passengersOfFlight(flight), branding));
+    return makeHTML("تقرير الرحلات", joinSections(sections), false, logoUrl, companyName, tagline, primaryColor, accentColor, false);
   };
 
   const exportPerFlightXLSX = () => {
@@ -1827,202 +1788,27 @@ const getReportAirlineLogo = (airline: string): string | null => {
               return passengers;
             })();
 
-            /* ══ دوال مساعدة مشتركة ══ */
-            // @ts-ignore
-            const mkLogo = (size: number) => logoUrl
-              ? `<img src="${logoUrl}" style="width:${size}px;height:${size}px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};padding:2px;" />`
-              : `<div style="width:${size}px;height:${size}px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="${Math.round(size*.55)}" height="${Math.round(size*.55)}" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
-            // @ts-ignore
-            const patBg = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22 viewBox=%220 0 48 48%22%3E%3Cpath d=%22M24 6l3.5 7.5 8 1.5-6 6.5 1.5 8.5-7-3.5-7 3.5 1.5-8.5-6-6.5 8-1.5z%22 fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%22.9%22/%3E%3C/svg%3E')`;
-
-            /* ══ ورقة ١: الاستيكر العريض (3 استيكرات رأسياً) ══ */
-            /* ══ ورقة ١: الاستيكر الأفقي الجديد (3 شرائط رأسياً) ══ */
-            const buildStickerPage = (p: Passenger) => {
-              const room = rooms.find(r => r.id === p.room_id);
-              const bus  = buses.find(b => b.id === p.bus_id);
-              const roomNo    = room?.number || "—";
-              const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
-              const busName   = bus?.name || "";
-              const minaName  = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || "";
-              const shortName = p.short_ar || p.name_ar || "";
-              const IMPACT    = "Impact,Arial Black,sans-serif";
-              /* الشعار: صورة حقيقية أو fallback SVG */
-              const logoImgEl = logoUrl
-                ? `<img src="${logoUrl}" style="width:100%;flex:1;object-fit:contain;min-height:0;display:block;" />`
-                : `<div style="width:100%;flex:1;display:flex;align-items:center;justify-content:center;min-height:0;"><svg viewBox="0 0 24 24" style="width:70%;height:70%;" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
-              const stk = () => `
-                <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;direction:rtl;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;flex-shrink:0;">
-                  <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:2;"></div>
-                  <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:2;"></div>
-
-                  <!-- قسم الشعار — يمين -->
-                  <div style="width:28%;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#F8F2E4;padding:10px 10px 8px;border-left:2px solid ${accentColor};">
-                    ${logoImgEl}
-                    <div style="display:flex;flex-direction:column;align-items:center;gap:1px;padding-top:4px;flex-shrink:0;">
-                      <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.1;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-                      <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;font-family:Cairo,sans-serif;">${config.season_label || ""}</div>
-                      <div style="font-size:10pt;font-weight:800;color:#241318;direction:ltr;">${config.admin_phone || ""}</div>
-                    </div>
-                  </div>
-
-                  <!-- قسم البيانات — وسط -->
-                  <div style="flex:1;padding:12pt 14pt;display:flex;flex-direction:column;justify-content:space-between;border-left:2px dashed #E8D5C4;">
-                    <div>
-                      <div style="font-size:15pt;font-weight:900;color:#1a0a10;line-height:1.3;font-family:Cairo,sans-serif;">${shortName}</div>
-                      <div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:2px;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:0;">
-                      <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;">
-                        <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
-                        <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${config.hotel_name || companyName}</span>
-                      </div>
-                      ${(config as any).hotel_address ? `<div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;"><span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${(config as any).hotel_address}</span></div>` : ""}
-                      <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;">
-                        <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
-                        <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- قسم رقم الغرفة — يسار -->
-                  <div style="width:26%;flex-shrink:0;background:#7D1F3C;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12pt 8pt;gap:3px;">
-                    <div style="font-size:9pt;font-weight:800;color:#F0C84A;letter-spacing:2px;font-family:Cairo,sans-serif;">الغرفة</div>
-                    <div style="font-size:58pt;font-weight:900;color:#fff;line-height:1;font-family:${IMPACT};">${roomNo}</div>
-                    <div style="font-size:10pt;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.15);padding:2px 10px;border-radius:99px;font-family:Cairo,sans-serif;">${roomFloor}</div>
-                    <div style="font-size:10pt;font-weight:800;color:#F0C84A;margin-top:5px;font-family:${IMPACT};display:flex;gap:5px;align-items:center;">
-                      ${busName ? `<span>باص ${busName}</span>` : ""}
-                      ${busName && minaName ? `<span style="color:rgba(255,255,255,.4);font-size:12pt;font-family:Cairo,sans-serif;font-weight:400;">·</span>` : ""}
-                      ${minaName ? `<span>منى ${minaName}</span>` : ""}
-                    </div>
-                  </div>
-                </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="sticker">${stk()}${stk()}${stk()}</div>`;
-            };
-
-            /* ══ ورقة ٢: تاج اليد — 3 شرائط أفقية (وجه واحد يلتف ويلتصق) ══ */
-            const buildHandTagPage = (p: Passenger) => {
-              const room = rooms.find(r => r.id === p.room_id);
-              const bus  = buses.find(b => b.id === p.bus_id);
-              const roomNo    = room?.number || "—";
-              const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
-              const busName   = bus?.name || "";
-              const handShort = p.short_ar || p.name_ar || "";
-              const hotelName = config.hotel_name || companyName;
-              const hotelAddr = (config as any).hotel_address || "";
-              const logoEl = logoUrl
-                ? `<img src="${logoUrl}" style="width:68px;height:68px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};background:#F8F2E4;" />`
-                : `<div style="width:68px;height:68px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
-              /* نفس كود العينة المعتمدة hand-tag-rotated.html حرفياً
-                 الشريط 70×297mm والمحتوى الداخلي 297×70mm متدار -90°
-                 قيم top/left محسوبة مسبقاً: (297/2-70/2)=113.5mm */
-              const strip = () => `
-                <div style="width:70mm;height:297mm;border-left:2px dashed #E8D5C4;position:relative;overflow:hidden;background:#fff;box-sizing:border-box;flex-shrink:0;">
-                  <div style="position:absolute;inset:5px;border:2px solid ${primaryColor};border-radius:8px;pointer-events:none;z-index:2;"></div>
-                  <div style="position:absolute;inset:8px;border:1px solid ${accentColor};border-radius:5px;opacity:.55;pointer-events:none;z-index:2;"></div>
-                  <div style="position:absolute;width:297mm;height:70mm;top:113.5mm;left:-113.5mm;transform:rotate(-90deg);transform-origin:center center;display:flex;flex-direction:row;align-items:stretch;direction:rtl;">
-                    <!-- قسم رقم الغرفة -->
-                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 16px;flex-shrink:0;min-width:95mm;">
-                      <div style="font-size:13px;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-                      <div style="font-size:98px;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
-                      <div style="font-size:12px;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;margin-top:4px;white-space:nowrap;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · باص ${busName}` : ""}</div>
-                    </div>
-                    <!-- قسم بيانات الحاج -->
-                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 12px;border-left:2px solid #E8D5C4;border-right:2px solid #E8D5C4;background:#F8F2E4;">
-                      <div style="font-size:16px;font-weight:900;color:#241318;text-align:center;line-height:1.4;white-space:nowrap;font-family:Cairo,sans-serif;">${handShort}</div>
-                      <div style="width:80%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
-                      <div style="font-size:14px;font-weight:700;color:#241318;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelName}</div>
-                      ${hotelAddr ? `<div style="font-size:11px;font-weight:600;color:#7A6570;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelAddr}</div>` : ""}
-                      ${busName ? `<div style="font-size:13px;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1.5px solid rgba(125,31,60,.25);border-radius:99px;padding:3px 14px;white-space:nowrap;font-family:Cairo,sans-serif;">باص ${busName}${(() => { const mn = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || ""; return mn ? ` · منى ${mn}` : ""; })()}</div>` : ""}
-                    </div>
-                    <!-- قسم الشعار -->
-                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 10px;flex-shrink:0;min-width:75mm;">
-                      ${logoEl}
-                      <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:19px;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;white-space:nowrap;">${companyName}</div>
-                      <div style="font-size:11px;font-weight:700;color:#8a6a10;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${config.season_label || ""}</div>
-                      <div style="font-size:11px;font-weight:800;color:#241318;direction:ltr;white-space:nowrap;font-family:Cairo,sans-serif;">${config.admin_phone || ""}</div>
-                    </div>
-                  </div>
-                </div>`;
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="hand">${strip()}${strip()}${strip()}</div>`;
-            };
-
-            /* ══ ورقة ٣: التاج المعلق A6 — نقل حرفي للعينة المعتمدة "الكلاسيكي" ══ */
-            const buildLongTagPage = (p: Passenger) => {
-              const room = rooms.find(r => r.id === p.room_id);
-              const bus  = buses.find(b => b.id === p.bus_id);
-              const roomNo    = room?.number || "—";
-              const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
-              const busName   = bus?.name || "";
-              const shortName = p.short_ar || p.name_ar || "";
-              const hotelName = config.hotel_name || companyName;
-              /* نفس نسب العينة (44px شعار) بس مكبّر شوية بناءً على الطلب */
-              const logoEl = logoUrl
-                ? `<img src="${logoUrl}" style="width:90pt;height:90pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
-                : `<div style="width:90pt;height:90pt;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
-              // @ts-ignore
-              const busIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3l1-4-1.4-5C20.6 7.8 19.7 7 18.6 7H4a2 2 0 0 0-2 2v9h3"/><circle cx="7" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg>';
-              // @ts-ignore
-              const phoneIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.07 4.18 2 2 0 0 1 5.11 2h3a2 2 0 0 1 2 1.72l.7 2.81a2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45l2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
-              const patBg2 = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Cg fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%221%22%3E%3Cpath d=%22M32 8l6 12 13 2.5-9 10.5 2 14-12-6-12 6 2-14-9-10.5L26 20z%22/%3E%3C/g%3E%3C/svg%3E')`;
-              /* كارت مصغّر بنسبة 85% من A6: 89.3×125.8mm — 4 في الورقة بفراغات حواليهم */
-              const tag = () => `
-                <div style="width:89.3mm;height:125.8mm;box-sizing:border-box;border-radius:6.8pt;overflow:hidden;position:relative;background:#fff;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;box-shadow:0 0 0 1px #E8D5C4;margin:3mm;">
-                  <!-- ثقب -->
-                  <div style="position:absolute;top:8.5pt;left:50%;transform:translateX(-50%);width:31pt;height:11pt;border-radius:99px;background:#241318;z-index:5;"></div>
-                  <!-- هيدر بوردو — الشعار تحت الثقب مباشرة -->
-                  <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:4pt 9pt 7pt;text-align:center;position:relative;flex-shrink:0;">
-                    <div style="display:flex;justify-content:center;margin-top:17pt;margin-bottom:2pt;">${logoEl}</div>
-                    <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:17pt;font-weight:700;line-height:1;">${companyName}</div>
-                    <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${config.season_label || ""}</div>
-                  </div>
-                  <!-- رقم الغرفة — فراغات مضغوطة -->
-                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;position:relative;">
-                    <div style="position:absolute;inset:0;opacity:.05;background-image:${patBg2};pointer-events:none;"></div>
-                    <div style="font-size:11pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;position:relative;line-height:1;">الغرفة</div>
-                    <div style="font-family:Impact,Arial Black,sans-serif;font-size:98pt;font-weight:900;color:${primaryColor};line-height:0.9;position:relative;">${roomNo}</div>
-                    <div style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;line-height:1;margin-top:2pt;">${roomFloor}</div>
-                  </div>
-                  <!-- شريط عاجي: بيانات الحاج -->
-                  <div style="background:#F8F2E4;border-top:2px solid ${accentColor};padding:8pt 12pt;text-align:center;flex-shrink:0;">
-                    <div style="font-family:Cairo,sans-serif;font-size:12pt;font-weight:700;color:#8a6a10;margin-bottom:2pt;">${hotelName}</div>
-                    <div style="font-family:Cairo,sans-serif;font-size:13.5pt;font-weight:900;color:#241318;line-height:1.1;">${shortName}</div>
-                    ${p.name_en ? `<div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1pt;line-height:1;">${p.name_en}</div>` : ""}
-                    <div style="display:flex;justify-content:center;gap:10pt;margin-top:4pt;font-size:9pt;font-weight:700;color:#8a6a10;flex-wrap:wrap;">
-                      ${busName ? `<span>باص ${busName}</span>` : ""}
-                      ${(() => { const minaName = camps.find((c: Camp) => c.id === p.camp_mina_id)?.name || ""; return minaName ? `<span>منى ${minaName}</span>` : ""; })()}
-                    </div>
-                  </div>
-                </div>`;
-              /* 4 تاجات في ورقة A4: شبكة 2×2 */
-              return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Cairo,sans-serif;direction:rtl;" data-page="long">${tag()}${tag()}${tag()}${tag()}</div>`;
-            };
-
-            /* ─── دالة الطباعة الفعلية ─── */
+            /* ══ الطباعة عبر الدالة الموحّدة المشتركة مع ملف الحاج (utils) ══ */
             const finalPassengers = stkSelected.size > 0
               ? passengers.filter(pp => stkSelected.has(pp.id))
               : stkPassengers;
 
             const doPrint = () => {
               if (!finalPassengers.length) { showAlert("warning", "يرجى اختيار حاج واحد على الأقل."); return; }
-              let html = "";
               const now = new Date().toLocaleDateString("ar-EG");
               const newDates: Record<number, string> = { ...printDates };
-              // @ts-ignore
-              const pagesPerPassenger = [stkTypes.sticker, stkTypes.hand_tag, stkTypes.long_tag].filter(Boolean).length;
-              for (const p of finalPassengers) {
-                if (stkTypes.sticker)  html += buildStickerPage(p);
-                if (stkTypes.hand_tag) html += buildHandTagPage(p);
-                if (stkTypes.long_tag) html += buildLongTagPage(p);
-                newDates[p.id] = now;
-              }
+              for (const p of finalPassengers) newDates[p.id] = now;
               setPrintDates(newDates);
               localStorage.setItem("stk_print_dates", JSON.stringify(newDates));
-              const full = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">
-                <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
-                <style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}[data-page]{page-break-after:always}[data-page]:last-child{page-break-after:avoid}</style>
-                </head><body>${html}</body></html>`;
-              printInPage(full);
+              const cfg = config as any;
+              printInPage(buildStickersHTML(
+                finalPassengers as any,
+                { color_primary: cfg.color_primary, color_accent: cfg.color_accent, name_ar: cfg.name_ar, season_label: cfg.season_label, hotel_name: cfg.hotel_name, hotel_address: cfg.hotel_address, admin_phone: cfg.admin_phone, logo_url: cfg.logo_url },
+                { rooms: rooms as any, buses: buses as any, camps: camps as any },
+                { sticker: stkTypes.sticker, hand_tag: stkTypes.hand_tag, long_tag: stkTypes.long_tag }
+              ));
             };
+
 
             return (
               <>
