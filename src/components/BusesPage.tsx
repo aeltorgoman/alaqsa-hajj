@@ -322,14 +322,14 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 </div>
                 {/* شريط إشغال — دائرة + بار */}
                 <div style={{ marginTop: 12, position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 52, height: 52, flexShrink: 0, position: "relative" }}>
-                    <svg width="52" height="52" style={{ transform: "rotate(-90deg)" }}>
-                      <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(0,0,0,.2)" strokeWidth="5" />
-                      <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="5" strokeLinecap="round" strokeDasharray={2 * Math.PI * 22} strokeDashoffset={2 * Math.PI * 22 * (1 - fillPct / 100)} style={{ transition: "stroke-dashoffset .3s" }} />
+                  <div style={{ width: 64, height: 64, flexShrink: 0, position: "relative" }}>
+                    <svg width="64" height="64" style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(0,0,0,.2)" strokeWidth="6" />
+                      <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(255,255,255,.95)" strokeWidth="6" strokeLinecap="round" strokeDasharray={2 * Math.PI * 27} strokeDashoffset={2 * Math.PI * 27 * (1 - fillPct / 100)} style={{ transition: "stroke-dashoffset .3s" }} />
                     </svg>
                     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-                      <b style={{ fontSize: 15, fontWeight: 900, lineHeight: 1, fontFamily: "var(--font-heading)" }}>{bp.length}</b>
-                      <small style={{ fontSize: 7, opacity: .8 }}>من {cap}</small>
+                      <b style={{ fontSize: 20, fontWeight: 900, lineHeight: 1, fontFamily: "var(--font-heading)" }}>{bp.length}</b>
+                      <small style={{ fontSize: 8.5, fontWeight: 700, opacity: .85, marginTop: 1 }}>من {cap}</small>
                     </div>
                   </div>
                   <div style={{ flex: 1 }}>
@@ -444,7 +444,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 </div>
 
                 {/* شمال: إضافة مسافرين */}
-                <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
+                <div style={{ width: 290, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
                   </div>
