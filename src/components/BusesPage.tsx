@@ -294,6 +294,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   <svg width="90" height="90" viewBox="0 0 24 24" fill="white"><path d="M8 6v6M15 6v6M2 12h19.6M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 1 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
+                  </div>
                   <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12 }}>
                     {/* الدائرة — أكبر */}
                     <div style={{ width: 72, height: 72, flexShrink: 0, position: "relative" }}>
@@ -316,7 +319,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         </div>
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ fontSize: 24, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }} onDoubleClick={() => setEditingBusId(bus.id)}>{bus.name}</div>
+                          <div style={{ fontSize: 24, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }} onDoubleClick={() => setEditingBusId(bus.id)}>باص {bus.name}</div>
                           {isVIP && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>VIP ✦</span>}
                         </div>
                       )}
