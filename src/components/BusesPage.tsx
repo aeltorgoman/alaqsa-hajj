@@ -320,14 +320,24 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   </button>
                   <button onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
                 </div>
-                {/* شريط إشغال */}
-                <div style={{ marginTop: 10, position: "relative", zIndex: 1 }}>
-                  <div style={{ height: 8, borderRadius: 99, background: "rgba(0,0,0,.2)", overflow: "hidden", marginBottom: 5 }}>
-                    <div style={{ height: "100%", borderRadius: 99, background: "rgba(255,255,255,.85)", width: `${fillPct}%`, transition: "width .3s" }} />
+                {/* شريط إشغال — دائرة + بار */}
+                <div style={{ marginTop: 12, position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 52, height: 52, flexShrink: 0, position: "relative" }}>
+                    <svg width="52" height="52" style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(0,0,0,.2)" strokeWidth="5" />
+                      <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="5" strokeLinecap="round" strokeDasharray={2 * Math.PI * 22} strokeDashoffset={2 * Math.PI * 22 * (1 - fillPct / 100)} style={{ transition: "stroke-dashoffset .3s" }} />
+                    </svg>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#fff" }}>
+                      <b style={{ fontSize: 15, fontWeight: 900, lineHeight: 1, fontFamily: "var(--font-heading)" }}>{bp.length}</b>
+                      <small style={{ fontSize: 7, opacity: .8 }}>من {cap}</small>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "rgba(255,255,255,.75)", fontWeight: 600 }}>
-                    <span>{bp.length} / {cap} مقعد</span>
-                    <span>{available} مقعد متبقٍ · {fillPct}٪</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff" }}>{available} مقعد متبقٍ</div>
+                    <div style={{ height: 6, borderRadius: 99, background: "rgba(0,0,0,.22)", overflow: "hidden", marginTop: 6 }}>
+                      <div style={{ height: "100%", borderRadius: 99, background: "#fff", width: `${fillPct}%`, transition: "width .3s" }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,.7)", fontWeight: 600, marginTop: 4 }}>{fillPct}٪ ممتلئ</div>
                   </div>
                 </div>
               </div>
@@ -350,22 +360,31 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
                         </span>
-                        <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
+                        <span style={{ fontSize: 10, color: "var(--muted)", width: 16, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: "var(--primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</div>
-
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
+                            {p.short_ar || p.name_ar}
+                            {(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}
+                            {p.services?.bus === "VIP" && !vipMismatch(p) && <span style={{ fontSize: 8, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>VIP</span>}
+                          </div>
                         </div>
                         {vipMismatch(p) && (
                           <span style={{ fontSize: 9, fontWeight: 700, color: "#C62828", background: "rgba(198,40,40,.08)", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>
                             {isVIP ? "ليس VIP" : "VIP"}
                           </span>
                         )}
-                        {p.services?.bus === "VIP" && !vipMismatch(p) && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
-                        <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" style={{ fontSize: 10, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 5px", fontFamily: "inherit", flexShrink: 0 }}>
-                          <option value="">نقل لـ...</option>
-                          {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
-                        <button onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1, flexShrink: 0, padding: "0 2px" }}>↩</button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, opacity: .6 }}>
+                          <div style={{ position: "relative", display: "inline-flex" }}>
+                            <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" title="نقل لباص آخر" style={{ appearance: "none", WebkitAppearance: "none", fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 22px 3px 8px", fontFamily: "var(--font-body)", cursor: "pointer" }}>
+                              <option value="">نقل</option>
+                              {buses.filter(b => b.id !== bus.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                          </div>
+                          <button onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -411,7 +430,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                               · {sharedRoom && sharedMina ? "نفس الغرفة وخيمة منى" : sharedRoom ? "نفس الغرفة" : "نفس خيمة منى"}
                               {matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}
                             </span>
-                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} style={{ padding: "3px 9px", borderRadius: 7, border: "none", background: "var(--primary)", color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", whiteSpace: "nowrap", flexShrink: 0 }}>+ إضافة</button>
+                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </button>
                             <button onClick={() => setDismissedSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
                           </div>
                         );
