@@ -469,3 +469,185 @@ export const NAV_ICONS: Record<string, string> = {
 export const inp = { fontSize: 12, background: "var(--bg-input)", border: "0.5px solid var(--border)", borderRadius: "var(--radius-md)", padding: "7px 10px", width: "100%", fontFamily: "var(--font-body)", outline: "none", boxSizing: "border-box" as const, color: "var(--text)" };
 export const btnP = (extra?: any) => ({ background: "var(--primary)", color: "var(--text-inverse)", border: "none", padding: "7px 14px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", fontWeight: 500, fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
 export const btnS = (extra?: any) => ({ background: "transparent", border: "0.5px solid var(--border)", padding: "7px 12px", borderRadius: "var(--radius-md)", fontSize: 12, cursor: "pointer", color: "var(--text-secondary)", fontFamily: "var(--font-body)", transition: "var(--transition)", ...extra });
+
+// ============================================================
+// مولّد مطبوعات الشنط الموحّد — مصدر واحد لملف الحاج وصفحة التقارير
+// ============================================================
+export interface StickerConfig {
+  color_primary?: string;
+  color_accent?: string;
+  name_ar?: string;
+  season_label?: string;
+  hotel_name?: string;
+  hotel_address?: string;
+  admin_phone?: string;
+  logo_url?: string;
+}
+export interface StickerPassenger {
+  short_ar?: string; name_ar?: string; name_en?: string; phone?: string;
+  room_id?: number | null; bus_id?: number | null; camp_mina_id?: number | null;
+}
+export interface StickerMeta {
+  rooms: { id: number; number?: string; floor?: string | number }[];
+  buses: { id: number; name?: string }[];
+  camps: { id: number; name?: string }[];
+}
+export interface StickerTypes { sticker?: boolean; hand_tag?: boolean; long_tag?: boolean }
+
+/* بناء صفحة الاستيكر العريض (3 استيكرات رأسياً في A4) */
+export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, meta: StickerMeta): string {
+  const primaryColor = cfg.color_primary || "#7D1F3C";
+  const accentColor  = cfg.color_accent  || "#D4A017";
+  const companyName  = cfg.name_ar || "";
+  const room = meta.rooms.find(r => r.id === p.room_id);
+  const bus  = meta.buses.find(b => b.id === p.bus_id);
+  const roomNo    = room?.number || "—";
+  const roomFloor = room?.floor  ? `الدور ${room.floor}` : "";
+  const busName   = bus?.name || "";
+  const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
+  const shortName = p.short_ar || p.name_ar || "";
+  const IMPACT    = "Impact,Arial Black,sans-serif";
+  const logoImgEl = cfg.logo_url
+    ? `<img src="${cfg.logo_url}" style="width:100%;flex:1;object-fit:contain;min-height:0;display:block;" />`
+    : `<div style="width:100%;flex:1;display:flex;align-items:center;justify-content:center;min-height:0;"><svg viewBox="0 0 24 24" style="width:70%;height:70%;" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+  const stk = () => `
+    <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;direction:rtl;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;flex-shrink:0;">
+      <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:2;"></div>
+      <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:2;"></div>
+      <div style="width:28%;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#F8F2E4;padding:10px 10px 8px;border-left:2px solid ${accentColor};">
+        ${logoImgEl}
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1px;padding-top:4px;flex-shrink:0;">
+          <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.1;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
+          <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;font-family:Cairo,sans-serif;">${cfg.season_label || ""}</div>
+          <div style="font-size:10pt;font-weight:800;color:#241318;direction:ltr;">${cfg.admin_phone || ""}</div>
+        </div>
+      </div>
+      <div style="flex:1;padding:12pt 14pt;display:flex;flex-direction:column;justify-content:space-between;border-left:2px dashed #E8D5C4;">
+        <div>
+          <div style="font-size:15pt;font-weight:900;color:#1a0a10;line-height:1.3;font-family:Cairo,sans-serif;">${shortName}</div>
+          <div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:2px;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;">
+            <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
+            <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || companyName}</span>
+          </div>
+          ${cfg.hotel_address ? `<div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;"><span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span></div>` : ""}
+          <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;">
+            <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
+            <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
+          </div>
+        </div>
+      </div>
+      <div style="width:26%;flex-shrink:0;background:${primaryColor};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12pt 8pt;gap:3px;">
+        <div style="font-size:9pt;font-weight:800;color:#F0C84A;letter-spacing:2px;font-family:Cairo,sans-serif;">الغرفة</div>
+        <div style="font-size:58pt;font-weight:900;color:#fff;line-height:1;font-family:${IMPACT};">${roomNo}</div>
+        <div style="font-size:10pt;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.15);padding:2px 10px;border-radius:99px;font-family:Cairo,sans-serif;">${roomFloor}</div>
+        <div style="font-size:10pt;font-weight:800;color:#F0C84A;margin-top:5px;font-family:${IMPACT};display:flex;gap:5px;align-items:center;">
+          ${busName ? `<span>باص ${busName}</span>` : ""}
+          ${busName && minaName ? `<span style="color:rgba(255,255,255,.4);font-size:12pt;font-family:Cairo,sans-serif;font-weight:400;">·</span>` : ""}
+          ${minaName ? `<span>منى ${minaName}</span>` : ""}
+        </div>
+      </div>
+    </div>`;
+  return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="sticker">${stk()}${stk()}${stk()}</div>`;
+}
+
+/* بناء صفحة تاج اليد (3 شرائط رأسية) */
+export function buildHandTagPageHTML(p: StickerPassenger, cfg: StickerConfig, meta: StickerMeta): string {
+  const primaryColor = cfg.color_primary || "#7D1F3C";
+  const accentColor  = cfg.color_accent  || "#D4A017";
+  const companyName  = cfg.name_ar || "";
+  const room = meta.rooms.find(r => r.id === p.room_id);
+  const bus  = meta.buses.find(b => b.id === p.bus_id);
+  const roomNo    = room?.number || "—";
+  const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
+  const busName   = bus?.name || "";
+  const handShort = p.short_ar || p.name_ar || "";
+  const hotelName = cfg.hotel_name || companyName;
+  const hotelAddr = cfg.hotel_address || "";
+  const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
+  const logoEl = cfg.logo_url
+    ? `<img src="${cfg.logo_url}" style="width:68px;height:68px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};background:#F8F2E4;" />`
+    : `<div style="width:68px;height:68px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+  const strip = () => `
+    <div style="width:70mm;height:297mm;border-left:2px dashed #E8D5C4;position:relative;overflow:hidden;background:#fff;box-sizing:border-box;flex-shrink:0;">
+      <div style="position:absolute;inset:5px;border:2px solid ${primaryColor};border-radius:8px;pointer-events:none;z-index:2;"></div>
+      <div style="position:absolute;inset:8px;border:1px solid ${accentColor};border-radius:5px;opacity:.55;pointer-events:none;z-index:2;"></div>
+      <div style="position:absolute;width:297mm;height:70mm;top:113.5mm;left:-113.5mm;transform:rotate(-90deg);transform-origin:center center;display:flex;flex-direction:row;align-items:stretch;direction:rtl;">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 16px;flex-shrink:0;min-width:95mm;">
+          <div style="font-size:13px;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
+          <div style="font-size:98px;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
+          <div style="font-size:12px;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;margin-top:4px;white-space:nowrap;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · باص ${busName}` : ""}</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 12px;border-left:2px solid #E8D5C4;border-right:2px solid #E8D5C4;background:#F8F2E4;">
+          <div style="font-size:16px;font-weight:900;color:#241318;text-align:center;line-height:1.4;white-space:nowrap;font-family:Cairo,sans-serif;">${handShort}</div>
+          <div style="width:80%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
+          <div style="font-size:14px;font-weight:700;color:#241318;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelName}</div>
+          ${hotelAddr ? `<div style="font-size:11px;font-weight:600;color:#7A6570;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelAddr}</div>` : ""}
+          ${busName ? `<div style="font-size:13px;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1.5px solid rgba(125,31,60,.25);border-radius:99px;padding:3px 14px;white-space:nowrap;font-family:Cairo,sans-serif;">باص ${busName}${minaName ? ` · منى ${minaName}` : ""}</div>` : ""}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 10px;flex-shrink:0;min-width:75mm;">
+          ${logoEl}
+          <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:19px;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;white-space:nowrap;">${companyName}</div>
+          <div style="font-size:11px;font-weight:700;color:#8a6a10;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${cfg.season_label || ""}</div>
+          <div style="font-size:11px;font-weight:800;color:#241318;direction:ltr;white-space:nowrap;font-family:Cairo,sans-serif;">${cfg.admin_phone || ""}</div>
+        </div>
+      </div>
+    </div>`;
+  return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-direction:row;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="hand">${strip()}${strip()}${strip()}</div>`;
+}
+
+/* بناء صفحة التاج المعلق (4 تاجات 2×2) */
+export function buildLongTagPageHTML(p: StickerPassenger, cfg: StickerConfig, meta: StickerMeta): string {
+  const primaryColor = cfg.color_primary || "#7D1F3C";
+  const companyName  = cfg.name_ar || "";
+  const room = meta.rooms.find(r => r.id === p.room_id);
+  const bus  = meta.buses.find(b => b.id === p.bus_id);
+  const roomNo    = room?.number || "—";
+  const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
+  const busName   = bus?.name || "";
+  const shortName = p.short_ar || p.name_ar || "";
+  const hotelName = cfg.hotel_name || companyName;
+  const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
+  const logoEl = cfg.logo_url
+    ? `<img src="${cfg.logo_url}" style="width:90pt;height:90pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
+    : `<div style="width:90pt;height:90pt;border-radius:50%;border:2.5px solid #F0C84A;display:flex;align-items:center;justify-content:center;background:rgba(240,200,74,.12);"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#F0C84A" stroke-width="1.5"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+  const patBg2 = `url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22 viewBox=%220 0 64 64%22%3E%3Cg fill=%22none%22 stroke=%22%237D1F3C%22 stroke-width=%221%22%3E%3Cpath d=%22M32 8l6 12 13 2.5-9 10.5 2 14-12-6-12 6 2-14-9-10.5L26 20z%22/%3E%3C/g%3E%3C/svg%3E')`;
+  const tag = () => `
+    <div style="width:89.3mm;height:125.8mm;box-sizing:border-box;border-radius:6.8pt;overflow:hidden;position:relative;background:#fff;display:flex;flex-direction:column;page-break-inside:avoid;break-inside:avoid;box-shadow:0 0 0 1px #E8D5C4;margin:3mm;">
+      <div style="position:absolute;top:8.5pt;left:50%;transform:translateX(-50%);width:31pt;height:11pt;border-radius:99px;background:#241318;z-index:5;"></div>
+      <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:4pt 9pt 7pt;text-align:center;position:relative;flex-shrink:0;">
+        <div style="display:flex;justify-content:center;margin-top:17pt;margin-bottom:2pt;">${logoEl}</div>
+        <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:17pt;font-weight:700;line-height:1;">${companyName}</div>
+        <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${cfg.season_label || ""}</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;position:relative;">
+        <div style="position:absolute;inset:0;opacity:.05;background-image:${patBg2};pointer-events:none;"></div>
+        <div style="font-size:11pt;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;position:relative;line-height:1;">الغرفة</div>
+        <div style="font-family:Impact,Arial Black,sans-serif;font-size:98pt;font-weight:900;color:${primaryColor};line-height:0.9;position:relative;">${roomNo}</div>
+        <div style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;position:relative;line-height:1;margin-top:2pt;">${roomFloor}</div>
+      </div>
+      <div style="background:#F8F2E4;border-top:2px solid ${cfg.color_accent || "#D4A017"};padding:8pt 12pt;text-align:center;flex-shrink:0;">
+        <div style="font-family:Cairo,sans-serif;font-size:12pt;font-weight:700;color:#8a6a10;margin-bottom:2pt;">${hotelName}</div>
+        <div style="font-family:Cairo,sans-serif;font-size:13.5pt;font-weight:900;color:#241318;line-height:1.1;">${shortName}</div>
+        ${p.name_en ? `<div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1pt;line-height:1;">${p.name_en}</div>` : ""}
+        <div style="display:flex;justify-content:center;gap:10pt;margin-top:4pt;font-size:9pt;font-weight:700;color:#8a6a10;flex-wrap:wrap;">
+          ${busName ? `<span>باص ${busName}</span>` : ""}
+          ${minaName ? `<span>منى ${minaName}</span>` : ""}
+        </div>
+      </div>
+    </div>`;
+  return `<div style="width:210mm;height:297mm;background:#fff;display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;align-items:flex-start;gap:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Cairo,sans-serif;direction:rtl;" data-page="long">${tag()}${tag()}${tag()}${tag()}</div>`;
+}
+
+/* المولّد الكامل — يجمع الأنواع المطلوبة ويرجّع HTML جاهز للطباعة */
+export function buildStickersHTML(passengers: StickerPassenger[], cfg: StickerConfig, meta: StickerMeta, types: StickerTypes = { sticker: true, hand_tag: true, long_tag: true }): string {
+  let body = "";
+  for (const p of passengers) {
+    if (types.sticker)  body += buildStickerPageHTML(p, cfg, meta);
+    if (types.hand_tag) body += buildHandTagPageHTML(p, cfg, meta);
+    if (types.long_tag) body += buildLongTagPageHTML(p, cfg, meta);
+  }
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style></head><body>${body}</body></html>`;
+}
