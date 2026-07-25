@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import type { Passenger, User } from "../types";
-import { AlertRotator } from "./AlertRotator";
-import { SeasonPhaseCard, PackagesCard, TotalPilgrimsCard } from "./Seasontimeline";
+import { SeasonPhaseCard, PackagesCard, TotalPilgrimsCard, SmartAlertsCard } from "./Seasontimeline";
 
 function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   passengers: Passenger[];
@@ -26,7 +25,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
     if (!perm || currentUser.permissions[perm]) setPage(page);
   };
 
-  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 10);
+  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 6);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -109,20 +108,12 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
 
       {/* ══ العمود الأيسر — Analytics ══ */}
       <div style={{ width: 220, flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
-          <div style={{ marginBottom: 16 }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ marginBottom: 16, flexShrink: 0 }}>
             <TotalPilgrimsCard passengers={passengers} />
           </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--em8)", marginBottom: 8, paddingBottom: 7, borderBottom: "1px solid var(--line)" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.7">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              تنبيهات سريعة
-            </div>
-            <AlertRotator passengers={passengers} setPage={setPage} currentUser={currentUser} />
-          </div>
+          {/* الكارت الذكي — تنبيهات حسب المرحلة */}
+          <SmartAlertsCard passengers={passengers} setPage={navTo} />
         </div>
       </div>
     </div>
