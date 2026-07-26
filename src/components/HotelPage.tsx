@@ -28,6 +28,18 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [search, setSearch] = useState("");
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [showAddPilgrim, setShowAddPilgrim] = useState(false);
+
+  /* إغلاق المودالات بمفتاح Escape */
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showAddPilgrim) { setShowAddPilgrim(false); return; }
+      if (showAddRoom) { setShowAddRoom(false); return; }
+      if (selectedRoom) { setSelectedRoom(null); return; }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selectedRoom, showAddRoom, showAddPilgrim]);
   const [pSearch, setPSearch] = useState("");
 
   // Add Room form
