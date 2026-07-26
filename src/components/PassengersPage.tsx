@@ -8,7 +8,7 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
-import { makeShort, buildStickersHTML, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
 // تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
 function nameMatches(a?: string | null, b?: string | null): boolean {
@@ -287,11 +287,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         passengers.forEach(x => { if (x.phone) phoneCounts[x.phone] = (phoneCounts[x.phone] || 0) + 1; });
         return !!(p.phone && phoneCounts[p.phone] > 1);
       }
-      if (opsFilter === "no_flight") return !(p as any).flight_id;
-      if (opsFilter === "no_bus") return !(p as any).bus_id;
-      if (opsFilter === "no_room") return !(p as any).room_id;
-      if (opsFilter === "no_mina") return !(p as any).camp_mina_id;
-      if (opsFilter === "no_arafa") return !(p as any).camp_arafa_id;
+      if (opsFilter === "no_flight") return isMissingService(p, "flight");
+      if (opsFilter === "no_bus") return isMissingService(p, "bus");
+      if (opsFilter === "no_room") return isMissingService(p, "hotel_type");
+      if (opsFilter === "no_mina") return isMissingService(p, "camp_mina");
+      if (opsFilter === "no_arafa") return isMissingService(p, "camp_arafa");
       if (opsFilter === "no_ticket") return !p.flight_ticket_url;
       if (opsFilter === "no_permit") return !p.hajj_permit_url;
       return true;
@@ -1269,11 +1269,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           const phoneCounts: Record<string, number> = {};
           hajj.forEach(p => { if (p.phone) phoneCounts[p.phone] = (phoneCounts[p.phone] || 0) + 1; });
           const dupPhones = Object.values(phoneCounts).filter(c => c > 1).length;
-          const noFlight = hajj.filter(p => !(p as any).flight_id).length;
-          const noBus = hajj.filter(p => !(p as any).bus_id).length;
-          const noRoom = hajj.filter(p => !(p as any).room_id).length;
-          const noMina = hajj.filter(p => !(p as any).camp_mina_id).length;
-          const noArafa = hajj.filter(p => !(p as any).camp_arafa_id).length;
+          const noFlight = hajj.filter(p => isMissingService(p, "flight")).length;
+          const noBus = hajj.filter(p => isMissingService(p, "bus")).length;
+          const noRoom = hajj.filter(p => isMissingService(p, "hotel_type")).length;
+          const noMina = hajj.filter(p => isMissingService(p, "camp_mina")).length;
+          const noArafa = hajj.filter(p => isMissingService(p, "camp_arafa")).length;
           const noTicket = hajj.filter(p => !p.flight_ticket_url).length;
           const noPermit = hajj.filter(p => !p.hajj_permit_url).length;
 
