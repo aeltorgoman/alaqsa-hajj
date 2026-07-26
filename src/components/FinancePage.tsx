@@ -451,6 +451,23 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   const [savingGroup, setSavingGroup]             = useState(false);
   const [addingMemberId, setAddingMemberId]       = useState<number | null>(null);
   const [showGroupPayModal, setShowGroupPayModal] = useState(false);
+
+  /* إغلاق المودالات بمفتاح Escape — مودالات الإدخال تطلب تأكيداً */
+  useEffect(() => {
+    const h = async (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const askClose = async (msg: string) => showConfirm(msg, { title: "إغلاق النموذج" });
+      if (showGroupPayModal) { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowGroupPayModal(false); return; }
+      if (showGroupModal)    { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowGroupModal(false); return; }
+      if (showChargeModal)   { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowChargeModal(false); return; }
+      if (showPayModal)      { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowPayModal(false); return; }
+      if (selectedPayment) { setSelectedPayment(null); return; }
+      if (selectedGroup)   { setSelectedGroup(null); return; }
+      if (selectedP)       { setSelectedP(null); return; }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selectedP, selectedGroup, selectedPayment, showPayModal, showChargeModal, showGroupModal, showGroupPayModal]);
   const [groupPayForm, setGroupPayForm]           = useState({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
   const [savingGroupPay, setSavingGroupPay]       = useState(false);
 
