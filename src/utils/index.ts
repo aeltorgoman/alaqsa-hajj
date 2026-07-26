@@ -651,3 +651,28 @@ export function buildStickersHTML(passengers: StickerPassenger[], cfg: StickerCo
   }
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=El+Messiri:wght@600;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:0}body{margin:0;padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}</style></head><body>${body}</body></html>`;
 }
+
+// ============================================================
+// هل الحاج طالب هذه الخدمة؟
+// إذا كان طلبه "بدون" فهو غير مطلوب — لا يُحتسب ناقصاً في التوزيع
+// ============================================================
+export type ServiceKey = "bus" | "flight" | "hotel_type" | "camp_mina" | "camp_arafa";
+
+export function wantsService(p: any, key: ServiceKey): boolean {
+  const v = (p?.services?.[key] ?? "").toString().trim();
+  return v !== "بدون";
+}
+
+/* هل ينقص الحاج توزيع هذه الخدمة فعلياً؟
+   (طالب الخدمة + لم يتم تعيينه بعد) */
+export function isMissingService(p: any, key: ServiceKey): boolean {
+  if (!wantsService(p, key)) return false;
+  const idField: Record<ServiceKey, string> = {
+    bus: "bus_id",
+    flight: "flight_id",
+    hotel_type: "room_id",
+    camp_mina: "camp_mina_id",
+    camp_arafa: "camp_arafa_id",
+  };
+  return p?.[idField[key]] == null;
+}
