@@ -25,7 +25,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
     if (!perm || currentUser.permissions[perm]) setPage(page);
   };
 
-  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 6);
+  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 8);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -79,8 +79,25 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
         {/* 3) الصف السفلي: آخر المسجلين + توزيع الباقات */}
         <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
 
+          {/* الكارت الذكي — تنبيهات حسب المرحلة */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <SmartAlertsCard passengers={passengers} setPage={navTo} />
+          </div>
+
+
+          {/* توزيع الباقات */}
+          <PackagesCard passengers={passengers} setPage={navTo} />
+        </div>
+      </div>
+
+      {/* ══ العمود الأيسر — Analytics ══ */}
+      <div style={{ width: "var(--sidebar-width)", flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 0", display: "flex", flexDirection: "column", minHeight: 0, gap: 12 }}>
+          <div style={{ flexShrink: 0, padding: "0 12px" }}>
+            <TotalPilgrimsCard passengers={passengers} />
+          </div>
           {/* آخر الحجاج المسجلين */}
-          <div style={{ flex: 1, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
+          <div style={{ flex: 1, background: "var(--paper)", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", background: "var(--info-bg)", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round">
                 <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
@@ -88,7 +105,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "var(--ink)", flex: 1 }}>آخر الحجاج المسجلين</div>
               <span onClick={() => navTo("passengers")} style={{ fontSize: 11, color: "var(--info)", cursor: "pointer", fontWeight: 700 }}>عرض الكل</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, overflowY: "auto", flex: 1, padding: "4px 6px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", flex: 1, padding: "4px 6px" }}>
               {recent.map(p => (
                 <div key={p.id} onClick={() => navTo("passengers")}
                   style={{ display: "flex", flexDirection: "column", padding: "7px 10px", borderRadius: 8, cursor: "pointer", direction: "rtl", minWidth: 0 }}
@@ -100,20 +117,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               ))}
             </div>
           </div>
-
-          {/* توزيع الباقات */}
-          <PackagesCard passengers={passengers} setPage={navTo} />
-        </div>
-      </div>
-
-      {/* ══ العمود الأيسر — Analytics ══ */}
-      <div style={{ width: "var(--sidebar-width)", flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <div style={{ marginBottom: 16, flexShrink: 0 }}>
-            <TotalPilgrimsCard passengers={passengers} />
-          </div>
-          {/* الكارت الذكي — تنبيهات حسب المرحلة */}
-          <SmartAlertsCard passengers={passengers} setPage={navTo} />
         </div>
       </div>
     </div>
