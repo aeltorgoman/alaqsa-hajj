@@ -58,6 +58,15 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
+
+  /* إغلاق المودال بمفتاح Escape */
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedCampId != null) { setSelectedCampId(null); setAddSearch(""); }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selectedCampId]);
   const [dismissedCampSuggestions, setDismissedCampSuggestions] = useState(new Set<number>());
   const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
   const [campSearch, setCampSearch] = useState("");
@@ -299,7 +308,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const genderPool = camp.type === "خاص" ? passengers : passengers.filter(p => p.gender === camp.gender);
         const addFiltered = genderPool.filter(p => (p as any)[campIdKey] == null && (!p.passenger_type || p.passenger_type === "حاج") && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
         return (
-          <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} onKeyDown={e => { if (e.key === "Escape") { setSelectedCampId(null); setAddSearch(""); } }} tabIndex={-1} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
               {/* هيدر */}
               <div style={{ background: `linear-gradient(135deg,${campColor},${campColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
