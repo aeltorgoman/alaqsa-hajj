@@ -12,6 +12,25 @@
    الثيم الافتراضي: Qatar Heritage (بوردو + ذهبي)
    مستوحى من كسوة الكعبة
    ============================================================ */
+/* ════════════════════════════════════════════════════════════
+   قيم بنيوية ثابتة — لا تتغيّر مع الثيم
+   الثيم مسؤول عن الألوان فقط
+   ════════════════════════════════════════════════════════════ */
+:root {
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+
+  --font-heading: 'Reem Kufi', serif;
+  --font-body: 'Tajawal', sans-serif;
+
+  --sidebar-width: 220px;
+  --topbar-height: 56px;
+  --transition: all 0.18s ease;
+}
+
 [data-theme="qatar-heritage"], :root {
   --em9:#3D0F1E; --em8:#5C1830; --em7:#7D1F3C; --em6:#A32D52; --em5:#C4496E;
   --g3:#e7cd8a; --g4:#d4ac4f; --g5:#c8a24b; --g6:#a9852f; --g7:#8a6a22;
@@ -49,17 +68,6 @@
   --shadow-lg: 0 8px 24px rgba(92,24,48,0.16);
   --shadow-xl: 0 30px 80px rgba(0,0,0,0.3);
 
-  --radius-sm: 9px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
-  --radius-full: 9999px;
-
-  --font-heading: 'Reem Kufi', serif;
-  --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 220px;
-  --topbar-height: 56px;
-  --transition: all 0.18s ease;
   --pattern-opacity: 0.08;
 
   --success: var(--em7); --success-bg: rgba(125,31,60,0.08);
@@ -90,9 +98,7 @@
   --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.4); --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.6); --shadow-xl: 0 30px 80px rgba(0,0,0,0.7);
-  --radius-sm: 9px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px; --radius-full: 9999px;
-  --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 220px; --topbar-height: 56px; --transition: all 0.18s ease; --pattern-opacity: 0.06;
+  --pattern-opacity: 0.06;
 
   --success: #4CAF82; --success-bg: #0d2a1c; --danger: #e05545; --danger-bg: #2a0d0a; --error: #e05545; --error-bg: #2a0d0a;
   --warning: var(--g3); --warning-bg: #1a1500; --info: #5ba8c9; --info-bg: #0a1e2a;
@@ -120,9 +126,7 @@
   --male-bg: var(--mb); --male-fg: var(--mf); --female-bg: var(--fb); --female-fg: var(--ff);
   --shadow-sm: 0 1px 3px rgba(7,62,110,0.08); --shadow-md: 0 4px 12px rgba(7,62,110,0.12);
   --shadow-lg: 0 8px 24px rgba(7,62,110,0.16); --shadow-xl: 0 16px 48px rgba(7,62,110,0.20);
-  --radius-sm: 9px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px; --radius-full: 9999px;
-  --font-heading: 'Reem Kufi', serif; --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 220px; --topbar-height: 56px; --transition: all 0.18s ease; --pattern-opacity: 0.04;
+  --pattern-opacity: 0.04;
 
   --success: #1D9E75; --success-bg: #e1f5ee; --danger: #c0392b; --danger-bg: #fbeae8; --error: #c0392b; --error-bg: #fbeae8;
   --warning: #b8860b; --warning-bg: #fdf5e0; --info: #0C447C; --info-bg: #e3eef8;
@@ -169,17 +173,6 @@
   --shadow-lg: 0 8px 24px rgba(11,59,46,0.16);
   --shadow-xl: 0 30px 80px rgba(0,0,0,0.3);
 
-  --radius-sm: 9px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
-  --radius-full: 9999px;
-
-  --font-heading: 'Reem Kufi', serif;
-  --font-body: 'Tajawal', sans-serif;
-  --sidebar-width: 220px;
-  --topbar-height: 56px;
-  --transition: all 0.18s ease;
   --pattern-opacity: 0.08;
 
   --success: var(--em7); --success-bg: rgba(15,83,64,0.08);
