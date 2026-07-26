@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
+import { isMissingService } from "../utils";
 
 /* ════════════════════════════════════════════════════════════
    منطق حساب مراحل الموسم — تلقائي بالكامل من البيانات
@@ -31,7 +32,7 @@ function useSeasonPhases(passengers: Passenger[]) {
     const regPct = total ? Math.round(docsComplete / total * 100) : 0;
     const distributed = hajj.filter(p => p.bus_id != null || p.room_id != null).length;
     const distActive = distributed >= PHASE_THRESHOLD;
-    const fullyDist = hajj.filter(p => p.bus_id != null && p.room_id != null && p.camp_mina_id != null && p.camp_arafa_id != null).length;
+    const fullyDist = hajj.filter(p => !isMissingService(p, "bus") && !isMissingService(p, "flight") && !isMissingService(p, "hotel_type") && !isMissingService(p, "camp_mina") && !isMissingService(p, "camp_arafa")).length;
     const distPct = total ? Math.round(fullyDist / total * 100) : 0;
     const permits = hajj.filter(p => p.hajj_permit_url).length;
     const tickets = hajj.filter(p => p.flight_ticket_url).length;
@@ -284,9 +285,15 @@ function TotalPilgrimsCard({ passengers }: { passengers: Passenger[] }) {
       </div>
       <div style={{ fontSize: 46, fontWeight: 900, lineHeight: 1, fontFamily: "var(--font-heading)", marginBottom: 3 }}>{total}</div>
       <div style={{ fontSize: 11.5, opacity: .7, marginBottom: 10 }}>الموسم الحالي</div>
-      <div style={{ display: "flex", gap: 10, paddingTop: 9, borderTop: "1px solid rgba(255,255,255,.15)", fontSize: 12.5, fontWeight: 700 }}>
-        <span style={{ color: "var(--male-fg)", background: "var(--male-bg)", padding: "2px 8px", borderRadius: 99 }}>{men} رجال</span>
-        <span style={{ color: "var(--female-fg)", background: "var(--female-bg)", padding: "2px 8px", borderRadius: 99 }}>{women} نساء</span>
+      <div style={{ paddingTop: 9, borderTop: "1px solid rgba(255,255,255,.15)" }}>
+        <div style={{ height: 5, borderRadius: 99, overflow: "hidden", display: "flex", marginBottom: 7, background: "rgba(0,0,0,.15)" }}>
+          <div style={{ background: "rgba(255,255,255,.85)", width: `${total ? (men / total * 100) : 0}%`, transition: "width .3s" }} />
+          <div style={{ background: "rgba(231,205,138,.75)", width: `${total ? (women / total * 100) : 0}%`, transition: "width .3s" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700 }}>
+          <span style={{ color: "#fff" }}>{men} <span style={{ fontWeight: 600, opacity: .6, fontSize: 10 }}>رجال</span></span>
+          <span style={{ color: "var(--g3)" }}>{women} <span style={{ fontWeight: 600, opacity: .6, fontSize: 10 }}>نساء</span></span>
+        </div>
       </div>
     </div>
   );
@@ -336,11 +343,11 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
     }
     if (phaseId === "dist") {
       return [
-        mk("no_bus", "حجاج بدون باص", "لم يتم التوزيع بعد", cnt(p => !(p as any).bus_id), `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, false, "buses"),
-        mk("no_flight", "حجاج بدون رحلة طيران", "لم يتم التوزيع بعد", cnt(p => !(p as any).flight_id), `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, false, "flights"),
-        mk("no_room", "حجاج بدون غرفة فندق", "لم يتم التوزيع بعد", cnt(p => !(p as any).room_id), `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, false, "hotel"),
-        mk("no_mina", "حجاج بدون مخيم منى", "لم يتم التوزيع بعد", cnt(p => !(p as any).camp_mina_id), `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, false, "mina"),
-        mk("no_arafa", "حجاج بدون مخيم عرفة", "لم يتم التوزيع بعد", cnt(p => !(p as any).camp_arafa_id), `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, false, "arafa"),
+        mk("no_bus", "حجاج بدون باص", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "bus")), `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, false, "buses"),
+        mk("no_flight", "حجاج بدون رحلة طيران", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "flight")), `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, false, "flights"),
+        mk("no_room", "حجاج بدون غرفة فندق", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "hotel_type")), `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, false, "hotel"),
+        mk("no_mina", "حجاج بدون مخيم منى", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "camp_mina")), `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, false, "mina"),
+        mk("no_arafa", "حجاج بدون مخيم عرفة", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "camp_arafa")), `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, false, "arafa"),
       ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
     }
     /* prep + travel */
@@ -395,7 +402,7 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
       {items.length > 0 && (
         <div style={{ borderTop: "1px solid var(--line)", padding: "7px 12px", background: "var(--ivory)", flexShrink: 0 }}>
           {phaseId === "dist" && (() => {
-            const incomplete = hajj.filter(p => !(p as any).bus_id || !(p as any).flight_id || !(p as any).room_id || !(p as any).camp_mina_id || !(p as any).camp_arafa_id).length;
+            const incomplete = hajj.filter(p => isMissingService(p, "bus") || isMissingService(p, "flight") || isMissingService(p, "hotel_type") || isMissingService(p, "camp_mina") || isMissingService(p, "camp_arafa")).length;
             return incomplete > 0 ? (
               <div style={{ fontSize: 10.5, color: "var(--ink)", fontWeight: 800, marginBottom: 5, paddingBottom: 5, borderBottom: "1px dashed var(--line)" }}>
                 {incomplete} حاج لم يكتمل توزيعهم
