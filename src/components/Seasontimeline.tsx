@@ -331,22 +331,22 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
         mk("expiring_soon", "جوازات تنتهي خلال ٦ أشهر", "تحتاج متابعة عاجلة", cnt(p => !isExpiredDate(p.expiry) && isExpiringSoonDate(p.expiry)), `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, true, "passengers", "جواز قريب"),
         mk("no_photo", "صور شخصية ناقصة", "مستند مطلوب للتسجيل", cnt(p => !p.photo_url), `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, false, "passengers", "بدون صورة"),
         mk("no_passport_file", "جوازات لم يتم رفعها", "مستندات مفقودة", cnt(p => !p.passport_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, false, "passengers", "بدون جواز"),
-        mk("no_phone", "بدون رقم هاتف", "بيانات التواصل مفقودة", cnt(p => !p.phone), `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, false, "passengers", "بدون تليفون"),
+        mk("no_phone", "حجاج بدون رقم هاتف", "بيانات التواصل مفقودة", cnt(p => !p.phone), `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, false, "passengers", "بدون تليفون"),
       ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
     }
     if (phaseId === "dist") {
       return [
-        mk("no_bus", "بدون باص", "", cnt(p => !(p as any).bus_id), `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, false, "buses"),
-        mk("no_flight", "بدون رحلة طيران", "", cnt(p => !(p as any).flight_id), `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, false, "flights"),
-        mk("no_room", "بدون غرفة فندق", "", cnt(p => !(p as any).room_id), `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, false, "hotel"),
-        mk("no_mina", "بدون مخيم منى", "", cnt(p => !(p as any).camp_mina_id), `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, false, "mina"),
-        mk("no_arafa", "بدون مخيم عرفة", "", cnt(p => !(p as any).camp_arafa_id), `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, false, "arafa"),
+        mk("no_bus", "حجاج بدون باص", "لم يتم التوزيع بعد", cnt(p => !(p as any).bus_id), `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, false, "buses"),
+        mk("no_flight", "حجاج بدون رحلة طيران", "لم يتم التوزيع بعد", cnt(p => !(p as any).flight_id), `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, false, "flights"),
+        mk("no_room", "حجاج بدون غرفة فندق", "لم يتم التوزيع بعد", cnt(p => !(p as any).room_id), `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, false, "hotel"),
+        mk("no_mina", "حجاج بدون مخيم منى", "لم يتم التوزيع بعد", cnt(p => !(p as any).camp_mina_id), `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, false, "mina"),
+        mk("no_arafa", "حجاج بدون مخيم عرفة", "لم يتم التوزيع بعد", cnt(p => !(p as any).camp_arafa_id), `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, false, "arafa"),
       ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
     }
     /* prep + travel */
     return [
-      mk("no_permit", "بدون تصريح حج", "تصريح الحج مفقود", cnt(p => !p.hajj_permit_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, true, "passengers", "بدون تصريح"),
-      mk("no_ticket", "بدون تذكرة طيران", "مستند السفر مفقود", cnt(p => !p.flight_ticket_url), `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, false, "passengers", "بدون تذكرة"),
+      mk("no_permit", "حجاج بدون تصريح حج", "تصريح الحج مفقود", cnt(p => !p.hajj_permit_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, true, "passengers", "بدون تصريح"),
+      mk("no_ticket", "حجاج بدون تذكرة طيران", "مستند السفر مفقود", cnt(p => !p.flight_ticket_url), `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, false, "passengers", "بدون تذكرة"),
     ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
   }, [hajj, phaseId]);
 
