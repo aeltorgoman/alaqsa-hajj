@@ -52,6 +52,15 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [nameError, setNameError] = useState("");
   const [dismissedSuggestions, setDismissedSuggestions] = useState(new Set<number>());
   const [selectedBusId, setSelectedBusId] = useState<number | null>(null);
+
+  /* إغلاق المودال بمفتاح Escape */
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedBusId != null) { setSelectedBusId(null); setDrawerPSearch(""); }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selectedBusId]);
   const [drawerPSearch, setDrawerPSearch] = useState("");
   const [busSearch, setBusSearch] = useState("");
 
@@ -284,7 +293,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const addFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
-          <div onKeyDown={e => { if (e.key === "Escape") { setSelectedBusId(null); setDrawerPSearch(""); } }} tabIndex={-1} onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
               {/* ══ هيدر ملون ══ */}
