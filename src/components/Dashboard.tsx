@@ -107,7 +107,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
       </div>
 
       {/* ══ العمود الأيسر — Analytics ══ */}
-      <div style={{ width: 220, flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ width: "var(--sidebar-width)", flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ marginBottom: 16, flexShrink: 0 }}>
             <TotalPilgrimsCard passengers={passengers} />
