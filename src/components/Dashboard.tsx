@@ -25,7 +25,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
     if (!perm || currentUser.permissions[perm]) setPage(page);
   };
 
-  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 8);
+  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 12);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -77,10 +77,10 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
         <SeasonPhaseCard passengers={passengers} setPage={navTo} />
 
         {/* 3) الصف السفلي: آخر المسجلين + توزيع الباقات */}
-        <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minHeight: 0, overflowY: "auto" }}>
 
           {/* الكارت الذكي — تنبيهات حسب المرحلة */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <SmartAlertsCard passengers={passengers} setPage={navTo} />
           </div>
 
@@ -108,11 +108,10 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
             <div style={{ display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", flex: 1, padding: "4px 6px" }}>
               {recent.map(p => (
                 <div key={p.id} onClick={() => navTo("passengers")}
-                  style={{ display: "flex", flexDirection: "column", padding: "7px 10px", borderRadius: 8, cursor: "pointer", direction: "rtl", minWidth: 0 }}
+                  style={{ padding: "5px 10px", borderRadius: 7, cursor: "pointer", direction: "rtl", minWidth: 0, fontSize: 11.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</div>
-                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nat}</div>
+                  {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
                 </div>
               ))}
             </div>
