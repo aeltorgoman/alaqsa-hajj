@@ -9,7 +9,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   onAddManual?: () => void;
   onScan?: (file: File) => void;
 }) {
-  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
 
   const PERM_MAP: Record<string, string> = {
     passengers: "manage_passengers",
@@ -25,7 +24,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
     if (!perm || currentUser.permissions[perm]) setPage(page);
   };
 
-  const recent = [...hajj].sort((a, b) => (b.id ?? 0) - (a.id ?? 0)).slice(0, 12);
   const scanInputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -95,26 +93,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 0", display: "flex", flexDirection: "column", minHeight: 0, gap: 12 }}>
           <div style={{ flexShrink: 0, padding: "0 12px" }}>
             <TotalPilgrimsCard passengers={passengers} />
-          </div>
-          {/* آخر الحجاج المسجلين */}
-          <div style={{ flex: 1, background: "var(--paper)", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", background: "var(--info-bg)", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="1.7" strokeLinecap="round">
-                <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
-              </svg>
-              <div style={{ fontFamily: "var(--font-heading)", fontSize: 14, color: "var(--ink)", flex: 1 }}>آخر الحجاج المسجلين</div>
-              <span onClick={() => navTo("passengers")} style={{ fontSize: 11, color: "var(--info)", cursor: "pointer", fontWeight: 700 }}>عرض الكل</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1, overflowY: "auto", flex: 1, padding: "4px 6px" }}>
-              {recent.map(p => (
-                <div key={p.id} onClick={() => navTo("passengers")}
-                  style={{ padding: "5px 10px", borderRadius: 7, cursor: "pointer", direction: "rtl", minWidth: 0, fontSize: 11.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                  {p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>
