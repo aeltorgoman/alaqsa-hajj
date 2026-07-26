@@ -335,16 +335,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (docViewer) { setDocViewer(null); return; }
-      if (editing) { setEditing(null); return; }
-      if (selected) { setSelected(null); return; }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [selected, editing, docViewer]);
   const [showManual, setShowManual] = useState(false);
   const DEFAULT_MANUAL_FORM = { name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" };
   const DEFAULT_MANUAL_SERVICES = { bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" };
@@ -609,6 +599,38 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   const [permitConfirm, setPermitConfirm] = useState<{ url: string; field: string; passenger: Passenger; idNum: string } | null>(null);
+
+  useEffect(() => {
+    const h = async (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // مودالات العرض — تُغلق فوراً
+      if (docViewer) { setDocViewer(null); return; }
+      // مودالات الإدخال — تطلب تأكيداً لتفادي فقد البيانات
+      if (permitConfirm) {
+        const ok = await confirmAction("هل تريد إلغاء تأكيد التصريح؟", { title: "إغلاق النموذج" });
+        if (ok) setPermitConfirm(null);
+        return;
+      }
+      if (pendingDocScan) {
+        const ok = await confirmAction("هل تريد إغلاق نتيجة المسح؟ ستفقد البيانات الممسوحة.", { title: "إغلاق النموذج" });
+        if (ok) setPendingDocScan(null);
+        return;
+      }
+      if (showManual) {
+        const ok = await confirmAction("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.", { title: "إغلاق النموذج" });
+        if (ok) setShowManual(false);
+        return;
+      }
+      if (editing) {
+        const ok = await confirmAction("هل تريد الإغلاق؟ ستفقد التعديلات غير المحفوظة.", { title: "إغلاق النموذج" });
+        if (ok) setEditing(null);
+        return;
+      }
+      if (selected) { setSelected(null); return; }
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [selected, editing, docViewer, showManual, pendingDocScan, permitConfirm]);
   const [showVerify, setShowVerify] = useState(false);
   const [verifyData, setVerifyData] = useState<{ passportUrl: string; idUrl: string; passenger: any; updates: any; isQatari: boolean; idMismatch: boolean; } | null>(null);
 
