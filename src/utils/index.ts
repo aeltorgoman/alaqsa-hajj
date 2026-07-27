@@ -508,44 +508,55 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const shortName = p.short_ar || p.name_ar || "";
   const IMPACT    = "Impact,Arial Black,sans-serif";
   const logoImgEl = cfg.logo_url
-    ? `<img src="${cfg.logo_url}" style="width:100%;flex:1;object-fit:contain;min-height:0;display:block;" />`
-    : `<div style="width:100%;flex:1;display:flex;align-items:center;justify-content:center;min-height:0;"><svg viewBox="0 0 24 24" style="width:70%;height:70%;" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+    ? `<img src="${cfg.logo_url}" style="height:100%;max-height:48mm;width:auto;max-width:46mm;object-fit:contain;flex-shrink:0;display:block;" />`
+    : `<div style="height:100%;max-height:48mm;width:42mm;flex-shrink:0;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:88%;height:88%;" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
   const stk = () => `
     <div style="width:100%;height:99mm;box-sizing:border-box;border-bottom:2px dashed #E8D5C4;display:flex;direction:rtl;page-break-inside:avoid;break-inside:avoid;overflow:hidden;position:relative;flex-shrink:0;">
       <div style="position:absolute;inset:5px;border:2.5px solid ${primaryColor};border-radius:10px;pointer-events:none;z-index:2;"></div>
       <div style="position:absolute;inset:9px;border:1px solid ${accentColor};border-radius:7px;pointer-events:none;opacity:.5;z-index:2;"></div>
-      <div style="width:28%;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#F8F2E4;padding:10px 10px 8px;border-left:2px solid ${accentColor};">
-        ${logoImgEl}
-        <div style="display:flex;flex-direction:column;align-items:center;gap:1px;padding-top:4px;flex-shrink:0;">
-          <div style="font-size:13pt;font-weight:700;color:${primaryColor};text-align:center;line-height:1.1;font-family:'El Messiri',Cairo,sans-serif;">${companyName}</div>
-          <div style="font-size:8pt;font-weight:700;color:#8a6a10;text-align:center;font-family:Cairo,sans-serif;">${cfg.season_label || ""}</div>
-          <div style="font-size:10pt;font-weight:800;color:#241318;direction:ltr;">${cfg.admin_phone || ""}</div>
-        </div>
-      </div>
-      <div style="flex:1;padding:12pt 14pt;display:flex;flex-direction:column;justify-content:space-between;border-left:2px dashed #E8D5C4;">
-        <div>
-          <div style="font-size:15pt;font-weight:900;color:#1a0a10;line-height:1.3;font-family:Cairo,sans-serif;">${shortName}</div>
-          <div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:2px;font-family:Arial,sans-serif;">${p.name_en || ""}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:0;">
-          <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;">
-            <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
-            <span style="font-size:11pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || companyName}</span>
+
+      <!-- الجانب الأيمن: صفّان — الحملة فوق، الحاج تحت -->
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0;border-left:2px dashed #E8D5C4;">
+
+        <!-- الصف العلوي: هوية الحملة -->
+        <div style="height:55%;flex-shrink:0;background:#F8F2E4;border-bottom:2px solid ${accentColor};display:flex;align-items:center;gap:16pt;padding:6pt 16pt;">
+          ${logoImgEl}
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;">
+            <div style="font-size:34pt;font-weight:700;color:${primaryColor};line-height:1.05;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
+            <div style="display:flex;align-items:center;gap:10pt;flex-wrap:wrap;">
+              ${cfg.season_label ? `<span style="font-size:13pt;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;">${cfg.season_label}</span>` : ""}
+              ${cfg.season_label && cfg.admin_phone ? `<span style="color:${accentColor};font-size:14pt;">•</span>` : ""}
+              ${cfg.admin_phone ? `<span style="font-size:14pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${cfg.admin_phone}</span>` : ""}
+            </div>
           </div>
-          ${cfg.hotel_address ? `<div style="display:flex;align-items:center;gap:8px;padding:4pt 0;border-bottom:1pt dashed #E8D5C4;"><span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span></div>` : ""}
-          <div style="display:flex;align-items:center;gap:8px;padding:4pt 0;">
-            <span style="font-size:9pt;font-weight:800;color:#8a6a10;min-width:40px;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
+        </div>
+
+        <!-- الصف السفلي: بيانات الحاج -->
+        <div style="flex:1;padding:8pt 16pt;display:flex;flex-direction:column;justify-content:center;gap:4pt;min-height:0;">
+          <div>
+            <div style="font-size:15pt;font-weight:900;color:#1a0a10;line-height:1.25;font-family:Cairo,sans-serif;">${shortName}</div>
+            ${p.name_en ? `<div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1px;font-family:Arial,sans-serif;">${p.name_en}</div>` : ""}
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;padding-top:3pt;border-top:1pt dashed #E8D5C4;">
+            <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:34px;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
             <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
           </div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:34px;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
+            <span style="font-size:10.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || companyName}</span>
+          </div>
+          ${cfg.hotel_address ? `<div style="display:flex;align-items:flex-start;gap:7px;"><span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:34px;flex-shrink:0;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:9pt;font-weight:700;color:#555;line-height:1.3;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span></div>` : ""}
         </div>
       </div>
+
+      <!-- الجانب الأيسر: الغرفة -->
       <div style="width:26%;flex-shrink:0;background:${primaryColor};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12pt 8pt;gap:3px;">
         <div style="font-size:9pt;font-weight:800;color:#F0C84A;letter-spacing:2px;font-family:Cairo,sans-serif;">الغرفة</div>
         <div style="font-size:58pt;font-weight:900;color:#fff;line-height:1;font-family:${IMPACT};">${roomNo}</div>
         <div style="font-size:10pt;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.15);padding:2px 10px;border-radius:99px;font-family:Cairo,sans-serif;">${roomFloor}</div>
-        <div style="font-size:10pt;font-weight:800;color:#F0C84A;margin-top:5px;font-family:${IMPACT};display:flex;gap:5px;align-items:center;">
+        <div style="font-size:14pt;font-weight:800;color:#F0C84A;margin-top:6px;font-family:${IMPACT};display:flex;gap:6px;align-items:center;">
           ${busName ? `<span>باص ${busName}</span>` : ""}
-          ${busName && minaName ? `<span style="color:rgba(255,255,255,.4);font-size:12pt;font-family:Cairo,sans-serif;font-weight:400;">·</span>` : ""}
+          ${busName && minaName ? `<span style="color:rgba(255,255,255,.4);font-size:15pt;font-family:Cairo,sans-serif;font-weight:400;">·</span>` : ""}
           ${minaName ? `<span>منى ${minaName}</span>` : ""}
         </div>
       </div>
