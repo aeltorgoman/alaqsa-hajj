@@ -62,6 +62,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     return () => document.removeEventListener("keydown", h);
   }, [selectedBusId]);
   const [drawerPSearch, setDrawerPSearch] = useState("");
+  const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
   const [busSearch, setBusSearch] = useState("");
 
   // Drag state
@@ -451,8 +452,20 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
                 {/* شمال: إضافة مسافرين */}
                 <div style={{ width: 290, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
-                  <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
+                  <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>
+                      {selectedAdd.size > 0 ? `${selectedAdd.size} محدد` : "إضافة مسافرين"}
+                    </span>
+                    {addFiltered.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (selectedAdd.size === addFiltered.length) setSelectedAdd(new Set());
+                          else setSelectedAdd(new Set(addFiltered.map(p => p.id)));
+                        }}
+                        style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: `${busColor}14`, border: `1px solid ${busColor}33`, color: busColor, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                        {selectedAdd.size === addFiltered.length && addFiltered.length > 0 ? "إلغاء تحديد الكل" : "تحديد الكل"}
+                      </button>
+                    )}
                   </div>
                   <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 10px" }}>
@@ -471,30 +484,46 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                           draggable
                           onDragStart={() => handleDragStartAdd(p.id)}
                           onDragEnd={handleDragEnd}
-                          onClick={async () => {
-                            if (willMismatch) {
-                              const msg = isVIP
-                                ? `هذا الحاج لم يطلب باص VIP — هل تريد إضافته لباص VIP؟`
-                                : `هذا الحاج طالب باص VIP — هل تريد إضافته لباص عادي؟`;
-                              const ok = await confirmAction(msg, { title: "تحذير — عدم تطابق النوع", danger: false, confirmLabel: "إضافة على أي حال", cancelLabel: "إلغاء" });
-                              if (!ok) return;
-                            }
-                            await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id);
-                            setPassengers(passengers.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x));
-                          }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? "rgba(125,31,60,.05)" : "transparent" }}
-                          onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
-                          onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                          onClick={() => setSelectedAdd(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "grab", borderBottom: "1px solid var(--line)", background: selectedAdd.has(p.id) ? `${busColor}12` : draggingId === p.id ? "rgba(125,31,60,.05)" : "transparent" }}
+                          onMouseEnter={e => { if (!selectedAdd.has(p.id)) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = selectedAdd.has(p.id) ? `${busColor}12` : "transparent"; }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${selectedAdd.has(p.id) ? busColor : "var(--line)"}`, background: selectedAdd.has(p.id) ? busColor : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                          </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
                             {willMismatch && isVIP && <div style={{ fontSize: 9, color: "#C62828", fontWeight: 700 }}>⚠ ليس VIP</div>}
                           </div>
                           {p.services?.bus === "VIP" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
-                          <span style={{ fontSize: 16, color: busColor, fontWeight: 700, flexShrink: 0 }}>＋</span>
                         </div>
                       );
                     })}
                   </div>
+                  {/* زر الإضافة الجماعي */}
+                  {selectedAdd.size > 0 && (
+                    <div style={{ padding: "10px 12px", borderTop: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
+                      <button
+                        onClick={async () => {
+                          const chosen = addFiltered.filter(p => selectedAdd.has(p.id));
+                          const mismatched = chosen.filter(p => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP"));
+                          if (mismatched.length > 0) {
+                            const ok = await confirmAction(
+                              `${mismatched.length} من الحجاج المحددين لا يتطابق نوع الباص المطلوب لديهم — هل تريد المتابعة؟`,
+                              { title: "تحذير — عدم تطابق النوع", danger: false, confirmLabel: "إضافة على أي حال", cancelLabel: "إلغاء" }
+                            );
+                            if (!ok) return;
+                          }
+                          await Promise.all(chosen.map(p => supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id)));
+                          setPassengers(passengers.map(x => selectedAdd.has(x.id) ? { ...x, bus_id: bus.id } : x));
+                          setSelectedAdd(new Set());
+                        }}
+                        style={{ width: "100%", padding: "9px", borderRadius: 10, border: "none", background: busColor, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        إضافة {selectedAdd.size} مسافر
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
