@@ -442,7 +442,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                 </div>
 
                 {/* شمال: إضافة */}
-                <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
+                <div style={{ width: 290, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
                   <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
                   </div>
