@@ -89,7 +89,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   }, [showAddP]);
   const [currentFlightId, setCurrentFlightId] = useState<number | null>(null);
   const [pSearch, setPSearch] = useState("");
-  const [transferMenuId, setTransferMenuId] = useState<number | null>(null);
+  const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
 
   useEffect(() => {
     supabase.from("flights").select("*").order("created_at").then(({ data }: any) => {
@@ -562,7 +562,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       {/* ===== مودال إضافة مسافرين ===== */}
       {showAddP && (
         <div onClick={() => setShowAddP(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: "94%", maxWidth: 720, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
 
             {/* ══ هيدر ملون بشكل تذكرة الطيران ══ */}
             <div style={{ background: "linear-gradient(135deg,#7D1F3C,#A32D52)", padding: "16px 20px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
@@ -648,70 +648,57 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   {currentFlight && getFlightPassengers(currentFlight).length === 0 ? (
                     <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد مسافرون بعد</div>
                   ) : currentFlight && getFlightPassengers(currentFlight).map((p, i) => (
-                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--line)", position: "relative" }}>
-                      <span style={{ fontSize: 10, color: "var(--muted)", width: 18, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", flex: 1, display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "#FEF3C7", color: "#92400E", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</span>
-                      {((p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى") && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 7px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
-                      {/* زرار النقل */}
-                      <div style={{ position: "relative", flexShrink: 0 }}>
-                        <button
-                          onClick={e => { e.stopPropagation(); setTransferMenuId(transferMenuId === p.id ? null : p.id); }}
-                          title="نقل لرحلة أخرى"
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1, padding: "0 2px" }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                        </button>
-                        {transferMenuId === p.id && (
-                          <div style={{ position: "absolute", left: 0, top: "100%", zIndex: 100, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,.12)", minWidth: 160, padding: "4px 0" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", padding: "4px 12px 2px" }}>نقل إلى رحلة:</div>
-                            {flights.filter(f => f.id !== currentFlightId && f.type === currentFlight?.type).length === 0 ? (
-                              <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 12px" }}>لا توجد رحلات أخرى</div>
-                            ) : flights.filter(f => f.id !== currentFlightId && f.type === currentFlight?.type).map(f => (
-                              <button key={f.id}
-                                onClick={async e => {
-                                  e.stopPropagation();
-                                  const field = flightField(currentFlight!.type);
-                                  await supabase.from("passengers").update({ [field]: f.id } as any).eq("id", p.id);
-                                  setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: f.id } : x));
-                                  setTransferMenuId(null);
-                                }}
-                                style={{ display: "block", width: "100%", textAlign: "right", padding: "7px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--ink)", fontFamily: "var(--font-body)" }}
-                                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "var(--ivory)"}
-                                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "none"}
-                              >
-                                {f.name} <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400 }}>{f.date || ""}</span>
-                              </button>
-                            ))}
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px", borderBottom: "1px solid var(--line)" }}>
+                      <span style={{ fontSize: 10, color: "var(--muted)", width: 16, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
+                          {p.short_ar || p.name_ar}
+                          {(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "#FEF3C7", color: "#92400E", flexShrink: 0 }}>{(p as any).passenger_type}</span>}
+                          {((p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى") && <span style={{ fontSize: 8, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>أولى</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, opacity: .6 }}>
+                        {flights.filter(f => f.id !== currentFlightId && f.type === currentFlight?.type).length > 0 && (
+                          <div style={{ position: "relative", display: "inline-flex" }}>
+                            <select
+                              onChange={async e => {
+                                if (!e.target.value) return;
+                                const field = flightField(currentFlight!.type);
+                                await supabase.from("passengers").update({ [field]: Number(e.target.value) } as any).eq("id", p.id);
+                                setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: Number(e.target.value) } : x));
+                              }}
+                              defaultValue="" title="نقل لرحلة أخرى"
+                              style={{ appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 8px 3px 24px", fontFamily: "var(--font-body)", cursor: "pointer", minWidth: 62, textAlign: "center" }}>
+                              <option value="">نقل</option>
+                              {flights.filter(f => f.id !== currentFlightId && f.type === currentFlight?.type).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                            </select>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                           </div>
                         )}
+                        <button onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                        </button>
                       </div>
-                      <button onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-                      </button>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* شمال: إضافة مسافرين */}
-              <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
+              <div style={{ width: 290, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
                 <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>
+                    {selectedAdd.size > 0 ? `${selectedAdd.size} محدد` : "إضافة مسافرين"}
+                  </span>
                   {filteredP.length > 0 && (
                     <button
-                      onClick={async () => {
-                        const field = flightField(currentFlight?.type);
-                        await Promise.all(filteredP.map(p =>
-                          supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id)
-                        ));
-                        setPassengers(passengers.map(x => {
-                          const found = filteredP.find(p => p.id === x.id);
-                          return found ? { ...x, [field]: currentFlightId, flight_class: found.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x;
-                        }));
+                      onClick={() => {
+                        if (selectedAdd.size === filteredP.length) setSelectedAdd(new Set());
+                        else setSelectedAdd(new Set(filteredP.map(p => p.id)));
                       }}
                       style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "rgba(125,31,60,.08)", border: "1px solid rgba(125,31,60,.2)", color: "#7D1F3C", cursor: "pointer", fontFamily: "var(--font-body)" }}
                     >
-                      تحديد الكل ({filteredP.length})
+                      {selectedAdd.size === filteredP.length && filteredP.length > 0 ? "إلغاء تحديد الكل" : "تحديد الكل"}
                     </button>
                   )}
                 </div>
@@ -729,23 +716,43 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     const wantsFirst = p.services?.flight === "درجة أولى";
                     return (
                       <div key={p.id}
-                        onClick={async () => {
-                          const field = flightField(currentFlight?.type);
-                          await supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id);
-                          setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x));
-                        }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)" }}
-                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"}
-                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = "transparent"}>
+                        onClick={() => setSelectedAdd(prev => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)", background: selectedAdd.has(p.id) ? "rgba(125,31,60,.07)" : "transparent" }}
+                        onMouseEnter={e => { if (!selectedAdd.has(p.id)) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = selectedAdd.has(p.id) ? "rgba(125,31,60,.07)" : "transparent"; }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${selectedAdd.has(p.id) ? "#7D1F3C" : "var(--line)"}`, background: selectedAdd.has(p.id) ? "#7D1F3C" : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</div>
                         </div>
                         {wantsFirst && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
-                        <span style={{ fontSize: 16, color: "#7D1F3C", fontWeight: 700, flexShrink: 0 }}>＋</span>
                       </div>
                     );
                   })}
                 </div>
+                {/* زر الإضافة الجماعي */}
+                {selectedAdd.size > 0 && (
+                  <div style={{ padding: "10px 12px", borderTop: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
+                    <button
+                      onClick={async () => {
+                        const field = flightField(currentFlight?.type);
+                        const chosen = filteredP.filter(p => selectedAdd.has(p.id));
+                        await Promise.all(chosen.map(p =>
+                          supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id)
+                        ));
+                        setPassengers(passengers.map(x => {
+                          const found = chosen.find(p => p.id === x.id);
+                          return found ? { ...x, [field]: currentFlightId, flight_class: found.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x;
+                        }));
+                        setSelectedAdd(new Set());
+                      }}
+                      style={{ width: "100%", padding: "9px", borderRadius: 10, border: "none", background: "#7D1F3C", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      إضافة {selectedAdd.size} مسافر
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
