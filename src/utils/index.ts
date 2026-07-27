@@ -506,7 +506,7 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const busName   = bus?.name || "";
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
   const shortName = p.short_ar || p.name_ar || "";
-  const IMPACT    = "Impact,Arial Black,sans-serif";
+  const NUMFONT   = "'El Messiri',Cairo,serif";
   const logoImgEl = cfg.logo_url
     ? `<img src="${cfg.logo_url}" style="height:100%;max-height:48mm;width:auto;max-width:46mm;object-fit:contain;flex-shrink:0;display:block;" />`
     : `<div style="height:100%;max-height:48mm;width:42mm;flex-shrink:0;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:88%;height:88%;" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
@@ -521,44 +521,43 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
         <!-- الصف العلوي: هوية الحملة -->
         <div style="height:55%;flex-shrink:0;background:#F8F2E4;border-bottom:2px solid ${accentColor};display:flex;align-items:center;gap:16pt;padding:6pt 16pt;">
           ${logoImgEl}
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
             <div style="font-size:34pt;font-weight:700;color:${primaryColor};line-height:1.05;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
-            <div style="display:flex;align-items:center;gap:10pt;flex-wrap:wrap;">
-              ${cfg.season_label ? `<span style="font-size:13pt;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;">${cfg.season_label}</span>` : ""}
-              ${cfg.season_label && cfg.admin_phone ? `<span style="color:${accentColor};font-size:14pt;">•</span>` : ""}
-              ${cfg.admin_phone ? `<span style="font-size:14pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${cfg.admin_phone}</span>` : ""}
-            </div>
+            ${cfg.admin_phone ? `<div style="font-size:15pt;font-weight:800;color:#241318;direction:ltr;text-align:right;font-family:Arial,sans-serif;line-height:1.3;letter-spacing:.5px;">${String(cfg.admin_phone).split(/[،,\/|]+/).map(t => t.trim()).filter(Boolean).join("<br>")}</div>` : ""}
+            ${cfg.season_label ? `<div style="font-size:13pt;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;line-height:1.2;">${cfg.season_label}</div>` : ""}
           </div>
         </div>
 
         <!-- الصف السفلي: بيانات الحاج -->
-        <div style="flex:1;padding:8pt 16pt;display:flex;flex-direction:column;justify-content:center;gap:4pt;min-height:0;">
-          <div>
-            <div style="font-size:15pt;font-weight:900;color:#1a0a10;line-height:1.25;font-family:Cairo,sans-serif;">${shortName}</div>
-            ${p.name_en ? `<div style="font-size:8.5pt;font-weight:600;color:#7A6570;direction:ltr;margin-top:1px;font-family:Arial,sans-serif;">${p.name_en}</div>` : ""}
+        <div style="flex:1;padding:9pt 16pt;display:flex;flex-direction:column;justify-content:center;gap:6pt;min-height:0;">
+          <div style="text-align:right;">
+            <div style="font-size:16pt;font-weight:900;color:#1a0a10;line-height:1.2;font-family:Cairo,sans-serif;">${shortName}</div>
+            ${p.name_en ? `<div style="font-size:9pt;font-weight:600;color:#7A6570;direction:ltr;text-align:right;margin-top:2px;font-family:Arial,sans-serif;">${p.name_en}</div>` : ""}
           </div>
-          <div style="display:flex;align-items:center;gap:7px;padding-top:3pt;border-top:1pt dashed #E8D5C4;">
-            <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:34px;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
-            <span style="font-size:11pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone || "—"}</span>
+          ${p.phone ? `<div style="display:flex;align-items:center;gap:8px;padding-top:5pt;border-top:1pt dashed #E8D5C4;">
+            <span style="font-size:9pt;font-weight:800;color:#8a6a10;flex-shrink:0;font-family:Cairo,sans-serif;">الهاتف</span>
+            <span style="font-size:12pt;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${p.phone}</span>
+          </div>` : ""}
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;${p.phone ? "" : "padding-top:5pt;border-top:1pt dashed #E8D5C4;"}">
+            <span style="font-size:9pt;font-weight:800;color:#8a6a10;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
+            <span style="font-size:11.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || companyName}</span>
+            ${cfg.hotel_address ? `<span style="color:${accentColor};font-size:10pt;">•</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span>` : ""}
           </div>
-          <div style="display:flex;align-items:center;gap:7px;">
-            <span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:34px;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
-            <span style="font-size:10.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || companyName}</span>
-          </div>
-          ${cfg.hotel_address ? `<div style="display:flex;align-items:flex-start;gap:7px;"><span style="font-size:8.5pt;font-weight:800;color:#8a6a10;min-width:34px;flex-shrink:0;font-family:Cairo,sans-serif;">العنوان</span><span style="font-size:9pt;font-weight:700;color:#555;line-height:1.3;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span></div>` : ""}
         </div>
       </div>
 
       <!-- الجانب الأيسر: الغرفة -->
-      <div style="width:26%;flex-shrink:0;background:${primaryColor};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12pt 8pt;gap:3px;">
-        <div style="font-size:9pt;font-weight:800;color:#F0C84A;letter-spacing:2px;font-family:Cairo,sans-serif;">الغرفة</div>
-        <div style="font-size:58pt;font-weight:900;color:#fff;line-height:1;font-family:${IMPACT};">${roomNo}</div>
-        <div style="font-size:10pt;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.15);padding:2px 10px;border-radius:99px;font-family:Cairo,sans-serif;">${roomFloor}</div>
-        <div style="font-size:14pt;font-weight:800;color:#F0C84A;margin-top:6px;font-family:${IMPACT};display:flex;gap:6px;align-items:center;">
+      <div style="width:26%;flex-shrink:0;background:${primaryColor};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10pt 8pt;gap:4px;">
+        <div style="font-size:13pt;font-weight:700;color:#F0C84A;letter-spacing:3px;font-family:'El Messiri',Cairo,serif;">الغرفة</div>
+        <div style="font-size:60pt;font-weight:700;color:#fff;line-height:1;font-family:${NUMFONT};">${roomNo}</div>
+        <div style="font-size:10.5pt;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.15);padding:2px 12px;border-radius:99px;font-family:Cairo,sans-serif;">${roomFloor}</div>
+        ${(busName || minaName) ? `
+        <div style="width:62%;height:1px;background:rgba(240,200,74,.35);margin:9px 0 7px;"></div>
+        <div style="font-size:19pt;font-weight:700;color:#F0C84A;font-family:${NUMFONT};display:flex;gap:11px;align-items:center;line-height:1.1;">
           ${busName ? `<span>باص ${busName}</span>` : ""}
-          ${busName && minaName ? `<span style="color:rgba(255,255,255,.4);font-size:15pt;font-family:Cairo,sans-serif;font-weight:400;">·</span>` : ""}
+          ${busName && minaName ? `<span style="color:rgba(255,255,255,.35);font-size:18pt;font-weight:400;">·</span>` : ""}
           ${minaName ? `<span>منى ${minaName}</span>` : ""}
-        </div>
+        </div>` : ""}
       </div>
     </div>`;
   return `<div style="width:210mm;height:297mm;background:#fff;display:block;font-family:Cairo,sans-serif;direction:rtl;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;" data-page="sticker">${stk()}${stk()}${stk()}</div>`;
