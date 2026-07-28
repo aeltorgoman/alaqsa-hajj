@@ -577,31 +577,47 @@ export function buildHandTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const hotelName = cfg.hotel_name || companyName;
   const hotelAddr = cfg.hotel_address || "";
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
+  const NUMFONT_H = "'El Messiri',Cairo,serif";
+  const phoneLines = String(cfg.admin_phone || "").split(/[،,\/|]+/).map(t => t.trim()).filter(Boolean);
   const logoEl = cfg.logo_url
-    ? `<img src="${cfg.logo_url}" style="width:68px;height:68px;object-fit:contain;border-radius:50%;border:2.5px solid ${accentColor};background:#F8F2E4;" />`
-    : `<div style="width:68px;height:68px;border-radius:50%;border:2.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
+    ? `<img src="${cfg.logo_url}" style="width:132px;height:132px;object-fit:contain;border-radius:50%;border:3.5px solid ${accentColor};background:#F8F2E4;padding:4px;" />`
+    : `<div style="width:132px;height:132px;border-radius:50%;border:3.5px solid ${accentColor};display:flex;align-items:center;justify-content:center;background:#F8F2E4;"><svg width="62" height="62" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.4"><path d="M12 2l2.4 4.8L19.5 8l-3.5 4 .7 5.5L12 15l-4.7 2.5.7-5.5-3.5-4 5.1-1.2z"/></svg></div>`;
   const strip = () => `
     <div style="width:70mm;height:297mm;border-left:2px dashed #E8D5C4;position:relative;overflow:hidden;background:#fff;box-sizing:border-box;flex-shrink:0;">
       <div style="position:absolute;inset:5px;border:2px solid ${primaryColor};border-radius:8px;pointer-events:none;z-index:2;"></div>
       <div style="position:absolute;inset:8px;border:1px solid ${accentColor};border-radius:5px;opacity:.55;pointer-events:none;z-index:2;"></div>
       <div style="position:absolute;width:297mm;height:70mm;top:113.5mm;left:-113.5mm;transform:rotate(-90deg);transform-origin:center center;display:flex;flex-direction:row;align-items:stretch;direction:rtl;">
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 16px;flex-shrink:0;min-width:95mm;">
-          <div style="font-size:13px;font-weight:800;color:#8a6a10;font-family:Cairo,sans-serif;">الغرفة</div>
-          <div style="font-size:98px;font-weight:900;color:${primaryColor};line-height:1;font-family:Cairo,sans-serif;">${roomNo}</div>
-          <div style="font-size:12px;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 14px;margin-top:4px;white-space:nowrap;font-family:Cairo,sans-serif;">${roomFloor}${busName ? ` · باص ${busName}` : ""}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:12px 16px;flex-shrink:0;min-width:95mm;">
+          <div style="font-size:19px;font-weight:700;color:#8a6a10;letter-spacing:4px;font-family:${NUMFONT_H};">الغرفة</div>
+          <div style="font-size:104px;font-weight:700;color:${primaryColor};line-height:1;font-family:${NUMFONT_H};">${roomNo}</div>
+          ${roomFloor ? `<div style="font-size:13px;font-weight:800;color:#241318;background:rgba(125,31,60,.08);border-radius:99px;padding:3px 16px;white-space:nowrap;font-family:Cairo,sans-serif;">${roomFloor}</div>` : ""}
+          ${(busName || minaName) ? `
+          <div style="width:55%;height:1.5px;background:${accentColor};opacity:.4;margin:8px 0 6px;"></div>
+          <div style="font-size:26px;font-weight:700;color:${primaryColor};font-family:${NUMFONT_H};display:flex;gap:12px;align-items:center;white-space:nowrap;">
+            ${busName ? `<span>باص ${busName}</span>` : ""}
+            ${busName && minaName ? `<span style="color:${accentColor};font-size:24px;font-weight:400;">·</span>` : ""}
+            ${minaName ? `<span>منى ${minaName}</span>` : ""}
+          </div>` : ""}
         </div>
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 12px;border-left:2px solid #E8D5C4;border-right:2px solid #E8D5C4;background:#F8F2E4;">
-          <div style="font-size:16px;font-weight:900;color:#241318;text-align:center;line-height:1.4;white-space:nowrap;font-family:Cairo,sans-serif;">${handShort}</div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:14px 14px;border-left:2px solid #E8D5C4;border-right:2px solid #E8D5C4;background:#F8F2E4;">
+          <div style="font-size:32px;font-weight:900;color:#241318;text-align:center;line-height:1.2;white-space:nowrap;font-family:Cairo,sans-serif;">${handShort}</div>
+          ${p.name_en ? `<div style="font-size:13px;font-weight:600;color:#7A6570;direction:ltr;text-align:center;white-space:nowrap;font-family:Arial,sans-serif;margin-top:-5px;">${p.name_en}</div>` : ""}
           <div style="width:80%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
-          <div style="font-size:14px;font-weight:700;color:#241318;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelName}</div>
-          ${hotelAddr ? `<div style="font-size:11px;font-weight:600;color:#7A6570;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelAddr}</div>` : ""}
-          ${busName ? `<div style="font-size:13px;font-weight:800;color:${primaryColor};background:rgba(125,31,60,.08);border:1.5px solid rgba(125,31,60,.25);border-radius:99px;padding:3px 14px;white-space:nowrap;font-family:Cairo,sans-serif;">باص ${busName}${minaName ? ` · منى ${minaName}` : ""}</div>` : ""}
+          ${p.phone ? `<div style="font-size:18px;font-weight:800;color:#241318;direction:ltr;text-align:center;white-space:nowrap;font-family:Arial,sans-serif;">${p.phone}</div>` : ""}
+          <div style="display:flex;align-items:baseline;gap:9px;justify-content:center;white-space:nowrap;">
+            <span style="font-size:24px;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${hotelName}</span>
+            ${hotelAddr ? `<span style="color:${accentColor};font-size:16px;">•</span><span style="font-size:15px;font-weight:600;color:#7A6570;font-family:Cairo,sans-serif;">${hotelAddr}</span>` : ""}
+          </div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 10px;flex-shrink:0;min-width:75mm;">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;padding:12px 12px;flex-shrink:0;min-width:82mm;">
           ${logoEl}
-          <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:19px;font-weight:700;color:${primaryColor};text-align:center;line-height:1.3;white-space:nowrap;">${companyName}</div>
-          <div style="font-size:11px;font-weight:700;color:#8a6a10;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${cfg.season_label || ""}</div>
-          <div style="font-size:11px;font-weight:800;color:#241318;direction:ltr;white-space:nowrap;font-family:Cairo,sans-serif;">${cfg.admin_phone || ""}</div>
+          <div style="font-family:${NUMFONT_H};font-size:40px;font-weight:700;color:${primaryColor};text-align:center;line-height:1.1;white-space:nowrap;">${companyName}</div>
+          ${(phoneLines.length || cfg.season_label) ? `
+          <div style="display:flex;align-items:center;gap:10px;justify-content:center;white-space:nowrap;padding-top:3px;border-top:1.5px solid rgba(212,160,23,.35);width:82%;justify-content:center;margin-top:2px;">
+            ${phoneLines.length ? `<span style="font-size:15px;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${phoneLines.join(" · ")}</span>` : ""}
+            ${phoneLines.length && cfg.season_label ? `<span style="color:${accentColor};font-size:13px;">•</span>` : ""}
+            ${cfg.season_label ? `<span style="font-size:14px;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;">${cfg.season_label}</span>` : ""}
+          </div>` : ""}
         </div>
       </div>
     </div>`;
