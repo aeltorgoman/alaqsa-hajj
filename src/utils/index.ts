@@ -604,10 +604,8 @@ export function buildHandTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
           ${p.name_en ? `<div style="font-size:13px;font-weight:600;color:#7A6570;direction:ltr;text-align:center;white-space:nowrap;font-family:Arial,sans-serif;margin-top:-5px;">${p.name_en}</div>` : ""}
           <div style="width:80%;height:1.5px;background:linear-gradient(90deg,transparent,${accentColor},transparent);"></div>
           ${p.phone ? `<div style="font-size:18px;font-weight:800;color:#241318;direction:ltr;text-align:center;white-space:nowrap;font-family:Arial,sans-serif;">${p.phone}</div>` : ""}
-          <div style="display:flex;align-items:baseline;gap:9px;justify-content:center;white-space:nowrap;">
-            <span style="font-size:24px;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${hotelName}</span>
-            ${hotelAddr ? `<span style="color:${accentColor};font-size:16px;">•</span><span style="font-size:15px;font-weight:600;color:#7A6570;font-family:Cairo,sans-serif;">${hotelAddr}</span>` : ""}
-          </div>
+          <div style="font-size:24px;font-weight:800;color:#241318;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;">${hotelName}</div>
+          ${hotelAddr ? `<div style="font-size:15px;font-weight:600;color:#7A6570;text-align:center;white-space:nowrap;font-family:Cairo,sans-serif;margin-top:-4px;">${hotelAddr}</div>` : ""}
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;padding:12px 12px;flex-shrink:0;min-width:82mm;">
           ${logoEl}
