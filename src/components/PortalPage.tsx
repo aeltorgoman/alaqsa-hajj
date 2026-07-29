@@ -1,16 +1,26 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { AlertModal, useAlert, useConfirm, ConfirmModal } from "./AlertModal";
+import { DeliveryReportModal } from "./DeliveryReportModal";
 import type { User } from "../types";
 import { btnP, btnS, inp } from "../utils";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
-   التبويب الأول: التنبيهات (فورية ومجدولة، بأولويات وصلاحية)
+   التبويب الأول: التنبيهات (فورية ومجدولة، بأولويات وصلاحية واستهداف)
    التبويب الثاني: إعدادات البوابة (إداري الحملة + مفاتيح التشغيل)
    ═══════════════════════════════════════════════════════════════ */
 
-type Announcement = { id: number; body: string; priority: string; show_at: string; expires_at: string | null; created_by: string | null; created_at: string };
+type Announcement = { id: number; title: string | null; body: string; priority: string; show_at: string; expires_at: string | null; created_by: string | null; created_at: string; target_type?: string | null; target_ids?: number[] | null; push_sent_at?: string | null };
+
+type Target = { id: number; name: string };
+
+const TARGET_KINDS = [
+  { key: "all", label: "جميع الحجاج" },
+  { key: "bus", label: "حسب الباص" },
+  { key: "camp_mina", label: "مخيم منى" },
+  { key: "camp_arafa", label: "مخيم عرفة" },
+];
 
 const PRIORITIES = [
   { key: "عاجل", color: "var(--primary)", txt: "var(--text-inverse)" },
@@ -38,8 +48,17 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
   /* ─── التنبيهات ─── */
   const [items, setItems] = useState<Announcement[]>([]);
+  const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [priority, setPriority] = useState("عام");
+  const [targetKind, setTargetKind] = useState("all");
+  const [targetIds, setTargetIds] = useState<number[]>([]);
+  const [buses, setBuses] = useState<Target[]>([]);
+  const [minaCamps, setMinaCamps] = useState<Target[]>([]);
+  const [arafaCamps, setArafaCamps] = useState<Target[]>([]);
+  const [audienceCount, setAudienceCount] = useState(0);
+  const [enabledCount, setEnabledCount] = useState(0);
+  const [reportFor, setReportFor] = useState<Announcement | null>(null);
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [showAt, setShowAt] = useState(() => toLocalInput(new Date(Date.now() + 3600000)));
   const [duration, setDuration] = useState("24h");
@@ -60,8 +79,50 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ─── قوائم الاستهداف ─── */
+  useEffect(() => {
+    (async () => {
+      const [{ data: bs }, { data: cs }] = await Promise.all([
+        supabase.from("buses").select("id,name").order("id"),
+        supabase.from("camps").select("id,name,page_type").order("id"),
+      ]);
+      if (bs) setBuses(bs as Target[]);
+      if (cs) {
+        const all = cs as { id: number; name: string; page_type: string | null }[];
+        setMinaCamps(all.filter(c => c.page_type === "منى").map(c => ({ id: c.id, name: c.name })));
+        setArafaCamps(all.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, name: c.name })));
+      }
+    })();
+  }, []);
+
+  /* ─── حساب عدد المستهدفين والمفعّلين ─── */
+  useEffect(() => {
+    (async () => {
+      const { data: aud } = await supabase.rpc("announcement_audience" as any, {
+        p_target_type: targetKind,
+        p_target_ids: targetIds,
+      } as any);
+      const ids: number[] = ((aud as any[]) || []).map(r => r.passenger_id);
+      setAudienceCount(ids.length);
+
+      const { data: en } = await supabase.rpc("push_enabled_passengers" as any);
+      const enabled = new Set(((en as any[]) || []).map(r => r.passenger_id));
+      setEnabledCount(ids.filter(id => enabled.has(id)).length);
+    })();
+  }, [targetKind, targetIds]);
+
+  const targetOptions = targetKind === "bus" ? buses
+    : targetKind === "camp_mina" ? minaCamps
+    : targetKind === "camp_arafa" ? arafaCamps
+    : [];
+
+  function toggleTarget(id: number) {
+    setTargetIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
   async function send() {
     if (!body.trim()) { showAlert("warning", "يرجى كتابة نص التنبيه."); return; }
+    if (targetKind !== "all" && targetIds.length === 0) { showAlert("warning", "يرجى اختيار جهة واحدة على الأقل، أو تحديد جميع الحجاج."); return; }
     const show = when === "now" ? new Date() : new Date(showAt);
     let expires: Date | null = null;
     const dur = DURATIONS.find(d => d.key === duration)!;
@@ -69,16 +130,44 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     else if (dur.ms > 0) expires = new Date(show.getTime() + dur.ms);
     if (expires && expires <= show) { showAlert("warning", "وقت الانتهاء يجب أن يكون بعد وقت الظهور."); return; }
     setSending(true);
-    const { error } = await supabase.from("announcements").insert({
+    const { data: created, error } = await (supabase.from("announcements") as any).insert({
+      title: title.trim() || null,
       body: body.trim(), priority,
       show_at: show.toISOString(),
       expires_at: expires ? expires.toISOString() : null,
       created_by: currentUser.name,
-    });
+      target_type: targetKind,
+      target_ids: targetKind === "all" ? [] : targetIds,
+    }).select("id").single();
+    if (error || !created) {
+      setSending(false);
+      showAlert("error", "تعذر إرسال التنبيه، يرجى المحاولة مرة أخرى.");
+      return;
+    }
+
+    /* التنبيه محفوظ الآن ولن يضيع، ودفعه إلى الأجهزة طبقة إضافية فوقه */
+    let pushNote = "";
+    if (when === "now") {
+      try {
+        const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
+          body: { announcement_id: created.id },
+        });
+        if (fnErr || (res as any)?.error) {
+          pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
+        } else {
+          const r = res as { sent: number; disabled: number };
+          pushNote = ` وصل إلى ${r.sent} من الأجهزة المفعّلة.`;
+          if (r.disabled > 0) pushNote += ` و${r.disabled} من الحجاج غير مفعّلين، وسيرونه عند فتح البوابة.`;
+        }
+      } catch {
+        pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
+      }
+    }
+
     setSending(false);
-    if (error) { showAlert("error", "تعذر إرسال التنبيه، يرجى المحاولة مرة أخرى."); return; }
-    showAlert("success", when === "now" ? "تم إرسال التنبيه، وسيظهر للحجاج فوراً." : "تمت جدولة التنبيه بنجاح.");
-    setBody(""); setPriority("عام"); setWhen("now"); setDuration("24h");
+    showAlert("success", (when === "now" ? "تم إرسال التنبيه." : "تمت جدولة التنبيه بنجاح.") + pushNote);
+    setTitle(""); setBody(""); setPriority("عام"); setWhen("now"); setDuration("24h");
+    setTargetKind("all"); setTargetIds([]);
     load();
   }
 
@@ -183,13 +272,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
           </span>
           {a.created_by && <span style={{ fontSize: 10, color: "var(--text-muted)", marginInlineStart: "auto" }}>{a.created_by}</span>}
         </div>
-        <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600, marginTop: 7, lineHeight: 1.9 }}>{a.body}</div>
-        {kind !== "ended" && (
-          <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
-            {kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
-            <button onClick={() => removeItem(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>
-          </div>
-        )}
+        {a.title && <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 800, marginTop: 7 }}>{a.title}</div>}
+        <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600, marginTop: a.title ? 3 : 7, lineHeight: 1.9 }}>{a.body}</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
+          {kind !== "ended" && kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
+          {kind !== "ended" && <button onClick={() => removeItem(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>}
+          {a.push_sent_at && <button onClick={() => setReportFor(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
+        </div>
       </div>
     );
   };
@@ -206,6 +295,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+      {reportFor && (
+        <DeliveryReportModal
+          announcementId={reportFor.id}
+          announcementBody={reportFor.title || reportFor.body}
+          onClose={() => setReportFor(null)}
+        />
+      )}
 
       {/* رأس الصفحة */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
@@ -232,6 +328,40 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       {tab === "alerts" && <>
         {/* صندوق الإرسال */}
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 8 }}>
+          {/* الاستهداف */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>المستهدفون</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {TARGET_KINDS.map(k => (
+                <button key={k.key} onClick={() => { setTargetKind(k.key); setTargetIds([]); }}
+                  style={{ border: targetKind === k.key ? "2px solid var(--primary)" : "1px solid var(--border)", background: targetKind === k.key ? "var(--primary)" : "var(--bg-card)", color: targetKind === k.key ? "var(--text-inverse)" : "var(--text-main)", borderRadius: 99, fontSize: 11.5, fontWeight: 800, padding: "5px 15px", cursor: "pointer", fontFamily: "inherit" }}>
+                  {k.label}
+                </button>
+              ))}
+            </div>
+            {targetOptions.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>
+                {targetOptions.map(o => {
+                  const on = targetIds.includes(o.id);
+                  return (
+                    <button key={o.id} onClick={() => toggleTarget(o.id)}
+                      style={{ border: on ? "1.5px solid var(--primary)" : "1px solid var(--border)", background: on ? "var(--bg-hover)" : "var(--bg-card)", color: on ? "var(--primary)" : "var(--text-muted)", borderRadius: "var(--radius-md)", fontSize: 11.5, fontWeight: on ? 800 : 600, padding: "5px 13px", cursor: "pointer", fontFamily: "inherit" }}>
+                      {on ? "✓ " : ""}{o.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 9, lineHeight: 1.8 }}>
+              سيصل التنبيه إلى <b style={{ color: "var(--text-main)" }}>{audienceCount}</b> من الحجاج،
+              منهم <b style={{ color: "var(--primary)" }}>{enabledCount}</b> مفعّلون للإشعارات على أجهزتهم.
+              {audienceCount > enabledCount && " والبقية سيرون التنبيه عند فتح البوابة."}
+            </div>
+          </div>
+
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="عنوان التنبيه (يظهر على شاشة جوال الحاج)"
+            style={{ ...inp, width: "100%", boxSizing: "border-box", marginBottom: 8 }} />
+
           <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="اكتب نص التنبيه الذي سيظهر للحجاج..." rows={3}
             style={{ ...inp, width: "100%", resize: "vertical", lineHeight: 1.9, boxSizing: "border-box" }} />
 
