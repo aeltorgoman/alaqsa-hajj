@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { NAV } from "./utils";
 import type { Passenger, User } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
@@ -19,6 +20,10 @@ import { AdminsPage } from "./components/AdminsPage";
 import { PortalPage } from "./components/PortalPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/LoadingSpinner";
+
+const PAGE_PERMS: Record<string, string> = Object.fromEntries(
+  NAV.flatMap(s => s.items).filter(it => it.perm).map(it => [it.id, it.perm])
+);
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -103,6 +108,15 @@ export default function App() {
   const isFull = FULL_PAGES.includes(page);
 
   const renderPage = () => {
+    const required = PAGE_PERMS[page];
+    if (required && !currentUser.permissions?.[required]) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: "var(--text-muted)" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>لا تملك صلاحية الوصول لهذه الصفحة</div>
+          <div style={{ fontSize: 12 }}>يرجى مراجعة مدير النظام</div>
+        </div>
+      );
+    }
     switch (page) {
       case "dash":       return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} onAddManual={() => { setGlobalShowManual(true); (window as any).__hajj_scan_return_dash__ = true; setPage("passengers"); }} onScan={(file) => { (window as any).__hajj_pending_scan_file__ = file; (window as any).__hajj_scan_return_dash__ = true; setPage("passengers"); }} />;
       case "passengers": return <PassengersPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} globalShowManual={globalShowManual} onGlobalManualClose={() => setGlobalShowManual(false)} />;

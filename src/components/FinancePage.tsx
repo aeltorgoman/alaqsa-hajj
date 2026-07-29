@@ -67,6 +67,12 @@ function fmtAmt(n: number): string {
   return n.toLocaleString("ar-QA", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+function esc(str: string | null | undefined): string {
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, ch => HTML_ESCAPES[ch]);
+}
+
 function financeStatus(due: number, paid: number) {
   if (paid >= due && due > 0) return { label: "مسدد",    color: "var(--success)", bg: "var(--success-bg)" };
   if (paid > 0)               return { label: "جزئي",    color: "var(--warning)", bg: "var(--warning-bg)" };
@@ -178,7 +184,7 @@ function makeReceiptHTML(
     </div>
   </div>
   <div class="receipt-body">
-    <div class="passenger-name">${passengerName}</div>
+    <div class="passenger-name">${esc(passengerName)}</div>
     <div class="amount-box">
       <div class="amount-label">المبلغ المستلم</div>
       <div class="amount-value">${fmtAmt(Number(payment.amount))}</div>
@@ -186,10 +192,10 @@ function makeReceiptHTML(
     </div>
     <div class="details-grid">
       <div class="detail-label">التاريخ:</div>
-      <div class="detail-value">${payment.payment_date}</div>
+      <div class="detail-value">${esc(payment.payment_date)}</div>
       <div class="detail-label">طريقة الدفع:</div>
-      <div class="detail-value">${payment.method}</div>
-      ${payment.notes ? `<div class="detail-label">ملاحظات:</div><div class="detail-value">${payment.notes}</div>` : ""}
+      <div class="detail-value">${esc(payment.method)}</div>
+      ${payment.notes ? `<div class="detail-label">ملاحظات:</div><div class="detail-value">${esc(payment.notes)}</div>` : ""}
     </div>
     <div class="receipt-footer">
       <div class="stamp-area">
@@ -234,12 +240,12 @@ function makePassengerStatementHTML(
   if (s.bus==="VIP")         rows+=`<tr><td class="bayan">باص VIP</td><td class="debit">${fmtAmt(pricing["addon_bus_vip"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if ((p as any).flight_class==="درجة أولى") rows+=`<tr class="alt"><td class="bayan">طيران درجة أولى</td><td class="debit">${fmtAmt(pricing["addon_first_class"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if ((p as any).flight_class==="بدون")      rows+=`<tr><td class="bayan">خصم بدون تذكرة <span class="badge-disc">خصم</span></td><td class="debit disc">(${fmtAmt(pricing["discount_no_ticket"]?.amount||0)})</td><td class="credit">—</td></tr>`;
-  pCustom.forEach((c, i) => { rows+=`<tr${i%2===0?" class='alt'":""}><td class="bayan"><span class="badge-${c.type==="إضافة"?"add":"disc"}">${c.type==="إضافة"?"بند خاص":"خصم خاص"}</span> ${c.description}${c.notes?` <span class="note">(${c.notes})</span>`:""}</td><td class="${c.type==="إضافة"?"debit":"debit disc"}">${c.type==="إضافة"?fmtAmt(c.amount):`(${fmtAmt(c.amount)})`}</td><td class="credit">—</td></tr>`; });
-  pPayments.forEach((py, i) => { rows+=`<tr class="pay-row${i%2===0?" alt":""}"><td class="bayan">دفعة — ${py.payment_date} <span class="method">(${py.method})</span>${py.notes?` — <span class="note">${py.notes}</span>`:""}</td><td class="debit">—</td><td class="credit paid">${fmtAmt(py.amount)}</td></tr>`; });
+  pCustom.forEach((c, i) => { rows+=`<tr${i%2===0?" class='alt'":""}><td class="bayan"><span class="badge-${c.type==="إضافة"?"add":"disc"}">${c.type==="إضافة"?"بند خاص":"خصم خاص"}</span> ${esc(c.description)}${c.notes?` <span class="note">(${esc(c.notes)})</span>`:""}</td><td class="${c.type==="إضافة"?"debit":"debit disc"}">${c.type==="إضافة"?fmtAmt(c.amount):`(${fmtAmt(c.amount)})`}</td><td class="credit">—</td></tr>`; });
+  pPayments.forEach((py, i) => { rows+=`<tr class="pay-row${i%2===0?" alt":""}"><td class="bayan">دفعة — ${esc(py.payment_date)} <span class="method">(${esc(py.method)})</span>${py.notes?` — <span class="note">${esc(py.notes)}</span>`:""}</td><td class="debit">—</td><td class="credit paid">${fmtAmt(py.amount)}</td></tr>`; });
 
   const addonsList = [s.hotel_view==="مطلة"?"مطلة":"", s.camp_mina==="خاص"?"منى خاص":"", s.camp_arafa==="خاص"?"عرفة خاص":"", s.bus==="VIP"?"VIP":"", (p as any).flight_class==="درجة أولى"?"درجة أولى":"", (p as any).flight_class==="بدون"?"بدون تذكرة":""].filter(Boolean).join(" · ");
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب — ${p.short_ar||p.name_ar}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب — ${esc(p.short_ar||p.name_ar)}</title>
 <style>
   @page { size: A4 portrait; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
@@ -290,7 +296,7 @@ function makePassengerStatementHTML(
   </div>
 </div>
 <div class="title-bar">كشف حساب</div>
-<div class="passenger-name">${p.short_ar||p.name_ar}</div>
+<div class="passenger-name">${esc(p.short_ar||p.name_ar)}</div>
 <div class="passenger-sub">${priceInfo.label}${addonsList?" &nbsp;·&nbsp; "+addonsList:""}</div>
 <div class="summary">
   <div class="sum-card card-due"><div class="sum-label">المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(totalDue)}</div><div class="sum-cur">ر.ق</div></div>
@@ -328,11 +334,11 @@ function makeGroupStatementHTML(
     const bal  = due - paid;
     const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
     const priceInfo = getPriceInfo(p.services, pricing);
-    const payRows = pPays.map(py => `<tr style="background:#f0faf8"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:13px;padding-right:32px">دفعة — ${py.payment_date} <span style="color:#888;font-size:12px">(${py.method})</span>${py.notes?` — ${py.notes}`:""}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;font-size:13px">—</td><td style="text-align:center;border:1px solid #e8e8e8;color:#2A9D8F;font-weight:700;font-size:14px">${fmtAmt(py.amount)}</td></tr>`).join("");
+    const payRows = pPays.map(py => `<tr style="background:#f0faf8"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:13px;padding-right:32px">دفعة — ${esc(py.payment_date)} <span style="color:#888;font-size:12px">(${esc(py.method)})</span>${py.notes?` — ${esc(py.notes)}`:""}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;font-size:13px">—</td><td style="text-align:center;border:1px solid #e8e8e8;color:#2A9D8F;font-weight:700;font-size:14px">${fmtAmt(py.amount)}</td></tr>`).join("");
     return `
     <div style="margin-bottom:20px;border:1.5px solid ${primaryColor}30;border-radius:10px;overflow:hidden;">
       <div style="background:${primaryColor}12;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${primaryColor}20">
-        <div style="font-size:17px;font-weight:800;color:${primaryColor}">${i+1}. ${p.short_ar||p.name_ar}</div>
+        <div style="font-size:17px;font-weight:800;color:${primaryColor}">${i+1}. ${esc(p.short_ar||p.name_ar)}</div>
         <div style="font-size:13px;color:#666">${priceInfo.label||""}</div>
         <div style="display:flex;gap:16px;font-size:13px">
           <span>مطلوب: <strong style="color:${primaryColor}">${fmtAmt(due)}</strong></span>
@@ -348,7 +354,7 @@ function makeGroupStatementHTML(
     </div>`;
   }).join("");
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب مجموعة — ${group.name}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب مجموعة — ${esc(group.name)}</title>
 <style>
   @page { size: A4 portrait; margin: 14mm 12mm; }
   * { box-sizing: border-box; }
@@ -373,7 +379,7 @@ function makeGroupStatementHTML(
   <div style="text-align:left;font-size:12px;color:#999">تاريخ الإصدار: ${dateStr}</div>
 </div>
 <div class="title-bar">كشف حساب مجموعة</div>
-<div style="text-align:center;font-size:24px;font-weight:900;color:${primaryColor};margin:6px 0 4px">${group.name}</div>
+<div style="text-align:center;font-size:24px;font-weight:900;color:${primaryColor};margin:6px 0 4px">${esc(group.name)}</div>
 <div style="text-align:center;font-size:13px;color:#888;margin-bottom:14px">${gPassengers.length} أعضاء</div>
 <div class="summary">
   <div class="sum-card" style="background:${primaryColor}08;border-color:${primaryColor}"><div class="sum-label">إجمالي المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(gTotDue)}</div><div class="sum-cur">ر.ق</div></div>
@@ -382,7 +388,7 @@ function makeGroupStatementHTML(
   <div class="sum-card" style="background:#E8951A10;border-color:#E8951A"><div class="sum-label">عدد الأعضاء</div><div class="sum-val" style="color:#E8951A">${gPassengers.length}</div><div class="sum-cur">حاج</div></div>
 </div>
 ${memberRows}
-<div class="footer">${companyName}${tagline?" — "+tagline:""} · كشف حساب مجموعة — ${group.name}</div>
+<div class="footer">${companyName}${tagline?" — "+tagline:""} · كشف حساب مجموعة — ${esc(group.name)}</div>
 </body></html>`;
 }
 
@@ -396,6 +402,7 @@ ${memberRows}
 export function FinancePage({ passengers, currentUser }: { passengers: Passenger[]; currentUser: User }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const canManage = !!currentUser.permissions?.manage_payments;
 
   const [subView, setSubView]     = useState<"list"|"detail"|"settings"|"reports"|"group">("list");
   const [selectedP, setSelectedP] = useState<Passenger | null>(null);
@@ -502,7 +509,14 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
     setLoading(false);
   }
 
+  function requireManage(): boolean {
+    if (canManage) return true;
+    showAlert("error", "لا تملك صلاحية إجراء عمليات مالية");
+    return false;
+  }
+
   async function savePricing() {
+    if (!requireManage()) return;
     setSavingPricing(true);
     for (const key of Object.keys(editPricing)) {
       await supabase.from("pricing_settings").update({ amount:Number(editPricing[key]), updated_at:new Date().toISOString() }).eq("key",key);
@@ -513,9 +527,10 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function saveCustomPrice() {
-    if (!selectedP) return;
+    if (!selectedP || !requireManage()) return;
+    const amt = Number(customPriceInput);
+    if (!Number.isFinite(amt) || amt < 0) { showAlert("warning", "يرجى إدخال مبلغ صحيح غير سالب"); return; }
     setSavingCustomPrice(true);
-    const amt = Number(customPriceInput) || 0;
     const newServices = { ...selectedP.services, custom_price: String(amt) };
     const { error } = await supabase.from("passengers").update({ custom_price: amt }).eq("id", selectedP.id);
     if (!error) {
@@ -529,9 +544,11 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function addPayment() {
-    if (!selectedP || !payForm.amount) return;
+    if (!selectedP || !payForm.amount || !requireManage()) return;
+    const amt = Number(payForm.amount);
+    if (!Number.isFinite(amt) || amt <= 0) { showAlert("warning", "يرجى إدخال مبلغ أكبر من صفر"); return; }
     setSavingPay(true);
-    const rec = { passenger_id:selectedP.id, amount:Number(payForm.amount), payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:(currentUser as any).username||"" };
+    const rec = { passenger_id:selectedP.id, amount:amt, payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:(currentUser as any).username||"" };
     const { data, error } = await supabase.from("payments").insert(rec).select().single();
     if (!error && data) {
       setPayments(prev => [data as Payment, ...prev]);
@@ -544,22 +561,25 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function deletePayment(id: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذه الدفعة؟")) return;
     await supabase.from("payments").delete().eq("id",id);
     setPayments(prev => prev.filter(p => p.id !== id));
   }
 
   async function addCustomCharge() {
-    const errs = { description: !chargeForm.description.trim(), amount: !chargeForm.amount };
+    const amt = Number(chargeForm.amount);
+    const errs = { description: !chargeForm.description.trim(), amount: !chargeForm.amount || !Number.isFinite(amt) || amt <= 0 };
     setChargeErrors(errs);
-    if (!selectedP || errs.description || errs.amount) return;
+    if (!selectedP || errs.description || errs.amount || !requireManage()) return;
     setSavingCharge(true);
-    const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount:Number(chargeForm.amount), type:chargeType, notes:chargeForm.notes, created_by:(currentUser as any).username||"" }).select().single();
+    const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount:amt, type:chargeType, notes:chargeForm.notes, created_by:(currentUser as any).username||"" }).select().single();
     if (!error && data) { setCustomCharges(prev => [...prev, data as CustomCharge]); setShowChargeModal(false); setChargeForm({ description:"", amount:"", notes:"" }); }
     setSavingCharge(false);
   }
 
   async function deleteCustomCharge(id: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذا البند؟")) return;
     await supabase.from("custom_charges").delete().eq("id",id);
     setCustomCharges(prev => prev.filter(c => c.id !== id));
@@ -577,7 +597,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function createGroupAndAdd() {
-    if (!selectedP || !groupForm.name.trim()) return;
+    if (!selectedP || !groupForm.name.trim() || !requireManage()) return;
     setSavingGroup(true);
     const { data:grp, error:ge } = await supabase.from("financial_groups").insert({ name:groupForm.name.trim(), notes:groupForm.notes, created_by:(currentUser as any).username||"" }).select().single();
     if (!ge && grp) {
@@ -592,7 +612,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function addMemberToGroup(groupId: number, passengerId: number) {
-    if (addingMemberId === passengerId) return;
+    if (addingMemberId === passengerId || !requireManage()) return;
     const existing = groupMembers.find(m => m.group_id === groupId && m.passenger_id === passengerId);
     if (existing) return;
     setAddingMemberId(passengerId);
@@ -606,12 +626,14 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function removeFromGroup(passengerId: number, groupId: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" })) return;
     await supabase.from("financial_group_members").delete().eq("group_id",groupId).eq("passenger_id",passengerId);
     setGroupMembers(prev => prev.filter(m => !(m.group_id===groupId && m.passenger_id===passengerId)));
   }
 
   async function deleteGroup(groupId: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذه المجموعة؟", { title: "حذف مجموعة" })) return;
     await supabase.from("financial_groups").delete().eq("id",groupId);
     setGroups(prev => prev.filter(g => g.id !== groupId));
@@ -620,18 +642,23 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   async function addGroupPayment() {
-    if (!selectedGroup || !groupPayForm.amount) return;
+    if (!selectedGroup || !groupPayForm.amount || !requireManage()) return;
     const members = getGroupPassengers(selectedGroup.id);
     if (members.length === 0) return;
+    const total = Number(groupPayForm.amount);
+    if (!Number.isFinite(total) || total <= 0) { showAlert("warning", "يرجى إدخال مبلغ أكبر من صفر"); return; }
     setSavingGroupPay(true);
-    const perPerson = Math.round((Number(groupPayForm.amount) / members.length) * 100) / 100;
-    const inserts = members.map(p => ({ passenger_id:p.id, amount:perPerson, payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:(currentUser as any).username||"" }));
+    // نوزّع بالقروش ثم نعطي الفروقات المتبقية للأعضاء الأوائل حتى يساوي المجموع المبلغ المُدخل بالضبط
+    const totalCents = Math.round(total * 100);
+    const baseCents = Math.floor(totalCents / members.length);
+    const remainder = totalCents - baseCents * members.length;
+    const inserts = members.map((p, i) => ({ passenger_id:p.id, amount:(baseCents + (i < remainder ? 1 : 0)) / 100, payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:(currentUser as any).username||"" }));
     const { data, error } = await supabase.from("payments").insert(inserts).select();
     if (!error && data) {
       setPayments(prev => [...(data as Payment[]), ...prev]);
       setShowGroupPayModal(false);
       setGroupPayForm({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
-      showAlert("success", `تم توزيع ${fmtAmt(Number(groupPayForm.amount))} ر.ق على ${members.length} أعضاء (${fmtAmt(perPerson)} ر.ق للفرد)`);
+      showAlert("success", `تم توزيع ${fmtAmt(total)} ر.ق على ${members.length} أعضاء (${fmtAmt(baseCents / 100)} ر.ق للفرد${remainder ? " تقريباً" : ""})`);
     }
     setSavingGroupPay(false);
   }
@@ -669,8 +696,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         const idx = i + j;
         return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
           <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
-          <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${r.p.short_ar||r.p.name_ar}</td>
-          <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${getPriceInfo(r.p.services, pricing).label.replace("باقة ","")}</td>
+          <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${esc(r.p.short_ar||r.p.name_ar)}</td>
+          <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${esc(getPriceInfo(r.p.services, pricing).label.replace("باقة ",""))}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${r.balance>0?"var(--danger)":"var(--success)"};font-weight:700">${fmtAmt(r.balance)}</td>
@@ -740,11 +767,11 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         const idx = i + j;
         return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
           <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
-          <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${p?(p.short_ar||p.name_ar):"—"}</td>
-          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${py.payment_date}</td>
-          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${py.method}</td>
+          <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${p?esc(p.short_ar||p.name_ar):"—"}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${esc(py.payment_date)}</td>
+          <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${esc(py.method)}</td>
           <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
-          <td style="font-size:9pt;padding:0 6pt;height:${ROW_H};color:#888">${py.notes||"—"}</td>
+          <td style="font-size:9pt;padding:0 6pt;height:${ROW_H};color:#888">${py.notes?esc(py.notes):"—"}</td>
         </tr>`;
       }).join("");
       const totRow = isLast ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
@@ -758,7 +785,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
   }
 
   function printPackagesReport() {
-    const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>p.services.hotel_type!=="خاص"&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[pk.label,String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
+    const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>p.services.hotel_type!=="خاص"&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
     const specialPassengers = passengers.filter(p=>p.services.hotel_type==="خاص");
     if (specialPassengers.length>0) {
       const specialTotal = specialPassengers.reduce((s,p)=>s+(Number((p.services as any).custom_price)||0),0);
@@ -769,7 +796,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
 
   function printAddonsReport() {
     const checks=[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>(p as any).flight_class==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>(p as any).flight_class==="بدون"}];
-    const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[pricing[a.key]?.label||a.key,String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
+    const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[esc(pricing[a.key]?.label||a.key),String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
     printInPage(makeFinanceHTML("ملخص الإضافات",printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"],rows),false,logoUrl,companyName,tagline,primaryColor,accentColor));
   }
 
@@ -921,7 +948,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               <div style={{ fontSize:11, color:"var(--text-muted)" }}>{gPassengers.length} أعضاء</div>
             </div>
             <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:gSt.bg, color:gSt.color, fontWeight:700 }}>{gSt.label}</span>
-            <button onClick={() => deleteGroup(selectedGroup.id)} style={{ padding:"6px 12px", background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:8, fontSize:12, cursor:"pointer" }}>حذف المجموعة</button>
+            {canManage && <button onClick={() => deleteGroup(selectedGroup.id)} style={{ padding:"6px 12px", background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:8, fontSize:12, cursor:"pointer" }}>حذف المجموعة</button>}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
             {[{label:"إجمالي المطلوب",value:fmtAmt(gTotDue),color:"var(--text)"},{label:"إجمالي المدفوع",value:fmtAmt(gTotPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(gTotBal),color:gTotBal>0?"var(--danger)":"var(--success)"}].map(card=>(
@@ -932,10 +959,12 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               </div>
             ))}
           </div>
-          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
-            <button onClick={() => setShowGroupPayModal(true)} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ دفعة مشتركة تُوزَّع على الأعضاء</button>
-            <button onClick={() => setShowGroupModal(true)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>+ إضافة عضو</button>
-          </div>
+          {canManage && (
+            <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+              <button onClick={() => setShowGroupPayModal(true)} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ دفعة مشتركة تُوزَّع على الأعضاء</button>
+              <button onClick={() => setShowGroupModal(true)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>+ إضافة عضو</button>
+            </div>
+          )}
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             <button onClick={()=>printInPage(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))} style={{ flex:1, padding:"8px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>كشف حساب المجموعة</button>
           </div>
@@ -958,7 +987,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                       <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:600 }}>{fmtAmt(due)}</td>
                       <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td>
                       <td style={{ ...tdStyle, textAlign:"center", color:bal>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(bal)}</td>
-                      <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>removeFromGroup(p.id,selectedGroup.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:12 }}>إزالة</button></td>
+                      <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={()=>removeFromGroup(p.id,selectedGroup.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:12 }}>إزالة</button>}</td>
                     </tr>
                   );
                 })}
@@ -999,7 +1028,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                 {[{label:"المبلغ الإجمالي",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}].map(f=>(
                   <div key={f.key} style={{ marginBottom:12 }}>
                     <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
-                    <input type={f.type} placeholder={f.ph} value={(groupPayForm as any)[f.key]} onChange={e=>setGroupPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle} />
+                    <input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={(groupPayForm as any)[f.key]} onChange={e=>setGroupPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle} />
                   </div>
                 ))}
                 <div style={{ marginBottom:16 }}>
@@ -1085,7 +1114,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                     )}
                   </td>
                   <td style={{ ...tdStyle, textAlign:"center", color:"var(--danger)", fontWeight:600 }}>
-                    {isSpecial && editingCustomPrice ? (
+                    {isSpecial && canManage && editingCustomPrice ? (
                       <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}>
                         <input
                           type="number"
@@ -1101,8 +1130,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                       </div>
                     ) : (
                       <span
-                        onClick={isSpecial ? () => { setCustomPriceInput(String((s as any).custom_price || "")); setEditingCustomPrice(true); } : undefined}
-                        style={{ cursor: isSpecial ? "pointer" : "default", borderBottom: isSpecial ? "1px dashed var(--danger)" : "none" }}
+                        onClick={isSpecial && canManage ? () => { setCustomPriceInput(String((s as any).custom_price || "")); setEditingCustomPrice(true); } : undefined}
+                        style={{ cursor: isSpecial && canManage ? "pointer" : "default", borderBottom: isSpecial && canManage ? "1px dashed var(--danger)" : "none" }}
                       >
                         {fmtAmt(pkgAmt)}
                       </span>
@@ -1124,7 +1153,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                     <td style={tdStyle}><span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, marginLeft:6, background:c.type==="إضافة"?"var(--warning-bg)":"var(--success-bg)", color:c.type==="إضافة"?"var(--warning)":"var(--success)" }}>{c.type==="إضافة"?"بند خاص":"خصم خاص"}</span>{c.description}{c.notes&&<span style={{ fontSize:10, color:"var(--text-muted)", marginRight:6 }}>({c.notes})</span>}</td>
                     <td style={{ ...tdStyle, textAlign:"center", color:c.type==="إضافة"?"var(--danger)":"var(--success)", fontWeight:600 }}>{c.type==="إضافة"?fmtAmt(c.amount):`(${fmtAmt(c.amount)})`}</td>
                     <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
-                    <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>deleteCustomCharge(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button></td>
+                    <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={()=>deleteCustomCharge(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button>}</td>
                   </tr>
                 ))}
                 {pPayments.map((py,i)=>(
@@ -1132,7 +1161,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
                     <td style={tdStyle}>دفعة — {py.payment_date} <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:6 }}>({py.method})</span>{py.notes&&<span style={{ fontSize:10, color:"var(--text-muted)" }}>— {py.notes}</span>}</td>
                     <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
                     <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td>
-                    <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>deletePayment(py.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button></td>
+                    <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={()=>deletePayment(py.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button>}</td>
                   </tr>
                 ))}
                 <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}>
@@ -1144,19 +1173,23 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               </tbody>
             </table>
           </div>
-          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
-            <button onClick={()=>setShowPayModal(true)} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ تسجيل دفعة</button>
-            <button onClick={()=>{setChargeType("إضافة");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"var(--warning)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ بند خاص</button>
-            <button onClick={()=>{setChargeType("خصم");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"var(--danger)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>− خصم خاص</button>
-          </div>
+          {canManage && (
+            <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+              <button onClick={()=>setShowPayModal(true)} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ تسجيل دفعة</button>
+              <button onClick={()=>{setChargeType("إضافة");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"var(--warning)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ بند خاص</button>
+              <button onClick={()=>{setChargeType("خصم");setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}} style={{ flex:1, padding:10, background:"var(--danger)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>− خصم خاص</button>
+            </div>
+          )}
           <div style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)" }}>
             <div style={{ fontWeight:700, fontSize:13, color:"var(--text)", marginBottom:12 }}>المجموعة المالية</div>
             {passengerGroup ? (
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <span style={{ fontSize:12, padding:"4px 12px", borderRadius:99, background:"rgba(125,31,60,0.08)", color:"var(--em7)", fontWeight:600 }}>{passengerGroup.name}</span>
                 <button onClick={()=>{setSelectedGroup(passengerGroup);setSubView("group");}} style={{ padding:"4px 12px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:6, fontSize:12, cursor:"pointer" }}>عرض حساب المجموعة</button>
-                <button onClick={()=>removeFromGroup(selectedP.id,passengerGroup.id)} style={{ padding:"4px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:6, fontSize:12, cursor:"pointer", color:"var(--danger)", marginRight:"auto" }}>إزالة من المجموعة</button>
+                {canManage && <button onClick={()=>removeFromGroup(selectedP.id,passengerGroup.id)} style={{ padding:"4px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:6, fontSize:12, cursor:"pointer", color:"var(--danger)", marginRight:"auto" }}>إزالة من المجموعة</button>}
               </div>
+            ) : !canManage ? (
+              <div style={{ fontSize:12, color:"var(--text-muted)" }}>غير مضاف إلى مجموعة</div>
             ) : (
               <div style={{ display:"flex", gap:10 }}>
                 <button onClick={()=>{setGroupModalMode("create");setGroupForm({name:"",notes:""});setShowGroupModal(true);}} style={{ padding:"6px 14px", background:"var(--primary)", color:"#fff", border:"none", borderRadius:8, fontSize:12, cursor:"pointer" }}>+ إنشاء مجموعة جديدة</button>
@@ -1172,7 +1205,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
             <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)" }}>
               <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--success)" }}>تسجيل دفعة جديدة</div>
               {[{label:"المبلغ",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}].map(f=>(
-                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} placeholder={f.ph} value={(payForm as any)[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
+                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={(payForm as any)[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
               ))}
               <div style={{ marginBottom:16 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>طريقة الدفع</div><select value={payForm.method} onChange={e=>setPayForm(p=>({...p,method:e.target.value}))} style={inputStyle}>{["نقدي","تحويل بنكي","شيك"].map(m=><option key={m}>{m}</option>)}</select></div>
               <div style={{ display:"flex", gap:10 }}>
@@ -1205,7 +1238,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
               ].map(f=>(
                 <div key={f.key} style={{ marginBottom:12 }}>
                   <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
-                  <input type={f.key==="amount"?"number":"text"} placeholder={f.ph} value={(chargeForm as any)[f.key]}
+                  <input type={f.key==="amount"?"number":"text"} min={f.key==="amount"?0:undefined} placeholder={f.ph} value={(chargeForm as any)[f.key]}
                     onChange={e=>{ setChargeForm(p=>({...p,[f.key]:e.target.value})); if((chargeErrors as any)[f.key]) setChargeErrors(p=>({...p,[f.key]:false})); }}
                     style={{ ...inputStyle, borderColor:(chargeErrors as any)[f.key]?"var(--danger)":"" }} />
                   {(chargeErrors as any)[f.key] && <div style={{ fontSize:11, color:"var(--danger)", marginTop:3 }}>يرجى إدخال {f.label.replace(" *","")}</div>}
@@ -1286,8 +1319,8 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
       const toLabel   = cashflowTo   || "اليوم";
       const rows = cfDates.map(d => {
         const row = cfByDate[d];
-        const methodStr = Object.entries(row.methods).map(([m, v]) => `${m}: ${fmtAmt(v)}`).join(" | ");
-        return `<tr><td>${d}</td><td style="text-align:center">${row.count}</td><td style="text-align:center;color:#1D6F42;font-weight:700">${fmtAmt(row.total)}</td><td style="font-size:10pt;color:#555">${methodStr}</td></tr>`;
+        const methodStr = Object.entries(row.methods).map(([m, v]) => `${esc(m)}: ${fmtAmt(v)}`).join(" | ");
+        return `<tr><td>${esc(d)}</td><td style="text-align:center">${row.count}</td><td style="text-align:center;color:#1D6F42;font-weight:700">${fmtAmt(row.total)}</td><td style="font-size:10pt;color:#555">${methodStr}</td></tr>`;
       }).join("");
       const totRow = `<tr style="background:#7D1F3C;color:#fff;font-weight:700"><td colspan="2">الإجمالي</td><td style="text-align:center">${fmtAmt(cfTotal)}</td><td></td></tr>`;
       const body = `<div style="margin-bottom:12pt;font-size:11pt;color:#555">الفترة: من <b>${fromLabel}</b> إلى <b>${toLabel}</b> · إجمالي التحصيل: <b style="color:#7D1F3C">${fmtAmt(cfTotal)} ر.ق</b></div><table><thead><tr><th>التاريخ</th><th style="text-align:center">عدد الدفعات</th><th style="text-align:center">الإجمالي</th><th>طرق الدفع</th></tr></thead><tbody>${rows}${totRow}</tbody></table>`;
@@ -1443,7 +1476,7 @@ export function FinancePage({ passengers, currentUser }: { passengers: Passenger
         <div style={{ fontFamily:"var(--font-body)", fontSize:20, fontWeight:800, color:"var(--primary)" }}>الحسابات المالية</div>
         <div style={{ marginRight:"auto", display:"flex", gap:8 }}>
           <button onClick={()=>setSubView("reports")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>التقارير</button>
-          <button onClick={()=>setSubView("settings")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>
+          {canManage && <button onClick={()=>setSubView("settings")} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>}
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, padding:"12px 20px", flexShrink:0 }}>
