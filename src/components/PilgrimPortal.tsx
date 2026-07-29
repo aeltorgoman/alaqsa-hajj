@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase";
+import {
+  getPushState, enablePush, disablePush, markNotificationRead,
+  registerServiceWorker, resubscribeIfNeeded,
+  type PushState,
+} from "../utils/pushClient";
+import { setupPortalManifest } from "../utils/portalManifest";
 
 /* ═══════════════════════════════════════════════════════════════
    بوابة الحاج — النسخة الثالثة
@@ -111,6 +117,10 @@ function PilgrimPortal() {
     try { return JSON.parse(localStorage.getItem("portal_acked_urgent") || "[]"); } catch { return []; }
   });
   const [now, setNow] = useState(() => Date.now());
+  const [pushState, setPushState] = useState<PushState>("unsupported");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushNote, setPushNote] = useState("");
+  const [pushDismissed, setPushDismissed] = useState(() => localStorage.getItem("portal_push_dismissed") === "1");
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -138,6 +148,70 @@ function PilgrimPortal() {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!data]);
+
+  /* ─── تهيئة التنبيهات: عامل الخدمة وملف تعريف التطبيق ─── */
+  useEffect(() => {
+    if (!data) return;
+    let alive = true;
+
+    (async () => {
+      await setupPortalManifest({
+        name: data.config?.name_ar || "بوابة الحاج",
+        logoUrl: data.config?.logo_url || null,
+        themeColor: data.config?.color_primary || "#7D1F3C",
+      });
+      await registerServiceWorker();
+      const st = await getPushState();
+      if (alive) setPushState(st);
+    })();
+
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "OPEN_ALERTS") setTab("alerts");
+      if (e.data?.type === "RESUBSCRIBE") resubscribeIfNeeded();
+    };
+    navigator.serviceWorker?.addEventListener("message", onMessage);
+
+    return () => {
+      alive = false;
+      navigator.serviceWorker?.removeEventListener("message", onMessage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
+
+  /* ─── تسجيل قراءة التنبيهات عند فتح تبويبها ─── */
+  useEffect(() => {
+    if (tab !== "alerts" || !data?.announcements?.length) return;
+    data.announcements.forEach(a => markNotificationRead(a.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, data?.announcements?.length]);
+
+  async function turnPushOn() {
+    setPushBusy(true);
+    setPushNote("");
+    const res = await enablePush();
+    setPushBusy(false);
+    if (res.ok) {
+      setPushState("enabled");
+      setPushNote("تم تفعيل التنبيهات بنجاح.");
+    } else if (res.reason === "denied") {
+      setPushState("denied");
+    } else {
+      setPushNote("تعذّر التفعيل، يرجى المحاولة مرة أخرى.");
+    }
+  }
+
+  async function turnPushOff() {
+    setPushBusy(true);
+    await disablePush();
+    setPushBusy(false);
+    setPushState("available");
+    setPushNote("تم إيقاف التنبيهات.");
+  }
+
+  function dismissPush() {
+    setPushDismissed(true);
+    localStorage.setItem("portal_push_dismissed", "1");
+  }
 
   const cfg = data?.config;
   const brand = cfg?.color_primary || "#7D1F3C";
@@ -586,6 +660,79 @@ function PilgrimPortal() {
 
         {/* ══ تاب التنبيهات ══ */}
         {tab === "alerts" && <>
+          {/* ── بطاقة تفعيل التنبيهات ── */}
+          {pushState === "enabled" ? (
+            <div style={{ ...card, padding: "15px 17px", display: "flex", alignItems: "center", gap: 13 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 14, background: "#e6f4ec", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon d={ICONS.bell} size={24} color="#1c6b45" sw={2} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: INK }}>التنبيهات مفعّلة</div>
+                <div style={{ fontSize: 14, color: LABEL, marginTop: 3 }}>سيصلك كل جديد عن رحلتك على هذا الجهاز.</div>
+              </div>
+              <button onClick={turnPushOff} disabled={pushBusy}
+                style={{ background: "none", border: `1.5px solid ${LINE}`, color: LABEL, borderRadius: 99, fontSize: 14, fontWeight: 700, padding: "8px 15px", cursor: "pointer", fontFamily: fontD, flexShrink: 0 }}>
+                إيقاف
+              </button>
+            </div>
+          ) : pushState === "denied" ? (
+            <div style={{ ...card, padding: "17px 19px", borderRight: `5px solid ${gold}` }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: INK }}>التنبيهات موقوفة من إعدادات الجهاز</div>
+              <div style={{ fontSize: 15, color: LABEL, marginTop: 8, lineHeight: 2 }}>
+                لإعادة تفعيلها: افتح إعدادات المتصفح، ثم إعدادات الموقع، ثم فعّل الإشعارات لهذه الصفحة.
+              </div>
+            </div>
+          ) : pushState === "ios-needs-install" && !pushDismissed ? (
+            <div style={{ ...card, padding: "19px 19px 17px", border: `2px solid ${gold}` }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: INK, marginBottom: 4 }}>فعّل تنبيهات الحملة</div>
+              <div style={{ fontSize: 15, color: LABEL, lineHeight: 2, marginBottom: 15 }}>
+                لتصلك التنبيهات على هذا الجهاز، اتبع الخطوات الثلاث مرة واحدة:
+              </div>
+              {[
+                "اضغط زر المشاركة في أسفل المتصفح.",
+                "اختر «إضافة إلى الشاشة الرئيسية».",
+                "افتح البوابة من الأيقونة الجديدة، ثم فعّل التنبيهات.",
+              ].map((s, i) => (
+                <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 11 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: GOLD_BRIGHT, color: brandDeep, fontWeight: 900, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: fontD }}>{i + 1}</div>
+                  <div style={{ fontSize: 15.5, color: INK, lineHeight: 1.9, paddingTop: 4 }}>{s}</div>
+                </div>
+              ))}
+              <div style={{ fontSize: 14, color: LABEL, marginTop: 13, lineHeight: 1.9 }}>
+                يمكنك طلب المساعدة من موظف الحملة لإتمام هذه الخطوات.
+              </div>
+              <button onClick={dismissPush}
+                style={{ background: "none", border: "none", color: LABEL, fontSize: 14, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: 0 }}>
+                إخفاء هذه الرسالة
+              </button>
+            </div>
+          ) : pushState === "available" && !pushDismissed ? (
+            <div style={{ ...card, padding: "22px 19px", textAlign: "center", border: `2px solid ${gold}` }}>
+              <div style={{ width: 66, height: 66, borderRadius: "50%", background: brand, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 13px" }}>
+                <Icon d={ICONS.bell} size={32} color={GOLD_BRIGHT} sw={1.8} />
+              </div>
+              <div style={{ fontSize: 21, fontWeight: 800, color: INK, marginBottom: 8 }}>تنبيهات الحملة</div>
+              <div style={{ fontSize: 15.5, color: LABEL, lineHeight: 2 }}>
+                فعّل التنبيهات ليصلك كل جديد عن رحلتك أولاً بأول: موعد الطيران، رقم غرفتك، باصك، ومخيمك.
+              </div>
+              <button onClick={turnPushOn} disabled={pushBusy}
+                style={{ width: "100%", marginTop: 17, background: brand, color: "#fff", border: "none", borderRadius: 16, padding: "16px", fontSize: 18, fontWeight: 900, cursor: pushBusy ? "default" : "pointer", fontFamily: fontD, opacity: pushBusy ? 0.6 : 1 }}>
+                {pushBusy ? "جارٍ التفعيل..." : "تفعيل التنبيهات"}
+              </button>
+              <button onClick={dismissPush}
+                style={{ background: "none", border: "none", color: LABEL, fontSize: 14.5, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline" }}>
+                ليس الآن
+              </button>
+              <div style={{ fontSize: 13.5, color: LABEL, marginTop: 14, lineHeight: 1.8 }}>
+                لن تصلك أي رسائل إعلانية — تنبيهات الحملة فقط.
+              </div>
+            </div>
+          ) : null}
+
+          {pushNote && (
+            <div style={{ ...card, padding: "13px 16px", fontSize: 15, fontWeight: 700, color: INK }}>{pushNote}</div>
+          )}
+
           {data.announcements.length === 0 && (
             <div style={{ ...card, textAlign: "center", padding: 34 }}>
               <Icon d={ICONS.bell} size={40} color={LABEL} sw={1.5} />
