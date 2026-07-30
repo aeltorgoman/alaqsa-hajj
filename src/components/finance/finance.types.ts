@@ -12,6 +12,9 @@ export type FinancialGroupMember = { id: number; group_id: number; passenger_id:
 // حالات فلتر القائمة الرئيسية
 export type FinanceFilterStatus = "all" | "paid" | "partial" | "unpaid" | "unpriced" | "credit";
 
+// نموذج الدفعة المشتركة على أعضاء المجموعة
+export type GroupPayForm = { amount: string; payment_date: string; method: string; notes: string };
+
 // مصادر البيانات تقبل مصفوفة أو خريطة مُجهّزة مسبقاً لتسريع الحساب
 export type ChargeSource  = CustomCharge[] | Map<number, CustomCharge[]>;
 export type PaymentSource = Payment[]      | Map<number, Payment[]>;
