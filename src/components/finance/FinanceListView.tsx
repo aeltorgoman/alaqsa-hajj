@@ -16,6 +16,9 @@ export type FinanceListViewProps = {
   paymentsByPassenger: Map<number, Payment[]>;
   getPassengerGroup: (passengerId: number) => FinancialGroup | null;
 
+  // الصلاحيات
+  canManage: boolean;
+
   // الحالة
   loading: boolean;
   refreshing: boolean;
@@ -44,6 +47,7 @@ export type FinanceListViewProps = {
 
 export function FinanceListView({
   sortedPassengers, filteredPassengers, pricing, chargesByPassenger, paymentsByPassenger, getPassengerGroup,
+  canManage,
   loading, refreshing, lastUpdated,
   searchTerm, filterStatus, filterPackage,
   onSearchTermChange, onFilterStatusChange, onFilterPackageChange, onClearFilters,
@@ -68,7 +72,7 @@ export function FinanceListView({
             {refreshing?"جارٍ التحديث...":"تحديث البيانات"}
           </button>
           <button onClick={()=>onOpenReports()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>التقارير</button>
-          <button onClick={()=>onOpenSettings()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>
+          {canManage && <button onClick={()=>onOpenSettings()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>}
         </div>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, padding:"12px 20px", flexShrink:0 }}>

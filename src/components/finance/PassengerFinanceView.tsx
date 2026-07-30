@@ -16,6 +16,9 @@ export type PassengerFinanceViewProps = {
   group: FinancialGroup | null;
   groups: FinancialGroup[];
 
+  // الصلاحيات
+  canManage: boolean;
+
   // حالة تعديل السعر الخاص
   editingCustomPrice: boolean;
   customPriceInput: string;
@@ -50,6 +53,7 @@ export type PassengerFinanceViewProps = {
 
 export function PassengerFinanceView({
   passenger, pricing, passengerPayments, passengerCharges, group, groups,
+  canManage,
   editingCustomPrice, customPriceInput, savingCustomPrice,
   onBack, onPrintStatement,
   onEditCustomPrice, onCustomPriceInputChange, onSaveCustomPrice, onCancelEditCustomPrice,
@@ -115,7 +119,7 @@ export function PassengerFinanceView({
                 )}
               </td>
               <td style={{ ...tdStyle, textAlign:"center", color:"var(--danger)", fontWeight:600 }}>
-                {isSpecial && editingCustomPrice ? (
+                {isSpecial && canManage && editingCustomPrice ? (
                   <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}>
                     <input
                       type="number"
@@ -131,8 +135,8 @@ export function PassengerFinanceView({
                   </div>
                 ) : (
                   <span
-                    onClick={isSpecial ? () => onEditCustomPrice() : undefined}
-                    style={{ cursor: isSpecial ? "pointer" : "default", borderBottom: isSpecial ? "1px dashed var(--danger)" : "none" }}
+                    onClick={isSpecial && canManage ? () => onEditCustomPrice() : undefined}
+                    style={{ cursor: isSpecial && canManage ? "pointer" : "default", borderBottom: isSpecial && canManage ? "1px dashed var(--danger)" : "none" }}
                   >
                     {fmtAmt(pkgAmt)}
                   </span>
@@ -154,7 +158,7 @@ export function PassengerFinanceView({
                 <td style={tdStyle}><span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, marginLeft:6, background:c.type==="إضافة"?"var(--warning-bg)":"var(--success-bg)", color:c.type==="إضافة"?"var(--warning)":"var(--success)" }}>{c.type==="إضافة"?"بند خاص":"خصم خاص"}</span>{c.description}{c.notes&&<span style={{ fontSize:10, color:"var(--text-muted)", marginRight:6 }}>({c.notes})</span>}</td>
                 <td style={{ ...tdStyle, textAlign:"center", color:c.type==="إضافة"?"var(--danger)":"var(--success)", fontWeight:600 }}>{c.type==="إضافة"?fmtAmt(c.amount):`(${fmtAmt(c.amount)})`}</td>
                 <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
-                <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>onDeleteCharge(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button></td>
+                <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={()=>onDeleteCharge(c.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button>}</td>
               </tr>
             ))}
             {pPayments.map((py,i)=>(
@@ -162,7 +166,7 @@ export function PassengerFinanceView({
                 <td style={tdStyle}>دفعة — {py.payment_date} <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:6 }}>({py.method})</span>{py.notes&&<span style={{ fontSize:10, color:"var(--text-muted)" }}>— {py.notes}</span>}</td>
                 <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
                 <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td>
-                <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={e=>{e.stopPropagation();onDeletePayment(py.id);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button></td>
+                <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={e=>{e.stopPropagation();onDeletePayment(py.id);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button>}</td>
               </tr>
             ))}
             <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}>
@@ -174,25 +178,27 @@ export function PassengerFinanceView({
           </tbody>
         </table>
       </div>
-      <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+      {canManage && (
+        <div style={{ display:"flex", gap:10, marginBottom:16 }}>
         <button onClick={()=>onAddPayment()} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ تسجيل دفعة</button>
         <button onClick={()=>onAddCharge("إضافة")} style={{ flex:1, padding:10, background:"var(--warning)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ بند خاص</button>
         <button onClick={()=>onAddCharge("خصم")} style={{ flex:1, padding:10, background:"var(--danger)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>− خصم خاص</button>
       </div>
+      )}
       <div style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)" }}>
         <div style={{ fontWeight:700, fontSize:13, color:"var(--text)", marginBottom:12 }}>المجموعة المالية</div>
         {group ? (
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <span style={{ fontSize:12, padding:"4px 12px", borderRadius:99, background:"rgba(125,31,60,0.08)", color:"var(--em7)", fontWeight:600 }}>{group.name}</span>
             <button onClick={()=>onOpenGroup(group)} style={{ padding:"4px 12px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:6, fontSize:12, cursor:"pointer" }}>عرض حساب المجموعة</button>
-            <button onClick={()=>onRemoveFromGroup(group.id)} style={{ padding:"4px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:6, fontSize:12, cursor:"pointer", color:"var(--danger)", marginRight:"auto" }}>إزالة من المجموعة</button>
+            {canManage && <button onClick={()=>onRemoveFromGroup(group.id)} style={{ padding:"4px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:6, fontSize:12, cursor:"pointer", color:"var(--danger)", marginRight:"auto" }}>إزالة من المجموعة</button>}
           </div>
-        ) : (
+        ) : canManage ? (
           <div style={{ display:"flex", gap:10 }}>
             <button onClick={()=>onCreateGroup()} style={{ padding:"6px 14px", background:"var(--primary)", color:"#fff", border:"none", borderRadius:8, fontSize:12, cursor:"pointer" }}>+ إنشاء مجموعة جديدة</button>
             {groups.length>0&&<button onClick={()=>onAddToExistingGroup()} style={{ padding:"6px 14px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer" }}>إضافة إلى مجموعة موجودة</button>}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
