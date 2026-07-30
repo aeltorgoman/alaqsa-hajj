@@ -792,7 +792,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     });
     const cfDates = Object.keys(cfByDate).sort();
     const cfTotal = cfPayments.reduce((s, p) => s + Number(p.amount), 0);
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين"), payments:()=>printPaymentsReport(payments,passengers,printBrand), packages:()=>printPackagesReport(passengers,pricing,printBrand), addons:()=>printAddonsReport(passengers,pricing,printBrand), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand }) };
+    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين"), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo), packages:()=>printPackagesReport(passengers,pricing,printBrand), addons:()=>printAddonsReport(passengers,pricing,printBrand), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand }) };
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
@@ -808,10 +808,23 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <button onClick={printActions[reportType]} style={{ padding:"7px 18px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
         </div>
         <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
-          {([{key:"full",label:"تقرير الحجاج الكامل"},{key:"late",label:"المتأخرون"},{key:"payments",label:"تقرير الدفعات"},{key:"packages",label:"تقرير الباقات"},{key:"addons",label:"ملخص الإضافات"},{key:"cashflow",label:"التدفق النقدي"}] as const).map(t=>(
+          {([{key:"full",label:"تقرير الحجاج الكامل"},{key:"late",label:"المتأخرون"},{key:"payments",label:"سجل الدفعات"},{key:"packages",label:"تقرير الباقات"},{key:"addons",label:"ملخص الإضافات"},{key:"cashflow",label:"التحصيل اليومي"}] as const).map(t=>(
             <button key={t.key} onClick={()=>setReportType(t.key)} style={{ padding:"6px 16px", borderRadius:99, border:"none", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer", fontWeight:reportType===t.key?700:400, background:reportType===t.key?"var(--em8)":"var(--bg-2)", color:reportType===t.key?"#fff":"var(--text)" }}>{t.label}</button>
           ))}
         </div>
+        {/* فلتر التاريخ المشترك بين سجل الدفعات والتحصيل اليومي */}
+        {(reportType==="payments"||reportType==="cashflow")&&(
+          <div style={{ marginBottom:16 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, background:"var(--bg-card)", borderRadius:12, padding:"12px 16px", boxShadow:"var(--shadow-sm)", flexWrap:"wrap" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--em8)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span style={{ fontSize:12, fontWeight:700, color:"var(--text-muted)" }}>من:</span>
+              <input type="date" value={cashflowFrom} onChange={e=>setCashflowFrom(e.target.value)} style={{ border:"0.5px solid var(--border)", borderRadius:8, padding:"5px 10px", fontSize:12, fontFamily:"var(--font-body)", background:"var(--bg-2)", color:"var(--text)", outline:"none" }} />
+              <span style={{ fontSize:12, fontWeight:700, color:"var(--text-muted)" }}>إلى:</span>
+              <input type="date" value={cashflowTo} onChange={e=>setCashflowTo(e.target.value)} style={{ border:"0.5px solid var(--border)", borderRadius:8, padding:"5px 10px", fontSize:12, fontFamily:"var(--font-body)", background:"var(--bg-2)", color:"var(--text)", outline:"none" }} />
+              {(cashflowFrom||cashflowTo)&&<button onClick={()=>{setCashflowFrom("");setCashflowTo("");}} style={{ fontSize:11, padding:"4px 10px", borderRadius:8, border:"0.5px solid var(--border)", background:"var(--bg-2)", cursor:"pointer", color:"var(--text-muted)", fontFamily:"var(--font-body)" }}>مسح الفلتر</button>}
+            </div>
+          </div>
+        )}
         {(reportType==="full"||reportType==="late")&&(
           <>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
@@ -830,13 +843,16 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             </div>
           </>
         )}
-        {reportType==="payments"&&(
+        {reportType==="payments"&&cfPayments.length===0&&(
+          <div style={{ textAlign:"center", padding:40, color:"var(--text-muted)", fontSize:13 }}>لا توجد دفعات في الفترة المحددة</div>
+        )}
+        {reportType==="payments"&&cfPayments.length>0&&(
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
               <tbody>
-                {[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);const pName=p?(p.short_ar||p.name_ar):"—";return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{pName}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(pName,py,logoUrl,companyName,tagline,primaryColor,accentColor));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span></td></tr>);})}
-                <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={4}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(payments.reduce((s,p)=>s+Number(p.amount),0))}</td><td style={{ padding:"10px 12px" }}></td></tr>
+                {[...cfPayments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);const pName=p?(p.short_ar||p.name_ar):"—";return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{pName}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(pName,py,logoUrl,companyName,tagline,primaryColor,accentColor));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span></td></tr>);})}
+                <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={4}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(cfTotal)}</td><td style={{ padding:"10px 12px" }}></td></tr>
               </tbody>
             </table>
           </div>
@@ -859,15 +875,6 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         )}
         {reportType==="cashflow"&&(
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            {/* فلتر التاريخ */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, background:"var(--bg-card)", borderRadius:12, padding:"12px 16px", boxShadow:"var(--shadow-sm)", flexWrap:"wrap" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--em8)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <span style={{ fontSize:12, fontWeight:700, color:"var(--text-muted)" }}>من:</span>
-              <input type="date" value={cashflowFrom} onChange={e=>setCashflowFrom(e.target.value)} style={{ border:"0.5px solid var(--border)", borderRadius:8, padding:"5px 10px", fontSize:12, fontFamily:"var(--font-body)", background:"var(--bg-2)", color:"var(--text)", outline:"none" }} />
-              <span style={{ fontSize:12, fontWeight:700, color:"var(--text-muted)" }}>إلى:</span>
-              <input type="date" value={cashflowTo} onChange={e=>setCashflowTo(e.target.value)} style={{ border:"0.5px solid var(--border)", borderRadius:8, padding:"5px 10px", fontSize:12, fontFamily:"var(--font-body)", background:"var(--bg-2)", color:"var(--text)", outline:"none" }} />
-              {(cashflowFrom||cashflowTo)&&<button onClick={()=>{setCashflowFrom("");setCashflowTo("");}} style={{ fontSize:11, padding:"4px 10px", borderRadius:8, border:"0.5px solid var(--border)", background:"var(--bg-2)", cursor:"pointer", color:"var(--text-muted)", fontFamily:"var(--font-body)" }}>مسح الفلتر</button>}
-            </div>
             {/* بطاقة الملخص */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
               {[
