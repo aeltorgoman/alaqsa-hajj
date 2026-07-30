@@ -368,7 +368,26 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   async function removeFromGroup(passengerId: number, groupId: number) {
     if (!requireManage()) return;
-    if (!await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" })) return;
+    const isLastMember = groupMembers.filter(m => m.group_id === groupId && m.passenger_id !== passengerId).length === 0;
+
+    const confirmed = isLastMember
+      ? await showConfirm("هذا آخر عضو في المجموعة. عند المتابعة سيتم حذف المجموعة بالكامل. هل تريد الاستمرار؟", { title: "حذف المجموعة" })
+      : await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" });
+    if (!confirmed) return;
+
+    /* آخر عضو: نحذف المجموعة وحدها — قيد financial_group_members_group_id_fkey
+       معرّف ON DELETE CASCADE فتُحذف العضوية معها في عملية واحدة، فلا يمكن
+       أن تبقى مجموعة فارغة إذا فشل جزء من العملية */
+    if (isLastMember) {
+      const { error } = await supabase.from("financial_groups").delete().eq("id", groupId);
+      if (error) { showAlert("error", "تعذر حذف المجموعة، لم يتم تنفيذ أي تغيير"); return; }
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+      setGroupMembers(prev => prev.filter(m => m.group_id !== groupId));
+      if (selectedGroup?.id === groupId) { setSelectedGroup(null); setSubView("list"); }
+      showAlert("success", "تم حذف المجموعة بالكامل بعد إزالة آخر عضو");
+      return;
+    }
+
     const { error } = await supabase.from("financial_group_members").delete().eq("group_id",groupId).eq("passenger_id",passengerId);
     if (error) { showAlert("error", "تعذر إزالة الحاج من المجموعة"); return; }
     setGroupMembers(prev => prev.filter(m => !(m.group_id===groupId && m.passenger_id===passengerId)));
