@@ -368,10 +368,33 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   async function removeFromGroup(passengerId: number, groupId: number) {
     if (!requireManage()) return;
-    if (!await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" })) return;
+    /* المجموعة لا يجوز أن تبقى بلا أعضاء — إزالة آخر عضو تعني حذف المجموعة بالكامل */
+    const isLastMember = groupMembers.filter(m => m.group_id === groupId).length <= 1;
+    const confirmed = isLastMember
+      ? await showConfirm("هذا آخر عضو في المجموعة. عند المتابعة سيتم حذف المجموعة بالكامل. هل تريد الاستمرار؟", { title: "حذف المجموعة" })
+      : await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" });
+    if (!confirmed) return;
+
     const { error } = await supabase.from("financial_group_members").delete().eq("group_id",groupId).eq("passenger_id",passengerId);
     if (error) { showAlert("error", "تعذر إزالة الحاج من المجموعة"); return; }
+
+    if (isLastMember) {
+      /* حذف المجموعة يتم تلقائياً في قاعدة البيانات، والاستدعاء هنا للتأكيد ولا يفشل إن كانت محذوفة */
+      const { error: gErr } = await supabase.from("financial_groups").delete().eq("id",groupId);
+      if (gErr) {
+        showAlert("error", "تمت إزالة الحاج، لكن تعذر حذف المجموعة الفارغة");
+        setGroupMembers(prev => prev.filter(m => !(m.group_id===groupId && m.passenger_id===passengerId)));
+        return;
+      }
+      setGroupMembers(prev => prev.filter(m => m.group_id !== groupId));
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+      if (selectedGroup?.id === groupId) { setSelectedGroup(null); if (subView === "group") setSubView("list"); }
+      showAlert("success", "تمت إزالة آخر عضو وحُذفت المجموعة");
+      return;
+    }
+
     setGroupMembers(prev => prev.filter(m => !(m.group_id===groupId && m.passenger_id===passengerId)));
+    showAlert("success", "تمت إزالة الحاج من المجموعة");
   }
 
   async function deleteGroup(groupId: number) {
