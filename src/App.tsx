@@ -114,7 +114,7 @@ export default function App() {
       case "reports":    return <ReportsPage passengers={passengers} resetKey={reportsResetKey} />;
       case "archive":    return <ArchivePage currentUser={currentUser} />;
       case "users":      return <UsersPage currentUser={currentUser} />;
-      case "finance":    return <FinancePage passengers={passengers} currentUser={currentUser!} />;
+      case "finance":    return <FinancePage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
       case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
       case "portal":     return <PortalPage currentUser={currentUser!} />;
       default:           return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
