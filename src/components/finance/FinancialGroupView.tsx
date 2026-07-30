@@ -16,6 +16,9 @@ export type FinancialGroupViewProps = {
   chargesByPassenger: Map<number, CustomCharge[]>;
   paymentsByPassenger: Map<number, Payment[]>;
 
+  // الصلاحيات
+  canManage: boolean;
+
   // حالة المودالات
   showAddMemberModal: boolean;
   showGroupPayModal: boolean;
@@ -49,6 +52,7 @@ export type FinancialGroupViewProps = {
 
 export function FinancialGroupView({
   group, groupPassengers, availableToAdd, pricing, chargesByPassenger, paymentsByPassenger,
+  canManage,
   showAddMemberModal, showGroupPayModal, addingMemberId, groupPayForm, savingGroupPay,
   onBack, onPrintGroupStatement,
   onDeleteGroup, onSelectPassenger, onRemoveMember, onAddMember,
@@ -69,7 +73,7 @@ export function FinancialGroupView({
           <div style={{ fontSize:11, color:"var(--text-muted)" }}>{groupPassengers.length} أعضاء</div>
         </div>
         <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:gSt.bg, color:gSt.color, fontWeight:700 }}>{gSt.label}</span>
-        <button onClick={() => onDeleteGroup(group.id)} style={{ padding:"6px 12px", background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:8, fontSize:12, cursor:"pointer" }}>حذف المجموعة</button>
+        {canManage && <button onClick={() => onDeleteGroup(group.id)} style={{ padding:"6px 12px", background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:8, fontSize:12, cursor:"pointer" }}>حذف المجموعة</button>}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
         {[{label:"إجمالي المطلوب",value:fmtAmt(gTotDue),color:"var(--text)"},{label:"إجمالي المدفوع",value:fmtAmt(gTotPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(gTotBal),color:gTotBal>0?"var(--danger)":"var(--success)"}].map(card=>(
@@ -80,10 +84,12 @@ export function FinancialGroupView({
           </div>
         ))}
       </div>
+      {canManage && (
       <div style={{ display:"flex", gap:10, marginBottom:16 }}>
         <button onClick={() => onOpenGroupPayModal()} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ دفعة مشتركة تُوزَّع على الأعضاء</button>
         <button onClick={() => onOpenAddMemberModal()} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>+ إضافة عضو</button>
       </div>
+      )}
       <div style={{ display:"flex", gap:10, marginBottom:16 }}>
         <button onClick={()=>onPrintGroupStatement()} style={{ flex:1, padding:"8px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>كشف حساب المجموعة</button>
       </div>
@@ -106,7 +112,7 @@ export function FinancialGroupView({
                   <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:600 }}>{fmtAmt(due)}</td>
                   <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(paid)}</td>
                   <td style={{ ...tdStyle, textAlign:"center", color:bal>0?"var(--danger)":"var(--success)", fontWeight:600 }}>{fmtAmt(bal)}</td>
-                  <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>onRemoveMember(p.id,group.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:12 }}>إزالة</button></td>
+                  <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={()=>onRemoveMember(p.id,group.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:12 }}>إزالة</button>}</td>
                 </tr>
               );
             })}
@@ -147,7 +153,7 @@ export function FinancialGroupView({
             {([{label:"المبلغ الإجمالي",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}] as { label:string; key:keyof GroupPayForm; type:string; ph:string }[]).map(f=>(
               <div key={f.key} style={{ marginBottom:12 }}>
                 <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
-                <input type={f.type} placeholder={f.ph} value={groupPayForm[f.key]} onChange={e=>onGroupPayFormChange(f.key, e.target.value)} style={inputStyle} />
+                <input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={groupPayForm[f.key]} onChange={e=>onGroupPayFormChange(f.key, e.target.value)} style={inputStyle} />
               </div>
             ))}
             <div style={{ marginBottom:16 }}>

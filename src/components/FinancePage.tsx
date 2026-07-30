@@ -18,6 +18,7 @@ import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStat
 export function FinancePage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers?: (updater: (prev: Passenger[]) => Passenger[]) => void; currentUser: User }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const canManage = !!currentUser.permissions?.manage_payments;
 
   const [subView, setSubView]     = useState<"list"|"detail"|"settings"|"reports"|"group">("list");
   const [selectedP, setSelectedP] = useState<Passenger | null>(null);
@@ -119,6 +120,12 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  function requireManage(): boolean {
+    if (canManage) return true;
+    showAlert("error", "لا تملك صلاحية إجراء عمليات مالية");
+    return false;
+  }
+
   async function loadFinanceData(silent = false) {
     if (silent) setRefreshing(true); else setLoading(true);
     const [pRes, pyRes, ccRes, gRes, gmRes] = await Promise.all([
@@ -178,6 +185,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const groupPassengerIds = useMemo(() => new Set(groupMembers.map(m => m.passenger_id)), [groupMembers]);
 
   async function savePricing() {
+    if (!requireManage()) return;
     const rows: { key:string; label:string; type:string; amount:number; updated_at:string }[] = [];
     for (const key of Object.keys(editPricing)) {
       const amount = Number(editPricing[key]);
@@ -205,6 +213,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function saveCustomPrice() {
+    if (!requireManage()) return;
     if (!selectedP) return;
     setSavingCustomPrice(true);
     const amt = Number(customPriceInput);
@@ -227,6 +236,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addPayment() {
+    if (!requireManage()) return;
     if (!selectedP) return;
     const amount = Number(payForm.amount);
     if (!payForm.amount.trim() || !Number.isFinite(amount) || amount <= 0) {
@@ -266,6 +276,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function deletePayment(id: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذه الدفعة؟")) return;
     const { error } = await supabase.from("payments").delete().eq("id",id);
     if (error) { showAlert("error", "تعذر حذف الدفعة، لم يتم تنفيذ الحذف"); return; }
@@ -274,6 +285,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addCustomCharge() {
+    if (!requireManage()) return;
     const amount = Number(chargeForm.amount);
     const badAmount = !chargeForm.amount.trim() || !Number.isFinite(amount) || amount <= 0;
     const errs = { description: !chargeForm.description.trim(), amount: badAmount };
@@ -292,6 +304,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function deleteCustomCharge(id: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذا البند؟")) return;
     const { error } = await supabase.from("custom_charges").delete().eq("id",id);
     if (error) { showAlert("error", "تعذر حذف البند، لم يتم تنفيذ الحذف"); return; }
@@ -309,6 +322,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function createGroupAndAdd() {
+    if (!requireManage()) return;
     if (!selectedP) return;
     if (!groupForm.name.trim()) { showAlert("error", "يرجى إدخال اسم المجموعة"); return; }
     if (groupPassengerIds.has(selectedP.id)) {
@@ -333,6 +347,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addMemberToGroup(groupId: number, passengerId: number) {
+    if (!requireManage()) return;
     if (addingMemberId === passengerId) return;
     const existing = groupMembers.find(m => m.passenger_id === passengerId);
     if (existing) {
@@ -352,6 +367,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function removeFromGroup(passengerId: number, groupId: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد إزالة هذا الحاج من المجموعة؟", { title: "إزالة من المجموعة" })) return;
     const { error } = await supabase.from("financial_group_members").delete().eq("group_id",groupId).eq("passenger_id",passengerId);
     if (error) { showAlert("error", "تعذر إزالة الحاج من المجموعة"); return; }
@@ -359,6 +375,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function deleteGroup(groupId: number) {
+    if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذه المجموعة؟", { title: "حذف مجموعة" })) return;
     const { error } = await supabase.from("financial_groups").delete().eq("id",groupId);
     if (error) { showAlert("error", "تعذر حذف المجموعة، لم يتم تنفيذ الحذف"); return; }
@@ -368,6 +385,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addGroupPayment() {
+    if (!requireManage()) return;
     if (!selectedGroup) return;
     const total = Number(groupPayForm.amount);
     if (!groupPayForm.amount.trim() || !Number.isFinite(total) || total <= 0) {
@@ -564,6 +582,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <ReceiptModal />
         <FinancialGroupView
+          canManage={canManage}
           group={selectedGroup}
           groupPassengers={gPassengers}
           availableToAdd={availableToAdd}
@@ -607,6 +626,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         <ReceiptModal />
         <PaymentDetailModal />
         <PassengerFinanceView
+          canManage={canManage}
           passenger={selectedP}
           pricing={pricing}
           passengerPayments={paymentsFor(selectedP.id, paymentsByPassenger)}
@@ -640,7 +660,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)" }}>
               <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--success)" }}>تسجيل دفعة جديدة</div>
               {[{label:"المبلغ",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}].map(f=>(
-                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} placeholder={f.ph} value={(payForm as any)[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
+                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={(payForm as any)[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
               ))}
               <div style={{ marginBottom:16 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>طريقة الدفع</div><select value={payForm.method} onChange={e=>setPayForm(p=>({...p,method:e.target.value}))} style={inputStyle}>{["نقدي","تحويل بنكي","شيك"].map(m=><option key={m}>{m}</option>)}</select></div>
               <div style={{ display:"flex", gap:10 }}>
@@ -673,7 +693,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
               ].map(f=>(
                 <div key={f.key} style={{ marginBottom:12 }}>
                   <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
-                  <input type={f.key==="amount"?"number":"text"} placeholder={f.ph} value={(chargeForm as any)[f.key]}
+                  <input type={f.key==="amount"?"number":"text"} min={f.key==="amount"?0:undefined} placeholder={f.ph} value={(chargeForm as any)[f.key]}
                     onChange={e=>{ setChargeForm(p=>({...p,[f.key]:e.target.value})); if((chargeErrors as any)[f.key]) setChargeErrors(p=>({...p,[f.key]:false})); }}
                     style={{ ...inputStyle, borderColor:(chargeErrors as any)[f.key]?"var(--danger)":"" }} />
                   {(chargeErrors as any)[f.key] && <div style={{ fontSize:11, color:"var(--danger)", marginTop:3 }}>يرجى إدخال {f.label.replace(" *","")}</div>}
@@ -893,6 +913,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
       <ReceiptModal />
       <FinanceListView
+        canManage={canManage}
         sortedPassengers={sortedPassengers}
         filteredPassengers={filteredPassengers}
         pricing={pricing}
