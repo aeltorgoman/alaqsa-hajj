@@ -5,7 +5,7 @@ import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus } from "./finance/finance.types";
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm } from "./finance/finance.types";
 import { PRICING_KEYS, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
@@ -69,7 +69,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const [cashflowTo,   setCashflowTo]   = useState("");
 
   // مجموعات مالية
-  const [showGroupModal, setShowGroupModal]       = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal]           = useState(false);
+  const [showPassengerGroupModal, setShowPassengerGroupModal] = useState(false);
   const [groupModalMode, setGroupModalMode]       = useState<"create"|"addTo">("create");
   const [groupForm, setGroupForm]                 = useState({ name:"", notes:"" });
   const [savingGroup, setSavingGroup]             = useState(false);
@@ -82,7 +83,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       if (e.key !== "Escape") return;
       const askClose = async (msg: string) => showConfirm(msg, { title: "إغلاق النموذج" });
       if (showGroupPayModal) { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowGroupPayModal(false); return; }
-      if (showGroupModal)    { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowGroupModal(false); return; }
+      if (showAddMemberModal || showPassengerGroupModal) { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) { setShowAddMemberModal(false); setShowPassengerGroupModal(false); } return; }
       if (showChargeModal)   { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowChargeModal(false); return; }
       if (showPayModal)      { if (await askClose("هل تريد الإغلاق؟ ستفقد البيانات المدخلة.")) setShowPayModal(false); return; }
       if (selectedPayment) { setSelectedPayment(null); return; }
@@ -91,8 +92,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [selectedP, selectedGroup, selectedPayment, showPayModal, showChargeModal, showGroupModal, showGroupPayModal]);
-  const [groupPayForm, setGroupPayForm]           = useState({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+  }, [selectedP, selectedGroup, selectedPayment, showPayModal, showChargeModal, showAddMemberModal, showPassengerGroupModal, showGroupPayModal]);
+  const [groupPayForm, setGroupPayForm]           = useState<GroupPayForm>({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
   const [savingGroupPay, setSavingGroupPay]       = useState(false);
 
   // بيانات الشركة للطباعة
@@ -326,7 +327,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     }
     setGroups(prev => [grp as FinancialGroup, ...prev]);
     setGroupMembers(prev => [...prev, mem as FinancialGroupMember]);
-    setShowGroupModal(false);
+    setShowPassengerGroupModal(false);
     setGroupForm({ name:"", notes:"" });
     showAlert("success", `تم إنشاء المجموعة "${grp.name}" بنجاح`);
   }
@@ -345,7 +346,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     setAddingMemberId(null);
     if (error || !data) { showAlert("error", "تعذر إضافة الحاج إلى المجموعة"); return; }
     setGroupMembers(prev => [...prev, data as FinancialGroupMember]);
-    setShowGroupModal(false);
+    setShowAddMemberModal(false);
+    setShowPassengerGroupModal(false);
     showAlert("success","تمت إضافة الحاج إلى المجموعة بنجاح");
   }
 
@@ -568,7 +570,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           pricing={pricing}
           chargesByPassenger={chargesByPassenger}
           paymentsByPassenger={paymentsByPassenger}
-          showAddMemberModal={showGroupModal}
+          showAddMemberModal={showAddMemberModal}
           showGroupPayModal={showGroupPayModal}
           addingMemberId={addingMemberId}
           groupPayForm={groupPayForm}
@@ -579,8 +581,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           onSelectPassenger={p => { setSelectedP(p); setSubView("detail"); }}
           onRemoveMember={(pid, gid) => removeFromGroup(pid, gid)}
           onAddMember={(gid, pid) => addMemberToGroup(gid, pid)}
-          onOpenAddMemberModal={() => setShowGroupModal(true)}
-          onCloseAddMemberModal={() => setShowGroupModal(false)}
+          onOpenAddMemberModal={() => setShowAddMemberModal(true)}
+          onCloseAddMemberModal={() => setShowAddMemberModal(false)}
           onOpenGroupPayModal={() => setShowGroupPayModal(true)}
           onCloseGroupPayModal={() => setShowGroupPayModal(false)}
           onGroupPayFormChange={(key, value) => setGroupPayForm(prev => ({ ...prev, [key]: value }))}
@@ -614,7 +616,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           editingCustomPrice={editingCustomPrice}
           customPriceInput={customPriceInput}
           savingCustomPrice={savingCustomPrice}
-          onBack={()=>{setSubView("reports");setSelectedP(null);setSelectedPayment(null);}}
+          onBack={()=>{setSubView("list");setSelectedP(null);setSelectedPayment(null);}}
           onPrintStatement={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))}
           onEditCustomPrice={()=>{ setCustomPriceInput(String((selectedP.services as any).custom_price || "")); setEditingCustomPrice(true); }}
           onCustomPriceInputChange={setCustomPriceInput}
@@ -627,8 +629,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           onDeleteCharge={id=>deleteCustomCharge(id)}
           onOpenGroup={g=>{setSelectedGroup(g);setSubView("group");}}
           onRemoveFromGroup={gid=>removeFromGroup(selectedP.id,gid)}
-          onCreateGroup={()=>{setGroupModalMode("create");setGroupForm({name:"",notes:""});setShowGroupModal(true);}}
-          onAddToExistingGroup={()=>{setGroupModalMode("addTo");setShowGroupModal(true);}}
+          onCreateGroup={()=>{setGroupModalMode("create");setGroupForm({name:"",notes:""});setShowPassengerGroupModal(true);}}
+          onAddToExistingGroup={()=>{setGroupModalMode("addTo");setShowPassengerGroupModal(true);}}
           tdStyle={tdStyle}
         />
 
@@ -689,7 +691,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         {/* مودال تأكيد الإجراءات */}
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         {/* مودال: مجموعة */}
-        {showGroupModal&&(
+        {showPassengerGroupModal&&(
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
             <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:360, boxShadow:"var(--shadow-xl)", maxHeight:"80vh", overflowY:"auto" }}>
               {groupModalMode==="create"?(
@@ -699,7 +701,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                   <div style={{ marginBottom:16 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>ملاحظات (اختياري)</div><input type="text" placeholder="..." value={groupForm.notes} onChange={e=>setGroupForm(p=>({...p,notes:e.target.value}))} style={inputStyle}/></div>
                   <div style={{ display:"flex", gap:10 }}>
                     <button onClick={createGroupAndAdd} disabled={savingGroup} style={{ flex:1, padding:10, background:"var(--primary)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>{savingGroup?"جارٍ الإنشاء...":"إنشاء وإضافة الحاج"}</button>
-                    <button onClick={()=>setShowGroupModal(false)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إلغاء</button>
+                    <button onClick={()=>setShowPassengerGroupModal(false)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إلغاء</button>
                   </div>
                 </>
               ):(
@@ -716,7 +718,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                       </button>
                     </div>
                   ))}
-                  <button onClick={()=>setShowGroupModal(false)} style={{ width:"100%", marginTop:16, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إغلاق</button>
+                  <button onClick={()=>setShowPassengerGroupModal(false)} style={{ width:"100%", marginTop:16, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إغلاق</button>
                 </>
               )}
             </div>

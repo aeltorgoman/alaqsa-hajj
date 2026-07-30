@@ -162,7 +162,7 @@ export function PassengerFinanceView({
                 <td style={tdStyle}>دفعة — {py.payment_date} <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:6 }}>({py.method})</span>{py.notes&&<span style={{ fontSize:10, color:"var(--text-muted)" }}>— {py.notes}</span>}</td>
                 <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
                 <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td>
-                <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={()=>onDeletePayment(py.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button></td>
+                <td style={{ ...tdStyle, textAlign:"center" }}><button onClick={e=>{e.stopPropagation();onDeletePayment(py.id);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button></td>
               </tr>
             ))}
             <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}>
