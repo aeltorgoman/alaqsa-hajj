@@ -1,14 +1,19 @@
 -- ============================================================
--- ضمان عدم بقاء مجموعة مالية بلا أعضاء — في أي سيناريو
+-- ضمان عدم بقاء مجموعة مالية بلا أعضاء بعد حذف عضو
 -- ============================================================
--- منطق الواجهة يغطّي الإزالة المقصودة فقط. تبقى مسارات لا يراها:
+-- هذه الـ migration تنشئ الدالة والمحفّز فقط.
+-- لا تحذف ولا تعدّل أي بيانات موجودة — تشغيلها على قاعدة فيها
+-- مجموعات فارغة قديمة يتركها كما هي.
+-- تنظيف المتراكم قبل هذا المحفّز في سكربت يدوي منفصل:
+--   supabase/scripts/cleanup_empty_financial_groups.sql
+--
+-- لماذا لا تكفي الواجهة:
 --   1) حذف الحاج نفسه — financial_group_members_passenger_id_fkey
 --      معرّف ON DELETE CASCADE، وله ثلاثة مداخل:
 --      PassengersPage.tsx / AdminsPage.tsx / ArchivePage.tsx
 --      ولا واحد منها يعلم بوجود المجموعات المالية.
 --   2) سباق تزامني: مستخدمان يزيلان آخِرَين عضوين في اللحظة نفسها،
 --      فيرى كلٌّ منهما أن عضوه "ليس الأخير".
--- القاعدة وحدها تستطيع إغلاق الاثنين.
 
 create or replace function public.delete_empty_financial_group()
 returns trigger
@@ -26,6 +31,8 @@ begin
 end;
 $$;
 
+-- المحفّزات تُستدعى من المحرّك لا من العميل، فسحب EXECUTE
+-- لا يؤثر على عملها ويمنع استدعاءها مباشرةً عبر REST.
 revoke execute on function public.delete_empty_financial_group() from public, anon, authenticated;
 
 -- constraint trigger مؤجَّل حتى الـ commit: عند حذف المجموعة مباشرةً
@@ -38,14 +45,3 @@ create constraint trigger trg_delete_empty_financial_group
   deferrable initially deferred
   for each row
   execute function public.delete_empty_financial_group();
-
--- تنظيف المجموعات الفارغة الموجودة حالياً.
--- ⚠️ يحذف بيانات: عند كتابة هذا الملف كانت مجموعة واحدة فارغة
---    (id=1 «عائلة الترجمان»، صفر أعضاء). راجِع القائمة قبل التطبيق:
---    select g.id, g.name from financial_groups g
---      left join financial_group_members m on m.group_id = g.id
---     where m.id is null;
-delete from public.financial_groups g
-where not exists (
-  select 1 from public.financial_group_members m where m.group_id = g.id
-);
