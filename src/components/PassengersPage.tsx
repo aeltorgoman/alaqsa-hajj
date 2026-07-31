@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { mapPassenger, upsertPassenger } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -574,7 +575,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
     if (data && data[0]) {
       const newId = data[0].id;
-      const docUpdates: any = {};
+      /* الصف القادم من القاعدة هو المصدر الوحيد لشكل الحاج.
+         يبدأ بصف الإدراج، ويُستبدل بصف التحديث إن رُفعت مستندات،
+         ثم يُحوَّل بـ mapPassenger — نفس المُحوِّل الذي يستخدمه
+         الجلب الأولي وأحداث Realtime */
+      let row = data[0];
+      const docUpdates: { passport_url?: string; national_id_url?: string } = {};
       if (manualPassportFile) {
         const url = await uploadDoc(manualPassportFile, newId, "passport_doc");
         if (url) docUpdates.passport_url = url;
@@ -584,9 +590,17 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         if (url) docUpdates.national_id_url = url;
       }
       if (Object.keys(docUpdates).length > 0) {
-        await supabase.from("passengers").update(docUpdates).eq("id", newId);
+        const { data: updatedRows, error: docErr } = await supabase
+          .from("passengers").update(docUpdates).eq("id", newId).select().single();
+        if (docErr) {
+          showAlert("warning", "تم حفظ الحاج لكن تعذّر حفظ المستندات، يرجى رفعها من صفحة الحاج");
+        } else if (updatedRows) {
+          row = updatedRows;
+        }
       }
-      setPassengers(prev => [{ id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger, ...prev]);
+      /* upsert لا يتأثر بترتيب الوصول: إن كان حدث Realtime قد سبقنا
+         وأضاف الحاج، يُستبدل بدل أن يتكرّر */
+      setPassengers(prev => upsertPassenger(prev, mapPassenger(row)));
       setShowManual(false);
       resetManualModal();
       // لو جاي من الداشبورد عن طريق سكان، ارجع للداشبورد
