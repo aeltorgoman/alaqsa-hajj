@@ -82,7 +82,7 @@ export function FinanceListView({
       </div>
       <div style={{ padding:"0 20px 12px", display:"flex", gap:10, flexShrink:0 }}>
         <input type="text" placeholder="🔍 بحث عن حاج..." value={searchTerm} onChange={e=>onSearchTermChange(e.target.value)} style={{ flex:1, padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13 }} />
-        <select value={filterStatus} onChange={e=>onFilterStatusChange(e.target.value as any)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:120 }}>
+        <select value={filterStatus} onChange={e=>onFilterStatusChange(e.target.value as FinanceFilterStatus)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:120 }}>
           <option value="all">كل الحالات</option><option value="paid">مسدد</option><option value="partial">جزئي</option><option value="unpaid">لم يدفع</option><option value="unpriced">غير مسعّر</option><option value="credit">رصيد دائن</option>
         </select>
         <select value={filterPackage} onChange={e=>onFilterPackageChange(e.target.value)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:130 }}>
@@ -112,8 +112,8 @@ export function FinanceListView({
                     if(s.camp_mina==="خاص")  badges.push("منى خاص");
                     if(s.camp_arafa==="خاص") badges.push("عرفة خاص");
                     if(s.bus==="VIP")         badges.push("VIP");
-                    if((p as any).flight_class==="درجة أولى") badges.push("درجة أولى");
-                    if((p as any).flight_class==="بدون")      badges.push("بدون تذكرة");
+                    if(p.flight_class==="درجة أولى") badges.push("درجة أولى");
+                    if(p.flight_class==="بدون")      badges.push("بدون تذكرة");
                     const pGroup=getPassengerGroup(p.id);
                     return(
                       <tr key={p.id} onClick={()=>onSelectPassenger(p)} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}>

@@ -634,6 +634,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      create_financial_group_with_member: {
+        Args: {
+          p_created_by: string
+          p_name: string
+          p_notes: string
+          p_passenger_id: number
+        }
+        Returns: Json
+      }
       verify_user: {
         Args: { p_password: string; p_username: string }
         Returns: {
