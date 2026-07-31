@@ -39,7 +39,7 @@ export function getPackageKey(hotel_type: string): string | null {
 // السعر يدوي لو الإقامة "خاص"، غير كده بياخد سعر الباقة الثابتة
 export function getPriceInfo(s: Passenger["services"], pricing: PricingMap): { label: string; amount: number; unpriced?: boolean } {
   if (s.hotel_type === "خاص") {
-    return { label: "سعر خاص", amount: Number((s as any).custom_price) || 0 };
+    return { label: "سعر خاص", amount: Number(s.custom_price) || 0 };
   }
   const key = getPackageKey(s.hotel_type);
   if (!key) return { label: "الباقة غير محددة", amount: 0, unpriced: true };
@@ -61,8 +61,8 @@ export function calcTotalDue(p: Passenger, pricing: PricingMap, custom: ChargeSo
   if (s.camp_mina === "خاص")  total += pricing["addon_mina"]?.amount    || 0;
   if (s.camp_arafa === "خاص") total += pricing["addon_arafa"]?.amount   || 0;
   if (s.bus === "VIP")         total += pricing["addon_bus_vip"]?.amount || 0;
-  if ((p as any).flight_class === "درجة أولى") total += pricing["addon_first_class"]?.amount  || 0;
-  if ((p as any).flight_class === "بدون")      total -= pricing["discount_no_ticket"]?.amount || 0;
+  if (p.flight_class === "درجة أولى") total += pricing["addon_first_class"]?.amount  || 0;
+  if (p.flight_class === "بدون")      total -= pricing["discount_no_ticket"]?.amount || 0;
   chargesFor(p.id, custom).forEach(c => {
     if (c.type === "إضافة") total += c.amount; else total -= c.amount;
   });

@@ -5,7 +5,7 @@ import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm } from "./finance/finance.types";
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow } from "./finance/finance.types";
 import { PRICING_KEYS, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
@@ -43,7 +43,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   // مودال دفعة
   const [showPayModal, setShowPayModal] = useState(false);
-  const [payForm, setPayForm]           = useState({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+  const [payForm, setPayForm]           = useState<PayForm>({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
   const [savingPay, setSavingPay]       = useState(false);
 
   // إيصال
@@ -53,8 +53,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   // مودال بند خاص
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [chargeType, setChargeType]           = useState<"إضافة"|"خصم">("إضافة");
-  const [chargeForm, setChargeForm]           = useState({ description:"", amount:"", notes:"" });
-  const [chargeErrors, setChargeErrors]       = useState({ description: false, amount: false });
+  const [chargeForm, setChargeForm]           = useState<ChargeForm>({ description:"", amount:"", notes:"" });
+  const [chargeErrors, setChargeErrors]       = useState<ChargeErrors>({ description: false, amount: false });
 
   // مودال التأكيد الموحد (بديل window.confirm)
   const { confirmState, confirmAction: showConfirm, handleConfirm: handleConfirmYes, handleCancel: handleConfirmNo } = useConfirm();
@@ -120,6 +120,16 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  /* القاعدة تفرض financial_group_members_passenger_id_key UNIQUE (passenger_id)،
+     فلو سبق مستخدمٌ آخر بإضافة الحاج بين فحصنا وإدراجنا يعود الخطأ 23505.
+     نترجمه إلى رسالة مفهومة بدل رسالة عامة */
+  function groupMemberErrorMessage(error: { code?: string; message?: string } | null): string {
+    if (error?.code === "23505" || /duplicate key|unique constraint/i.test(error?.message || "")) {
+      return "هذا الحاج منتمٍ بالفعل إلى مجموعة مالية. لا يمكن ضمّه إلى أكثر من مجموعة.";
+    }
+    return "تعذر إضافة الحاج إلى المجموعة";
+  }
+
   function requireManage(): boolean {
     if (canManage) return true;
     showAlert("error", "لا تملك صلاحية إجراء عمليات مالية");
@@ -135,17 +145,35 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       supabase.from("financial_groups").select("*").order("created_at", { ascending:false }),
       supabase.from("financial_group_members").select("*"),
     ]);
-    if (pRes.data) {
+
+    /* أي جزء يفشل يُبلَّغ عنه صراحةً ولا يُكتب في الحالة، حتى لا تُعرض
+       بيانات ناقصة كأنها كاملة (مثلاً دفعات بلا بنود خاصة = رصيد مضلِّل) */
+    const parts: { res: { error: unknown }; label: string }[] = [
+      { res: pRes,  label: "الأسعار" },
+      { res: pyRes, label: "الدفعات" },
+      { res: ccRes, label: "البنود الخاصة" },
+      { res: gRes,  label: "المجموعات المالية" },
+      { res: gmRes, label: "أعضاء المجموعات" },
+    ];
+    const failed = parts.filter(p => p.res.error).map(p => p.label);
+
+    if (pRes.data && !pRes.error) {
       const map: PricingMap = {};
       const em: Record<string,string> = {};
-      pRes.data.forEach((r:any) => { map[r.key]={label:r.label,amount:Number(r.amount),type:r.type}; em[r.key]=String(r.amount); });
+      (pRes.data as PricingRow[]).forEach(r => { map[r.key]={label:r.label,amount:Number(r.amount),type:r.type}; em[r.key]=String(r.amount); });
       setPricing(map); setEditPricing(em);
     }
-    if (pyRes.data) setPayments(pyRes.data as Payment[]);
-    if (ccRes.data) setCustomCharges(ccRes.data as CustomCharge[]);
-    if (gRes.data)  setGroups(gRes.data as FinancialGroup[]);
-    if (gmRes.data) setGroupMembers(gmRes.data as FinancialGroupMember[]);
-    setLastUpdated(new Date());
+    if (pyRes.data && !pyRes.error) setPayments(pyRes.data as Payment[]);
+    if (ccRes.data && !ccRes.error) setCustomCharges(ccRes.data as CustomCharge[]);
+    if (gRes.data  && !gRes.error)  setGroups(gRes.data as FinancialGroup[]);
+    if (gmRes.data && !gmRes.error) setGroupMembers(gmRes.data as FinancialGroupMember[]);
+
+    if (failed.length === 0) {
+      setLastUpdated(new Date());
+    } else {
+      showAlert("error", `تعذر تحميل: ${failed.join("، ")}. البيانات المعروضة قد تكون غير مكتملة، يرجى تحديث الصفحة.`);
+    }
+
     setLoading(false);
     setRefreshing(false);
   }
@@ -258,7 +286,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       if (!ok) return;
     }
     setSavingPay(true);
-    const rec = { passenger_id:selectedP.id, amount, payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:(currentUser as any).username||"" };
+    const rec = { passenger_id:selectedP.id, amount, payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:currentUser.username||"" };
     const { data, error } = await supabase.from("payments").insert(rec).select().single();
     if (error || !data) {
       setSavingPay(false);
@@ -295,7 +323,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       return;
     }
     setSavingCharge(true);
-    const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount, type:chargeType, notes:chargeForm.notes, created_by:(currentUser as any).username||"" }).select().single();
+    const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount, type:chargeType, notes:chargeForm.notes, created_by:currentUser.username||"" }).select().single();
     setSavingCharge(false);
     if (error || !data) { showAlert("error", "تعذر حفظ البند، يرجى المحاولة مرة أخرى"); return; }
     setCustomCharges(prev => [...prev, data as CustomCharge]);
@@ -330,13 +358,16 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       return;
     }
     setSavingGroup(true);
-    const { data:grp, error:ge } = await supabase.from("financial_groups").insert({ name:groupForm.name.trim(), notes:groupForm.notes, created_by:(currentUser as any).username||"" }).select().single();
+    const { data:grp, error:ge } = await supabase.from("financial_groups").insert({ name:groupForm.name.trim(), notes:groupForm.notes, created_by:currentUser.username||"" }).select().single();
     if (ge || !grp) { setSavingGroup(false); showAlert("error", "تعذر إنشاء المجموعة، يرجى المحاولة مرة أخرى"); return; }
     const { data:mem, error:me } = await supabase.from("financial_group_members").insert({ group_id:grp.id, passenger_id:selectedP.id }).select().single();
     setSavingGroup(false);
     if (me || !mem) {
       await supabase.from("financial_groups").delete().eq("id", grp.id);
-      showAlert("error", "تعذر إضافة الحاج إلى المجموعة، ولم يتم إنشاؤها");
+      showAlert("error", me?.code === "23505"
+        ? "هذا الحاج منتمٍ بالفعل إلى مجموعة مالية. لم يتم إنشاء المجموعة."
+        : "تعذر إضافة الحاج إلى المجموعة، ولم يتم إنشاؤها");
+      if (me?.code === "23505") loadFinanceData(true);
       return;
     }
     setGroups(prev => [grp as FinancialGroup, ...prev]);
@@ -359,7 +390,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     setAddingMemberId(passengerId);
     const { data, error } = await supabase.from("financial_group_members").insert({ group_id:groupId, passenger_id:passengerId }).select().single();
     setAddingMemberId(null);
-    if (error || !data) { showAlert("error", "تعذر إضافة الحاج إلى المجموعة"); return; }
+    if (error || !data) {
+      showAlert("error", groupMemberErrorMessage(error));
+      if (error?.code === "23505") loadFinanceData(true);
+      return;
+    }
     setGroupMembers(prev => [...prev, data as FinancialGroupMember]);
     setShowAddMemberModal(false);
     setShowPassengerGroupModal(false);
@@ -423,7 +458,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const baseUnits  = Math.floor(totalUnits / members.length);
     const extraUnits = totalUnits - baseUnits * members.length;
     const shares = members.map((_, i) => (baseUnits + (i >= members.length - extraUnits ? 1 : 0)) / 100);
-    const inserts = members.map((p, i) => ({ passenger_id:p.id, amount:shares[i], payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:(currentUser as any).username||"" }));
+    const inserts = members.map((p, i) => ({ passenger_id:p.id, amount:shares[i], payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:currentUser.username||"" }));
     const { data, error } = await supabase.from("payments").insert(inserts).select();
     setSavingGroupPay(false);
     if (error || !data) { showAlert("error", "تعذر توزيع الدفعة، لم يتم تسجيل أي مبلغ"); return; }
@@ -657,7 +692,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           savingCustomPrice={savingCustomPrice}
           onBack={()=>{setSubView("list");setSelectedP(null);setSelectedPayment(null);}}
           onPrintStatement={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))}
-          onEditCustomPrice={()=>{ setCustomPriceInput(String((selectedP.services as any).custom_price || "")); setEditingCustomPrice(true); }}
+          onEditCustomPrice={()=>{ setCustomPriceInput(String(selectedP.services.custom_price || "")); setEditingCustomPrice(true); }}
           onCustomPriceInputChange={setCustomPriceInput}
           onSaveCustomPrice={saveCustomPrice}
           onCancelEditCustomPrice={()=>setEditingCustomPrice(false)}
@@ -678,8 +713,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
             <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)" }}>
               <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--success)" }}>تسجيل دفعة جديدة</div>
-              {[{label:"المبلغ",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}].map(f=>(
-                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={(payForm as any)[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
+              {([{label:"المبلغ",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}] as { label:string; key:keyof PayForm; type:string; ph:string }[]).map(f=>(
+                <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={payForm[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
               ))}
               <div style={{ marginBottom:16 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>طريقة الدفع</div><select value={payForm.method} onChange={e=>setPayForm(p=>({...p,method:e.target.value}))} style={inputStyle}>{["نقدي","تحويل بنكي","شيك"].map(m=><option key={m}>{m}</option>)}</select></div>
               <div style={{ display:"flex", gap:10 }}>
@@ -705,17 +740,17 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                 </div>
               </div>
               {/* الحقول */}
-              {[
+              {([
                 {label:chargeType==="إضافة"?"وصف البند *":"سبب الخصم *",key:"description",ph:chargeType==="إضافة"?"مثال: ليموزين من المطار":"مثال: خصم موظف"},
                 {label:"المبلغ *",key:"amount",ph:"0"},
                 {label:"ملاحظات (اختياري)",key:"notes",ph:"..."}
-              ].map(f=>(
+              ] as { label:string; key:keyof ChargeForm; ph:string }[]).map(f=>(
                 <div key={f.key} style={{ marginBottom:12 }}>
                   <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
-                  <input type={f.key==="amount"?"number":"text"} min={f.key==="amount"?0:undefined} placeholder={f.ph} value={(chargeForm as any)[f.key]}
-                    onChange={e=>{ setChargeForm(p=>({...p,[f.key]:e.target.value})); if((chargeErrors as any)[f.key]) setChargeErrors(p=>({...p,[f.key]:false})); }}
-                    style={{ ...inputStyle, borderColor:(chargeErrors as any)[f.key]?"var(--danger)":"" }} />
-                  {(chargeErrors as any)[f.key] && <div style={{ fontSize:11, color:"var(--danger)", marginTop:3 }}>يرجى إدخال {f.label.replace(" *","")}</div>}
+                  <input type={f.key==="amount"?"number":"text"} min={f.key==="amount"?0:undefined} placeholder={f.ph} value={chargeForm[f.key]}
+                    onChange={e=>{ setChargeForm(p=>({...p,[f.key]:e.target.value})); if(f.key!=="notes" && chargeErrors[f.key]) setChargeErrors(p=>({...p,[f.key]:false})); }}
+                    style={{ ...inputStyle, borderColor:(f.key!=="notes" && chargeErrors[f.key])?"var(--danger)":"" }} />
+                  {(f.key!=="notes" && chargeErrors[f.key]) && <div style={{ fontSize:11, color:"var(--danger)", marginTop:3 }}>يرجى إدخال {f.label.replace(" *","")}</div>}
                 </div>
               ))}
               <div style={{ display:"flex", gap:10, marginTop:4 }}>
@@ -849,7 +884,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الإضافة / الخصم</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي</th></tr></thead>
-              <tbody>{[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>(p as any).flight_class==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>(p as any).flight_class==="بدون"}].map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pricing[a.key]?.label||a.key}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>{[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>p.flight_class==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>p.flight_class==="بدون"}].map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pricing[a.key]?.label||a.key}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
             </table>
           </div>
         )}

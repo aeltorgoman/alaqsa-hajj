@@ -15,6 +15,16 @@ export type FinanceFilterStatus = "all" | "paid" | "partial" | "unpaid" | "unpri
 // نموذج الدفعة المشتركة على أعضاء المجموعة
 export type GroupPayForm = { amount: string; payment_date: string; method: string; notes: string };
 
+// نموذج تسجيل دفعة فردية
+export type PayForm = { amount: string; payment_date: string; method: string; notes: string };
+
+// نموذج البند الخاص / الخصم، وأخطاء التحقق المقابلة له
+export type ChargeForm = { description: string; amount: string; notes: string };
+export type ChargeErrors = { description: boolean; amount: boolean };
+
+// صف واحد كما يرد من جدول pricing_settings
+export type PricingRow = { key: string; label: string; amount: number | string; type: string };
+
 // مصادر البيانات تقبل مصفوفة أو خريطة مُجهّزة مسبقاً لتسريع الحساب
 export type ChargeSource  = CustomCharge[] | Map<number, CustomCharge[]>;
 export type PaymentSource = Payment[]      | Map<number, Payment[]>;

@@ -74,8 +74,8 @@ export function PassengerFinanceView({
   if (s.camp_mina==="خاص")  addonRows.push({label:"خيمة خاصة - منى",amount:pricing["addon_mina"]?.amount||0});
   if (s.camp_arafa==="خاص") addonRows.push({label:"خيمة خاصة - عرفة",amount:pricing["addon_arafa"]?.amount||0});
   if (s.bus==="VIP")         addonRows.push({label:"باص VIP",amount:pricing["addon_bus_vip"]?.amount||0});
-  if ((passenger as any).flight_class==="درجة أولى") addonRows.push({label:"طيران درجة أولى",amount:pricing["addon_first_class"]?.amount||0});
-  if ((passenger as any).flight_class==="بدون")      addonRows.push({label:"خصم بدون تذكرة",amount:pricing["discount_no_ticket"]?.amount||0,isDiscount:true});
+  if (passenger.flight_class==="درجة أولى") addonRows.push({label:"طيران درجة أولى",amount:pricing["addon_first_class"]?.amount||0});
+  if (passenger.flight_class==="بدون")      addonRows.push({label:"خصم بدون تذكرة",amount:pricing["discount_no_ticket"]?.amount||0,isDiscount:true});
   return (
     <div style={{ maxWidth:720, margin:"0 auto" }}>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
