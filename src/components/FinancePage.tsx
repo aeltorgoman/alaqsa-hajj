@@ -5,7 +5,7 @@ import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
 import type { Passenger, User } from "../types";
 
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow } from "./finance/finance.types";
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
 import { PRICING_KEYS, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
@@ -358,20 +358,25 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       return;
     }
     setSavingGroup(true);
-    const { data:grp, error:ge } = await supabase.from("financial_groups").insert({ name:groupForm.name.trim(), notes:groupForm.notes, created_by:currentUser.username||"" }).select().single();
-    if (ge || !grp) { setSavingGroup(false); showAlert("error", "تعذر إنشاء المجموعة، يرجى المحاولة مرة أخرى"); return; }
-    const { data:mem, error:me } = await supabase.from("financial_group_members").insert({ group_id:grp.id, passenger_id:selectedP.id }).select().single();
+    /* إنشاء المجموعة وأول عضو داخل معاملة واحدة على الخادم — أي فشل
+       أو انقطاع يُرجع الاثنين معاً فلا تبقى مجموعة فارغة */
+    const { data, error } = await supabase.rpc("create_financial_group_with_member", {
+      p_name: groupForm.name.trim(),
+      p_notes: groupForm.notes,
+      p_created_by: currentUser.username || "",
+      p_passenger_id: selectedP.id,
+    });
     setSavingGroup(false);
-    if (me || !mem) {
-      await supabase.from("financial_groups").delete().eq("id", grp.id);
-      showAlert("error", me?.code === "23505"
+    if (error || !data) {
+      showAlert("error", error?.code === "23505"
         ? "هذا الحاج منتمٍ بالفعل إلى مجموعة مالية. لم يتم إنشاء المجموعة."
-        : "تعذر إضافة الحاج إلى المجموعة، ولم يتم إنشاؤها");
-      if (me?.code === "23505") loadFinanceData(true);
+        : "تعذر إنشاء المجموعة، يرجى المحاولة مرة أخرى");
+      if (error?.code === "23505") loadFinanceData(true);
       return;
     }
-    setGroups(prev => [grp as FinancialGroup, ...prev]);
-    setGroupMembers(prev => [...prev, mem as FinancialGroupMember]);
+    const { group: grp, member: mem } = data as unknown as CreatedGroupWithMember;
+    setGroups(prev => [grp, ...prev]);
+    setGroupMembers(prev => [...prev, mem]);
     setShowPassengerGroupModal(false);
     setGroupForm({ name:"", notes:"" });
     showAlert("success", `تم إنشاء المجموعة "${grp.name}" بنجاح`);

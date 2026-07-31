@@ -25,6 +25,9 @@ export type ChargeErrors = { description: boolean; amount: boolean };
 // صف واحد كما يرد من جدول pricing_settings
 export type PricingRow = { key: string; label: string; amount: number | string; type: string };
 
+// نتيجة create_financial_group_with_member — المجموعة وأول عضو معاً
+export type CreatedGroupWithMember = { group: FinancialGroup; member: FinancialGroupMember };
+
 // مصادر البيانات تقبل مصفوفة أو خريطة مُجهّزة مسبقاً لتسريع الحساب
 export type ChargeSource  = CustomCharge[] | Map<number, CustomCharge[]>;
 export type PaymentSource = Payment[]      | Map<number, Payment[]>;
