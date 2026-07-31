@@ -365,6 +365,7 @@ export type Database = {
           sort_order: number | null
           updated_at: string | null
           updated_by: string | null
+          wants_flight: boolean | null
         }
         Insert: {
           bus?: string | null
@@ -408,6 +409,7 @@ export type Database = {
           sort_order?: number | null
           updated_at?: string | null
           updated_by?: string | null
+          wants_flight?: boolean | null
         }
         Update: {
           bus?: string | null
@@ -451,6 +453,7 @@ export type Database = {
           sort_order?: number | null
           updated_at?: string | null
           updated_by?: string | null
+          wants_flight?: boolean | null
         }
         Relationships: []
       }

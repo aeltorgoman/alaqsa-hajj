@@ -43,6 +43,7 @@ export interface Passenger {
   created_by?: string | null;
   updated_by?: string | null;
   updated_at?: string | null;
+  wants_flight?: boolean | null;
   services: {
     bus: string;
     flight: string;
