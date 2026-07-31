@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { NAV } from "./utils";
 import type { Passenger, User } from "./types";
-import type { Database } from "./types/database";
+import { mapPassenger, upsertPassenger } from "./utils/passenger";
+import type { PassengerRow } from "./utils/passenger";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
 import { Dashboard } from "./components/Dashboard";
@@ -27,25 +28,6 @@ import { LoadingSpinner } from "./components/LoadingSpinner";
 const PAGE_PERM: Record<string, string> = Object.fromEntries(
   NAV.flatMap(s => s.items).filter(it => it.perm).map(it => [it.id, it.perm])
 );
-
-/* صف جدول passengers كما تولّده Supabase — مصدر الحقيقة لشكل البيانات
-   القادمة من القاعدة، سواء من الجلب الأولي أو من أحداث Realtime */
-type PassengerRow = Database["public"]["Tables"]["passengers"]["Row"];
-
-const PASSENGER_TYPES = ["حاج", "مرافق", "مشرف", "إداري"] as const;
-type PassengerType = (typeof PASSENGER_TYPES)[number];
-
-function toPassengerType(value: string | null): PassengerType {
-  return (PASSENGER_TYPES as readonly string[]).includes(value ?? "")
-    ? (value as PassengerType)
-    : "حاج";
-}
-
-/* ترتيب موحّد: نفس ترتيب الجلب الأولي (sort_order ثم id)
-   حتى لا يختلف ترتيب القائمة بعد وصول حدث Realtime */
-function sortPassengers(list: Passenger[]): Passenger[] {
-  return [...list].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id);
-}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -79,33 +61,6 @@ export default function App() {
     setPage("dash");
   };
 
-  const mapPassenger = (p: PassengerRow): Passenger => ({
-    id: p.id, name_ar: p.name_ar || "", name_en: p.name_en || "",
-    short_ar: p.short_ar || "", short_en: p.short_en || "",
-    passport: p.passport || "", national_id: p.national_id || "",
-    nat: p.nat || "", dob: p.dob || "", expiry: p.expiry || "",
-    gender: p.gender || "", phone: p.phone || "",
-    services: { bus: p.bus || "عادي", flight: p.flight || "عادي", hotel_type: p.hotel_type || "ثنائية", hotel_view: p.hotel_view || "مطلة", camp_mina: p.camp_mina || "عادي", camp_arafa: p.camp_arafa || "عادي", custom_price: p.custom_price != null ? String(p.custom_price) : "" },
-    rel: "", linked: -1,
-    photo_url: p.photo_url || "", id_expiry: p.id_expiry || "",
-    national_id_url: p.national_id_url || "", contract_url: p.contract_url || "",
-    passport_url: p.passport_url || "",
-    hajj_permit_url: p.hajj_permit_url || "", flight_ticket_url: p.flight_ticket_url || "",
-    bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
-    camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
-    family_id: p.family_id || null,
-    flight_id: p.flight_id || null, flight_class: p.flight_class || undefined,
-    return_flight_id: p.return_flight_id || null,
-    sort_order: p.sort_order || 0,
-    passenger_type: toPassengerType(p.passenger_type),
-    wants_flight: p.wants_flight || false,
-    /* حقول كانت تُسقَط صامتاً فتُعطَّل ميزة التدقيق في PassengersPage */
-    season_id: p.season_id ?? null,
-    created_at: p.created_at,
-    created_by: p.created_by ?? null,
-    updated_by: p.updated_by ?? null,
-    updated_at: p.updated_at ?? null,
-  });
 
   useEffect(() => {
     const loadPassengers = async () => {
@@ -124,11 +79,7 @@ export default function App() {
       .on<PassengerRow>("postgres_changes", { event: "*", schema: "public", table: "passengers" }, payload => {
         if (payload.eventType === "INSERT") {
           const added = mapPassenger(payload.new);
-          setPassengers(prev => {
-            if (prev.some(p => p.id === added.id)) return prev;
-            /* إعادة الفرز حتى يبقى الترتيب مطابقاً لترتيب الجلب الأولي */
-            return sortPassengers([...prev, added]);
-          });
+          setPassengers(prev => upsertPassenger(prev, added));
         } else if (payload.eventType === "UPDATE") {
           const updated = mapPassenger(payload.new);
           setPassengers(prev => prev.map(p => p.id === updated.id ? updated : p));
