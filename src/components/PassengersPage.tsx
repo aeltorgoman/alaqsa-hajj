@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -105,7 +106,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
-function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
+function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
@@ -464,7 +465,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (url) {
         await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id);
         const updated = { ...passenger, hajj_permit_url: url } as Passenger;
-        setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+        setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم حفظ تصريح الحج في ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
@@ -478,7 +479,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
         await supabase.from("passengers").update(updates).eq("id", passenger.id);
         const updated = { ...passenger, ...updates } as Passenger;
-        setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+        setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم ربط البطاقة الشخصية بملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
@@ -499,7 +500,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         }
         await supabase.from("passengers").update(updates).eq("id", passenger.id);
         const updated = { ...passenger, ...updates } as Passenger;
-        setPassengers(passengers.map(x => x.id === passenger.id ? updated : x));
+        setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم حفظ صورة جواز السفر وتحديث بيانات ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
@@ -585,7 +586,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (Object.keys(docUpdates).length > 0) {
         await supabase.from("passengers").update(docUpdates).eq("id", newId);
       }
-      setPassengers([{ id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger, ...passengers]);
+      setPassengers(prev => [{ id: newId, ...manualForm, short_ar, short_en, services: manualServices, rel: "", linked: -1, created_by: data[0].created_by, created_at: data[0].created_at, ...docUpdates } as Passenger, ...prev]);
       setShowManual(false);
       resetManualModal();
       // لو جاي من الداشبورد عن طريق سكان، ارجع للداشبورد
@@ -692,7 +693,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           // مش لاقي حاج → ارفع على الحاج الحالي بدون تأكيد
           await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
           const updated = { ...p, [field]: url };
-          setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
+          setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
           setSelected(updated);
           if (idNum) showAlert("warning", `تمت قراءة الرقم "${idNum}" من المستند، لكنه غير موجود في القائمة — تم رفع الملف على ${p.short_ar || p.name_ar}`);
         }
@@ -702,7 +703,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (url) {
         await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
         const updated = { ...p, [field]: url };
-        setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
+        setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
         setSelected(updated);
       }
       setDocUploading(null);
@@ -712,7 +713,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const saveDocUpdates = async (p: Passenger, updates: Partial<Passenger>) => {
     await supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, ...updates };
-    setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
+    setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
   };
 
@@ -729,7 +730,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (path) await supabase.storage.from("passengers-docs").remove([path]);
     await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, [field]: null };
-    setPassengers(passengers.map((x: Passenger) => x.id === p.id ? updated : x));
+    setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
   };
   const [showLinkFamily, setShowLinkFamily] = useState(false);
@@ -741,7 +742,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     await supabase.from("passengers").update({ family_id: familyId }).eq("id", p2.id);
     const updated1 = { ...p1, family_id: familyId };
     const updated2 = { ...p2, family_id: familyId };
-    setPassengers(passengers.map(p => p.id === p1.id ? updated1 : p.id === p2.id ? updated2 : p));
+    setPassengers(prev => prev.map(p => p.id === p1.id ? updated1 : p.id === p2.id ? updated2 : p));
     setSelected(updated1);
     setShowLinkFamily(false); setLinkSearch("");
   };
@@ -751,7 +752,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (!ok) return;
     await supabase.from("passengers").update({ family_id: null }).eq("id", p.id);
     const updated = { ...p, family_id: null };
-    setPassengers(passengers.map(x => x.id === p.id ? updated : x));
+    setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
   };
 
@@ -759,7 +760,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const deleteP = async (id: number) => {
     await supabase.from("passengers").delete().eq("id", id);
-    setPassengers(passengers.filter(p => p.id !== id));
+    setPassengers(prev => prev.filter(p => p.id !== id));
     setSelected(null);
   };
 
@@ -775,10 +776,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       supabase.from("passengers").update({ sort_order: otherOrder }).eq("id", p.id),
       supabase.from("passengers").update({ sort_order: myOrder }).eq("id", other.id),
     ]);
-    setPassengers((passengers as any[]).map((x: any) =>
+    setPassengers(prev => prev.map(x =>
       x.id === p.id ? { ...x, sort_order: otherOrder } :
       x.id === other.id ? { ...x, sort_order: myOrder } : x
-    ) as Passenger[]);
+    ));
   };
 
   // ===== Drag & Drop =====
@@ -805,7 +806,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const [moved] = newOrder.splice(fromIdx, 1);
     newOrder.splice(toIdx, 0, moved);
     const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
-    setPassengers(passengers.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
+    setPassengers(prev => prev.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
     await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
 
@@ -824,7 +825,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       }
     }
     const updates = result.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
-    setPassengers(passengers.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
+    setPassengers(prev => prev.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
     await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
 
@@ -843,7 +844,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const [moved] = newOrder.splice(currentIdx, 1);
     newOrder.splice(targetIdx, 0, moved);
     const updates = newOrder.map((x, i) => ({ id: x.id, sort_order: (i + 1) * 10 }));
-    setPassengers(passengers.map(x => { const u = updates.find(y => y.id === x.id); return u ? { ...x, sort_order: u.sort_order } : x; }));
+    setPassengers(prev => prev.map(x => { const u = updates.find(y => y.id === x.id); return u ? { ...x, sort_order: u.sort_order } : x; }));
     await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
   const saveEdit = async (p: Passenger) => {
@@ -859,7 +860,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }).eq("id", p.id);
     if (error) { showAlert("error", "حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return; }
     const updatedP = { ...p, updated_by, updated_at };
-    setPassengers(passengers.map(x => x.id === p.id ? updatedP : x));
+    setPassengers(prev => prev.map(x => x.id === p.id ? updatedP : x));
     setEditing(null); setSelected(updatedP);
   };
 
@@ -1157,7 +1158,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       const [moved] = reordered.splice(fromIdx, 1);
                       reordered.splice(toIdx, 0, moved);
                       const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
-                      setPassengers(reordered.map((x, idx) => ({ ...x, sort_order: idx + 1 })));
+                      const orderById = new Map(updates.map(u => [u.id, u.sort_order]));
+                      setPassengers(prev => prev.map(x => orderById.has(x.id) ? { ...x, sort_order: orderById.get(x.id)! } : x));
                       await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
                     }}
                     onClick={() => setSelected(p)}
@@ -1178,7 +1180,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                               const reordered = [...passengers].filter(x => x.id !== p.id);
                               reordered.splice(Math.min(newOrder - 1, reordered.length), 0, p);
                               const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
-                              setPassengers(reordered.map((x, idx) => ({ ...x, sort_order: idx + 1 })));
+                              const orderById = new Map(updates.map(u => [u.id, u.sort_order]));
+                              setPassengers(prev => prev.map(x => orderById.has(x.id) ? { ...x, sort_order: orderById.get(x.id)! } : x));
                               await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
                             }
                             setEditingOrderId(null);
@@ -1613,7 +1616,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 const { passenger, url, field } = permitConfirm;
                 await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", passenger.id);
                 const updated = { ...passenger, [field]: url };
-                setPassengers(passengers.map((x: Passenger) => x.id === passenger.id ? updated : x));
+                setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
                 setSelected(updated);
                 setPermitConfirm(null);
               }} style={{ flex: 1, background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
