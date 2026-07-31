@@ -227,12 +227,13 @@ export function makePassengerStatementHTML(
 <div class="summary">
   <div class="sum-card card-due"><div class="sum-label">المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(totalDue)}</div><div class="sum-cur">ر.ق</div></div>
   <div class="sum-card card-paid"><div class="sum-label">المدفوع</div><div class="sum-val" style="color:#2A9D8F">${fmtAmt(totalPaid)}</div><div class="sum-cur">ر.ق</div></div>
-  <div class="sum-card card-bal" style="background:${balance>0?"#C0392B10":"#2A9D8F10"};border-color:${balance>0?"var(--danger)":"var(--success)"}"><div class="sum-label">المتبقي</div><div class="sum-val" style="color:${balance>0?"var(--danger)":"var(--success)"}">${fmtAmt(balance)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card card-bal" style="background:${balance>0?"#C0392B10":"#2A9D8F10"};border-color:${balance>0?"#C0392B":"#2A9D8F"}"><div class="sum-label">المتبقي</div><div class="sum-val" style="color:${balance>0?"#C0392B":"#2A9D8F"}">${fmtAmt(balance)}</div><div class="sum-cur">ر.ق</div></div>
 </div>
 <table>
   <tr><th>البيان</th><th style="width:140px;text-align:center">مدين (مطلوب)</th><th style="width:140px;text-align:center">دائن (مدفوع)</th></tr>
   ${rows}
-  <tr class="total-row"><td>الرصيد المتبقي</td><td>${fmtAmt(totalDue)}</td><td>${fmtAmt(totalPaid)}</td></tr>
+  <tr class="total-row"><td>الإجمالي</td><td>${fmtAmt(totalDue)}</td><td>${fmtAmt(totalPaid)}</td></tr>
+  <tr class="total-row" style="background:${balance>0?"#C0392B":"#2A9D8F"};color:#fff"><td>${balance>0?"الرصيد المتبقي":balance<0?"رصيد دائن للحاج":"الرصيد المتبقي"}</td><td colspan="2" style="text-align:center">${fmtAmt(Math.abs(balance))} ر.ق</td></tr>
 </table>
 <div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>
 </body></html>`;
@@ -376,8 +377,9 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
 }
 
 
-export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBrand) {
+export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBrand, from = "", to = "") {
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = brand;
+  const periodLine = `<div style="margin-bottom:10pt;font-size:11pt;color:#555">الفترة: من <b>${esc(from || "البداية")}</b> إلى <b>${esc(to || "اليوم")}</b> · عدد الدفعات: <b>${payments.length}</b></div>`;
   const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
   const total=payments.reduce((s,p)=>s+Number(p.amount),0);
   const PER_PAGE = 30;
@@ -413,7 +415,26 @@ export function printPaymentsReport(payments: Payment[], passengers: Passenger[]
     </tr>` : "";
     pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table style="table-layout:fixed">${header}${rows}${totRow}</table></div>`);
   }
-  printInPage(makeFinanceHTML("تقرير الدفعات",pages.join(""),false,logoUrl,companyName,tagline,primaryColor,accentColor));
+  // ملخص طرق الدفع في نهاية التقرير
+  const byMethod: Record<string, { total: number; count: number }> = {};
+  sorted.forEach(py => {
+    if (!byMethod[py.method]) byMethod[py.method] = { total: 0, count: 0 };
+    byMethod[py.method].total += Number(py.amount);
+    byMethod[py.method].count += 1;
+  });
+  const methodRows = Object.entries(byMethod)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([m, v]) => `<tr><td style="padding:5pt 8pt;border:1px solid #e8e8e8;font-size:11pt">${esc(m)}</td><td style="padding:5pt 8pt;border:1px solid #e8e8e8;text-align:center;font-size:11pt">${v.count}</td><td style="padding:5pt 8pt;border:1px solid #e8e8e8;text-align:center;font-size:11pt;color:#2A9D8F;font-weight:700">${fmtAmt(v.total)}</td></tr>`)
+    .join("");
+  const methodSummary = methodRows ? `<div style="margin-top:14pt">
+    <div style="font-size:12pt;font-weight:700;color:${primaryColor};margin-bottom:6pt">ملخص طرق الدفع</div>
+    <table style="border-collapse:collapse">
+      <tr style="background:${primaryColor};color:#fff"><th style="padding:5pt 8pt;font-size:10pt">طريقة الدفع</th><th style="padding:5pt 8pt;font-size:10pt;width:80pt">عدد الدفعات</th><th style="padding:5pt 8pt;font-size:10pt;width:100pt">الإجمالي</th></tr>
+      ${methodRows}
+      <tr style="background:${primaryColor};color:#fff;font-weight:700"><td style="padding:5pt 8pt;font-size:11pt">الإجمالي العام</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${sorted.length}</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${fmtAmt(total)}</td></tr>
+    </table>
+  </div>` : "";
+  printInPage(makeFinanceHTML("سجل الدفعات التفصيلي",periodLine+pages.join("")+methodSummary,false,logoUrl,companyName,tagline,primaryColor,accentColor));
 }
 
 export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
@@ -441,9 +462,9 @@ export function printCashflowReport(params: { dates: string[]; byDate: CashflowB
   const rows = cfDates.map(d => {
     const row = cfByDate[d];
     const methodStr = Object.entries(row.methods).map(([m, v]) => `${esc(m)}: ${fmtAmt(v)}`).join(" | ");
-    return `<tr><td>${esc(d)}</td><td style="text-align:center">${row.count}</td><td style="text-align:center;color:#1D6F42;font-weight:700">${fmtAmt(row.total)}</td><td style="font-size:10pt;color:#555">${methodStr}</td></tr>`;
+    return `<tr><td>${esc(d)}</td><td style="text-align:center">${row.count}</td><td style="text-align:center;color:#2A9D8F;font-weight:700">${fmtAmt(row.total)}</td><td style="font-size:10pt;color:#555">${methodStr}</td></tr>`;
   }).join("");
-  const totRow = `<tr style="background:#7D1F3C;color:#fff;font-weight:700"><td colspan="2">الإجمالي</td><td style="text-align:center">${fmtAmt(cfTotal)}</td><td></td></tr>`;
-  const body = `<div style="margin-bottom:12pt;font-size:11pt;color:#555">الفترة: من <b>${fromLabel}</b> إلى <b>${toLabel}</b> · إجمالي التحصيل: <b style="color:#7D1F3C">${fmtAmt(cfTotal)} ر.ق</b></div><table><thead><tr><th>التاريخ</th><th style="text-align:center">عدد الدفعات</th><th style="text-align:center">الإجمالي</th><th>طرق الدفع</th></tr></thead><tbody>${rows}${totRow}</tbody></table>`;
-  printInPage(makeFinanceHTML("تقرير التدفق النقدي", body, false, logoUrl, companyName, tagline, primaryColor, accentColor));
+  const totRow = `<tr style="background:${primaryColor};color:#fff;font-weight:700"><td colspan="2">الإجمالي</td><td style="text-align:center">${fmtAmt(cfTotal)}</td><td></td></tr>`;
+  const body = `<div style="margin-bottom:12pt;font-size:11pt;color:#555">الفترة: من <b>${fromLabel}</b> إلى <b>${toLabel}</b> · إجمالي التحصيل: <b style="color:${primaryColor}">${fmtAmt(cfTotal)} ر.ق</b></div><table><thead><tr><th>التاريخ</th><th style="text-align:center">عدد الدفعات</th><th style="text-align:center">الإجمالي</th><th>طرق الدفع</th></tr></thead><tbody>${rows}${totRow}</tbody></table>`;
+  printInPage(makeFinanceHTML("ملخص التحصيل اليومي", body, false, logoUrl, companyName, tagline, primaryColor, accentColor));
 }
