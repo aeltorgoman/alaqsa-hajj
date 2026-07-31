@@ -1,6 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { mapPassenger, upsertPassenger } from "../utils/passenger";
+
+/* شكل نتيجة أي عملية كتابة على Supabase */
+type WriteResult = { error: { message?: string } | null };
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -111,6 +114,33 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
+
+  /* ── النمط الموحّد لعمليات الكتابة ──────────────────────────
+     كل insert/update/delete يمرّ من هنا. تُرجع true عند النجاح فقط،
+     وتعرض رسالة عند الفشل. الحالة المحلية لا تُحدَّث إلا إذا عادت
+     true — فلا تُظهر الواجهة نتيجةً لم تحدث في القاعدة. */
+  async function writeOk(result: PromiseLike<WriteResult>, failMessage: string): Promise<boolean> {
+    const { error } = await result;
+    if (error) {
+      console.error(failMessage, error);
+      showAlert("error", failMessage);
+      return false;
+    }
+    return true;
+  }
+
+  /* نفس النمط لدفعة عمليات متوازية */
+  async function writeAllOk(results: PromiseLike<WriteResult>[], failMessage: string): Promise<boolean> {
+    const settled = await Promise.all(results);
+    const failed = settled.filter(r => r.error);
+    if (failed.length > 0) {
+      console.error(failMessage, failed.map(f => f.error));
+      showAlert("error", failMessage);
+      return false;
+    }
+    return true;
+  }
+
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -464,7 +494,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (docKind === "hajj_permit") {
       const url = await uploadDoc(file, passenger.id, "hajj_permit");
       if (url) {
-        await supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id);
+        if (!await writeOk(supabase.from("passengers").update({ hajj_permit_url: url }).eq("id", passenger.id), "تعذّر حفظ تصريح الحج، لم يُحفظ أي تغيير")) { setAutoScanning(false); return; }
         const updated = { ...passenger, hajj_permit_url: url } as Passenger;
         setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم حفظ تصريح الحج في ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
@@ -478,7 +508,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         if (!passenger.national_id && parsed.national_id) updates.national_id = parsed.national_id;
         if (!(passenger as any).id_expiry && parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
         if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
-        await supabase.from("passengers").update(updates).eq("id", passenger.id);
+        if (!await writeOk(supabase.from("passengers").update(updates).eq("id", passenger.id), "تعذّر حفظ البطاقة الشخصية، لم يُحفظ أي تغيير")) { setAutoScanning(false); return; }
         const updated = { ...passenger, ...updates } as Passenger;
         setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم ربط البطاقة الشخصية بملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
@@ -499,7 +529,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           updates.name_en = parsed.name_en;
           updates.short_en = makeShort(parsed.name_en);
         }
-        await supabase.from("passengers").update(updates).eq("id", passenger.id);
+        if (!await writeOk(supabase.from("passengers").update(updates).eq("id", passenger.id), "تعذّر حفظ صورة جواز السفر، لم يُحفظ أي تغيير")) { setAutoScanning(false); return; }
         const updated = { ...passenger, ...updates } as Passenger;
         setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
         showAlert("success", `تم حفظ صورة جواز السفر وتحديث بيانات ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
@@ -705,7 +735,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           setPermitConfirm({ url, field, passenger: matched, idNum });
         } else {
           // مش لاقي حاج → ارفع على الحاج الحالي بدون تأكيد
-          await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
+          if (!await writeOk(supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) { setDocUploading(null); return; }
           const updated = { ...p, [field]: url };
           setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
           setSelected(updated);
@@ -715,7 +745,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     } else {
       const url = await uploadDoc(file, p.id, docType);
       if (url) {
-        await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
+        if (!await writeOk(supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) { setDocUploading(null); return; }
         const updated = { ...p, [field]: url };
         setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
         setSelected(updated);
@@ -725,7 +755,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   const saveDocUpdates = async (p: Passenger, updates: Partial<Passenger>) => {
-    await supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id);
+    if (!await writeOk(supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ بيانات المستند، لم يُحفظ أي تغيير")) return;
     const updated = { ...p, ...updates };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
@@ -742,7 +772,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (!ok) return;
     const path = getStoragePath(url);
     if (path) await supabase.storage.from("passengers-docs").remove([path]);
-    await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id);
+    if (!await writeOk(supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حذف المستند، لم يُحفظ أي تغيير")) return;
     const updated = { ...p, [field]: null };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
@@ -752,8 +782,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const handleLinkFamily = async (p1: Passenger, p2: Passenger) => {
     const familyId = p1.family_id || p2.family_id || `fam_${Date.now()}`;
-    await supabase.from("passengers").update({ family_id: familyId }).eq("id", p1.id);
-    await supabase.from("passengers").update({ family_id: familyId }).eq("id", p2.id);
+    if (!await writeAllOk([
+      supabase.from("passengers").update({ family_id: familyId }).eq("id", p1.id),
+      supabase.from("passengers").update({ family_id: familyId }).eq("id", p2.id),
+    ], "تعذّر الربط العائلي، يرجى المحاولة مرة أخرى")) return;
     const updated1 = { ...p1, family_id: familyId };
     const updated2 = { ...p2, family_id: familyId };
     setPassengers(prev => prev.map(p => p.id === p1.id ? updated1 : p.id === p2.id ? updated2 : p));
@@ -764,7 +796,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const handleUnlinkFamily = async (p: Passenger) => {
     const ok = await confirmAction("هتفك الارتباط العائلي لهذا الحاج؟", { title: "فك الارتباط العائلي", danger: false });
     if (!ok) return;
-    await supabase.from("passengers").update({ family_id: null }).eq("id", p.id);
+    if (!await writeOk(supabase.from("passengers").update({ family_id: null }).eq("id", p.id), "تعذّر فك الارتباط العائلي، لم يُحفظ أي تغيير")) return;
     const updated = { ...p, family_id: null };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
@@ -773,7 +805,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const getFamilyMembers = (p: Passenger) => p.family_id ? passengers.filter(x => x.family_id === p.family_id && x.id !== p.id) : [];
 
   const deleteP = async (id: number) => {
-    await supabase.from("passengers").delete().eq("id", id);
+    if (!await writeOk(supabase.from("passengers").delete().eq("id", id), "تعذّر حذف الحاج، لم يُحذف من قاعدة البيانات")) return;
     setPassengers(prev => prev.filter(p => p.id !== id));
     setSelected(null);
   };
@@ -786,10 +818,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const other = sorted[swapIdx] as any;
     const myOrder = (p as any).sort_order || 0;
     const otherOrder = other.sort_order || 0;
-    await Promise.all([
+    if (!await writeAllOk([
       supabase.from("passengers").update({ sort_order: otherOrder }).eq("id", p.id),
       supabase.from("passengers").update({ sort_order: myOrder }).eq("id", other.id),
-    ]);
+    ], "تعذّر تغيير الترتيب، لم يُحفظ أي تغيير")) return;
     setPassengers(prev => prev.map(x =>
       x.id === p.id ? { ...x, sort_order: otherOrder } :
       x.id === other.id ? { ...x, sort_order: myOrder } : x
@@ -820,8 +852,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const [moved] = newOrder.splice(fromIdx, 1);
     newOrder.splice(toIdx, 0, moved);
     const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
+    if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
     setPassengers(prev => prev.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
-    await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
 
   // ===== رتب حسب العائلة =====
@@ -839,8 +871,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       }
     }
     const updates = result.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
+    if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
     setPassengers(prev => prev.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
-    await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
 
   // ===== تغيير الرقم يدوياً =====
@@ -858,8 +890,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const [moved] = newOrder.splice(currentIdx, 1);
     newOrder.splice(targetIdx, 0, moved);
     const updates = newOrder.map((x, i) => ({ id: x.id, sort_order: (i + 1) * 10 }));
+    if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
     setPassengers(prev => prev.map(x => { const u = updates.find(y => y.id === x.id); return u ? { ...x, sort_order: u.sort_order } : x; }));
-    await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
   };
   const saveEdit = async (p: Passenger) => {
     const updated_at = new Date().toISOString();
@@ -1173,8 +1205,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       reordered.splice(toIdx, 0, moved);
                       const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
                       const orderById = new Map(updates.map(u => [u.id, u.sort_order]));
+                      if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
                       setPassengers(prev => prev.map(x => orderById.has(x.id) ? { ...x, sort_order: orderById.get(x.id)! } : x));
-                      await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
                     }}
                     onClick={() => setSelected(p)}
                     style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--paper)" : "var(--ivory)", borderBottom: "1px solid var(--line)", transition: "background .12s" }}
@@ -1195,8 +1227,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                               reordered.splice(Math.min(newOrder - 1, reordered.length), 0, p);
                               const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
                               const orderById = new Map(updates.map(u => [u.id, u.sort_order]));
+                              if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
                               setPassengers(prev => prev.map(x => orderById.has(x.id) ? { ...x, sort_order: orderById.get(x.id)! } : x));
-                              await Promise.all(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)));
                             }
                             setEditingOrderId(null);
                             setEditingOrderVal("");
@@ -1628,7 +1660,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={async () => {
                 const { passenger, url, field } = permitConfirm;
-                await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", passenger.id);
+                if (!await writeOk(supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", passenger.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) return;
                 const updated = { ...passenger, [field]: url };
                 setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
                 setSelected(updated);
