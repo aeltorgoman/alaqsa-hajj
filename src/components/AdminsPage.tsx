@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
@@ -250,7 +251,7 @@ function AdminsPage({
     // منع تسجيل نفس الشخص كحاج وإداري
     if (!editTarget && (form.passport.trim() || form.national_id.trim())) {
       const duplicate = passengers.find(p =>
-        (!p.passenger_type || p.passenger_type === "حاج") &&
+        (isHajj(p)) &&
         ((form.passport.trim() && p.passport === form.passport.trim()) ||
          (form.national_id.trim() && p.national_id === form.national_id.trim()))
       );

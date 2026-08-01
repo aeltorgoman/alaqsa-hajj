@@ -4,6 +4,7 @@
 // كل تحويل من صف قاعدة البيانات إلى Passenger يمرّ من هنا حصراً،
 // سواء جاء الصف من الجلب الأولي أو من حدث Realtime أو من نتيجة
 // insert/update. فلا توجد أشكال متعددة للكائن نفسه.
+import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import type { Database } from "../types/database";
 
@@ -62,4 +63,20 @@ export function upsertPassenger(list: Passenger[], passenger: Passenger): Passen
   return list.some(p => p.id === passenger.id)
     ? list.map(p => (p.id === passenger.id ? passenger : p))
     : sortPassengers([...list, passenger]);
+}
+
+/* هل هذا الشخص حاج؟ — السجلّ بلا passenger_type يُعدّ حاجاً، وهو
+   الافتراض القائم في القاعدة منذ ما قبل إضافة العمود. كان هذا
+   الشرط مكرراً حرفياً في 39 موضعاً عبر 11 ملفاً. */
+export function isHajj(p: { passenger_type?: string | null }): boolean {
+  return !p.passenger_type || p.passenger_type === "حاج";
+}
+
+/* تحديثات ترتيب الحجاج — تُرجع الوعود ليفحصها writeAllOk عند
+   الاستدعاء، فلا تبتلع الأخطاء. كانت مكررة حرفياً في BusesPage
+   وCampsPage. */
+export function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
+  return items.map(item =>
+    supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
+  );
 }

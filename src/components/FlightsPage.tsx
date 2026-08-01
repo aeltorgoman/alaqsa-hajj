@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isHajj } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -7,7 +8,7 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, brandingFromConfig } from "../utils";
 import { createWriteHelpers } from "../utils/write";
 
 // رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id
@@ -41,7 +42,7 @@ const getAirlineLogoUrl = (airline: string): string | null => {
 
 // ===== ملخص صفحة الطيران =====
 function FlightsStats({ passengers }: { passengers: Passenger[] }) {
-  const hajjOnly = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const hajjOnly = passengers.filter(p => isHajj(p));
   const total = hajjOnly.length;
   const withoutTicket = hajjOnly.filter(p => p.services?.flight === "بدون").length;
   const needsFlight = total - withoutTicket;
@@ -159,13 +160,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [field]: null } : p));
   };
 
-  const branding = {
-    logoUrl: config.logo_url || "",
-    companyName: config.name_ar || "حملة الأقصى",
-    tagline: config.tagline || "",
-    primaryColor: config.color_primary || "#6B1F3A",
-    accentColor: config.color_accent || "#0C447C",
-  };
+  const branding = brandingFromConfig(config);
   const printFlight = (flight: Flight) => {
     const fp = getFlightPassengers(flight);
     printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor));
@@ -378,7 +373,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "#7D1F3C", lineHeight: 1 }}>{fp.filter(p => isHajj(p)).length}</div>
                   <div style={{ fontSize: 10, color: "var(--muted)" }}>حاج</div>
                 </div>
                 {fp.filter(p => p.passenger_type && p.passenger_type !== "حاج").length > 0 && (

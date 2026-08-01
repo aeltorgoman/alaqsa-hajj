@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { isMissingService } from "../utils";
@@ -25,7 +26,7 @@ function useSeasonPhases(passengers: Passenger[]) {
   }, []);
 
   return useMemo(() => {
-    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const hajj = passengers.filter(p => isHajj(p));
     const total = hajj.length;
     const regActive = total > 0;
     const docsComplete = hajj.filter(p => p.photo_url && p.passport_url && p.national_id_url).length;
@@ -211,7 +212,7 @@ const PACKAGE_COLORS: Record<string, string> = {
 const PACKAGE_FALLBACK = "#8a7d68";
 
 function PackagesCard({ passengers, setPage }: { passengers: Passenger[]; setPage?: (p: string) => void }) {
-  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const hajj = passengers.filter(p => isHajj(p));
   const total = hajj.length;
   const counts: Record<string, number> = {};
   hajj.forEach(p => { const t = p.services?.hotel_type?.trim(); if (!t) return; counts[t] = (counts[t] || 0) + 1; });
@@ -266,7 +267,7 @@ function PackagesCard({ passengers, setPage }: { passengers: Passenger[]; setPag
    كارت إجمالي الحجاج
    ════════════════════════════════════════════════════════════ */
 function TotalPilgrimsCard({ passengers }: { passengers: Passenger[] }) {
-  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const hajj = passengers.filter(p => isHajj(p));
   const total = hajj.length;
   const men   = hajj.filter(p => p.gender === "ذكر").length;
   const women = hajj.filter(p => p.gender === "أنثى").length;
@@ -319,7 +320,7 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
   const { phases, currentIdx } = useSeasonPhases(passengers);
   const phaseId = phases[currentIdx].id;
   const phaseLabel = phases[currentIdx].label;
-  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const hajj = passengers.filter(p => isHajj(p));
 
   /* الانتقال: التسجيل والسفر → صفحة الحجاج بالفلتر · التوزيع → صفحة الخدمة */
   const go = (target: string, searchTerm?: string) => {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { isHajj, sortOrderUpdates } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -7,17 +8,10 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, brandingFromConfig } from "../utils";
 import { createWriteHelpers } from "../utils/write";
 
 // ===== ألوان أيقونات المخيمات (دورة ألوان موحّدة) =====
-
-// ===== تحديثات ترتيب الحجاج — تُرجع الوعود ليفحصها writeAllOk =====
-function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
-  return items.map(item =>
-    supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
-  );
-}
 
 /* مفتاحا العمود والخدمة — حرفيان لا string عام، فالفهرسة بهما آمنة نوعياً */
 type CampIdKey = "camp_mina_id" | "camp_arafa_id";
@@ -26,7 +20,7 @@ type CampServiceKey = "camp_mina" | "camp_arafa";
 // ===== إحصائيات المخيمات =====
 function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: CampIdKey; campServiceKey: CampServiceKey }) {
   const stats = useMemo(() => {
-    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const hajj = passengers.filter(p => isHajj(p));
     const total = hajj.length;
     const assignedCount = hajj.filter(p => p[campIdKey] != null).length;
     const unassigned = total - assignedCount;
@@ -206,7 +200,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     dragPassengerId.current = null; dragOverPassengerId.current = null;
   };
 
-  const branding = { logoUrl: config.logo_url || "", companyName: config.name_ar || "حملة الأقصى", tagline: config.tagline || "", primaryColor: config.color_primary || "#6B1F3A", accentColor: config.color_accent || "#0C447C" };
+  const branding = brandingFromConfig(config);
 
   const printCamp = (camp: Camp) => {
     const cp = getCampPassengers(camp.id);
@@ -331,7 +325,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const campColor = isSpecial ? "#D4A017" : (camp.gender === "ذكر" ? "#1D4ED8" : "#BE185D");
         const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
         const genderPool = camp.type === "خاص" ? passengers : passengers.filter(p => p.gender === camp.gender);
-        const addFiltered = genderPool.filter(p => p[campIdKey] == null && (!p.passenger_type || p.passenger_type === "حاج") && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
+        const addFiltered = genderPool.filter(p => p[campIdKey] == null && (isHajj(p)) && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
         return (
           <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
@@ -417,7 +411,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     .filter(p =>
                       p[campIdKey] !== camp.id &&
                       !dismissedCampSuggestions.has(p.id!) &&
-                      (!p.passenger_type || p.passenger_type === "حاج") &&
+                      (isHajj(p)) &&
                       (camp.type === "خاص" || p.gender === camp.gender) &&
                       ((p.family_id && famIds.has(p.family_id)) ||
                        (p.bus_id && busIds.has(p.bus_id)) ||

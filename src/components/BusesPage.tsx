@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { isHajj, sortOrderUpdates } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
@@ -6,20 +7,13 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, brandingFromConfig } from "../utils";
 import { createWriteHelpers } from "../utils/write";
-
-// ===== تحديثات ترتيب الحجاج — تُرجع الوعود ليفحصها writeAllOk =====
-function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
-  return items.map(item =>
-    supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
-  );
-}
 
 // ===== إحصائيات الباصات =====
 function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger[] }) {
   const stats = useMemo(() => {
-    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const hajj = passengers.filter(p => isHajj(p));
     const total = hajj.length;
     const assignedCount = hajj.filter(p => p.bus_id != null).length;
     const unassigned = total - assignedCount;
@@ -193,7 +187,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     dragPassengerId.current = null; dragOverPassengerId.current = null;
   };
 
-  const branding = { logoUrl: config.logo_url || "", companyName: config.name_ar || "حملة الأقصى", tagline: config.tagline || "", primaryColor: config.color_primary || "#6B1F3A", accentColor: config.color_accent || "#0C447C" };
+  const branding = brandingFromConfig(config);
 
   const printBus = (bus: Bus) => {
     const bp = getBusPassengers(bus.id);
@@ -313,7 +307,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const cap = bus.capacity || 50;
         const available = Math.max(0, cap - bp.length);
         const fillPct = Math.min(100, Math.round(bp.length / cap * 100));
-        const addFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
+        const addFiltered = passengers.filter(p => p.bus_id == null && (isHajj(p)) && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
           <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -425,7 +419,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     .filter(p =>
                       p.bus_id !== bus.id &&
                       !dismissedSuggestions.has(p.id!) &&
-                      (!p.passenger_type || p.passenger_type === "حاج") &&
+                      (isHajj(p)) &&
                       ((p.room_id && roomIds.has(p.room_id)) || (p.camp_mina_id && minaIds.has(p.camp_mina_id)))
                     )
                     .sort((a, b) => {
