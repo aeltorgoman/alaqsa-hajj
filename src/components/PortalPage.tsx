@@ -4,6 +4,7 @@ import { AlertModal, useAlert, useConfirm, ConfirmModal } from "./AlertModal";
 import { DeliveryReportModal } from "./DeliveryReportModal";
 import type { User } from "../types";
 import { btnP, btnS, inp } from "../utils";
+import { createWriteHelpers } from "../utils/write";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -45,9 +46,12 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [tab, setTab] = useState<"alerts" | "settings">("alerts");
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
+  const { writeOk } = createWriteHelpers(showAlert);
 
   /* ─── التنبيهات ─── */
   const [items, setItems] = useState<Announcement[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [priority, setPriority] = useState("عام");
@@ -68,8 +72,19 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const load = async () => {
-    const { data } = await supabase.from("announcements").select("*").order("show_at", { ascending: false });
-    if (data) { setItems(data as Announcement[]); setNowMs(Date.now()); }
+    const { data, error } = await supabase.from("announcements").select("*").order("show_at", { ascending: false });
+    /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو «لا توجد تنبيهات». وload
+       تعمل كل 30 ثانية، فآخر قائمة صحيحة تبقى معروضة عند فشل تحديث
+       عابر بدل أن تُمحى الشاشة. */
+    if (error || !data) {
+      console.error("تعذر تحميل التنبيهات", error);
+      setItemsError(true);
+    } else {
+      setItems(data as Announcement[]);
+      setNowMs(Date.now());
+      setItemsError(false);
+    }
+    setItemsLoading(false);
   };
 
   useEffect(() => {
@@ -174,14 +189,14 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   async function endNow(a: Announcement) {
     const ok = await confirmAction("سيختفي هذا التنبيه من بوابة الحاج فوراً. هل أنت متأكد؟", { title: "إنهاء التنبيه", confirmLabel: "إنهاء" });
     if (!ok) return;
-    await supabase.from("announcements").update({ expires_at: new Date().toISOString() }).eq("id", a.id);
+    if (!await writeOk(supabase.from("announcements").update({ expires_at: new Date().toISOString() }).eq("id", a.id), "تعذر إنهاء التنبيه")) return;
     load();
   }
 
   async function removeItem(a: Announcement) {
     const ok = await confirmAction("سيتم حذف التنبيه نهائياً. هل أنت متأكد؟", { title: "حذف التنبيه", confirmLabel: "حذف" });
     if (!ok) return;
-    await supabase.from("announcements").delete().eq("id", a.id);
+    if (!await writeOk(supabase.from("announcements").delete().eq("id", a.id), "تعذر حذف التنبيه")) return;
     load();
   }
 
@@ -205,11 +220,18 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [arafaUrl, setArafaUrl] = useState("");
   const [features, setFeatures] = useState<Record<string, boolean>>({});
   const [savingCfg, setSavingCfg] = useState(false);
+  const [cfgLoading, setCfgLoading] = useState(true);
+  const [cfgError, setCfgError] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,hotel_url,camp_mina_address,camp_mina_url,camp_arafa_address,camp_arafa_url").order("id").limit(1).single() as any;
-      if (data) {
+      const { data, error } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,hotel_url,camp_mina_address,camp_mina_url,camp_arafa_address,camp_arafa_url").order("id").limit(1).single() as any;
+      /* بدون هذا كان الفشل ينتهي بحقول فارغة وزر حفظ معطَّل بلا تفسير */
+      if (error || !data) {
+        console.error("تعذر تحميل إعدادات البوابة", error);
+        setCfgError(true);
+      } else {
+        setCfgError(false);
         setCfgId(data.id);
         setAdminName(data.admin_name || "");
         setAdminPhone(data.admin_phone || "");
@@ -225,6 +247,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         setArafaUrl(data.camp_arafa_url || "");
         setFeatures((data.features as Record<string, boolean>) || {});
       }
+      setCfgLoading(false);
     })();
   }, []);
 
@@ -411,6 +434,19 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         </div>
 
         {/* القوائم */}
+        {itemsLoading ? (
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "18px 2px" }}>جاري تحميل التنبيهات...</div>
+        ) : itemsError && items.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, padding: "18px 2px" }}>
+            تعذر تحميل التنبيهات — يرجى التحقق من الاتصال وتحديث الصفحة
+          </div>
+        ) : <>
+        {/* فشل تحديث عابر: آخر قائمة صحيحة تبقى معروضة، ويُنبَّه أنها قد لا تكون محدَّثة */}
+        {itemsError && (
+          <div style={{ fontSize: 11, color: "var(--danger)", fontWeight: 700, padding: "8px 2px 0" }}>
+            تعذر تحديث القائمة — المعروض أدناه آخر بيانات وصلت
+          </div>
+        )}
         {secTitle("ظاهر الآن للحجاج", live.length, "var(--primary)")}
         {live.length === 0 && <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "4px 2px" }}>لا توجد تنبيهات ظاهرة حالياً.</div>}
         {live.map(a => annCard(a, "live"))}
@@ -423,9 +459,16 @@ function PortalPage({ currentUser }: { currentUser: User }) {
           {secTitle("منتهي", ended.length)}
           {ended.slice(0, 10).map(a => annCard(a, "ended"))}
         </>}
+        </>}
       </>}
 
-      {tab === "settings" && <>
+      {tab === "settings" && (cfgLoading ? (
+        <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "18px 2px" }}>جاري تحميل الإعدادات...</div>
+      ) : cfgError ? (
+        <div style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, padding: "18px 2px" }}>
+          تعذر تحميل إعدادات البوابة — يرجى التحقق من الاتصال وتحديث الصفحة
+        </div>
+      ) : <>
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 14, maxWidth: 640 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text-main)", marginBottom: 4 }}>إداري الحملة</div>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 14 }}>يظهر اسمه وأرقامه لجميع الحجاج في البوابة وفي بطاقة الطوارئ</div>
@@ -474,7 +517,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         <button onClick={saveSettings} disabled={savingCfg || cfgId == null} style={{ ...btnP(), padding: "10px 30px", opacity: savingCfg ? .6 : 1 }}>
           {savingCfg ? "جارٍ الحفظ..." : "حفظ الإعدادات"}
         </button>
-      </>}
+      </>)}
     </div>
   );
 }
