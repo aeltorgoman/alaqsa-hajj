@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { isHajj } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
@@ -85,11 +85,21 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       });
   }, []);
 
-  const floors = useMemo(() => {
-    const fs = [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
-    if (fs.length > 0 && filterFloor === "الكل") setFilterFloor(fs[0]);
-    return fs;
-  }, [rooms]);
+  const floors = useMemo(
+    () => [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)),
+    [rooms]
+  );
+
+  /* التعيين الأولي لأول طابق — مرة واحدة عند وصول الغرف لا كلما تغيّرت.
+     كان داخل الـ useMemo أعلاه، فيعيد الضبط بعد كل تعديل على الغرف
+     ويُلغي اختيار المستخدم لـ«الكل» بلا سبب ظاهر. */
+  const floorInitialized = useRef(false);
+  useEffect(() => {
+    if (!floorInitialized.current && floors.length > 0) {
+      floorInitialized.current = true;
+      setFilterFloor(floors[0]);
+    }
+  }, [floors]);
 
   const hajj = passengers.filter(p => isHajj(p));
 
