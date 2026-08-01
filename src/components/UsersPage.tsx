@@ -8,6 +8,8 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 
+type WriteResult = { error: { message?: string } | null };
+
 /* ─── helpers ─── */
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -80,10 +82,26 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
+  /* ── النمط الموحّد لعمليات الكتابة — نفس نمط PassengersPage ──
+     تُرجع true عند النجاح فقط، وتعرض رسالة عند الفشل. الحالة
+     المحلية لا تُحدَّث إلا إذا عادت true، فلا تُظهر الواجهة نتيجةً
+     لم تحدث في القاعدة. */
+  async function writeOk(result: PromiseLike<WriteResult>, failMessage: string): Promise<boolean> {
+    const { error } = await result;
+    if (error) {
+      console.error(failMessage, error);
+      showAlert("error", failMessage);
+      return false;
+    }
+    return true;
+  }
+
   const [activeTab, setActiveTab] = useState<"identity" | "system" | "users">("identity");
 
   /* users */
   const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState({ name: "", username: "", password: "" });
@@ -118,8 +136,16 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   }, [config]);
 
   useEffect(() => {
-    supabase.from("users").select("*").order("id").then(({ data }: any) => {
-      if (data) setUsers(data);
+    /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو كـ«لا يوجد مستخدمون» */
+    supabase.from("users").select("*").order("id").then(({ data, error }) => {
+      if (error || !data) {
+        console.error("تعذر تحميل قائمة المستخدمين", error);
+        setUsersError(true);
+      } else {
+        setUsers(data as User[]);
+        setUsersError(false);
+      }
+      setUsersLoading(false);
     });
   }, []);
 
@@ -205,7 +231,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const deleteUser = async (id: number) => {
     const ok = await confirmAction("هل تريد حذف هذا المستخدم؟", { title: "حذف مستخدم" });
     if (!ok) return;
-    await supabase.from("users").delete().eq("id", id);
+    if (!await writeOk(supabase.from("users").delete().eq("id", id), "تعذر حذف المستخدم")) return;
     setUsers(prev => prev.filter(x => x.id !== id));
   };
 
@@ -213,7 +239,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const toggleActive = async (u: User) => {
     const current = (u as any).is_active === false ? false : true;
     const newVal = !current;
-    await supabase.from("users").update({ is_active: newVal }).eq("id", u.id);
+    if (!await writeOk(
+      supabase.from("users").update({ is_active: newVal }).eq("id", u.id),
+      newVal ? "تعذر تفعيل الحساب" : "تعذر تعطيل الحساب"
+    )) return;
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: newVal } as any : x));
   };
 
@@ -466,6 +495,14 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 )}
               </div>
               <div style={cardBody}>
+                {usersLoading ? (
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>جاري التحميل...</div>
+                ) : usersError ? (
+                  <div style={{ textAlign: "center", padding: "2rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
+                    تعذر تحميل قائمة المستخدمين — يرجى التحقق من الاتصال وتحديث الصفحة
+                  </div>
+                ) : (
+                  <>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {users.map((u, idx) => {
                     const isOwner = u.username === "admin";
@@ -536,6 +573,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     نشطون: <strong style={{ color: "var(--primary)" }}>{users.filter(u => (u as any).is_active !== false).length}</strong>
                   </span>
                 </div>
+                  </>
+                )}
 
               </div>
             </div>
