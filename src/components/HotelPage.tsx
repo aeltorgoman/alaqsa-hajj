@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
 import { useConfig } from "../config/ConfigContext";
@@ -15,7 +16,7 @@ function avatarInitials(name: string) {
   return name.trim().split(" ").map(w => w[0]).slice(0, 2).join("");
 }
 
-function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const config = useConfig();
   const primary = config.color_primary || "#7D1F3C";
   const { alert, showAlert } = useAlert();
@@ -177,13 +178,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const removeFromRoom = async (pId: number) => {
     await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: null } as any : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } as any : p));
   };
 
   const addToRoom = async (pId: number) => {
     if (!selectedRoom) return;
     await supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } as any : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } as any : p));
     setPSearch("");
   };
 

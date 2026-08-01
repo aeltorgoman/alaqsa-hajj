@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
 import { Modal } from "./Modal";
@@ -39,7 +40,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
 }
 
 // ===== صفحة الباصات =====
-function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
@@ -104,14 +105,14 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const removeP = async (pId: number) => {
     await supabase.from("passengers").update({ bus_id: null }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, bus_id: null } : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, bus_id: null } : p));
   };
 
   const moveP = async (pId: number, toId: string) => {
     if (!toId) return;
     const newBusId = parseInt(toId);
     await supabase.from("passengers").update({ bus_id: newBusId }).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, bus_id: newBusId } : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, bus_id: newBusId } : p));
   };
 
   // ===== Drag & Drop handlers =====
@@ -139,7 +140,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     /* سحب من قائمة الإضافة → إضافة للباص */
     if (dragType.current === "add" && fromId) {
       await supabase.from("passengers").update({ bus_id: busId }).eq("id", fromId);
-      setPassengers(passengers.map(x => x.id === fromId ? { ...x, bus_id: busId } : x));
+      setPassengers(prev => prev.map(x => x.id === fromId ? { ...x, bus_id: busId } : x));
       setDraggingId(null); dragPassengerId.current = null; dragOverPassengerId.current = null;
       return;
     }
@@ -161,11 +162,10 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     newOrder.splice(toIdx, 0, moved);
 
     const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
-    const updatedPassengers = passengers.map(p => {
+    setPassengers(prev => prev.map(p => {
       const upd = updates.find(u => u.id === p.id);
       return upd ? { ...p, sort_order: upd.sort_order } : p;
-    });
-    setPassengers(updatedPassengers);
+    }));
     await saveSortOrder(updates);
 
     setDraggingId(null); setDragOverId(null);
@@ -437,7 +437,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                               · {sharedRoom && sharedMina ? "نفس الغرفة وخيمة منى" : sharedRoom ? "نفس الغرفة" : "نفس خيمة منى"}
                               {matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}
                             </span>
-                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(passengers.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(prev => prev.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </button>
                             <button onClick={() => setDismissedSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
@@ -515,7 +515,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                             if (!ok) return;
                           }
                           await Promise.all(chosen.map(p => supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id)));
-                          setPassengers(passengers.map(x => selectedAdd.has(x.id) ? { ...x, bus_id: bus.id } : x));
+                          setPassengers(prev => prev.map(x => selectedAdd.has(x.id) ? { ...x, bus_id: bus.id } : x));
                           setSelectedAdd(new Set());
                         }}
                         style={{ width: "100%", padding: "9px", borderRadius: 10, border: "none", background: busColor, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
