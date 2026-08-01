@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
 import type { Passenger, Flight } from "../types";
@@ -57,7 +58,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 }
 
 // ===== صفحة الطيران =====
-function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void }) {
+function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -143,7 +144,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
     await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", pId);
-    setPassengers(passengers.map(p => p.id === pId ? { ...p, [field]: null } : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [field]: null } : p));
   };
 
   const branding = {
@@ -665,7 +666,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                                 if (!e.target.value) return;
                                 const field = flightField(currentFlight!.type);
                                 await supabase.from("passengers").update({ [field]: Number(e.target.value) } as any).eq("id", p.id);
-                                setPassengers(passengers.map(x => x.id === p.id ? { ...x, [field]: Number(e.target.value) } : x));
+                                setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, [field]: Number(e.target.value) } : x));
                               }}
                               defaultValue="" title="نقل لرحلة أخرى"
                               style={{ appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 8px 3px 24px", fontFamily: "var(--font-body)", cursor: "pointer", minWidth: 62, textAlign: "center" }}>
@@ -741,7 +742,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                         await Promise.all(chosen.map(p =>
                           supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id)
                         ));
-                        setPassengers(passengers.map(x => {
+                        setPassengers(prev => prev.map(x => {
                           const found = chosen.find(p => p.id === x.id);
                           return found ? { ...x, [field]: currentFlightId, flight_class: found.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x;
                         }));
