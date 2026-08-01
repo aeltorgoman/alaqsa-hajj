@@ -62,6 +62,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [arafaCamps, setArafaCamps] = useState<Target[]>([]);
   const [audienceIds, setAudienceIds] = useState<number[]>([]);
   const [enabledIds, setEnabledIds] = useState<Set<number>>(new Set());
+  const [audienceError, setAudienceError] = useState(false);
+  const [enabledError, setEnabledError] = useState(false);
   const [reportFor, setReportFor] = useState<Announcement | null>(null);
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [showAt, setShowAt] = useState(() => toLocalInput(new Date(Date.now() + 3600000)));
@@ -118,8 +120,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     (async () => {
       const { data, error } = await supabase.rpc("push_enabled_passengers" as any);
       if (cancelled) return;
-      if (error) { console.error("تعذر تحميل قائمة المفعّلين للإشعارات", error); return; }
+      if (error) { console.error("تعذر تحميل قائمة المفعّلين للإشعارات", error); setEnabledError(true); return; }
       setEnabledIds(new Set(((data as any[]) || []).map(r => r.passenger_id)));
+      setEnabledError(false);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -136,8 +139,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         p_target_ids: targetIds,
       } as any);
       if (cancelled) return;
-      if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); return; }
+      if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); setAudienceError(true); return; }
       setAudienceIds(((data as any[]) || []).map(r => r.passenger_id));
+      setAudienceError(false);
     })();
     return () => { cancelled = true; };
   }, [targetKind, targetIds]);
@@ -396,11 +400,24 @@ function PortalPage({ currentUser }: { currentUser: User }) {
                 })}
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 9, lineHeight: 1.8 }}>
-              سيصل التنبيه إلى <b style={{ color: "var(--text-main)" }}>{audienceCount}</b> من الحجاج،
-              منهم <b style={{ color: "var(--primary)" }}>{enabledCount}</b> مفعّلون للإشعارات على أجهزتهم.
-              {audienceCount > enabledCount && " والبقية سيرون التنبيه عند فتح البوابة."}
-            </div>
+            {/* عند فشل حساب الجمهور لا يُعرض رقم إطلاقاً — «0» قد تكون نتيجة
+                صحيحة، فعرضها هنا يوهم بأن الحساب تمّ. السطر يختفي من نفسه
+                عند أول نجاح لاحق، بلا نافذة منبثقة ولا تكرار مع كل نقرة. */}
+            {audienceError ? (
+              <div style={{ fontSize: 11.5, color: "var(--danger)", fontWeight: 700, marginTop: 9, lineHeight: 1.8 }}>
+                تعذر حساب عدد المستهدفين. يرجى المحاولة مرة أخرى.
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 9, lineHeight: 1.8 }}>
+                سيصل التنبيه إلى <b style={{ color: "var(--text-main)" }}>{audienceCount}</b> من الحجاج،
+                {enabledError ? (
+                  <span style={{ color: "var(--danger)", fontWeight: 700 }}> وتعذر حساب عدد المفعّلين للإشعارات. يرجى المحاولة مرة أخرى.</span>
+                ) : <>
+                  {" "}منهم <b style={{ color: "var(--primary)" }}>{enabledCount}</b> مفعّلون للإشعارات على أجهزتهم.
+                  {audienceCount > enabledCount && " والبقية سيرون التنبيه عند فتح البوابة."}
+                </>}
+              </div>
+            )}
           </div>
 
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="عنوان التنبيه (يظهر على شاشة جوال الحاج)"
