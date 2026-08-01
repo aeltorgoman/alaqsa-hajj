@@ -275,9 +275,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         {a.title && <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 800, marginTop: 7 }}>{a.title}</div>}
         <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600, marginTop: a.title ? 3 : 7, lineHeight: 1.9 }}>{a.body}</div>
         <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
-          {kind !== "ended" && kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
-          {kind !== "ended" && <button onClick={() => removeItem(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>}
-          {a.push_sent_at && <button onClick={() => setReportFor(a)} style={{ ...btnS, fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
+          {kind !== "ended" && kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
+          {kind !== "ended" && <button onClick={() => removeItem(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>}
+          {a.push_sent_at && <button onClick={() => setReportFor(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
         </div>
       </div>
     );
@@ -311,7 +311,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: "var(--text-muted)", direction: "ltr" }}>{portalUrl}</span>
-          <button onClick={() => { navigator.clipboard?.writeText(portalUrl); showAlert("success", "تم نسخ رابط البوابة، يمكنك مشاركته مع الحجاج."); }} style={{ ...btnP, fontSize: 11.5, padding: "7px 16px" }}>نسخ الرابط</button>
+          <button onClick={() => { navigator.clipboard?.writeText(portalUrl); showAlert("success", "تم نسخ رابط البوابة، يمكنك مشاركته مع الحجاج."); }} style={{ ...btnP(), fontSize: 11.5, padding: "7px 16px" }}>نسخ الرابط</button>
         </div>
       </div>
 
@@ -404,7 +404,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
           </div>
 
           <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={send} disabled={sending} style={{ ...btnP, opacity: sending ? .6 : 1, padding: "9px 26px" }}>
+            <button onClick={send} disabled={sending} style={{ ...btnP(), opacity: sending ? .6 : 1, padding: "9px 26px" }}>
               {sending ? "جارٍ الإرسال..." : when === "now" ? "إرسال التنبيه" : "جدولة التنبيه"}
             </button>
           </div>
@@ -471,7 +471,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
           })}
         </div>
 
-        <button onClick={saveSettings} disabled={savingCfg || cfgId == null} style={{ ...btnP, padding: "10px 30px", opacity: savingCfg ? .6 : 1 }}>
+        <button onClick={saveSettings} disabled={savingCfg || cfgId == null} style={{ ...btnP(), padding: "10px 30px", opacity: savingCfg ? .6 : 1 }}>
           {savingCfg ? "جارٍ الحفظ..." : "حفظ الإعدادات"}
         </button>
       </>}
