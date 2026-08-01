@@ -150,7 +150,7 @@ function DeliveryReportModal({
                     <span style={{ fontSize: 10.5, fontWeight: 700, background: lb.bg, color: lb.fg, padding: "3px 11px", borderRadius: 99, flexShrink: 0 }}>{lb.text}</span>
                     {isMissed(r.status) && r.phone && (
                       <a href={waLink(r.phone)} target="_blank" rel="noreferrer"
-                        style={{ ...btnS, fontSize: 10.5, padding: "4px 12px", textDecoration: "none", flexShrink: 0 }}>واتساب</a>
+                        style={{ ...btnS(), fontSize: 10.5, padding: "4px 12px", textDecoration: "none", flexShrink: 0 }}>واتساب</a>
                     )}
                   </div>
                 );
@@ -159,7 +159,7 @@ function DeliveryReportModal({
 
             {missed.length > 0 && (
               <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>
-                <button onClick={openAllWhatsapp} style={{ ...btnS, fontSize: 12, padding: "8px 16px" }}>
+                <button onClick={openAllWhatsapp} style={{ ...btnS(), fontSize: 12, padding: "8px 16px" }}>
                   مراسلة أول من لم يصله عبر الواتساب
                 </button>
                 <span style={{ fontSize: 11, color: "var(--text-muted)", alignSelf: "center" }}>
