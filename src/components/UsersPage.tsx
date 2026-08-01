@@ -190,10 +190,22 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setShowAdd(true);
   };
 
-  const togglePerm = (key: string) => setPerms(prev => ({ ...prev, [key]: !prev[key] }));
+  /* ── منع القفل الذاتي ──────────────────────────────────────
+     صفحة الإعدادات كلها محجوبة خلف manage_users (NAV + App.tsx)،
+     فمن ينزعها عن نفسه أو يحذف حسابه يفقد الوصول إليها نهائياً ولا
+     يملك وسيلة لاستعادته من داخل النظام. الحارس هنا على مستوى
+     الدوال لا الأزرار فقط، لأن الأزرار مجرد واجهة. */
+  const isSelf = (id: number) => id === currentUser.id;
+  const isSelfEdit = editUser !== null && isSelf(editUser.id);
+  const isLockedPerm = (key: string) => isSelfEdit && key === "manage_users";
+
+  const togglePerm = (key: string) => {
+    if (isLockedPerm(key)) return;
+    setPerms(prev => ({ ...prev, [key]: !prev[key] }));
+  };
   const toggleAll = () => {
     const allOn = ALL_PERMISSIONS.every(p => perms[p.key]);
-    setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, !allOn])));
+    setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, isLockedPerm(p.key) ? true : !allOn])));
   };
 
   const [savingUser, setSavingUser] = useState(false);
@@ -201,16 +213,19 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const saveUser = async () => {
     if (!form.name || !form.username) return;
     setSavingUser(true);
+    /* الحارس عند حدود الكتابة لا عند الزر فقط: manage_users تبقى
+       ممنوحة عند تعديل المستخدم لحسابه مهما كانت حالة النموذج */
+    const permsToSave = isSelfEdit ? { ...perms, manage_users: true } : perms;
     try {
       if (editUser) {
         if (form.password.trim()) {
-          const { error } = await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
+          const { error } = await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: permsToSave });
           if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error.message); return; }
         } else {
-          const { error } = await supabase.from("users").update({ name: form.name, username: form.username, permissions: perms }).eq("id", editUser.id);
+          const { error } = await supabase.from("users").update({ name: form.name, username: form.username, permissions: permsToSave }).eq("id", editUser.id);
           if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error.message); return; }
         }
-        setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, username: form.username, permissions: perms } : u));
+        setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, username: form.username, permissions: permsToSave } : u));
       } else {
         if (!form.password) return;
         const { error } = await supabase.rpc("create_user", { p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
@@ -229,6 +244,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   };
 
   const deleteUser = async (id: number) => {
+    if (isSelf(id)) { showAlert("error", "لا يمكنك حذف حسابك الحالي"); return; }
     const ok = await confirmAction("هل تريد حذف هذا المستخدم؟", { title: "حذف مستخدم" });
     if (!ok) return;
     if (!await writeOk(supabase.from("users").delete().eq("id", id), "تعذر حذف المستخدم")) return;
@@ -237,6 +253,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
   /* ── [FEATURE #2] toggle is_active ── */
   const toggleActive = async (u: User) => {
+    /* التعطيل لا يمنع الدخول اليوم لأن verify_user لا تفحص is_active
+       (مؤجَّل لمرحلة التأمين)، لكن الحارس يوضع الآن كي لا يتحوّل
+       تفعيل ذلك الفحص لاحقاً إلى قفل ذاتي جديد */
+    if (isSelf(u.id)) { showAlert("error", "لا يمكنك تعطيل حسابك الحالي"); return; }
     const current = (u as any).is_active === false ? false : true;
     const newVal = !current;
     if (!await writeOk(
@@ -506,6 +526,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {users.map((u, idx) => {
                     const isOwner = u.username === "admin";
+                    const isMe = isSelf(u.id);
                     const isActive = (u as any).is_active !== false;
                     const avatarBg = isOwner
                       ? "linear-gradient(135deg,#c8a24b,#8a6a22)"
@@ -535,8 +556,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                         {/* ── [FEATURE #2 + FIX #3] ACTIONS ── */}
                         {currentUser.permissions.manage_users && !isOwner && (
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-                            {/* Switch تفعيل الحساب */}
-                            <Switch on={isActive} onChange={() => toggleActive(u)} />
+                            {/* Switch تفعيل الحساب — معطَّل على حسابك أنت */}
+                            <Switch on={isActive} onChange={() => toggleActive(u)} disabled={isMe} />
                             {/* أزرار التعديل والحذف */}
                             <div style={{ display: "flex", gap: 4 }}>
                               <button
@@ -548,7 +569,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
                               </button>
-                              <button
+                              {!isMe && <button
                                 onClick={() => deleteUser(u.id)}
                                 title="حذف"
                                 style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid var(--line)", background: "var(--bg-2)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--text-muted)", transition: "all .15s" }}
@@ -556,7 +577,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--line)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted)"; }}
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         )}
@@ -621,22 +642,29 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
         {/* ── [FEATURE #1] PERMISSIONS AS SWITCHES ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>الصلاحيات</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>
+            الصلاحيات
+            {isSelfEdit && <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text-muted)", marginRight: 6 }}>— هذا حسابك، وصلاحية إدارة المستخدمين مثبَّتة</span>}
+          </div>
           <div onClick={toggleAll} style={{ fontSize: 11, color: "var(--em7)", cursor: "pointer", fontWeight: 600 }}>
             {ALL_PERMISSIONS.every(p => perms[p.key]) ? "إلغاء الكل" : "تحديد الكل"}
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
-          {ALL_PERMISSIONS.map(p => (
+          {ALL_PERMISSIONS.map(p => {
+            const locked = isLockedPerm(p.key);
+            return (
             <div
               key={p.key}
               onClick={() => togglePerm(p.key)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 9, cursor: "pointer", background: perms[p.key] ? "rgba(125,31,60,.06)" : "var(--bg-2)", border: `1px solid ${perms[p.key] ? "rgba(125,31,60,.2)" : "var(--border)"}`, transition: "all .15s" }}
+              title={locked ? "لا يمكنك نزع صلاحية إدارة المستخدمين عن حسابك الحالي" : undefined}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 9, cursor: locked ? "not-allowed" : "pointer", background: perms[p.key] ? "rgba(125,31,60,.06)" : "var(--bg-2)", border: `1px solid ${perms[p.key] ? "rgba(125,31,60,.2)" : "var(--border)"}`, transition: "all .15s" }}
             >
               <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: perms[p.key] ? 600 : 400 }}>{p.label}</span>
-              <Switch on={perms[p.key]} onChange={() => togglePerm(p.key)} />
+              <Switch on={perms[p.key]} onChange={() => togglePerm(p.key)} disabled={locked} />
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
