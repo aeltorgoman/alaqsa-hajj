@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useConfig } from "../config/ConfigContext";
@@ -52,9 +52,13 @@ function natCode(nat: string | undefined | null): string {
   return /^[A-Za-z]/.test(v) ? v.slice(0, 3).toUpperCase() : v;
 }
 
+// دالة خالصة لا تقرأ إلا وسيطها، فمكانها خارج المكوّن حتى تبقى مرجعيتها
+// ثابتة ولا تُبطل الاشتقاقات المذكَّرة التي تستعملها
+const floorKey = (r: Room) => r.floor ? String(r.floor) : "بدون طابق";
+
 function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
   const { alert: alertState, showAlert } = useAlert();
-  const passengers = [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0)));
+  const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
   // الحجاج المرتبطين برحلة معينة — ذهاب عبر flight_id، إياب عبر return_flight_id (مستقلين)
@@ -96,6 +100,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [rooms, setRooms] = useState<Room[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refDataError, setRefDataError] = useState(false);
+  // رسالة موحّدة عند فشل الجلب — تفرّق بين «لا يوجد» و«لم نستطع القراءة»
+  const refErrorBox = (
+    <div style={{ textAlign: "center", padding: "2rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
+      تعذر تحميل البيانات — يرجى التحقق من الاتصال وتحديث الصفحة
+    </div>
+  );
 
   // تحديد عناصر التقرير (لطباعة عنصر واحد بس أو أكثر)
   const [selectedBusIds, setSelectedBusIds] = useState<Set<number>>(new Set());
@@ -103,18 +114,17 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [selectedMinaCampIds, setSelectedMinaCampIds] = useState<Set<number>>(new Set());
   const [selectedArafaCampIds, setSelectedArafaCampIds] = useState<Set<number>>(new Set());
   const [selectedFloors, setSelectedFloors] = useState<Set<string>>(new Set());
-  const floorKey = (r: Room) => r.floor ? String(r.floor) : "بدون طابق";
 
   // تقرير الفندق — فلتر الطباعة
   const [hotelPrintFilter, setHotelPrintFilter] = useState<"all" | "type">("all");
   const [hotelPrintType, setHotelPrintType] = useState<string>("");
-  const floorItems = [...new Set(rooms.map(r => floorKey(r)))]
+  const floorItems = useMemo(() => [...new Set(rooms.map(r => floorKey(r)))]
     .sort((a, b) => {
       if (a === "بدون طابق") return 1;
       if (b === "بدون طابق") return -1;
       return Number(a) - Number(b);
     })
-    .map(f => ({ id: f, label: f === "بدون طابق" ? f : `طابق ${f}` }));
+    .map(f => ({ id: f, label: f === "بدون طابق" ? f : `طابق ${f}` })), [rooms]);
 
   // تقرير الطيران — نوع التقرير الفرعي
   const [flightSubReport, setFlightSubReport] = useState<"airline" | "per_flight" | null>(null);
@@ -194,23 +204,25 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const toggleAll = () => setSelectedCols(prev => prev.length === ALL_COLS.length ? [] : ALL_COLS.map(c => c.key));
   const [filterNat, setFilterNat] = useState<string>("الكل");
   const [filterPType, setFilterPType] = useState<string>("الكل");
-  const nats = ["الكل", ...Array.from(new Set(passengers.map(p => p.nat).filter(Boolean)))];
-  const filteredPassengers = passengers.filter(p => {
+  const nats = useMemo(() => ["الكل", ...Array.from(new Set(passengers.map(p => p.nat).filter(Boolean)))], [passengers]);
+  const filteredPassengers = useMemo(() => passengers.filter(p => {
     const isHajj = !p.passenger_type || p.passenger_type === "حاج";
     return (filterNat === "الكل" || p.nat === filterNat) &&
       (filterPType === "الكل" || (filterPType === "حجاج" ? isHajj : !isHajj));
-  });
+  }), [passengers, filterNat, filterPType]);
   const activeCols = ALL_COLS.filter(c => selectedCols.includes(c.key));
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [{ data: b }, { data: c }, { data: r }, { data: f }] = await Promise.all([
+      const [{ data: b, error: eb }, { data: c, error: ec }, { data: r, error: er }, { data: f, error: ef }] = await Promise.all([
         supabase.from("buses").select("*").order("created_at"),
         supabase.from("camps").select("*").order("created_at"),
         supabase.from("rooms").select("*").order("number"),
         supabase.from("flights").select("*").order("date"),
       ]);
+      /* الفشل يُبلَّغ عنه بدل عرض «لا يوجد باصات» على بيانات لم تصل أصلاً */
+      setRefDataError(!!(eb || ec || er || ef) || !b || !c || !r || !f);
       if (b) {
         const validBuses = (b as Bus[]).filter(x => x.type || passengers.some(p => p.bus_id === x.id));
         setBuses(validBuses);
@@ -1155,6 +1167,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                         />
                       )}
                       {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+                        refDataError ? refErrorBox :
                         flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
                         flights.map((flight) => {
                           const fp = passengersOfFlight(flight);
@@ -1250,6 +1263,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {activeReport === "buses" && (
             <>
               {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+                refDataError ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>{refErrorBox}</> :
                 buses.length === 0 ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div></> :
                 <>
                   <ExportButtons
@@ -1340,6 +1354,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {activeReport === "mina" && (
             <>
               {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+                refDataError ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>{refErrorBox}</> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
                   <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
@@ -1425,6 +1440,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {activeReport === "arafa" && (
             <>
               {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
+                refDataError ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>{refErrorBox}</> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
                   <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
@@ -1614,6 +1630,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
               </div>
 
               {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
+                refDataError ? refErrorBox :
                 rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
                 getFilteredRooms().length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>اختر طابقاً واحداً على الأقل</div> :
                 <>
