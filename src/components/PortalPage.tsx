@@ -60,8 +60,10 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [buses, setBuses] = useState<Target[]>([]);
   const [minaCamps, setMinaCamps] = useState<Target[]>([]);
   const [arafaCamps, setArafaCamps] = useState<Target[]>([]);
-  const [audienceCount, setAudienceCount] = useState(0);
-  const [enabledCount, setEnabledCount] = useState(0);
+  const [audienceIds, setAudienceIds] = useState<number[]>([]);
+  const [enabledIds, setEnabledIds] = useState<Set<number>>(new Set());
+  const [audienceError, setAudienceError] = useState(false);
+  const [enabledError, setEnabledError] = useState(false);
   const [reportFor, setReportFor] = useState<Announcement | null>(null);
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [showAt, setShowAt] = useState(() => toLocalInput(new Date(Date.now() + 3600000)));
@@ -110,21 +112,44 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     })();
   }, []);
 
-  /* ─── حساب عدد المستهدفين والمفعّلين ─── */
+  /* ─── المفعّلون للإشعارات ───
+     لا تعتمد على الاستهداف إطلاقاً، فتُجلب مرة واحدة بدل استعلام
+     كامل مع كل نقرة على أزرار الاستهداف. */
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const { data: aud } = await supabase.rpc("announcement_audience" as any, {
+      const { data, error } = await supabase.rpc("push_enabled_passengers" as any);
+      if (cancelled) return;
+      if (error) { console.error("تعذر تحميل قائمة المفعّلين للإشعارات", error); setEnabledError(true); return; }
+      setEnabledIds(new Set(((data as any[]) || []).map(r => r.passenger_id)));
+      setEnabledError(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* ─── جمهور التنبيه حسب الاستهداف ───
+     علامة الإلغاء تمنع استجابة قديمة من دهس أحدث منها عند تبديل
+     الاستهداف بسرعة — والعدد المعروض هو ما يبني عليه المستخدم قرار
+     الإرسال. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("announcement_audience" as any, {
         p_target_type: targetKind,
         p_target_ids: targetIds,
       } as any);
-      const ids: number[] = ((aud as any[]) || []).map(r => r.passenger_id);
-      setAudienceCount(ids.length);
-
-      const { data: en } = await supabase.rpc("push_enabled_passengers" as any);
-      const enabled = new Set(((en as any[]) || []).map(r => r.passenger_id));
-      setEnabledCount(ids.filter(id => enabled.has(id)).length);
+      if (cancelled) return;
+      if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); setAudienceError(true); return; }
+      setAudienceIds(((data as any[]) || []).map(r => r.passenger_id));
+      setAudienceError(false);
     })();
+    return () => { cancelled = true; };
   }, [targetKind, targetIds]);
+
+  /* العددان مشتقّان من مصدر واحد، فلا يتفارقان ولا يحتاج أحدهما
+     إعادة جلب الآخر */
+  const audienceCount = audienceIds.length;
+  const enabledCount = audienceIds.filter(id => enabledIds.has(id)).length;
 
   const targetOptions = targetKind === "bus" ? buses
     : targetKind === "camp_mina" ? minaCamps
@@ -375,11 +400,24 @@ function PortalPage({ currentUser }: { currentUser: User }) {
                 })}
               </div>
             )}
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 9, lineHeight: 1.8 }}>
-              سيصل التنبيه إلى <b style={{ color: "var(--text-main)" }}>{audienceCount}</b> من الحجاج،
-              منهم <b style={{ color: "var(--primary)" }}>{enabledCount}</b> مفعّلون للإشعارات على أجهزتهم.
-              {audienceCount > enabledCount && " والبقية سيرون التنبيه عند فتح البوابة."}
-            </div>
+            {/* عند فشل حساب الجمهور لا يُعرض رقم إطلاقاً — «0» قد تكون نتيجة
+                صحيحة، فعرضها هنا يوهم بأن الحساب تمّ. السطر يختفي من نفسه
+                عند أول نجاح لاحق، بلا نافذة منبثقة ولا تكرار مع كل نقرة. */}
+            {audienceError ? (
+              <div style={{ fontSize: 11.5, color: "var(--danger)", fontWeight: 700, marginTop: 9, lineHeight: 1.8 }}>
+                تعذر حساب عدد المستهدفين. يرجى المحاولة مرة أخرى.
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 9, lineHeight: 1.8 }}>
+                سيصل التنبيه إلى <b style={{ color: "var(--text-main)" }}>{audienceCount}</b> من الحجاج،
+                {enabledError ? (
+                  <span style={{ color: "var(--danger)", fontWeight: 700 }}> وتعذر حساب عدد المفعّلين للإشعارات. يرجى المحاولة مرة أخرى.</span>
+                ) : <>
+                  {" "}منهم <b style={{ color: "var(--primary)" }}>{enabledCount}</b> مفعّلون للإشعارات على أجهزتهم.
+                  {audienceCount > enabledCount && " والبقية سيرون التنبيه عند فتح البوابة."}
+                </>}
+              </div>
+            )}
           </div>
 
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="عنوان التنبيه (يظهر على شاشة جوال الحاج)"
