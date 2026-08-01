@@ -93,9 +93,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
 
   const roomPassengers = (roomId: number) =>
-    hajj.filter(p => (p as any).room_id === roomId);
+    hajj.filter(p => p.room_id === roomId);
 
-  const unassigned = hajj.filter(p => !(p as any).room_id);
+  const unassigned = hajj.filter(p => !p.room_id);
 
   const getStatus = (room: Room) => {
     const cap = TYPE_CAP[room.type] || 0;
@@ -136,7 +136,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   // KPIs
   const totalRooms = rooms.length;
-  const withRoom = hajj.filter(p => (p as any).room_id).length;
+  const withRoom = hajj.filter(p => p.room_id).length;
   const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
   const availableRooms = rooms.filter(r => { const c = TYPE_CAP[r.type] || 0; return c > 0 && roomPassengers(r.id).length < c; }).length;
 
@@ -187,13 +187,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const removeFromRoom = async (pId: number) => {
     if (!await writeOk(supabase.from("passengers").update({ room_id: null }).eq("id", pId), "تعذر إخراج الحاج من الغرفة")) return;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } as any : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } : p));
   };
 
   const addToRoom = async (pId: number) => {
     if (!selectedRoom) return;
     if (!await writeOk(supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } as any : p));
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } : p));
     setPSearch("");
   };
 
@@ -233,7 +233,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const openPanel = (room: Room) => {
     setSelectedRoom(room);
     setPanelType(room.type);
-    setPanelNotes((room as any).notes || "");
+    setPanelNotes(room.notes || "");
     setShowAddPilgrim(false);
     setPSearch("");
     setEditingRoomNum(false);

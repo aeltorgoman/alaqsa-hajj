@@ -63,6 +63,8 @@ export interface Bus {
   id: number;
   name: string;
   type: string;
+  /* عمود قائم في القاعدة بافتراضي 50 — كان غيابه يفرض (bus as any).capacity */
+  capacity?: number | null;
   season_id?: number | null;
   created_at?: string;
 }
@@ -95,5 +97,8 @@ export interface Flight {
   time: string;
   from_airport: string;
   to_airport: string;
+  /* عمودان قائمان في القاعدة — كان غيابهما يفرض (flight as any).arrival_* */
+  arrival_time?: string | null;
+  arrival_date?: string | null;
   created_at?: string;
 }

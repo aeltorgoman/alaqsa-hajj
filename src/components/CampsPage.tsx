@@ -19,14 +19,18 @@ function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
   );
 }
 
+/* مفتاحا العمود والخدمة — حرفيان لا string عام، فالفهرسة بهما آمنة نوعياً */
+type CampIdKey = "camp_mina_id" | "camp_arafa_id";
+type CampServiceKey = "camp_mina" | "camp_arafa";
+
 // ===== إحصائيات المخيمات =====
-function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: string; campServiceKey: string }) {
+function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: CampIdKey; campServiceKey: CampServiceKey }) {
   const stats = useMemo(() => {
     const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
     const total = hajj.length;
-    const assignedCount = hajj.filter(p => (p as any)[campIdKey] != null).length;
+    const assignedCount = hajj.filter(p => p[campIdKey] != null).length;
     const unassigned = total - assignedCount;
-    const specialRequested = hajj.filter(p => (p.services as any)[campServiceKey] === "خاص").length;
+    const specialRequested = hajj.filter(p => p.services[campServiceKey] === "خاص").length;
     return { total, assignedCount, unassigned, specialRequested };
   }, [camps, passengers, campIdKey, campServiceKey]);
   const { total, assignedCount, unassigned, specialRequested } = stats;
@@ -97,7 +101,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   }, [pageType]);
 
   const getCampPassengers = (campId: number) =>
-    passengers.filter(p => (p as any)[campIdKey] === campId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    passengers.filter(p => p[campIdKey] === campId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
 
   const addCamp = async () => {
@@ -130,7 +134,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const moveP = async (pId: number, toId: string) => {
     if (!toId) return;
     const newCampId = parseInt(toId);
-    const fc = camps.find(c => c.id === (passengers.find(p => p.id === pId) as any)?.[campIdKey]);
+    const fc = camps.find(c => c.id === passengers.find(p => p.id === pId)?.[campIdKey]);
     const tc = camps.find(c => c.id === newCampId);
     if (fc && tc && fc.gender !== tc.gender && tc.type !== "خاص") return;
     if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: newCampId } as TablesUpdate<"passengers">).eq("id", pId), "تعذر نقل المسافر إلى المخيم الآخر")) return;
@@ -327,7 +331,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const campColor = isSpecial ? "#D4A017" : (camp.gender === "ذكر" ? "#1D4ED8" : "#BE185D");
         const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
         const genderPool = camp.type === "خاص" ? passengers : passengers.filter(p => p.gender === camp.gender);
-        const addFiltered = genderPool.filter(p => (p as any)[campIdKey] == null && (!p.passenger_type || p.passenger_type === "حاج") && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
+        const addFiltered = genderPool.filter(p => p[campIdKey] == null && (!p.passenger_type || p.passenger_type === "حاج") && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
         return (
           <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
@@ -382,8 +386,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
                             {p.short_ar || p.name_ar}
-                            {(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}
-                            {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 8, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>خاص</span>}
+                            {p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
+                            {p.services[serviceKey] === "خاص" && <span style={{ fontSize: 8, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>خاص</span>}
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, opacity: .6 }}>
@@ -406,21 +410,21 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
                 {/* اقتراحات ذكية */}
                 {(() => {
-                  const busIds = new Set(cp.map((p: any) => p.bus_id).filter(Boolean));
-                  const roomIds = new Set(cp.map((p: any) => p.room_id).filter(Boolean));
-                  const famIds = new Set(cp.filter((p: any) => p.family_id).map((p: any) => p.family_id));
+                  const busIds = new Set(cp.map(p => p.bus_id).filter(Boolean));
+                  const roomIds = new Set(cp.map(p => p.room_id).filter(Boolean));
+                  const famIds = new Set(cp.filter(p => p.family_id).map(p => p.family_id));
                   const allSuggestions = passengers
                     .filter(p =>
-                      (p as any)[campIdKey] !== camp.id &&
+                      p[campIdKey] !== camp.id &&
                       !dismissedCampSuggestions.has(p.id!) &&
                       (!p.passenger_type || p.passenger_type === "حاج") &&
                       (camp.type === "خاص" || p.gender === camp.gender) &&
                       ((p.family_id && famIds.has(p.family_id)) ||
-                       ((p as any).bus_id && busIds.has((p as any).bus_id)) ||
-                       ((p as any).room_id && roomIds.has((p as any).room_id)))
+                       (p.bus_id && busIds.has(p.bus_id)) ||
+                       (p.room_id && roomIds.has(p.room_id)))
                     )
                     .sort((a, b) => {
-                      const sc = (x: any) => (x.family_id && famIds.has(x.family_id) ? 4 : 0) + (x.bus_id && busIds.has(x.bus_id) ? 2 : 0) + (x.room_id && roomIds.has(x.room_id) ? 1 : 0);
+                      const sc = (x: Passenger) => (x.family_id && famIds.has(x.family_id) ? 4 : 0) + (x.bus_id && busIds.has(x.bus_id) ? 2 : 0) + (x.room_id && roomIds.has(x.room_id) ? 1 : 0);
                       return sc(b) - sc(a);
                     });
                   if (!allSuggestions.length) return null;
@@ -434,21 +438,21 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                       <div style={{ maxHeight: 114, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
                         {allSuggestions.map(p => {
                           const hasFam = p.family_id && famIds.has(p.family_id);
-                          const hasBus = (p as any).bus_id && busIds.has((p as any).bus_id);
+                          const hasBus = p.bus_id && busIds.has(p.bus_id);
                           const reason = hasFam ? "صلة قرابة" : hasBus ? "نفس الباص" : "نفس الغرفة";
-                          const matchPax = cp.find((x: any) => hasFam ? x.family_id === p.family_id : hasBus ? (x as any).bus_id === (p as any).bus_id : (x as any).room_id === (p as any).room_id);
-                          const matchName = (matchPax as any)?.short_ar || (matchPax as any)?.name_ar?.split(" ").slice(0,2).join(" ") || "";
-                          const isTypeMismatch = camp.type === "خاص" && (p.services as any)?.[serviceKey] !== "خاص";
+                          const matchPax = cp.find(x => hasFam ? x.family_id === p.family_id : hasBus ? x.bus_id === p.bus_id : x.room_id === p.room_id);
+                          const matchName = matchPax?.short_ar || matchPax?.name_ar?.split(" ").slice(0,2).join(" ") || "";
+                          const isTypeMismatch = camp.type === "خاص" && p.services?.[serviceKey] !== "خاص";
                           return (
                             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${hasFam ? "#A5D6A7" : hasBus ? "#90CAF9" : "#FFD54F"}`, background: hasFam ? "#F1F8E9" : hasBus ? "#E3F2FD" : "#FFFDE7" }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)" }}>{(p as any).short_ar || p.name_ar}</span>
+                                <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
                                 <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", marginRight: 5 }}>· {reason}{matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}</span>
                               </div>
                               <button onClick={async () => {
-                                if (isTypeMismatch) { showAlert("warning", `تنبيه: ${(p as any).short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); }
-                                if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: camp.id } as any).eq("id", p.id), "تعذر إضافة المسافر إلى المخيم")) return;
-                                setPassengers(prev => prev.map((x: any) => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x));
+                                if (isTypeMismatch) { showAlert("warning", `تنبيه: ${p.short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); }
+                                if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", p.id), "تعذر إضافة المسافر إلى المخيم")) return;
+                                setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x));
                               }} title="إضافة للمخيم" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                               </button>
@@ -494,9 +498,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                         onMouseEnter={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
                         onMouseLeave={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}</div>
                         </div>
-                        {(p.services as any)[serviceKey] === "خاص" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>خاص</span>}
+                        {p.services[serviceKey] === "خاص" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>خاص</span>}
                         <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${selectedAdd.has(p.id) ? campColor : "var(--line)"}`, background: selectedAdd.has(p.id) ? campColor : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                           {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                         </div>
@@ -508,7 +512,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
                       <button onClick={async () => {
                         const ids = [...selectedAdd];
-                        const mismatch = ids.filter(id => { const p = passengers.find(x => x.id === id); return camp.type === "خاص" && (p?.services as any)?.[serviceKey] !== "خاص"; });
+                        const mismatch = ids.filter(id => { const p = passengers.find(x => x.id === id); return camp.type === "خاص" && p?.services?.[serviceKey] !== "خاص"; });
                         if (mismatch.length) showAlert("warning", `تنبيه: ${mismatch.length === 1 ? "حاج" : `${mismatch.length} حجاج`} طالبون خيمة عادية وليس خاصة`);
                         if (!await writeAllOk(ids.map(id => supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", id)), "تعذر إضافة بعض المسافرين إلى المخيم")) return;
                         setPassengers(prev => prev.map(x => selectedAdd.has(x.id) ? { ...x, [campIdKey]: camp.id } : x));
