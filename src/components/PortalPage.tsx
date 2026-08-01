@@ -93,7 +93,6 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     const t0 = setTimeout(load, 0);
     const t = setInterval(load, 30000);
     return () => { clearTimeout(t0); clearInterval(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ─── قوائم الاستهداف ─── */
@@ -121,7 +120,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       const { data, error } = await supabase.rpc("push_enabled_passengers" as any);
       if (cancelled) return;
       if (error) { console.error("تعذر تحميل قائمة المفعّلين للإشعارات", error); setEnabledError(true); return; }
-      setEnabledIds(new Set(((data as any[]) || []).map(r => r.passenger_id)));
+      setEnabledIds(new Set((data || []).map((r: { passenger_id: number }) => r.passenger_id)));
       setEnabledError(false);
     })();
     return () => { cancelled = true; };
@@ -140,7 +139,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       } as any);
       if (cancelled) return;
       if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); setAudienceError(true); return; }
-      setAudienceIds(((data as any[]) || []).map(r => r.passenger_id));
+      setAudienceIds((data || []).map((r: { passenger_id: number }) => r.passenger_id));
       setAudienceError(false);
     })();
     return () => { cancelled = true; };
@@ -192,7 +191,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
           body: { announcement_id: created.id },
         });
-        if (fnErr || (res as any)?.error) {
+        if (fnErr || (res as { error?: unknown })?.error) {
           pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
         } else {
           const r = res as { sent: number; disabled: number };
@@ -279,7 +278,6 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   async function saveSettings() {
     if (cfgId == null) return;
     setSavingCfg(true);
-    // @ts-ignore
     const { error } = await (supabase.from("company_config") as any).update({
       admin_name: adminName.trim() || null,
       admin_phone: adminPhone.trim() || null,
