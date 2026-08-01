@@ -4,6 +4,10 @@ export interface User {
   username: string;
   password: string;
   permissions: Record<string, boolean>;
+  /* اختياري لأن verify_user لا تُرجعه، فالمستخدم الحالي القادم من
+     تسجيل الدخول بلا الحقل، بينما صفوف select("*") تحمله دائماً.
+     nullable مطابقةً للعمود المولَّد في types/database.ts */
+  is_active?: boolean | null;
 }
 
 export interface Passenger {
