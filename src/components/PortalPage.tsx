@@ -60,8 +60,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [buses, setBuses] = useState<Target[]>([]);
   const [minaCamps, setMinaCamps] = useState<Target[]>([]);
   const [arafaCamps, setArafaCamps] = useState<Target[]>([]);
-  const [audienceCount, setAudienceCount] = useState(0);
-  const [enabledCount, setEnabledCount] = useState(0);
+  const [audienceIds, setAudienceIds] = useState<number[]>([]);
+  const [enabledIds, setEnabledIds] = useState<Set<number>>(new Set());
   const [reportFor, setReportFor] = useState<Announcement | null>(null);
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [showAt, setShowAt] = useState(() => toLocalInput(new Date(Date.now() + 3600000)));
@@ -110,21 +110,42 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     })();
   }, []);
 
-  /* ─── حساب عدد المستهدفين والمفعّلين ─── */
+  /* ─── المفعّلون للإشعارات ───
+     لا تعتمد على الاستهداف إطلاقاً، فتُجلب مرة واحدة بدل استعلام
+     كامل مع كل نقرة على أزرار الاستهداف. */
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const { data: aud } = await supabase.rpc("announcement_audience" as any, {
+      const { data, error } = await supabase.rpc("push_enabled_passengers" as any);
+      if (cancelled) return;
+      if (error) { console.error("تعذر تحميل قائمة المفعّلين للإشعارات", error); return; }
+      setEnabledIds(new Set(((data as any[]) || []).map(r => r.passenger_id)));
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  /* ─── جمهور التنبيه حسب الاستهداف ───
+     علامة الإلغاء تمنع استجابة قديمة من دهس أحدث منها عند تبديل
+     الاستهداف بسرعة — والعدد المعروض هو ما يبني عليه المستخدم قرار
+     الإرسال. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("announcement_audience" as any, {
         p_target_type: targetKind,
         p_target_ids: targetIds,
       } as any);
-      const ids: number[] = ((aud as any[]) || []).map(r => r.passenger_id);
-      setAudienceCount(ids.length);
-
-      const { data: en } = await supabase.rpc("push_enabled_passengers" as any);
-      const enabled = new Set(((en as any[]) || []).map(r => r.passenger_id));
-      setEnabledCount(ids.filter(id => enabled.has(id)).length);
+      if (cancelled) return;
+      if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); return; }
+      setAudienceIds(((data as any[]) || []).map(r => r.passenger_id));
     })();
+    return () => { cancelled = true; };
   }, [targetKind, targetIds]);
+
+  /* العددان مشتقّان من مصدر واحد، فلا يتفارقان ولا يحتاج أحدهما
+     إعادة جلب الآخر */
+  const audienceCount = audienceIds.length;
+  const enabledCount = audienceIds.filter(id => enabledIds.has(id)).length;
 
   const targetOptions = targetKind === "bus" ? buses
     : targetKind === "camp_mina" ? minaCamps
