@@ -157,6 +157,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setCompanyUploading(false);
     if (url) setCompanyForm(prev => ({ ...prev, logo_url: url }));
     else showAlert("error", "فشل رفع الشعار، يرجى المحاولة مرة أخرى");
+    /* تصفير الحقل ليعمل onChange عند إعادة اختيار الملف نفسه بعد الفشل */
+    e.target.value = "";
   };
 
   const saveCompanyConfig = async () => {
@@ -352,6 +354,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                           const url = await uploadDoc(file, 0, "company_banner");
                           setCompanyUploading(false);
                           if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
+                          else showAlert("error", "فشل رفع صورة البانر، يرجى المحاولة مرة أخرى");
                           e.target.value = "";
                         }} />
                       </label>
@@ -369,7 +372,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                       </div>
                       <div style={{ textAlign: "center" }}>
                         <div style={{ fontSize: 10, fontWeight: 700, color: "var(--primary)" }}>{companyUploading ? "جاري الرفع..." : "تغيير الشعار"}</div>
-                        <div style={{ fontSize: 9, color: "var(--text-muted)" }}>PNG · SVG</div>
+                        <div style={{ fontSize: 9, color: "var(--text-muted)" }}>PNG · JPG</div>
                       </div>
                       <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={companyUploading} style={{ display: "none" }} />
                     </label>

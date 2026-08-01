@@ -115,7 +115,11 @@ export function compressImage(file: File): Promise<Blob> {
       canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext("2d");
       if (ctx && !isPng) {
-        ctx.fillStyle = "var(--text-inverse)";
+        /* لون صريح لا متغيّر CSS: canvas لا يفسّر var() ويتجاهل القيمة
+           غير الصالحة صامتاً، فتبقى #000000 الافتراضية وتخرج الخلفية
+           سوداء. ولو فُسِّر المتغيّر لتبع مظهر الواجهة — و‑‑text-inverse
+           أسود في الثيم الداكن — والمطلوب أبيض دائماً تحت الشفافية. */
+        ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, width, height);
       }
       ctx?.drawImage(img, 0, 0, width, height);
