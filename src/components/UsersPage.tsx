@@ -7,8 +7,7 @@ import { useConfig } from "../config/ConfigContext";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
-
-type WriteResult = { error: { message?: string } | null };
+import { createWriteHelpers } from "../utils/write";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -82,19 +81,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
-  /* ── النمط الموحّد لعمليات الكتابة — نفس نمط PassengersPage ──
-     تُرجع true عند النجاح فقط، وتعرض رسالة عند الفشل. الحالة
-     المحلية لا تُحدَّث إلا إذا عادت true، فلا تُظهر الواجهة نتيجةً
-     لم تحدث في القاعدة. */
-  async function writeOk(result: PromiseLike<WriteResult>, failMessage: string): Promise<boolean> {
-    const { error } = await result;
-    if (error) {
-      console.error(failMessage, error);
-      showAlert("error", failMessage);
-      return false;
-    }
-    return true;
-  }
+  /* النمط الموحّد لعمليات الكتابة — التعريف في utils/write.ts */
+  const { writeOk } = createWriteHelpers(showAlert);
 
   const [activeTab, setActiveTab] = useState<"identity" | "system" | "users">("identity");
 

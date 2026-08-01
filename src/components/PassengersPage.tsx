@@ -1,9 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { mapPassenger, upsertPassenger } from "../utils/passenger";
-
-/* شكل نتيجة أي عملية كتابة على Supabase */
-type WriteResult = { error: { message?: string } | null };
+import { createWriteHelpers } from "../utils/write";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -115,31 +113,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
-  /* ── النمط الموحّد لعمليات الكتابة ──────────────────────────
-     كل insert/update/delete يمرّ من هنا. تُرجع true عند النجاح فقط،
-     وتعرض رسالة عند الفشل. الحالة المحلية لا تُحدَّث إلا إذا عادت
-     true — فلا تُظهر الواجهة نتيجةً لم تحدث في القاعدة. */
-  async function writeOk(result: PromiseLike<WriteResult>, failMessage: string): Promise<boolean> {
-    const { error } = await result;
-    if (error) {
-      console.error(failMessage, error);
-      showAlert("error", failMessage);
-      return false;
-    }
-    return true;
-  }
-
-  /* نفس النمط لدفعة عمليات متوازية */
-  async function writeAllOk(results: PromiseLike<WriteResult>[], failMessage: string): Promise<boolean> {
-    const settled = await Promise.all(results);
-    const failed = settled.filter(r => r.error);
-    if (failed.length > 0) {
-      console.error(failMessage, failed.map(f => f.error));
-      showAlert("error", failMessage);
-      return false;
-    }
-    return true;
-  }
+  /* النمط الموحّد لعمليات الكتابة — التعريف في utils/write.ts */
+  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
 
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
