@@ -5,6 +5,7 @@ import type { Passenger, Room } from "../types";
 import { useConfig } from "../config/ConfigContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
+import { createWriteHelpers } from "../utils/write";
 
 const ROOM_TYPES: Room["type"][] = ["فردية", "ثنائية", "ثلاثية", "رباعية", "مجلس", "أخرى"];
 
@@ -21,7 +22,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const primary = config.color_primary || "#7D1F3C";
   const { alert, showAlert } = useAlert();
 
+  const { writeOk } = createWriteHelpers(showAlert);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [roomsError, setRoomsError] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [filterFloor, setFilterFloor] = useState("الكل");  // سيتم تعيينه بأول طابق عند التحميل
   const [filterStatus, setFilterStatus] = useState("الكل");
@@ -71,8 +75,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
 
   useEffect(() => {
+    /* الفشل يُبلَّغ عنه بدل شبكة فارغة تبدو كـ«لا يوجد غرف» */
     supabase.from("rooms").select("*")
-      .then(({ data }: any) => { if (data) setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); });
+      .then(({ data, error }) => {
+        if (error || !data) { console.error("تعذر تحميل الغرف", error); setRoomsError(true); }
+        else { setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); setRoomsError(false); }
+        setRoomsLoading(false);
+      });
   }, []);
 
   const floors = useMemo(() => {
@@ -177,13 +186,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const removeFromRoom = async (pId: number) => {
-    await supabase.from("passengers").update({ room_id: null }).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ room_id: null }).eq("id", pId), "تعذر إخراج الحاج من الغرفة")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } as any : p));
   };
 
   const addToRoom = async (pId: number) => {
     if (!selectedRoom) return;
-    await supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } as any : p));
     setPSearch("");
   };
@@ -191,7 +200,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const deleteRoom = async (room: Room) => {
     const occ = roomPassengers(room.id);
     if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها حجاج"); return; }
-    await supabase.from("rooms").delete().eq("id", room.id);
+    if (!await writeOk(supabase.from("rooms").delete().eq("id", room.id), "تعذر حذف الغرفة")) return;
     setRooms(prev => prev.filter(r => r.id !== room.id));
     setSelectedRoom(null);
     showAlert("success", "تم حذف الغرفة"); setTimeout(() => showAlert(null), 2500);
@@ -199,21 +208,22 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const saveRoomType = async (type: Room["type"]) => {
     if (!selectedRoom) return;
-    await supabase.from("rooms").update({ type }).eq("id", selectedRoom.id);
+    if (!await writeOk(supabase.from("rooms").update({ type }).eq("id", selectedRoom.id), "تعذر تعديل نوع الغرفة")) return;
+    setPanelType(type);
     setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, type } : r));
     setSelectedRoom(prev => prev ? { ...prev, type } : prev);
   };
 
   const saveNotes = async () => {
     if (!selectedRoom) return;
-    await supabase.from("rooms").update({ notes: panelNotes || null }).eq("id", selectedRoom.id);
+    if (!await writeOk(supabase.from("rooms").update({ notes: panelNotes || null }).eq("id", selectedRoom.id), "تعذر حفظ الملاحظات")) return;
     setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, notes: panelNotes || null } : r));
     showAlert("success", "تم حفظ الملاحظات"); setTimeout(() => showAlert(null), 2500);
   };
 
   const saveRoomNumber = async () => {
     if (!selectedRoom || !newRoomNum.trim()) return;
-    await supabase.from("rooms").update({ number: newRoomNum.trim() }).eq("id", selectedRoom.id);
+    if (!await writeOk(supabase.from("rooms").update({ number: newRoomNum.trim() }).eq("id", selectedRoom.id), "تعذر تعديل رقم الغرفة")) return;
     setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, number: newRoomNum.trim() } : r).sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
     setSelectedRoom(prev => prev ? { ...prev, number: newRoomNum.trim() } : prev);
     setEditingRoomNum(false);
@@ -292,7 +302,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
         {/* Rooms Grid */}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
-          {floors.filter(f => filterFloor === "الكل" || f === filterFloor).map(floor => {
+          {roomsLoading && <div style={{ textAlign: "center", padding: "3rem", color: "var(--muted)", fontSize: 12 }}>جاري التحميل...</div>}
+          {!roomsLoading && roomsError && (
+            <div style={{ textAlign: "center", padding: "3rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
+              تعذر تحميل الغرف — يرجى التحقق من الاتصال وتحديث الصفحة
+            </div>
+          )}
+          {!roomsLoading && !roomsError && floors.filter(f => filterFloor === "الكل" || f === filterFloor).map(floor => {
             const floorRooms = filteredRooms.filter(r => r.floor === floor);
             if (floorRooms.length === 0) return null;
             return (
@@ -458,7 +474,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {/* النوع selector */}
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {ROOM_TYPES.map(t => (
-                <button key={t} onClick={() => { setPanelType(t); saveRoomType(t); }}
+                <button key={t} onClick={() => saveRoomType(t)}
                   style={{ padding: "4px 8px", borderRadius: 99, border: "1.5px solid", borderColor: panelType === t ? primary : "var(--line)", background: panelType === t ? primary : "var(--paper)", color: panelType === t ? "#fff" : "var(--ink)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .12s" }}>
                   {t}
                 </button>

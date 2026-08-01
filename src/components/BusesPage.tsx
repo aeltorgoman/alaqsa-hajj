@@ -7,12 +7,13 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { createWriteHelpers } from "../utils/write";
 
-// ===== دالة حفظ الترتيب في Supabase =====
-async function saveSortOrder(items: { id: number; sort_order: number }[]) {
-  await Promise.all(items.map(item =>
+// ===== تحديثات ترتيب الحجاج — تُرجع الوعود ليفحصها writeAllOk =====
+function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
+  return items.map(item =>
     supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
-  ));
+  );
 }
 
 // ===== إحصائيات الباصات =====
@@ -44,7 +45,10 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
+  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
   const [buses, setBuses] = useState<Bus[]>([]);
+  const [busesLoading, setBusesLoading] = useState(true);
+  const [busesError, setBusesError] = useState(false);
   const [editingBusId, setEditingBusId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [busName, setBusName] = useState("");
@@ -74,7 +78,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const dragType = useRef<"reorder"|"add">("reorder");
 
   useEffect(() => {
-    supabase.from("buses").select("*").order("created_at").then(({ data }: any) => { if (data) setBuses(data); });
+    /* الفشل يُبلَّغ عنه بدل «لا يوجد باصات بعد» على بيانات لم تصل */
+    supabase.from("buses").select("*").order("created_at").then(({ data, error }) => {
+      if (error || !data) { console.error("تعذر تحميل الباصات", error); setBusesError(true); }
+      else { setBuses(data as Bus[]); setBusesError(false); }
+      setBusesLoading(false);
+    });
   }, []);
 
   const getBusPassengers = (busId: number) =>
@@ -104,15 +113,20 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
 
   const removeP = async (pId: number) => {
-    await supabase.from("passengers").update({ bus_id: null }).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ bus_id: null }).eq("id", pId), "تعذر إزالة المسافر من الباص")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, bus_id: null } : p));
   };
 
   const moveP = async (pId: number, toId: string) => {
     if (!toId) return;
     const newBusId = parseInt(toId);
-    await supabase.from("passengers").update({ bus_id: newBusId }).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ bus_id: newBusId }).eq("id", pId), "تعذر نقل المسافر إلى الباص الآخر")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, bus_id: newBusId } : p));
+  };
+
+  const renameBus = async (id: number, name: string) => {
+    if (!await writeOk(supabase.from("buses").update({ name }).eq("id", id), "تعذر تعديل اسم الباص")) return;
+    setBuses(prev => prev.map(b => b.id === id ? { ...b, name } : b));
   };
 
   // ===== Drag & Drop handlers =====
@@ -139,8 +153,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
     /* سحب من قائمة الإضافة → إضافة للباص */
     if (dragType.current === "add" && fromId) {
-      await supabase.from("passengers").update({ bus_id: busId }).eq("id", fromId);
-      setPassengers(prev => prev.map(x => x.id === fromId ? { ...x, bus_id: busId } : x));
+      if (await writeOk(supabase.from("passengers").update({ bus_id: busId }).eq("id", fromId), "تعذر إضافة المسافر إلى الباص")) {
+        setPassengers(prev => prev.map(x => x.id === fromId ? { ...x, bus_id: busId } : x));
+      }
       setDraggingId(null); dragPassengerId.current = null; dragOverPassengerId.current = null;
       return;
     }
@@ -166,7 +181,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       const upd = updates.find(u => u.id === p.id);
       return upd ? { ...p, sort_order: upd.sort_order } : p;
     }));
-    await saveSortOrder(updates);
+    /* التحديث أعلاه يبقى تفاؤلياً كما كان — الإبلاغ يُضاف بلا تغيير سلوكي */
+    await writeAllOk(sortOrderUpdates(updates), "تعذر حفظ الترتيب الجديد");
 
     setDraggingId(null); setDragOverId(null);
     dragPassengerId.current = null; dragOverPassengerId.current = null;
@@ -214,7 +230,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       </div>
 
       {/* شبكة الباصات */}
-      {!buses.length ? (
+      {busesLoading ? (
+        <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)", fontSize: 12 }}>جاري التحميل...</div>
+      ) : busesError ? (
+        <div style={{ textAlign: "center", padding: "3rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
+          تعذر تحميل الباصات — يرجى التحقق من الاتصال وتحديث الصفحة
+        </div>
+      ) : !buses.length ? (
         <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)", fontSize: 12 }}>
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.2" strokeLinecap="round"><path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>
           <div style={{ marginTop: 8 }}>لا يوجد باصات بعد</div>
@@ -324,8 +346,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       {editingBusId === bus.id ? (
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <input defaultValue={bus.name} id={`bus-modal-${bus.id}`} style={{ fontSize: 15, fontWeight: 800, padding: "4px 10px", borderRadius: 8, border: "none", outline: "none", width: 140, fontFamily: "var(--font-body)" }} autoFocus
-                            onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id).then(() => { setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, name: v } : b)); }); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
-                          <button onClick={() => { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("buses").update({ name: v }).eq("id", bus.id).then(() => { setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, name: v } : b)); }); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>حفظ</button>
+                            onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameBus(bus.id, v); } setEditingBusId(null); } if (e.key === "Escape") setEditingBusId(null); }} />
+                          <button onClick={() => { const v = (document.getElementById(`bus-modal-${bus.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameBus(bus.id, v); } setEditingBusId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>حفظ</button>
                         </div>
                       ) : (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -437,7 +459,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                               · {sharedRoom && sharedMina ? "نفس الغرفة وخيمة منى" : sharedRoom ? "نفس الغرفة" : "نفس خيمة منى"}
                               {matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}
                             </span>
-                            <button onClick={async () => { await supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id); setPassengers(prev => prev.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                            <button onClick={async () => { if (!await writeOk(supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id), "تعذر إضافة المسافر إلى الباص")) return; setPassengers(prev => prev.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </button>
                             <button onClick={() => setDismissedSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
@@ -514,7 +536,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                             );
                             if (!ok) return;
                           }
-                          await Promise.all(chosen.map(p => supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id)));
+                          if (!await writeAllOk(chosen.map(p => supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id)), "تعذر إضافة بعض المسافرين إلى الباص")) return;
                           setPassengers(prev => prev.map(x => selectedAdd.has(x.id) ? { ...x, bus_id: bus.id } : x));
                           setSelectedAdd(new Set());
                         }}
