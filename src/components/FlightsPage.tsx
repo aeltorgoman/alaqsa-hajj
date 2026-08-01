@@ -8,6 +8,7 @@ import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
+import { createWriteHelpers } from "../utils/write";
 
 // رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id
 const flightField = (type?: string): "flight_id" | "return_flight_id" =>
@@ -61,7 +62,10 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [flightsLoading, setFlightsLoading] = useState(true);
+  const [flightsError, setFlightsError] = useState(false);
   const [editingFlightId, setEditingFlightId] = useState<number | null>(null);
   const [editFlightModal, setEditFlightModal] = useState<Flight | null>(null);
   const [editForm, setEditForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "" });
@@ -93,8 +97,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
 
   useEffect(() => {
-    supabase.from("flights").select("*").order("created_at").then(({ data }: any) => {
-      if (data) setFlights(data as Flight[]);
+    /* الفشل يُبلَّغ عنه بدل «لا يوجد رحلات بعد» على بيانات لم تصل */
+    supabase.from("flights").select("*").order("created_at").then(({ data, error }) => {
+      if (error || !data) { console.error("تعذر تحميل الرحلات", error); setFlightsError(true); }
+      else { setFlights(data as Flight[]); setFlightsError(false); }
+      setFlightsLoading(false);
     });
   }, []);
 
@@ -115,9 +122,14 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const saveEditFlight = async () => {
     if (!editFlightModal) return;
     const upd = { name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(), date: editForm.date, time: editForm.time, arrival_time: editForm.arrival_time, arrival_date: editForm.arrival_date, from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim() };
-    await supabase.from("flights").update(upd).eq("id", editFlightModal.id);
-    setFlights(flights.map(f => f.id === editFlightModal.id ? { ...f, ...upd } : f));
+    if (!await writeOk(supabase.from("flights").update(upd).eq("id", editFlightModal.id), "تعذر حفظ تعديلات الرحلة")) return;
+    setFlights(prev => prev.map(f => f.id === editFlightModal.id ? { ...f, ...upd } : f));
     setEditFlightModal(null);
+  };
+
+  const renameFlight = async (id: number, name: string) => {
+    if (!await writeOk(supabase.from("flights").update({ name }).eq("id", id), "تعذر تعديل اسم الرحلة")) return;
+    setFlights(prev => prev.map(f => f.id === id ? { ...f, name } : f));
   };
 
   const addFlight = async () => {
@@ -135,7 +147,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   const deleteFlight = async (flight: Flight) => {
     if (getFlightPassengers(flight).length > 0) { showAlert("warning", "لا يمكن حذف رحلة تحتوي على مسافرين"); return; }
-    await supabase.from("flights").delete().eq("id", flight.id);
+    if (!await writeOk(supabase.from("flights").delete().eq("id", flight.id), "تعذر حذف الرحلة")) return;
     setFlights(prev => prev.filter(f => f.id !== flight.id));
   };
 
@@ -143,7 +155,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // الدرجة بتتحدد من services.flight بتاع الحاج نفسه تلقائياً
 
   const removeP = async (pId: number, field: "flight_id" | "return_flight_id") => {
-    await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", pId), "تعذر إزالة المسافر من الرحلة")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [field]: null } : p));
   };
 
@@ -291,11 +303,11 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       <input defaultValue={flight.name} id={`fn-${flight.id}`} style={{ ...inp, fontSize: 12, padding: "3px 8px", width: 130 }} autoFocus
                         onKeyDown={e => {
-                          if (e.key === "Enter") { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("flights").update({ name: v }).eq("id", flight.id); setFlights(flights.map(f => f.id === flight.id ? { ...f, name: v } : f)); } setEditingFlightId(null); }
+                          if (e.key === "Enter") { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameFlight(flight.id, v); } setEditingFlightId(null); }
                           if (e.key === "Escape") setEditingFlightId(null);
                         }}
                       />
-                      <button onClick={() => { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("flights").update({ name: v }).eq("id", flight.id); setFlights(flights.map(f => f.id === flight.id ? { ...f, name: v } : f)); } setEditingFlightId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>
+                      <button onClick={() => { const v = (document.getElementById(`fn-${flight.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameFlight(flight.id, v); } setEditingFlightId(null); }} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "var(--em7)", color: "#fff", border: "none", cursor: "pointer" }}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                       </button>
                     </div>
@@ -460,7 +472,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
       {/* قائمة الرحلات */}
       <div style={{ flex: 1, overflowY: "auto", padding: "0 14px 14px" }}>
-        {visibleFlights.length === 0 ? (
+        {flightsLoading ? (
+          <div style={{ textAlign: "center", padding: "3rem", color: "var(--muted)", fontSize: 12 }}>جاري التحميل...</div>
+        ) : flightsError ? (
+          <div style={{ textAlign: "center", padding: "3rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
+            تعذر تحميل الرحلات — يرجى التحقق من الاتصال وتحديث الصفحة
+          </div>
+        ) : visibleFlights.length === 0 ? (
           <div style={{ textAlign: "center", padding: "3rem", color: "var(--muted)", fontSize: 12 }}>
             <PlaneIcon size={36} color="var(--muted)" />
             <div style={{ marginTop: 10 }}>لا يوجد رحلات بعد</div>
@@ -665,7 +683,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                               onChange={async e => {
                                 if (!e.target.value) return;
                                 const field = flightField(currentFlight!.type);
-                                await supabase.from("passengers").update({ [field]: Number(e.target.value) } as any).eq("id", p.id);
+                                if (!await writeOk(supabase.from("passengers").update({ [field]: Number(e.target.value) } as any).eq("id", p.id), "تعذر نقل المسافر إلى الرحلة الأخرى")) return;
                                 setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, [field]: Number(e.target.value) } : x));
                               }}
                               defaultValue="" title="نقل لرحلة أخرى"
@@ -739,9 +757,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       onClick={async () => {
                         const field = flightField(currentFlight?.type);
                         const chosen = filteredP.filter(p => selectedAdd.has(p.id));
-                        await Promise.all(chosen.map(p =>
+                        if (!await writeAllOk(chosen.map(p =>
                           supabase.from("passengers").update({ [field]: currentFlightId, flight_class: p.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } as TablesUpdate<"passengers">).eq("id", p.id)
-                        ));
+                        ), "تعذر إضافة بعض المسافرين إلى الرحلة")) return;
                         setPassengers(prev => prev.map(x => {
                           const found = chosen.find(p => p.id === x.id);
                           return found ? { ...x, [field]: currentFlightId, flight_class: found.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي" } : x;

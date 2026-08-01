@@ -8,14 +8,15 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { createWriteHelpers } from "../utils/write";
 
 // ===== ألوان أيقونات المخيمات (دورة ألوان موحّدة) =====
 
-// ===== دالة حفظ الترتيب في Supabase =====
-async function saveSortOrder(items: { id: number; sort_order: number }[]) {
-  await Promise.all(items.map(item =>
+// ===== تحديثات ترتيب الحجاج — تُرجع الوعود ليفحصها writeAllOk =====
+function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
+  return items.map(item =>
     supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
-  ));
+  );
 }
 
 // ===== إحصائيات المخيمات =====
@@ -45,7 +46,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
+  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
   const [camps, setCamps] = useState<Camp[]>([]);
+  const [campsLoading, setCampsLoading] = useState(true);
+  const [campsError, setCampsError] = useState(false);
   const [editingCampId, setEditingCampId] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [campName, setCampName] = useState("");
@@ -83,7 +87,13 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const iconTitle = pageType === "منى" ? "مخيمات منى" : "مخيمات عرفة";
 
   useEffect(() => {
-    supabase.from("camps").select("*").eq("page_type", pageType).order("created_at").then(({ data }: any) => { if (data) setCamps(data as Camp[]); });
+    /* الفشل يُبلَّغ عنه بدل «لا يوجد مخيمات بعد» على بيانات لم تصل */
+    setCampsLoading(true);
+    supabase.from("camps").select("*").eq("page_type", pageType).order("created_at").then(({ data, error }) => {
+      if (error || !data) { console.error("تعذر تحميل المخيمات", error); setCampsError(true); }
+      else { setCamps(data as Camp[]); setCampsError(false); }
+      setCampsLoading(false);
+    });
   }, [pageType]);
 
   const getCampPassengers = (campId: number) =>
@@ -113,7 +123,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
 
   const removeP = async (pId: number) => {
-    await supabase.from("passengers").update({ [campIdKey]: null } as TablesUpdate<"passengers">).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: null } as TablesUpdate<"passengers">).eq("id", pId), "تعذر إزالة المسافر من المخيم")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [campIdKey]: null } : p));
   };
 
@@ -123,8 +133,13 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const fc = camps.find(c => c.id === (passengers.find(p => p.id === pId) as any)?.[campIdKey]);
     const tc = camps.find(c => c.id === newCampId);
     if (fc && tc && fc.gender !== tc.gender && tc.type !== "خاص") return;
-    await supabase.from("passengers").update({ [campIdKey]: newCampId } as TablesUpdate<"passengers">).eq("id", pId);
+    if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: newCampId } as TablesUpdate<"passengers">).eq("id", pId), "تعذر نقل المسافر إلى المخيم الآخر")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [campIdKey]: newCampId } : p));
+  };
+
+  const renameCamp = async (id: number, name: string) => {
+    if (!await writeOk(supabase.from("camps").update({ name }).eq("id", id), "تعذر تعديل اسم المخيم")) return;
+    setCamps(prev => prev.map(c => c.id === id ? { ...c, name } : c));
   };
 
   // ===== Drag & Drop handlers =====
@@ -149,8 +164,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const handleDrop = async (campId: number) => {
     const fromId = dragPassengerId.current;
     if (dragType.current === "add" && fromId) {
-      await supabase.from("passengers").update({ [campIdKey]: campId } as TablesUpdate<"passengers">).eq("id", fromId);
-      setPassengers(prev => prev.map(x => x.id === fromId ? { ...x, [campIdKey]: campId } : x));
+      if (await writeOk(supabase.from("passengers").update({ [campIdKey]: campId } as TablesUpdate<"passengers">).eq("id", fromId), "تعذر إضافة المسافر إلى المخيم")) {
+        setPassengers(prev => prev.map(x => x.id === fromId ? { ...x, [campIdKey]: campId } : x));
+      }
       setDraggingId(null); dragPassengerId.current = null; dragOverPassengerId.current = null;
       return;
     }
@@ -174,7 +190,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       const upd = updates.find(u => u.id === p.id);
       return upd ? { ...p, sort_order: upd.sort_order } : p;
     }));
-    await saveSortOrder(updates);
+    /* التحديث أعلاه يبقى تفاؤلياً كما كان — الإبلاغ يُضاف بلا تغيير سلوكي */
+    await writeAllOk(sortOrderUpdates(updates), "تعذر حفظ الترتيب الجديد");
 
     setDraggingId(null); setDragOverId(null);
     dragPassengerId.current = null; dragOverPassengerId.current = null;
@@ -292,7 +309,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         {campSearch && <button onClick={() => setCampSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 16 }}>✕</button>}
       </div>
 
-      {!camps.length
+      {campsLoading
+        ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>جاري التحميل...</div>
+        : campsError
+        ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>تعذر تحميل المخيمات — يرجى التحقق من الاتصال وتحديث الصفحة</div>
+        : !camps.length
         ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ marginBottom: 8 }}><IconSvg /></div>لا يوجد مخيمات بعد</div>
         : <>{renderGroup(maleCamps, "ذكر")}{renderGroup(femaleCamps, "أنثى")}</>
       }
@@ -319,8 +340,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     {editingCampId === camp.id ? (
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <input defaultValue={camp.name} id={`cm-${camp.id}`} style={{ fontSize: 15, fontWeight: 800, padding: "4px 10px", borderRadius: 8, border: "none", outline: "none", width: 140, fontFamily: "var(--font-body)" }} autoFocus
-                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`cm-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("camps").update({ name: v }).eq("id", camp.id); setCamps(camps.map(c => c.id === camp.id ? { ...c, name: v } : c)); } setEditingCampId(null); } if (e.key === "Escape") setEditingCampId(null); }} />
-                        <button onClick={() => { const v = (document.getElementById(`cm-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { supabase.from("camps").update({ name: v }).eq("id", camp.id); setCamps(camps.map(c => c.id === camp.id ? { ...c, name: v } : c)); } setEditingCampId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>✓</button>
+                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`cm-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameCamp(camp.id, v); } setEditingCampId(null); } if (e.key === "Escape") setEditingCampId(null); }} />
+                        <button onClick={() => { const v = (document.getElementById(`cm-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameCamp(camp.id, v); } setEditingCampId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>✓</button>
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -426,7 +447,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                               </div>
                               <button onClick={async () => {
                                 if (isTypeMismatch) { showAlert("warning", `تنبيه: ${(p as any).short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); }
-                                await supabase.from("passengers").update({ [campIdKey]: camp.id } as any).eq("id", p.id);
+                                if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: camp.id } as any).eq("id", p.id), "تعذر إضافة المسافر إلى المخيم")) return;
                                 setPassengers(prev => prev.map((x: any) => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x));
                               }} title="إضافة للمخيم" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -489,7 +510,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                         const ids = [...selectedAdd];
                         const mismatch = ids.filter(id => { const p = passengers.find(x => x.id === id); return camp.type === "خاص" && (p?.services as any)?.[serviceKey] !== "خاص"; });
                         if (mismatch.length) showAlert("warning", `تنبيه: ${mismatch.length === 1 ? "حاج" : `${mismatch.length} حجاج`} طالبون خيمة عادية وليس خاصة`);
-                        await Promise.all(ids.map(id => supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", id)));
+                        if (!await writeAllOk(ids.map(id => supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", id)), "تعذر إضافة بعض المسافرين إلى المخيم")) return;
                         setPassengers(prev => prev.map(x => selectedAdd.has(x.id) ? { ...x, [campIdKey]: camp.id } : x));
                         setSelectedAdd(new Set());
                       }} style={{ width: "100%", padding: "9px", borderRadius: 9, border: "none", background: campColor, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>
