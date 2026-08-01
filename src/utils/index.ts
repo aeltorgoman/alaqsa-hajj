@@ -233,6 +233,24 @@ export interface ReportBranding {
   primaryColor?: string;
   accentColor?: string;
 }
+
+/* اشتقاق هوية الطباعة من إعدادات الحملة — كان مكرراً حرفياً في
+   BusesPage وCampsPage وFlightsPage وخمس مرات داخل ReportsPage */
+export function brandingFromConfig(config: {
+  logo_url?: string | null;
+  name_ar?: string | null;
+  tagline?: string | null;
+  color_primary?: string | null;
+  color_accent?: string | null;
+}): ReportBranding {
+  return {
+    logoUrl: config.logo_url || "",
+    companyName: config.name_ar || "حملة الأقصى",
+    tagline: config.tagline || "",
+    primaryColor: config.color_primary || "#6B1F3A",
+    accentColor: config.color_accent || "#0C447C",
+  };
+}
 type NameItem = { short_ar?: string; name_ar: string };
 
 // شعار القسم (دائرة بصورة اللوجو أو حرف اسم الشركة)

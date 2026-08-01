@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { NAV } from "./utils";
 import type { Passenger, User } from "./types";
-import { mapPassenger, upsertPassenger } from "./utils/passenger";
+import { mapPassenger, upsertPassenger, isHajj } from "./utils/passenger";
 import type { PassengerRow } from "./utils/passenger";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
@@ -138,7 +138,7 @@ export default function App() {
         <div style={{ position: "sticky", top: 0, height: "100vh", flexShrink: 0 }}>
           <Sidebar
             page={page} setPage={setPage}
-            count={passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length}
+            count={passengers.filter(p => isHajj(p)).length}
             currentUser={currentUser} onLogout={handleLogout}
             onReportsClick={() => setReportsResetKey(k => k + 1)}
           />

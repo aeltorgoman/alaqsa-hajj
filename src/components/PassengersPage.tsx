@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { mapPassenger, upsertPassenger } from "../utils/passenger";
+import { mapPassenger, upsertPassenger, isHajj } from "../utils/passenger";
 import { createWriteHelpers } from "../utils/write";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
@@ -34,7 +34,7 @@ function strongNameMatch(a?: string | null, b?: string | null): boolean {
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
   const stats = useMemo(() => {
-    const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+    const hajj = passengers.filter(p => isHajj(p));
     const total = hajj.length;
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -66,7 +66,7 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   ];
   const PKG_COLORS: Record<string, string> = { "ثنائية": "#7D1F3C", "ثلاثية": "#D4A017", "رباعية": "#2A9D8F", "فردية": "#1565C0", "خاص": "#7E57C2" };
   const pkgCounts: Record<string, number> = {};
-  passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").forEach(p => {
+  passengers.filter(p => isHajj(p)).forEach(p => {
     const t = p.services?.hotel_type?.trim(); if (t) pkgCounts[t] = (pkgCounts[t] || 0) + 1;
   });
   const pkgEntries = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1]);
@@ -192,7 +192,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   /* خيارات الفلاتر مولدة ديناميكياً من البيانات الفعلية */
   const optsFrom = (get: (p: Passenger) => string | undefined | null, withNone = false) => {
-    const vals = [...new Set(passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").map(get).map(v => (v || "").trim()).filter(Boolean))].filter(v => v !== "بدون") as string[];
+    const vals = [...new Set(passengers.filter(p => isHajj(p)).map(get).map(v => (v || "").trim()).filter(Boolean))].filter(v => v !== "بدون") as string[];
     return withNone ? [...vals, "بدون"] : vals;
   };
   const QUICK_FILTERS = [
@@ -833,7 +833,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   // ===== رتب حسب العائلة =====
   const sortByFamily = async () => {
-    const sorted = [...passengers].filter(p => !p.passenger_type || p.passenger_type === "حاج").sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = [...passengers].filter(p => isHajj(p)).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     const result: Passenger[] = [];
     const visited = new Set<number>();
     for (const p of sorted) {
@@ -857,7 +857,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const applyOrderChange = async (p: Passenger, newNum: number) => {
     setEditingOrderId(null);
     if (!newNum || newNum < 1) return;
-    const sorted = [...passengers].filter(x => !x.passenger_type || x.passenger_type === "حاج").sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = [...passengers].filter(x => isHajj(x)).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     const currentIdx = sorted.findIndex(x => x.id === p.id);
     const targetIdx = Math.min(newNum - 1, sorted.length - 1);
     if (currentIdx === targetIdx) return;
@@ -1049,7 +1049,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <button onClick={() => setFilters({})} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--danger)", background: "var(--fb)", color: "var(--ff)", cursor: "pointer", fontFamily: "var(--font-body)" }}>مسح الفلاتر ✕</button>
             )}
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج").length} حاج</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>{filtered.length} من {passengers.filter(p => isHajj(p)).length} حاج</div>
 
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
@@ -1085,7 +1085,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       style={{ width: 36, fontSize: 11, textAlign: "center", border: "1.5px solid var(--em7)", borderRadius: 6, padding: "2px 4px", outline: "none", flexShrink: 0 }}
                     />
                   ) : (
-                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String([...passengers].filter(x => !x.passenger_type || x.passenger_type === "حاج").sort((a:any,b:any)=>(a.sort_order||0)-(b.sort_order||0)).findIndex(x=>x.id===p.id)+1)); }} style={{ width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String([...passengers].filter(x => isHajj(x)).sort((a:any,b:any)=>(a.sort_order||0)-(b.sort_order||0)).findIndex(x=>x.id===p.id)+1)); }} style={{ width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       {idx + 1}
@@ -1306,7 +1306,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
         {/* ══ مركز العمليات — جانبي بالطول ══ */}
         {(() => {
-          const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+          const hajj = passengers.filter(p => isHajj(p));
           const noPhoto = hajj.filter(p => !p.photo_url).length;
           const noPassportFile = hajj.filter(p => !p.passport_url).length;
           const expiredPassport = hajj.filter(p => p.expiry && isExpired(p.expiry)).length;

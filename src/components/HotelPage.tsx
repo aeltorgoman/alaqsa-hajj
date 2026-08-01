@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { isHajj } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
@@ -90,7 +91,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     return fs;
   }, [rooms]);
 
-  const hajj = passengers.filter(p => !p.passenger_type || p.passenger_type === "حاج");
+  const hajj = passengers.filter(p => isHajj(p));
 
   const roomPassengers = (roomId: number) =>
     hajj.filter(p => p.room_id === roomId);
