@@ -257,13 +257,13 @@ function UsersPage({ currentUser }: { currentUser: User }) {
        (مؤجَّل لمرحلة التأمين)، لكن الحارس يوضع الآن كي لا يتحوّل
        تفعيل ذلك الفحص لاحقاً إلى قفل ذاتي جديد */
     if (isSelf(u.id)) { showAlert("error", "لا يمكنك تعطيل حسابك الحالي"); return; }
-    const current = (u as any).is_active === false ? false : true;
+    const current = u.is_active === false ? false : true;
     const newVal = !current;
     if (!await writeOk(
       supabase.from("users").update({ is_active: newVal }).eq("id", u.id),
       newVal ? "تعذر تفعيل الحساب" : "تعذر تعطيل الحساب"
     )) return;
-    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: newVal } as any : x));
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: newVal } : x));
   };
 
   const tabBtn = (id: typeof activeTab): React.CSSProperties => ({
@@ -527,7 +527,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   {users.map((u, idx) => {
                     const isOwner = u.username === "admin";
                     const isMe = isSelf(u.id);
-                    const isActive = (u as any).is_active !== false;
+                    const isActive = u.is_active !== false;
                     const avatarBg = isOwner
                       ? "linear-gradient(135deg,#c8a24b,#8a6a22)"
                       : AVATAR_COLORS[idx % AVATAR_COLORS.length];
@@ -591,7 +591,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     إجمالي الحسابات: <strong style={{ color: "var(--primary)" }}>{users.length} مستخدمين</strong>
                   </span>
                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    نشطون: <strong style={{ color: "var(--primary)" }}>{users.filter(u => (u as any).is_active !== false).length}</strong>
+                    نشطون: <strong style={{ color: "var(--primary)" }}>{users.filter(u => u.is_active !== false).length}</strong>
                   </span>
                 </div>
                   </>
