@@ -5,7 +5,7 @@ import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
 import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
-import { AlertModal, useAlert } from "./AlertModal";
+import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, brandingFromConfig } from "../utils";
@@ -63,6 +63,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [flightsLoading, setFlightsLoading] = useState(true);
@@ -318,7 +319,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 <button onClick={e => { e.stopPropagation(); printFlight(flight); }} title="طباعة" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)" }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                 </button>
-                <button onClick={e => { e.stopPropagation(); deleteFlight(flight); }} title="حذف" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--muted)" }}>
+                <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`هل تريد حذف رحلة ${flight.name}؟`, { title: "حذف الرحلة" }); if (ok) deleteFlight(flight); }} title="حذف" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--muted)" }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                 </button>
               </div>
@@ -425,6 +426,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       `}</style>
 
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
+      <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
 
       {/* KPI Cards */}
       <FlightsStats passengers={passengers} />
