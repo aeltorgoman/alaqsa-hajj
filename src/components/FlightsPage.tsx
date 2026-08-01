@@ -108,8 +108,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const getFlightPassengers = (flight: Flight) => {
     const field = flightField(flight.type);
     return passengers
-      .filter(p => (p as any)[field] === flight.id)
-      .sort((a, b) => ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0));
+      .filter(p => p[field] === flight.id)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   };
 
   // ===== Drag & Drop =====
@@ -117,7 +117,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ===== تعديل الرحلة =====
   const openEditFlight = (flight: Flight) => {
     setEditFlightModal(flight);
-    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", arrival_time: (flight as any).arrival_time || "", arrival_date: (flight as any).arrival_date || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
+    setEditForm({ name: flight.name, type: flight.type, airline: flight.airline || "", date: flight.date || "", time: flight.time || "", arrival_time: flight.arrival_time || "", arrival_date: flight.arrival_date || "", from_airport: flight.from_airport || "", to_airport: flight.to_airport || "" });
   };
   const saveEditFlight = async () => {
     if (!editFlightModal) return;
@@ -181,7 +181,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (p.passenger_type && p.passenger_type !== "حاج") return false;
     if (p.services?.flight === "بدون") return false;
     if (!currentFlight) return false;
-    const val = (p as any)[currentField];
+    const val = p[currentField];
     if (val === currentFlightId) return false;
     return val == null;
   });
@@ -199,9 +199,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     const toIATA = extractIATA(flight.to_airport || "");
     const fromCity = extractCity(flight.from_airport || "");
     const toCity = extractCity(flight.to_airport || "");
-    const firstClassCount = fp.filter(p => (p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى").length;
+    const firstClassCount = fp.filter(p => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى").length;
     const economyCount = fp.length - firstClassCount;
-    const arrivalTime = (flight as any).arrival_time || "";
+    const arrivalTime = flight.arrival_time || "";
 
     // تنسيق التاريخ بالإنجليزي — زي تذكرة الطيران
     let dateDisplay = flight.date || "";
@@ -352,7 +352,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 </div>
                 {/* مؤشر جاهزية التذاكر */}
                 {(() => {
-                  const withTicket = fp.filter(p => (p as any).flight_ticket_url).length;
+                  const withTicket = fp.filter(p => p.flight_ticket_url).length;
                   const pct = fp.length ? Math.round(withTicket / fp.length * 100) : 0;
                   return (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--ivory)", borderRadius: 8, padding: "5px 10px", border: "1px solid var(--line)" }}>
@@ -613,7 +613,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   const arrIATA = extractIATA(currentFlight?.to_airport || "");
                   const arrCity = extractCity(currentFlight?.to_airport || "");
                   const depTime = currentFlight?.time;
-                  const arrTime = (currentFlight as any)?.arrival_time;
+                  const arrTime = currentFlight?.arrival_time;
                   // الوصول دايماً يمين (to_airport)، المغادرة دايماً يسار (from_airport)
                   const rightIATA = arrIATA;
                   const rightCity = arrCity;
@@ -672,8 +672,8 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
                           {p.short_ar || p.name_ar}
-                          {(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "#FEF3C7", color: "#92400E", flexShrink: 0 }}>{(p as any).passenger_type}</span>}
-                          {((p as any).flight_class === "درجة أولى" || p.services?.flight === "درجة أولى") && <span style={{ fontSize: 8, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>أولى</span>}
+                          {p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "#FEF3C7", color: "#92400E", flexShrink: 0 }}>{p.passenger_type}</span>}
+                          {(p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى") && <span style={{ fontSize: 8, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>أولى</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, opacity: .6 }}>
@@ -683,7 +683,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                               onChange={async e => {
                                 if (!e.target.value) return;
                                 const field = flightField(currentFlight!.type);
-                                if (!await writeOk(supabase.from("passengers").update({ [field]: Number(e.target.value) } as any).eq("id", p.id), "تعذر نقل المسافر إلى الرحلة الأخرى")) return;
+                                if (!await writeOk(supabase.from("passengers").update({ [field]: Number(e.target.value) } as TablesUpdate<"passengers">).eq("id", p.id), "تعذر نقل المسافر إلى الرحلة الأخرى")) return;
                                 setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, [field]: Number(e.target.value) } : x));
                               }}
                               defaultValue="" title="نقل لرحلة أخرى"
@@ -743,7 +743,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                           {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}</div>
                         </div>
                         {wantsFirst && <span style={{ fontSize: 9, fontWeight: 800, background: "linear-gradient(135deg,#D4A017,#b8860b)", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>أولى</span>}
                       </div>

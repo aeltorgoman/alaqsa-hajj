@@ -28,7 +28,7 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
   }, [buses, passengers]);
   const { total, assignedCount, vipRequested } = stats;
 
-  const totalSeats = buses.reduce((s, b) => s + ((b as any).capacity || 50), 0);
+  const totalSeats = buses.reduce((s, b) => s + (b.capacity || 50), 0);
   const availableSeats = Math.max(0, totalSeats - assignedCount);
   const cards: StatCardData[] = [
     { label: "إجمالي الباصات", num: buses.length, sub: `${buses.filter(b => b.type === "VIP").length} VIP`, tone: "brand" },
@@ -248,7 +248,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             const isVIP = bus.type === "VIP";
             const busColor = isVIP ? "#D4A017" : "#1D4ED8";
             const isSelected = selectedBusId === bus.id;
-                    const cap2 = (bus as any).capacity || 50;
+                    const cap2 = bus.capacity || 50;
                     const fillPct2 = Math.min(100, Math.round(bp.length / cap2 * 100));
                     return (
                       <div key={bus.id} onClick={() => setSelectedBusId(bus.id)}
@@ -310,7 +310,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const bp = getBusPassengers(bus.id);
         const isVIP = bus.type === "VIP";
         const busColor = isVIP ? "#D4A017" : "#1D4ED8";
-        const cap = (bus as any).capacity || 50;
+        const cap = bus.capacity || 50;
         const available = Math.max(0, cap - bp.length);
         const fillPct = Math.min(100, Math.round(bp.length / cap * 100));
         const addFiltered = passengers.filter(p => p.bus_id == null && (!p.passenger_type || p.passenger_type === "حاج") && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
@@ -393,7 +393,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
                             {p.short_ar || p.name_ar}
-                            {(p as any).passenger_type && (p as any).passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{(p as any).passenger_type}</span>}
+                            {p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
                             {p.services?.bus === "VIP" && !vipMismatch(p) && <span style={{ fontSize: 8, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>VIP</span>}
                           </div>
                         </div>
@@ -419,18 +419,18 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   </div>
                 {/* اقتراحات ذكية */}
                 {(() => {
-                  const roomIds = new Set(bp.map((p: any) => p.room_id).filter(Boolean));
-                  const minaIds = new Set(bp.map((p: any) => p.camp_mina_id).filter(Boolean));
+                  const roomIds = new Set(bp.map(p => p.room_id).filter(Boolean));
+                  const minaIds = new Set(bp.map(p => p.camp_mina_id).filter(Boolean));
                   const allSuggestions = passengers
                     .filter(p =>
                       p.bus_id !== bus.id &&
                       !dismissedSuggestions.has(p.id!) &&
                       (!p.passenger_type || p.passenger_type === "حاج") &&
-                      (((p as any).room_id && roomIds.has((p as any).room_id)) || ((p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id)))
+                      ((p.room_id && roomIds.has(p.room_id)) || (p.camp_mina_id && minaIds.has(p.camp_mina_id)))
                     )
                     .sort((a, b) => {
-                      const sc = (x: any) => {
-                        const famIds = new Set(bp.filter((q: any) => q.family_id).map((q: any) => q.family_id));
+                      const sc = (x: Passenger) => {
+                        const famIds = new Set(bp.filter(q => q.family_id).map(q => q.family_id));
                         const kin = x.family_id && famIds.has(x.family_id) ? 4 : 0;
                         const room = x.room_id && roomIds.has(x.room_id) ? 2 : 0;
                         const mina = x.camp_mina_id && minaIds.has(x.camp_mina_id) ? 1 : 0;
@@ -448,18 +448,18 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       </div>
                       <div style={{ maxHeight: 114, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
                       {allSuggestions.map(p => {
-                        const sharedRoom = (p as any).room_id && roomIds.has((p as any).room_id);
-                        const sharedMina = (p as any).camp_mina_id && minaIds.has((p as any).camp_mina_id);
-                        const matchPax = bp.find((x: any) => sharedRoom ? (x as any).room_id === (p as any).room_id : (x as any).camp_mina_id === (p as any).camp_mina_id);
-                        const matchName = (matchPax as any)?.short_ar || (matchPax as any)?.name_ar?.split(" ").slice(0,2).join(" ") || "";
+                        const sharedRoom = p.room_id && roomIds.has(p.room_id);
+                        const sharedMina = p.camp_mina_id && minaIds.has(p.camp_mina_id);
+                        const matchPax = bp.find(x => sharedRoom ? x.room_id === p.room_id : x.camp_mina_id === p.camp_mina_id);
+                        const matchName = matchPax?.short_ar || matchPax?.name_ar?.split(" ").slice(0,2).join(" ") || "";
                         return (
                           <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${sharedRoom && sharedMina ? "#81C784" : sharedRoom ? "#FFD54F" : "#A5D6A7"}`, background: sharedRoom && sharedMina ? "#F1F8E9" : sharedRoom ? "#FFFDE7" : "#F9FBE7" }}>
-                            <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)", flexShrink: 0 }}>{(p as any).short_ar || p.name_ar}</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)", flexShrink: 0 }}>{p.short_ar || p.name_ar}</span>
                             <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               · {sharedRoom && sharedMina ? "نفس الغرفة وخيمة منى" : sharedRoom ? "نفس الغرفة" : "نفس خيمة منى"}
                               {matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}
                             </span>
-                            <button onClick={async () => { if (!await writeOk(supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id), "تعذر إضافة المسافر إلى الباص")) return; setPassengers(prev => prev.map((x: any) => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                            <button onClick={async () => { if (!await writeOk(supabase.from("passengers").update({ bus_id: bus.id }).eq("id", p.id), "تعذر إضافة المسافر إلى الباص")) return; setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, bus_id: bus.id } : x)); }} title="إضافة للباص" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </button>
                             <button onClick={() => setDismissedSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
