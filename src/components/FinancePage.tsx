@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSeasonWrite } from "../season/useSeasonWrite";
 import { isHajj } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -19,6 +20,11 @@ import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStat
 export function FinancePage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers?: (updater: (prev: Passenger[]) => Passenger[]) => void; currentUser: User }) {
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
+  const { assertWritable } = useSeasonWrite(showAlert);
+
+  /* مداخل الكتابة هنا خصائص تُمرَّر إلى مكوّنات فرعية، فلا يُعطَّل
+     زرّ في هذا الملف. الرفض يقع عند محاولة الفتح برسالة صريحة —
+     أوضح للمستخدم من زرّ لا يستجيب، وبلا مساس بالمكوّنات الفرعية. */
   const canManage = !!currentUser.permissions?.manage_payments;
 
   const [subView, setSubView]     = useState<"list"|"detail"|"settings"|"reports"|"group">("list");
@@ -213,7 +219,12 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   const groupPassengerIds = useMemo(() => new Set(groupMembers.map(m => m.passenger_id)), [groupMembers]);
 
+  /* §٤ من #42: الجداول المالية لا تخزّن season_id، فيُشتقّ الموسم
+     من الحاج. هذه المجموعة هي أداة الاشتقاق الوحيدة في الصفحة. */
+  const viewedPassengerIds = useMemo(() => new Set(passengers.map(p => p.id)), [passengers]);
+
   async function savePricing() {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     const rows: { key:string; label:string; type:string; amount:number; updated_at:string }[] = [];
     for (const key of Object.keys(editPricing)) {
@@ -242,6 +253,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function saveCustomPrice() {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!selectedP) return;
     setSavingCustomPrice(true);
@@ -265,6 +277,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addPayment() {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!selectedP) return;
     const amount = Number(payForm.amount);
@@ -305,6 +318,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function deletePayment(id: number) {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذه الدفعة؟")) return;
     const { error } = await supabase.from("payments").delete().eq("id",id);
@@ -314,6 +328,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addCustomCharge() {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     const amount = Number(chargeForm.amount);
     const badAmount = !chargeForm.amount.trim() || !Number.isFinite(amount) || amount <= 0;
@@ -333,6 +348,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function deleteCustomCharge(id: number) {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذا البند؟")) return;
     const { error } = await supabase.from("custom_charges").delete().eq("id",id);
@@ -351,6 +367,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function createGroupAndAdd() {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!selectedP) return;
     if (!groupForm.name.trim()) { showAlert("error", "يرجى إدخال اسم المجموعة"); return; }
@@ -384,6 +401,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addMemberToGroup(groupId: number, passengerId: number) {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (addingMemberId === passengerId) return;
     const existing = groupMembers.find(m => m.passenger_id === passengerId);
@@ -408,6 +426,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function removeFromGroup(passengerId: number, groupId: number) {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     /* المجموعة لا يجوز أن تبقى بلا أعضاء — إزالة آخر عضو تعني حذف المجموعة بالكامل */
     const isLastMember = groupMembers.filter(m => m.group_id === groupId).length <= 1;
@@ -439,6 +458,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function deleteGroup(groupId: number) {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!await showConfirm("هل تريد حذف هذه المجموعة؟", { title: "حذف مجموعة" })) return;
     const { error } = await supabase.from("financial_groups").delete().eq("id",groupId);
@@ -449,6 +469,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   async function addGroupPayment() {
+    if (!assertWritable()) return;
     if (!requireManage()) return;
     if (!selectedGroup) return;
     const total = Number(groupPayForm.amount);
@@ -666,7 +687,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           onAddMember={(gid, pid) => addMemberToGroup(gid, pid)}
           onOpenAddMemberModal={() => setShowAddMemberModal(true)}
           onCloseAddMemberModal={() => setShowAddMemberModal(false)}
-          onOpenGroupPayModal={() => setShowGroupPayModal(true)}
+          onOpenGroupPayModal={() => { if (assertWritable()) setShowGroupPayModal(true); }}
           onCloseGroupPayModal={() => setShowGroupPayModal(false)}
           onGroupPayFormChange={(key, value) => setGroupPayForm(prev => ({ ...prev, [key]: value }))}
           onSubmitGroupPayment={addGroupPayment}
@@ -706,15 +727,15 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           onCustomPriceInputChange={setCustomPriceInput}
           onSaveCustomPrice={saveCustomPrice}
           onCancelEditCustomPrice={()=>setEditingCustomPrice(false)}
-          onAddPayment={()=>setShowPayModal(true)}
-          onAddCharge={t=>{setChargeType(t);setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}}
+          onAddPayment={()=>{ if (assertWritable()) setShowPayModal(true); }}
+          onAddCharge={t=>{ if (!assertWritable()) return; setChargeType(t);setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}}
           onOpenPayment={py=>setSelectedPayment(py)}
           onDeletePayment={id=>deletePayment(id)}
           onDeleteCharge={id=>deleteCustomCharge(id)}
           onOpenGroup={g=>{setSelectedGroup(g);setSubView("group");}}
           onRemoveFromGroup={gid=>removeFromGroup(selectedP.id,gid)}
-          onCreateGroup={()=>{setGroupModalMode("create");setGroupForm({name:"",notes:""});setShowPassengerGroupModal(true);}}
-          onAddToExistingGroup={()=>{setGroupModalMode("addTo");setShowPassengerGroupModal(true);}}
+          onCreateGroup={()=>{ if (!assertWritable()) return; setGroupModalMode("create");setGroupForm({name:"",notes:""});setShowPassengerGroupModal(true);}}
+          onAddToExistingGroup={()=>{ if (!assertWritable()) return; setGroupModalMode("addTo");setShowPassengerGroupModal(true);}}
           tdStyle={tdStyle}
         />
 
@@ -791,9 +812,12 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
               ):(
                 <>
                   <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--text)" }}>إضافة إلى مجموعة موجودة</div>
-                  {groups.map(g=>(
+                  {/* المجموعة تظهر إن كان لها عضو في الموسم المعروض،
+                      والعدد عدد أعضاء هذا الموسم وحده. المجموعة
+                      الممتدّة عبر موسمين حالة صحيحة لا خطأ. */}
+                  {groups.filter(g=>getGroupPassengers(g.id).length>0).map(g=>(
                     <div key={g.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
-                      <div><div style={{ fontSize:13, fontWeight:600 }}>{g.name}</div><div style={{ fontSize:11, color:"var(--text-muted)" }}>{groupMembers.filter(m=>m.group_id===g.id).length} أعضاء</div></div>
+                      <div><div style={{ fontSize:13, fontWeight:600 }}>{g.name}</div><div style={{ fontSize:11, color:"var(--text-muted)" }}>{getGroupPassengers(g.id).length} أعضاء</div></div>
                       <button
                         disabled={addingMemberId===selectedP.id}
                         onClick={()=>addMemberToGroup(g.id,selectedP.id)}
@@ -821,6 +845,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const totDue=allData.reduce((s,r)=>s+r.due,0),totPaid=allData.reduce((s,r)=>s+r.paid,0),totBal=totDue-totPaid;
     const filtered=reportType==="late"?allData.filter(r=>r.balance>0):allData;
     const cfPayments = payments.filter(py => {
+      /* دفعات حجاج الموسم المعروض وحدهم — الجلب يأتي بالكل */
+      if (!viewedPassengerIds.has(py.passenger_id)) return false;
       const d = py.payment_date;
       return (!cashflowFrom || d >= cashflowFrom) && (!cashflowTo || d <= cashflowTo);
     });
