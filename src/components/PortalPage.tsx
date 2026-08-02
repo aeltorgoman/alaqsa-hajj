@@ -5,6 +5,7 @@ import { DeliveryReportModal } from "./DeliveryReportModal";
 import type { User } from "../types";
 import { btnP, btnS, inp } from "../utils";
 import { createWriteHelpers } from "../utils/write";
+import { useSeason } from "../season/useSeason";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -47,6 +48,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const { writeOk } = createWriteHelpers(showAlert);
+  /* activeSeason لا viewedSeason — انظر التعليق فوق قوائم الاستهداف */
+  const { activeSeason } = useSeason();
 
   /* ─── التنبيهات ─── */
   const [items, setItems] = useState<Announcement[]>([]);
@@ -96,11 +99,20 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   }, []);
 
   /* ─── قوائم الاستهداف ─── */
+  /* ⚠️ استثناء معماريّ مقصود: هذا الموضع يقرأ activeSeason لا
+     viewedSeason — وهو المكان الوحيد في التطبيق الذي يفعل ذلك.
+     لا تُصحّحه إلى viewedSeason.
+
+     السبب أن هذا التبويب أداة تشغيل لبوابة الحاج لا شاشة أرشيف،
+     و§٦ من #42 يقرّر أن البوابة تخدم الموسم النشط وحده. ودالة
+     announcement_audience في القاعدة تفلتر بالموسم النشط بالفعل،
+     فاستهداف باص من موسم مقفل كان سيُنتج جمهوراً فارغاً دائماً —
+     واجهة تعد بإرسال لا يقع. */
   useEffect(() => {
     (async () => {
       const [{ data: bs }, { data: cs }] = await Promise.all([
-        supabase.from("buses").select("id,name").order("id"),
-        supabase.from("camps").select("id,name,page_type").order("id"),
+        supabase.from("buses").select("id,name").eq("season_id", activeSeason.id).order("id"),
+        supabase.from("camps").select("id,name,page_type").eq("season_id", activeSeason.id).order("id"),
       ]);
       if (bs) setBuses(bs as Target[]);
       if (cs) {
@@ -109,7 +121,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         setArafaCamps(all.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, name: c.name })));
       }
     })();
-  }, []);
+  }, [activeSeason.id]);
 
   /* ─── المفعّلون للإشعارات ───
      لا تعتمد على الاستهداف إطلاقاً، فتُجلب مرة واحدة بدل استعلام
