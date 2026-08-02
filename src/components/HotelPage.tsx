@@ -6,7 +6,8 @@ import type { Passenger, Room } from "../types";
 import { useConfig } from "../config/ConfigContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
-import { createWriteHelpers } from "../utils/write";
+import { useSeasonWrite } from "../season/useSeasonWrite";
+import { useSeason } from "../season/useSeason";
 
 const ROOM_TYPES: Room["type"][] = ["فردية", "ثنائية", "ثلاثية", "رباعية", "مجلس", "أخرى"];
 
@@ -23,7 +24,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const primary = config.color_primary || "#7D1F3C";
   const { alert, showAlert } = useAlert();
 
-  const { writeOk } = createWriteHelpers(showAlert);
+  const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { viewedSeason } = useSeason();
+
+  /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية */
+  const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [roomsError, setRoomsError] = useState(false);
@@ -77,13 +82,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل شبكة فارغة تبدو كـ«لا يوجد غرف» */
-    supabase.from("rooms").select("*")
+    supabase.from("rooms").select("*").eq("season_id", viewedSeason.id)
       .then(({ data, error }) => {
         if (error || !data) { console.error("تعذر تحميل الغرف", error); setRoomsError(true); }
         else { setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); setRoomsError(false); }
         setRoomsLoading(false);
       });
-  }, []);
+  }, [viewedSeason.id]);
 
   const floors = useMemo(
     () => [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)),
@@ -159,6 +164,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   ];
 
   const addRoom = async () => {
+    if (!assertWritable()) return;
     if (!addNum.trim() || !addFloor.trim()) { showAlert("error", "رقم الغرفة والدور مطلوبان"); return; }
     const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, notes: addNotes.trim() || null }]).select();
     if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
@@ -169,6 +175,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const addRoomRange = async () => {
+    if (!assertWritable()) return;
     const from = parseInt(rangeFrom), to = parseInt(rangeTo);
     if (!rangeFloor.trim() || isNaN(from) || isNaN(to) || from > to) { showAlert("error", "يرجى إدخال نطاق صحيح ودور صحيح"); return; }
     const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType }));
@@ -180,6 +187,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const addRoomTemplate = async () => {
+    if (!assertWritable()) return;
     const numFloors = parseInt(tplFloors), rPerFloor = parseInt(tplRoomsPerFloor);
     const startNum = parseInt(tplStartNum), floorStart = parseInt(tplFloorStart);
     if (isNaN(numFloors)||isNaN(rPerFloor)||isNaN(startNum)||isNaN(floorStart)||numFloors<1||rPerFloor<1) { showAlert("error", "يرجى تعبئة جميع الحقول بشكل صحيح"); return; }
@@ -209,6 +217,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const deleteRoom = async (room: Room) => {
+    if (!assertWritable()) return;
     const occ = roomPassengers(room.id);
     if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها حجاج"); return; }
     if (!await writeOk(supabase.from("rooms").delete().eq("id", room.id), "تعذر حذف الغرفة")) return;
@@ -291,7 +300,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {["الكل","مكتملة","قيد التسكين","جاهزة"].map(s => <option key={s}>{s}</option>)}
           </select>
           {/* إضافة */}
-          <button onClick={() => setShowAddRoom(true)} style={{ ...btnP, display:"flex",alignItems:"center",gap:5,flexShrink:0 }}>
+          <button disabled={readOnly} onClick={() => setShowAddRoom(true)} style={{ ...btnP, ...roOff, display:"flex",alignItems:"center",gap:5,flexShrink:0 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             غرفة جديدة
           </button>
@@ -529,8 +538,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             )}
 
             {/* إضافة حاج */}
-            {selectedRoom.type !== "مجلس" && <button onClick={() => setShowAddPilgrim(!showAddPilgrim)}
-              style={{ width: "100%", padding: "9px", borderRadius: 9, border: `1.5px dashed var(--line)`, background: "transparent", color: primary, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 4, transition: "all .15s" }}>
+            {selectedRoom.type !== "مجلس" && <button disabled={readOnly} onClick={() => setShowAddPilgrim(!showAddPilgrim)}
+              style={{ ...roOff, width: "100%", padding: "9px", borderRadius: 9, border: `1.5px dashed var(--line)`, background: "transparent", color: primary, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 4, transition: "all .15s" }}>
               + إضافة حاج للغرفة
             </button>}
 
@@ -570,8 +579,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           {/* Actions */}
           <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", flexShrink: 0 }}>
             <div style={{ fontSize: 9, color: "var(--muted)", textAlign: "center", marginBottom: 6, fontWeight: 600 }}>⚠️ تأكيد قبل الحذف</div>
-            <button onClick={() => setConfirmDelete(selectedRoom)}
-              style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+            <button disabled={readOnly} onClick={() => setConfirmDelete(selectedRoom)}
+              style={{ ...roOff, width: "100%", padding: "8px", borderRadius: 8, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
               حذف الغرفة
             </button>
           </div>
