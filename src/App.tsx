@@ -18,7 +18,7 @@ import { FlightsPage } from "./components/FlightsPage";
 import { CampsPage } from "./components/CampsPage";
 import { HotelPage } from "./components/HotelPage";
 import { ReportsPage } from "./components/ReportsPage";
-import { ArchivePage } from "./components/ArchivePage";
+import { SeasonManagerPage } from "./components/SeasonManagerPage";
 import { UsersPage } from "./components/UsersPage";
 import { FinancePage } from "./components/FinancePage";
 import { AdminsPage } from "./components/AdminsPage";
@@ -68,7 +68,14 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
   useEffect(() => {
     const handler = () => setPage("dash");
     window.addEventListener("hajj_return_dash", handler);
-    return () => window.removeEventListener("hajj_return_dash", handler);
+    /* الانتقال بعد الدخول إلى موسم مؤرشَف — بنفس نمط الحدث القائم
+       أعلاه، فلا يحتاج تمرير setPage عبر الشجرة */
+    const goto = (e: Event) => setPage((e as CustomEvent<string>).detail);
+    window.addEventListener("hajj_goto_page", goto);
+    return () => {
+      window.removeEventListener("hajj_return_dash", handler);
+      window.removeEventListener("hajj_goto_page", goto);
+    };
   }, []);
 
   useEffect(() => { sessionStorage.setItem("hajj_page", page); }, [page]);
@@ -136,7 +143,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
       case "arafa":      return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
       case "hotel":      return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
       case "reports":    return <ReportsPage passengers={passengers} resetKey={reportsResetKey} />;
-      case "archive":    return <ArchivePage currentUser={currentUser} />;
+      case "archive":    return <SeasonManagerPage />;
       case "users":      return <UsersPage currentUser={currentUser} />;
       case "finance":    return <FinancePage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
       case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
