@@ -4,6 +4,9 @@ import { NAV } from "./utils";
 import type { Passenger, User } from "./types";
 import { mapPassenger, upsertPassenger, isHajj } from "./utils/passenger";
 import type { PassengerRow } from "./utils/passenger";
+import { SeasonProvider } from "./season/SeasonContext";
+import { useSeason } from "./season/useSeason";
+import { SeasonBar } from "./season/SeasonBar";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./components/LoginPage";
 import { Dashboard } from "./components/Dashboard";
@@ -33,6 +36,32 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try { const s = sessionStorage.getItem("hajj_user"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
+
+  const handleLogin = (user: User) => {
+    const { password: _, ...userWithoutPassword } = user;
+    sessionStorage.setItem("hajj_user", JSON.stringify(userWithoutPassword));
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("hajj_user");
+    sessionStorage.removeItem("hajj_page");
+    setCurrentUser(null);
+  };
+
+  if (!currentUser) return <LoginPage onLogin={handleLogin} />;
+
+  /* المزوّد داخل الجزء المصادَق عليه وحده: لا يتأخر ظهور شاشة
+     الدخول، ولا تُجلب المواسم قبل تسجيل الدخول */
+  return (
+    <SeasonProvider>
+      <AppShell currentUser={currentUser} onLogout={handleLogout} />
+    </SeasonProvider>
+  );
+}
+
+function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () => void }) {
+  const { viewedSeason } = useSeason();
   const [page, setPage] = useState(() => sessionStorage.getItem("hajj_page") || "dash");
   const [reportsResetKey, setReportsResetKey] = useState(0);
 
@@ -48,23 +77,9 @@ export default function App() {
   const [passengersError, setPassengersError] = useState(false);
   const [globalShowManual, setGlobalShowManual] = useState(false);
 
-  const handleLogin = (user: User) => {
-    const { password: _, ...userWithoutPassword } = user;
-    sessionStorage.setItem("hajj_user", JSON.stringify(userWithoutPassword));
-    setCurrentUser(user);
-  };
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("hajj_user");
-    sessionStorage.removeItem("hajj_page");
-    setCurrentUser(null);
-    setPage("dash");
-  };
-
-
   useEffect(() => {
     const loadPassengers = async () => {
-      const { data, error } = await supabase.from("passengers").select("*").order("sort_order", { ascending: true }).order("id", { ascending: true });
+      const { data, error } = await supabase.from("passengers").select("*").eq("season_id", viewedSeason.id).order("sort_order", { ascending: true }).order("id", { ascending: true });
       /* الفشل يُبلَّغ عنه بدل عرض قائمة فارغة تبدو كـ«لا يوجد حجاج» */
       if (error || !data) {
         setPassengersError(true);
@@ -75,12 +90,20 @@ export default function App() {
       setPassengersLoading(false);
     };
     loadPassengers();
+    /* ⚠️ الفلترة في العميل مقصودة — لا تستبدلها بفلتر خادميّ.
+       إضافة `filter: "season_id=eq.N"` إلى خيارات postgres_changes
+       تبدو أنظف، لكنها تكسر الحذف: حدث DELETE لا يحمل في payload.old
+       غير المفتاح الأساسي (replica identity الافتراضية)، فلا يطابق
+       شرطاً على season_id أبداً، وتختفي كل إشعارات الحذف صامتةً.
+       الفرز أدناه بدل ذلك — حدث على موسم آخر لا يدخل هذه الشاشة. */
     const channel = supabase.channel("passengers-realtime")
       .on<PassengerRow>("postgres_changes", { event: "*", schema: "public", table: "passengers" }, payload => {
         if (payload.eventType === "INSERT") {
+          if (payload.new.season_id !== viewedSeason.id) return;
           const added = mapPassenger(payload.new);
           setPassengers(prev => upsertPassenger(prev, added));
         } else if (payload.eventType === "UPDATE") {
+          if (payload.new.season_id !== viewedSeason.id) return;
           const updated = mapPassenger(payload.new);
           setPassengers(prev => prev.map(p => p.id === updated.id ? updated : p));
         } else if (payload.eventType === "DELETE") {
@@ -90,9 +113,7 @@ export default function App() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  if (!currentUser) return <LoginPage onLogin={handleLogin} />;
+  }, [viewedSeason.id]);
 
   const FULL_PAGES = ["dash", "passengers", "manual", "buses", "flights", "mina", "arafa", "hotel", "finance", "admins", "users"];
   const isFull = FULL_PAGES.includes(page);
@@ -127,9 +148,12 @@ export default function App() {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", direction: "rtl", fontFamily: "var(--font-body)", background: "var(--ivory)" }}>
 
+      {/* شريط سياق الموسم — لا يظهر إلا عند تصفّح موسم مؤرشَف */}
+      <SeasonBar />
+
       {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
       {page === "dash" && (
-        <DashboardBanner setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />
+        <DashboardBanner setPage={setPage} currentUser={currentUser!} onLogout={onLogout} />
       )}
 
       {/* الجسم — السايدبار + المحتوى */}
@@ -139,7 +163,7 @@ export default function App() {
           <Sidebar
             page={page} setPage={setPage}
             count={passengers.filter(p => isHajj(p)).length}
-            currentUser={currentUser} onLogout={handleLogout}
+            currentUser={currentUser} onLogout={onLogout}
             onReportsClick={() => setReportsResetKey(k => k + 1)}
           />
         </div>
@@ -147,11 +171,13 @@ export default function App() {
         {/* المحتوى — يتمرر بشكل طبيعي */}
         <div style={{ flex: 1, minWidth: 0, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           {page !== "dash" && (
-            <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={handleLogout} />
+            <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={onLogout} />
           )}
           {isFull ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <ErrorBoundary>
+              {/* key= يُعيد تركيب شجرة الصفحات عند تبديل الموسم، فلا
+                  تتسرّب مودالات ولا تحديدات ولا مسوّدات من موسم سابق */}
+              <ErrorBoundary key={viewedSeason.id}>
                 {passengersLoading ? <LoadingSpinner /> : passengersError ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 6, padding: 24, textAlign: "center" }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>تعذر تحميل بيانات الحجاج</div>
@@ -163,7 +189,7 @@ export default function App() {
           ) : (
             <div style={{ background: "var(--ivory)", padding: "20px" }}>
               <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
-                <ErrorBoundary>
+                <ErrorBoundary key={viewedSeason.id}>
                   {passengersLoading ? <LoadingSpinner /> : passengersError ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 6, padding: 24, textAlign: "center" }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>تعذر تحميل بيانات الحجاج</div>
