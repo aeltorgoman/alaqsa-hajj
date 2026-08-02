@@ -17,10 +17,38 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
   const [closing, setClosing] = useState(false);
   const { alert: alertState, showAlert } = useAlert();
 
+  /* هل يوجد موسم مفتوح؟ null = لم يُفحص بعد.
+     إن كان false فالنظام بلا موسم مفتوح — حالة لا مخرج منها سابقاً،
+     لأن إنشاء الموسم لا يقع إلا داخل closeSeason التي تتوقف عند
+     أول خطوة. زر التعافي أدناه هو المخرج. */
+  const [hasOpenSeason, setHasOpenSeason] = useState<boolean | null>(null);
+  const [recoverName, setRecoverName] = useState("");
+  const [recovering, setRecovering] = useState(false);
+
+  const checkOpenSeason = async () => {
+    const { data, error } = await supabase.from("seasons").select("id").is("closed_at", null);
+    if (error) { console.error("تعذر التحقق من الموسم المفتوح", error); return; }
+    setHasOpenSeason((data || []).length > 0);
+  };
+
   useEffect(() => {
     supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false })
       .then(({ data: d }: any) => { if (d) setSeasons(d); });
+    supabase.from("seasons").select("id").is("closed_at", null)
+      .then(({ data, error }) => { if (!error) setHasOpenSeason((data || []).length > 0); });
   }, []);
+
+  /* استكمال العملية المتوقّفة: إنشاء موسم مفتوح بلا لمس أي بيانات أخرى */
+  const recoverSeason = async () => {
+    if (!recoverName.trim()) { showAlert("warning", "يرجى كتابة اسم الموسم الجديد."); return; }
+    setRecovering(true);
+    const { error } = await supabase.from("seasons").insert([{ name: recoverName.trim() }]);
+    setRecovering(false);
+    if (error) { showAlert("error", "تعذر إنشاء الموسم الجديد، يرجى المحاولة مرة أخرى."); return; }
+    setRecoverName("");
+    await checkOpenSeason();
+    showAlert("success", `تم إنشاء موسم ${recoverName.trim()} وأصبح الموسم المفتوح.`);
+  };
 
   const [showDelete, setShowDelete] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
@@ -55,29 +83,66 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
     setLoading(false);
   };
 
+  /* ترتيب الخطوات لم يتغيّر — أُضيف فحصٌ لكل خطوة وتوقّفٌ عند أول فشل،
+     برسالة تحدد ما تمّ وما لم يتمّ. الذرّية الحقيقية تحتاج معاملة في
+     القاعدة، وهي مسجَّلة في Issue مستقلة. */
   const closeSeason = async () => {
     if (!newSeasonName.trim()) { showAlert("warning", "يرجى كتابة اسم الموسم الجديد."); return; }
     setClosing(true);
-    // جيب الموسم الحالي
-    const { data: current } = await supabase.from("seasons").select("*").is("closed_at", null).single();
-    if (!current) { showAlert("error", "لا يوجد موسم مفتوح حالياً."); setClosing(false); return; }
-    // قفّل الموسم الحالي
-    await supabase.from("seasons").update({ closed_at: new Date().toISOString(), closed_by: currentUser.name }).eq("id", current.id);
-    // افتح موسم جديد
-    const { data: newSeason } = await supabase.from("seasons").insert([{ name: newSeasonName.trim() }]).select().single();
-    if (newSeason) {
-      // حدّث season_id للبيانات الحالية (الكل يتنقل للأرشيف)
-      await Promise.all([
-        supabase.from("passengers").update({ season_id: current.id }).is("season_id", null),
-        supabase.from("buses").update({ season_id: current.id }).is("season_id", null),
-        supabase.from("camps").update({ season_id: current.id }).is("season_id", null),
-        supabase.from("rooms").update({ season_id: current.id }).is("season_id", null),
-      ]);
+
+    /* ١) الموسم الحالي — لا كتابة بعد، فالفشل هنا بلا أثر */
+    const { data: current, error: curErr } = await supabase.from("seasons").select("*").is("closed_at", null).maybeSingle();
+    if (curErr) {
+      console.error("تعذر قراءة الموسم الحالي", curErr);
+      showAlert("error", "تعذر قراءة الموسم الحالي. لم يتم أي تغيير — يرجى المحاولة مرة أخرى.");
+      setClosing(false); return;
     }
-    // إضافة الموسم المقفول للقائمة
+    if (!current) {
+      showAlert("error", "لا يوجد موسم مفتوح حالياً.");
+      setHasOpenSeason(false);
+      setClosing(false); setShowClose(false); return;
+    }
+
+    /* ٢) إقفال الحالي — أول كتابة */
+    const { error: closeErr } = await supabase.from("seasons")
+      .update({ closed_at: new Date().toISOString(), closed_by: currentUser.name }).eq("id", current.id);
+    if (closeErr) {
+      console.error("تعذر إقفال الموسم الحالي", closeErr);
+      showAlert("error", "تعذر إقفال الموسم الحالي. لم يتم أي تغيير — يرجى المحاولة مرة أخرى.");
+      setClosing(false); return;
+    }
+
+    /* ٣) الموسم الجديد — فشله يترك النظام بلا موسم مفتوح */
+    const { data: newSeason, error: newErr } = await supabase.from("seasons")
+      .insert([{ name: newSeasonName.trim() }]).select().single();
+    if (newErr || !newSeason) {
+      console.error("تعذر إنشاء الموسم الجديد", newErr);
+      await checkOpenSeason();
+      showAlert("error", "أُقفل الموسم الحالي، لكن تعذّر إنشاء الموسم الجديد. النظام الآن بلا موسم مفتوح — استعمل «إنشاء موسم جديد» في أعلى الصفحة لاستكمال العملية.");
+      setClosing(false); setShowClose(false); return;
+    }
+
+    /* ٤) نقل البيانات — الفشل الجزئي يُسمّى بجدوله */
+    const moves: [string, PromiseLike<{ error: { message?: string } | null }>][] = [
+      ["الحجاج", supabase.from("passengers").update({ season_id: current.id }).is("season_id", null)],
+      ["الباصات", supabase.from("buses").update({ season_id: current.id }).is("season_id", null)],
+      ["المخيمات", supabase.from("camps").update({ season_id: current.id }).is("season_id", null)],
+      ["الغرف", supabase.from("rooms").update({ season_id: current.id }).is("season_id", null)],
+    ];
+    const settled = await Promise.all(moves.map(async ([label, q]) => ({ label, error: (await q).error })));
+    const failed = settled.filter(r => r.error);
+
+    /* تحديث القائمة يقع في كل الأحوال — الموسم أُقفل فعلاً */
     const { data: closedSeasons } = await supabase.from("seasons").select("*").not("closed_at", "is", null).order("id", { ascending: false });
     if (closedSeasons) setSeasons(closedSeasons);
+    await checkOpenSeason();
     setShowClose(false); setNewSeasonName(""); setClosing(false);
+
+    if (failed.length > 0) {
+      console.error("تعذر نقل بعض البيانات إلى الأرشيف", failed.map(f => f.error));
+      showAlert("error", `أُقفل الموسم وبدأ موسم ${newSeasonName}، لكن تعذّر نقل: ${failed.map(f => f.label).join(" و")}. يرجى إعادة المحاولة أو مراجعة البيانات.`);
+      return;
+    }
     showAlert("success", `تم إقفال الموسم الحالي وبدء موسم ${newSeasonName}.`);
   };
 
@@ -95,7 +160,24 @@ function ArchivePage({ currentUser }: { currentUser: User }) {
     return (
       <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
         <AlertModal alert={alertState} onClose={() => showAlert(null)} />
-        {currentUser.permissions.view_archive && (
+        {/* لا يوجد موسم مفتوح — عملية إقفال سابقة توقّفت في منتصفها.
+            هذا هو المخرج الوحيد من الواجهة، فبدونه يبقى النظام معلَّقاً. */}
+        {hasOpenSeason === false && currentUser.permissions.view_archive && (
+          <div style={{ background: "var(--female-bg)", border: "1px solid #e74c3c", borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--danger)", marginBottom: 6 }}>لا يوجد موسم مفتوح</div>
+            <div style={{ fontSize: 11.5, color: "var(--text)", lineHeight: 1.7, marginBottom: 10 }}>
+              يبدو أن عملية إقفال سابقة توقّفت قبل إنشاء الموسم الجديد. النظام لا يعمل بلا موسم مفتوح —
+              اكتب اسم الموسم الجديد لاستكمال العملية. لن تُنقل أي بيانات ولن يُمسّ الأرشيف.
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input style={{ ...inp, flex: 1 }} value={recoverName} onChange={e => setRecoverName(e.target.value)} placeholder="مثال: 1449" />
+              <button onClick={recoverSeason} disabled={recovering} style={{ background: "var(--danger)", color: "var(--bg-card)", border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 600, opacity: recovering ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                {recovering ? "جاري الإنشاء..." : "إنشاء موسم جديد"}
+              </button>
+            </div>
+          </div>
+        )}
+        {hasOpenSeason !== false && currentUser.permissions.view_archive && (
           <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div><div style={{ fontSize: 13, fontWeight: 600 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> إقفال الموسم الحالي</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>إقفال الموسم وبدء موسم حج جديد</div></div>
             <button onClick={() => { setShowClose(true); setCloseStep(1); setNewSeasonName(""); }} style={{ background: "var(--warning)", color: "var(--bg-card)", border: "none", padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>إقفال</button>
