@@ -8,7 +8,8 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, brandingFromConfig } from "../utils";
-import { createWriteHelpers } from "../utils/write";
+import { useSeasonWrite } from "../season/useSeasonWrite";
+import { useSeason } from "../season/useSeason";
 
 // ===== إحصائيات الباصات =====
 function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger[] }) {
@@ -39,7 +40,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
-  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
+  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { viewedSeason } = useSeason();
+
+  /* التعطيل البصري لمداخل الكتابة في موسم للعرض فقط — طبقة تجربة
+     لا حماية؛ الضمانة محفّز القاعدة */
+  const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
   const [buses, setBuses] = useState<Bus[]>([]);
   const [busesLoading, setBusesLoading] = useState(true);
   const [busesError, setBusesError] = useState(false);
@@ -73,18 +79,19 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل «لا يوجد باصات بعد» على بيانات لم تصل */
-    supabase.from("buses").select("*").order("created_at").then(({ data, error }) => {
+    supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at").then(({ data, error }) => {
       if (error || !data) { console.error("تعذر تحميل الباصات", error); setBusesError(true); }
       else { setBuses(data as Bus[]); setBusesError(false); }
       setBusesLoading(false);
     });
-  }, []);
+  }, [viewedSeason.id]);
 
   const getBusPassengers = (busId: number) =>
     passengers.filter(p => p.bus_id === busId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
 
   const addBus = async () => {
+    if (!assertWritable()) return;
     if (!busName.trim()) { setNameError("يرجى إدخال اسم الباص"); return; }
     if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`يوجد باص بالاسم "${busName}" بالفعل`); return; }
     setNameError("");
@@ -98,6 +105,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   const deleteBus = async (id: number) => {
+    if (!assertWritable()) return;
     if (getBusPassengers(id).length > 0) { showAlert("warning", "لا يمكن حذف باص يحتوي على مسافرين"); return; }
     const { error } = await supabase.from("buses").delete().eq("id", id);
     if (error) { showAlert("error", `فشل حذف الباص: ${error.message}`); return; }
@@ -210,7 +218,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <BusesStats buses={buses} passengers={passengers} />
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12 }}>
-        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
+        <button disabled={readOnly} onClick={() => setShowAdd(true)} style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> باص جديد
         </button>
         {buses.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
@@ -358,7 +366,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   <button onClick={() => printBus(bus)} title="طباعة" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="9" y1="21" x2="12" y2="21"/><circle cx="18" cy="11.5" r="1" fill="currentColor"/></svg>
                   </button>
-                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} title="حذف الباص" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف ${bus.name}؟`, { title: "حذف الباص" }); if (ok) { deleteBus(bus.id); setSelectedBusId(null); } }} title="حذف الباص" style={{ ...roOff, width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                   </button>
                   <button onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
@@ -404,7 +412,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                             </select>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                           </div>
-                          <button onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <button disabled={readOnly} onClick={() => removeP(p.id)} title="إزالة من الباص" style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
                           </button>
                         </div>
