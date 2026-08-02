@@ -14,6 +14,11 @@
 // مرحليّ مقصود لهذه العمليات وحدها، ويُستبدل عند إعادة تصميم
 // المصادقة (رمز موقَّع أو Supabase Auth).
 //
+// الأعمال الثلاثة:
+//   verify  — يتحقق ويعود بلا تنفيذ. خطوة الهوية في معالج الإقفال.
+//   close   — close_season()
+//   delete  — delete_season()
+//
 // verify_jwt = false عن قصد: الدالة تنفّذ مصادقتها بنفسها أدناه،
 // ولا يوجد JWT في هذا النظام لتتحقق منه البوابة.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -28,12 +33,13 @@ const CORS = {
    العمليات، فلا تتفارق الواجهة عن الخادم */
 const REQUIRED_PERMISSION = "view_archive";
 
-function fail(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), {
+function json(status: number, payload: unknown) {
+  return new Response(JSON.stringify(payload), {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
 }
+const fail = (status: number, message: string) => json(status, { error: message });
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -54,7 +60,9 @@ Deno.serve(async (req: Request) => {
 
   const { action, username, password } = body;
   if (!username || !password) return fail(400, "اسم المستخدم وكلمة المرور مطلوبان.");
-  if (action !== "close" && action !== "delete") return fail(400, "عملية غير معروفة.");
+  if (action !== "verify" && action !== "close" && action !== "delete") {
+    return fail(400, "عملية غير معروفة.");
+  }
 
   const admin = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -82,6 +90,11 @@ Deno.serve(async (req: Request) => {
   if (!perms[REQUIRED_PERMISSION]) return fail(403, "لا تملك صلاحية إدارة المواسم.");
 
   /* ٣) التنفيذ */
+
+  /* verify يقف هنا عن قصد: خطوة الهوية تثبت الصلاحية ولا تغيّر شيئاً.
+     ويعود بالاسم ليكتبه الإيصال من مصدر موثوق لا من الجلسة. */
+  if (action === "verify") return json(200, { ok: true, name: user.name ?? username });
+
   if (action === "close") {
     const name = (body.newSeasonName ?? "").trim();
     if (!name) return fail(400, "اسم الموسم الجديد مطلوب.");
@@ -96,9 +109,7 @@ Deno.serve(async (req: Request) => {
       console.error("تعذر إقفال الموسم", error);
       return fail(400, error.message || "تعذّر إقفال الموسم.");
     }
-    return new Response(JSON.stringify({ newSeasonId: data }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return json(200, { newSeasonId: data, closedBy: user.name ?? username });
   }
 
   const seasonId = body.seasonId;
@@ -109,7 +120,5 @@ Deno.serve(async (req: Request) => {
     console.error("تعذر حذف الموسم", error);
     return fail(400, error.message || "تعذّر حذف الموسم.");
   }
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
+  return json(200, { ok: true });
 });
