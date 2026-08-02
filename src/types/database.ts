@@ -22,7 +22,11 @@ export type Database = {
           expires_at: string | null
           id: number
           priority: string
+          push_sent_at: string | null
           show_at: string
+          target_ids: number[]
+          target_type: string
+          title: string | null
         }
         Insert: {
           body: string
@@ -31,7 +35,11 @@ export type Database = {
           expires_at?: string | null
           id?: never
           priority?: string
+          push_sent_at?: string | null
           show_at?: string
+          target_ids?: number[]
+          target_type?: string
+          title?: string | null
         }
         Update: {
           body?: string
@@ -40,7 +48,11 @@ export type Database = {
           expires_at?: string | null
           id?: never
           priority?: string
+          push_sent_at?: string | null
           show_at?: string
+          target_ids?: number[]
+          target_type?: string
+          title?: string | null
         }
         Relationships: []
       }
@@ -107,20 +119,23 @@ export type Database = {
           admin_phone: string | null
           admin_whatsapp: string | null
           banner_image_url: string | null
-          camp_arafa_address: string | null
-          camp_mina_address: string | null
-          city: string | null
-          country: string | null
-          hotel_address: string | null
-          hotel_name: string | null
           banner_position: string | null
           banner_position_x: string | null
+          camp_arafa_address: string | null
+          camp_arafa_url: string | null
+          camp_mina_address: string | null
+          camp_mina_url: string | null
+          city: string | null
           color_accent: string | null
           color_primary: string | null
           color_sidebar: string | null
           contact_email: string | null
           contact_phone: string | null
+          country: string | null
           features: Json | null
+          hotel_address: string | null
+          hotel_name: string | null
+          hotel_url: string | null
           id: number
           logo_url: string | null
           name_ar: string
@@ -136,7 +151,9 @@ export type Database = {
           banner_position?: string | null
           banner_position_x?: string | null
           camp_arafa_address?: string | null
+          camp_arafa_url?: string | null
           camp_mina_address?: string | null
+          camp_mina_url?: string | null
           city?: string | null
           color_accent?: string | null
           color_primary?: string | null
@@ -147,6 +164,7 @@ export type Database = {
           features?: Json | null
           hotel_address?: string | null
           hotel_name?: string | null
+          hotel_url?: string | null
           id?: number
           logo_url?: string | null
           name_ar?: string
@@ -162,7 +180,9 @@ export type Database = {
           banner_position?: string | null
           banner_position_x?: string | null
           camp_arafa_address?: string | null
+          camp_arafa_url?: string | null
           camp_mina_address?: string | null
+          camp_mina_url?: string | null
           city?: string | null
           color_accent?: string | null
           color_primary?: string | null
@@ -173,6 +193,7 @@ export type Database = {
           features?: Json | null
           hotel_address?: string | null
           hotel_name?: string | null
+          hotel_url?: string | null
           id?: number
           logo_url?: string | null
           name_ar?: string
@@ -250,7 +271,7 @@ export type Database = {
           {
             foreignKeyName: "financial_group_members_passenger_id_fkey"
             columns: ["passenger_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "passengers"
             referencedColumns: ["id"]
           },
@@ -321,6 +342,51 @@ export type Database = {
           type?: string | null
         }
         Relationships: []
+      }
+      notification_deliveries: {
+        Row: {
+          announcement_id: number
+          error: string | null
+          id: number
+          passenger_id: number
+          read_at: string | null
+          sent_at: string
+          status: string
+        }
+        Insert: {
+          announcement_id: number
+          error?: string | null
+          id?: number
+          passenger_id: number
+          read_at?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Update: {
+          announcement_id?: number
+          error?: string | null
+          id?: number
+          passenger_id?: number
+          read_at?: string | null
+          sent_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_deliveries_passenger_id_fkey"
+            columns: ["passenger_id"]
+            isOneToOne: false
+            referencedRelation: "passengers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       passengers: {
         Row: {
@@ -498,6 +564,50 @@ export type Database = {
           },
         ]
       }
+      pilgrim_push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: number
+          last_seen_at: string
+          p256dh: string
+          passenger_id: number
+          platform: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: number
+          last_seen_at?: string
+          p256dh: string
+          passenger_id: number
+          platform?: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: number
+          last_seen_at?: string
+          p256dh?: string
+          passenger_id?: number
+          platform?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilgrim_push_subscriptions_passenger_id_fkey"
+            columns: ["passenger_id"]
+            isOneToOne: false
+            referencedRelation: "passengers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_settings: {
         Row: {
           amount: number
@@ -614,8 +724,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_pilgrim_portal: {
-        Args: { p_doc: string; p_day: number; p_month: number; p_year: number }
+      announcement_audience: {
+        Args: { p_target_ids: number[]; p_target_type: string }
+        Returns: {
+          passenger_id: number
+        }[]
+      }
+      create_financial_group_with_member: {
+        Args: {
+          p_created_by: string
+          p_name: string
+          p_notes: string
+          p_passenger_id: number
+        }
         Returns: Json
       }
       create_user: {
@@ -627,6 +748,49 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_pilgrim_portal: {
+        Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
+        Returns: Json
+      }
+      mark_pilgrim_notification_read: {
+        Args: {
+          p_announcement_id: number
+          p_day: number
+          p_doc: string
+          p_month: number
+          p_year: number
+        }
+        Returns: boolean
+      }
+      push_enabled_passengers: {
+        Args: never
+        Returns: {
+          devices: number
+          passenger_id: number
+        }[]
+      }
+      register_pilgrim_push: {
+        Args: {
+          p_auth: string
+          p_day: number
+          p_doc: string
+          p_endpoint: string
+          p_month: number
+          p_p256dh: string
+          p_platform?: string
+          p_user_agent?: string
+          p_year: number
+        }
+        Returns: boolean
+      }
+      resolve_pilgrim_id: {
+        Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
+        Returns: number
+      }
+      unregister_pilgrim_push: {
+        Args: { p_endpoint: string }
+        Returns: boolean
+      }
       update_user: {
         Args: {
           p_id: number
@@ -636,15 +800,6 @@ export type Database = {
           p_username: string
         }
         Returns: undefined
-      }
-      create_financial_group_with_member: {
-        Args: {
-          p_created_by: string
-          p_name: string
-          p_notes: string
-          p_passenger_id: number
-        }
-        Returns: Json
       }
       verify_user: {
         Args: { p_password: string; p_username: string }
