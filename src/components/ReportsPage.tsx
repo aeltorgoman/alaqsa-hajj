@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSeason } from "../season/useSeason";
 import { isHajj } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
@@ -59,6 +60,9 @@ const floorKey = (r: Room) => r.floor ? String(r.floor) : "بدون طابق";
 
 function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
   const { alert: alertState, showAlert } = useAlert();
+  /* صفحة قراءة بحتة: تحترم الموسم المعروض في بياناتها، ولا تعرف
+     readOnly ولا تُعطَّل فيها طباعة ولا تصدير ولا بحث */
+  const { viewedSeason } = useSeason();
   const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
@@ -219,9 +223,10 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const load = async () => {
       setLoading(true);
       const [{ data: b, error: eb }, { data: c, error: ec }, { data: r, error: er }, { data: f, error: ef }] = await Promise.all([
-        supabase.from("buses").select("*").order("created_at"),
-        supabase.from("camps").select("*").order("created_at"),
-        supabase.from("rooms").select("*").order("number"),
+        supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
+        supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("created_at"),
+        supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("number"),
+        /* الرحلات بلا season_id حتى م٧ — مقصود، لا سهو */
         supabase.from("flights").select("*").order("date"),
       ]);
       /* الفشل يُبلَّغ عنه بدل عرض «لا يوجد باصات» على بيانات لم تصل أصلاً */
@@ -249,7 +254,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       setLoading(false);
     };
     load();
-  }, []);
+  }, [viewedSeason.id]);
 
   // ============================================================
   // تقرير الحجاج
