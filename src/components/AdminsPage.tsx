@@ -3,6 +3,8 @@ import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
+import { useSeasonWrite } from "../season/useSeasonWrite";
+import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
@@ -62,6 +64,11 @@ function AdminsPage({
   setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
 }) {
   const { alert, showAlert } = useAlert();
+  const { assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { viewedSeason } = useSeason();
+
+  /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية */
+  const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
 
   // بيانات التعيين
   const [buses, setBuses]     = useState<Bus[]>([]);
@@ -148,9 +155,10 @@ function AdminsPage({
   const loadAssignData = async () => {
     if (dataLoaded) return;
     const [{ data: b }, { data: r }, { data: c }, { data: f }] = await Promise.all([
-      supabase.from("buses").select("*").order("created_at"),
-      supabase.from("rooms").select("*").order("floor").order("number"),
-      supabase.from("camps").select("*").order("name"),
+      supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
+      supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("floor").order("number"),
+      supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("name"),
+      /* الرحلات بلا season_id حتى م٧ — مقصود، لا سهو */
       supabase.from("flights").select("*").order("date"),
     ]);
     if (b) setBuses(b as Bus[]);
@@ -246,6 +254,7 @@ function AdminsPage({
   // حفظ الإداري
   // ============================================================
   const saveAdmin = async () => {
+    if (!assertWritable()) return;
     if (!form.name_ar.trim() && !form.name_en.trim()) { showAlert("warning", "يرجى إدخال الاسم على الأقل"); return; }
 
     // منع تسجيل نفس الشخص كحاج وإداري
@@ -329,6 +338,7 @@ function AdminsPage({
   // رفع المستندات
   // ============================================================
   const handleAdminDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
+    if (!assertWritable()) return;
     setDocUploading(docType);
     const url = await uploadDoc(file, p.id, docType === "passport_doc" ? "passport_doc" : docType === "idcard" ? "idcard" : docType);
     setDocUploading(null);
@@ -340,6 +350,7 @@ function AdminsPage({
   };
 
   const handleAdminDocDelete = async (p: Passenger, field: string) => {
+    if (!assertWritable()) return;
     await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id);
     const updated = { ...p, [field]: null };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
@@ -350,6 +361,7 @@ function AdminsPage({
   // حفظ التعيين
   // ============================================================
   const saveAssign = async () => {
+    if (!assertWritable()) return;
     if (!assignTarget) return;
     const updates: any = {
       bus_id:           assign.bus_id           ? Number(assign.bus_id)           : null,
@@ -371,6 +383,7 @@ function AdminsPage({
   // حذف
   // ============================================================
   const deleteAdmin = async (id: number) => {
+    if (!assertWritable()) return;
     const { error } = await supabase.from("passengers").delete().eq("id", id);
     if (error) { showAlert("error", "حدث خطأ أثناء الحذف"); return; }
     setPassengers(prev => prev.filter(p => p.id !== id));
@@ -416,7 +429,7 @@ function AdminsPage({
 
       {/* شريط الأزرار */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <button onClick={openAdd} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+        <button disabled={readOnly} onClick={openAdd} style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           إضافة إداري
         </button>
@@ -468,13 +481,13 @@ function AdminsPage({
                   <button onClick={() => setDocTarget(p)} style={{ ...btnS({ padding: "5px 10px", fontSize: 11 }) }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>مستندات
                   </button>
-                  <button onClick={() => openAssign(p)} style={{ ...btnP({ padding: "5px 10px", fontSize: 11 }) }}>
+                  <button disabled={readOnly} onClick={() => openAssign(p)} style={{ ...btnP({ padding: "5px 10px", fontSize: 11 }), ...roOff }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginLeft: 4 }}><path d="M8 6H21"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>تعيين
                   </button>
-                  <button onClick={() => openEdit(p)} style={{ ...btnS({ padding: "5px 10px", fontSize: 11 }) }}>
+                  <button disabled={readOnly} onClick={() => openEdit(p)} style={{ ...btnS({ padding: "5px 10px", fontSize: 11 }), ...roOff }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button onClick={() => setDeleteTarget(p)} style={{ background: "var(--error-bg)", border: "none", color: "var(--error)", padding: "5px 8px", borderRadius: 8, cursor: "pointer" }}>
+                  <button disabled={readOnly} onClick={() => setDeleteTarget(p)} style={{ ...roOff, background: "var(--error-bg)", border: "none", color: "var(--error)", padding: "5px 8px", borderRadius: 8, cursor: "pointer" }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                   </button>
                 </div>
