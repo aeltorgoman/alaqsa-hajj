@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { mapPassenger, upsertPassenger, isHajj } from "../utils/passenger";
-import { createWriteHelpers } from "../utils/write";
+import { useSeasonWrite } from "../season/useSeasonWrite";
+import { useSeason } from "../season/useSeason";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -113,8 +114,16 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
-  /* النمط الموحّد لعمليات الكتابة — التعريف في utils/write.ts */
-  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
+  /* النمط الموحّد لعمليات الكتابة — التعريف في utils/write.ts،
+     ومعرفة الموسم مركّبة فوقه في season/useSeasonWrite.ts */
+  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { viewedSeason } = useSeason();
+
+  /* التعطيل البصري لمداخل الكتابة في موسم للعرض فقط. طبقة تجربة
+     لا حماية: الحماية في useSeasonWrite وفي محفّز القاعدة. تُطبَّق
+     بـ pointerEvents لأن نصف هذه المداخل <div onClick> لا <button>
+     فلا ينفع فيها disabled. */
+  const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
 
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
@@ -129,11 +138,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaFlights, setMetaFlights] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from("buses").select("id,name").then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
-    supabase.from("rooms").select("id,number").then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
-    supabase.from("camps").select("id,name,page_type").then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
+    supabase.from("buses").select("id,name").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
+    supabase.from("rooms").select("id,number").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
+    supabase.from("camps").select("id,name,page_type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
+    /* الرحلات بلا season_id بعد — يُضاف في م٧، وحتى ذلك الحين
+       تُجلب كلها كما كانت */
     supabase.from("flights").select("id,name,type").then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
-  }, []);
+  }, [viewedSeason.id]);
 
   // استقبال scan من Dashboard
   useEffect(() => {
@@ -568,6 +579,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const dupN = manualForm.national_id && passengers.some((p: Passenger) => p.national_id === manualForm.national_id);
     if (dupP) { showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return; }
     if (dupN) { showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return; }
+    if (!assertWritable()) return;
     setManualSaving(true);
     const short_ar = makeShort(manualForm.name_ar);
     const short_en = makeShort(manualForm.name_en);
@@ -743,6 +755,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   };
 
   const handleDocDelete = async (p: Passenger, field: string, url: string) => {
+    if (!assertWritable()) return;
     const ok = await confirmAction("هتمسح المستند ده؟", { title: "حذف مستند" });
     if (!ok) return;
     const path = getStoragePath(url);
@@ -869,6 +882,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setPassengers(prev => prev.map(x => { const u = updates.find(y => y.id === x.id); return u ? { ...x, sort_order: u.sort_order } : x; }));
   };
   const saveEdit = async (p: Passenger) => {
+    if (!assertWritable()) return;
     const updated_at = new Date().toISOString();
     const updated_by = currentUser?.name || null;
     const { error } = await supabase.from("passengers").update({
@@ -1001,7 +1015,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               e.target.value = "";
             }} />
             {/* إضافة يدوي */}
-            <div onClick={() => { resetManualModal(); setShowManual(true); }} title="إضافة يدوي" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
+            <div onClick={() => { resetManualModal(); setShowManual(true); }} title="إضافة يدوي" style={{ ...roOff, height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
               يدوي
             </div>
@@ -1085,7 +1099,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       style={{ width: 36, fontSize: 11, textAlign: "center", border: "1.5px solid var(--em7)", borderRadius: 6, padding: "2px 4px", outline: "none", flexShrink: 0 }}
                     />
                   ) : (
-                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String([...passengers].filter(x => isHajj(x)).sort((a:any,b:any)=>(a.sort_order||0)-(b.sort_order||0)).findIndex(x=>x.id===p.id)+1)); }} style={{ width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String([...passengers].filter(x => isHajj(x)).sort((a:any,b:any)=>(a.sort_order||0)-(b.sort_order||0)).findIndex(x=>x.id===p.id)+1)); }} style={{ ...roOff, width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       {idx + 1}
@@ -1134,12 +1148,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                       </div>
                     </div>
-                    <div onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                    <div onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </div>
-                    <div onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                    <div onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--fb)"; e.currentTarget.style.color = "var(--ff)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
@@ -1278,8 +1292,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     ))}
                     <td style={{ padding: "5px 10px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-                        <button onClick={e => { e.stopPropagation(); setEditing(p); }} title="تعديل"
-                          style={{ width: 30, height: 30, borderRadius: 9, border: "none", background: "#BBDEFB", cursor: "pointer", color: "#0D47A1", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
+                        <button disabled={readOnly} onClick={e => { e.stopPropagation(); setEditing(p); }} title="تعديل"
+                          style={{ ...roOff, width: 30, height: 30, borderRadius: 9, border: "none", background: "#BBDEFB", cursor: "pointer", color: "#0D47A1", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#0D47A1"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#BBDEFB"; b.style.color = "#0D47A1"; b.style.transform = "scale(1)"; }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -1287,7 +1301,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                           </svg>
                         </button>
                         <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف"
-                          style={{ width: 30, height: 30, borderRadius: 9, border: "none", background: "#FFCDD2", cursor: "pointer", color: "#B71C1C", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
+                          style={{ ...roOff, width: 30, height: 30, borderRadius: 9, border: "none", background: "#FFCDD2", cursor: "pointer", color: "#B71C1C", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#B71C1C"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#FFCDD2"; b.style.color = "#B71C1C"; b.style.transform = "scale(1)"; }}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
@@ -1525,11 +1539,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   <div style={{ display: "flex", gap: 3 }}>
                     <button onClick={() => setDocViewer({ url, label })} style={{ background: "var(--male-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--info)", fontWeight: 800 }}>عرض</button>
                     <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--primary-dark)" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-                    <button onClick={() => handleDocDelete(selected, field, url)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--danger)" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+                    <button disabled={readOnly} onClick={() => handleDocDelete(selected, field, url)} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "3px 7px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--danger)" }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
                   </div>
                 ) : (
                   <>
-                    <input id={`upload-${docType}`} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
+                    <input id={`upload-${docType}`} disabled={readOnly} type="file" accept={accept} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDocUpload(selected, docType, field, f); e.currentTarget.value = ""; }} />
                     <button onClick={() => document.getElementById(`upload-${docType}`)?.click()} style={{ background: "var(--danger-bg)", border: "none", padding: "3px 9px", borderRadius: 6, fontSize: 9.5, cursor: "pointer", color: "var(--danger)", fontWeight: 800 }}>رفع</button>
                   </>
                 )}
@@ -1542,7 +1556,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           <div style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 500 }}>الأقارب</div>
-              <button onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ background: "var(--success-bg)", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>+ ربط</button>
+              <button disabled={readOnly} onClick={() => { setShowLinkFamily(true); setLinkSearch(""); }} style={{ ...roOff, background: "var(--success-bg)", border: "none", padding: "2px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>+ ربط</button>
             </div>
             {getFamilyMembers(selected).length === 0 ? (
               <div style={{ fontSize: 10, color: "var(--text-muted)" }}>لا يوجد أقارب مرتبطين</div>
@@ -1553,7 +1567,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     <div style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fm.short_ar || fm.name_ar}</div>
                     <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 1 }}>{fm.gender}</div>
                   </div>
-                  <button onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط" style={{ background: "#FFEBEE", border: "none", cursor: "pointer", color: "#B71C1C", width: 26, height: 26, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <button disabled={readOnly} onClick={() => handleUnlinkFamily(fm)} title="فك الارتباط" style={{ ...roOff, background: "#FFEBEE", border: "none", cursor: "pointer", color: "#B71C1C", width: 26, height: 26, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 </div>
@@ -1569,8 +1583,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             </div>
           )}
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
-            <button onClick={async () => { const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(selected.id); }} style={{ background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+            <button disabled={readOnly} onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), ...roOff, flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
+            <button onClick={async () => { const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(selected.id); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
           </div>
           <button onClick={() => {
             /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير */
