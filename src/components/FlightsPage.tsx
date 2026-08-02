@@ -9,7 +9,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useConfig } from "../config/ConfigContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, brandingFromConfig } from "../utils";
-import { createWriteHelpers } from "../utils/write";
+import { useSeasonWrite } from "../season/useSeasonWrite";
 
 // رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id
 const flightField = (type?: string): "flight_id" | "return_flight_id" =>
@@ -64,7 +64,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const config = useConfig();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
-  const { writeOk, writeAllOk } = createWriteHelpers(showAlert);
+  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+
+  /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية.
+     ولا فلترة هنا: جدول flights بلا season_id حتى م٧، فالرحلات
+     مشتركة بين المواسم حتى ذلك الحين. */
+  const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
   const [flights, setFlights] = useState<Flight[]>([]);
   const [flightsLoading, setFlightsLoading] = useState(true);
   const [flightsError, setFlightsError] = useState(false);
@@ -135,6 +140,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const addFlight = async () => {
+    if (!assertWritable()) return;
     if (!flightName.trim()) { setNameError("يرجى إدخال رقم الرحلة أو اسمها"); return; }
     if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} بالاسم "${flightName}" موجودة بالفعل`); return; }
     setNameError("");
@@ -148,6 +154,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const deleteFlight = async (flight: Flight) => {
+    if (!assertWritable()) return;
     if (getFlightPassengers(flight).length > 0) { showAlert("warning", "لا يمكن حذف رحلة تحتوي على مسافرين"); return; }
     if (!await writeOk(supabase.from("flights").delete().eq("id", flight.id), "تعذر حذف الرحلة")) return;
     setFlights(prev => prev.filter(f => f.id !== flight.id));
@@ -319,7 +326,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                 <button onClick={e => { e.stopPropagation(); printFlight(flight); }} title="طباعة" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--paper)", border: "1px solid var(--line)", cursor: "pointer", color: "var(--muted)" }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                 </button>
-                <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`هل تريد حذف رحلة ${flight.name}؟`, { title: "حذف الرحلة" }); if (ok) deleteFlight(flight); }} title="حذف" style={{ width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--muted)" }}>
+                <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`هل تريد حذف رحلة ${flight.name}؟`, { title: "حذف الرحلة" }); if (ok) deleteFlight(flight); }} title="حذف" style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: fp.length === 0 ? "var(--fb)" : "var(--paper)", border: `1px solid ${fp.length === 0 ? "rgba(122,46,69,.2)" : "var(--line)"}`, cursor: fp.length === 0 ? "pointer" : "not-allowed", color: fp.length === 0 ? "var(--ff)" : "var(--muted)" }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                 </button>
               </div>
@@ -455,7 +462,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setShowAdd(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+        <button disabled={readOnly} onClick={() => setShowAdd(true)} style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           رحلة جديدة
         </button>
@@ -691,7 +698,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                           </div>
                         )}
-                        <button onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <button disabled={readOnly} onClick={() => removeP(p.id, flightField(currentFlight.type))} title="إزالة من الرحلة" style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
                         </button>
                       </div>
