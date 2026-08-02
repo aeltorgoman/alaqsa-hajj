@@ -36,6 +36,14 @@ declare
   v_open   int;
   v_tbl    text;
 begin
+  -- قاعدة جديدة: الـ baseline ينشئ جدول seasons بلا صفّ، وكل ما
+  -- يلي يحتاج موسماً نشطاً. فيُبذَر واحد هنا بدل أن يفشل الترحيل.
+  if not exists (select 1 from public.seasons) then
+    insert into public.seasons (name) values ('الموسم الأول');
+  end if;
+
+  -- صفر مواسم مفتوحة مع وجود مواسم: حالة تحتاج قراراً بشرياً
+  -- (أيّ موسم يُستأنف؟) فلا تُخمَّن هنا — ولذلك تفشل بصوت مسموع.
   select count(*) into v_open from public.seasons where closed_at is null;
   if v_open <> 1 then
     raise exception 'الترحيل يتطلّب موسماً مفتوحاً واحداً بالضبط، والموجود %', v_open;
