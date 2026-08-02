@@ -62,7 +62,7 @@ export type Database = {
           created_at: string | null
           id: number
           name: string | null
-          season_id: number | null
+          season_id: number
           type: string | null
         }
         Insert: {
@@ -70,7 +70,7 @@ export type Database = {
           created_at?: string | null
           id?: never
           name?: string | null
-          season_id?: number | null
+          season_id?: number
           type?: string | null
         }
         Update: {
@@ -78,10 +78,18 @@ export type Database = {
           created_at?: string | null
           id?: never
           name?: string | null
-          season_id?: number | null
+          season_id?: number
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "buses_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       camps: {
         Row: {
@@ -90,7 +98,7 @@ export type Database = {
           id: number
           name: string | null
           page_type: string | null
-          season_id: number | null
+          season_id: number
           type: string | null
         }
         Insert: {
@@ -99,7 +107,7 @@ export type Database = {
           id?: never
           name?: string | null
           page_type?: string | null
-          season_id?: number | null
+          season_id?: number
           type?: string | null
         }
         Update: {
@@ -108,10 +116,18 @@ export type Database = {
           id?: never
           name?: string | null
           page_type?: string | null
-          season_id?: number | null
+          season_id?: number
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "camps_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_config: {
         Row: {
@@ -425,7 +441,7 @@ export type Database = {
           photo_url: string | null
           return_flight_id: number | null
           room_id: number | null
-          season_id: number | null
+          season_id: number
           short_ar: string | null
           short_en: string | null
           sort_order: number | null
@@ -469,7 +485,7 @@ export type Database = {
           photo_url?: string | null
           return_flight_id?: number | null
           room_id?: number | null
-          season_id?: number | null
+          season_id?: number
           short_ar?: string | null
           short_en?: string | null
           sort_order?: number | null
@@ -513,7 +529,7 @@ export type Database = {
           photo_url?: string | null
           return_flight_id?: number | null
           room_id?: number | null
-          season_id?: number | null
+          season_id?: number
           short_ar?: string | null
           short_en?: string | null
           sort_order?: number | null
@@ -521,7 +537,15 @@ export type Database = {
           updated_by?: string | null
           wants_flight?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "passengers_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payments: {
         Row: {
@@ -642,7 +666,7 @@ export type Database = {
           id: number
           notes: string | null
           number: string | null
-          season_id: number | null
+          season_id: number
           type: string | null
         }
         Insert: {
@@ -651,7 +675,7 @@ export type Database = {
           id?: never
           notes?: string | null
           number?: string | null
-          season_id?: number | null
+          season_id?: number
           type?: string | null
         }
         Update: {
@@ -660,10 +684,18 @@ export type Database = {
           id?: never
           notes?: string | null
           number?: string | null
-          season_id?: number | null
+          season_id?: number
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "rooms_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       seasons: {
         Row: {
@@ -724,11 +756,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      active_season_id: { Args: never; Returns: number }
       announcement_audience: {
         Args: { p_target_ids: number[]; p_target_type: string }
         Returns: {
           passenger_id: number
         }[]
+      }
+      close_season: {
+        Args: { p_closed_by: string; p_new_name: string }
+        Returns: number
       }
       create_financial_group_with_member: {
         Args: {
@@ -748,6 +785,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      delete_season: { Args: { p_season_id: number }; Returns: undefined }
       get_pilgrim_portal: {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: Json
