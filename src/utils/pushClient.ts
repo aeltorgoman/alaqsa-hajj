@@ -149,14 +149,14 @@ export async function enablePush(): Promise<EnableResult> {
     const auth = arrayBufferToBase64(sub.getKey("auth"));
     if (!p256dh || !auth) return { ok: false, reason: "failed" };
 
-    const { data, error } = await supabase.rpc("register_pilgrim_push" as any, {
+    const { data, error } = await supabase.rpc("register_pilgrim_push", {
       ...creds,
       p_endpoint: sub.endpoint,
       p_p256dh: p256dh,
       p_auth: auth,
       p_platform: getPlatform(),
       p_user_agent: navigator.userAgent.slice(0, 300),
-    } as any);
+    });
 
     if (error || data === false) {
       await sub.unsubscribe().catch(() => undefined);
@@ -180,7 +180,7 @@ export async function disablePush(): Promise<boolean> {
 
     if (sub) await sub.unsubscribe().catch(() => undefined);
     if (endpoint) {
-      await supabase.rpc("unregister_pilgrim_push" as any, { p_endpoint: endpoint } as any);
+      await supabase.rpc("unregister_pilgrim_push", { p_endpoint: endpoint });
     }
     localStorage.removeItem("portal_push_endpoint");
     return true;
@@ -204,10 +204,10 @@ export async function markNotificationRead(announcementId: number): Promise<void
   const creds = getPortalCreds();
   if (!creds) return;
   try {
-    await supabase.rpc("mark_pilgrim_notification_read" as any, {
+    await supabase.rpc("mark_pilgrim_notification_read", {
       ...creds,
       p_announcement_id: announcementId,
-    } as any);
+    });
   } catch {
     /* تسجيل القراءة ليس حرجاً، فنتجاهل الفشل بهدوء */
   }

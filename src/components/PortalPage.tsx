@@ -117,10 +117,10 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.rpc("push_enabled_passengers" as any);
+      const { data, error } = await supabase.rpc("push_enabled_passengers");
       if (cancelled) return;
       if (error) { console.error("تعذر تحميل قائمة المفعّلين للإشعارات", error); setEnabledError(true); return; }
-      setEnabledIds(new Set((data || []).map((r: { passenger_id: number }) => r.passenger_id)));
+      setEnabledIds(new Set((data || []).map(r => r.passenger_id)));
       setEnabledError(false);
     })();
     return () => { cancelled = true; };
@@ -133,13 +133,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.rpc("announcement_audience" as any, {
+      const { data, error } = await supabase.rpc("announcement_audience", {
         p_target_type: targetKind,
         p_target_ids: targetIds,
-      } as any);
+      });
       if (cancelled) return;
       if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); setAudienceError(true); return; }
-      setAudienceIds((data || []).map((r: { passenger_id: number }) => r.passenger_id));
+      setAudienceIds((data || []).map(r => r.passenger_id));
       setAudienceError(false);
     })();
     return () => { cancelled = true; };
@@ -169,7 +169,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     else if (dur.ms > 0) expires = new Date(show.getTime() + dur.ms);
     if (expires && expires <= show) { showAlert("warning", "وقت الانتهاء يجب أن يكون بعد وقت الظهور."); return; }
     setSending(true);
-    const { data: created, error } = await (supabase.from("announcements") as any).insert({
+    const { data: created, error } = await supabase.from("announcements").insert({
       title: title.trim() || null,
       body: body.trim(), priority,
       show_at: show.toISOString(),
@@ -249,7 +249,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,hotel_url,camp_mina_address,camp_mina_url,camp_arafa_address,camp_arafa_url").order("id").limit(1).single() as any;
+      const { data, error } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,hotel_url,camp_mina_address,camp_mina_url,camp_arafa_address,camp_arafa_url").order("id").limit(1).single();
       /* بدون هذا كان الفشل ينتهي بحقول فارغة وزر حفظ معطَّل بلا تفسير */
       if (error || !data) {
         console.error("تعذر تحميل إعدادات البوابة", error);
@@ -278,7 +278,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   async function saveSettings() {
     if (cfgId == null) return;
     setSavingCfg(true);
-    const { error } = await (supabase.from("company_config") as any).update({
+    const { error } = await supabase.from("company_config").update({
       admin_name: adminName.trim() || null,
       admin_phone: adminPhone.trim() || null,
       admin_whatsapp: adminWa.trim() || null,
