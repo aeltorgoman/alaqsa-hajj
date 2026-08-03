@@ -21,6 +21,16 @@ type Counts = { passengers: number; buses: number; camps: number; rooms: number 
 
 const TABLES = ["passengers", "buses", "camps", "rooms"] as const;
 
+/* مدة الموسم بالأيام — من الفتح إلى الإقفال، أو إلى اليوم إن كان
+   ما زال نشطاً. تُعرض عند مراجعة المواسم القديمة. */
+function durationDays(from: string | null, to: string | null): number | null {
+  if (!from) return null;
+  const start = new Date(from).getTime();
+  const end = to ? new Date(to).getTime() : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+  return Math.floor((end - start) / 86400000);
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -93,6 +103,8 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
         </div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
           بدأ في {fmtDate(activeSeason.created_at)}
+          {durationDays(activeSeason.created_at, null) !== null &&
+            ` · مستمرّ منذ ${durationDays(activeSeason.created_at, null)} يوماً`}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{countLine(activeSeason.id)}</div>
         <button onClick={() => setShowClose(true)} style={btnP({ marginTop: 12 })}>إقفال الموسم</button>
@@ -117,7 +129,10 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
                   <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--bg-2)", color: "var(--text-muted)" }}>مقفل</span>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
-                  أُقفل في {fmtDate(s.closed_at)}{s.closed_by ? ` · بواسطة ${s.closed_by}` : ""}
+                  بدأ في {fmtDate(s.created_at)} · أُقفل في {fmtDate(s.closed_at)}
+                  {s.closed_by ? ` · بواسطة ${s.closed_by}` : ""}
+                  {durationDays(s.created_at, s.closed_at) !== null &&
+                    ` · استمرّ ${durationDays(s.created_at, s.closed_at)} يوماً`}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{countLine(s.id)}</div>
               </div>

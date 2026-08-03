@@ -187,7 +187,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
               <div style={{ padding: "8px 12px 6px", fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.08em", borderBottom: "1px solid var(--line)" }}>الإعدادات</div>
               {[
                 { label: "إدارة المستخدمين", page: "users", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>` },
-                { label: "الأرشيف", page: "archive", icon: `<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>` },
+                { label: "المواسم", page: "archive", icon: `<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>` },
               ].map(item => (
                 <div key={item.page}
                   onClick={() => { setShowSettings(false); setPage(item.page); }}
