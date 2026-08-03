@@ -38,16 +38,17 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
     reader.onload = async (e) => {
       const base64 = (e.target?.result as string).split(",")[1];
       try {
-        const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode: "passport" })
+        /* الاستدعاء عبر العميل لا بـ fetch خام: يرفق ترويسة المصادقة
+           تلقائياً، وهو شرط تشغيل الدالة بعد تفعيل verify_jwt */
+        const { data } = await supabase.functions.invoke("Scan-passport", {
+          body: { imageBase64: base64, mediaType: file.type, mode: "passport" }
         });
-        const data = await response.json();
         clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
         setTimeout(() => {
           setLoading(false);
-          const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
+          /* ?. لأن invoke يُرجع data = null عند الفشل، بخلاف response.json()
+             الذي كان يُرجع جسم الخطأ — والسلوك الظاهر يبقى كما هو: حقول فارغة */
+          const text = data?.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
           let parsed: any = {};
           try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
           const name_en = parsed.name_en || "";

@@ -45,13 +45,14 @@ export function fileToBase64(file: File): Promise<string> {
 
 export async function scanDocument(file: File, mode: "passport" | "idcard"): Promise<any> {
   const base64 = await fileToBase64(file);
-  const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode })
+  /* الاستدعاء عبر العميل لا بـ fetch خام: يرفق ترويسة المصادقة
+     تلقائياً، وهو شرط تشغيل الدالة بعد تفعيل verify_jwt */
+  const { data } = await supabase.functions.invoke("Scan-passport", {
+    body: { imageBase64: base64, mediaType: file.type, mode }
   });
-  const data = await response.json();
-  const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
+  /* ?. لأن invoke يُرجع data = null عند الفشل، بخلاف response.json()
+     الذي كان يُرجع جسم الخطأ — والسلوك الظاهر يبقى كما هو: حقول فارغة */
+  const text = data?.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
   let parsed: any = {};
   try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
   return parsed;
