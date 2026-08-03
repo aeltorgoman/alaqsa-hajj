@@ -72,6 +72,8 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   const [docUrls, setDocUrls] = useState<string[]>([]);
   const [downloaded, setDownloaded] = useState(false);
   const [dlProgress, setDlProgress] = useState(0);
+  /* عدد الملفات التي تعذّر ضمّها — نسخة ناقصة تُعلَن ولا تُقدَّم كاملة */
+  const [dlFailed, setDlFailed] = useState(0);
   /* الخطوة ٤ */
   const [newName, setNewName] = useState(() => suggestName(activeSeason.name));
   /* النتيجة */
@@ -79,7 +81,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
 
   const reset = () => {
     setStep(1); setPassword(""); setError(""); setBusy(false);
-    setWarnings(null); setDocUrls([]); setDownloaded(false); setDlProgress(0);
+    setWarnings(null); setDocUrls([]); setDownloaded(false); setDlProgress(0); setDlFailed(0);
     setNewName(suggestName(activeSeason.name)); setResult(null);
   };
 
@@ -134,7 +136,8 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
 
   /* ── الخطوة ٣: تنزيل نسخة ──────────────────────────────── */
   const downloadZip = async () => {
-    setBusy(true); setError(""); setDlProgress(0);
+    setBusy(true); setError(""); setDlProgress(0); setDlFailed(0);
+    let failed = 0;
     try {
       /* استيراد ديناميكي: المكتبة لا تدخل الحزمة الرئيسية،
          وتُحمَّل عند الضغط على الزرّ لا قبله */
@@ -143,12 +146,19 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       let done = 0;
       for (const url of docUrls) {
         const path = getStoragePath(url);
-        if (path) {
-          const res = await fetch(url);
-          if (res.ok) zip.file(path, await res.blob());
+        /* الفشل يُعدّ ولا يُبتلع: نسخة ناقصة تخرج صامتة أسوأ من
+           عدم التنزيل، لأن المستخدم يحذف المستندات واثقاً بها */
+        if (!path) { failed++; }
+        else {
+          try {
+            const res = await fetch(url);
+            if (res.ok) zip.file(path, await res.blob());
+            else { failed++; console.error("تعذر تنزيل مستند", { url, status: res.status }); }
+          } catch (e) { failed++; console.error("تعذر تنزيل مستند", { url, e }); }
         }
         setDlProgress(++done);
       }
+      setDlFailed(failed);
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -183,11 +193,23 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
     let docsMsg = "لا مستندات في هذا الموسم.";
     if (docUrls.length > 0) {
       const paths = docUrls.map(getStoragePath).filter(Boolean);
-      const { error: rmErr } = await supabase.storage.from("passengers-docs").remove(paths);
-      if (rmErr) {
-        console.error("تعذر حذف بعض المستندات", rmErr);
+      const { data: removedData, error: rmErr } = await supabase.storage.from("passengers-docs").remove(paths);
+      /* remove() ينجح جزئياً: ما لم يُذكر في data لم يُحذف. المسارات
+         الباقية تُسجَّل بأسمائها لا بعددها، فالملف اليتيم يُعثر عليه
+         لاحقاً بدل أن يبقى مجهولاً في الحاوية. */
+      const removed = new Set((removedData || []).map(f => f.name));
+      const orphans = paths.filter(p => !removed.has(p));
+      if (rmErr || orphans.length > 0) {
+        console.error("[season-close] مستندات لم تُحذف — ملفات يتيمة في passengers-docs", {
+          season: activeSeason.name,
+          seasonId: activeSeason.id,
+          at: new Date().toISOString(),
+          count: orphans.length,
+          paths: orphans,
+          error: rmErr,
+        });
         docsOk = false;
-        docsMsg = `تعذّر حذف مستندات موسم ${activeSeason.name}، ويمكن معالجتها لاحقاً.`;
+        docsMsg = `تعذّر حذف ${orphans.length || docUrls.length} من مستندات موسم ${activeSeason.name}، ويمكن معالجتها لاحقاً.`;
       } else {
         docsMsg = `حُذفت مستندات موسم ${activeSeason.name} (${paths.length} ملفاً).`;
       }
@@ -299,7 +321,11 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
             ⚠ ستُحذف نهائياً عند الإقفال ولا يمكن استعادتها.
           </div>
           {downloaded
-            ? <div style={{ fontSize: 12, color: "var(--success)", marginBottom: 12 }}>✓ نُزّلت النسخة.</div>
+            ? (dlFailed > 0
+                ? <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 12 }}>
+                    ⚠ تم تنزيل النسخة، لكن تعذّر تنزيل {dlFailed} مستنداً.
+                  </div>
+                : <div style={{ fontSize: 12, color: "var(--success)", marginBottom: 12 }}>✓ نُزّلت النسخة كاملة.</div>)
             : (
               <button onClick={downloadZip} disabled={busy} style={btnS({ width: "100%", marginBottom: 12 })}>
                 {busy ? `جارٍ التجهيز… ${dlProgress} / ${docUrls.length}` : "تنزيل نسخة (ZIP)"}
@@ -376,7 +402,12 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
             <div>✅ تم إنشاء موسم {newName.trim()}.</div>
             <div>✅ أصبح موسم {newName.trim()} هو الموسم النشط.</div>
             <div style={{ color: result.docsOk ? "var(--success)" : "var(--warning)" }}>
-              {result.docsOk ? "✅" : "⚠️"} {downloaded && result.docsOk ? "تم تنزيل نسخة المستندات وحذفها من النظام." : result.docsMsg}
+              {result.docsOk && dlFailed === 0 ? "✅" : "⚠️"}{" "}
+              {downloaded && dlFailed > 0
+                ? `تم تنزيل النسخة، لكن تعذّر تنزيل ${dlFailed} مستنداً. ${result.docsMsg}`
+                : downloaded && result.docsOk
+                  ? "تم تنزيل نسخة المستندات كاملة وحُذفت من النظام."
+                  : result.docsMsg}
             </div>
           </div>
 
