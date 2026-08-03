@@ -469,7 +469,7 @@ export const NAV = [
   { section: "التنظيم", items: [{ id: "passengers", label: "الحجاج", perm: "manage_passengers" }, { id: "buses", label: "الباصات", perm: "manage_buses" }, { id: "flights", label: "الطيران", perm: "manage_flights" }, { id: "mina", label: "مخيمات منى", perm: "manage_camps" }, { id: "arafa", label: "مخيمات عرفة", perm: "manage_camps" }, { id: "hotel", label: "الفندق", perm: "manage_hotel" }] },
   { section: "التقارير", items: [{ id: "reports", label: "التقارير", perm: "view_reports" }] },
   { section: "بوابة الحاج", items: [{ id: "portal", label: "بوابة الحاج", perm: "manage_portal" }] },
-  { section: "الأرشيف", items: [{ id: "archive", label: "الأرشيف", perm: "view_archive" }] },
+  { section: "المواسم", items: [{ id: "archive", label: "إدارة المواسم", perm: "view_archive" }] },
   { section: "الإعدادات", items: [{ id: "users", label: "الإعدادات", perm: "manage_users" }, { id: "finance", label: "الحسابات", perm: "manage_payments" }, { id: "admins", label: "الإداريون", perm: "manage_admins" }] },
 ];
 
