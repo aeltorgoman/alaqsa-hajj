@@ -143,7 +143,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
       case "arafa":      return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
       case "hotel":      return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
       case "reports":    return <ReportsPage passengers={passengers} resetKey={reportsResetKey} />;
-      case "archive":    return <SeasonManagerPage />;
+      case "archive":    return <SeasonManagerPage currentUser={currentUser} />;
       case "users":      return <UsersPage currentUser={currentUser} />;
       case "finance":    return <FinancePage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
       case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;

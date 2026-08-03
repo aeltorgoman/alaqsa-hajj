@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { useSeason } from "../season/useSeason";
 import { AlertModal, useAlert } from "./AlertModal";
+import { SeasonCloseWizard } from "./SeasonCloseWizard";
+import type { User } from "../types";
 import { btnP } from "../utils";
 
 /* عدّادات الموسم — أربعة أرقام لا صفوف. تُجلب بـ head+count فلا
@@ -23,7 +25,7 @@ function fmtDate(iso: string | null): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function SeasonManagerPage() {
+function SeasonManagerPage({ currentUser }: { currentUser: User }) {
   const { alert: alertState, showAlert } = useAlert();
   /* ⚠️ activeSeason لا viewedSeason — الصفحة تدير المواسم من فوقها
      لا من داخلها. لو تصفّح المستخدم موسماً مؤرشفاً ثم فتحها، يجب
@@ -32,6 +34,7 @@ function SeasonManagerPage() {
      التطبيق اللذان يقرآن activeSeason. لا تُصحّحه إلى viewedSeason. */
   const { activeSeason, seasons, viewSeason } = useSeason();
 
+  const [showClose, setShowClose] = useState(false);
   const [counts, setCounts] = useState<Record<number, Counts>>({});
   const [countsError, setCountsError] = useState(false);
 
@@ -89,6 +92,7 @@ function SeasonManagerPage() {
           بدأ في {fmtDate(activeSeason.created_at)}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{countLine(activeSeason.id)}</div>
+        <button onClick={() => setShowClose(true)} style={btnP({ marginTop: 12 })}>إقفال الموسم</button>
       </div>
 
       {/* ── المواسم السابقة ── */}
@@ -131,10 +135,20 @@ function SeasonManagerPage() {
         </div>
       )}
 
-      {/* الإقفال والحذف يصلان في PRs التالية من م٥ */}
+      {/* حذف موسم مقفل يصل في الخطوة التالية من هذه المرحلة */}
       <div style={{ marginTop: 22, padding: "10px 14px", background: "var(--info-bg)", borderRadius: 10, fontSize: 11, color: "var(--text-secondary)" }}>
-        إقفال الموسم وحذف موسم مقفل يصلان في الخطوات التالية من هذه المرحلة.
+        حذف موسم مقفل يصل في الخطوة التالية من هذه المرحلة.
       </div>
+
+      <SeasonCloseWizard
+        show={showClose}
+        onClose={() => setShowClose(false)}
+        activeSeason={activeSeason}
+        counts={counts[activeSeason.id]}
+        currentUser={currentUser}
+        existingNames={seasons.map(s => s.name)}
+        onGoToNewSeason={() => { sessionStorage.setItem("hajj_page", "passengers"); window.location.reload(); }}
+      />
 
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
     </div>
