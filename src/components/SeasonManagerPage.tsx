@@ -8,8 +8,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { useSeason } from "../season/useSeason";
+import type { Season } from "../season/useSeason";
 import { AlertModal, useAlert } from "./AlertModal";
 import { SeasonCloseWizard } from "./SeasonCloseWizard";
+import { SeasonDeleteDialog } from "./SeasonDeleteDialog";
 import type { User } from "../types";
 import { btnP } from "../utils";
 
@@ -35,6 +37,7 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
   const { activeSeason, seasons, viewSeason } = useSeason();
 
   const [showClose, setShowClose] = useState(false);
+  const [toDelete, setToDelete] = useState<Season | null>(null);
   const [counts, setCounts] = useState<Record<number, Counts>>({});
   const [countsError, setCountsError] = useState(false);
 
@@ -118,6 +121,8 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{countLine(s.id)}</div>
               </div>
+              {/* الزرّان في حاوية واحدة ليبقيا متجاورين عند الالتفاف */}
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <button
                 onClick={() => {
                   viewSeason(s.id);
@@ -130,15 +135,15 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
               >
                 تصفّح هذا الموسم
               </button>
+              <button onClick={() => setToDelete(s)}
+                style={{ background: "var(--female-bg)", border: "none", color: "var(--danger)", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                حذف
+              </button>
+              </div>
             </div>
           ))}
         </div>
       )}
-
-      {/* حذف موسم مقفل يصل في الخطوة التالية من هذه المرحلة */}
-      <div style={{ marginTop: 22, padding: "10px 14px", background: "var(--info-bg)", borderRadius: 10, fontSize: 11, color: "var(--text-secondary)" }}>
-        حذف موسم مقفل يصل في الخطوة التالية من هذه المرحلة.
-      </div>
 
       <SeasonCloseWizard
         show={showClose}
@@ -148,6 +153,13 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
         currentUser={currentUser}
         existingNames={seasons.map(s => s.name)}
         onGoToNewSeason={() => { sessionStorage.setItem("hajj_page", "passengers"); window.location.reload(); }}
+      />
+
+      <SeasonDeleteDialog
+        season={toDelete}
+        counts={toDelete ? counts[toDelete.id] : undefined}
+        currentUser={currentUser}
+        onClose={() => setToDelete(null)}
       />
 
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
