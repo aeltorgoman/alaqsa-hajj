@@ -61,18 +61,157 @@ export function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export async function scanDocument(file: File, mode: "passport" | "idcard" | "hajj_permit" | "auto"): Promise<any> {
-  const base64 = await fileToBase64(file);
-  const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode })
+export type ScanMode = "passport" | "idcard" | "hajj_permit" | "auto";
+export type ScannedDocument = Record<string, unknown> & {
+  doc_type: string;
+  name_en: string;
+  name_ar: string;
+  passport: string;
+  national_id: string;
+  nationality: string;
+  dob: string;
+  expiry: string;
+  id_expiry: string;
+  gender: string;
+  permit_number: string;
+};
+
+type AnthropicContent = { type?: unknown; text?: unknown };
+type ScanFunctionResponse = {
+  content?: unknown;
+  error?: unknown;
+  message?: unknown;
+};
+
+export class DocumentScanError extends Error {
+  readonly code: string;
+  readonly status?: number;
+
+  constructor(
+    message: string,
+    code: string,
+    status?: number,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
+    this.name = "DocumentScanError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+const EXPECTED_FIELDS: Record<ScanMode, readonly string[]> = {
+  passport: ["name_en", "name_ar", "passport", "nationality", "dob", "expiry", "gender"],
+  idcard: ["name_en", "name_ar", "national_id", "id_expiry", "dob", "gender"],
+  hajj_permit: ["name_en", "name_ar", "national_id", "passport", "permit_number"],
+  auto: ["name_en", "name_ar", "national_id", "passport"],
+};
+
+const DOCUMENT_TYPES = ["passport", "idcard", "hajj_permit"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExpectedDocumentData(value: Record<string, unknown>, mode: ScanMode): boolean {
+  if (mode === "auto") {
+    const hasValidDocumentType = typeof value.doc_type === "string" &&
+      (DOCUMENT_TYPES as readonly string[]).includes(value.doc_type.trim());
+    const hasIdentityData = EXPECTED_FIELDS.auto.some(field =>
+      typeof value[field] === "string" && value[field].trim().length > 0
+    );
+    return hasValidDocumentType && hasIdentityData;
+  }
+
+  return EXPECTED_FIELDS[mode].some(field => {
+    const fieldValue = value[field];
+    return typeof fieldValue === "string" ? fieldValue.trim().length > 0 : fieldValue !== undefined && fieldValue !== null;
   });
-  const data = await response.json();
-  const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
-  let parsed: any = {};
-  try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
-  return parsed;
+}
+
+export function parseScanResponse(payload: unknown, mode: ScanMode): ScannedDocument {
+  if (!isRecord(payload) || Object.keys(payload).length === 0) {
+    throw new DocumentScanError("استجابة خدمة المسح فارغة.", "EMPTY_RESPONSE");
+  }
+
+  const response = payload as ScanFunctionResponse;
+  if (response.error) {
+    throw new DocumentScanError("أعادت خدمة تحليل المستند خطأ.", "PROVIDER_ERROR");
+  }
+
+  if (!Array.isArray(response.content)) {
+    throw new DocumentScanError("لا تحتوي استجابة التحليل على محتوى صالح.", "INVALID_CONTENT");
+  }
+
+  const text = response.content
+    .filter((item): item is AnthropicContent => isRecord(item))
+    .map(item => typeof item.text === "string" ? item.text : "")
+    .join("")
+    .replace(/```(?:json)?|```/gi, "")
+    .trim();
+
+  if (!text) {
+    throw new DocumentScanError("لا تحتوي استجابة التحليل على نص.", "EMPTY_CONTENT");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new DocumentScanError("تعذر تحليل بيانات المستند.", "INVALID_JSON", undefined, { cause: error });
+  }
+
+  if (!isRecord(parsed) || !hasExpectedDocumentData(parsed, mode)) {
+    throw new DocumentScanError("لم يتم العثور على بيانات مستند متوقعة.", "NO_DOCUMENT_DATA");
+  }
+
+  const stringValue = (field: string) => typeof parsed[field] === "string" ? parsed[field] : "";
+  return {
+    ...parsed,
+    doc_type: stringValue("doc_type"),
+    name_en: stringValue("name_en"),
+    name_ar: stringValue("name_ar"),
+    passport: stringValue("passport"),
+    national_id: stringValue("national_id"),
+    nationality: stringValue("nationality"),
+    dob: stringValue("dob"),
+    expiry: stringValue("expiry"),
+    id_expiry: stringValue("id_expiry"),
+    gender: stringValue("gender"),
+    permit_number: stringValue("permit_number"),
+  };
+}
+
+function getFunctionErrorStatus(error: unknown): number | undefined {
+  if (!isRecord(error) || !("context" in error)) return undefined;
+  const context = error.context;
+  return isRecord(context) && typeof context.status === "number" ? context.status : undefined;
+}
+
+export async function scanDocument(file: File, mode: ScanMode): Promise<ScannedDocument> {
+  const imageBase64 = await fileToBase64(file);
+  const { data, error } = await supabase.functions.invoke("Scan-passport", {
+    body: { imageBase64, mediaType: file.type, mode },
+  });
+
+  if (error) {
+    const status = getFunctionErrorStatus(error);
+    const code = status === 401 ? "UNAUTHORIZED" : status && status >= 500 ? "FUNCTION_SERVER_ERROR" : "FUNCTION_REQUEST_FAILED";
+    console.error("Document scan function failed", { mode, status, code, error });
+    throw new DocumentScanError(
+      status === 401 ? "انتهت صلاحية جلسة المسح أو لم يتم السماح بالطلب." : "تعذر الاتصال بخدمة مسح المستندات.",
+      code,
+      status,
+      { cause: error }
+    );
+  }
+
+  try {
+    return parseScanResponse(data, mode);
+  } catch (error) {
+    console.error("Document scan response was invalid", { mode, error });
+    throw error;
+  }
 }
 
 export async function downloadFile(url: string) {
