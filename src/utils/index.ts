@@ -104,14 +104,25 @@ const EXPECTED_FIELDS: Record<ScanMode, readonly string[]> = {
   passport: ["name_en", "name_ar", "passport", "nationality", "dob", "expiry", "gender"],
   idcard: ["name_en", "name_ar", "national_id", "id_expiry", "dob", "gender"],
   hajj_permit: ["name_en", "name_ar", "national_id", "passport", "permit_number"],
-  auto: ["doc_type", "name_en", "name_ar", "national_id", "passport", "permit_number"],
+  auto: ["name_en", "name_ar", "national_id", "passport"],
 };
+
+const DOCUMENT_TYPES = ["passport", "idcard", "hajj_permit"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasExpectedDocumentData(value: Record<string, unknown>, mode: ScanMode): boolean {
+  if (mode === "auto") {
+    const hasValidDocumentType = typeof value.doc_type === "string" &&
+      (DOCUMENT_TYPES as readonly string[]).includes(value.doc_type.trim());
+    const hasIdentityData = EXPECTED_FIELDS.auto.some(field =>
+      typeof value[field] === "string" && value[field].trim().length > 0
+    );
+    return hasValidDocumentType && hasIdentityData;
+  }
+
   return EXPECTED_FIELDS[mode].some(field => {
     const fieldValue = value[field];
     return typeof fieldValue === "string" ? fieldValue.trim().length > 0 : fieldValue !== undefined && fieldValue !== null;
