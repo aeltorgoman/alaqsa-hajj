@@ -34,22 +34,12 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
     const msgs = ["جاري تحليل الجواز...", "استخراج البيانات...", "التحقق..."];
     let p = 0;
     const iv = setInterval(() => { p = Math.min(p + Math.random() * 20, 85); setProgress(p); setStatusMsg(msgs[Math.min(Math.floor(p / 30), 2)]); }, 400);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64 = (e.target?.result as string).split(",")[1];
+    void (async () => {
       try {
-        const response = await fetch("https://zkucwcnclbfvukhdqhgc.supabase.co/functions/v1/Scan-passport", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mediaType: file.type, mode: "passport" })
-        });
-        const data = await response.json();
+        const parsed = await scanDocument(file, "passport");
         clearInterval(iv); setProgress(100); setStatusMsg("تم الاستخراج بنجاح!");
         setTimeout(() => {
           setLoading(false);
-          const text = data.content ? data.content.map((i: any) => i.text || "").join("") : JSON.stringify(data);
-          let parsed: any = {};
-          try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch {}
           const name_en = parsed.name_en || "";
           const name_ar = parsed.name_ar || "";
           setForm(prev => ({
@@ -69,13 +59,12 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
       } catch (err) {
         clearInterval(iv);
         setLoading(false);
-        setShowFields(true);
+        setShowFields(false);
         setStatusMsg("❌ فشل في قراءة الجواز");
         showAlert("error", "حدث خطأ أثناء تحليل الجواز، يرجى المحاولة مرة أخرى أو إدخال البيانات يدوياً.");
         console.error("Scan error:", err);
       }
-    };
-    reader.readAsDataURL(file);
+    })();
   };
 
   const handleIdCard = async (file: File) => {

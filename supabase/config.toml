@@ -1,0 +1,2 @@
+[functions.Scan-passport]
+verify_jwt = true
