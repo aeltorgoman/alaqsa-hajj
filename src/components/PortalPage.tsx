@@ -6,6 +6,7 @@ import type { User } from "../types";
 import { btnP, btnS, inp } from "../utils";
 import { createWriteHelpers } from "../utils/write";
 import { useSeason } from "../season/useSeason";
+import { companyService } from "../company/companyService";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -255,13 +256,16 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [arafaAddress, setArafaAddress] = useState("");
   const [arafaUrl, setArafaUrl] = useState("");
   const [features, setFeatures] = useState<Record<string, boolean>>({});
+  const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({});
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [helpMessage, setHelpMessage] = useState("");
   const [savingCfg, setSavingCfg] = useState(false);
   const [cfgLoading, setCfgLoading] = useState(true);
   const [cfgError, setCfgError] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("company_config").select("id,admin_name,admin_phone,admin_whatsapp,features,country,city,hotel_name,hotel_address,hotel_url,camp_mina_address,camp_mina_url,camp_arafa_address,camp_arafa_url").order("id").limit(1).single();
+      const { data, error } = await companyService.loadConfig();
       /* بدون هذا كان الفشل ينتهي بحقول فارغة وزر حفظ معطَّل بلا تفسير */
       if (error || !data) {
         console.error("تعذر تحميل إعدادات البوابة", error);
@@ -282,6 +286,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         setArafaAddress(data.camp_arafa_address || "");
         setArafaUrl(data.camp_arafa_url || "");
         setFeatures((data.features as Record<string, boolean>) || {});
+        setPortalSettings((data.portal_settings as Record<string, boolean>) || {});
+        setWelcomeMessage(data.portal_welcome_message || "");
+        setHelpMessage(data.portal_help_message || "");
       }
       setCfgLoading(false);
     })();
@@ -290,7 +297,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   async function saveSettings() {
     if (cfgId == null) return;
     setSavingCfg(true);
-    const { error } = await supabase.from("company_config").update({
+    const { error } = await companyService.updateConfig({
       admin_name: adminName.trim() || null,
       admin_phone: adminPhone.trim() || null,
       admin_whatsapp: adminWa.trim() || null,
@@ -304,7 +311,10 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       camp_arafa_address: arafaAddress.trim() || null,
       camp_arafa_url: arafaUrl.trim() || null,
       features,
-    }).eq("id", cfgId);
+      portal_settings: portalSettings,
+      portal_welcome_message: welcomeMessage.trim() || null,
+      portal_help_message: helpMessage.trim() || null,
+    });
     setSavingCfg(false);
     if (error) showAlert("error", "تعذر حفظ الإعدادات، يرجى المحاولة مرة أخرى.");
     else showAlert("success", "تم حفظ إعدادات البوابة بنجاح.");
@@ -313,9 +323,14 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const portalUrl = `${window.location.origin}/hajj`;
 
   const TOGGLES = [
-    { key: "portal_roommates", label: "إظهار رفقاء الغرفة", desc: "يرى الحاج أسماء زملائه في الغرفة" },
-    { key: "portal_lost_card", label: "بطاقة أنا تائه", desc: "بطاقة تعريف للطوارئ باسم الحاج ورقم الحملة" },
-    { key: "portal_documents", label: "المستندات", desc: "يطّلع الحاج على تصريح الحج وتذكرة الطيران" },
+    { key: "flights", label: "معلومات الرحلات", desc: "إظهار بيانات رحلة الذهاب والعودة" },
+    { key: "rooms", label: "معلومات الغرفة", desc: "إظهار رقم الغرفة والدور والنوع" },
+    { key: "buses", label: "معلومات الباص", desc: "إظهار بيانات باص الحاج" },
+    { key: "documents", label: "المستندات", desc: "عرض تصريح الحج وتذكرة الطيران" },
+    { key: "pdf_downloads", label: "تنزيل الملفات", desc: "إظهار زر تنزيل المستند المفتوح" },
+    { key: "notifications", label: "التنبيهات", desc: "إظهار تبويب التنبيهات وخيارات التفعيل" },
+    { key: "roommates", label: "رفقاء الغرفة", desc: "إظهار أسماء زملاء الغرفة" },
+    { key: "lost_card", label: "بطاقة أنا تائه", desc: "إظهار بطاقة تعريف الطوارئ" },
   ];
 
   const annCard = (a: Announcement, kind: "live" | "scheduled" | "ended") => {
@@ -545,15 +560,19 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 14, maxWidth: 640 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text-main)", marginBottom: 12 }}>ما يراه الحاج في البوابة</div>
+          <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+            <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رسالة الترحيب</div><textarea value={welcomeMessage} onChange={e => setWelcomeMessage(e.target.value)} style={{ ...inp, width: "100%", boxSizing: "border-box", minHeight: 64 }} /></div>
+            <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رسالة المساعدة</div><textarea value={helpMessage} onChange={e => setHelpMessage(e.target.value)} style={{ ...inp, width: "100%", boxSizing: "border-box", minHeight: 64 }} /></div>
+          </div>
           {TOGGLES.map((t, i) => {
-            const on = features[t.key] !== false;
+            const on = portalSettings[t.key] !== false;
             return (
               <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: i < TOGGLES.length - 1 ? "1px dashed var(--border)" : "none" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>{t.label}</div>
                   <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>{t.desc}</div>
                 </div>
-                <div onClick={() => setFeatures(f => ({ ...f, [t.key]: !(f[t.key] !== false) }))}
+                <div onClick={() => setPortalSettings(f => ({ ...f, [t.key]: !(f[t.key] !== false) }))}
                   style={{ width: 42, height: 23, borderRadius: 99, background: on ? "var(--primary)" : "var(--border)", position: "relative", cursor: "pointer", transition: "background .2s", flexShrink: 0 }}>
                   <div style={{ position: "absolute", top: 2.5, insetInlineStart: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "inset-inline-start .2s", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }} />
                 </div>

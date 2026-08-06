@@ -12,7 +12,9 @@ supabase/
 │   ├── 20260802021944_season_reject_writes_to_closed_season.sql
 │   ├── 20260802022009_season_close_and_delete_transactions.sql
 │   ├── 20260802022040_portal_active_season_only.sql
-│   └── 20260802022310_season_restrict_close_and_delete_execution.sql
+│   ├── 20260802022310_season_restrict_close_and_delete_execution.sql
+│   ├── 20260804090000_s1_identity_foundation.sql
+│   └── 20260806110000_company_profile_phase1.sql    ملف الشركة والأصول
 └── scripts/
     ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
     └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات

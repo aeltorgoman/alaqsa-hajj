@@ -30,6 +30,14 @@ export interface AppConfig {
     archive: boolean;
     users: boolean;
   };
+  bank_name?: string | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_iban?: string | null;
+  bank_swift?: string | null;
+  portal_welcome_message?: string | null;
+  portal_help_message?: string | null;
+  portal_settings?: Record<string, boolean> | null;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {

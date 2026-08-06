@@ -3,7 +3,7 @@ import { isHajj } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyBranding } from "../company/CompanyContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useSeasonWrite } from "../season/useSeasonWrite";
@@ -20,8 +20,7 @@ function avatarInitials(name: string) {
 }
 
 function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
-  const config = useConfig();
-  const primary = config.color_primary || "#7D1F3C";
+  const primary = useCompanyBranding().primaryColor;
   const { alert, showAlert } = useAlert();
 
   const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);

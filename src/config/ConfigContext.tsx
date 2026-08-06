@@ -1,28 +1,30 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppConfig } from "./AppConfig";
 import { DEFAULT_CONFIG } from "./AppConfig";
 import { ThemeProvider } from "./ThemeContext";
-import { supabase } from "../supabase";
-
-const ConfigContext = createContext<AppConfig>(DEFAULT_CONFIG);
+import { CompanyContext } from "../company/CompanyContext";
+import { companyService, normalizeCompanyProfile } from "../company/companyService";
+import type { Database } from "../types/database";
+import { applyCompanyMetadata } from "../company/companyMetadata";
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
+  const [assets, setAssets] = useState<Database["public"]["Tables"]["company_assets"]["Row"][]>([]);
 
   useEffect(() => {
-    supabase
-      .from("company_config")
-      .select("*")
-      .eq("id", 1)
-      .single()
-      .then(({ data, error }: { data: any; error: any }) => {
+    companyService.load().then(({ config: data, assets: assetRows, error }) => {
         if (data && !error) {
-          setConfig({ ...DEFAULT_CONFIG, ...data });
+          const featureValues = data.features && typeof data.features === "object" && !Array.isArray(data.features)
+            ? data.features : {};
+          setConfig({
+            ...DEFAULT_CONFIG, ...data,
+            features: { ...DEFAULT_CONFIG.features, ...featureValues },
+          } as unknown as AppConfig);
           /* حفظ نسخة محلية تُستخدم في شاشة البدء بالزيارات القادمة */
           try {
-            localStorage.setItem("aqsa_boot_config", JSON.stringify({
+            localStorage.setItem("hajj_company_boot", JSON.stringify({
               name_ar: data.name_ar || "",
               tagline: data.tagline || "",
               logo_url: data.logo_url || "",
@@ -31,16 +33,24 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
             }));
           } catch { /* التخزين المحلي غير متاح */ }
         }
+        setAssets(assetRows);
         setLoading(false);
       });
   }, []);
+
+  const profile = normalizeCompanyProfile(config, assets);
+  useEffect(() => { applyCompanyMetadata(profile); }, [profile]);
 
   if (loading) {
     /* قراءة آخر إعدادات محفوظة — تُملأ الشاشة ببيانات الحملة الحقيقية */
     let boot: { name_ar?: string; tagline?: string; logo_url?: string; color_primary?: string; color_accent?: string } = {};
     try {
-      const raw = localStorage.getItem("aqsa_boot_config");
-      if (raw) boot = JSON.parse(raw);
+      const raw = localStorage.getItem("hajj_company_boot") || localStorage.getItem("aqsa_boot_config");
+      if (raw) {
+        boot = JSON.parse(raw);
+        localStorage.setItem("hajj_company_boot", raw);
+        localStorage.removeItem("aqsa_boot_config");
+      }
     } catch { /* التخزين المحلي غير متاح */ }
 
     /* الألوان: من إعدادات الحملة إن وُجدت، وإلا ألوان النظام الافتراضية */
@@ -78,10 +88,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
               width: 76, height: 76, objectFit: "contain", borderRadius: "50%",
               border: `2px solid ${accentSoft}`, background: "rgba(255,255,255,.08)",
               padding: 5, margin: "0 auto 18px", display: "block",
-              animation: "aqsa-fade .5s ease",
+              animation: "company-fade .5s ease",
             }} />
           ) : (
-            <svg width="64" height="64" viewBox="0 0 44 44" fill="none" stroke={accentSoft} strokeWidth="1.4" style={{ margin: "0 auto 18px", display: "block", animation: "aqsa-spin 3.2s linear infinite" }}>
+            <svg width="64" height="64" viewBox="0 0 44 44" fill="none" stroke={accentSoft} strokeWidth="1.4" style={{ margin: "0 auto 18px", display: "block", animation: "company-spin 3.2s linear infinite" }}>
               <path d="M22 3 L26.5 8.5 L33.5 8 L33 15 L38.5 19.5 L33 24 L33.5 31 L26.5 30.5 L22 36 L17.5 30.5 L10.5 31 L11 24 L5.5 19.5 L11 15 L10.5 8 L17.5 8.5 Z" />
               <circle cx="22" cy="19.5" r="4.5" fill={accentSoft} stroke="none" />
             </svg>
@@ -105,29 +115,25 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
           )}
 
           <div style={{ display: "flex", justifyContent: "center", gap: 6 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, animation: "aqsa-pulse 1.2s ease-in-out infinite" }} />
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, animation: "aqsa-pulse 1.2s ease-in-out 0.2s infinite" }} />
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, animation: "aqsa-pulse 1.2s ease-in-out 0.4s infinite" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, animation: "company-pulse 1.2s ease-in-out infinite" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, animation: "company-pulse 1.2s ease-in-out 0.2s infinite" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: accent, animation: "company-pulse 1.2s ease-in-out 0.4s infinite" }} />
           </div>
         </div>
         <style>{`
-          @keyframes aqsa-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-          @keyframes aqsa-pulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.15); } }
-          @keyframes aqsa-fade { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+          @keyframes company-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+          @keyframes company-pulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.15); } }
+          @keyframes company-fade { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
         `}</style>
       </div>
     );
   }
 
   return (
-    <ConfigContext.Provider value={config}>
-      <ThemeProvider config={config}>
+    <CompanyContext.Provider value={profile}>
+      <ThemeProvider>
         {children}
       </ThemeProvider>
-    </ConfigContext.Provider>
+    </CompanyContext.Provider>
   );
-}
-
-export function useConfig(): AppConfig {
-  return useContext(ConfigContext);
 }

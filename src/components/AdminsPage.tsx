@@ -9,6 +9,7 @@ import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
 import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile, makeHTML, printInPage } from "../utils";
+import { useReportBranding } from "../company/CompanyContext";
 
 // ============================================================
 // ثوابت
@@ -66,6 +67,7 @@ function AdminsPage({
   const { alert, showAlert } = useAlert();
   const { assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
+  const branding = useReportBranding();
 
   /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية */
   const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
@@ -145,7 +147,7 @@ function AdminsPage({
       </tr>
       ${rows}
     </table>`;
-    const html = makeHTML("كشف الإداريين", body, true, "", "حملة الأقصى", "", "#7D1F3C", "#0C447C");
+    const html = makeHTML("كشف الإداريين", body, branding, { landscape: true });
     printInPage(html);
   };
 

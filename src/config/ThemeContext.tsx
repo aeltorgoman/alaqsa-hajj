@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useState } from "react"; import type { ReactNode } from "react";
-import type { AppConfig } from "./AppConfig";
 
 export type ThemeId = "qatar-heritage" | "dark-heritage" | "modern-green" | "royal-emerald";
 
@@ -62,18 +61,14 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({
   children,
-  config,
 }: {
   children: ReactNode;
-  config?: AppConfig;
 }) {
   const getInitialTheme = (): ThemeId => {
     try {
       const saved = localStorage.getItem("hajj_theme") as ThemeId;
       if (saved && THEMES.find(t => t.id === saved)) return saved;
     } catch {}
-    const configTheme = (config as any)?.theme as ThemeId;
-    if (configTheme && THEMES.find(t => t.id === configTheme)) return configTheme;
     return "qatar-heritage";
   };
 

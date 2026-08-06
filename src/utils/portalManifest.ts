@@ -59,8 +59,11 @@ export async function setupPortalManifest(opts: {
 }): Promise<void> {
   if (typeof document === "undefined") return;
 
-  const name = opts.name || "حملة الأقصى";
-  const theme = opts.themeColor || "#7D1F3C";
+  const name = opts.name || "بوابة الحاج";
+  const theme = opts.themeColor || "#1D9E75";
+  document.title = `${name} — بوابة الحاج`;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme);
+  document.querySelector('meta[property="og:title"]')?.setAttribute("content", name);
 
   type Icon = { src: string; sizes: string; type: string; purpose?: string };
   const icons: Icon[] = [];

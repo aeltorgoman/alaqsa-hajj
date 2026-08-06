@@ -30,7 +30,7 @@ type PortalData = {
 };
 type Ann = { id: number; body: string; priority: string; show_at: string };
 type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
-type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; season_label: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; features: Record<string, boolean> | null; country: string | null; city: string | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; camp_mina_address: string | null; camp_mina_url: string | null; camp_arafa_address: string | null; camp_arafa_url: string | null };
+type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; season_label: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; features: Record<string, boolean> | null; portal_settings?: Record<string, boolean> | null; portal_welcome_message?: string | null; portal_help_message?: string | null; assets?: Record<string, string> | null; country: string | null; city: string | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; camp_mina_address: string | null; camp_mina_url: string | null; camp_arafa_address: string | null; camp_arafa_url: string | null };
 
 /* أقرب يوم عرفة: القادم، أو الفائت خلال ٤٠ يوماً (فترة ما بعد الحج) */
 function getSeasonArafa(): Date {
@@ -82,8 +82,6 @@ const MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "ما
 const INK = "#241318";          // العناوين والقيم على الفاتح
 const BODY = "#4A3540";         // النص العادي على الفاتح — غامق كامل
 const LABEL = "#7A6570";        // التسميات — مقروءة
-const GOLD_BRIGHT = "#F0C84A";  // الذهبي الساطع — على الخلفيات الداكنة
-const GOLD_DARK = "#8a6a10";    // الذهبي الغامق — على الخلفيات الفاتحة
 const LINE = "#E8D5C4";
 const IVORY = "#F8F2E4";
 
@@ -157,8 +155,8 @@ function PilgrimPortal() {
     (async () => {
       await setupPortalManifest({
         name: data.config?.name_ar || "بوابة الحاج",
-        logoUrl: data.config?.logo_url || null,
-        themeColor: data.config?.color_primary || "#7D1F3C",
+        logoUrl: data.config?.assets?.logo || data.config?.logo_url || null,
+        themeColor: data.config?.color_primary || "#1D9E75",
       });
       await registerServiceWorker();
       const st = await getPushState();
@@ -214,13 +212,31 @@ function PilgrimPortal() {
   }
 
   const cfg = data?.config;
-  const brand = cfg?.color_primary || "#7D1F3C";
-  const brandDeep = "#3d0f1f";
-  const gold = cfg?.color_accent || "#D4A017";
+  const brand = cfg?.color_primary || "#1D9E75";
+  const gold = cfg?.color_accent || "#085041";
+  const darken = (hex: string, factor: number) => {
+    const value = hex.replace("#", "");
+    if (!/^[0-9a-f]{6}$/i.test(value)) return hex;
+    return `#${[0, 2, 4].map(i => Math.round(parseInt(value.slice(i, i + 2), 16) * factor).toString(16).padStart(2, "0")).join("")}`;
+  };
+  const brandDeep = darken(brand, 0.55);
+  const goldBright = gold;
+  const goldDark = darken(gold, 0.7);
+  const portalLogo = cfg?.assets?.logo || cfg?.logo_url || null;
   const features = cfg?.features || {};
-  const showRoommates = features.portal_roommates !== false;
-  const showLost = features.portal_lost_card !== false;
-  const showDocs = features.portal_documents !== false;
+  const portalSettings = cfg?.portal_settings || {};
+  const showFlights = portalSettings.flights !== false;
+  const showRooms = portalSettings.rooms !== false;
+  const showBuses = portalSettings.buses !== false;
+  const showNotifications = portalSettings.notifications !== false;
+  const showPdfDownloads = portalSettings.pdf_downloads !== false;
+  const showRoommates = portalSettings.roommates !== false && features.portal_roommates !== false;
+  const showLost = portalSettings.lost_card !== false && features.portal_lost_card !== false;
+  const showDocs = portalSettings.documents !== false && features.portal_documents !== false;
+
+  useEffect(() => {
+    if (!showNotifications && tab === "alerts") setTab("trip");
+  }, [showNotifications, tab]);
 
   const arafa = useMemo(() => getSeasonArafa(), []);
   const postHajj = now > arafa.getTime() + 86400000;
@@ -275,14 +291,14 @@ function PilgrimPortal() {
   /* ═══ شريط هوية الحملة ═══ */
   const brandBar = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "16px 16px 14px" }}>
-      <div style={{ width: 100, height: 100, borderRadius: "50%", border: `3px solid ${GOLD_BRIGHT}`, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 8px rgba(240,200,74,.07)" }}>
-        {cfg?.logo_url
-          ? <img src={cfg.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <div style={{ width: "100%", height: "100%", background: "rgba(240,200,74,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon d={ICONS.star} size={44} color={GOLD_BRIGHT} sw={1.4} /></div>}
+      <div style={{ width: 100, height: 100, borderRadius: "50%", border: `3px solid ${goldBright}`, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 8px rgba(240,200,74,.07)" }}>
+        {portalLogo
+          ? <img src={portalLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <div style={{ width: "100%", height: "100%", background: "rgba(240,200,74,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon d={ICONS.star} size={44} color={goldBright} sw={1.4} /></div>}
       </div>
       <div style={{ textAlign: "right" }}>
         <div style={{ fontFamily: fontT, fontSize: 36, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
-        <div style={{ fontFamily: font, fontSize: 16, fontWeight: 700, color: GOLD_BRIGHT, marginTop: 4 }}>
+        <div style={{ fontFamily: font, fontSize: 16, fontWeight: 700, color: goldBright, marginTop: 4 }}>
           بوابة الحاج{cfg?.season_label ? ` — ${cfg.season_label}` : ""}
         </div>
       </div>
@@ -294,16 +310,16 @@ function PilgrimPortal() {
     if (!urgentUnacked.length) return null;
     const a = urgentUnacked[0];
     return (
-      <div style={{ position: "fixed", top: 0, right: 0, left: 0, zIndex: 100, background: `linear-gradient(135deg,#A31212,#7A0D0D)`, color: "#fff", padding: "16px 16px calc(16px)", boxShadow: "0 8px 30px rgba(0,0,0,.4)", borderBottom: `3px solid ${GOLD_BRIGHT}` }}>
+      <div style={{ position: "fixed", top: 0, right: 0, left: 0, zIndex: 100, background: `linear-gradient(135deg,#A31212,#7A0D0D)`, color: "#fff", padding: "16px 16px calc(16px)", boxShadow: "0 8px 30px rgba(0,0,0,.4)", borderBottom: `3px solid ${goldBright}` }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 560, margin: "0 auto" }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Icon d={ICONS.warn} size={24} color={GOLD_BRIGHT} />
+            <Icon d={ICONS.warn} size={24} color={goldBright} />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: fontD, fontSize: 15, fontWeight: 900, color: GOLD_BRIGHT, marginBottom: 4 }}>تنبيه عاجل من إدارة الحملة</div>
+            <div style={{ fontFamily: fontD, fontSize: 15, fontWeight: 900, color: goldBright, marginBottom: 4 }}>تنبيه عاجل من إدارة الحملة</div>
             <div style={{ fontSize: 15.5, fontWeight: 700, lineHeight: 1.9 }}>{a.body}</div>
             <button onClick={() => ackUrgent(a.id)}
-              style={{ marginTop: 12, border: "none", background: GOLD_BRIGHT, color: "#5a0a0a", fontFamily: fontD, fontWeight: 900, fontSize: 18, padding: "13px 40px", borderRadius: 12, cursor: "pointer" }}>
+              style={{ marginTop: 12, border: "none", background: goldBright, color: "#5a0a0a", fontFamily: fontD, fontWeight: 900, fontSize: 18, padding: "13px 40px", borderRadius: 12, cursor: "pointer" }}>
               فهمت
             </button>
             {urgentUnacked.length > 1 && <span style={{ fontSize: 12, fontWeight: 700, marginInlineStart: 12, color: "rgba(255,255,255,.8)" }}>+{urgentUnacked.length - 1} تنبيه عاجل آخر</span>}
@@ -322,25 +338,25 @@ function PilgrimPortal() {
         <div style={{ position: "absolute", inset: 0, opacity: .06, backgroundImage: STAR_PATTERN, pointerEvents: "none" }} />
         <div style={{ width: "100%", maxWidth: 410, position: "relative" }}>
           <div style={{ textAlign: "center", marginBottom: 30 }}>
-            <div style={{ width: 110, height: 110, borderRadius: "50%", border: `3px solid ${GOLD_BRIGHT}`, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: "0 0 0 10px rgba(240,200,74,.08)" }}>
-              {cfg?.logo_url
-                ? <img src={cfg.logo_url} alt="" style={{ width: 70, height: 70, objectFit: "contain" }} />
-                : <Icon d={ICONS.star} size={54} color={GOLD_BRIGHT} sw={1.3} />}
+            <div style={{ width: 110, height: 110, borderRadius: "50%", border: `3px solid ${goldBright}`, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: "0 0 0 10px rgba(240,200,74,.08)" }}>
+              {portalLogo
+                ? <img src={portalLogo} alt="" style={{ width: 70, height: 70, objectFit: "contain" }} />
+                : <Icon d={ICONS.star} size={54} color={goldBright} sw={1.3} />}
             </div>
             <div style={{ fontFamily: fontT, fontSize: 32, fontWeight: 700 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
-            <div style={{ fontSize: 15.5, color: GOLD_BRIGHT, marginTop: 8, fontWeight: 700 }}>بوابة الحاج {cfg?.season_label ? `— ${cfg.season_label}` : ""}</div>
+            <div style={{ fontSize: 15.5, color: goldBright, marginTop: 8, fontWeight: 700 }}>بوابة الحاج {cfg?.season_label ? `— ${cfg.season_label}` : ""}</div>
           </div>
 
-          <label style={{ display: "block", fontSize: 15, color: GOLD_BRIGHT, fontWeight: 800, marginBottom: 9 }}>رقم جواز السفر أو البطاقة الشخصية</label>
+          <label style={{ display: "block", fontSize: 15, color: goldBright, fontWeight: 800, marginBottom: 9 }}>رقم جواز السفر أو البطاقة الشخصية</label>
           <input value={doc} onChange={e => setDoc(e.target.value)} placeholder="A12345678"
             style={{ ...inpStyle, width: "100%", direction: "ltr", textAlign: "left", letterSpacing: 1.5, padding: "16px 16px" }} />
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "20px 0 9px" }}>
-            <label style={{ fontSize: 15, color: GOLD_BRIGHT, fontWeight: 800 }}>تاريخ الميلاد</label>
+            <label style={{ fontSize: 15, color: goldBright, fontWeight: 800 }}>تاريخ الميلاد</label>
             <div style={{ display: "flex", background: "rgba(255,255,255,.12)", borderRadius: 99, padding: 3, border: "1px solid rgba(255,255,255,.25)" }}>
               {[{ id: "select", l: "اختيار" }, { id: "type", l: "كتابة" }].map(o => (
                 <button key={o.id} onClick={() => setDobMode(o.id as typeof dobMode)}
-                  style={{ border: "none", borderRadius: 99, padding: "6px 18px", fontFamily: fontD, fontWeight: 800, fontSize: 13.5, cursor: "pointer", background: dobMode === o.id ? GOLD_BRIGHT : "transparent", color: dobMode === o.id ? brandDeep : "rgba(255,255,255,.85)", transition: "background .2s" }}>
+                  style={{ border: "none", borderRadius: 99, padding: "6px 18px", fontFamily: fontD, fontWeight: 800, fontSize: 13.5, cursor: "pointer", background: dobMode === o.id ? goldBright : "transparent", color: dobMode === o.id ? brandDeep : "rgba(255,255,255,.85)", transition: "background .2s" }}>
                   {o.l}
                 </button>
               ))}
@@ -382,13 +398,13 @@ function PilgrimPortal() {
           {loginError && <div style={{ marginTop: 16, fontSize: 14.5, fontWeight: 700, background: "rgba(255,80,80,.18)", border: "1.5px solid rgba(255,130,130,.5)", borderRadius: 12, padding: "13px 15px", lineHeight: 1.9 }}>{loginError}</div>}
 
           <button onClick={login} disabled={loading}
-            style={{ width: "100%", marginTop: 24, padding: 18, border: "none", borderRadius: 15, background: GOLD_BRIGHT, color: brandDeep, fontFamily: fontD, fontWeight: 900, fontSize: 19, cursor: "pointer", opacity: loading ? .6 : 1, boxShadow: "0 8px 24px rgba(240,200,74,.35)" }}>
+            style={{ width: "100%", marginTop: 24, padding: 18, border: "none", borderRadius: 15, background: goldBright, color: brandDeep, fontFamily: fontD, fontWeight: 900, fontSize: 19, cursor: "pointer", opacity: loading ? .6 : 1, boxShadow: "0 8px 24px rgba(240,200,74,.35)" }}>
             {loading ? "جارٍ التحقق..." : "دخول إلى رحلتي"}
           </button>
 
           <div style={{ textAlign: "center", fontSize: 13.5, color: "rgba(255,255,255,.8)", fontWeight: 600, marginTop: 24, lineHeight: 2.1 }}>
             تدخل مرة واحدة فقط وتبقى بوابتك مفتوحة دائماً
-            {cfg?.admin_phone && <><br />للمساعدة: <a href={`tel:${cfg.admin_phone}`} style={{ direction: "ltr", display: "inline-block", color: GOLD_BRIGHT, fontWeight: 800, textDecoration: "none" }}>{cfg.admin_phone}</a></>}
+            {cfg?.admin_phone && <><br />للمساعدة: <a href={`tel:${cfg.admin_phone}`} style={{ direction: "ltr", display: "inline-block", color: goldBright, fontWeight: 800, textDecoration: "none" }}>{cfg.admin_phone}</a></>}
           </div>
         </div>
       </div>
@@ -400,7 +416,7 @@ function PilgrimPortal() {
   const card: React.CSSProperties = { background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, padding: 19, marginBottom: 14, boxShadow: "0 5px 20px rgba(93,16,41,.08)" };
   const cardH = (icon: string, title: string, sub?: string, bigTitle = false) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-      <div style={{ width: 46, height: 46, borderRadius: 13, background: `${gold}1e`, border: `1.5px solid ${gold}55`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD_DARK, flexShrink: 0 }}><Icon d={icon} size={23} /></div>
+      <div style={{ width: 46, height: 46, borderRadius: 13, background: `${gold}1e`, border: `1.5px solid ${gold}55`, display: "flex", alignItems: "center", justifyContent: "center", color: goldDark, flexShrink: 0 }}><Icon d={icon} size={23} /></div>
       <div>
         <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: bigTitle ? 26 : 22, color: INK }}>{title}</div>
         {sub && <div style={{ fontSize: 16, fontWeight: 600, color: LABEL, marginTop: 2 }}>{sub}</div>}
@@ -420,7 +436,7 @@ function PilgrimPortal() {
         <Icon d={ICONS.pin} size={18} color="#fff" />
       </div>
       <span style={{ flex: 1, fontSize: 17, fontWeight: 700, color: INK, lineHeight: 1.8 }}>{address}</span>
-      <span style={{ fontSize: 15, fontWeight: 800, color: GOLD_DARK, fontFamily: fontD, whiteSpace: "nowrap" }}>افتح الخريطة</span>
+      <span style={{ fontSize: 15, fontWeight: 800, color: goldDark, fontFamily: fontD, whiteSpace: "nowrap" }}>افتح الخريطة</span>
     </a>
   );
 
@@ -433,7 +449,7 @@ function PilgrimPortal() {
         <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, color: "#fff" }}>
           <button onClick={() => setDocView(null)} style={{ background: "rgba(255,255,255,.13)", border: "none", borderRadius: 13, width: 46, height: 46, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon d={ICONS.back} size={22} /></button>
           <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 19, flex: 1 }}>{docView.title}</div>
-          <a href={docView.url} download target="_blank" rel="noreferrer" style={{ background: GOLD_BRIGHT, borderRadius: 13, padding: "11px 20px", color: brandDeep, fontSize: 15, fontWeight: 800, textDecoration: "none", display: "flex", alignItems: "center", gap: 8, fontFamily: fontD }}><Icon d={ICONS.download} size={17} />تنزيل</a>
+          {showPdfDownloads && <a href={docView.url} download target="_blank" rel="noreferrer" style={{ background: goldBright, borderRadius: 13, padding: "11px 20px", color: brandDeep, fontSize: 15, fontWeight: 800, textDecoration: "none", display: "flex", alignItems: "center", gap: 8, fontFamily: fontD }}><Icon d={ICONS.download} size={17} />تنزيل</a>}
         </div>
         <div style={{ flex: 1, padding: "0 12px 12px" }}>
           {isPdf
@@ -453,17 +469,17 @@ function PilgrimPortal() {
           <div style={{ position: "absolute", inset: 0, opacity: .08, backgroundImage: STAR_PATTERN, pointerEvents: "none" }} />
           <div style={{ position: "relative" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 8 }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", border: `2.5px solid ${GOLD_BRIGHT}`, background: "rgba(240,200,74,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {cfg?.logo_url ? <img src={cfg.logo_url} alt="" style={{ width: 34, height: 34, objectFit: "contain" }} /> : <Icon d={ICONS.star} size={26} color={GOLD_BRIGHT} sw={1.5} />}
+              <div style={{ width: 52, height: 52, borderRadius: "50%", border: `2.5px solid ${goldBright}`, background: "rgba(240,200,74,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {portalLogo ? <img src={portalLogo} alt="" style={{ width: 34, height: 34, objectFit: "contain" }} /> : <Icon d={ICONS.star} size={26} color={goldBright} sw={1.5} />}
               </div>
               <div style={{ fontFamily: fontT, fontSize: 30, fontWeight: 700 }}>{cfg?.name_ar || "الحملة"}</div>
             </div>
-            <div style={{ fontSize: 13, color: GOLD_BRIGHT, letterSpacing: 2.5, fontWeight: 700, direction: "ltr" }}>HAJJ GROUP{cfg?.country ? ` — ${cfg.country.toUpperCase()}` : ""}</div>
+            <div style={{ fontSize: 13, color: goldBright, letterSpacing: 2.5, fontWeight: 700, direction: "ltr" }}>HAJJ GROUP{cfg?.country ? ` — ${cfg.country.toUpperCase()}` : ""}</div>
 
             <div style={{ fontFamily: fontD, fontSize: 36, fontWeight: 900, marginTop: 24, lineHeight: 1.4 }}>{p.name_ar}</div>
             <div style={{ fontSize: 17.5, direction: "ltr", color: "#fff", marginTop: 6, fontWeight: 600 }}>{p.name_en}</div>
 
-            <div style={{ background: "rgba(240,200,74,.13)", border: `1.5px solid ${GOLD_BRIGHT}88`, borderRadius: 15, padding: "14px 15px", marginTop: 22, fontSize: 15.5, fontWeight: 700, lineHeight: 2.1, textAlign: "right", color: "#fff" }}>
+            <div style={{ background: "rgba(240,200,74,.13)", border: `1.5px solid ${goldBright}88`, borderRadius: 15, padding: "14px 15px", marginTop: 22, fontSize: 15.5, fontWeight: 700, lineHeight: 2.1, textAlign: "right", color: "#fff" }}>
               {(cfg?.hotel_name || data.room) && <div>الفندق: {cfg?.hotel_name || ""} {data.room ? `— غرفة ${data.room.number}` : ""}</div>}
               {(p.camp_mina_name || p.camp_mina) && <div>مخيم منى: {p.camp_mina_name || p.camp_mina}{cfg?.camp_mina_address ? ` — ${cfg.camp_mina_address}` : ""}</div>}
               {(p.camp_arafa_name || p.camp_arafa) && <div>مخيم عرفات: {p.camp_arafa_name || p.camp_arafa}{cfg?.camp_arafa_address ? ` — ${cfg.camp_arafa_address}` : ""}</div>}
@@ -471,7 +487,7 @@ function PilgrimPortal() {
 
             {cfg?.admin_phone && <>
               <div style={{ fontSize: 14, color: "#fff", fontWeight: 700, marginTop: 22, opacity: .9 }}>رقم الطوارئ · Emergency</div>
-              <a href={`tel:${cfg.admin_phone}`} style={{ fontFamily: fontD, fontSize: 36, fontWeight: 900, color: GOLD_BRIGHT, direction: "ltr", display: "block", marginTop: 6, letterSpacing: 1, textDecoration: "none" }}>{cfg.admin_phone}</a>
+              <a href={`tel:${cfg.admin_phone}`} style={{ fontFamily: fontD, fontSize: 36, fontWeight: 900, color: goldBright, direction: "ltr", display: "block", marginTop: 6, letterSpacing: 1, textDecoration: "none" }}>{cfg.admin_phone}</a>
               {cfg.admin_name && <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginTop: 5, opacity: .9 }}>{cfg.admin_name}</div>}
             </>}
           </div>
@@ -491,32 +507,32 @@ function PilgrimPortal() {
         <div style={{ position: "absolute", inset: 0, opacity: .06, backgroundImage: STAR_PATTERN, pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
           {brandBar}
-          <div style={{ height: 1.5, background: `linear-gradient(90deg,transparent,${GOLD_BRIGHT}88,transparent)`, margin: "0 -4px 16px" }} />
+          <div style={{ height: 1.5, background: `linear-gradient(90deg,transparent,${goldBright}88,transparent)`, margin: "0 -4px 16px" }} />
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {p.photo_url
               ? <img src={p.photo_url} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,.55)" }} />
-              : <div style={{ width: 60, height: 60, borderRadius: "50%", background: GOLD_BRIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{(p.short_ar || p.name_ar)?.charAt(0)}</div>}
+              : <div style={{ width: 60, height: 60, borderRadius: "50%", background: goldBright, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{(p.short_ar || p.name_ar)?.charAt(0)}</div>}
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 18, color: GOLD_BRIGHT, fontWeight: 800 }}>{p.gender === "أنثى" ? "حياك الله يا حاجة" : "حياك الله يا حاج"}</div>
+              <div style={{ fontSize: 18, color: goldBright, fontWeight: 800 }}>{p.gender === "أنثى" ? "حياك الله يا حاجة" : "حياك الله يا حاج"}</div>
               <div style={{ fontFamily: fontD, fontSize: 28, fontWeight: 900, marginTop: 2, lineHeight: 1.4, color: "#fff" }}>{p.short_ar || p.name_ar}</div>
             </div>
             <button onClick={logout} style={{ background: "rgba(255,255,255,.13)", border: "1.5px solid rgba(255,255,255,.35)", color: "#fff", borderRadius: 99, fontSize: 13.5, padding: "8px 17px", cursor: "pointer", fontFamily: fontD, fontWeight: 800 }}>خروج</button>
           </div>
 
           {postHajj ? (
-            <div style={{ marginTop: 18, background: "rgba(240,200,74,.14)", border: `2px solid ${GOLD_BRIGHT}77`, borderRadius: 20, padding: "19px 16px", textAlign: "center" }}>
-              <Icon d={ICONS.kaaba} size={30} color={GOLD_BRIGHT} sw={1.6} />
+            <div style={{ marginTop: 18, background: "rgba(240,200,74,.14)", border: `2px solid ${goldBright}77`, borderRadius: 20, padding: "19px 16px", textAlign: "center" }}>
+              <Icon d={ICONS.kaaba} size={30} color={goldBright} sw={1.6} />
               <div style={{ fontFamily: fontT, fontSize: 24, fontWeight: 700, color: "#fff", marginTop: 9 }}>تقبل الله حجكم وسعيكم</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: GOLD_BRIGHT, marginTop: 5 }}>حجاً مبروراً وسعياً مشكوراً وذنباً مغفوراً</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: goldBright, marginTop: 5 }}>حجاً مبروراً وسعياً مشكوراً وذنباً مغفوراً</div>
             </div>
           ) : diff > 0 && (
-            <div style={{ marginTop: 18, background: "rgba(0,0,0,.22)", border: `1.5px solid ${GOLD_BRIGHT}44`, borderRadius: 20, padding: "16px 16px" }}>
-              <div style={{ fontSize: 14.5, color: GOLD_BRIGHT, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}><Icon d={ICONS.clock} size={17} />المتبقي على الوقوف بعرفات</div>
+            <div style={{ marginTop: 18, background: "rgba(0,0,0,.22)", border: `1.5px solid ${goldBright}44`, borderRadius: 20, padding: "16px 16px" }}>
+              <div style={{ fontSize: 14.5, color: goldBright, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}><Icon d={ICONS.clock} size={17} />المتبقي على الوقوف بعرفات</div>
               <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
                 {[[cd.d, "يوم"], [cd.h, "ساعة"], [cd.m, "دقيقة"], [cd.s, "ثانية"]].map(([v, l], i) => (
                   <div key={i} style={{ flex: 1, textAlign: "center", background: "rgba(0,0,0,.38)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: "12px 0" }}>
                     <div style={{ fontFamily: fontD, fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1.1 }}>{String(v).padStart(2, "0")}</div>
-                    <div style={{ fontSize: 13, color: GOLD_BRIGHT, fontWeight: 800, marginTop: 3 }}>{l}</div>
+                    <div style={{ fontSize: 13, color: goldBright, fontWeight: 800, marginTop: 3 }}>{l}</div>
                   </div>
                 ))}
               </div>
@@ -526,19 +542,21 @@ function PilgrimPortal() {
       </div>
 
       <div style={{ padding: "0 15px", marginTop: -36, position: "relative" }}>
+        {cfg?.portal_welcome_message && <div style={card}><div style={{ fontSize: 17, fontWeight: 700, color: INK, lineHeight: 2 }}>{cfg.portal_welcome_message}</div></div>}
+        {cfg?.portal_help_message && <div style={card}><div style={{ fontSize: 15, fontWeight: 600, color: LABEL, lineHeight: 2 }}>{cfg.portal_help_message}</div></div>}
         {/* ══ تاب رحلتي ══ */}
         {tab === "trip" && <>
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
             {cfg?.admin_phone && <a href={`tel:${cfg.admin_phone}`} style={{ flex: 1, borderRadius: 17, padding: "15px 6px", background: brand, color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textDecoration: "none", boxShadow: "0 5px 16px rgba(125,31,60,.35)" }}><Icon d={ICONS.phone} size={23} />إداري الحملة</a>}
             {cfg?.admin_whatsapp && <a href={`https://wa.me/${cfg.admin_whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" style={{ flex: 1, borderRadius: 17, padding: "15px 6px", background: "#1F7A4D", color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textDecoration: "none", boxShadow: "0 5px 16px rgba(31,122,77,.35)" }}><Icon d={ICONS.wa} size={23} />واتساب</a>}
-            {showLost && <button onClick={() => setLostOpen(true)} style={{ flex: 1, border: "none", borderRadius: 17, padding: "15px 6px", background: GOLD_BRIGHT, color: brandDeep, fontFamily: fontD, fontWeight: 900, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", boxShadow: "0 5px 16px rgba(240,200,74,.4)" }}><Icon d={ICONS.help} size={23} />أنا تائه</button>}
+            {showLost && <button onClick={() => setLostOpen(true)} style={{ flex: 1, border: "none", borderRadius: 17, padding: "15px 6px", background: goldBright, color: brandDeep, fontFamily: fontD, fontWeight: 900, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", boxShadow: "0 5px 16px rgba(240,200,74,.4)" }}><Icon d={ICONS.help} size={23} />أنا تائه</button>}
           </div>
 
-          {activeFlight ? (
+          {showFlights && (activeFlight ? (
             <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, overflow: "hidden", marginBottom: 14, boxShadow: "0 5px 20px rgba(93,16,41,.08)" }}>
               <div style={{ background: `linear-gradient(90deg,${brand},${brandDeep})`, color: "#fff", padding: "13px 17px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", gap: 9 }}><Icon d={ICONS.plane} size={19} />{flightLabel}{activeFlight.airline ? ` — ${activeFlight.airline}` : ""}</div>
-                {activeFlight.class && <div style={{ fontSize: 13, background: GOLD_BRIGHT, color: brandDeep, padding: "5px 15px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>{activeFlight.class}</div>}
+                {activeFlight.class && <div style={{ fontSize: 13, background: goldBright, color: brandDeep, padding: "5px 15px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>{activeFlight.class}</div>}
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 8px" }}>
                 <div style={{ textAlign: "center" }}>
@@ -547,7 +565,7 @@ function PilgrimPortal() {
                 </div>
                 <div style={{ flex: 1, display: "flex", alignItems: "center", margin: "0 12px" }}>
                   <div style={{ flex: 1, borderTop: `2.5px dotted ${gold}88` }} />
-                  <div style={{ margin: "0 8px", transform: "scaleX(-1)" }}><Icon d={ICONS.plane} size={22} color={GOLD_DARK} /></div>
+                  <div style={{ margin: "0 8px", transform: "scaleX(-1)" }}><Icon d={ICONS.plane} size={22} color={goldDark} /></div>
                   <div style={{ flex: 1, borderTop: `2.5px dotted ${gold}88` }} />
                 </div>
                 <div style={{ textAlign: "center" }}>
@@ -560,22 +578,22 @@ function PilgrimPortal() {
                 <div style={{ position: "absolute", top: -11, left: -12, width: 22, height: 22, borderRadius: "50%", background: IVORY, border: `1px solid ${LINE}` }} />
               </div>
               <div style={{ display: "flex", padding: "14px 18px 16px" }}>
-                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>الرحلة</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: GOLD_DARK, marginTop: 2, direction: "ltr" }}>{activeFlight.name || "—"}</div></div>
+                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>الرحلة</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: goldDark, marginTop: 2, direction: "ltr" }}>{activeFlight.name || "—"}</div></div>
                 <div style={{ width: 1.5, background: LINE }} />
-                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>التاريخ</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: GOLD_DARK, marginTop: 2, direction: "ltr" }}>{activeFlight.date || "—"}</div></div>
+                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>التاريخ</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: goldDark, marginTop: 2, direction: "ltr" }}>{activeFlight.date || "—"}</div></div>
               </div>
             </div>
           ) : (
             <div style={card}><div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 10 }}>لم يتم تسجيل رحلة طيران بعد</div></div>
-          )}
+          ))}
 
-          <div style={card}>
+          {showBuses && <div style={card}>
             {cardH(ICONS.bus, "أوتوبيسي", "التنقل بين المشاعر")}
             {data.bus ? <>
               {row("رقم الأوتوبيس", data.bus.name || "—", true)}
               {data.bus.type ? row("النوع", data.bus.type) : null}
             </> : <div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 6 }}>لم يتم تحديد الأوتوبيس بعد</div>}
-          </div>
+          </div>}
 
           {showDocs && (
             <div style={card}>
@@ -595,7 +613,7 @@ function PilgrimPortal() {
 
         {/* ══ تاب سكني ══ */}
         {tab === "stay" && <>
-          <div style={card}>
+          {showRooms && <div style={card}>
             {cardH(ICONS.home, cfg?.hotel_name ? `فندق ${cfg.hotel_name}` : "سكني في مكة", [p.hotel_type, p.hotel_view].filter(Boolean).join(" — ") || undefined)}
             {data.room ? <>
               {row("الغرفة", data.room.number || "—", true)}
@@ -603,7 +621,7 @@ function PilgrimPortal() {
               {data.room.type ? row("النوع", data.room.type) : null}
             </> : <div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 6 }}>لم يتم تسكينك بعد</div>}
             {cfg?.hotel_address && addressLink(cfg.hotel_address, cfg.hotel_url)}
-          </div>
+          </div>}
 
           <div style={card}>
             {cardH(ICONS.tent, "مخيماتي", "منى وعرفات")}
@@ -629,7 +647,7 @@ function PilgrimPortal() {
               {data.family.map((m, i) => (
                 <div key={i} style={{ padding: "12px 2px", borderBottom: i < data.family.length - 1 ? `1px dashed ${LINE}` : "none" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: GOLD_DARK, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{(m.short_ar || m.name)?.charAt(0)}</div>
+                    <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: goldDark, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{(m.short_ar || m.name)?.charAt(0)}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 21, fontWeight: 700, color: INK }}>{m.short_ar || m.name}</div>
                       <div style={{ fontSize: 15, color: LABEL, fontWeight: 600, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -649,9 +667,9 @@ function PilgrimPortal() {
               {cardH(ICONS.users, "رفقاء الغرفة", `${data.roommates.length} معك في الغرفة`)}
               {data.roommates.map((m, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 2px", borderBottom: i < data.roommates.length - 1 ? `1px dashed ${LINE}` : "none" }}>
-                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: GOLD_DARK, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{m.name?.charAt(0)}</div>
+                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: goldDark, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{m.name?.charAt(0)}</div>
                   <div style={{ fontSize: 21, fontWeight: 700, color: INK, flex: 1 }}>{m.name}</div>
-                  {m.is_family && <span style={{ fontSize: 12.5, background: GOLD_BRIGHT, color: brandDeep, padding: "4px 14px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>عائلتك</span>}
+                  {m.is_family && <span style={{ fontSize: 12.5, background: goldBright, color: brandDeep, padding: "4px 14px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>عائلتك</span>}
                 </div>
               ))}
             </div>
@@ -694,7 +712,7 @@ function PilgrimPortal() {
                 "افتح البوابة من الأيقونة الجديدة، ثم فعّل التنبيهات.",
               ].map((s, i) => (
                 <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 11 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: GOLD_BRIGHT, color: brandDeep, fontWeight: 900, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: fontD }}>{i + 1}</div>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: goldBright, color: brandDeep, fontWeight: 900, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontFamily: fontD }}>{i + 1}</div>
                   <div style={{ fontSize: 15.5, color: INK, lineHeight: 1.9, paddingTop: 4 }}>{s}</div>
                 </div>
               ))}
@@ -709,7 +727,7 @@ function PilgrimPortal() {
           ) : pushState === "available" && !pushDismissed ? (
             <div style={{ ...card, padding: "22px 19px", textAlign: "center", border: `2px solid ${gold}` }}>
               <div style={{ width: 66, height: 66, borderRadius: "50%", background: brand, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 13px" }}>
-                <Icon d={ICONS.bell} size={32} color={GOLD_BRIGHT} sw={1.8} />
+                <Icon d={ICONS.bell} size={32} color={goldBright} sw={1.8} />
               </div>
               <div style={{ fontSize: 21, fontWeight: 800, color: INK, marginBottom: 8 }}>تنبيهات الحملة</div>
               <div style={{ fontSize: 15.5, color: LABEL, lineHeight: 2 }}>
@@ -743,7 +761,7 @@ function PilgrimPortal() {
             <div key={a.id} style={{ ...card, borderRight: `5px solid ${a.priority === "عاجل" ? brand : a.priority === "مهم" ? gold : LINE}`, padding: "15px 17px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>{new Date(a.show_at).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}</span>
-                {a.priority !== "عام" && <span style={{ fontSize: 13, fontFamily: fontD, background: a.priority === "عاجل" ? brand : GOLD_BRIGHT, color: a.priority === "عاجل" ? "#fff" : brandDeep, padding: "4px 15px", borderRadius: 99, fontWeight: 900 }}>{a.priority}</span>}
+                {a.priority !== "عام" && <span style={{ fontSize: 13, fontFamily: fontD, background: a.priority === "عاجل" ? brand : goldBright, color: a.priority === "عاجل" ? "#fff" : brandDeep, padding: "4px 15px", borderRadius: 99, fontWeight: 900 }}>{a.priority}</span>}
               </div>
               <div style={{ fontSize: 19, color: INK, fontWeight: 700, marginTop: 9, lineHeight: 2 }}>{a.body}</div>
             </div>
@@ -757,7 +775,7 @@ function PilgrimPortal() {
           { id: "trip", label: "رحلتي", icon: ICONS.plane },
           { id: "stay", label: "سكني", icon: ICONS.home },
           { id: "alerts", label: "التنبيهات", icon: ICONS.bell },
-        ].map(t => {
+        ].filter(t => t.id !== "alerts" || showNotifications).map(t => {
           const on = tab === t.id;
           return (
             <button key={t.id} onClick={() => { setTab(t.id as typeof tab); if (t.id === "alerts") { setSeenAlerts(data.announcements.length); localStorage.setItem("portal_seen_alerts", String(data.announcements.length)); } }}

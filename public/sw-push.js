@@ -24,7 +24,7 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data ? event.data.text() : "" };
   }
 
-  const title = payload.title || "حملة الأقصى";
+  const title = payload.title || "بوابة الحاج";
   const body = payload.body || "لديك تنبيه جديد من الحملة.";
   const urgent = payload.priority === "عاجل";
 
