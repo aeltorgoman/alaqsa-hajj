@@ -1232,4 +1232,31 @@ The objective is to build the most reliable Hajj Management Platform possible.
 
 ---
 
+# Architecture Decisions
+
+This section records architectural decisions that become mandatory project standards.
+
+These decisions are not temporary implementation notes.
+
+They define long-term engineering rules and remain valid until officially replaced.
+
+### ADR-001 — Company Profile
+
+Company information must never be accessed directly from company_config by application components.
+
+company_config is the persistence model.
+
+It is not the application contract.
+
+The application contract is CompanyProfile.
+
+All application code must consume company information exclusively through CompanyService and its typed selectors.
+
+Normalization, backward compatibility, legacy mapping, and configuration translation belong only inside CompanyService.
+
+Application components must never understand the database representation of company configuration.
+
+Future features must follow this architecture.
+
+Direct database consumption is prohibited.
 **End of Part V**
