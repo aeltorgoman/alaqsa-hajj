@@ -22,8 +22,66 @@ comment on table public.company_assets is 'Deployment-level company assets. Keys
 
 alter table public.company_assets enable row level security;
 drop policy if exists "allow all" on public.company_assets;
-create policy "allow all" on public.company_assets for all using (true) with check (true);
-grant select, insert, update, delete on public.company_assets to anon, authenticated, service_role;
+drop policy if exists company_assets_public_read on public.company_assets;
+drop policy if exists company_assets_management_read on public.company_assets;
+drop policy if exists company_assets_management_insert on public.company_assets;
+drop policy if exists company_assets_management_update on public.company_assets;
+drop policy if exists company_assets_management_delete on public.company_assets;
+
+create policy company_assets_public_read on public.company_assets
+  for select to anon
+  using (asset_key = any (array['logo', 'login_logo', 'login_background', 'favicon', 'portal_banner', 'dashboard_banner']));
+create policy company_assets_management_read on public.company_assets
+  for select to authenticated
+  using (true);
+create policy company_assets_management_insert on public.company_assets
+  for insert to authenticated
+  with check (public.has_permission('manage_users'));
+create policy company_assets_management_update on public.company_assets
+  for update to authenticated
+  using (public.has_permission('manage_users'))
+  with check (public.has_permission('manage_users'));
+create policy company_assets_management_delete on public.company_assets
+  for delete to authenticated
+  using (public.has_permission('manage_users'));
+
+revoke all on table public.company_assets from public, anon, authenticated;
+grant select on table public.company_assets to anon;
+grant select, insert, update, delete on table public.company_assets to authenticated;
+grant all on table public.company_assets to service_role;
+
+-- The anonymous boot/login surface receives an explicit safe projection. The
+-- complete row, including financial fields, is never granted to anon.
+create or replace view public.company_profile_public
+with (security_invoker = false)
+as
+select
+  id, name_ar, name_en, tagline, logo_url, banner_image_url,
+  color_primary, color_accent, color_sidebar, banner_position,
+  banner_position_x, contact_phone, contact_email, country, city,
+  season_label, features, admin_name, admin_phone, admin_whatsapp,
+  hotel_name, hotel_address, hotel_url, camp_mina_address,
+  camp_mina_url, camp_arafa_address, camp_arafa_url,
+  portal_welcome_message, portal_help_message, portal_settings
+from public.company_config
+where id = 1;
+
+revoke all on table public.company_config from public, anon, authenticated;
+revoke all on table public.company_profile_public from public, anon, authenticated;
+grant select on table public.company_profile_public to anon, authenticated, service_role;
+grant select, update on table public.company_config to authenticated;
+grant all on table public.company_config to service_role;
+
+drop policy if exists "allow all" on public.company_config;
+drop policy if exists company_config_management_read on public.company_config;
+drop policy if exists company_config_management_update on public.company_config;
+create policy company_config_management_read on public.company_config
+  for select to authenticated
+  using (true);
+create policy company_config_management_update on public.company_config
+  for update to authenticated
+  using (public.has_permission('manage_users'))
+  with check (public.has_permission('manage_users'));
 
 -- Existing URL columns remain untouched. Seed aliases make the asset service usable
 -- immediately while legacy consumers continue reading company_config.
@@ -38,16 +96,17 @@ CREATE OR REPLACE FUNCTION public.get_pilgrim_portal(p_doc text, p_day integer, 
  RETURNS json
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path = public, pg_temp
 AS $function$
 DECLARE
-  v_p passengers%ROWTYPE;
+  v_p public.passengers%ROWTYPE;
   v_matched boolean := false;
   v_nums text[];
   v_y int; v_m int; v_d int;
   v_result json;
 BEGIN
   FOR v_p IN
-    SELECT * FROM passengers
+    SELECT * FROM public.passengers
     WHERE season_id = public.active_season_id()
       AND (trim(coalesce(passport,'')) = trim(p_doc)
        OR trim(coalesce(national_id,'')) = trim(p_doc))
@@ -76,12 +135,12 @@ BEGIN
       'hajj_permit_url', v_p.hajj_permit_url, 'flight_ticket_url', v_p.flight_ticket_url,
       'hotel_type', v_p.hotel_type, 'hotel_view', v_p.hotel_view,
       'camp_mina', v_p.camp_mina, 'camp_arafa', v_p.camp_arafa,
-      'camp_mina_name', (SELECT c.name FROM camps c WHERE c.id = v_p.camp_mina_id),
-      'camp_arafa_name', (SELECT c.name FROM camps c WHERE c.id = v_p.camp_arafa_id),
+      'camp_mina_name', (SELECT c.name FROM public.camps c WHERE c.id = v_p.camp_mina_id),
+      'camp_arafa_name', (SELECT c.name FROM public.camps c WHERE c.id = v_p.camp_arafa_id),
       'phone', v_p.phone
     ),
-    'bus', (SELECT json_build_object('name', b.name, 'type', b.type) FROM buses b WHERE b.id = v_p.bus_id),
-    'room', (SELECT json_build_object('number', r.number, 'floor', r.floor, 'type', r.type) FROM rooms r WHERE r.id = v_p.room_id),
+    'bus', (SELECT json_build_object('name', b.name, 'type', b.type) FROM public.buses b WHERE b.id = v_p.bus_id),
+    'room', (SELECT json_build_object('number', r.number, 'floor', r.floor, 'type', r.type) FROM public.rooms r WHERE r.id = v_p.room_id),
     'roommates', CASE
       WHEN v_p.room_id IS NOT NULL THEN
         (SELECT coalesce(json_agg(json_build_object(
@@ -90,9 +149,9 @@ BEGIN
           'bus_name', b2.name,
           'is_family', (pp.family_id IS NOT NULL AND pp.family_id = v_p.family_id)
         )), '[]'::json)
-         FROM passengers pp
-         LEFT JOIN rooms r2 ON r2.id = pp.room_id
-         LEFT JOIN buses b2 ON b2.id = pp.bus_id
+         FROM public.passengers pp
+         LEFT JOIN public.rooms r2 ON r2.id = pp.room_id
+         LEFT JOIN public.buses b2 ON b2.id = pp.bus_id
          WHERE pp.room_id = v_p.room_id AND pp.id <> v_p.id)
       ELSE '[]'::json END,
     'family', CASE
@@ -102,16 +161,16 @@ BEGIN
           'gender', pp.gender,
           'room_number', r2.number, 'room_floor', r2.floor,
           'bus_name', b2.name,
-          'camp_mina_name', (SELECT c.name FROM camps c WHERE c.id = pp.camp_mina_id),
-          'camp_arafa_name', (SELECT c.name FROM camps c WHERE c.id = pp.camp_arafa_id)
+          'camp_mina_name', (SELECT c.name FROM public.camps c WHERE c.id = pp.camp_mina_id),
+          'camp_arafa_name', (SELECT c.name FROM public.camps c WHERE c.id = pp.camp_arafa_id)
         )), '[]'::json)
-         FROM passengers pp
-         LEFT JOIN rooms r2 ON r2.id = pp.room_id
-         LEFT JOIN buses b2 ON b2.id = pp.bus_id
+         FROM public.passengers pp
+         LEFT JOIN public.rooms r2 ON r2.id = pp.room_id
+         LEFT JOIN public.buses b2 ON b2.id = pp.bus_id
          WHERE pp.family_id = v_p.family_id AND pp.id <> v_p.id)
       ELSE '[]'::json END,
-    'flight_go', (SELECT json_build_object('name', f.name, 'airline', f.airline, 'from_airport', f.from_airport, 'to_airport', f.to_airport, 'date', f.date, 'time', f.time, 'arrival_time', f.arrival_time, 'arrival_date', f.arrival_date, 'class', v_p.flight_class) FROM flights f WHERE f.id = v_p.flight_id),
-    'flight_back', (SELECT json_build_object('name', f.name, 'airline', f.airline, 'from_airport', f.from_airport, 'to_airport', f.to_airport, 'date', f.date, 'time', f.time, 'arrival_time', f.arrival_time, 'arrival_date', f.arrival_date, 'class', v_p.flight_class) FROM flights f WHERE f.id = v_p.return_flight_id),
+    'flight_go', (SELECT json_build_object('name', f.name, 'airline', f.airline, 'from_airport', f.from_airport, 'to_airport', f.to_airport, 'date', f.date, 'time', f.time, 'arrival_time', f.arrival_time, 'arrival_date', f.arrival_date, 'class', v_p.flight_class) FROM public.flights f WHERE f.id = v_p.flight_id),
+    'flight_back', (SELECT json_build_object('name', f.name, 'airline', f.airline, 'from_airport', f.from_airport, 'to_airport', f.to_airport, 'date', f.date, 'time', f.time, 'arrival_time', f.arrival_time, 'arrival_date', f.arrival_date, 'class', v_p.flight_class) FROM public.flights f WHERE f.id = v_p.return_flight_id),
     'config', (SELECT json_build_object(
       'name_ar', c.name_ar, 'logo_url', c.logo_url, 'tagline', c.tagline,
       'color_primary', c.color_primary, 'color_accent', c.color_accent,
@@ -124,13 +183,24 @@ BEGIN
       'portal_welcome_message', c.portal_welcome_message,
       'portal_help_message', c.portal_help_message,
       'portal_settings', c.portal_settings,
-      'assets', (SELECT coalesce(jsonb_object_agg(a.asset_key, a.asset_url), '{}'::jsonb) FROM company_assets a)
-    ) FROM company_config c ORDER BY c.id LIMIT 1),
+      'assets', (SELECT coalesce(jsonb_object_agg(a.asset_key, a.asset_url), '{}'::jsonb)
+        FROM public.company_assets a
+        WHERE a.asset_key = any (array['logo', 'portal_banner', 'favicon']))
+    ) FROM public.company_config c ORDER BY c.id LIMIT 1),
     'announcements', (SELECT coalesce(json_agg(json_build_object('id', a.id, 'body', a.body, 'priority', a.priority, 'show_at', a.show_at) ORDER BY (a.priority = 'عاجل') DESC, a.show_at DESC), '[]'::json)
-      FROM announcements a
+      FROM public.announcements a
       WHERE a.show_at <= now() AND (a.expires_at IS NULL OR a.expires_at > now()))
   ) INTO v_result;
 
   RETURN v_result;
 END;
 $function$;
+
+revoke execute on function public.get_pilgrim_portal(text, integer, integer, integer) from public, authenticated;
+grant execute on function public.get_pilgrim_portal(text, integer, integer, integer) to anon, service_role;
+
+-- Harden the remaining legacy SECURITY DEFINER entry points discovered during
+-- this migration review without changing their signatures or behavior.
+alter function public.verify_user(text, text) set search_path = public, pg_temp;
+alter function public.create_user(text, text, text, jsonb) set search_path = public, pg_temp;
+alter function public.update_user(integer, text, text, text, jsonb) set search_path = public, pg_temp;

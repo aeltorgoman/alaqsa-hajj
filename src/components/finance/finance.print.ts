@@ -4,6 +4,16 @@
 import type { Passenger } from "../../types";
 import type { PricingMap, Payment, CustomCharge, FinancialGroup, PrintBrand, FinanceRow, CashflowByDate } from "./finance.types";
 import { esc, fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, PRICING_KEYS } from "./finance.utils";
+import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../../company/safety";
+
+function safePrintBrand(brand: PrintBrand): PrintBrand {
+  return {
+    ...brand,
+    logoUrl: normalizeCompanyAssetUrl(brand.logoUrl) || "",
+    primaryColor: normalizeCompanyColor(brand.primaryColor, "#1D9E75"),
+    accentColor: normalizeCompanyColor(brand.accentColor, "#085041"),
+  };
+}
 
 export function printInPage(html: string) {
   const existing = document.getElementById("__print_frame__");
@@ -23,9 +33,9 @@ export function printInPage(html: string) {
 // HTML نظيف للتقارير المالية (بدون نقوش)
 // ============================================================
 export function makeFinanceHTML(
-  title: string, body: string, brand: PrintBrand, _landscape = false
+  title: string, body: string, brand: PrintBrand
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = brand;
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
   const timeStr = now.toLocaleTimeString("ar-EG", { hour:"2-digit", minute:"2-digit" });
@@ -69,7 +79,7 @@ ${body}
 export function makeReceiptHTML(
   passengerName: string, payment: Payment, brand: PrintBrand
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = brand;
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
   const logoHtml = logoUrl ? `<img src="${esc(logoUrl)}" alt="logo" />` : `<span>${esc((companyName||"ح").trim().charAt(0))}</span>`;
   const receiptNo = String(payment.id).padStart(5, "0");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>إيصال استلام دفعة</title>
@@ -143,7 +153,7 @@ export function makeReceiptHTML(
 export function makePassengerStatementHTML(
   p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], brand: PrintBrand
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = brand;
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
   const s = p.services;
   const priceInfo = getPriceInfo(s, pricing);
   const pkgAmt = priceInfo.amount;
@@ -243,7 +253,7 @@ export function makeGroupStatementHTML(
   group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap,
   customCharges: CustomCharge[], payments: Payment[], brand: PrintBrand
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = brand;
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
   const logoHtml  = logoUrl ? `<img src="${esc(logoUrl)}" alt="logo" />` : `<span>${esc((companyName||"ح").trim().charAt(0))}</span>`;
   const now = new Date();
   const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
@@ -327,7 +337,7 @@ export function printTable(headers: string[], rows: string[][], primaryColor: st
 
 
 export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: PrintBrand, title = "تقرير الحجاج المالي الكامل") {
-  const { primaryColor } = brand;
+  const { primaryColor } = safePrintBrand(brand);
   const tD=data.reduce((s,r)=>s+r.due,0), tP=data.reduce((s,r)=>s+r.paid,0), tB=tD-tP;
   const PER_PAGE = 30;
   const header = `<tr style="background:${primaryColor};color:#fff">
@@ -369,12 +379,12 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
     pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table style="table-layout:fixed">${header}${rows}${totRow}</table></div>`);
   }
   const body = pages.join("");
-  printInPage(makeFinanceHTML(title,body, brand, false));
+  printInPage(makeFinanceHTML(title, body, brand));
 }
 
 
 export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBrand, from = "", to = "") {
-  const { primaryColor } = brand;
+  const { primaryColor } = safePrintBrand(brand);
   const periodLine = `<div style="margin-bottom:10pt;font-size:11pt;color:#555">الفترة: من <b>${esc(from || "البداية")}</b> إلى <b>${esc(to || "اليوم")}</b> · عدد الدفعات: <b>${payments.length}</b></div>`;
   const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
   const total=payments.reduce((s,p)=>s+Number(p.amount),0);
@@ -430,29 +440,29 @@ export function printPaymentsReport(payments: Payment[], passengers: Passenger[]
       <tr style="background:${primaryColor};color:#fff;font-weight:700"><td style="padding:5pt 8pt;font-size:11pt">الإجمالي العام</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${sorted.length}</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${fmtAmt(total)}</td></tr>
     </table>
   </div>` : "";
-  printInPage(makeFinanceHTML("سجل الدفعات التفصيلي",periodLine+pages.join("")+methodSummary, brand, false));
+  printInPage(makeFinanceHTML("سجل الدفعات التفصيلي", periodLine + pages.join("") + methodSummary, brand));
 }
 
 export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
-  const { primaryColor } = brand;
+  const { primaryColor } = safePrintBrand(brand);
   const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>p.services.hotel_type!=="خاص"&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
   const specialPassengers = passengers.filter(p=>p.services.hotel_type==="خاص");
   if (specialPassengers.length>0) {
     const specialTotal = specialPassengers.reduce((s,p)=>s+(Number(p.services.custom_price)||0),0);
     rows.push(["سعر خاص",String(specialPassengers.length),"—",`<strong>${fmtAmt(specialTotal)}</strong>`]);
   }
-  printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"],rows,primaryColor), brand, false));
+  printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor), brand));
 }
 
 export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
-  const { primaryColor } = brand;
+  const { primaryColor } = safePrintBrand(brand);
   const checks=[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>p.flight_class==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>p.flight_class==="بدون"}];
   const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[esc(pricing[a.key]?.label||a.key),String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
-  printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"],rows,primaryColor), brand, false));
+  printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor), brand));
 }
 export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBrand }) {
   const { dates: cfDates, byDate: cfByDate, total: cfTotal, from: cashflowFrom, to: cashflowTo, brand } = params;
-  const { primaryColor } = brand;
+  const { primaryColor } = safePrintBrand(brand);
   const fromLabel = esc(cashflowFrom || "البداية");
   const toLabel   = esc(cashflowTo   || "اليوم");
   const rows = cfDates.map(d => {
@@ -462,5 +472,5 @@ export function printCashflowReport(params: { dates: string[]; byDate: CashflowB
   }).join("");
   const totRow = `<tr style="background:${primaryColor};color:#fff;font-weight:700"><td colspan="2">الإجمالي</td><td style="text-align:center">${fmtAmt(cfTotal)}</td><td></td></tr>`;
   const body = `<div style="margin-bottom:12pt;font-size:11pt;color:#555">الفترة: من <b>${fromLabel}</b> إلى <b>${toLabel}</b> · إجمالي التحصيل: <b style="color:${primaryColor}">${fmtAmt(cfTotal)} ر.ق</b></div><table><thead><tr><th>التاريخ</th><th style="text-align:center">عدد الدفعات</th><th style="text-align:center">الإجمالي</th><th>طرق الدفع</th></tr></thead><tbody>${rows}${totRow}</tbody></table>`;
-  printInPage(makeFinanceHTML("ملخص التحصيل اليومي", body, brand, false));
+  printInPage(makeFinanceHTML("ملخص التحصيل اليومي", body, brand));
 }

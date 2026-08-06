@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { ReportBranding } from "../company/types";
+import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
 
 export function makeShort(fullName: string): string {
   if (!fullName) return "";
@@ -288,7 +289,14 @@ export function makeHTML(
   branding: ReportBranding,
   options: { landscape?: boolean; noHeader?: boolean; patternOpacity?: number } = {}
 ) {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor, headerUrl, footerText } = branding;
+  const companyName = escapeCompanyHtml(branding.companyName);
+  const tagline = escapeCompanyHtml(branding.tagline);
+  const footerText = escapeCompanyHtml(branding.footerText);
+  const primaryColor = normalizeCompanyColor(branding.primaryColor, "#1D9E75");
+  const accentColor = normalizeCompanyColor(branding.accentColor, "#085041");
+  const logoUrl = normalizeCompanyAssetUrl(branding.logoUrl);
+  const headerUrl = normalizeCompanyAssetUrl(branding.headerUrl);
+  const safeTitle = escapeCompanyHtml(title);
   const { landscape = false, noHeader = false, patternOpacity = 0.08 } = options;
   const initial = (companyName || "ح").trim().charAt(0);
   const logoHtml = logoUrl
@@ -313,9 +321,9 @@ export function makeHTML(
     <div>الساعة: ${timeStr}</div>
   </div>
 </div>
-<div class="doc-title-bar">${title}</div>`;
+  <div class="doc-title-bar">${safeTitle}</div>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>${title}</title>
+<title>${safeTitle}</title>
 <link href="https://fonts.googleapis.com/css2?family=El+Messiri:wght@600;700&display=swap" rel="stylesheet">
 <style>
   @page { size: A4 ${landscape ? "landscape" : "portrait"}; margin: 14mm 12mm; }
@@ -355,7 +363,7 @@ export function makeHTML(
 </style></head><body>
 ${headerHTML}
 ${body}
-<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${title}`}</div>
+<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>
 </body></html>`;
 }
 
@@ -369,12 +377,14 @@ type NameItem = { short_ar?: string; name_ar: string };
 
 // شعار القسم (دائرة بصورة اللوجو أو حرف اسم الشركة)
 export function sectionLogoHtml(b: ReportBranding): string {
-  const companyName = b.companyName;
-  return b.logoUrl ? `<img src="${b.logoUrl}" alt="logo" />` : `<span>${companyName.trim().charAt(0)}</span>`;
+  const companyName = escapeCompanyHtml(b.companyName);
+  const logoUrl = normalizeCompanyAssetUrl(b.logoUrl);
+  return logoUrl ? `<img src="${logoUrl}" alt="logo" />` : `<span>${companyName.trim().charAt(0)}</span>`;
 }
 
 // عرض قائمة أسماء: عمود واحد لو 20 أو أقل، وعمودين لو أكتر
 export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحاج", primaryColor = "#6B1F3A"): string {
+  primaryColor = normalizeCompanyColor(primaryColor, "#1D9E75");
   if (items.length === 0) {
     return `<table style="width:100%;margin:0 auto"><tr><th style="text-align:center;width:36px;font-size:12pt;padding:7pt">م</th><th style="font-size:12pt;padding:7pt">${nameLabel}</th></tr><tr><td style="font-size:12pt;padding:7pt"></td><td style="font-size:12pt;padding:7pt">لا يوجد مسافرون</td></tr></table>`;
   }
@@ -436,11 +446,13 @@ export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحا
 // قسم بشعارين (يمين/شمال) وعنوان كبير في الوسط + جدول أسماء — مستخدم لكل باص/مخيم
 export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTML: string, b: ReportBranding): string {
   const logo = sectionLogoHtml(b);
+  const safeTitle = escapeCompanyHtml(title);
+  const safeSubtitle = escapeCompanyHtml(subtitle);
   return `<div class="camp-header">
     <div class="camp-logo">${logo}</div>
     <div class="camp-title-box">
-      <div class="camp-title">${title}</div>
-      ${subtitle ? `<div class="camp-subtitle">${subtitle}</div>` : ""}
+      <div class="camp-title">${safeTitle}</div>
+      ${safeSubtitle ? `<div class="camp-subtitle">${safeSubtitle}</div>` : ""}
     </div>
     <div class="camp-logo">${logo}</div>
   </div>${namesHTML}`;
@@ -453,7 +465,7 @@ export function joinSections(sections: string[]): string {
 
 // قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)
 export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string; services?: { flight?: string } })[], b: ReportBranding): string {
-  const primaryColor = b.primaryColor || "#6B1F3A";
+  const primaryColor = normalizeCompanyColor(b.primaryColor, "#1D9E75");
   const rows = fp.map((p, i) => {
     const wantsFirst = p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
     const cls = wantsFirst ? "درجة أولى" : "اقتصادية";

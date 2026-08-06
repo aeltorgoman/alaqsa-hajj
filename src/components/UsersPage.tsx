@@ -100,32 +100,19 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const [perms, setPerms] = useState<Record<string, boolean>>({});
 
   /* company */
-  const [companyForm, setCompanyForm] = useState({
-    name_ar: "", name_en: "", tagline: "",
-    contact_phone: "", contact_email: "",
-    season_label: "",
-    color_primary: "#6B1F3A", color_accent: "#0C447C",
-    logo_url: "" as string | null,
-    banner_image_url: "" as string | null,
-    bank_name: "", bank_account_name: "", bank_account_number: "",
-    bank_iban: "", bank_swift: "",
-  });
+  const [companyForm, setCompanyForm] = useState(() => ({
+    name_ar: identity.nameAr, name_en: identity.nameEn, tagline: identity.tagline,
+    contact_phone: contact.phone, contact_email: contact.email,
+    season_label: identity.seasonLabel,
+    color_primary: branding.primaryColor, color_accent: branding.accentColor,
+    logo_url: identity.logoUrl || "", banner_image_url: branding.bannerUrl || "",
+    bank_name: financial.bankName, bank_account_name: financial.accountName,
+    bank_account_number: financial.accountNumber, bank_iban: financial.iban,
+    bank_swift: financial.swift,
+  }));
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
   const [companyMsg, setCompanyMsg] = useState("");
-
-  useEffect(() => {
-    setCompanyForm({
-      name_ar: identity.nameAr, name_en: identity.nameEn, tagline: identity.tagline,
-      contact_phone: contact.phone, contact_email: contact.email,
-      season_label: identity.seasonLabel,
-      color_primary: branding.primaryColor, color_accent: branding.accentColor,
-      logo_url: identity.logoUrl || "", banner_image_url: branding.bannerUrl || "",
-      bank_name: financial.bankName, bank_account_name: financial.accountName,
-      bank_account_number: financial.accountNumber, bank_iban: financial.iban,
-      bank_swift: financial.swift,
-    });
-  }, [identity, contact, branding, financial]);
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو كـ«لا يوجد مستخدمون» */
