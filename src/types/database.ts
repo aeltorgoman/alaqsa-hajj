@@ -129,6 +129,12 @@ export type Database = {
           },
         ]
       }
+      company_assets: {
+        Row: { alt_text: string | null; asset_key: string; asset_url: string; metadata: Json; updated_at: string | null }
+        Insert: { alt_text?: string | null; asset_key: string; asset_url: string; metadata?: Json; updated_at?: string | null }
+        Update: { alt_text?: string | null; asset_key?: string; asset_url?: string; metadata?: Json; updated_at?: string | null }
+        Relationships: []
+      }
       company_config: {
         Row: {
           admin_name: string | null
@@ -137,6 +143,11 @@ export type Database = {
           banner_image_url: string | null
           banner_position: string | null
           banner_position_x: string | null
+          bank_account_name: string | null
+          bank_account_number: string | null
+          bank_iban: string | null
+          bank_name: string | null
+          bank_swift: string | null
           camp_arafa_address: string | null
           camp_arafa_url: string | null
           camp_mina_address: string | null
@@ -156,6 +167,9 @@ export type Database = {
           logo_url: string | null
           name_ar: string
           name_en: string | null
+          portal_help_message: string | null
+          portal_settings: Json
+          portal_welcome_message: string | null
           season_label: string | null
           tagline: string | null
         }
@@ -166,6 +180,11 @@ export type Database = {
           banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_iban?: string | null
+          bank_name?: string | null
+          bank_swift?: string | null
           camp_arafa_address?: string | null
           camp_arafa_url?: string | null
           camp_mina_address?: string | null
@@ -185,6 +204,9 @@ export type Database = {
           logo_url?: string | null
           name_ar?: string
           name_en?: string | null
+          portal_help_message?: string | null
+          portal_settings?: Json
+          portal_welcome_message?: string | null
           season_label?: string | null
           tagline?: string | null
         }
@@ -195,6 +217,11 @@ export type Database = {
           banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_iban?: string | null
+          bank_name?: string | null
+          bank_swift?: string | null
           camp_arafa_address?: string | null
           camp_arafa_url?: string | null
           camp_mina_address?: string | null
@@ -214,6 +241,9 @@ export type Database = {
           logo_url?: string | null
           name_ar?: string
           name_en?: string | null
+          portal_help_message?: string | null
+          portal_settings?: Json
+          portal_welcome_message?: string | null
           season_label?: string | null
           tagline?: string | null
         }

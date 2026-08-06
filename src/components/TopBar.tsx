@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyBranding } from "../company/CompanyContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { NotificationBell } from "./NotificationBell";
 import type { User } from "../types";
@@ -25,8 +25,7 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
   currentUser: User;
   onLogout: () => void;
 }) {
-  const config  = useConfig();
-  const primary = config.color_primary || "#7D1F3C";
+  const primary = useCompanyBranding().primaryColor;
   const meta    = PAGE_META[page] || { label: page, sub: "", icon: "" };
   const initials = currentUser.name.trim().split(" ").map((w: string) => w[0]).slice(0, 2).join("");
 

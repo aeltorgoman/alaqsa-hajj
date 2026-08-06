@@ -7,8 +7,8 @@ import type { Passenger, Flight } from "../types";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
-import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections, brandingFromConfig } from "../utils";
+import { useReportBranding } from "../company/CompanyContext";
+import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 
 // رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id
@@ -61,7 +61,7 @@ function FlightsStats({ passengers }: { passengers: Passenger[] }) {
 
 // ===== صفحة الطيران =====
 function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
-  const config = useConfig();
+  const branding = useReportBranding();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
@@ -168,14 +168,13 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [field]: null } : p));
   };
 
-  const branding = brandingFromConfig(config);
   const printFlight = (flight: Flight) => {
     const fp = getFlightPassengers(flight);
-    printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor));
+    printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), branding));
   };
   const printAll = () => {
     const sections = flights.map(f => makeFlightSectionHTML(f, getFlightPassengers(f), branding));
-    printInPage(makeHTML("تقرير الرحلات", joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
+    printInPage(makeHTML("تقرير الرحلات", joinSections(sections), branding, { noHeader: true }));
   };
 
   const currentFlight = flights.find(f => f.id === currentFlightId);

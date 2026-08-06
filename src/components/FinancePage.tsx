@@ -4,7 +4,7 @@ import { isHajj } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
-import { useConfig } from "../config/ConfigContext";
+import { useReportBranding } from "../company/CompanyContext";
 import type { Passenger, User } from "../types";
 
 import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
@@ -18,7 +18,7 @@ import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStat
 // المكوّن الرئيسي
 // ============================================================
 export function FinancePage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers?: (updater: (prev: Passenger[]) => Passenger[]) => void; currentUser: User }) {
-  const config = useConfig();
+  const reportBranding = useReportBranding();
   const { alert: alertState, showAlert } = useAlert();
   const { assertWritable } = useSeasonWrite(showAlert);
 
@@ -105,11 +105,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const [savingGroupPay, setSavingGroupPay]       = useState(false);
 
   // بيانات الشركة للطباعة
-  const primaryColor = config.color_primary || "#6B1F3A";
-  const accentColor  = config.color_accent  || "#0C447C";
-  const companyName  = config.name_ar       || "حملة الأقصى";
-  const tagline      = config.tagline       || "";
-  const logoUrl      = config.logo_url      || "";
+  const { primaryColor, accentColor, companyName, tagline, logoUrl } = reportBranding;
   const printBrand: PrintBrand = { logoUrl, companyName, tagline, primaryColor, accentColor };
 
   useEffect(() => { loadFinanceData(); }, []);
@@ -555,7 +551,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const ReceiptModal = () => {
     if (!receiptPayment) return null;
     const { payment, passengerName } = receiptPayment;
-    const receiptHtml = makeReceiptHTML(passengerName,payment,logoUrl,companyName,tagline,primaryColor,accentColor);
+    const receiptHtml = makeReceiptHTML(passengerName, payment, reportBranding);
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
@@ -608,7 +604,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             </div>
           ))}
           <div style={{ display:"flex", gap:10, marginTop:16 }}>
-            <button onClick={() => { printInPage(makeReceiptHTML(pName, selectedPayment, logoUrl, companyName, tagline, primaryColor, accentColor)); }}
+            <button onClick={() => { printInPage(makeReceiptHTML(pName, selectedPayment, reportBranding)); }}
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
               🖨️ طباعة إيصال
             </button>
@@ -680,7 +676,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           groupPayForm={groupPayForm}
           savingGroupPay={savingGroupPay}
           onBack={() => { setSubView("list"); setSelectedGroup(null); }}
-          onPrintGroupStatement={()=>printInPage(makeGroupStatementHTML(selectedGroup,gPassengers,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))}
+          onPrintGroupStatement={()=>printInPage(makeGroupStatementHTML(selectedGroup, gPassengers, pricing, customCharges, payments, reportBranding))}
           onDeleteGroup={gid => deleteGroup(gid)}
           onSelectPassenger={p => { setSelectedP(p); setSubView("detail"); }}
           onRemoveMember={(pid, gid) => removeFromGroup(pid, gid)}
@@ -722,7 +718,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           customPriceInput={customPriceInput}
           savingCustomPrice={savingCustomPrice}
           onBack={()=>{setSubView("list");setSelectedP(null);setSelectedPayment(null);}}
-          onPrintStatement={()=>printInPage(makePassengerStatementHTML(selectedP,pricing,customCharges,payments,logoUrl,companyName,tagline,primaryColor,accentColor))}
+          onPrintStatement={()=>printInPage(makePassengerStatementHTML(selectedP, pricing, customCharges, payments, reportBranding))}
           onEditCustomPrice={()=>{ setCustomPriceInput(String(selectedP.services.custom_price || "")); setEditingCustomPrice(true); }}
           onCustomPriceInputChange={setCustomPriceInput}
           onSaveCustomPrice={saveCustomPrice}
@@ -920,7 +916,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
               <tbody>
-                {[...cfPayments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);const pName=p?(p.short_ar||p.name_ar):"—";return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{pName}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(pName,py,logoUrl,companyName,tagline,primaryColor,accentColor));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span></td></tr>);})}
+                {[...cfPayments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);const pName=p?(p.short_ar||p.name_ar):"—";return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{pName}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(pName, py, reportBranding));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span></td></tr>);})}
                 <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={4}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(cfTotal)}</td><td style={{ padding:"10px 12px" }}></td></tr>
               </tbody>
             </table>

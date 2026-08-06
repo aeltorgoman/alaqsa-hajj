@@ -7,8 +7,8 @@ import type { Passenger, Camp } from "../types";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
-import { useConfig } from "../config/ConfigContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable, brandingFromConfig } from "../utils";
+import { useReportBranding } from "../company/CompanyContext";
+import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 
@@ -42,7 +42,7 @@ function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: C
 
 // ===== صفحة المخيمات =====
 function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
-  const config = useConfig();
+  const branding = useReportBranding();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
@@ -208,13 +208,12 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     dragPassengerId.current = null; dragOverPassengerId.current = null;
   };
 
-  const branding = brandingFromConfig(config);
 
   const printCamp = (camp: Camp) => {
     const cp = getCampPassengers(camp.id);
     const isMale = camp.gender === "ذكر";
     const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", branding.primaryColor), branding);
-    printInPage(makeHTML(`مخيمات ${pageType}`, section, false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
+    printInPage(makeHTML(`مخيمات ${pageType}`, section, branding, { noHeader: true }));
   };
 
   const printAll = () => {
@@ -223,7 +222,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       const isMale = camp.gender === "ذكر";
       return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", branding.primaryColor), branding);
     });
-    printInPage(makeHTML(`مخيمات ${pageType}`, joinSections(sections), false, branding.logoUrl, branding.companyName, branding.tagline, branding.primaryColor, branding.accentColor, true));
+    printInPage(makeHTML(`مخيمات ${pageType}`, joinSections(sections), branding, { noHeader: true }));
   };
 
   const maleCamps = camps.filter(c => c.gender === "ذكر");

@@ -1054,29 +1054,47 @@ Human operators make final decisions.
 
 ---
 
-# 73. Multi-Tenant Readiness
+# 73. Company Profile and Multi-Deployment Architecture
 
-The architecture should support multiple Hajj campaigns.
+The product supports multiple Hajj campaigns through repeatable, isolated
+deployments of one shared codebase.
 
-Every campaign should remain isolated.
+Each customer deployment has exactly one company, one Supabase project, one
+database, and one Vercel deployment.
 
-No campaign should access another campaign's data.
+The application is not a multi-tenant system. Do not add a companies table, a
+tenant identifier, campaign membership, or a company selector to business data.
 
-Customization should be configuration-driven whenever possible.
+`company_config` row `id = 1` is the deployment-level persistence source for the
+Company Profile. `company_assets` is the extensible source for company media.
+Legacy asset URL columns remain compatibility inputs until an approved removal
+migration is completed.
 
-Branding.
+Company-specific identity, contact information, financial configuration,
+branding, portal configuration, and assets must be configuration-driven. A new
+customer must never require a source-code change or a separate codebase.
 
-Themes.
+Application components must consume focused Company Profile hooks/selectors.
+They must not query `company_config`, interpret its raw row shape, or construct
+their own company defaults.
 
-Logos.
+Company Service is a configuration boundary only. It may load, persist,
+normalize, map legacy fields, resolve configuration assets, and expose typed
+profile modules. It must not contain financial calculations, permission
+decisions, season rules, operational workflows, room allocation, report
+generation, or UI state.
 
-Business settings.
+`ReportBranding` is a data transfer object only. Rendering and formatting belong
+to report/print modules; asset resolution and compatibility fallback belong to
+Company Profile normalization.
 
-Notification templates.
+Public surfaces such as the Pilgrim Portal receive an explicit safe projection
+of the Company Profile. Secrets are environment configuration and must never be
+stored in Company Profile.
 
-Reports.
-
-Avoid maintaining separate codebases.
+This rule is implemented by the approved Company Profile architecture described
+in `COMPANY_PROFILE_ARCHITECTURE_REVIEW.md`, with completion records in
+`COMPANY_PROFILE_PHASE1.md` and `COMPANY_PROFILE_PHASE2.md`.
 
 One platform.
 

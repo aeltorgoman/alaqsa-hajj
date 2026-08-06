@@ -3,11 +3,12 @@ import type { ChangeEvent } from "react";
 import { supabase } from "../supabase";
 import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadDoc } from "../utils";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { createWriteHelpers } from "../utils/write";
+import { companyService } from "../company/companyService";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -77,7 +78,10 @@ const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", mar
 
 /* ─── component ─── */
 function UsersPage({ currentUser }: { currentUser: User }) {
-  const config = useConfig();
+  const identity = useCompanyIdentity();
+  const contact = useCompanyContact();
+  const branding = useCompanyBranding();
+  const financial = useCompanyFinancial();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
@@ -103,6 +107,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     color_primary: "#6B1F3A", color_accent: "#0C447C",
     logo_url: "" as string | null,
     banner_image_url: "" as string | null,
+    bank_name: "", bank_account_name: "", bank_account_number: "",
+    bank_iban: "", bank_swift: "",
   });
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
@@ -110,18 +116,16 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
   useEffect(() => {
     setCompanyForm({
-      name_ar: config.name_ar || "",
-      name_en: config.name_en || "",
-      tagline: config.tagline || "",
-      contact_phone: config.contact_phone || "",
-      contact_email: config.contact_email || "",
-      season_label: config.season_label || "",
-      color_primary: config.color_primary || "#6B1F3A",
-      color_accent: config.color_accent || "#0C447C",
-      logo_url: config.logo_url || "",
-      banner_image_url: config.banner_image_url || "",
+      name_ar: identity.nameAr, name_en: identity.nameEn, tagline: identity.tagline,
+      contact_phone: contact.phone, contact_email: contact.email,
+      season_label: identity.seasonLabel,
+      color_primary: branding.primaryColor, color_accent: branding.accentColor,
+      logo_url: identity.logoUrl || "", banner_image_url: branding.bannerUrl || "",
+      bank_name: financial.bankName, bank_account_name: financial.accountName,
+      bank_account_number: financial.accountNumber, bank_iban: financial.iban,
+      bank_swift: financial.swift,
     });
-  }, [config]);
+  }, [identity, contact, branding, financial]);
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو كـ«لا يوجد مستخدمون» */
@@ -152,15 +156,24 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const saveCompanyConfig = async () => {
     setCompanySaving(true);
     setCompanyMsg("");
-    const { error } = await supabase.from("company_config").update({
+    const { error } = await companyService.updateConfig({
       name_ar: companyForm.name_ar, name_en: companyForm.name_en,
       tagline: companyForm.tagline, contact_phone: companyForm.contact_phone,
       contact_email: companyForm.contact_email, season_label: companyForm.season_label,
       color_primary: companyForm.color_primary, color_accent: companyForm.color_accent,
       logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url,
-    }).eq("id", 1);
+      bank_name: companyForm.bank_name || null,
+      bank_account_name: companyForm.bank_account_name || null,
+      bank_account_number: companyForm.bank_account_number || null,
+      bank_iban: companyForm.bank_iban || null,
+      bank_swift: companyForm.bank_swift || null,
+    });
     setCompanySaving(false);
     if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
+    await Promise.all([
+      companyForm.logo_url ? companyService.saveAsset({ key: "logo", url: companyForm.logo_url, altText: companyForm.name_ar }) : Promise.resolve(),
+      companyForm.banner_image_url ? companyService.saveAsset({ key: "dashboard_banner", url: companyForm.banner_image_url, altText: companyForm.name_ar }) : Promise.resolve(),
+    ]);
     setCompanyMsg("تم الحفظ بنجاح — سيتم تحديث الصفحة...");
     setTimeout(() => window.location.reload(), 1200);
   };
@@ -276,7 +289,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       <div style={{ padding: "18px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 700, color: "var(--primary)" }}>إعدادات الحملة</div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>تخصيص هوية وإعدادات {config.name_ar || "الحملة"}</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>تخصيص هوية وإعدادات {identity.nameAr}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,var(--em8),var(--em7))", color: "var(--accent-light)", fontSize: 11, fontWeight: 700, padding: "7px 14px", borderRadius: 99, boxShadow: "0 2px 8px rgba(92,24,48,.25)" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -466,6 +479,19 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     <div style={{ flex: 1, height: 28, background: companyForm.color_accent, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10, fontWeight: 700 }}>الثانوي</div>
                     <div style={{ flex: 1, height: 28, background: `linear-gradient(135deg,${companyForm.color_primary},${companyForm.color_accent})`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10, fontWeight: 700 }}>التدرج</div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHead}><div style={cardIcon}>ر.ق</div><div><div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>البيانات البنكية</div><div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>بيانات التحويل الخاصة بالحملة</div></div></div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                  <div><label style={fieldLabel}>اسم البنك</label><input style={inp} value={companyForm.bank_name} onChange={e => setCompanyForm(p => ({ ...p, bank_name: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>اسم الحساب</label><input style={inp} value={companyForm.bank_account_name} onChange={e => setCompanyForm(p => ({ ...p, bank_account_name: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>رقم الحساب</label><input style={inp} dir="ltr" value={companyForm.bank_account_number} onChange={e => setCompanyForm(p => ({ ...p, bank_account_number: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>IBAN</label><input style={inp} dir="ltr" value={companyForm.bank_iban} onChange={e => setCompanyForm(p => ({ ...p, bank_iban: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>SWIFT</label><input style={inp} dir="ltr" value={companyForm.bank_swift} onChange={e => setCompanyForm(p => ({ ...p, bank_swift: e.target.value }))} /></div>
                 </div>
               </div>
             </div>

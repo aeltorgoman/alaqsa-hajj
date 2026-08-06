@@ -11,7 +11,7 @@ import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
 // تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
@@ -110,7 +110,9 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 }
 
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
-  const config = useConfig();
+  const reportBranding = useReportBranding();
+  const companyIdentity = useCompanyIdentity();
+  const companyPortal = useCompanyPortal();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
@@ -319,7 +321,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
-    const headers = COLS.map(c => `<th style="padding:4pt 6pt;background:${config.color_primary || "#6B1F3A"};color:#fff;text-align:right;font-size:8pt">${c.label}</th>`).join("");
+    const headers = COLS.map(c => `<th style="padding:4pt 6pt;background:${reportBranding.primaryColor};color:#fff;text-align:right;font-size:8pt">${c.label}</th>`).join("");
     const rows = filtered.map((p, i) =>
       `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f6f2"}">
         <td style="text-align:center;padding:4pt 5pt;border:0.5pt solid #ddd;font-size:8pt">${i + 1}</td>
@@ -327,10 +329,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       </tr>`
     ).join("");
     const body = `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
-      <thead><tr><th style="text-align:center;padding:4pt 5pt;background:${config.color_primary || "#6B1F3A"};color:#fff;width:20pt;font-size:8pt">م</th>${headers}</tr></thead>
+      <thead><tr><th style="text-align:center;padding:4pt 5pt;background:${reportBranding.primaryColor};color:#fff;width:20pt;font-size:8pt">م</th>${headers}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-    const html = makeHTML("كشف الحجاج", body, true, config.logo_url || "", config.name_ar || "حملة الأقصى", config.tagline || "", config.color_primary || "#6B1F3A", config.color_accent || "#0C447C");
+    const html = makeHTML("كشف الحجاج", body, reportBranding, { landscape: true });
     printInPage(html);
   };
 
@@ -343,7 +345,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
-    addSummarySheet(wb, XLSX, "كشف الحجاج", config.name_ar || "حملة الأقصى", [
+    addSummarySheet(wb, XLSX, "كشف الحجاج", reportBranding.companyName, [
       ["إجمالي عدد الحجاج", filtered.length],
       ["عدد الرجال", filtered.filter(p => p.gender === "ذكر").length],
       ["عدد النساء", filtered.filter(p => p.gender === "أنثى").length],
@@ -1588,10 +1590,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           </div>
           <button onClick={() => {
             /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير */
-            const cfg = config as any;
             printInPage(buildStickersHTML(
               [selected as any],
-              { color_primary: cfg.color_primary, color_accent: cfg.color_accent, name_ar: cfg.name_ar, season_label: cfg.season_label, hotel_name: cfg.hotel_name, hotel_address: cfg.hotel_address, admin_phone: cfg.admin_phone, logo_url: cfg.logo_url },
+              { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName, season_label: companyIdentity.seasonLabel, hotel_name: companyPortal.hotelName, hotel_address: companyPortal.hotelAddress, admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
               { rooms: metaRooms as any, buses: metaBuses as any, camps: metaCamps as any },
               { sticker: true, hand_tag: true, long_tag: true }
             ));

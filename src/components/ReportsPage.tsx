@@ -3,9 +3,9 @@ import { useSeason } from "../season/useSeason";
 import { isHajj } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS, brandingFromConfig } from "../utils";
+import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -70,18 +70,16 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const passengersOfFlight = (flight: Flight) => passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id);
   // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
   const flightNameFor = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || flights.find(f => f.id === p.return_flight_id)?.name || "—";
-  const config = useConfig();
-  const logoUrl = config.logo_url || "";
-  const companyName = config.name_ar || "حملة الأقصى";
-  const tagline = config.tagline || "";
+  const reportBranding = useReportBranding();
+  const companyIdentity = useCompanyIdentity();
+  const companyPortal = useCompanyPortal();
+  const { companyName, primaryColor } = reportBranding;
   // ألوان التقارير المطبوعة = لون الشركة الثابت من الإعدادات (مستقل عن ثيم الواجهة)
   // بحيث يثبّت كل عميل/شركة لونه الخاص في المطبوعات بصرف النظر عن الثيم الذي يستخدمه الموظف على الشاشة
-  const primaryColor = config.color_primary || "#6B1F3A";
-  const accentColor = config.color_accent || "#0C447C";
   /* هوية الطباعة — نسخة واحدة تخدم كل مولّدات التقارير أدناه */
-  const branding = brandingFromConfig(config);
+  const branding = reportBranding;
   const mkHTML = (title: string, body: string, landscape = false, noHeader = false, patternOpacity?: number) =>
-    makeHTML(title, body, landscape, logoUrl, companyName, tagline, primaryColor, accentColor, noHeader, patternOpacity);
+    makeHTML(title, body, reportBranding, { landscape, noHeader, patternOpacity });
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -344,10 +342,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
     if (selFlights.length === 1) {
       const flight = selFlights[0];
       const fp = passengersOfFlight(flight);
-      return makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), false, logoUrl, companyName, tagline, primaryColor, accentColor);
+      return makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), reportBranding);
     }
     const sections = selFlights.map(flight => makeFlightSectionHTML(flight, passengersOfFlight(flight), branding));
-    return makeHTML("تقرير الرحلات", joinSections(sections), false, logoUrl, companyName, tagline, primaryColor, accentColor, false);
+    return makeHTML("تقرير الرحلات", joinSections(sections), reportBranding);
   };
 
   const exportPerFlightXLSX = () => {
@@ -1198,7 +1196,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                                     {flight.date && <div style={{ fontSize: 10, opacity: .65 }}>{flight.date}{flight.time ? ` · ${flight.time}` : ""}</div>}
                                   </div>
                                   {/* أيقونة طباعة */}
-                                  <button onClick={e => { e.stopPropagation(); const br = { logoUrl, companyName, tagline, primaryColor, accentColor }; printInPage(mkHTML(`تقرير رحلة ${flight.name}`, makeTwoLogoSectionHTML(`رحلة ${flight.name} — ${flight.type}`, `${flight.airline} · ${flight.date}`, renderNamesTable(fp, "اسم الحاج / الحاجة", primaryColor), br), false, true)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <button onClick={e => { e.stopPropagation(); printInPage(mkHTML(`تقرير رحلة ${flight.name}`, makeTwoLogoSectionHTML(`رحلة ${flight.name} — ${flight.type}`, `${flight.airline} · ${flight.date}`, renderNamesTable(fp, "اسم الحاج / الحاجة", primaryColor), reportBranding), false, true)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                                   </button>
                                 </div>
@@ -1820,10 +1818,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
               for (const p of finalPassengers) newDates[p.id] = now;
               setPrintDates(newDates);
               localStorage.setItem("stk_print_dates", JSON.stringify(newDates));
-              const cfg = config as any;
               printInPage(buildStickersHTML(
                 finalPassengers as any,
-                { color_primary: cfg.color_primary, color_accent: cfg.color_accent, name_ar: cfg.name_ar, season_label: cfg.season_label, hotel_name: cfg.hotel_name, hotel_address: cfg.hotel_address, admin_phone: cfg.admin_phone, logo_url: cfg.logo_url },
+                { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName, season_label: companyIdentity.seasonLabel, hotel_name: companyPortal.hotelName, hotel_address: companyPortal.hotelAddress, admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
                 { rooms: rooms as any, buses: buses as any, camps: camps as any },
                 { sticker: stkTypes.sticker, hand_tag: stkTypes.hand_tag, long_tag: stkTypes.long_tag }
               ));

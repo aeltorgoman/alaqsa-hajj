@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyAssets, useCompanyBranding, useCompanyIdentity } from "../company/CompanyContext";
 import type { User } from "../types";
 
 function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
-  const config = useConfig();
+  const identity = useCompanyIdentity();
+  const branding = useCompanyBranding();
+  const assets = useCompanyAssets();
+  const loginLogo = assets.login_logo?.url || identity.logoUrl;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -40,7 +43,9 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "#5C1830",  /* خلفية ثابتة — جزء من هوية الحملة */
+      background: assets.login_background
+        ? `center / cover no-repeat url("${assets.login_background.url}")`
+        : branding.primaryColor,
       direction: "rtl", fontFamily: "var(--font-body)",
       position: "relative", overflow: "hidden",
     }}>
@@ -58,8 +63,8 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
 
           {/* شعار + اسم */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
-            {config.logo_url ? (
-              <img src={config.logo_url} alt={config.name_ar} style={{ width: 76, height: 76, borderRadius: "50%", objectFit: "cover", marginBottom: 8, border: "2px solid var(--accent-light)" }} />
+            {loginLogo ? (
+              <img src={loginLogo} alt={identity.nameAr} style={{ width: 76, height: 76, borderRadius: "50%", objectFit: "cover", marginBottom: 8, border: "2px solid var(--accent-light)" }} />
             ) : (
               <svg width="96" height="118" viewBox="0 0 96 118" style={{ marginBottom: 8 }}>
                 <path d="M8 116 V52 C8 26 28 6 48 6 C68 6 88 26 88 52 V116" fill="none" stroke="var(--accent)" strokeWidth="2.5"/>
@@ -71,10 +76,10 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
               </svg>
             )}
             <div style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 30, color: "var(--primary-dark)", letterSpacing: "0.5px" }}>
-              {config.name_ar}
+              {identity.nameAr}
             </div>
             <div style={{ fontSize: 12, color: "var(--accent-dark)", letterSpacing: "2px", marginTop: 2 }}>
-              {config.tagline}
+              {identity.tagline}
             </div>
           </div>
 
@@ -148,7 +153,7 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
           </button>
 
           <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "var(--text-muted)" }}>
-            {config.name_ar} · دولة قطر
+            {identity.nameAr}
           </div>
         </div>
       </div>

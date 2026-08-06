@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useConfig } from "../config/ConfigContext";
+import { useCompanyBranding, useCompanyIdentity } from "../company/CompanyContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import type { User } from "../types";
 import { NotificationBell } from "./NotificationBell";
@@ -9,8 +9,10 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
   onLogout: () => void;
   currentUser: User;
 }) {
-  const config  = useConfig();
-  const primary = config.color_primary || "#7D1F3C";
+  const identity = useCompanyIdentity();
+  const branding = useCompanyBranding();
+  const primary = branding.primaryColor;
+  const bannerUrl = branding.bannerUrl;
 
   // ─── عداد يوم عرفة ───
   function getArafaDate(): Date {
@@ -95,7 +97,7 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
       position: "relative" as const,
       flexShrink: 0,
       height: 240,
-      background: config.banner_image_url
+      background: bannerUrl
         ? undefined
         : `linear-gradient(110deg,${primary}f0 0%,${primary} 50%,${primary}cc 100%)`,
       overflow: "hidden" as const,
@@ -152,13 +154,13 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
   };
 
   return (
-    <div style={S.banner} className={!config.banner_image_url ? "banner-gradient-animated" : ""}>
+    <div style={S.banner} className={!bannerUrl ? "banner-gradient-animated" : ""}>
 
       {/* صورة الكعبة */}
-      {config.banner_image_url && (
-        <img src={config.banner_image_url} alt="banner"
+      {bannerUrl && (
+        <img src={bannerUrl} alt="banner"
           className="banner-img-animated"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: ((config as any).banner_position_x || "50") + "% " + ((config as any).banner_position || "center") }} />
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: `${branding.bannerPositionX}% ${branding.bannerPosition}` }} />
       )}
 
       {/* overlay */}
@@ -268,8 +270,8 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
       {/* ── يمين: شعار الحملة + الاسم ── */}
       <div style={S.brand}>
         <div style={S.brandCircle}>
-          {config.logo_url
-            ? <img src={config.logo_url} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          {identity.logoUrl
+            ? <img src={identity.logoUrl} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
             : <svg viewBox="0 0 44 44" fill="none" stroke="#d4ac4f" strokeWidth="1.5" width="28" height="28">
                 <path d="M22 3L26.5 8.5L33.5 8L33 15L38.5 19.5L33 24L33.5 31L26.5 30.5L22 36L17.5 30.5L10.5 31L11 24L5.5 19.5L11 15L10.5 8L17.5 8.5Z"/>
                 <circle cx="22" cy="19.5" r="4.5"/>
@@ -278,8 +280,8 @@ function DashboardBanner({ setPage, currentUser, onLogout }: {
         </div>
         <div>
           <div style={{ fontSize: 12, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 4 }}>نظام إدارة الحج</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{config.name_ar || "حملة الأقصى"}</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", lineHeight: 1.4 }}>{config.tagline || "نُدير التفاصيل لتتفرّغوا للعبادة"}</div>
+          <div style={{ fontFamily: "var(--font-heading)", fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{identity.nameAr}</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", lineHeight: 1.4 }}>{identity.tagline}</div>
         </div>
       </div>
 
