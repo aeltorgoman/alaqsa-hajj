@@ -10,8 +10,19 @@ export interface CompanyPortal {
   supportPhone: string; hotelName: string; hotelAddress: string;
   visibility: { flights: boolean; rooms: boolean; buses: boolean; financialBalance: boolean; qrCodes: boolean; documents: boolean; notifications: boolean; pdfDownloads: boolean; roommates: boolean; lostCard: boolean };
 }
-export interface CompanyAsset { key: string; url: string; altText: string | null; metadata: Json; updatedAt: string | null }
+export type CompanyAssetKey =
+  | "logo"
+  | "login_logo"
+  | "login_background"
+  | "favicon"
+  | "portal_banner"
+  | "dashboard_banner"
+  | "report_header"
+  | "company_stamp"
+  | "manager_signature"
+  | "payment_qr";
+export interface CompanyAsset { key: CompanyAssetKey; url: string; altText: string | null; metadata: Json; updatedAt: string | null }
 export interface CompanyProfile {
   identity: CompanyIdentity; contact: CompanyContact; financial: CompanyFinancial;
-  branding: CompanyBranding; reportBranding: ReportBranding; portal: CompanyPortal; assets: Readonly<Record<string, CompanyAsset>>;
+  branding: CompanyBranding; reportBranding: ReportBranding; portal: CompanyPortal; assets: Readonly<Partial<Record<CompanyAssetKey, CompanyAsset>>>;
 }

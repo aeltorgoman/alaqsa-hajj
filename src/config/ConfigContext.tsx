@@ -6,6 +6,7 @@ import { ThemeProvider } from "./ThemeContext";
 import { CompanyContext } from "../company/CompanyContext";
 import { companyService, normalizeCompanyProfile } from "../company/companyService";
 import type { Database } from "../types/database";
+import { applyCompanyMetadata } from "../company/companyMetadata";
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
@@ -38,7 +39,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const profile = normalizeCompanyProfile(config, assets);
-  useEffect(() => { companyService.applyMetadata(profile); }, [profile]);
+  useEffect(() => { applyCompanyMetadata(profile); }, [profile]);
 
   if (loading) {
     /* قراءة آخر إعدادات محفوظة — تُملأ الشاشة ببيانات الحملة الحقيقية */

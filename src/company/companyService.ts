@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config/AppConfig";
 import type { Database, Json } from "../types/database";
-import type { CompanyAsset, CompanyProfile } from "./types";
+import type { CompanyAsset, CompanyAssetKey, CompanyProfile } from "./types";
 import { supabase } from "../supabase";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "./safety";
 
@@ -11,18 +11,33 @@ type ConfigUpdate = Database["public"]["Tables"]["company_config"]["Update"];
 
 const enabled = (value: unknown, fallback = true) => typeof value === "boolean" ? value : fallback;
 const text = (value: unknown) => typeof value === "string" ? value : "";
+const COMPANY_ASSET_KEYS: readonly CompanyAssetKey[] = [
+  "logo", "login_logo", "login_background", "favicon", "portal_banner",
+  "dashboard_banner", "report_header", "company_stamp", "manager_signature", "payment_qr",
+];
+
+function isCompanyAssetKey(value: string): value is CompanyAssetKey {
+  return COMPANY_ASSET_KEYS.includes(value as CompanyAssetKey);
+}
+
+function normalizeAssets(rows: AssetRow[]): Partial<Record<CompanyAssetKey, CompanyAsset>> {
+  const assets: Partial<Record<CompanyAssetKey, CompanyAsset>> = {};
+  rows.forEach(row => {
+    const url = normalizeCompanyAssetUrl(row.asset_url);
+    if (!url || !isCompanyAssetKey(row.asset_key)) return;
+    assets[row.asset_key] = {
+      key: row.asset_key, url, altText: row.alt_text,
+      metadata: row.metadata ?? ({} as Json), updatedAt: row.updated_at,
+    };
+  });
+  return assets;
+}
 
 export function normalizeCompanyProfile(config: AppConfig | ConfigRow | PublicConfigRow, rows: AssetRow[] = []): CompanyProfile {
   const raw = config as AppConfig & Partial<ConfigRow>;
   const features = (raw.features && typeof raw.features === "object" ? raw.features : {}) as Record<string, unknown>;
   const portal = (raw.portal_settings && typeof raw.portal_settings === "object" && !Array.isArray(raw.portal_settings) ? raw.portal_settings : {}) as Record<string, unknown>;
-  const assets = Object.fromEntries(rows.flatMap((row): [string, CompanyAsset][] => {
-    const url = normalizeCompanyAssetUrl(row.asset_url);
-    return url ? [[row.asset_key, {
-      key: row.asset_key, url, altText: row.alt_text,
-      metadata: row.metadata ?? ({} as Json), updatedAt: row.updated_at,
-    }]] : [];
-  }));
+  const assets = normalizeAssets(rows);
   const legacyLogoUrl = normalizeCompanyAssetUrl(raw.logo_url);
   const legacyBannerUrl = normalizeCompanyAssetUrl(raw.banner_image_url);
   if (legacyLogoUrl && !assets.logo) assets.logo = { key: "logo", url: legacyLogoUrl, altText: raw.name_ar, metadata: {}, updatedAt: null };
@@ -61,7 +76,7 @@ export const companyService = {
   reportBranding: (profile: CompanyProfile) => profile.reportBranding,
   portal: (profile: CompanyProfile) => profile.portal,
   assets: (profile: CompanyProfile) => profile.assets,
-  asset: (profile: CompanyProfile, key: string) => profile.assets[key] ?? null,
+  asset: (profile: CompanyProfile, key: CompanyAssetKey) => profile.assets[key] ?? null,
   async load() {
     const { data: authData } = await supabase.auth.getSession();
     const configQuery = authData.session
@@ -75,28 +90,13 @@ export const companyService = {
     // compatibility source until the additive migration is applied.
     return { config: configResult.data, assets: assetsResult.data ?? [], error: configResult.error };
   },
-  async saveAsset(asset: { key: string; url: string; altText?: string | null; metadata?: Json }) {
+  async saveAsset(asset: { key: CompanyAssetKey; url: string; altText?: string | null; metadata?: Json }) {
     return supabase.from("company_assets").upsert({
       asset_key: asset.key, asset_url: asset.url, alt_text: asset.altText ?? null,
       metadata: asset.metadata ?? {}, updated_at: new Date().toISOString(),
     });
   },
-  async removeAsset(key: string) { return supabase.from("company_assets").delete().eq("asset_key", key); },
+  async removeAsset(key: CompanyAssetKey) { return supabase.from("company_assets").delete().eq("asset_key", key); },
   async loadConfig() { return supabase.from("company_config").select("*").eq("id", 1).single(); },
   async updateConfig(values: ConfigUpdate) { return supabase.from("company_config").update(values).eq("id", 1); },
-  applyMetadata(profile: CompanyProfile) {
-    if (typeof document === "undefined") return;
-    document.title = profile.identity.tagline
-      ? `${profile.identity.nameAr} — ${profile.identity.tagline}`
-      : profile.identity.nameAr;
-    const setMeta = (selector: string, attribute: "content" | "href", value: string) => {
-      const element = document.querySelector<HTMLMetaElement | HTMLLinkElement>(selector);
-      if (element && value) element.setAttribute(attribute, value);
-    };
-    setMeta('meta[name="theme-color"]', "content", profile.branding.primaryColor);
-    setMeta('meta[property="og:title"]', "content", profile.identity.nameAr);
-    setMeta('meta[property="og:description"]', "content", profile.identity.tagline);
-    const favicon = profile.assets.favicon?.url || profile.identity.logoUrl || "";
-    setMeta('link[rel="icon"]', "href", favicon);
-  },
 };
