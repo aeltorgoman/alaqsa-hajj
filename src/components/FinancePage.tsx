@@ -296,7 +296,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       if (!ok) return;
     }
     setSavingPay(true);
-    const rec = { passenger_id:selectedP.id, amount, payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:currentUser.username||"" };
+    const rec = { passenger_id:selectedP.id, amount, payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:currentUser.email||"" };
     const { data, error } = await supabase.from("payments").insert(rec).select().single();
     if (error || !data) {
       setSavingPay(false);
@@ -335,7 +335,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       return;
     }
     setSavingCharge(true);
-    const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount, type:chargeType, notes:chargeForm.notes, created_by:currentUser.username||"" }).select().single();
+    const { data, error } = await supabase.from("custom_charges").insert({ passenger_id:selectedP.id, description:chargeForm.description, amount, type:chargeType, notes:chargeForm.notes, created_by:currentUser.email||"" }).select().single();
     setSavingCharge(false);
     if (error || !data) { showAlert("error", "تعذر حفظ البند، يرجى المحاولة مرة أخرى"); return; }
     setCustomCharges(prev => [...prev, data as CustomCharge]);
@@ -377,7 +377,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const { data, error } = await supabase.rpc("create_financial_group_with_member", {
       p_name: groupForm.name.trim(),
       p_notes: groupForm.notes,
-      p_created_by: currentUser.username || "",
+      p_created_by: currentUser.email || "",
       p_passenger_id: selectedP.id,
     });
     setSavingGroup(false);
@@ -485,7 +485,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const baseUnits  = Math.floor(totalUnits / members.length);
     const extraUnits = totalUnits - baseUnits * members.length;
     const shares = members.map((_, i) => (baseUnits + (i >= members.length - extraUnits ? 1 : 0)) / 100);
-    const inserts = members.map((p, i) => ({ passenger_id:p.id, amount:shares[i], payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:currentUser.username||"" }));
+    const inserts = members.map((p, i) => ({ passenger_id:p.id, amount:shares[i], payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:currentUser.email||"" }));
     const { data, error } = await supabase.from("payments").insert(inserts).select();
     setSavingGroupPay(false);
     if (error || !data) { showAlert("error", "تعذر توزيع الدفعة، لم يتم تسجيل أي مبلغ"); return; }

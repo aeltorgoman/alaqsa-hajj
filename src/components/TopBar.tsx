@@ -175,7 +175,7 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
                   <div style={{ width:36, height:36, borderRadius:"50%", background:`linear-gradient(135deg,${primary},${primary}99)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:"#fff", flexShrink:0 }}>{initials}</div>
                   <div>
                     <div style={{ fontSize:13, fontWeight:700, color:"var(--ink)" }}>{currentUser.name.split(" ").slice(0,2).join(" ")}</div>
-                    <div style={{ fontSize:10, color:"var(--muted)", marginTop:1 }}>@{currentUser.username}</div>
+                    <div style={{ fontSize:10, color:"var(--muted)", marginTop:1 }}>@{currentUser.email}</div>
                   </div>
                 </div>
                 <div style={{ padding:6 }}>

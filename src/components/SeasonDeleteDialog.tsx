@@ -34,7 +34,7 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
   const run = async () => {
     setBusy(true); setError("");
     const { error: err } = await supabase.functions.invoke("season-admin", {
-      body: { action: "delete", username: currentUser.username, password, seasonId: season.id },
+      body: { action: "delete", username: currentUser.email, password, seasonId: season.id },
     });
     if (err) {
       /* رسالة الخادم تُستخرج من جسم الاستجابة: functions.invoke يضع
