@@ -9,30 +9,28 @@
    ولا تُنقل، ويُبنى النظام الجديد من حساب مدير واحد.
 
    ── التشغيل ────────────────────────────────────────────────────
-     الفحص أولاً — إلزاميّ (S1 Design v1.2 §٧.٥):
-       ADMIN_EMAIL=... ADMIN_PASSWORD=... \
-       SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+     node supabase/scripts/seed_first_admin.mjs
+
+     يقرأ ما يجده في البيئة، ويسأل عمّا ينقص عبر stdin. ثم يعرض
+     الخطّة ويتوقّف لطلب تأكيد صريح قبل أي كتابة — بوابة الـ Dry Run
+     (S1 Design v1.2 §٧.٥) محفوظة داخل نفس التشغيل.
+
+     للفحص وحده بلا أي كتابة ولا سؤال تأكيد:
        node supabase/scripts/seed_first_admin.mjs --dry-run
 
-     ثم التنفيذ بعد اعتماد تقرير الفحص:
-       … node supabase/scripts/seed_first_admin.mjs
-
-   ⚠️ مفتاح الخدمة يُقرأ من البيئة ولا يُطبع ولا يُكتب في أي ملف.
+   ⚠️ مفتاح الخدمة لا يُطبع ولا يُكتب في أي ملف. وكلمة المرور
+      ومفتاح الخدمة يُدخَلان مخفيَّين على الطرفية.
    ⚠️ لا يُشغَّل تلقائياً ولا ضمن أي بناء.
 
    Idempotent: إعادة التشغيل تُحدِّث ولا تُكرِّر.
    Self-Healing: يُعيد إنشاء ما نقص ولا يمسّ ما هو سليم.
+   لا يحذف شيئاً إطلاقاً.
    ═══════════════════════════════════════════════════════════════ */
 
 import { createClient } from "@supabase/supabase-js";
+import readline from "node:readline";
 
 const DRY = process.argv.includes("--dry-run");
-
-const URL   = process.env.SUPABASE_URL;
-const KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const EMAIL = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
-const PASS  = process.env.ADMIN_PASSWORD || "";
-const NAME  = (process.env.ADMIN_NAME || "المدير العام").trim();
 
 /* كل الصلاحيات الأحد عشر المعرّفة في src/utils/index.ts — أول مدير
    يملكها كاملة، فلا يبقى النظام بلا من يديره */
@@ -42,21 +40,87 @@ const ALL_PERMISSIONS = [
   "manage_payments", "manage_admins", "manage_portal",
 ];
 
-const fail = (m) => { console.error(`✗ ${m}`); process.exit(1); };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const fail = (m) => { console.error(`\n✗ ${m}`); process.exit(1); };
 const log  = (m) => console.log(m);
 
-/* ── حرّاس المدخلات ──────────────────────────────────────────── */
-if (!URL || !KEY) fail("SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY مطلوبان في البيئة.");
-if (!EMAIL) fail("ADMIN_EMAIL مطلوب — معرّف الدخول.");
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(EMAIL)) {
-  fail(`ADMIN_EMAIL بصيغة غير صحيحة: ${EMAIL}\n  لا يشترط أن يكون بريداً حقيقياً، لكن الصيغة يجب أن تكون صحيحة (admin@company.local مثلاً).`);
+// ── الإدخال التفاعلي ──────────────────────────────────────────
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const isTTY = Boolean(process.stdin.isTTY);
+
+const ask = (q) => new Promise((res) => rl.question(q, (v) => res(v.trim())));
+
+/* الإدخال المخفيّ: نبتلع ما تكتبه الطرفية أثناء السؤال فلا يظهر
+   المحرف ولا يبقى في المخرجات. خارج الطرفية لا إخفاء ممكن. */
+function askHidden(q) {
+  if (!isTTY) return ask(q);
+  return new Promise((res) => {
+    const original = rl._writeToOutput.bind(rl);
+    rl._writeToOutput = (s) => original(s.includes(q) ? q : "");
+    rl.question(q, (v) => {
+      rl._writeToOutput = original;
+      process.stdout.write("\n");
+      res(v.trim());
+    });
+  });
 }
-if (!DRY && !PASS) fail("ADMIN_PASSWORD مطلوب للتنفيذ الفعلي.");
-if (PASS && PASS.length < 8) fail("ADMIN_PASSWORD أقصر من ٨ محارف.");
+
+/* القيمة من البيئة إن وُجدت، وإلا تُطلب. لا شيء يُخزَّن في ملف. */
+async function need(envKey, prompt, { hidden = false, fallback = "" } = {}) {
+  const fromEnv = (process.env[envKey] ?? "").trim();
+  if (fromEnv) { log(`  ${envKey.padEnd(26)}: من البيئة`); return fromEnv; }
+  /* السؤال يحتاج طرفية. خارجها نفشل بوضوح بدل أن نتعلّق منتظرين
+     إدخالاً لن يأتي — والبديل تمريرها في البيئة. */
+  if (!isTTY) {
+    if (fallback) return fallback;
+    fail(`${envKey} مفقود، ولا طرفية للسؤال عنه.\n  شغّل السكربت في طرفية تفاعلية، أو مرّر ${envKey} في البيئة.`);
+  }
+  const v = hidden ? await askHidden(prompt) : await ask(prompt);
+  return v || fallback;
+}
+
+/* حساب مدير النظام لا حساب شركة بعينها */
+const DEFAULT_EMAIL = "admin@system.local";
+const MIN_PASSWORD = 8;
+
+/* كلمة المرور تُتحقَّق قبل أي محاولة إنشاء، وتُعاد المطالبة بها في
+   نفس التشغيل عند الرفض — لا إعادة تشغيل للسكربت. */
+async function needPassword() {
+  let v = (process.env.ADMIN_PASSWORD ?? "").trim();
+  if (v) {
+    log(`  ${"ADMIN_PASSWORD".padEnd(26)}: من البيئة`);
+    if (v.length >= MIN_PASSWORD) return v;
+    log(`  \u2717 كلمة المرور من البيئة أقصر من ${MIN_PASSWORD} محارف.`);
+    if (!isTTY) fail(`ADMIN_PASSWORD أقصر من ${MIN_PASSWORD} محارف، ولا طرفية لإعادة المطالبة.`);
+    v = "";
+  }
+  if (!isTTY) fail(`ADMIN_PASSWORD مفقود، ولا طرفية للسؤال عنه.\n  شغّل السكربت في طرفية تفاعلية، أو مرّر ADMIN_PASSWORD في البيئة.`);
+
+  for (;;) {
+    const entered = await askHidden(`كلمة المرور (${MIN_PASSWORD} محارف فأكثر · لن تظهر): `);
+    if (!entered) { log(`  \u2717 كلمة المرور مطلوبة — لا يمكن أن تكون فارغة.`); continue; }
+    if (entered.length < MIN_PASSWORD) { log(`  \u2717 قصيرة: ${entered.length} من ${MIN_PASSWORD} محارف. أعد الإدخال.`); continue; }
+    return entered;
+  }
+}
+
+log("═══ المدخلات ═══");
+const URL   = await need("SUPABASE_URL", "رابط المشروع (SUPABASE_URL): ");
+const KEY   = await need("SUPABASE_SERVICE_ROLE_KEY", "مفتاح الخدمة (لن يظهر أثناء الكتابة): ", { hidden: true });
+const EMAIL = (await need("ADMIN_EMAIL", `معرّف الدخول (بريد) [${DEFAULT_EMAIL}]: `, { fallback: DEFAULT_EMAIL })).toLowerCase();
+const NAME  = await need("ADMIN_NAME", "الاسم المعروض [المدير العام]: ", { fallback: "المدير العام" });
+const PASS  = DRY ? "" : await needPassword();
+
+// ── حرّاس المدخلات ──────────────────────────────────────────
+if (!URL) fail("رابط المشروع مطلوب.");
+if (!KEY) fail("مفتاح الخدمة مطلوب.");
+if (!EMAIL_RE.test(EMAIL)) {
+  fail(`معرّف الدخول بصيغة غير صحيحة: ${EMAIL}\n  لا يشترط أن يكون بريداً حقيقياً، لكن الصيغة يجب أن تكون صحيحة.`);
+}
 
 const admin = createClient(URL, KEY, { auth: { persistSession: false } });
 
-/* ── قراءة الحالة الراهنة ────────────────────────────────────── */
+// ── قراءة الحالة الراهنة ────────────────────────────────────
 const { data: listed, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
 if (listErr) fail(`تعذّرت قراءة auth.users: ${listErr.message}`);
 
@@ -70,13 +134,8 @@ if (profErr) fail(`تعذّرت قراءة user_profiles: ${profErr.message}`);
 const profileForEmail = (profiles ?? []).find((p) => (p.email || "").toLowerCase() === EMAIL) || null;
 const profileForId    = existing ? (profiles ?? []).find((p) => p.id === existing.id) || null : null;
 
-/* ── الخطّة ──────────────────────────────────────────────────── */
-const plan = {
-  authAccount: existing ? "موجود — يبقى بمعرّفه" : "سيُنشأ",
-  profile:     profileForId ? "موجود — سيُحدَّث" : "سيُنشأ",
-};
-
-log("═══ الحالة الراهنة ═══");
+// ── الخطّة ──────────────────────────────────────────────────
+log("\n═══ الحالة الراهنة ═══");
 log(`  حسابات auth.users            : ${authUsers.length}`);
 log(`  صفوف user_profiles           : ${(profiles ?? []).length}`);
 log(`  حساب بهذا البريد             : ${existing ? `نعم (${existing.id})` : "لا"}`);
@@ -86,8 +145,8 @@ log("\n═══ الخطّة ═══");
 log(`  البريد (Login ID)            : ${EMAIL}`);
 log(`  الاسم                        : ${NAME}`);
 log(`  الصلاحيات                    : ${ALL_PERMISSIONS.length} (كاملة)`);
-log(`  حساب المصادقة                : ${plan.authAccount}`);
-log(`  ملفّ المستخدم                 : ${plan.profile}`);
+log(`  حساب المصادقة                : ${existing ? "موجود — يبقى بمعرّفه" : "سيُنشأ"}`);
+log(`  ملفّ المستخدم                 : ${profileForId ? "موجود — سيُحدَّث" : "سيُنشأ"}`);
 log(`  عمليات حذف                   : صفر — لا يحذف هذا السكربت شيئاً إطلاقاً`);
 
 /* تعارض: بريد محجوز في ملفّ يعود لحساب آخر */
@@ -97,10 +156,19 @@ if (profileForEmail && (!existing || profileForEmail.id !== existing.id)) {
 
 if (DRY) {
   log("\n✓ فحص فقط — لم تُكتب أي بيانات.");
+  rl.close();
   process.exit(0);
 }
 
-/* ── التنفيذ ─────────────────────────────────────────────────── */
+/* بوابة الاعتماد — §٧.٥. لا كتابة قبل تأكيد صريح. */
+const confirm = await ask('\nاكتب "نعم" للتنفيذ، أو أي شيء آخر للإلغاء: ');
+if (confirm !== "نعم") {
+  log("أُلغي. لم تُكتب أي بيانات.");
+  rl.close();
+  process.exit(0);
+}
+
+// ── التنفيذ ─────────────────────────────────────────────────
 let userId = existing?.id ?? null;
 
 if (!userId) {
@@ -122,10 +190,10 @@ const { error: upErr } = await admin.from("user_profiles").upsert(
   { id: userId, email: EMAIL, name: NAME, permissions, is_active: true, updated_at: new Date().toISOString() },
   { onConflict: "id" },
 );
-if (upErr) fail(`تعذّر حفظ الملفّ: ${upErr.message}`);
+if (upErr) fail(`تعذّر حفظ الملفّ: ${upErr.message}\n  الحساب أُنشئ. أعد تشغيل السكربت — سيُكمل الملفّ وحده (Self-Healing).`);
 log(`✓ الملفّ محفوظ`);
 
-/* ── التحقّق بعد الكتابة ─────────────────────────────────────── */
+// ── التحقّق بعد الكتابة ─────────────────────────────────────
 const { data: check, error: chkErr } = await admin
   .from("user_profiles").select("id, email, name, is_active, permissions").eq("id", userId).single();
 if (chkErr || !check) fail(`تعذّر التحقّق: ${chkErr?.message}`);
@@ -142,4 +210,14 @@ if (check.email !== EMAIL || check.is_active !== true || granted !== ALL_PERMISS
   fail("التحقّق فشل: الصفّ المحفوظ لا يطابق المتوقّع.");
 }
 
-log("\n✓ تمّ. أعد تشغيل --dry-run للتأكّد من أن الخطّة صارت «لا تغيير».");
+/* إثبات الـ Idempotency داخل نفس التشغيل: إعادة قراءة الحالة
+   وعرض ما ستكون عليه خطّة تشغيل تالٍ — وهو ما يقابل Dry Run ثانياً */
+const { data: after } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+const { data: afterProfiles } = await admin.from("user_profiles").select("id");
+log("\n═══ الحالة بعد التنفيذ (تقابل Dry Run ثانياً) ═══");
+log(`  حسابات auth.users            : ${(after?.users ?? []).length}`);
+log(`  صفوف user_profiles           : ${(afterProfiles ?? []).length}`);
+log(`  تشغيل تالٍ سيُنتج             : حساب المصادقة موجود — يبقى بمعرّفه · الملفّ يُحدَّث`);
+
+log("\n✓ تمّ. ادخل على التطبيق بهذا البريد وكلمة المرور.");
+rl.close();
