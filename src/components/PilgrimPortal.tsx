@@ -134,12 +134,11 @@ function PilgrimPortal() {
         const { data: res } = await supabase.rpc("get_pilgrim_portal", creds);
         if (res) { setData(res as unknown as PortalData); localStorage.setItem("portal_data", JSON.stringify(res)); return; }
       }
-      const { data: anns } = await supabase
-        .from("announcements").select("id,body,priority,show_at")
-        .lte("show_at", new Date().toISOString())
-        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-        .order("show_at", { ascending: false });
-      if (anns) setData(d => d ? { ...d, announcements: [...anns].sort((a, b) => (b.priority === "عاجل" ? 1 : 0) - (a.priority === "عاجل" ? 1 : 0)) } : d);
+      /* الحاج anon، فلا يقرأ الجدول مباشرةً: إسقاط مضبوط خلف دالة
+         SECURITY DEFINER — نفس نمط get_pilgrim_portal (س٤ / §٣.٦).
+         الدالة ترشّح بالوقت والانتهاء وترتّب العاجل أولاً. */
+      const { data: anns } = await supabase.rpc("get_portal_announcements");
+      if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
     };
     refreshAll();
     const t = setInterval(refreshAll, 180000);
