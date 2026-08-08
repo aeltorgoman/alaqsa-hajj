@@ -79,12 +79,37 @@ async function need(envKey, prompt, { hidden = false, fallback = "" } = {}) {
   return v || fallback;
 }
 
+/* حساب مدير النظام لا حساب شركة بعينها */
+const DEFAULT_EMAIL = "admin@system.local";
+const MIN_PASSWORD = 8;
+
+/* كلمة المرور تُتحقَّق قبل أي محاولة إنشاء، وتُعاد المطالبة بها في
+   نفس التشغيل عند الرفض — لا إعادة تشغيل للسكربت. */
+async function needPassword() {
+  let v = (process.env.ADMIN_PASSWORD ?? "").trim();
+  if (v) {
+    log(`  ${"ADMIN_PASSWORD".padEnd(26)}: من البيئة`);
+    if (v.length >= MIN_PASSWORD) return v;
+    log(`  \u2717 كلمة المرور من البيئة أقصر من ${MIN_PASSWORD} محارف.`);
+    if (!isTTY) fail(`ADMIN_PASSWORD أقصر من ${MIN_PASSWORD} محارف، ولا طرفية لإعادة المطالبة.`);
+    v = "";
+  }
+  if (!isTTY) fail(`ADMIN_PASSWORD مفقود، ولا طرفية للسؤال عنه.\n  شغّل السكربت في طرفية تفاعلية، أو مرّر ADMIN_PASSWORD في البيئة.`);
+
+  for (;;) {
+    const entered = await askHidden(`كلمة المرور (${MIN_PASSWORD} محارف فأكثر · لن تظهر): `);
+    if (!entered) { log(`  \u2717 كلمة المرور مطلوبة — لا يمكن أن تكون فارغة.`); continue; }
+    if (entered.length < MIN_PASSWORD) { log(`  \u2717 قصيرة: ${entered.length} من ${MIN_PASSWORD} محارف. أعد الإدخال.`); continue; }
+    return entered;
+  }
+}
+
 log("═══ المدخلات ═══");
 const URL   = await need("SUPABASE_URL", "رابط المشروع (SUPABASE_URL): ");
 const KEY   = await need("SUPABASE_SERVICE_ROLE_KEY", "مفتاح الخدمة (لن يظهر أثناء الكتابة): ", { hidden: true });
-const EMAIL = (await need("ADMIN_EMAIL", "معرّف الدخول (بريد · مثل admin@company.local): ")).toLowerCase();
+const EMAIL = (await need("ADMIN_EMAIL", `معرّف الدخول (بريد) [${DEFAULT_EMAIL}]: `, { fallback: DEFAULT_EMAIL })).toLowerCase();
 const NAME  = await need("ADMIN_NAME", "الاسم المعروض [المدير العام]: ", { fallback: "المدير العام" });
-const PASS  = DRY ? "" : await need("ADMIN_PASSWORD", "كلمة المرور (٨ محارف فأكثر · لن تظهر): ", { hidden: true });
+const PASS  = DRY ? "" : await needPassword();
 
 // ── حرّاس المدخلات ──────────────────────────────────────────
 if (!URL) fail("رابط المشروع مطلوب.");
@@ -92,7 +117,6 @@ if (!KEY) fail("مفتاح الخدمة مطلوب.");
 if (!EMAIL_RE.test(EMAIL)) {
   fail(`معرّف الدخول بصيغة غير صحيحة: ${EMAIL}\n  لا يشترط أن يكون بريداً حقيقياً، لكن الصيغة يجب أن تكون صحيحة.`);
 }
-if (!DRY && PASS.length < 8) fail("كلمة المرور أقصر من ٨ محارف.");
 
 const admin = createClient(URL, KEY, { auth: { persistSession: false } });
 
