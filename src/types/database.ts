@@ -884,6 +884,7 @@ export type Database = {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: Json
       }
+      get_portal_announcements: { Args: never; Returns: Json }
       has_permission: { Args: { p_key: string }; Returns: boolean }
       mark_pilgrim_notification_read: {
         Args: {
