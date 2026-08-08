@@ -1,14 +1,41 @@
+// ============================================================
+// Scan-passport — استخراج بيانات مستندات الحاج بالذكاء الاصطناعي
+// ============================================================
+// س٣ / Security Architecture v1.3 §٧.٣.
+//
+// الدالة كانت تُنفَّذ لمن يحمل مفتاح النشر العلني — وهو منشور في
+// حزمة المتصفح. والفاتورة حقيقية: كل استدعاء يستهلك مفتاحاً مدفوعاً.
+//
+// ⚠️ النمط الثلاثي — §٧.٢. verify_jwt = true قائم منذ س٠، لكنه
+// وحده لا يحمي: مفتاح anon هو JWT صالح يجتاز البوابة. الحارس أدناه
+// هو ما يميّز موظفاً حقيقياً، والصلاحية manage_passengers هي نفسها
+// التي تحرس صفحة الحجاج في NAV — فلا تتفارق الواجهة عن الخادم.
+//
+// التفويض كله عبر _shared/authorize.ts — لا منطق تفويض في هذا
+// الملف ولا في أي دالة أخرى.
+//
+// ما دون ذلك من الملف منقول كما كان بلا تغيير: نصوص الاستخراج
+// الثلاثة والنموذج والاستجابة. حدّ الاستدعاءات وتصفية الاستجابة
+// في س٩، لا هنا.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { authorize } from "../_shared/authorize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const REQUIRED_PERMISSION = "manage_passengers";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  /* الهوية والصلاحية قبل قراءة الجسم وقبل أي استهلاك للمفتاح المدفوع */
+  const auth = await authorize(req, REQUIRED_PERMISSION);
+  if (!auth.ok) return auth.response;
+
   try {
     const { imageBase64, mediaType, mode } = await req.json();
     const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
