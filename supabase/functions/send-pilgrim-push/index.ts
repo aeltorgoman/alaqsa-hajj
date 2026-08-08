@@ -5,10 +5,24 @@
      VAPID_PUBLIC_KEY   المفتاح العام
      VAPID_PRIVATE_KEY  المفتاح الخاص
      VAPID_SUBJECT      بريد أو رابط التواصل (mailto:...)
+
+   س٣ / Security Architecture v1.3 §٧.٤:
+   verify_jwt = true قائم منذ إنشائها، ولا يحمي وحده — مفتاح النشر
+   العلني هو JWT صالح يجتاز البوابة. وهذه أخطر دالة في النظام أثراً
+   لأن ناتجها **يخرج إلى أجهزة الحجاج**، فحاملُ المفتاح كان يستطيع
+   دفع تنبيه إلى كل حاج مشترك.
+
+   الحارس عبر _shared/authorize.ts وحدها، وصلاحية manage_portal هي
+   نفسها التي تحرس صفحة بوابة الحاج في NAV.
+
+   ما دون ذلك من الملف منقول كما كان بلا تغيير.
    ══════════════════════════════════════════════════════════════ */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.7";
+import { authorize } from "../_shared/authorize.ts";
+
+const REQUIRED_PERMISSION = "manage_portal";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +46,10 @@ type Subscription = {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+
+  /* الهوية والصلاحية قبل قراءة الجسم وقبل أي إرسال إلى جهاز */
+  const auth = await authorize(req, REQUIRED_PERMISSION);
+  if (!auth.ok) return auth.response;
 
   try {
     const publicKey = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
