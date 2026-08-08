@@ -12,12 +12,23 @@
 // عميل معزول لا الجلسة القائمة: persistSession:false فلا يكتب
 // تخزيناً ولا يُطلق onAuthStateChange، والرمز العائد يُهمَل. فلا
 // تُستبدل جلسة المستخدم في منتصف معالج الإقفال.
+//
+// و storageKey مستقلّ: بدونه يتقاسم العميلان المفتاح نفسه، فتُحذّر
+// GoTrue من «نسختين تحت مفتاح تخزين واحد» — وهي فئة سلوك غير
+// محدَّد لا يجوز تركها على مسار مصادقة.
 import { createClient } from "@supabase/supabase-js";
 
 const confirmClient = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: "hajj-password-confirm",
+    },
+  },
 );
 
 export async function confirmPassword(email: string, password: string): Promise<boolean> {
