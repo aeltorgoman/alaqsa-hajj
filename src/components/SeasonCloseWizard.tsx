@@ -3,9 +3,10 @@
 // ============================================================
 // خمس خطوات، ولا كتابة واحدة قبل الخطوة الخامسة.
 //
-// التحقق من الهوية يقع في الخطوة الأولى ويبقى سارياً ما دام
-// المعالج مفتوحاً — دورة حياة المكوّن هي الحدّ: التفكيك يمحو
-// كلمة المرور، فالإلغاء ثم البدء من جديد يعيد السؤال.
+// التحقق من الهوية يقع في الخطوة الأولى: تأكيد كلمة المرور عند
+// Supabase Auth، ثم فحص الصلاحية على الخادم. وكل استدعاء لاحق
+// يمرّ بالفحص نفسه من JWT الجلسة — فالتفويض لا يعتمد على أن
+// المعالج ما زال مفتوحاً. الإلغاء ثم البدء من جديد يعيد السؤال.
 //
 // ⚠️ الإقفال يحفظ البيانات ولا يحذفها. الشيء الوحيد الذي يُحذف
 // هو ملفات المستندات. حذف بيانات الموسم عملية أخرى تماماً
@@ -15,6 +16,7 @@ import { supabase } from "../supabase";
 import type { Passenger, User } from "../types";
 import type { Season } from "../season/useSeason";
 import { Modal } from "./Modal";
+import { confirmPassword } from "../season/confirmPassword";
 import { btnP, btnS, inp, getStoragePath } from "../utils";
 
 /* أعمدة المستندات الستة — مصدر العدّ ومصدر الحذف معاً */
@@ -90,12 +92,25 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   /* ── الخطوة ١: الهوية ───────────────────────────────────── */
   const verify = async () => {
     setBusy(true); setError("");
-    const { data, message } = await invokeAdmin({ action: "verify", username: currentUser.email, password });
+
+    /* التأكيد عند Supabase Auth وحده — كلمة المرور لا تصل إلى
+       season-admin ولا إلى أي دالة من دوالنا (§٧.١) */
+    const confirmed = await confirmPassword(currentUser.email, password);
+    if (!confirmed) {
+      setError("كلمة المرور غير صحيحة.");
+      setBusy(false);
+      return;
+    }
+
+    /* الحارس الحقيقي: الهوية والصلاحية على الخادم من JWT الجلسة */
+    const { data, message } = await invokeAdmin({ action: "verify" });
     setBusy(false);
     if (!data?.ok) {
       setError(message || "تعذّر التحقق، يرجى المحاولة مرة أخرى.");
       return;
     }
+    /* لم تعد لها حاجة بعد التأكيد — لا تبقى في الحالة حتى التفكيك */
+    setPassword("");
     await loadReview();
     setStep(2);
   };
@@ -179,7 +194,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
 
     /* الإقفال أولاً: هو الجوهر، ومعاملة واحدة في القاعدة */
     const { data, message } = await invokeAdmin({
-      action: "close", username: currentUser.email, password, newSeasonName: newName.trim(),
+      action: "close", newSeasonName: newName.trim(),
     });
     if (!data?.newSeasonId) {
       setError(message || "تعذّر إقفال الموسم. لم يتغيّر شيء — يمكنك إعادة المحاولة.");
