@@ -90,7 +90,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   /* ── الخطوة ١: الهوية ───────────────────────────────────── */
   const verify = async () => {
     setBusy(true); setError("");
-    const { data, message } = await invokeAdmin({ action: "verify", username: currentUser.username, password });
+    const { data, message } = await invokeAdmin({ action: "verify", username: currentUser.email, password });
     setBusy(false);
     if (!data?.ok) {
       setError(message || "تعذّر التحقق، يرجى المحاولة مرة أخرى.");
@@ -179,7 +179,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
 
     /* الإقفال أولاً: هو الجوهر، ومعاملة واحدة في القاعدة */
     const { data, message } = await invokeAdmin({
-      action: "close", username: currentUser.username, password, newSeasonName: newName.trim(),
+      action: "close", username: currentUser.email, password, newSeasonName: newName.trim(),
     });
     if (!data?.newSeasonId) {
       setError(message || "تعذّر إقفال الموسم. لم يتغيّر شيء — يمكنك إعادة المحاولة.");

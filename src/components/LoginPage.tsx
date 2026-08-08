@@ -8,19 +8,47 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   const branding = useCompanyBranding();
   const assets = useCompanyAssets();
   const loginLogo = assets.login_logo?.url || identity.logoUrl;
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /* رسالة واحدة لكل أسباب الفشل — لا نكشف أي حساب موجود */
+  const GENERIC = "البريد أو كلمة المرور غير صحيحة";
+
   const handleLogin = async () => {
-    if (!username || !password) return;
+    if (!email || !password) return;
     setLoading(true); setError("");
-    const { data: userData } = await supabase.rpc("verify_user", { p_username: username, p_password: password });
-    const data = userData?.[0] ?? null;
-    if (data) { onLogin(data as User); }
-    else setError("اسم المستخدم أو كلمة المرور غلط");
+
+    const { data: auth, error: authErr } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (authErr || !auth?.user) { setError(GENERIC); setLoading(false); return; }
+
+    /* الوجود في auth.users لا يمنح شيئاً: بلا ملفّ أو بحساب معطَّل
+       لا دخول — Security Architecture §٤.٣ والثابت أ٣ */
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("id, email, name, permissions, is_active")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+
+    if (!profile || profile.is_active !== true) {
+      await supabase.auth.signOut();
+      setError(GENERIC);
+      setLoading(false);
+      return;
+    }
+
+    onLogin({
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      permissions: (profile.permissions ?? {}) as Record<string, boolean>,
+      is_active: profile.is_active,
+    } as User);
     setLoading(false);
   };
 
@@ -93,17 +121,20 @@ function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
           {/* اسم المستخدم */}
           <div style={{ marginTop: 16 }}>
             <label style={{ display: "block", fontSize: 13, color: "var(--primary)", marginBottom: 6, fontWeight: 600 }}>
-              اسم المستخدم
+              البريد (Login ID)
             </label>
             <input
               style={inputStyle}
-              value={username}
-              onChange={e => setUsername(e.target.value)}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleLogin()}
-              placeholder="أدخل اسم المستخدم"
-              autoComplete="off"
+              placeholder="admin@company.local"
+              autoComplete="username"
               autoFocus
             />
+            <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.6 }}>
+              لا يشترط أن يكون بريداً إلكترونياً حقيقياً، لكنه يستخدم لتسجيل الدخول ويجب أن يكون بصيغة بريد صحيحة.
+            </div>
           </div>
 
           {/* كلمة المرور */}

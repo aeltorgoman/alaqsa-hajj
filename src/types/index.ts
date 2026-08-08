@@ -1,12 +1,10 @@
 export interface User {
-  id: number;
+  /* uuid من auth.users — لا رقم. المصدر user_profiles لا public.users */
+  id: string;
   name: string;
-  username: string;
-  password: string;
+  /* معرّف الدخول (Login ID). لا يشترط أن يكون بريداً حقيقياً */
+  email: string;
   permissions: Record<string, boolean>;
-  /* اختياري لأن verify_user لا تُرجعه، فالمستخدم الحالي القادم من
-     تسجيل الدخول بلا الحقل، بينما صفوف select("*") تحمله دائماً.
-     nullable مطابقةً للعمود المولَّد في types/database.ts */
   is_active?: boolean | null;
 }
 

@@ -7,7 +7,6 @@ import { useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyI
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
-import { createWriteHelpers } from "../utils/write";
 import { companyService } from "../company/companyService";
 
 /* ─── helpers ─── */
@@ -77,6 +76,17 @@ const fieldLabel: React.CSSProperties = {
 const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", margin: "14px 0" };
 
 /* ─── component ─── */
+/* رسالة الخادم تُستخرج من جسم الاستجابة: functions.invoke يضع
+   الاستجابة غير الناجحة في error ويترك data فارغاً */
+async function invokeUserAdmin(body: Record<string, unknown>): Promise<{ error: string | null }> {
+  const { error } = await supabase.functions.invoke("user-admin", { body });
+  if (!error) return { error: null };
+  try {
+    const parsed = await (error as { context?: Response }).context?.json();
+    return { error: parsed?.error || error.message };
+  } catch { return { error: error.message }; }
+}
+
 function UsersPage({ currentUser }: { currentUser: User }) {
   const identity = useCompanyIdentity();
   const contact = useCompanyContact();
@@ -84,9 +94,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const financial = useCompanyFinancial();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
-
-  /* النمط الموحّد لعمليات الكتابة — التعريف في utils/write.ts */
-  const { writeOk } = createWriteHelpers(showAlert);
 
   const [activeTab, setActiveTab] = useState<"identity" | "system" | "users">("identity");
 
@@ -96,7 +103,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const [usersError, setUsersError] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ name: "", username: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [perms, setPerms] = useState<Record<string, boolean>>({});
 
   /* company */
@@ -116,12 +123,12 @@ function UsersPage({ currentUser }: { currentUser: User }) {
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو كـ«لا يوجد مستخدمون» */
-    supabase.from("users").select("*").order("id").then(({ data, error }) => {
+    supabase.from("user_profiles").select("id, email, name, permissions, is_active").order("created_at").then(({ data, error }) => {
       if (error || !data) {
         console.error("تعذر تحميل قائمة المستخدمين", error);
         setUsersError(true);
       } else {
-        setUsers(data as User[]);
+        setUsers(data.map(r => ({ ...r, permissions: (r.permissions ?? {}) as Record<string, boolean> })) as User[]);
         setUsersError(false);
       }
       setUsersLoading(false);
@@ -168,14 +175,14 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   /* ── [FIX #4] reset form completely on openAdd ── */
   const openAdd = () => {
     setEditUser(null);
-    setForm({ name: "", username: "", password: "" });
+    setForm({ name: "", email: "", password: "" });
     setPerms(Object.fromEntries(ALL_PERMISSIONS.map(p => [p.key, false])));
     setShowAdd(true);
   };
 
   const openEdit = (u: User) => {
     setEditUser(u);
-    setForm({ name: u.name, username: u.username, password: "" });
+    setForm({ name: u.name, email: u.email, password: "" });
     setPerms({ ...u.permissions });
     setShowAdd(true);
   };
@@ -185,7 +192,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
      فمن ينزعها عن نفسه أو يحذف حسابه يفقد الوصول إليها نهائياً ولا
      يملك وسيلة لاستعادته من داخل النظام. الحارس هنا على مستوى
      الدوال لا الأزرار فقط، لأن الأزرار مجرد واجهة. */
-  const isSelf = (id: number) => id === currentUser.id;
+  const isSelf = (id: string) => id === currentUser.id;
   const isSelfEdit = editUser !== null && isSelf(editUser.id);
   const isLockedPerm = (key: string) => isSelfEdit && key === "manage_users";
 
@@ -201,28 +208,32 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const [savingUser, setSavingUser] = useState(false);
 
   const saveUser = async () => {
-    if (!form.name || !form.username) return;
+    if (!form.name || !form.email) return;
     setSavingUser(true);
     /* الحارس عند حدود الكتابة لا عند الزر فقط: manage_users تبقى
        ممنوحة عند تعديل المستخدم لحسابه مهما كانت حالة النموذج */
     const permsToSave = isSelfEdit ? { ...perms, manage_users: true } : perms;
     try {
+      /* كل كتابة تمرّ بالدالة: الإنشاء في auth.users والملفّ معاً،
+         والحرّاس على الخادم لا على الأزرار */
       if (editUser) {
-        if (form.password.trim()) {
-          const { error } = await supabase.rpc("update_user", { p_id: editUser.id, p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: permsToSave });
-          if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error.message); return; }
-        } else {
-          const { error } = await supabase.from("users").update({ name: form.name, username: form.username, permissions: permsToSave }).eq("id", editUser.id);
-          if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error.message); return; }
-        }
-        setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, username: form.username, permissions: permsToSave } : u));
+        const { error } = await invokeUserAdmin({
+          action: "update", id: editUser.id, name: form.name, email: form.email,
+          password: form.password.trim() || undefined, permissions: permsToSave,
+        });
+        if (error) { showAlert("error", "تعذر حفظ التعديلات: " + error); return; }
+        setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, name: form.name, email: form.email, permissions: permsToSave } : u));
       } else {
         if (!form.password) return;
-        const { error } = await supabase.rpc("create_user", { p_name: form.name, p_username: form.username, p_password: form.password, p_permissions: perms });
-        if (error) { showAlert("error", "تعذر إنشاء المستخدم: " + error.message); return; }
-        const { data, error: fetchError } = await supabase.from("users").select("*").order("id");
+        const { error } = await invokeUserAdmin({
+          action: "create", name: form.name, email: form.email,
+          password: form.password, permissions: perms,
+        });
+        if (error) { showAlert("error", "تعذر إنشاء المستخدم: " + error); return; }
+        const { data, error: fetchError } = await supabase
+          .from("user_profiles").select("id, email, name, permissions, is_active").order("created_at");
         if (fetchError) { showAlert("error", "تم الإنشاء لكن تعذر تحديث القائمة: " + fetchError.message); return; }
-        if (data) setUsers(data as User[]);
+        if (data) setUsers(data.map(r => ({ ...r, permissions: (r.permissions ?? {}) as Record<string, boolean> })) as User[]);
       }
       showAlert("success", "تم حفظ بيانات المستخدم بنجاح");
       setShowAdd(false);
@@ -233,28 +244,26 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     }
   };
 
-  const deleteUser = async (id: number) => {
+  const deleteUser = async (id: string) => {
     if (isSelf(id)) { showAlert("error", "لا يمكنك حذف حسابك الحالي"); return; }
     const ok = await confirmAction("هل تريد حذف هذا المستخدم؟", { title: "حذف مستخدم" });
     if (!ok) return;
-    if (!await writeOk(supabase.from("users").delete().eq("id", id), "تعذر حذف المستخدم")) return;
+    const { error } = await invokeUserAdmin({ action: "delete", id });
+    if (error) { showAlert("error", "تعذر حذف المستخدم: " + error); return; }
     setUsers(prev => prev.filter(x => x.id !== id));
   };
 
   /* ── [FEATURE #2] toggle is_active ── */
   const toggleActive = async (u: User) => {
-    /* التعطيل لا يمنع الدخول اليوم لأن verify_user لا تفحص is_active
-       (مؤجَّل لمرحلة التأمين)، لكن الحارس يوضع الآن كي لا يتحوّل
-       تفعيل ذلك الفحص لاحقاً إلى قفل ذاتي جديد */
+    /* التعطيل يسري فوراً: has_permission تفحص is_active في كل
+       قرار تفويض، فلا انتظار لانتهاء الجلسة — الثابت أ٣ */
     if (isSelf(u.id)) { showAlert("error", "لا يمكنك تعطيل حسابك الحالي"); return; }
-    const current = u.is_active === false ? false : true;
-    const newVal = !current;
-    if (!await writeOk(
-      supabase.from("users").update({ is_active: newVal }).eq("id", u.id),
-      newVal ? "تعذر تفعيل الحساب" : "تعذر تعطيل الحساب"
-    )) return;
+    const newVal = u.is_active === false;
+    const { error } = await invokeUserAdmin({ action: "update", id: u.id, is_active: newVal });
+    if (error) { showAlert("error", (newVal ? "تعذر تفعيل الحساب: " : "تعذر تعطيل الحساب: ") + error); return; }
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, is_active: newVal } : x));
   };
+
 
   const tabBtn = (id: typeof activeTab): React.CSSProperties => ({
     display: "flex", alignItems: "center", gap: 6,
@@ -529,7 +538,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   <>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {users.map((u, idx) => {
-                    const isOwner = u.username === "admin";
+                    const isOwner = idx === 0;   /* أقدم ملفّ = الحساب المؤسِّس، لا يُعدَّل ولا يُحذف */
                     const isMe = isSelf(u.id);
                     const isActive = u.is_active !== false;
                     const avatarBg = isOwner
@@ -551,7 +560,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                         {/* INFO */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</div>
-                          <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace", marginTop: 2 }}>@{u.username}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace", marginTop: 2 }}>{u.email}</div>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 3, marginTop: 5, padding: "2px 7px", borderRadius: 99, fontSize: 10, fontWeight: 700, background: isOwner ? "rgba(212,172,79,.15)" : "rgba(125,31,60,.07)", color: isOwner ? "#8a6a22" : "var(--primary)", border: `1px solid ${isOwner ? "rgba(212,172,79,.3)" : "rgba(125,31,60,.15)"}` }}>
                             {isOwner && <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
                             {isOwner ? "المدير العام" : `${Object.values(u.permissions).filter(Boolean).length} صلاحية`}
@@ -636,7 +645,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
           <div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>اسم المستخدم</div>
             {/* [FIX #4] autoComplete="off" prevents browser from filling last username */}
-            <input style={inp} value={form.username} autoComplete="off" onChange={e => setForm(p => ({ ...p, username: e.target.value }))} />
+            <input style={inp} value={form.email} autoComplete="off" placeholder="admin@company.local" onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
           </div>
         </div>
         <div style={{ marginBottom: 12 }}>

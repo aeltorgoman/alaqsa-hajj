@@ -751,6 +751,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          permissions: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          is_active?: boolean
+          name: string
+          permissions?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          permissions?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           created_at: string | null
@@ -854,6 +884,7 @@ export type Database = {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: Json
       }
+      has_permission: { Args: { p_key: string }; Returns: boolean }
       mark_pilgrim_notification_read: {
         Args: {
           p_announcement_id: number

@@ -32,23 +32,59 @@ const PAGE_PERM: Record<string, string> = Object.fromEntries(
   NAV.flatMap(s => s.items).filter(it => it.perm).map(it => [it.id, it.perm])
 );
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    try { const s = sessionStorage.getItem("hajj_user"); return s ? JSON.parse(s) : null; } catch { return null; }
-  });
-
-  const handleLogin = (user: User) => {
-    const { password: _, ...userWithoutPassword } = user;
-    sessionStorage.setItem("hajj_user", JSON.stringify(userWithoutPassword));
-    setCurrentUser(user);
+/* الملفّ مصدر الصلاحيات — يُقرأ من القاعدة بمعرّف الجلسة، لا من
+   المتصفح. تعديل التخزين المحلي لا يمنح شيئاً (الثابت أ٢). */
+async function loadProfile(userId: string): Promise<User | null> {
+  const { data } = await supabase
+    .from("user_profiles")
+    .select("id, email, name, permissions, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  if (!data || data.is_active !== true) return null;
+  return {
+    id: data.id,
+    email: data.email,
+    name: data.name,
+    permissions: (data.permissions ?? {}) as Record<string, boolean>,
+    is_active: data.is_active,
   };
+}
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("hajj_user");
+export default function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  /* استرجاع الجلسة عند التحميل، ومتابعة تغيّرها — الخروج من تبويب
+     آخر أو انتهاء الرمز ينعكس هنا بلا إعادة تحميل */
+  useEffect(() => {
+    let cancelled = false;
+
+    const apply = async (userId: string | undefined) => {
+      if (!userId) { if (!cancelled) { setCurrentUser(null); setChecking(false); } return; }
+      const profile = await loadProfile(userId);
+      if (cancelled) return;
+      /* جلسة صالحة بلا ملفّ = لا دخول — §٤.٣ */
+      if (!profile) await supabase.auth.signOut();
+      setCurrentUser(profile);
+      setChecking(false);
+    };
+
+    supabase.auth.getSession().then(({ data }) => apply(data.session?.user?.id));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      void apply(session?.user?.id);
+    });
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+  }, []);
+
+  const handleLogin = (user: User) => setCurrentUser(user);
+
+  const handleLogout = async () => {
     sessionStorage.removeItem("hajj_page");
+    await supabase.auth.signOut();
     setCurrentUser(null);
   };
 
+  if (checking) return <LoadingSpinner />;
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
 
   /* المزوّد داخل الجزء المصادَق عليه وحده: لا يتأخر ظهور شاشة
