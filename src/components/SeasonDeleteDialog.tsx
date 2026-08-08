@@ -13,6 +13,7 @@ import { supabase } from "../supabase";
 import type { User } from "../types";
 import type { Season } from "../season/useSeason";
 import { Modal } from "./Modal";
+import { confirmPassword } from "../season/confirmPassword";
 import { btnP, btnS, inp } from "../utils";
 
 type Counts = { passengers: number; buses: number; camps: number; rooms: number };
@@ -33,8 +34,19 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
 
   const run = async () => {
     setBusy(true); setError("");
+
+    /* التأكيد عند Supabase Auth وحده — كلمة المرور لا تصل إلى
+       season-admin ولا إلى أي دالة من دوالنا (§٧.١) */
+    const confirmed = await confirmPassword(currentUser.email, password);
+    if (!confirmed) {
+      setError("كلمة المرور غير صحيحة.");
+      setBusy(false);
+      return;
+    }
+
+    /* الحارس الحقيقي: الهوية والصلاحية على الخادم من JWT الجلسة */
     const { error: err } = await supabase.functions.invoke("season-admin", {
-      body: { action: "delete", username: currentUser.email, password, seasonId: season.id },
+      body: { action: "delete", seasonId: season.id },
     });
     if (err) {
       /* رسالة الخادم تُستخرج من جسم الاستجابة: functions.invoke يضع
