@@ -15,10 +15,34 @@ supabase/
 │   ├── 20260802022310_season_restrict_close_and_delete_execution.sql
 │   ├── 20260804090000_s1_identity_foundation.sql
 │   └── 20260806110000_company_profile_phase1.sql    ملف الشركة والأصول
-└── scripts/
-    ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
-    └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
+├── scripts/
+│   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
+│   └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
+└── functions/
+    ├── _shared/
+    │   ├── authorize.ts                              طبقة التفويض الوحيدة
+    │   └── http.ts                                   ترويسات وردود موحّدة
+    ├── season-admin/                                 إقفال الموسم وحذفه
+    ├── user-admin/                                   إنشاء المستخدمين وتعديلهم وحذفهم
+    ├── Scan-passport/                                استخراج بيانات المستندات
+    └── send-pilgrim-push/                            دفع التنبيهات إلى أجهزة الحجاج
 ```
+
+## قاعدة مُلزِمة للدوال
+
+**لا دالة Edge تكتب منطق تفويض بنفسها.** كل دالة محميّة تستدعي
+`authorize()` من `_shared/authorize.ts`، وأي دالة جديدة تعيد استعمال
+الطبقة نفسها بدل تكرار فحص الصلاحيات.
+
+والنمط الثلاثي مُلزِم (Security Architecture §٧.٢): `verify_jwt = true`
+في إعداد النشر **مع** `getUser(jwt)` **مع** `has_permission()`. الثلاثة
+معاً — فمفتاح النشر العلني هو JWT صالح يجتاز البوابة وحدها.
+
+**النشر يشمل `_shared/`:** نقطة الدخول `<اسم-الدالة>/index.ts`، وتُرفع
+معها ملفات `_shared/` ليعمل الاستيراد النسبيّ `../_shared/…`.
+
+> `user-admin` تقرأ الصلاحية من `user_profiles` مباشرة بدل
+> `has_permission()` — استثناء موثَّق من س٢، مسجَّل ديناً تقنياً.
 
 الخمسة الأخيرة هي **م١ من معمارية المواسم** (Issue #42) — تُقرأ بالترتيب،
 وكلٌّ منها قابل لإعادة التشغيل وحده.
