@@ -110,7 +110,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (camps.some(c => c.name.trim() === campName.trim() && c.gender === campGender)) { setNameError(`يوجد مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} بالاسم "${campName}" بالفعل`); return; }
     setNameError("");
     const { data, error } = await supabase.from("camps").insert([{ name: campName.trim(), gender: campGender, type: campType, page_type: pageType }]).select();
-    if (error) { showAlert("error", `فشل إضافة المخيم: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
+    if (error) { console.error("فشل إضافة المخيم", error); showAlert("error", "فشل إضافة المخيم، يرجى المحاولة مرة أخرى"); return; }
     if (!error && data?.[0]) {
       setCamps((prev: Camp[]) => [...prev, data[0] as Camp]);
       setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setShowAdd(false);
@@ -121,7 +121,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!assertWritable()) return;
     if (getCampPassengers(id).length > 0) { showAlert("warning", "يرجى إزالة المسافرين قبل حذف المخيم"); return; }
     const { error } = await supabase.from("camps").delete().eq("id", id);
-    if (error) { showAlert("error", `فشل حذف المخيم: ${error.message}`); return; }
+    if (error) { console.error("فشل حذف المخيم", error); showAlert("error", "فشل حذف المخيم، يرجى المحاولة مرة أخرى"); return; }
     setCamps((prev: Camp[]) => prev.filter(c => c.id !== id));
   };
 

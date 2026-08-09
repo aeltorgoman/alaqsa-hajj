@@ -588,7 +588,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa, created_by: currentUser?.name || null }]).select();
     if (error) {
       console.error("Manual save error:", error);
-      showAlert("error", `فشل حفظ البيانات: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      showAlert("error", "فشل حفظ البيانات، يرجى المحاولة مرة أخرى");
       setManualSaving(false);
       return;
     }
