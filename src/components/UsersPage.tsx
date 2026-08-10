@@ -232,7 +232,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         if (error) { showAlert("error", "تعذر إنشاء المستخدم: " + error); return; }
         const { data, error: fetchError } = await supabase
           .from("user_profiles").select("id, email, name, permissions, is_active").order("created_at");
-        if (fetchError) { showAlert("error", "تم الإنشاء لكن تعذر تحديث القائمة: " + fetchError.message); return; }
+        if (fetchError) { console.error("تعذر تحديث قائمة المستخدمين بعد الإنشاء", fetchError); showAlert("error", "تم الإنشاء لكن تعذر تحديث القائمة، أعد تحميل الصفحة"); return; }
         if (data) setUsers(data.map(r => ({ ...r, permissions: (r.permissions ?? {}) as Record<string, boolean> })) as User[]);
       }
       showAlert("success", "تم حفظ بيانات المستخدم بنجاح");

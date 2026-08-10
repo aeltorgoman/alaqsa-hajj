@@ -96,7 +96,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (buses.some(b => b.name.trim() === busName.trim())) { setNameError(`يوجد باص بالاسم "${busName}" بالفعل`); return; }
     setNameError("");
     const { data, error } = await supabase.from("buses").insert([{ name: busName.trim(), type: busType, capacity: Number(busCapacity) || 50 }]).select();
-    if (error) { showAlert("error", `فشل إضافة الباص: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
+    if (error) { console.error("فشل إضافة الباص", error); showAlert("error", "فشل إضافة الباص، يرجى المحاولة مرة أخرى"); return; }
     if (!error && data?.[0]) {
       const newBus = data[0] as Bus;
       setBuses(prev => [...prev, newBus]);
@@ -108,7 +108,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!assertWritable()) return;
     if (getBusPassengers(id).length > 0) { showAlert("warning", "لا يمكن حذف باص يحتوي على مسافرين"); return; }
     const { error } = await supabase.from("buses").delete().eq("id", id);
-    if (error) { showAlert("error", `فشل حذف الباص: ${error.message}`); return; }
+    if (error) { console.error("فشل حذف الباص", error); showAlert("error", "فشل حذف الباص، يرجى المحاولة مرة أخرى"); return; }
     setBuses(prev => prev.filter(b => b.id !== id));
   };
 

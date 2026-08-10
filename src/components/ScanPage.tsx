@@ -103,7 +103,7 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
     }]).select();
     if (error) {
       console.error("Save error:", error);
-      showAlert("error", `فشل حفظ بيانات الحاج: ${error.message || "يرجى المحاولة مرة أخرى"}`);
+      showAlert("error", "فشل حفظ بيانات الحاج، يرجى المحاولة مرة أخرى");
       setUploading(false);
       return;
     }

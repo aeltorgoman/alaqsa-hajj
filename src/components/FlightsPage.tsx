@@ -145,7 +145,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (flights.some(f => f.name.trim() === flightName.trim() && f.type === flightType)) { setNameError(`رحلة ${flightType} بالاسم "${flightName}" موجودة بالفعل`); return; }
     setNameError("");
     const { data, error } = await supabase.from("flights").insert([{ name: flightName.trim(), type: flightType, airline: airline.trim(), date: flightDate, time: flightTime, arrival_time: arrivalTime, arrival_date: arrivalDate, from_airport: fromAirport.trim(), to_airport: toAirport.trim() }]).select();
-    if (error) { showAlert("error", `فشل إضافة الرحلة: ${error.message || "يرجى المحاولة مرة أخرى"}`); return; }
+    if (error) { console.error("فشل إضافة الرحلة", error); showAlert("error", "فشل إضافة الرحلة، يرجى المحاولة مرة أخرى"); return; }
     if (!error && data?.[0]) {
       const newFlight = data[0] as Flight;
       setFlights(prev => [...prev, newFlight]);
