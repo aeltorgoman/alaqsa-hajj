@@ -14,9 +14,16 @@
 // التفويض كله عبر _shared/authorize.ts — لا منطق تفويض في هذا
 // الملف ولا في أي دالة أخرى.
 //
-// ما دون ذلك من الملف منقول كما كان بلا تغيير: نصوص الاستخراج
-// الثلاثة والنموذج والاستجابة. حدّ الاستدعاءات وتصفية الاستجابة
-// في س٩، لا هنا.
+// نصوص الاستخراج الثلاثة والنموذج منقولة كما كانت بلا تغيير.
+//
+// س٩ / L2 — تصفية الاستجابة. كانت الدالة تُعيد استجابة المزوّد كما
+// هي: اسم النموذج ومعرّف الرسالة وعدّاد الرموز وسبب التوقّف ونصّ
+// خطئه. والعميل لا يقرأ منها إلا نصوص `content[].text`. فما زاد
+// وصفٌ لبنيتنا الخلفية يُسلَّم مجاناً لمن يملك الصلاحية. الإسقاط
+// أدناه يُخرج ما يُستعمَل وحده.
+//
+// وأخطاء المزوّد كانت تعود بحالة 200 مع جسمه الخام؛ صارت 502 برسالة
+// عامة والتفصيل في سجلّ الخادم. حدّ الاستدعاءات وحصر CORS باقيان.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authorize } from "../_shared/authorize.ts";
 
@@ -26,6 +33,18 @@ const corsHeaders = {
 };
 
 const REQUIRED_PERMISSION = "manage_passengers";
+
+/* الإسقاط المضبوط: نصوص المحتوى وحدها — لا نموذج ولا رموز ولا معرّفات */
+function projectContent(payload: unknown): { content: { type: "text"; text: string }[] } {
+  const content = (payload as { content?: unknown } | null)?.content;
+  if (!Array.isArray(content)) return { content: [] };
+  return {
+    content: content
+      .filter((item): item is { text: string } =>
+        typeof item === "object" && item !== null && typeof (item as { text?: unknown }).text === "string")
+      .map((item) => ({ type: "text" as const, text: item.text })),
+  };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -127,12 +146,23 @@ serve(async (req) => {
       })
     });
 
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    const data = await response.json().catch(() => null);
+
+    /* فشل المزوّد: تفصيله في السجلّ، والعميل يأخذ حالةً صادقة ورسالةً عامة */
+    if (!response.ok) {
+      console.error("فشل استدعاء مزوّد التحليل", { status: response.status, body: data });
+      return new Response(JSON.stringify({ error: "تعذّر تحليل المستند." }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify(projectContent(data)), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: String(error) }), {
+    console.error("خطأ غير متوقّع في مسح المستند", error);
+    return new Response(JSON.stringify({ error: "تعذّر تحليل المستند." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
