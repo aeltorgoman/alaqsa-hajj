@@ -18,7 +18,7 @@
 // verify_jwt = true، والتفويض كله عبر _shared/authorize.ts — لا
 // منطق تفويض في هذا الملف ولا في أي دالة أخرى.
 import { authorize } from "../_shared/authorize.ts";
-import { CORS, fail, json } from "../_shared/http.ts";
+import { cors, fail, json } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
 /* الصلاحية التي تحرس صفحة إدارة المواسم في NAV — نفسها تحرس
@@ -26,8 +26,8 @@ import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 const REQUIRED_PERMISSION = "view_archive";
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST") return fail(405, "الطريقة غير مدعومة.");
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
+  if (req.method !== "POST") return fail(req, 405, "الطريقة غير مدعومة.");
 
   let body: {
     action?: string;
@@ -37,12 +37,12 @@ Deno.serve(async (req: Request) => {
   try {
     body = await req.json();
   } catch {
-    return fail(400, "طلب غير صالح.");
+    return fail(req, 400, "طلب غير صالح.");
   }
 
   const { action } = body;
   if (action !== "verify" && action !== "close" && action !== "delete") {
-    return fail(400, "عملية غير معروفة.");
+    return fail(req, 400, "عملية غير معروفة.");
   }
 
   /* ١) الهوية والصلاحية — الطبقة المشتركة، النمط الثلاثي كاملاً */
@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
 
   /* ١.٥) الحدّ الكمّي — س٩ / M4. العمليات هنا لا رجعة فيها */
   const limited = await enforceRateLimit(
-    admin, LIMITS.seasonAdmin.scope, userId, LIMITS.seasonAdmin.limit, LIMITS.seasonAdmin.windowSeconds,
+    req, admin, LIMITS.seasonAdmin.scope, userId, LIMITS.seasonAdmin.limit, LIMITS.seasonAdmin.windowSeconds,
   );
   if (limited) return limited;
 
@@ -66,11 +66,11 @@ Deno.serve(async (req: Request) => {
 
   /* verify يقف هنا عن قصد: خطوة الهوية تثبت الصلاحية ولا تغيّر شيئاً.
      ويعود بالاسم ليكتبه الإيصال من مصدر موثوق لا من الجلسة. */
-  if (action === "verify") return json(200, { ok: true, name: actor });
+  if (action === "verify") return json(req, 200, { ok: true, name: actor });
 
   if (action === "close") {
     const name = (body.newSeasonName ?? "").trim();
-    if (!name) return fail(400, "اسم الموسم الجديد مطلوب.");
+    if (!name) return fail(req, 400, "اسم الموسم الجديد مطلوب.");
 
     const { data, error } = await admin.rpc("close_season", {
       p_new_name: name,
@@ -80,18 +80,18 @@ Deno.serve(async (req: Request) => {
        موسم مفتوح) فتُمرَّر كما هي بدل رسالة عامة تُخفي السبب */
     if (error) {
       console.error("تعذر إقفال الموسم", error);
-      return fail(400, error.message || "تعذّر إقفال الموسم.");
+      return fail(req, 400, error.message || "تعذّر إقفال الموسم.");
     }
-    return json(200, { newSeasonId: data, closedBy: actor });
+    return json(req, 200, { newSeasonId: data, closedBy: actor });
   }
 
   const seasonId = body.seasonId;
-  if (typeof seasonId !== "number") return fail(400, "معرّف الموسم مطلوب.");
+  if (typeof seasonId !== "number") return fail(req, 400, "معرّف الموسم مطلوب.");
 
   const { error } = await admin.rpc("delete_season", { p_season_id: seasonId });
   if (error) {
     console.error("تعذر حذف الموسم", error);
-    return fail(400, error.message || "تعذّر حذف الموسم.");
+    return fail(req, 400, error.message || "تعذّر حذف الموسم.");
   }
-  return json(200, { ok: true });
+  return json(req, 200, { ok: true });
 });

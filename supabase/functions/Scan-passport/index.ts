@@ -23,18 +23,17 @@
 // أدناه يُخرج ما يُستعمَل وحده.
 //
 // وأخطاء المزوّد كانت تعود بحالة 200 مع جسمه الخام؛ صارت 502 برسالة
-// عامة والتفصيل في سجلّ الخادم. حصر CORS باقٍ.
+// عامة والتفصيل في سجلّ الخادم.
 //
 // س٩ / M4 — حدّ الاستدعاءات. الصلاحية تحدّ الحقّ لا الكمّ، وكل
 // استدعاء هنا يستهلك مفتاحاً مدفوعاً.
+//
+// س٩ — وترويسات CORS صارت من الطبقة المشتركة، محسوبةً على أصل
+// الطلب بدل `*` الثابتة.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authorize } from "../_shared/authorize.ts";
+import { cors } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const REQUIRED_PERMISSION = "manage_passengers";
 
@@ -51,6 +50,8 @@ function projectContent(payload: unknown): { content: { type: "text"; text: stri
 }
 
 serve(async (req) => {
+  const corsHeaders = cors(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -61,7 +62,7 @@ serve(async (req) => {
 
   /* الحدّ الكمّي قبل استهلاك المفتاح المدفوع */
   const limited = await enforceRateLimit(
-    auth.admin, LIMITS.scan.scope, auth.userId, LIMITS.scan.limit, LIMITS.scan.windowSeconds,
+    req, auth.admin, LIMITS.scan.scope, auth.userId, LIMITS.scan.limit, LIMITS.scan.windowSeconds,
   );
   if (limited) return limited;
 

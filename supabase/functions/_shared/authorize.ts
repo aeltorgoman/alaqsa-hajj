@@ -26,7 +26,7 @@ export async function authorize(req: Request, permission: string): Promise<Autho
   const url = Deno.env.get("SUPABASE_URL")!;
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  if (!token) return { ok: false, response: fail(401, "غير مصرّح.") };
+  if (!token) return { ok: false, response: fail(req, 401, "غير مصرّح.") };
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
@@ -34,7 +34,7 @@ export async function authorize(req: Request, permission: string): Promise<Autho
 
   /* (٢) الهوية — من الرمز لا من جسم الطلب */
   const { data: caller, error: callerErr } = await admin.auth.getUser(token);
-  if (callerErr || !caller?.user) return { ok: false, response: fail(401, "غير مصرّح.") };
+  if (callerErr || !caller?.user) return { ok: false, response: fail(req, 401, "غير مصرّح.") };
 
   /* (٣) الصلاحية — بهوية المستدعي نفسه، ومن مصدر واحد */
   const asUser = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -44,10 +44,10 @@ export async function authorize(req: Request, permission: string): Promise<Autho
   const { data: allowed, error: permErr } = await asUser.rpc("has_permission", { p_key: permission });
   if (permErr) {
     console.error("تعذّر فحص الصلاحية", permErr);
-    return { ok: false, response: fail(500, "تعذّر التحقق من الصلاحية.") };
+    return { ok: false, response: fail(req, 500, "تعذّر التحقق من الصلاحية.") };
   }
   /* الرفض هو الافتراض: أي قيمة غير true رفض */
-  if (allowed !== true) return { ok: false, response: fail(403, "لا تملك الصلاحية المطلوبة.") };
+  if (allowed !== true) return { ok: false, response: fail(req, 403, "لا تملك الصلاحية المطلوبة.") };
 
   return { ok: true, admin, userId: caller.user.id };
 }
