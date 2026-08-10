@@ -21,6 +21,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.7";
 import { authorize } from "../_shared/authorize.ts";
+import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
 const REQUIRED_PERMISSION = "manage_portal";
 
@@ -50,6 +51,12 @@ Deno.serve(async (req: Request) => {
   /* الهوية والصلاحية قبل قراءة الجسم وقبل أي إرسال إلى جهاز */
   const auth = await authorize(req, REQUIRED_PERMISSION);
   if (!auth.ok) return auth.response;
+
+  /* س٩ / M4 — الحدّ الكمّي قبل أي إرسال إلى جهاز حاج */
+  const limited = await enforceRateLimit(
+    auth.admin, LIMITS.push.scope, auth.userId, LIMITS.push.limit, LIMITS.push.windowSeconds,
+  );
+  if (limited) return limited;
 
   try {
     const publicKey = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
