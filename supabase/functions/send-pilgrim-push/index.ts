@@ -21,21 +21,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.7";
 import { authorize } from "../_shared/authorize.ts";
+import { cors } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
 const REQUIRED_PERMISSION = "manage_portal";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
 
 type Subscription = {
   id: number;
@@ -46,6 +35,13 @@ type Subscription = {
 };
 
 Deno.serve(async (req: Request) => {
+  const CORS = cors(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
+
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   /* الهوية والصلاحية قبل قراءة الجسم وقبل أي إرسال إلى جهاز */
@@ -54,7 +50,7 @@ Deno.serve(async (req: Request) => {
 
   /* س٩ / M4 — الحدّ الكمّي قبل أي إرسال إلى جهاز حاج */
   const limited = await enforceRateLimit(
-    auth.admin, LIMITS.push.scope, auth.userId, LIMITS.push.limit, LIMITS.push.windowSeconds,
+    req, auth.admin, LIMITS.push.scope, auth.userId, LIMITS.push.limit, LIMITS.push.windowSeconds,
   );
   if (limited) return limited;
 
@@ -214,6 +210,8 @@ Deno.serve(async (req: Request) => {
       disabled: disabledIds.length,
     });
   } catch (err) {
-    return json({ error: (err as Error).message ?? "خطأ غير متوقع." }, 500);
+    /* س٩ — التفصيل إلى سجلّ الخادم، والمستدعي يأخذ رسالة عامة */
+    console.error("خطأ غير متوقّع في إرسال التنبيهات", err);
+    return json({ error: "تعذّر إرسال التنبيهات." }, 500);
   }
 });

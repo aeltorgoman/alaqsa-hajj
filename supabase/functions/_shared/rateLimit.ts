@@ -16,6 +16,7 @@ import { fail } from "./http.ts";
 
 /** ترجع Response للرفض، أو null إذا كان الطلب داخل الحدّ. */
 export async function enforceRateLimit(
+  req: Request,
   admin: SupabaseClient,
   scope: string,
   userId: string,
@@ -36,7 +37,7 @@ export async function enforceRateLimit(
 
   if (data !== true) {
     console.warn("تجاوز حدّ الاستدعاءات", { scope, userId, limit, windowSeconds });
-    return fail(429, "تجاوزت الحدّ المسموح من الطلبات، حاول بعد قليل.");
+    return fail(req, 429, "تجاوزت الحدّ المسموح من الطلبات، حاول بعد قليل.");
   }
 
   return null;
