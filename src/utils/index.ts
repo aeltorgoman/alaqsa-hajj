@@ -198,10 +198,16 @@ export async function scanDocument(file: File, mode: ScanMode): Promise<ScannedD
 
   if (error) {
     const status = getFunctionErrorStatus(error);
-    const code = status === 401 ? "UNAUTHORIZED" : status && status >= 500 ? "FUNCTION_SERVER_ERROR" : "FUNCTION_REQUEST_FAILED";
+    const code = status === 401
+      ? "UNAUTHORIZED"
+      : status === 429
+        ? "RATE_LIMITED"
+        : status && status >= 500 ? "FUNCTION_SERVER_ERROR" : "FUNCTION_REQUEST_FAILED";
     console.error("Document scan function failed", { mode, status, code, error });
     throw new DocumentScanError(
-      status === 401 ? "انتهت صلاحية جلسة المسح أو لم يتم السماح بالطلب." : "تعذر الاتصال بخدمة مسح المستندات.",
+      status === 401 ? "انتهت صلاحية جلسة المسح أو لم يتم السماح بالطلب."
+        : status === 429 ? "تجاوزت الحدّ المسموح من عمليات المسح، حاول بعد قليل."
+        : "تعذر الاتصال بخدمة مسح المستندات.",
       code,
       status,
       { cause: error }

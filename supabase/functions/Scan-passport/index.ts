@@ -23,9 +23,13 @@
 // أدناه يُخرج ما يُستعمَل وحده.
 //
 // وأخطاء المزوّد كانت تعود بحالة 200 مع جسمه الخام؛ صارت 502 برسالة
-// عامة والتفصيل في سجلّ الخادم. حدّ الاستدعاءات وحصر CORS باقيان.
+// عامة والتفصيل في سجلّ الخادم. حصر CORS باقٍ.
+//
+// س٩ / M4 — حدّ الاستدعاءات. الصلاحية تحدّ الحقّ لا الكمّ، وكل
+// استدعاء هنا يستهلك مفتاحاً مدفوعاً.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { authorize } from "../_shared/authorize.ts";
+import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +58,12 @@ serve(async (req) => {
   /* الهوية والصلاحية قبل قراءة الجسم وقبل أي استهلاك للمفتاح المدفوع */
   const auth = await authorize(req, REQUIRED_PERMISSION);
   if (!auth.ok) return auth.response;
+
+  /* الحدّ الكمّي قبل استهلاك المفتاح المدفوع */
+  const limited = await enforceRateLimit(
+    auth.admin, LIMITS.scan.scope, auth.userId, LIMITS.scan.limit, LIMITS.scan.windowSeconds,
+  );
+  if (limited) return limited;
 
   try {
     const { imageBase64, mediaType, mode } = await req.json();

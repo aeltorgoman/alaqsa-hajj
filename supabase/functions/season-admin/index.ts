@@ -19,6 +19,7 @@
 // منطق تفويض في هذا الملف ولا في أي دالة أخرى.
 import { authorize } from "../_shared/authorize.ts";
 import { CORS, fail, json } from "../_shared/http.ts";
+import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
 /* الصلاحية التي تحرس صفحة إدارة المواسم في NAV — نفسها تحرس
    العمليات، فلا تتفارق الواجهة عن الخادم */
@@ -48,6 +49,12 @@ Deno.serve(async (req: Request) => {
   const auth = await authorize(req, REQUIRED_PERMISSION);
   if (!auth.ok) return auth.response;
   const { admin, userId } = auth;
+
+  /* ١.٥) الحدّ الكمّي — س٩ / M4. العمليات هنا لا رجعة فيها */
+  const limited = await enforceRateLimit(
+    admin, LIMITS.seasonAdmin.scope, userId, LIMITS.seasonAdmin.limit, LIMITS.seasonAdmin.windowSeconds,
+  );
+  if (limited) return limited;
 
   /* ٢) الاسم للإيصال — من user_profiles بمعرّف الجلسة، لا مما يرسله
      المتصفح ولا من auth.users (الثابت أ١٠) */
