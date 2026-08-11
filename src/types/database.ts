@@ -820,36 +820,6 @@ export type Database = {
         }
         Relationships: []
       }
-      users: {
-        Row: {
-          created_at: string | null
-          id: number
-          is_active: boolean | null
-          name: string
-          password: string
-          permissions: Json | null
-          username: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: never
-          is_active?: boolean | null
-          name: string
-          password: string
-          permissions?: Json | null
-          username: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: never
-          is_active?: boolean | null
-          name?: string
-          password?: string
-          permissions?: Json | null
-          username?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       company_profile_public: {
@@ -982,15 +952,6 @@ export type Database = {
         }
         Returns: Json
       }
-      create_user: {
-        Args: {
-          p_name: string
-          p_password: string
-          p_permissions: Json
-          p_username: string
-        }
-        Returns: undefined
-      }
       delete_season: { Args: { p_season_id: number }; Returns: undefined }
       get_pilgrim_portal: {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
@@ -1037,26 +998,6 @@ export type Database = {
       unregister_pilgrim_push: {
         Args: { p_endpoint: string }
         Returns: boolean
-      }
-      update_user: {
-        Args: {
-          p_id: number
-          p_name: string
-          p_password: string
-          p_permissions: Json
-          p_username: string
-        }
-        Returns: undefined
-      }
-      verify_user: {
-        Args: { p_password: string; p_username: string }
-        Returns: {
-          id: number
-          name: string
-          password: string
-          permissions: Json
-          username: string
-        }[]
       }
     }
     Enums: {
