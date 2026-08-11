@@ -315,13 +315,22 @@ export function useSignedDoc(
 export async function downloadFile(value: string) {
   const url = await signedDocUrl(value);
   if (!url) return;
+
+  /* ⚠️ الاسم من **مفتاح الكائن** لا من الرابط الموقّع: الرابط يحمل
+     `?token=…`، وقصّه بـ`split("/").pop()` كان يُنتج اسماً مثل
+     `passport_doc_178….jpg?token=eyJhbGciOi…` — لا ينتهي بامتداد
+     فلا يفتحه النظام. والمفتاح ثابت ونظيف ولا استعلام فيه. */
+  const filename = docKey(value).split("/").pop() || "document";
+
   try {
     const response = await fetch(url);
+    /* استجابة خطأ تُنتج ملفاً «صالحاً» فيه نصّ الخطأ — تُرفض هنا */
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = url.split("/").pop() || "file";
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
