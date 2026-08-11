@@ -387,6 +387,37 @@ export async function uploadDoc(file: File, passengerId: number, docType: string
   return path;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   أصول الشركة — حاوية أخرى بقاعدة أخرى (س٦ / الخطوة ٣ · ق١)
+
+   الشعار والخلفية **عامّان بطبيعتهما**: شاشة الدخول تعرضهما لزائر
+   مجهول قبل وجود جلسة. فلا توقيع ولا مفاتيح هنا — يُخزَّن الرابط
+   العامّ كاملاً، وهو ثابت لأن الحاوية تبقى عامة.
+
+   وهذا **ليس نقضاً لـق٤**: تلك القاعدة سببها أن حاوية المستندات
+   تصير خاصّة فيموت رابطها. وهنا لا يموت.
+
+   ⚠️ ولهذا لا تُستعمل `uploadDoc` للأصول: كانت ترفع إلى
+   `passengers-docs` وتُعيد **مفتاحاً**، و`normalizeCompanyAssetUrl`
+   ترفض المفتاح وتُرجع null — فيختفي الشعار.
+   ═══════════════════════════════════════════════════════════════ */
+
+const COMPANY_BUCKET = "company-assets";
+
+export async function uploadCompanyAsset(file: File, kind: string): Promise<string | null> {
+  const compressed = await compressImage(file);
+  const isPng = file.type === "image/png";
+  const ext = isPng ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const contentType = isPng ? "image/png" : file.type === "image/webp" ? "image/webp" : "image/jpeg";
+  const path = `${kind}_${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage.from(COMPANY_BUCKET).upload(path, compressed, { upsert: true, contentType });
+  if (error) { console.error("تعذّر رفع أصل الشركة", error); return null; }
+
+  const { data } = supabase.storage.from(COMPANY_BUCKET).getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
 export function makeHTML(
   title: string,
   body: string,

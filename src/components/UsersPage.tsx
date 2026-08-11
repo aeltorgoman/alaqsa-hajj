@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { supabase } from "../supabase";
 import type { User } from "../types";
-import { ALL_PERMISSIONS, inp, btnP, btnS, uploadDoc } from "../utils";
+import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset } from "../utils";
 import { useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -139,7 +139,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setCompanyUploading(true);
-    const url = await uploadDoc(file, 0, "company_logo");
+    const url = await uploadCompanyAsset(file, "company_logo");
     setCompanyUploading(false);
     if (url) setCompanyForm(prev => ({ ...prev, logo_url: url }));
     else showAlert("error", "فشل رفع الشعار، يرجى المحاولة مرة أخرى");
@@ -348,7 +348,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                         <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
                           const file = e.target.files?.[0]; if (!file) return;
                           setCompanyUploading(true);
-                          const url = await uploadDoc(file, 0, "company_banner");
+                          const url = await uploadCompanyAsset(file, "company_banner");
                           setCompanyUploading(false);
                           if (url) setCompanyForm(prev => ({ ...prev, banner_image_url: url }));
                           else showAlert("error", "فشل رفع صورة البانر، يرجى المحاولة مرة أخرى");
