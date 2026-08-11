@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { ReportBranding } from "../company/types";
@@ -222,7 +223,98 @@ export async function scanDocument(file: File, mode: ScanMode): Promise<ScannedD
   }
 }
 
-export async function downloadFile(url: string) {
+/* ═══════════════════════════════════════════════════════════════
+   مستندات الحجاج — طبقة التوقيع (س٦ / الخطوة ١)
+
+   الحاوية `passengers-docs` عامة اليوم، وستصير خاصّة في آخر س٦.
+   ولهذا **يمرّ كل قارئ من هنا** بدل أن يبني رابطاً بنفسه: يوم
+   الخصخصة لا تتغيّر إلا هذه الدالة.
+
+   والقاعدة تحفظ **مفتاح الكائن** لا الرابط (القرار ق٤): الرابط
+   الموقّع مؤقّت بطبيعته فلا يُخزَّن، والمفتاح ثابت. و`docKey`
+   تقبل الشكلين — المفتاح الجديد والرابط العامّ القديم — فلا
+   يحتاج الانتقال لحظةَ توقّف واحدة.
+   ═══════════════════════════════════════════════════════════════ */
+
+const DOC_BUCKET = "passengers-docs";
+const PUBLIC_PREFIX = `/storage/v1/object/public/${DOC_BUCKET}/`;
+
+/** مدد الصلاحية المعتمدة — ق٣ */
+export const DOC_TTL = {
+  /** عرض داخليّ للموظّف */
+  view: 5 * 60,
+  /** بوابة الحاج */
+  portal: 15 * 60,
+  /** روابط ترسَل عبر واتساب ويفتحها المستلم لاحقاً */
+  whatsapp: 7 * 24 * 60 * 60,
+} as const;
+
+/** يقبل مفتاح كائن أو رابطاً عاماً قديماً، ويعيد مفتاح الكائن. */
+export function docKey(value: string | null | undefined): string {
+  if (!value) return "";
+  const idx = value.indexOf(PUBLIC_PREFIX);
+  if (idx !== -1) return decodeURIComponent(value.slice(idx + PUBLIC_PREFIX.length).split("?")[0]);
+  /* رابط لا يخصّ حاويتنا: لا مفتاح له */
+  if (/^https?:\/\//i.test(value)) return "";
+  return value;
+}
+
+/* ذاكرة داخل الجلسة: الرابط الموقّع يُعاد استعماله ما بقي حيّاً،
+   وهامش نصف دقيقة يمنع تسليم رابط يموت بين التوقيع والفتح */
+const signedCache = new Map<string, { url: string; expiresAt: number }>();
+const SIGN_MARGIN_MS = 30_000;
+
+/** رابط موقّع قصير العمر لمستند — المسار الوحيد للقراءة. */
+export async function signedDocUrl(
+  value: string | null | undefined,
+  ttlSeconds: number = DOC_TTL.view
+): Promise<string> {
+  const key = docKey(value);
+  if (!key) return "";
+
+  const cacheKey = `${key}|${ttlSeconds}`;
+  const cached = signedCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+
+  const { data, error } = await supabase.storage.from(DOC_BUCKET).createSignedUrl(key, ttlSeconds);
+  if (error || !data?.signedUrl) {
+    console.error("تعذّر توقيع رابط المستند", { key, error });
+    return "";
+  }
+  signedCache.set(cacheKey, {
+    url: data.signedUrl,
+    expiresAt: Date.now() + ttlSeconds * 1000 - SIGN_MARGIN_MS,
+  });
+  return data.signedUrl;
+}
+
+/** رابط عامّ مباشر — للحاجّ المجهول وحده ما دامت الحاوية عامة.
+ *  ⚠️ مؤقّت: يُستبدل بدالة `pilgrim-doc` في الخطوة ٤ من س٦. */
+export function publicDocUrl(value: string | null | undefined): string {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  const { data } = supabase.storage.from(DOC_BUCKET).getPublicUrl(value);
+  return data?.publicUrl || "";
+}
+
+/** خطّاف عرض: يوقّع القيمة المخزّنة ويعيد رابطاً جاهزاً للـ`src`. */
+export function useSignedDoc(
+  value: string | null | undefined,
+  ttlSeconds: number = DOC_TTL.view
+): string {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let alive = true;
+    if (!value) { setUrl(""); return; }
+    void signedDocUrl(value, ttlSeconds).then(u => { if (alive) setUrl(u); });
+    return () => { alive = false; };
+  }, [value, ttlSeconds]);
+  return url;
+}
+
+export async function downloadFile(value: string) {
+  const url = await signedDocUrl(value);
+  if (!url) return;
   try {
     const response = await fetch(url);
     const blob = await response.blob();
@@ -237,12 +329,8 @@ export async function downloadFile(url: string) {
   } catch { window.open(url, "_blank"); }
 }
 
-export function getStoragePath(url: string): string {
-  const prefix = "/storage/v1/object/public/passengers-docs/";
-  const idx = url.indexOf(prefix);
-  if (idx === -1) return "";
-  return decodeURIComponent(url.slice(idx + prefix.length));
-}
+/** الاسم القديم — يبقى للمستدعين، وصار واجهةً لـ docKey. */
+export const getStoragePath = docKey;
 
 export function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve) => {
@@ -283,10 +371,11 @@ export async function uploadDoc(file: File, passengerId: number, docType: string
   const ext = file.type === "application/pdf" ? "pdf" : isPng ? "png" : "jpg";
   const contentType = file.type === "application/pdf" ? "application/pdf" : isPng ? "image/png" : "image/jpeg";
   const path = `${passengerId}/${docType}_${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from("passengers-docs").upload(path, compressed, { upsert: true, contentType });
+  const { error } = await supabase.storage.from(DOC_BUCKET).upload(path, compressed, { upsert: true, contentType });
   if (error) { console.error("upload error", error); return null; }
-  const { data } = supabase.storage.from("passengers-docs").getPublicUrl(path);
-  return data?.publicUrl || null;
+  /* س٦ / ق٤: يُعاد **مفتاح الكائن** لا رابطاً عاماً. القيمة تُخزَّن
+     كما هي في العمود، وطبقة التوقيع تبني الرابط عند العرض. */
+  return path;
 }
 
 export function makeHTML(
