@@ -14,7 +14,11 @@ supabase/
 │   ├── 20260802022040_portal_active_season_only.sql
 │   ├── 20260802022310_season_restrict_close_and_delete_execution.sql
 │   ├── 20260804090000_s1_identity_foundation.sql
-│   └── 20260806110000_company_profile_phase1.sql    ملف الشركة والأصول
+│   ├── 20260806110000_company_profile_phase1.sql    ملف الشركة والأصول
+│   ├── 20260808120000_s4_portal_announcements.sql   تنبيهات البوابة خلف إسقاط
+│   ├── 20260808140000_s4_rls_and_anon_revocation.sql  سياسات RLS وسحب صلاحيات anon
+│   ├── 20260809100000_s9_pin_search_path.sql        تثبيت مسار البحث
+│   └── 20260810100000_s9_edge_rate_limit.sql        عدّاد حدّ الاستدعاءات
 ├── scripts/
 │   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
 │   └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
@@ -48,6 +52,11 @@ supabase/
 **مرصود ومؤجَّل بقرار — موثَّق فلا يُعدّ عيباً:**
 حاوية `passengers-docs` عامة القراءة (تُغلق في س٦ بروابط موقّعة) ·
 و`company_profile_public` يرفع تنبيه `security_definer_view` عند Advisors وهو **مقصود**.
+
+> ⚠️ **`EXECUTE` ممنوح لـ`PUBLIC` افتراضاً في Postgres**، و`PUBLIC` تشمل `anon`.
+> فـ`revoke … from anon` يزيل صفّ `anon` **ويترك `PUBLIC` قائماً** — والدالة تبقى
+> منفَّذة للمجهول. كل منع لدالة يبدأ بـ`revoke execute … from public`، ثم يُمنح
+> ما في الجرد صراحةً. رُصد هذا في بروفة نشر س٤ ولولاها لشُحن الترحيل ناقصاً.
 
 **مسؤولية المالك:** تبرير بقاء المدخل عند كل مراجعة · ومراجعة أي تغيير يمسّ إسقاطه ·
 وإضافة أي مدخل جديد إلى هذا الجرد قبل شحنه.
