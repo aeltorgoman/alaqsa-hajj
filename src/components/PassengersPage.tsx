@@ -1753,9 +1753,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               </div>
             </div>
             {docViewer.url.toLowerCase().includes("pdf") ? (
-              <iframe src={docViewer.url} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
+              <iframe src={docViewerUrl} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
             ) : (
-              <img src={docViewer.url} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
+              <img src={docViewerUrl} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
             )}
           </div>
         </div>
