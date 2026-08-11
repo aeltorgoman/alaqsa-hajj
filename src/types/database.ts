@@ -308,6 +308,27 @@ export type Database = {
           },
         ]
       }
+      edge_rate_limits: {
+        Row: {
+          hits: number
+          scope: string
+          subject: string
+          window_start: string
+        }
+        Insert: {
+          hits?: number
+          scope: string
+          subject: string
+          window_start: string
+        }
+        Update: {
+          hits?: number
+          scope?: string
+          subject?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       financial_group_members: {
         Row: {
           group_id: number
@@ -943,6 +964,15 @@ export type Database = {
         Args: { p_closed_by: string; p_new_name: string }
         Returns: number
       }
+      consume_rate_limit: {
+        Args: {
+          p_limit: number
+          p_scope: string
+          p_subject: string
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       create_financial_group_with_member: {
         Args: {
           p_created_by: string
@@ -968,6 +998,7 @@ export type Database = {
       }
       get_portal_announcements: { Args: never; Returns: Json }
       has_permission: { Args: { p_key: string }; Returns: boolean }
+      is_active_employee: { Args: never; Returns: boolean }
       mark_pilgrim_notification_read: {
         Args: {
           p_announcement_id: number
