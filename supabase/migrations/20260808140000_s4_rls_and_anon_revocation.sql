@@ -163,3 +163,35 @@ grant select on table public.notification_deliveries to authenticated;
 
 /* المتتاليات: الإدراج يحتاج usage — تبقى للموظّف وتُسحب من anon (أعلاه) */
 grant usage, select on all sequences in schema public to authenticated;
+
+-- ── ٧) سحب EXECUTE من PUBLIC — بلا هذا لا يُسحب شيء ─────────
+-- ⚠️ اكتُشف في بروفة ما قبل النشر على الإنتاج. الـ EXECUTE على دوال
+-- Postgres ممنوح لـ **PUBLIC** افتراضاً، ويظهر في الـ ACL صفّاً بلا
+-- مستفيد: `=X/postgres`. و PUBLIC تشمل anon. فـ«revoke … from anon»
+-- في القسم ٤ يزيل صفّ anon **ويترك PUBLIC قائماً**، ويبقى المجهول
+-- قادراً على التنفيذ. الفحص أثبته: بعد القسم ٤ كاملاً بقيت
+-- has_function_privilege('anon','verify_user',...) = true.
+--
+-- ولهذا يُسحب هنا من PUBLIC صراحةً، ويبقى المنح الصريح وحده مصدرَ
+-- الإذن — وهو ما يجعل جرد الوصول المجهول مصدر الحقيقة فعلاً لا قولاً.
+
+/* الثلاث القديمة — القرار ٢ من مراجعة س٤: EXECUTE يُسحب من الجميع.
+   وهي معطّلة اليوم بخطأ crypt (§٩.١)، فلا يجوز أن يبقى إغلاق C1
+   معتمداً على عطلٍ عارض بدل منعٍ صريح. تُحذف في س٥. */
+revoke execute on function public.verify_user(text, text)                       from public, anon, authenticated;
+revoke execute on function public.create_user(text, text, text, jsonb)          from public, anon, authenticated;
+revoke execute on function public.update_user(integer, text, text, text, jsonb) from public, anon, authenticated;
+
+/* دوال الموظّف: SECURITY DEFINER تتجاوز RLS، وكانت تُنفَّذ لـ anon.
+   منحها الصريح لـ authenticated و service_role باقٍ فلا يتأثر التطبيق. */
+revoke execute on function public.active_season_id()                    from public;
+revoke execute on function public.announcement_audience(text, bigint[]) from public;
+revoke execute on function public.push_enabled_passengers()             from public;
+
+/* دوال البوابة الخمس: المنح الصريح لـ anon في القسم ٥ هو المصدر
+   الوحيد للإذن بعد اليوم — لا وراثة من PUBLIC. */
+revoke execute on function public.get_pilgrim_portal(text, integer, integer, integer) from public;
+revoke execute on function public.get_portal_announcements()                          from public;
+revoke execute on function public.register_pilgrim_push(text, integer, integer, integer, text, text, text, text, text) from public;
+revoke execute on function public.unregister_pilgrim_push(text)                       from public;
+revoke execute on function public.mark_pilgrim_notification_read(text, integer, integer, integer, bigint) from public;
