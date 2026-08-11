@@ -18,9 +18,11 @@ supabase/
 │   ├── 20260808120000_s4_portal_announcements.sql   تنبيهات البوابة خلف إسقاط
 │   ├── 20260808140000_s4_rls_and_anon_revocation.sql  سياسات RLS وسحب صلاحيات anon
 │   ├── 20260809100000_s9_pin_search_path.sql        تثبيت مسار البحث
-│   └── 20260810100000_s9_edge_rate_limit.sql        عدّاد حدّ الاستدعاءات
+│   ├── 20260810100000_s9_edge_rate_limit.sql        عدّاد حدّ الاستدعاءات
+│   └── 20260811090000_s5_drop_legacy_auth.sql       حذف نظام الهوية القديم
 ├── scripts/
 │   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
+│   ├── seed_first_admin.mjs                          أداة طوارئ — لا مسار تثبيت
 │   └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
 └── functions/
     ├── _shared/
