@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { publicDocUrl } from "../utils";
 import { supabase } from "../supabase";
 import {
   getPushState, enablePush, disablePush, markNotificationRead,
@@ -509,7 +510,7 @@ function PilgrimPortal() {
           <div style={{ height: 1.5, background: `linear-gradient(90deg,transparent,${goldBright}88,transparent)`, margin: "0 -4px 16px" }} />
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {p.photo_url
-              ? <img src={p.photo_url} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,.55)" }} />
+              ? <img src={publicDocUrl(p.photo_url)} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,.55)" }} />
               : <div style={{ width: 60, height: 60, borderRadius: "50%", background: goldBright, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{(p.short_ar || p.name_ar)?.charAt(0)}</div>}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 18, color: goldBright, fontWeight: 800 }}>{p.gender === "أنثى" ? "حياك الله يا حاجة" : "حياك الله يا حاج"}</div>
@@ -597,7 +598,7 @@ function PilgrimPortal() {
           {showDocs && (
             <div style={card}>
               {cardH(ICONS.doc, "مستنداتي", "للإبراز في المطار والمنافذ")}
-              {[["تصريح الحج", p.hajj_permit_url], ["تذكرة الطيران", p.flight_ticket_url]].map(([t, url], i) => (
+              {[["تصريح الحج", publicDocUrl(p.hajj_permit_url)], ["تذكرة الطيران", publicDocUrl(p.flight_ticket_url)]].map(([t, url], i) => (
                 <div key={i} onClick={() => url && setDocView({ title: t as string, url: url as string })}
                   style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 2px", borderBottom: i === 0 ? `1px dashed ${LINE}` : "none", cursor: url ? "pointer" : "default" }}>
                   <span style={{ fontSize: 20, fontWeight: 700, color: INK }}>{t}</span>

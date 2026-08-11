@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS } from "../utils";
+import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -2097,17 +2097,17 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     if (res.ok) {
                       // بعت التصريح لو مختار
                       if (waSendDocs.permit && p.hajj_permit_url) {
-                        const path = p.hajj_permit_url.split("/passengers-docs/")[1]?.split("?")[0];
+                        const path = docKey(p.hajj_permit_url);
                         if (path) {
-                          const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, 60 * 60 * 24 * 30);
+                          const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, DOC_TTL.whatsapp);
                           if (data?.signedUrl) await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, { method: "POST", headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تصريح السفر" } }) });
                         }
                       }
                       // بعت التذكرة لو مختارة
                       if (waSendDocs.ticket && p.flight_ticket_url) {
-                        const path = p.flight_ticket_url.split("/passengers-docs/")[1]?.split("?")[0];
+                        const path = docKey(p.flight_ticket_url);
                         if (path) {
-                          const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, 60 * 60 * 24 * 30);
+                          const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, DOC_TTL.whatsapp);
                           if (data?.signedUrl) await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, { method: "POST", headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تذكرة الطيران" } }) });
                         }
                       }

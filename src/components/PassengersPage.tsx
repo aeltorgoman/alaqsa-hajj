@@ -12,7 +12,8 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
-import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, downloadFile, getStoragePath, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { DocImage } from "./DocImage";
+import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 
 // تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
 function nameMatches(a?: string | null, b?: string | null): boolean {
@@ -355,6 +356,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
+  /* س٦: العارض يفتح برابط موقّع لا بالقيمة المخزّنة */
+  const docViewerUrl = useSignedDoc(docViewer?.url);
   const [showManual, setShowManual] = useState(false);
   const DEFAULT_MANUAL_FORM = { name_ar: "", name_en: "", short_ar: "", short_en: "", passport: "", national_id: "", nat: "قطري", dob: "", expiry: "", id_expiry: "", gender: "ذكر", phone: "" };
   const DEFAULT_MANUAL_SERVICES = { bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" };
@@ -937,7 +940,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {existingDoc ? (
                     <button onClick={() => setCompareCandidate(p)} title="عرض الصور بحجم أكبر للمقارنة" style={{ width: 40, height: 40, padding: 0, border: "1px solid var(--line)", borderRadius: 6, overflow: "hidden", cursor: "pointer", flexShrink: 0, background: "none" }}>
-                      <img src={existingDoc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <DocImage value={existingDoc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </button>
                   ) : (
                     <Avatar name={p.name_ar} gender={p.gender} size={36} />
@@ -975,7 +978,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 <div style={{ flex: 1, minWidth: 240 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6, textAlign: "center" }}>{existingLabel}</div>
                   {existingDoc ? (
-                    <img src={existingDoc} style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }} />
+                    <DocImage value={existingDoc} style={{ width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }} />
                   ) : (
                     <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, border: "1px dashed var(--line)", background: "var(--bg-2)", fontSize: 12, color: "var(--text-muted)" }}>لا توجد صورة محفوظة لهذا الحاج</div>
                   )}
@@ -1611,7 +1614,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             <div key={label as string} style={{ border: "0.5px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
               <div style={{ background: "var(--bg-2)", padding: "6px 10px", fontSize: 11, fontWeight: 500, borderBottom: "0.5px solid var(--border)" }}>{label as string}</div>
               {url ? (
-                <img src={url as string} alt={label as string} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                <DocImage value={url as string} alt={label as string} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
               ) : (
                 <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--border)", fontSize: 12 }}>لم يتم الرفع</div>
               )}
@@ -1731,9 +1734,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               </div>
             </div>
             {docViewer.url.endsWith(".pdf") || docViewer.url.includes("pdf") ? (
-              <iframe src={docViewer.url} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
+              <iframe src={docViewerUrl} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
             ) : (
-              <img src={docViewer.url} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
+              <img src={docViewerUrl} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
             )}
           </div>
         </div>

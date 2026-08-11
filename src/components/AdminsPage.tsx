@@ -8,7 +8,7 @@ import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile, makeHTML, printInPage } from "../utils";
+import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile, makeHTML, printInPage, useSignedDoc } from "../utils";
 import { useReportBranding } from "../company/CompanyContext";
 
 // ============================================================
@@ -105,6 +105,8 @@ function AdminsPage({
   const [docTarget, setDocTarget] = useState<Passenger | null>(null);
   const [docUploading, setDocUploading] = useState<string | null>(null);
   const [docViewer, setDocViewer] = useState<{ url: string; label: string } | null>(null);
+  /* س٦: العارض يفتح برابط موقّع لا بالقيمة المخزّنة */
+  const docViewerUrl = useSignedDoc(docViewer?.url);
 
   const admins = passengers.filter(p => p.passenger_type && p.passenger_type !== "حاج");
 
@@ -684,7 +686,7 @@ function AdminsPage({
             {docViewer && (
               <div style={{ width: 260, flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{docViewer.label}</div>
-                <img src={docViewer.url} alt={docViewer.label} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }}
+                <img src={docViewerUrl} alt={docViewer.label} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }}
                   onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
               </div>
             )}
