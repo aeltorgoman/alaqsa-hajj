@@ -176,7 +176,12 @@ export function parseScanResponse(payload: unknown, mode: ScanMode): ScannedDocu
   const stringValue = (field: string) => typeof parsed[field] === "string" ? parsed[field] : "";
   return {
     ...parsed,
-    doc_type: stringValue("doc_type"),
+    /* ⚠️ يُقصّ هنا لأن الفحص أعلاه يقصّ: `hasExpectedDocumentData`
+       يقبل `doc_type` بعد `trim()`، فكان `"hajj_permit\n"` يجتاز
+       التحقّق ثم يسقط في مقارنة `=== "hajj_permit"` عند المستدعي
+       فيُعامَل المستند كجواز. القصّ يوحّد الطرفين — ولا يغيّر منطق
+       التعرّف: النوع كما قرأه المزوّد، بلا فراغ حوله. */
+    doc_type: stringValue("doc_type").trim(),
     name_en: stringValue("name_en"),
     name_ar: stringValue("name_ar"),
     passport: stringValue("passport"),
