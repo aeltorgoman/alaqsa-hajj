@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { portalDocUrl, usePortalDoc, type PortalCreds, type PortalDocType } from "../utils";
-import { supabase } from "../supabase";
+import { portalSupabase } from "../portalSupabase";
 import {
   getPushState, enablePush, disablePush, markNotificationRead,
   registerServiceWorker, resubscribeIfNeeded,
@@ -139,13 +139,13 @@ function PilgrimPortal() {
     const creds = (() => { try { return JSON.parse(localStorage.getItem("portal_creds") || "null"); } catch { return null; } })();
     const refreshAll = async () => {
       if (creds) {
-        const { data: res } = await supabase.rpc("get_pilgrim_portal", creds);
+        const { data: res } = await portalSupabase.rpc("get_pilgrim_portal", creds);
         if (res) { setData(res as unknown as PortalData); localStorage.setItem("portal_data", JSON.stringify(res)); return; }
       }
       /* الحاج anon، فلا يقرأ الجدول مباشرةً: إسقاط مضبوط خلف دالة
          SECURITY DEFINER — نفس نمط get_pilgrim_portal (س٤ / §٣.٦).
          الدالة ترشّح بالوقت والانتهاء وترتّب العاجل أولاً. */
-      const { data: anns } = await supabase.rpc("get_portal_announcements");
+      const { data: anns } = await portalSupabase.rpc("get_portal_announcements");
       if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
     };
     refreshAll();
@@ -274,7 +274,7 @@ function PilgrimPortal() {
     setLoading(true);
     try {
       const creds = { p_doc: doc.trim(), p_day: dNum, p_month: mNum, p_year: yNum };
-      const { data: res, error } = await supabase.rpc("get_pilgrim_portal", creds);
+      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_portal", creds);
       if (error || !res) setLoginError("البيانات غير صحيحة. تأكد من رقم الجواز أو البطاقة وتاريخ الميلاد.");
       else {
         setData(res as unknown as PortalData);
