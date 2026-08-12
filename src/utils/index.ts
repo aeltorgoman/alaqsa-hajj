@@ -78,6 +78,9 @@ export type ScannedDocument = Record<string, unknown> & {
   id_expiry: string;
   gender: string;
   permit_number: string;
+  /* عقد تصريح الحج — تحليل بالمحتوى لا بالقالب، وأي حقل غائب يعود "" */
+  passport_number: string;
+  full_name: string;
 };
 
 type AnthropicContent = { type?: unknown; text?: unknown };
@@ -107,7 +110,8 @@ export class DocumentScanError extends Error {
 const EXPECTED_FIELDS: Record<ScanMode, readonly string[]> = {
   passport: ["name_en", "name_ar", "passport", "nationality", "dob", "expiry", "gender"],
   idcard: ["name_en", "name_ar", "national_id", "id_expiry", "dob", "gender"],
-  hajj_permit: ["name_en", "name_ar", "national_id", "passport", "permit_number"],
+  /* يكفي حقل واحد: غياب رقم الهوية لا يُفشل العملية إذا وُجد الجواز */
+  hajj_permit: ["national_id", "passport_number", "full_name", "passport", "name_ar", "name_en"],
   auto: ["name_en", "name_ar", "national_id", "passport"],
 };
 
@@ -183,6 +187,11 @@ export function parseScanResponse(payload: unknown, mode: ScanMode): ScannedDocu
     id_expiry: stringValue("id_expiry"),
     gender: stringValue("gender"),
     permit_number: stringValue("permit_number"),
+    /* الجواز يصل باسمين حسب الوضع (`passport` في الجواز والوضع
+       التلقائي، `passport_number` في التصريح) — والمطابقة تقرأ
+       الاثنين فلا تتعلّق بنوع المستند */
+    passport_number: stringValue("passport_number") || stringValue("passport"),
+    full_name: stringValue("full_name") || stringValue("name_ar") || stringValue("name_en"),
   };
 }
 
@@ -202,12 +211,15 @@ export async function scanDocument(file: File, mode: ScanMode): Promise<ScannedD
     const status = getFunctionErrorStatus(error);
     const code = status === 401
       ? "UNAUTHORIZED"
-      : status === 429
-        ? "RATE_LIMITED"
-        : status && status >= 500 ? "FUNCTION_SERVER_ERROR" : "FUNCTION_REQUEST_FAILED";
+      : status === 415
+        ? "UNSUPPORTED_MEDIA_TYPE"
+        : status === 429
+          ? "RATE_LIMITED"
+          : status && status >= 500 ? "FUNCTION_SERVER_ERROR" : "FUNCTION_REQUEST_FAILED";
     console.error("Document scan function failed", { mode, status, code, error });
     throw new DocumentScanError(
       status === 401 ? "انتهت صلاحية جلسة المسح أو لم يتم السماح بالطلب."
+        : status === 415 ? "صيغة الملف غير مدعومة للمسح. المدعوم: JPG · PNG · WebP · GIF · PDF."
         : status === 429 ? "تجاوزت الحدّ المسموح من عمليات المسح، حاول بعد قليل."
         : "تعذر الاتصال بخدمة مسح المستندات.",
       code,
@@ -446,6 +458,21 @@ export async function uploadDoc(file: File, passengerId: number, docType: string
   /* س٦ / ق٤: يُعاد **مفتاح الكائن** لا رابطاً عاماً. القيمة تُخزَّن
      كما هي في العمود، وطبقة التوقيع تبني الرابط عند العرض. */
   return path;
+}
+
+/** حذف كائن رُفع للتوّ — تنظيفٌ بعد فشل تحديث القاعدة.
+ *  يُرجع نجاح الحذف، ولا يرمي: هو مسار تعويض لا مسار عمل. */
+export async function removeDoc(key: string): Promise<boolean> {
+  const path = docKey(key);
+  if (!path) return false;
+  const { error } = await supabase.storage.from(DOC_BUCKET).remove([path]);
+  if (error) {
+    /* الفشل يُسجَّل ولا يُبتلع: يبقى كائن يتيم في الحاوية، ومن يقرأ
+       السجلّ يعرف مفتاحه بالضبط */
+    console.error("تعذّر حذف الكائن بعد فشل حفظ المستند — كائن يتيم", { path, error });
+    return false;
+  }
+  return true;
 }
 
 /* ═══════════════════════════════════════════════════════════════

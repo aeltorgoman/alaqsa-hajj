@@ -13,7 +13,33 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { DocImage } from "./DocImage";
-import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+
+/* ── مقارنة الاسم المستخرَج باسم الحاجّ ──
+   الاسم عامل تأكيد لا مفتاح مطابقة، فالمطلوب كشف الاختلاف **الواضح**
+   لا التطابق الحرفي: الإملاء يختلف بين وثيقة وأخرى (أ/إ/آ · ة/ه ·
+   ى/ي)، والتصريح قد يحمل الاسم الرباعي والقاعدة الثلاثي. فالتطبيع
+   يزيل فروق الرسم، والحكم على تقاطع الكلمات: كلمتان مشتركتان أو
+   أكثر تكفيان لاعتبار الاسمين متوافقين. */
+function normalizeArabic(name: string): string {
+  return name
+    .replace(/[ً-ْـ]/g, "")
+    .replace(/[أإآ]/g, "ا").replace(/ة/g, "ه").replace(/[ىئ]/g, "ي").replace(/ؤ/g, "و")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .trim().replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function namesClearlyDiffer(extracted: string, passenger: Passenger): boolean {
+  const candidates = [passenger.name_ar, passenger.short_ar, passenger.name_en]
+    .filter(Boolean).map(v => normalizeArabic(String(v)));
+  const words = normalizeArabic(extracted).split(" ").filter(w => w.length > 1);
+  if (!words.length || !candidates.length) return false;   /* لا بيانات = لا تحذير */
+  return !candidates.some(c => {
+    const shared = words.filter(w => c.includes(w)).length;
+    return shared >= 2 || (shared >= 1 && words.length === 1);
+  });
+}
 
 // تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
 function nameMatches(a?: string | null, b?: string | null): boolean {
@@ -635,7 +661,20 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setManualSaving(false);
   };
 
-  const [permitConfirm, setPermitConfirm] = useState<{ url: string; field: string; passenger: Passenger; idNum: string } | null>(null);
+  /* تصريح الحج — لا رفع قبل التأكيد، فالحالة تحمل **الملف** لا رابطاً:
+     الرفع يقع بعد أن يرى المستخدم المطابقة ويوافق عليها */
+  const [permitConfirm, setPermitConfirm] = useState<{
+    file: File;
+    field: string;
+    /* الحاجّ المرشَّح — قد يكون null إذا تعذّر التحديد بأمان */
+    passenger: Passenger | null;
+    matchedBy: "national_id" | "passport" | null;
+    /* الاسم المستخرَج يخالف اسم الحاجّ بوضوح — تحذير لا منع */
+    nameMismatch: boolean;
+    parsed: { national_id: string; passport_number: string; full_name: string };
+  } | null>(null);
+  const [permitSaving, setPermitSaving] = useState(false);
+  const [permitSearch, setPermitSearch] = useState("");
 
   useEffect(() => {
     const h = async (e: KeyboardEvent) => {
@@ -671,8 +710,23 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [showVerify, setShowVerify] = useState(false);
   const [verifyData, setVerifyData] = useState<{ passportUrl: string; idUrl: string; passenger: any; updates: any; isQatari: boolean; idMismatch: boolean; } | null>(null);
 
+  /* ⚠️ الغلاف موجود لسبب واقعي: `runDocUpload` تنتظر وعوداً قد
+     يُرفض أحدها (فشل تحليل، انقطاع شبكة)، ورفضٌ غير ملتقَط كان يترك
+     الواجهة على «جاري الرفع» إلى الأبد. فـ`finally` تُفرغ الحالة
+     مهما كان المسار. */
   const handleDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
     setDocUploading(docType);
+    try {
+      await runDocUpload(p, docType, field, file);
+    } catch (err) {
+      console.error("تعذّر رفع المستند", { docType, err });
+      showAlert("error", "تعذّر إتمام العملية، حاول مرة أخرى.");
+    } finally {
+      setDocUploading(null);
+    }
+  };
+
+  const runDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
     if (docType === "passport_doc") {
       const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "passport")]);
       const updates: any = {};
@@ -709,30 +763,49 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         await saveDocUpdates(p, updates);
       }
     } else if (docType === "hajj_permit") {
-      // OCR تصريح السفر — يقرأ رقم البطاقة ويدور على الحاج
-      const [url, parsed] = await Promise.all([
-        uploadDoc(file, p.id, docType),
-        scanDocument(file, "hajj_permit")
-      ]);
-      setDocUploading(null);
-      if (url) {
-        // دور على الحاج بالبطاقة أو الجواز
-        const idNum = parsed.national_id || parsed.passport || "";
-        const matched = idNum
-          ? passengers.find(x => x.national_id === idNum || x.passport === idNum)
-          : null;
+      /* ═══ تصريح الحج ═══
+         التحليل أولاً، والرفع بعد تأكيد المستخدم وحده. فلا يدخل
+         التخزينَ ملفٌ لم يُقرَّ ربطه بحاجّ، ولا يبقى كائن يتيم إذا
+         فشل التحليل أو ألغى المستخدم. */
+      try {
+        const parsed = await scanDocument(file, "hajj_permit");
+        const nid = (parsed.national_id || "").trim();
+        const pass = (parsed.passport_number || "").trim();
+        const fullName = (parsed.full_name || "").trim();
 
-        if (matched) {
-          // طلع رسالة تأكيد
-          setPermitConfirm({ url, field, passenger: matched, idNum });
-        } else {
-          // مش لاقي حاج → ارفع على الحاج الحالي بدون تأكيد
-          if (!await writeOk(supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) { setDocUploading(null); return; }
-          const updated = { ...p, [field]: url };
-          setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
-          setSelected(updated);
-          if (idNum) showAlert("warning", `تمت قراءة الرقم "${idNum}" من المستند، لكنه غير موجود في القائمة — تم رفع الملف على ${p.short_ar || p.name_ar}`);
+        /* ترتيب المطابقة المعتمد: الهوية أولاً، فالجواز عند غيابها أو
+           عند تعذّر المطابقة بها. والاسم **ليس مفتاح مطابقة** — هو
+           عامل تأكيد وتحذير وحده. */
+        let matched: Passenger | undefined;
+        let matchedBy: "national_id" | "passport" | null = null;
+        if (nid) {
+          matched = passengers.find(x => (x.national_id || "").trim() === nid);
+          if (matched) matchedBy = "national_id";
         }
+        if (!matched && pass) {
+          matched = passengers.find(x => (x.passport || "").trim() === pass);
+          if (matched) matchedBy = "passport";
+        }
+
+        setPermitSearch("");
+        setPermitConfirm({
+          file, field,
+          passenger: matched ?? null,
+          matchedBy,
+          nameMismatch: !!(matched && fullName && namesClearlyDiffer(fullName, matched)),
+          parsed: { national_id: nid, passport_number: pass, full_name: fullName },
+        });
+
+        if (!matched) {
+          showAlert("warning", nid || pass
+            ? "قُرئ رقم من التصريح لكنه لا يطابق أي حاجّ — اختر الحاجّ يدوياً ثم أكّد."
+            : "تعذّر قراءة رقم هوية أو جواز من التصريح — اختر الحاجّ يدوياً ثم أكّد.");
+        }
+      } catch (err) {
+        console.error("تعذّر تحليل تصريح الحج", err);
+        showAlert("error", err instanceof DocumentScanError
+          ? err.message
+          : "تعذّر تحليل تصريح الحج، حاول مرة أخرى.");
       }
     } else {
       const url = await uploadDoc(file, p.id, docType);
@@ -1634,39 +1707,122 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       </Modal>
 
       {/* مودال تأكيد تصريح السفر */}
-      <Modal show={!!permitConfirm} onClose={() => setPermitConfirm(null)} title="تأكيد تصريح السفر" maxWidth={380}>
-        {permitConfirm && (
-          <>
-            <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>قرأ الذكاء الاصطناعي من التصريح:</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--em7)", marginBottom: 4 }}>{permitConfirm.idNum}</div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>ووجد الحاج:</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, background: "var(--paper)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
-                <Avatar name={permitConfirm.passenger.name_ar} gender={permitConfirm.passenger.gender} size={36} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{permitConfirm.passenger.short_ar || permitConfirm.passenger.name_ar}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{permitConfirm.passenger.nat} · {permitConfirm.passenger.national_id || permitConfirm.passenger.passport}</div>
-                </div>
+      {/* تأكيد تصريح الحج — الرفع لا يقع إلا من هنا، بعد أن يرى
+          المستخدم البيانات المستخرَجة والحاجّ المحدَّد ويوافق */}
+      <Modal show={!!permitConfirm} onClose={() => { if (!permitSaving) setPermitConfirm(null); }} title="تأكيد تصريح الحج" maxWidth={400}>
+        {permitConfirm && (() => {
+          const { parsed, passenger, matchedBy, nameMismatch } = permitConfirm;
+          const rows: [string, string][] = [
+            ["رقم الهوية", parsed.national_id],
+            ["رقم الجواز", parsed.passport_number],
+            ["الاسم", parsed.full_name],
+          ];
+          return (
+            <>
+              <div style={{ background: "var(--bg-2)", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>قُرئ من التصريح:</div>
+                {rows.map(([label, value]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: value ? 700 : 400, color: value ? "var(--em7)" : "var(--muted)" }}>{value || "غير موجود"}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14 }}>هل أنت متأكد أن هذا التصريح يخص هذا الحاج؟</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={async () => {
-                const { passenger, url, field } = permitConfirm;
-                if (!await writeOk(supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", passenger.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) return;
-                const updated = { ...passenger, [field]: url };
-                setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
-                setSelected(updated);
-                setPermitConfirm(null);
-              }} style={{ flex: 1, background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> نعم، حفظ
-              </button>
-              <button onClick={() => setPermitConfirm(null)} style={{ flex: 1, background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> إلغاء
-              </button>
-            </div>
-          </>
-        )}
+
+              {passenger ? (
+                <>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>
+                    {matchedBy === "national_id" ? "طوبق بالهوية مع:" : matchedBy === "passport" ? "طوبق برقم الجواز مع:" : "الحاجّ المختار:"}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--paper)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)" }}>
+                    <Avatar name={passenger.name_ar} gender={passenger.gender} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{passenger.short_ar || passenger.name_ar}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{passenger.nat} · {passenger.national_id || passenger.passport || "—"}</div>
+                    </div>
+                    <button disabled={permitSaving} onClick={() => setPermitConfirm({ ...permitConfirm, passenger: null, matchedBy: null, nameMismatch: false })}
+                      style={{ background: "var(--bg-2)", border: "1px solid var(--line)", borderRadius: 7, padding: "5px 9px", fontSize: 10.5, cursor: "pointer", color: "var(--text-muted)" }}>تغيير</button>
+                  </div>
+
+                  {nameMismatch && (
+                    <div style={{ marginTop: 10, background: "var(--danger-bg)", border: "1px solid #f0c0cc", borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--danger)", marginBottom: 3 }}>⚠ الاسم في التصريح يختلف عن اسم الحاجّ</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>الرقم طابق، لكن الاسم المقروء «{parsed.full_name}» لا يشبه «{passenger.name_ar}». راجع المستند قبل الحفظ.</div>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "14px 0" }}>هل تؤكّد أن هذا التصريح يخصّ هذا الحاجّ؟ سيُرفع الملف بعد التأكيد.</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button disabled={permitSaving} onClick={async () => {
+                      const target = permitConfirm.passenger;
+                      if (!target) return;
+                      setPermitSaving(true);
+                      try {
+                        const url = await uploadDoc(permitConfirm.file, target.id, "hajj_permit");
+                        if (!url) { showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى"); return; }
+
+                        const field = permitConfirm.field;
+                        const ok = await writeOk(
+                          supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", target.id),
+                          "تعذّر حفظ المستند، لم يُحفظ أي تغيير");
+                        if (!ok) {
+                          /* الرفع نجح والقاعدة لا — لا يُترك كائن بلا
+                             مرجع: يُحذف، وتعذّر الحذف يُسجَّل ويُعلَن */
+                          const cleaned = await removeDoc(url);
+                          if (!cleaned) showAlert("warning", "تعذّر أيضاً حذف الملف المرفوع — أبلغ المسؤول التقني.");
+                          return;
+                        }
+
+                        const updated = { ...target, [field]: url };
+                        setPassengers(prev => prev.map(x => x.id === target.id ? updated : x));
+                        if (selected?.id === target.id) setSelected(updated);
+                        showAlert("success", `تم حفظ تصريح الحج في ملف ${target.short_ar || target.name_ar}`);
+                        setPermitConfirm(null);
+                      } finally {
+                        setPermitSaving(false);
+                      }
+                    }} style={{ flex: 1, background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: permitSaving ? "default" : "pointer", opacity: permitSaving ? .6 : 1 }}>
+                      {permitSaving ? "جارٍ الحفظ…" : "نعم، ارفع واحفظ"}
+                    </button>
+                    <button disabled={permitSaving} onClick={() => setPermitConfirm(null)} style={{ flex: 1, background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>إلغاء</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* لا مطابقة آمنة: الاسم وحده لا يكفي للتحديد التلقائي،
+                      فالاختيار للمستخدم ثم التأكيد */}
+                  <div style={{ fontSize: 11.5, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>تعذّر تحديد الحاجّ بأمان من التصريح — اختره يدوياً.</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg-2)", borderRadius: 8, padding: "6px 10px", marginBottom: 8 }}>
+                    <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "inherit" }}
+                      placeholder="ابحث بالاسم أو الرقم..." value={permitSearch} onChange={e => setPermitSearch(e.target.value)} autoFocus />
+                  </div>
+                  <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                    {passengers.filter(x => !permitSearch
+                      || (x.name_ar || "").includes(permitSearch)
+                      || (x.short_ar || "").includes(permitSearch)
+                      || (x.national_id || "").includes(permitSearch)
+                      || (x.passport || "").includes(permitSearch)).slice(0, 60).map(x => (
+                      <div key={x.id} onClick={() => setPermitConfirm({
+                        ...permitConfirm, passenger: x, matchedBy: null,
+                        nameMismatch: !!(parsed.full_name && namesClearlyDiffer(parsed.full_name, x)),
+                      })}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 8, marginBottom: 3, cursor: "pointer" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "var(--success-bg)"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                        <Avatar name={x.name_ar} gender={x.gender} size={28} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{x.short_ar || x.name_ar}</div>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{x.national_id || x.passport || "—"}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => setPermitConfirm(null)} style={{ ...btnS(), width: "100%", marginTop: 10 }}>إلغاء — بلا رفع</button>
+                </>
+              )}
+            </>
+          );
+        })()}
       </Modal>
 
       <Modal show={showLinkFamily} onClose={() => setShowLinkFamily(false)} title="ربط بأقارب">
