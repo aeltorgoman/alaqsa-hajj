@@ -288,13 +288,70 @@ export async function signedDocUrl(
   return data.signedUrl;
 }
 
-/** رابط عامّ مباشر — للحاجّ المجهول وحده ما دامت الحاوية عامة.
- *  ⚠️ مؤقّت: يُستبدل بدالة `pilgrim-doc` في الخطوة ٤ من س٦. */
-export function publicDocUrl(value: string | null | undefined): string {
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  const { data } = supabase.storage.from(DOC_BUCKET).getPublicUrl(value);
-  return data?.publicUrl || "";
+/* ── بوابة الحاج — س٦ / الخطوة ٤ ──
+   `publicDocUrl` انتهت. الحاجّ المجهول لا يبني رابطاً بنفسه بعد
+   اليوم، ولا يملك ما يبنيه به أصلاً: البوابة لم تعد تستلم مفاتيح
+   المستندات (ق٦)، بل ثلاث قيم منطقية. والرابط يأتي موقّعاً من
+   `pilgrim-doc` التي تستخرج المفتاح من سجل الحاجّ بعد إثبات هويّته.
+   ولهذا يوم تصير الحاوية خاصّة لا يتغيّر شيء في هذه الشاشة. */
+
+/** أنواع المستندات المسموحة للبوابة — نفس قائمة السماح في الخادم */
+export type PortalDocType = "photo" | "hajj_permit" | "flight_ticket";
+
+export type PortalCreds = { p_doc: string; p_day: number; p_month: number; p_year: number };
+
+export type PortalDoc = { url: string; is_pdf: boolean };
+
+/* الرابط الموقّع لا يُخزَّن: ذاكرة الجلسة وحدها، وبهامش نصف دقيقة
+   يمنع تسليم رابط يموت بين الطلب والفتح */
+const portalDocCache = new Map<string, { doc: PortalDoc; expiresAt: number }>();
+
+/** يطلب رابطاً موقّعاً (١٥ دقيقة) لمستند الحاجّ من `pilgrim-doc`.
+ *  لا يُرسل مفتاحاً ولا رابطاً ولا رقم حاجّ — بيانات الإثبات والنوع فقط. */
+export async function portalDocUrl(
+  creds: PortalCreds | null,
+  docType: PortalDocType
+): Promise<PortalDoc | null> {
+  if (!creds?.p_doc) return null;
+
+  const cacheKey = `${creds.p_doc}|${docType}`;
+  const cached = portalDocCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.doc;
+
+  const { data, error } = await supabase.functions.invoke("pilgrim-doc", {
+    body: {
+      doc: creds.p_doc, day: creds.p_day, month: creds.p_month, year: creds.p_year,
+      doc_type: docType,
+    },
+  });
+  if (error || !data?.url) {
+    console.error("تعذّر جلب رابط المستند", { docType, error });
+    return null;
+  }
+
+  const doc: PortalDoc = { url: data.url, is_pdf: data.is_pdf === true };
+  portalDocCache.set(cacheKey, {
+    doc,
+    expiresAt: Date.now() + (Number(data.expires_in) || DOC_TTL.portal) * 1000 - SIGN_MARGIN_MS,
+  });
+  return doc;
+}
+
+/** خطّاف عرض للبوابة — يطلب الرابط عند الحاجة ويعيده جاهزاً للـ`src`. */
+export function usePortalDoc(
+  creds: PortalCreds | null,
+  docType: PortalDocType,
+  enabled: boolean
+): string {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let alive = true;
+    if (!enabled || !creds?.p_doc) { setUrl(""); return; }
+    void portalDocUrl(creds, docType).then(d => { if (alive) setUrl(d?.url ?? ""); });
+    return () => { alive = false; };
+    /* المفاتيح أوّليّة عن قصد: كائن الاعتماد يُعاد بناؤه كل عرض */
+  }, [creds?.p_doc, creds?.p_day, creds?.p_month, creds?.p_year, docType, enabled]);
+  return url;
 }
 
 /** خطّاف عرض: يوقّع القيمة المخزّنة ويعيد رابطاً جاهزاً للـ`src`. */
