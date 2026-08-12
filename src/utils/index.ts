@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
+import { portalSupabase } from "../portalSupabase";
 import type { ReportBranding } from "../company/types";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
 
@@ -318,7 +319,10 @@ export async function portalDocUrl(
   const cached = portalDocCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.doc;
 
-  const { data, error } = await supabase.functions.invoke("pilgrim-doc", {
+  /* عميل البوابة لا العميل المشترك: `pilgrim-doc` عامة
+     (`verify_jwt=false`) فلا تتأثر بوجود جلسة موظّف من عدمه — لكن
+     لا سبب لإرسال رمز هوية موظّف إلى مسار عامّ لا يقرؤه */
+  const { data, error } = await portalSupabase.functions.invoke("pilgrim-doc", {
     body: {
       doc: creds.p_doc, day: creds.p_day, month: creds.p_month, year: creds.p_year,
       doc_type: docType,

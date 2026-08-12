@@ -2,7 +2,7 @@
    تنبيهات بوابة الحاج — منطق التسجيل في جهاز الحاج
    ══════════════════════════════════════════════════════════════ */
 
-import { supabase } from "../supabase";
+import { portalSupabase } from "../portalSupabase";
 
 const VAPID_PUBLIC_KEY: string = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 const SW_PATH = "/sw-push.js";
@@ -149,7 +149,7 @@ export async function enablePush(): Promise<EnableResult> {
     const auth = arrayBufferToBase64(sub.getKey("auth"));
     if (!p256dh || !auth) return { ok: false, reason: "failed" };
 
-    const { data, error } = await supabase.rpc("register_pilgrim_push", {
+    const { data, error } = await portalSupabase.rpc("register_pilgrim_push", {
       ...creds,
       p_endpoint: sub.endpoint,
       p_p256dh: p256dh,
@@ -180,7 +180,7 @@ export async function disablePush(): Promise<boolean> {
 
     if (sub) await sub.unsubscribe().catch(() => undefined);
     if (endpoint) {
-      await supabase.rpc("unregister_pilgrim_push", { p_endpoint: endpoint });
+      await portalSupabase.rpc("unregister_pilgrim_push", { p_endpoint: endpoint });
     }
     localStorage.removeItem("portal_push_endpoint");
     return true;
@@ -204,7 +204,7 @@ export async function markNotificationRead(announcementId: number): Promise<void
   const creds = getPortalCreds();
   if (!creds) return;
   try {
-    await supabase.rpc("mark_pilgrim_notification_read", {
+    await portalSupabase.rpc("mark_pilgrim_notification_read", {
       ...creds,
       p_announcement_id: announcementId,
     });
