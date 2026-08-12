@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { publicDocUrl } from "../utils";
+import { portalDocUrl, usePortalDoc, type PortalCreds, type PortalDocType } from "../utils";
 import { supabase } from "../supabase";
 import {
   getPushState, enablePush, disablePush, markNotificationRead,
@@ -19,7 +19,8 @@ import { setupPortalManifest } from "../utils/portalManifest";
    ═══════════════════════════════════════════════════════════════ */
 
 type PortalData = {
-  pilgrim: { name_ar: string; name_en: string; short_ar?: string | null; gender: string; photo_url: string | null; hajj_permit_url: string | null; flight_ticket_url: string | null; hotel_type: string | null; hotel_view: string | null; camp_mina: string | null; camp_arafa: string | null; camp_mina_name?: string | null; camp_arafa_name?: string | null; phone: string | null };
+  /* ق٦ — العميل يستلم وجود المستند لا مفتاحه، والرابط من `pilgrim-doc` */
+  pilgrim: { name_ar: string; name_en: string; short_ar?: string | null; gender: string; has_photo: boolean; has_hajj_permit: boolean; has_flight_ticket: boolean; hotel_type: string | null; hotel_view: string | null; camp_mina: string | null; camp_arafa: string | null; camp_mina_name?: string | null; camp_arafa_name?: string | null; phone: string | null };
   bus: { name: string; type: string } | null;
   room: { number: string; floor: string; type: string } | null;
   roommates: { name: string; is_family: boolean }[];
@@ -110,7 +111,13 @@ function PilgrimPortal() {
   const [loginError, setLoginError] = useState("");
   const [tab, setTab] = useState<"trip" | "stay" | "alerts">("trip");
   const [lostOpen, setLostOpen] = useState(false);
-  const [docView, setDocView] = useState<{ title: string; url: string } | null>(null);
+  const [docView, setDocView] = useState<{ title: string; url: string; isPdf: boolean } | null>(null);
+  const [docBusy, setDocBusy] = useState<PortalDocType | null>(null);
+  /* بيانات الإثبات محفوظة كما كانت للدخول مرّة واحدة، وهي الآن أيضاً
+     ما تُطلَب به روابط المستندات — لا مفتاح يُخزَّن في الجهاز */
+  const [creds, setCreds] = useState<PortalCreds | null>(() => {
+    try { return JSON.parse(localStorage.getItem("portal_creds") || "null"); } catch { return null; }
+  });
   const [seenAlerts, setSeenAlerts] = useState<number>(() => Number(localStorage.getItem("portal_seen_alerts") || 0));
   const [ackedUrgent, setAckedUrgent] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("portal_acked_urgent") || "[]"); } catch { return []; }
@@ -238,6 +245,10 @@ function PilgrimPortal() {
     if (!showNotifications && tab === "alerts") setTab("trip");
   }, [showNotifications, tab]);
 
+  /* صورة الحاجّ: رابط موقّع قصير العمر يُطلب عند العرض — والخطّاف
+     قبل أي عودة مبكّرة كي لا يتغيّر ترتيب الخطّافات بين عرض وآخر */
+  const photoUrl = usePortalDoc(creds, "photo", data?.pilgrim?.has_photo === true);
+
   const arafa = useMemo(() => getSeasonArafa(), []);
   const postHajj = now > arafa.getTime() + 86400000;
   const activeFlight = postHajj && data?.flight_back ? data.flight_back : data?.flight_go;
@@ -269,6 +280,7 @@ function PilgrimPortal() {
         setData(res as unknown as PortalData);
         localStorage.setItem("portal_data", JSON.stringify(res));
         localStorage.setItem("portal_creds", JSON.stringify(creds));
+        setCreds(creds);
       }
     } catch { setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى."); }
     setLoading(false);
@@ -280,6 +292,7 @@ function PilgrimPortal() {
     localStorage.removeItem("portal_seen_alerts");
     localStorage.removeItem("portal_acked_urgent");
     setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
+    setCreds(null); setDocView(null);
   }
 
   function ackUrgent(id: number) {
@@ -442,7 +455,8 @@ function PilgrimPortal() {
 
   /* ═══════════ عرض مستند ═══════════ */
   if (docView) {
-    const isPdf = docView.url.toLowerCase().includes(".pdf");
+    /* نوع العرض يأتي من الخادم: الرابط الموقّع لا يُقرأ منه امتداد */
+    const isPdf = docView.isPdf;
     return (
       <div dir="rtl" style={{ minHeight: "100dvh", background: "#1c0d12", fontFamily: font, display: "flex", flexDirection: "column" }}>
         {urgentBanner}
@@ -509,8 +523,8 @@ function PilgrimPortal() {
           {brandBar}
           <div style={{ height: 1.5, background: `linear-gradient(90deg,transparent,${goldBright}88,transparent)`, margin: "0 -4px 16px" }} />
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {p.photo_url
-              ? <img src={publicDocUrl(p.photo_url)} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,.55)" }} />
+            {p.has_photo && photoUrl
+              ? <img src={photoUrl} alt="" style={{ width: 60, height: 60, borderRadius: "50%", objectFit: "cover", border: "3px solid rgba(255,255,255,.55)" }} />
               : <div style={{ width: 60, height: 60, borderRadius: "50%", background: goldBright, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{(p.short_ar || p.name_ar)?.charAt(0)}</div>}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 18, color: goldBright, fontWeight: 800 }}>{p.gender === "أنثى" ? "حياك الله يا حاجة" : "حياك الله يا حاج"}</div>
@@ -598,12 +612,23 @@ function PilgrimPortal() {
           {showDocs && (
             <div style={card}>
               {cardH(ICONS.doc, "مستنداتي", "للإبراز في المطار والمنافذ")}
-              {[["تصريح الحج", publicDocUrl(p.hajj_permit_url)], ["تذكرة الطيران", publicDocUrl(p.flight_ticket_url)]].map(([t, url], i) => (
-                <div key={i} onClick={() => url && setDocView({ title: t as string, url: url as string })}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 2px", borderBottom: i === 0 ? `1px dashed ${LINE}` : "none", cursor: url ? "pointer" : "default" }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: INK }}>{t}</span>
-                  {url
-                    ? <span style={{ fontSize: 17, background: brand, color: "#fff", padding: "9px 26px", borderRadius: 99, fontWeight: 800, fontFamily: fontD }}>عرض</span>
+              {/* الوجود من القاعدة، والرابط لا يُطلب إلا عند الضغط:
+                  توقيع عند الحاجة لا عند فتح الشاشة */}
+              {([
+                { t: "تصريح الحج", type: "hajj_permit" as PortalDocType, has: p.has_hajj_permit },
+                { t: "تذكرة الطيران", type: "flight_ticket" as PortalDocType, has: p.has_flight_ticket },
+              ]).map((d, i) => (
+                <div key={d.type} onClick={async () => {
+                  if (!d.has || docBusy) return;
+                  setDocBusy(d.type);
+                  const res = await portalDocUrl(creds, d.type);
+                  setDocBusy(null);
+                  if (res) setDocView({ title: d.t, url: res.url, isPdf: res.is_pdf });
+                }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 2px", borderBottom: i === 0 ? `1px dashed ${LINE}` : "none", cursor: d.has ? "pointer" : "default" }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: INK }}>{d.t}</span>
+                  {d.has
+                    ? <span style={{ fontSize: 17, background: brand, color: "#fff", padding: "9px 26px", borderRadius: 99, fontWeight: 800, fontFamily: fontD }}>{docBusy === d.type ? "جارٍ الفتح…" : "عرض"}</span>
                     : <span style={{ fontSize: 17, color: LABEL, fontWeight: 600 }}>لم يُرفع بعد</span>}
                 </div>
               ))}
