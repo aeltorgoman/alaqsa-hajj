@@ -37,6 +37,33 @@ import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
 const REQUIRED_PERMISSION = "manage_passengers";
 
+/* ────────────────────────────────────────────────────────────
+   كتلة المحتوى بحسب نوع الملف
+
+   ⚠️ العطل الذي يُغلقه هذا: كل ملف كان يُرسَل ككتلة `image`، وهي
+   لا تقبل إلا jpeg/png/gif/webp. فتصريح حج بصيغة PDF كان يُرَدّ من
+   المزوّد بـ400 (`media_type: Input should be 'image/jpeg'…`) فتردّ
+   الدالة 502 — والمسح لا يبدأ أصلاً.
+   وتصريح الحج **صادر من جهة حكومية** ويأتي PDF أو صورة، فالنوعان
+   مساران شرعيّان لا استثناء وحالة عادية.
+
+   وPDF له آليّته الرسمية عند المزوّد: كتلة `document`. ولا يُحوَّل
+   إلى صورة التفافاً — التحويل يفقد النصّ المستخرَج ويضيف عطلاً
+   جديداً في مسار لا يحتاجه. */
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+
+function mediaBlock(mediaType: string, data: string): Record<string, unknown> | null {
+  if (mediaType === "application/pdf") {
+    return { type: "document", source: { type: "base64", media_type: "application/pdf", data } };
+  }
+  /* jpg شائع من أجهزة المسح، وهو jpeg نفسه */
+  const normalized = mediaType === "image/jpg" ? "image/jpeg" : mediaType;
+  if ((IMAGE_TYPES as readonly string[]).includes(normalized)) {
+    return { type: "image", source: { type: "base64", media_type: normalized, data } };
+  }
+  return null;
+}
+
 /* الإسقاط المضبوط: نصوص المحتوى وحدها — لا نموذج ولا رموز ولا معرّفات */
 function projectContent(payload: unknown): { content: { type: "text"; text: string }[] } {
   const content = (payload as { content?: unknown } | null)?.content;
@@ -78,6 +105,27 @@ serve(async (req) => {
   "id_expiry": "تاريخ انتهاء البطاقة DD/MM/YYYY"
 }
 فقط الرقم والصلاحية. لا تضيف أي بيانات أخرى.`;
+    } else if (mode === "hajj_permit") {
+      /* ⚠️ كان هذا الوضع يسقط في نصّ الجواز أدناه، فيُستخرَج من
+         التصريح ما ليس فيه. والتحليل هنا **بالمحتوى لا بالقالب**:
+         التصريح صادر من جهة حكومية وقد يتغيّر تصميمه ومواضع حقوله
+         بين موسم وآخر، فلا يُبنى الاستخراج على موضع ولا على شكل. */
+      prompt = `هذا مستند تصريح حج (قد يكون صورة أو PDF، وقد يختلف تصميمه من موسم لآخر ومن جهة لأخرى).
+
+اقرأ المستند كاملاً وابحث عن بيانات هوية صاحب التصريح **أينما وردت** — لا تعتمد على موضع ثابت ولا على شكل معيّن ولا على ترتيب الحقول. قد تكون العناوين بالعربي أو بالإنجليزي أو الاثنين معاً.
+
+أجب فقط بـ JSON بدون أي نص إضافي:
+{
+  "national_id": "رقم الهوية أو البطاقة الشخصية أو الرقم القومي إن وُجد في المستند",
+  "passport_number": "رقم جواز السفر إن وُجد في المستند",
+  "full_name": "اسم صاحب التصريح كما هو مكتوب حرفياً (العربي إن وُجد، وإلا الإنجليزي)"
+}
+
+قواعد مُلزِمة:
+- أي حقل لا تجده في المستند اتركه "" — لا تخمّن ولا تستنتج ولا تؤلّف.
+- غياب رقم الهوية ليس فشلاً: أعد ما وجدته من الحقول الأخرى.
+- لا تترجم الاسم ولا تُعِد ترتيبه ولا تصحّح إملاءه.
+- انقل الأرقام كما هي بلا فواصل ولا مسافات ولا أصفار تضيفها من عندك.`;
     } else if (mode === "auto") {
       prompt = `هذه صورة مستند سفر لحاج. حدد أولاً نوع المستند، ثم استخرج البيانات المناسبة له فقط، وأجب فقط بـ JSON بدون أي نص إضافي بالشكل التالي:
 
@@ -137,6 +185,17 @@ serve(async (req) => {
 مهم: لا تترجم الاسم. فقط انقل البيانات الموجودة في الجواز.`;
     }
 
+    /* النوع يُفحص هنا لا عند المزوّد: رفضه يعود 502 عامة، وهذا يعود
+       415 برسالة تقول للموظّف ما الصيغ المقبولة */
+    const block = mediaBlock(String(mediaType ?? ""), imageBase64);
+    if (!block) {
+      console.error("نوع ملف غير مدعوم للمسح", { mediaType, mode });
+      return new Response(
+        JSON.stringify({ error: "صيغة الملف غير مدعومة للمسح. المدعوم: JPG · PNG · WebP · GIF · PDF." }),
+        { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -149,10 +208,8 @@ serve(async (req) => {
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-            { type: "text", text: prompt }
-          ]
+          /* الملف قبل النصّ — الترتيب المعتمد لكتل المستندات */
+          content: [block, { type: "text", text: prompt }]
         }]
       })
     });
