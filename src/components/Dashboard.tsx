@@ -50,7 +50,8 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
               <div style={{ fontSize: 10.5, marginTop: 2, opacity: .75 }}>جواز / بطاقة / تصريح حج</div>
             </div>
           </div>
-          <input ref={scanInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => {
+          {/* نفس مدخل صفحة الحجاج: يقبل PDF فعلياً، والعرض يلحق بالواقع */}
+          <input ref={scanInputRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => {
             const file = e.target.files?.[0]; if (!file) return;
             if (onScan) { onScan(file); } else { (window as any).__hajj_pending_scan_file__ = file; setPage("passengers"); }
             e.target.value = "";
