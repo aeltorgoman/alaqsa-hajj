@@ -234,14 +234,16 @@ function AdminsPage({
   // ============================================================
   // مسح بطاقة
   // ============================================================
-  /* ⚠️ عقد وضع `idcard` في دالّة المسح يُعيد حقلين لا غير —
-     `national_id` و`id_expiry` — ونصّه صريح: «فقط الرقم والصلاحية».
-     وكانت الصفحة تقرأ `parsed.expiry` (مفتاح الجواز) لا `id_expiry`،
-     وتنتظر معه اسماً وميلاداً وجنساً لا يعودان أصلاً. فلم يكن يمتلئ
-     من مسح البطاقة إلا رقمها، والباقي يبقى فارغاً — فيبدو أن المسح
-     «لم يعمل». صفحة الحجاج تقرأ الحقلين الصحيحين وحدهما، وهذا
-     يطابقها الآن. توسيع ما يُستخرَج من البطاقة قرار منتج يمسّ
-     الدالّة المشتركة، وهو خارج نطاق هذا الإصلاح. */
+  /* ── مسح البطاقة عند **إنشاء** إداري ──
+     هنا البطاقة مصدر إنشاء لا استكمال، فالمطلوب منها بياناتها
+     الأساسية كاملة. ووضع `idcard` في الدالّة المشتركة يُعيد حقلين
+     لا غير — «فقط الرقم والصلاحية» — بينما وضع `auto` يُعيد للبطاقة
+     الاسم والجنسية والميلاد والجنس مع الرقم والصلاحية. فالوضع
+     الصحيح موجود بالفعل، ولا حاجة لتوسيع أي عقد.
+     (وكانت الصفحة فوق ذلك تقرأ `parsed.expiry` — مفتاح الجواز —
+     بدل `id_expiry`، فتخرج الصلاحية فارغة دائماً.)
+     أما استكمال بطاقة إداري قائم فمسار آخر لا يلمس بياناته
+     الأساسية: مودال المستندات أدناه. */
   const handleScanId = async (file: File) => {
     setScanning(true);
     const reader = new FileReader();
@@ -249,11 +251,22 @@ function AdminsPage({
       setIdImg(ev.target?.result as string);
       setIdFile(file);
       try {
-        const parsed = await scanDocument(file, "idcard");
+        const parsed = await scanDocument(file, "auto");
+        if (parsed.doc_type !== "idcard") {
+          showAlert("warning", "المستند لا يبدو بطاقة شخصية — راجع الملف أو استعمل زرّ مسح الجواز");
+          return;
+        }
         setForm(prev => ({
           ...prev,
+          name_ar:     parsed.name_ar     || prev.name_ar,
+          short_ar:    parsed.name_ar     ? makeShort(parsed.name_ar) : prev.short_ar,
+          name_en:     parsed.name_en     || prev.name_en,
+          short_en:    parsed.name_en     ? makeShort(parsed.name_en) : prev.short_en,
           national_id: parsed.national_id || prev.national_id,
           id_expiry:   parsed.id_expiry   || prev.id_expiry,
+          nat:         parsed.nationality || prev.nat,
+          dob:         parsed.dob         || prev.dob,
+          gender:      parsed.gender      || prev.gender,
         }));
       } catch (e) {
         console.error("تعذّرت قراءة بطاقة الإداري", e);
@@ -416,7 +429,27 @@ function AdminsPage({
         newKey = null;
         return;
       }
-      const updated = { ...p, [field]: newKey };
+      let updated = { ...p, [field]: newKey };
+      /* البطاقة لإداري قائم = مستند **استكمال** لا إنشاء: تُحدَّث
+         بياناتها وحدها (الرقم والصلاحية)، ولا يُمَسّ الاسم ولا
+         الميلاد ولا الجنس — فبياناته الأساسية مثبتة سلفاً ولا سبب
+         لأن يستبدلها مسحٌ عارض. (الإنشاء من البطاقة مسار آخر في
+         مودال الإضافة، وهناك تُستخرَج الأساسيات كاملة.)
+         وفشل القراءة لا يُبطل الرفع: الملف حُفظ ومرجعه حُفظ. */
+      if (docType === "idcard") {
+        try {
+          const parsed = await scanDocument(file, "idcard");
+          const card: { national_id?: string; id_expiry?: string } = {};
+          if (parsed.national_id) card.national_id = parsed.national_id;
+          if (parsed.id_expiry)   card.id_expiry   = parsed.id_expiry;
+          if (Object.keys(card).length && await writeOk(
+            supabase.from("passengers").update(card).eq("id", p.id),
+            "حُفظت البطاقة، وتعذّر تحديث بياناتها",
+          )) updated = { ...updated, ...card };
+        } catch (e) {
+          console.error("تعذّرت قراءة بطاقة الإداري بعد الرفع", e);
+        }
+      }
       setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
       setDocTarget(updated);
       if (prevKey && docKey(prevKey) !== docKey(newKey)) await removeDoc(prevKey);
@@ -632,7 +665,22 @@ function AdminsPage({
       {/* ============================================================ */}
       {/* مودال الإضافة / التعديل */}
       {/* ============================================================ */}
-      <Modal show={showModal} onClose={() => { setShowModal(false); resetModal(); }} title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري"} maxWidth={(passportImg || idImg) ? 820 : 500}>
+      <Modal show={showModal} onClose={() => { if (!scanning) { setShowModal(false); resetModal(); } }} title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري"} maxWidth={(passportImg || idImg) ? 820 : 500}>
+        {/* المؤشّر على رأس المودال ومستقلّ عن الصورة عن قصد: كان
+            معلّقاً بظهور المعاينة، والمعاينة لا تظهر إلا بعد أن تنتهي
+            `FileReader` من قراءة الملف — ثوانٍ في صور الهاتف الكبيرة.
+            فكانت أطول لحظة انتظار هي بالضبط اللحظة التي لا مؤشّر
+            فيها. الآن يظهر مع أوّل نقرة ويبقى حتى نجاح أو خطأ. */}
+        {scanning && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+            <style>{`@keyframes hajjSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            <div style={{ width: 20, height: 20, border: "2.5px solid var(--line)", borderTopColor: "var(--warning)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--warning)" }}>جارٍ قراءة المستند…</div>
+              <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>قد تستغرق القراءة بضع ثوانٍ — لا تغلق النافذة</div>
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           {/* البيانات */}
           <div style={{ flex: 1 }}>
@@ -700,8 +748,8 @@ function AdminsPage({
 
             {/* أزرار الحفظ */}
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={saveAdmin} disabled={saving} style={{ ...btnP({ flex: 1, opacity: saving ? 0.6 : 1 }) }}>
-                {saving ? "جاري الحفظ..." : (editTarget ? "حفظ التعديل" : "إضافة")}
+              <button onClick={saveAdmin} disabled={saving || scanning} style={{ ...btnP({ flex: 1, opacity: (saving || scanning) ? 0.6 : 1 }) }}>
+                {saving ? "جاري الحفظ..." : scanning ? "جارٍ القراءة…" : (editTarget ? "حفظ التعديل" : "إضافة")}
               </button>
               <button onClick={() => { setShowModal(false); resetModal(); }} style={btnS()}>إلغاء</button>
             </div>
