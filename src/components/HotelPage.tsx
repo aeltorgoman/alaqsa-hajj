@@ -107,8 +107,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const hajj = passengers.filter(p => isHajj(p));
 
+  /* شاغلو الغرفة — كل من `room_id` يشير إليها، حاجّاً كان أو إدارياً.
+     السرير المشغول مشغول أياً كان ساكنه: فالإشغال والسعة وحارس الحذف
+     تُبنى على مفتاح الإسناد لا على قائمة الحجاج. أما مؤشّرات «الحجاج
+     الموزّعين» و«نسبة التوزيع» فتبقى حجّاجية، لأن معناها حجّاجي. */
   const roomPassengers = (roomId: number) =>
-    hajj.filter(p => p.room_id === roomId);
+    passengers.filter(p => p.room_id === roomId);
 
   const unassigned = hajj.filter(p => !p.room_id);
 
@@ -218,7 +222,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const deleteRoom = async (room: Room) => {
     if (!assertWritable()) return;
     const occ = roomPassengers(room.id);
-    if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها حجاج"); return; }
+    if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها نزلاء"); return; }
     if (!await writeOk(supabase.from("rooms").delete().eq("id", room.id), "تعذر حذف الغرفة")) return;
     setRooms(prev => prev.filter(r => r.id !== room.id));
     setSelectedRoom(null);
@@ -506,7 +510,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {[
               { label: "الدور", val: selectedRoom.floor },
               { label: "الوضع", val: (statusLabel[getStatus(selectedRoom)] || getStatus(selectedRoom)), color: statusColor[getStatus(selectedRoom)] },
-              { label: "عدد الحجاج", val: `${roomPassengers(selectedRoom.id).length}/${TYPE_CAP[selectedRoom.type] || "—"}` },
+              { label: "عدد النزلاء", val: `${roomPassengers(selectedRoom.id).length}/${TYPE_CAP[selectedRoom.type] || "—"}` },
             ].map(k => (
               <div key={k.label} style={{ background: "var(--ivory)", borderRadius: 8, padding: "7px 8px", textAlign: "center" }}>
                 <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{k.label}</div>
@@ -517,9 +521,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
           {/* Body */}
           <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 8 }}>الحجاج الموجودون</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 8 }}>النزلاء الموجودون</div>
             {roomPassengers(selectedRoom.id).length === 0 ? (
-              <div style={{ textAlign: "center", padding: "16px 0", color: "var(--muted)", fontSize: 12 }}>لا يوجد حجاج في هذه الغرفة</div>
+              <div style={{ textAlign: "center", padding: "16px 0", color: "var(--muted)", fontSize: 12 }}>لا يوجد نزلاء في هذه الغرفة</div>
             ) : (
               roomPassengers(selectedRoom.id).map((p, i) => (
                 <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 6, background: "var(--ivory)" }}>
