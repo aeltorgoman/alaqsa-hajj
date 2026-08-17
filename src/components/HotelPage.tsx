@@ -6,14 +6,11 @@ import type { Passenger, Room } from "../types";
 import { useCompanyBranding } from "../company/CompanyContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
+import { ROOM_TYPE_CAP as TYPE_CAP } from "../utils";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 
 const ROOM_TYPES: Room["type"][] = ["فردية", "ثنائية", "ثلاثية", "رباعية", "مجلس", "أخرى"];
-
-const TYPE_CAP: Record<string, number> = {
-  "فردية": 1, "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "مجلس": 0, "أخرى": 0,
-};
 
 function avatarInitials(name: string) {
   return name.trim().split(" ").map(w => w[0]).slice(0, 2).join("");

@@ -656,7 +656,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   // ══════════════════════════════════════════════
   if (subView === "group" && selectedGroup) {
     const gPassengers = getGroupPassengers(selectedGroup.id);
-    const availableToAdd=passengers.filter(p=>!groupPassengerIds.has(p.id));
+    /* الإداري خارج المال: لا يُضاف إلى مجموعة مالية ولو كانت أوراقه
+       أوراق حاجّ كاملة. الفلتر هنا لا يخفي عضواً قائماً — إخفاؤه
+       يجعله غير قابل للإزالة — بل يمنع دخول جديد. */
+    const availableToAdd=passengers.filter(p=>!groupPassengerIds.has(p.id)&&isHajj(p));
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={() => showAlert(null)} />
@@ -857,7 +860,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     });
     const cfDates = Object.keys(cfByDate).sort();
     const cfTotal = cfPayments.reduce((s, p) => s + Number(p.amount), 0);
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين"), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo), packages:()=>printPackagesReport(passengers,pricing,printBrand), addons:()=>printAddonsReport(passengers,pricing,printBrand), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand }) };
+    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين"), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand }) };
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
