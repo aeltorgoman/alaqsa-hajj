@@ -758,10 +758,10 @@ function AdminsPage({
       {/* ============================================================ */}
       {/* مودال المستندات */}
       {/* ============================================================ */}
-      <Modal show={!!docTarget} onClose={() => { setDocTarget(null); setDocViewer(null); }} title={`مستندات: ${docTarget?.short_ar || docTarget?.name_ar || ""}`}>
+      <Modal show={!!docTarget} onClose={() => { setDocTarget(null); setDocViewer(null); }} title={`مستندات: ${docTarget?.short_ar || docTarget?.name_ar || ""}`} maxWidth={480}>
         {docTarget && (
-          <div style={{ display: "flex", gap: 14 }}>
-            <div style={{ flex: 1 }}>
+          <div>
+            <div>
               {DOC_TYPES.map(({ label, field, docType, accept }) => {
                 const url = (docTarget as Record<string, any>)[field] as string | null;
                 return (
@@ -798,22 +798,38 @@ function AdminsPage({
               })}
             </div>
             {/* عرض الصورة */}
-            {docViewer && (
-              <div style={{ width: 260, flexShrink: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{docViewer.label}</div>
-                {/* العقد والتذكرة والتصريح تصل PDF كثيراً، و`<img>` وحده
-                    كان يعرضها مربعاً فارغاً — نفس تمييز صفحة الحجاج */}
-                {docViewer.url.toLowerCase().includes("pdf") ? (
-                  <iframe src={docViewerUrl} title={docViewer.label} style={{ width: "100%", height: 340, border: "1px solid var(--border)", borderRadius: 8 }} />
-                ) : (
-                  <img src={docViewerUrl} alt={docViewer.label} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }}
-                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                )}
-              </div>
-            )}
           </div>
         )}
       </Modal>
+
+      {/* ============================================================ */}
+      {/* عارض المستند — طبقة فوق المودال لا لوحة بجانبه               */}
+      {/* ============================================================ */}
+      {/* اللوحة الجانبية كانت ٢٦٠px داخل مودال عرضه ٤٢٠: الجواز يُقرأ
+          بالكاد والتصريح لا يُقرأ. والعارض في صفحة الحجاج يملأ الشاشة
+          منذ البداية — فهذا هو النمط، لا ابتكار جديد. */}
+      {docViewer && (
+        <div onClick={() => setDocViewer(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "var(--bg-card)", borderRadius: 14, padding: 16, maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
+              <span style={{ fontWeight: 700, color: "var(--text)", fontSize: 14 }}>{docViewer.label}</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => downloadFile(docViewer.url)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 7, background: "var(--bg-2)", border: "0.5px solid var(--border)", cursor: "pointer", color: "var(--text)", fontFamily: "inherit" }}>تحميل</button>
+                <button onClick={() => setDocViewer(null)} style={{ fontSize: 18, background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", lineHeight: 1 }}>✕</button>
+              </div>
+            </div>
+            {/* العقد والتذكرة والتصريح تصل PDF كثيراً، و`<img>` وحده
+                كان يعرضها مربعاً فارغاً — نفس تمييز صفحة الحجاج */}
+            {docViewer.url.toLowerCase().includes("pdf") ? (
+              <iframe src={docViewerUrl} title={docViewer.label} style={{ width: "80vw", height: "75vh", border: "none", borderRadius: 8 }} />
+            ) : (
+              <img src={docViewerUrl} alt={docViewer.label} style={{ maxWidth: "80vw", maxHeight: "75vh", objectFit: "contain", borderRadius: 8 }} />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* ============================================================ */}
