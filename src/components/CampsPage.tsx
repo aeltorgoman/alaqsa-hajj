@@ -332,7 +332,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const campColor = isSpecial ? "#D4A017" : (camp.gender === "ذكر" ? "#1D4ED8" : "#BE185D");
         const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
         const genderPool = camp.type === "خاص" ? passengers : passengers.filter(p => p.gender === camp.gender);
-        const addFiltered = genderPool.filter(p => p[campIdKey] == null && (isHajj(p)) && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
+        /* الإداري ينزل المخيّم كالحاجّ — والفصل بالجنس محفوظ في
+           `genderPool` أعلاه، و«خاص» وحده يقبل الجنسين */
+        const addFiltered = genderPool.filter(p => p[campIdKey] == null && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
         return (
           <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
@@ -373,6 +375,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                   <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: campColor, background: `${campColor}12`, padding: "2px 8px", borderRadius: 99 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
+                    {/* التركيبة لا الإجمالي وحده */}
+                    {cp.some(p => !isHajj(p)) && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)" }}>{cp.filter(p => isHajj(p)).length} حاج · {cp.filter(p => !isHajj(p)).length} إداري</span>}
                   </div>
                   <div style={{ flex: 1, overflowY: "auto" }} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(camp.id)}>
                     {cp.length === 0 ? (

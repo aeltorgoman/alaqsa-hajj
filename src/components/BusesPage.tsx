@@ -17,14 +17,18 @@ function BusesStats({ buses, passengers }: { buses: Bus[]; passengers: Passenger
     const hajj = passengers.filter(p => isHajj(p));
     const total = hajj.length;
     const assignedCount = hajj.filter(p => p.bus_id != null).length;
+    /* المقعد يشغله من يجلس عليه: الإداري يستهلك مقعداً كالحاجّ،
+       فالمتاح يُحسب على الجميع. أما «نسبة التوزيع» أدناه فمؤشّر
+       حجّاجي ونصّه «من X حاج» — يبقى كما هو. */
+    const seated = passengers.filter(p => p.bus_id != null).length;
     const unassigned = total - assignedCount;
     const vipRequested = hajj.filter(p => p.services?.bus === "VIP").length;
-    return { total, assignedCount, unassigned, vipRequested };
+    return { total, assignedCount, unassigned, vipRequested, seated };
   }, [buses, passengers]);
-  const { total, assignedCount, vipRequested } = stats;
+  const { total, assignedCount, vipRequested, seated } = stats;
 
   const totalSeats = buses.reduce((s, b) => s + (b.capacity || 50), 0);
-  const availableSeats = Math.max(0, totalSeats - assignedCount);
+  const availableSeats = Math.max(0, totalSeats - seated);
   const cards: StatCardData[] = [
     { label: "إجمالي الباصات", num: buses.length, sub: `${buses.filter(b => b.type === "VIP").length} VIP`, tone: "brand" },
     { label: "طالبين VIP", num: vipRequested, sub: `${total ? Math.round(vipRequested / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
@@ -314,7 +318,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const cap = bus.capacity || 50;
         const available = Math.max(0, cap - bp.length);
         const fillPct = Math.min(100, Math.round(bp.length / cap * 100));
-        const addFiltered = passengers.filter(p => p.bus_id == null && (isHajj(p)) && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
+        /* الإداري يركب الباص كالحاجّ — وكان يُسنَد من صفحة الإداريين
+           وحدها، بلا سعة ولا إشغال أمام المستخدم */
+        const addFiltered = passengers.filter(p => p.bus_id == null && (!drawerPSearch || p.name_ar.includes(drawerPSearch) || (p.short_ar||"").includes(drawerPSearch)));
         const vipMismatch = (p: typeof bp[0]) => (isVIP && p.services?.bus !== "VIP") || (!isVIP && p.services?.bus === "VIP");
         return (
           <div onClick={() => { setSelectedBusId(null); setDrawerPSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -380,6 +386,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: busColor, background: `${busColor}12`, padding: "2px 8px", borderRadius: 99 }}>{bp.length === 1 ? `${bp.length} مسافر` : bp.length === 2 ? `${bp.length} مسافران` : `${bp.length} مسافرين`}</span>
+                    {/* التركيبة لا الإجمالي وحده — الرقم أعلاه سعة، وهذا تصنيف */}
+                    {bp.some(p => !isHajj(p)) && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)" }}>{bp.filter(p => isHajj(p)).length} حاج · {bp.filter(p => !isHajj(p)).length} إداري</span>}
                   </div>
                   <div style={{ flex: 1, overflowY: "auto" }} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(bus.id)}>
                     {bp.length === 0 ? (
