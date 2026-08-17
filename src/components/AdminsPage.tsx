@@ -8,7 +8,7 @@ import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc } from "../utils";
+import { inp, btnP, btnS, makeShort, scanDocument, DocumentScanError, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc } from "../utils";
 import { useReportBranding } from "../company/CompanyContext";
 
 // ============================================================
@@ -194,6 +194,10 @@ function AdminsPage({
   // ============================================================
   // مسح جواز
   // ============================================================
+  /* القراءة تستغرق ثوانٍ، وكانت الصورة تظهر فور اختيار الملف
+     والحقول فارغة — فيقرأ المستخدم المشهد على أنه «انتهى ولم يقرأ».
+     فصار المؤشّر على الصورة نفسها: ضبابٌ وطبقةٌ ودوّار، وهو نمط
+     صفحة الحجاج نفسه لا نمط موازٍ. والخطأ يُعلَن ولا يُبتلع. */
   const handleScanPassport = async (file: File) => {
     setScanning(true);
     const reader = new FileReader();
@@ -215,15 +219,29 @@ function AdminsPage({
           expiry:     parsed.expiry     || prev.expiry,
           gender:     parsed.gender     || prev.gender,
         }));
-      } catch { /* تجاهل */ }
-      setScanning(false);
+      } catch (e) {
+        console.error("تعذّرت قراءة جواز الإداري", e);
+        showAlert("error", e instanceof DocumentScanError ? e.message : "تعذّرت قراءة الجواز — أدخل البيانات يدوياً");
+      } finally {
+        setScanning(false);
+      }
     };
+    /* فشل القراءة من القرص لا يترك المؤشّر دائراً */
+    reader.onerror = () => { setScanning(false); showAlert("error", "تعذّرت قراءة الملف"); };
     reader.readAsDataURL(file);
   };
 
   // ============================================================
   // مسح بطاقة
   // ============================================================
+  /* ⚠️ عقد وضع `idcard` في دالّة المسح يُعيد حقلين لا غير —
+     `national_id` و`id_expiry` — ونصّه صريح: «فقط الرقم والصلاحية».
+     وكانت الصفحة تقرأ `parsed.expiry` (مفتاح الجواز) لا `id_expiry`،
+     وتنتظر معه اسماً وميلاداً وجنساً لا يعودان أصلاً. فلم يكن يمتلئ
+     من مسح البطاقة إلا رقمها، والباقي يبقى فارغاً — فيبدو أن المسح
+     «لم يعمل». صفحة الحجاج تقرأ الحقلين الصحيحين وحدهما، وهذا
+     يطابقها الآن. توسيع ما يُستخرَج من البطاقة قرار منتج يمسّ
+     الدالّة المشتركة، وهو خارج نطاق هذا الإصلاح. */
   const handleScanId = async (file: File) => {
     setScanning(true);
     const reader = new FileReader();
@@ -234,16 +252,17 @@ function AdminsPage({
         const parsed = await scanDocument(file, "idcard");
         setForm(prev => ({
           ...prev,
-          name_ar:     parsed.name_ar     || prev.name_ar,
-          short_ar:    parsed.name_ar     ? makeShort(parsed.name_ar) : prev.short_ar,
           national_id: parsed.national_id || prev.national_id,
-          dob:         parsed.dob         || prev.dob,
-          id_expiry:   parsed.expiry      || prev.id_expiry,
-          gender:      parsed.gender      || prev.gender,
+          id_expiry:   parsed.id_expiry   || prev.id_expiry,
         }));
-      } catch { /* تجاهل */ }
-      setScanning(false);
+      } catch (e) {
+        console.error("تعذّرت قراءة بطاقة الإداري", e);
+        showAlert("error", e instanceof DocumentScanError ? e.message : "تعذّرت قراءة البطاقة — أدخل البيانات يدوياً");
+      } finally {
+        setScanning(false);
+      }
     };
+    reader.onerror = () => { setScanning(false); showAlert("error", "تعذّرت قراءة الملف"); };
     reader.readAsDataURL(file);
   };
 
@@ -691,18 +710,27 @@ function AdminsPage({
           {/* صور المستندات */}
           {(passportImg || idImg) && (
             <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {passportImg && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>صورة الجواز</div>
-                  <img src={passportImg} alt="جواز" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
+              {([["صورة الجواز", passportImg], ["صورة البطاقة", idImg]] as [string, string | null][]).map(([label, src]) => src && (
+                <div key={label}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{label}</div>
+                  <div style={{ position: "relative", borderRadius: 8, overflow: "hidden" }}>
+                    <img src={src} alt={label} style={{ width: "100%", display: "block", border: "1px solid var(--border)", borderRadius: 8, filter: scanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
+                    {scanning && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        {/* `hajjSpin` هو دوران الهوية المعرَّف في
+                            `LoadingSpinner`، لكنه محلّي داخل ذلك المكوّن
+                            فلا يصل إلى هنا — فيُعرَّف معه. (اسم `spin`
+                            المستعمل في صفحة الحجاج غير معرَّف أصلاً في
+                            أيّ من ملفّي CSS، فحلقتها ساكنة لا تدور —
+                            مسجَّل ولم يُمسّ.) */}
+                        <style>{`@keyframes hajjSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.35)", borderTopColor: "var(--em7)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-              {idImg && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>صورة البطاقة</div>
-                  <img src={idImg} alt="بطاقة" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
-                </div>
-              )}
+              ))}
             </div>
           )}
         </div>
