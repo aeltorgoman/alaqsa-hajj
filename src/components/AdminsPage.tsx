@@ -7,8 +7,8 @@ import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
-import { AlertModal, useAlert } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, downloadFile, makeHTML, printInPage, useSignedDoc } from "../utils";
+import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
+import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc } from "../utils";
 import { useReportBranding } from "../company/CompanyContext";
 
 // ============================================================
@@ -22,6 +22,17 @@ const TYPE_COLORS: Record<AdminType, [string, string]> = {
   "إداري": ["var(--warning-bg)", "var(--warning)"],
   "مرافق": ["var(--success-bg)", "var(--primary-dark)"],
 };
+
+/* مستندات الإداري الستّة — مرجع واحد يستعمله المودال وحذفُ الإداري
+   معاً، فلا يفوت التنظيفَ نوعٌ أُضيف إلى الواجهة وحدها. */
+const DOC_TYPES = [
+  { label: "صورة شخصية",   field: "photo_url",         docType: "photo",         accept: "image/*" },
+  { label: "جواز السفر",   field: "passport_url",      docType: "passport_doc",  accept: "image/*,application/pdf" },
+  { label: "البطاقة",      field: "national_id_url",   docType: "idcard",        accept: "image/*,application/pdf" },
+  { label: "العقد",        field: "contract_url",      docType: "contract",      accept: "image/*,application/pdf" },
+  { label: "تذكرة الطيران", field: "flight_ticket_url", docType: "flight_ticket", accept: "image/*,application/pdf" },
+  { label: "تصريح الحاج",  field: "hajj_permit_url",   docType: "hajj_permit",   accept: "image/*,application/pdf" },
+] as const;
 
 const DEFAULT_FORM = {
   name_ar: "", name_en: "", short_ar: "", short_en: "",
@@ -65,7 +76,8 @@ function AdminsPage({
   setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
 }) {
   const { alert, showAlert } = useAlert();
-  const { assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
+  const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
   const branding = useReportBranding();
 
@@ -77,7 +89,7 @@ function AdminsPage({
   const [rooms, setRooms]     = useState<Room[]>([]);
   const [camps, setCamps]     = useState<Camp[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState<number | null>(null);
 
   // مودال الإضافة / التعديل
   const [showModal, setShowModal]   = useState(false);
@@ -96,7 +108,7 @@ function AdminsPage({
 
   // مودال التعيين
   const [assignTarget, setAssignTarget] = useState<Passenger | null>(null);
-  const [assign, setAssign] = useState({ bus_id: "", room_id: "", camp_mina_id: "", camp_arafa_id: "", flight_id: "", return_flight_id: "", wants_flight: false });
+  const [assign, setAssign] = useState({ bus_id: "", room_id: "", camp_mina_id: "", camp_arafa_id: "", flight_id: "", return_flight_id: "", wants_flight: false, flight_class: "عادي" });
 
   // حذف
   const [deleteTarget, setDeleteTarget] = useState<Passenger | null>(null);
@@ -156,8 +168,11 @@ function AdminsPage({
   // ============================================================
   // تحميل بيانات التعيين
   // ============================================================
+  /* الذاكرة مربوطة بالموسم المعروض: كان `dataLoaded` علماً أبدياً،
+     فمن بدّل الموسم بلا مغادرة الصفحة ظلّ يرى غرف الموسم السابق
+     ويُسنِد إليها. */
   const loadAssignData = async () => {
-    if (dataLoaded) return;
+    if (dataLoaded === viewedSeason.id) return;
     const [{ data: b }, { data: r }, { data: c }, { data: f }] = await Promise.all([
       supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
       supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("floor").order("number"),
@@ -169,7 +184,7 @@ function AdminsPage({
     if (r) setRooms(r as Room[]);
     if (c) setCamps(c as Camp[]);
     if (f) setFlights(f as Flight[]);
-    setDataLoaded(true);
+    setDataLoaded(viewedSeason.id);
   };
 
   // ============================================================
@@ -288,6 +303,28 @@ function AdminsPage({
     }
 
     setSaving(true);
+    /* الجواز والبطاقة المرفوعان من مودال الإنشاء/التعديل يمرّان بنفس
+       ضمانات مودال المستندات: حفظ مُتحقَّق منه، وتنظيف الكائن إن فشل
+       الحفظ، وحذف القديم بعد نجاح الجديد لا قبله. */
+    const commitScannedDocs = async (id: number, prev: Passenger | null): Promise<Record<string, string>> => {
+      const uploaded: Record<string, string> = {};
+      if (passportFile) { const k = await uploadDoc(passportFile, id, "passport_doc"); if (k) uploaded.passport_url = k; }
+      if (idFile)       { const k = await uploadDoc(idFile,       id, "idcard");       if (k) uploaded.national_id_url = k; }
+      const keys = Object.keys(uploaded);
+      if (!keys.length) return {};
+      if (!await writeOk(
+        supabase.from("passengers").update(uploaded as TablesUpdate<"passengers">).eq("id", id),
+        "حُفظت البيانات، وتعذّر حفظ مراجع المستندات",
+      )) {
+        for (const f of keys) await removeDoc(uploaded[f]);
+        return {};
+      }
+      for (const f of keys) {
+        const old = prev ? (prev as Record<string, any>)[f] as string | null : null;
+        if (old && docKey(old) !== docKey(uploaded[f])) await removeDoc(old);
+      }
+      return uploaded;
+    };
     const short_ar = form.short_ar.trim() || makeShort(form.name_ar);
     const short_en = form.short_en.trim() || makeShort(form.name_en);
 
@@ -297,13 +334,7 @@ function AdminsPage({
           .update({ ...form, short_ar, short_en })
           .eq("id", editTarget.id);
         if (error) throw error;
-        // رفع الصور لو تغيرت + تحديث أعمدة الروابط في قاعدة البيانات
-        const docUpdates: any = {};
-        if (passportFile) { const url = await uploadDoc(passportFile, editTarget.id, "passport_doc"); if (url) docUpdates.passport_url = url; }
-        if (idFile)       { const url = await uploadDoc(idFile,       editTarget.id, "idcard");       if (url) docUpdates.national_id_url = url; }
-        if (Object.keys(docUpdates).length) {
-          await supabase.from("passengers").update(docUpdates).eq("id", editTarget.id);
-        }
+        const docUpdates = await commitScannedDocs(editTarget.id, editTarget);
         setPassengers(prev => prev.map(p => p.id === editTarget.id
           ? { ...p, ...form, short_ar, short_en, ...docUpdates } : p));
         showAlert("success", "تم تعديل بيانات الإداري");
@@ -313,18 +344,16 @@ function AdminsPage({
           .select();
         if (error || !data?.[0]) throw error;
         const newId = data[0].id;
-        // رفع الصور + تحديث أعمدة الروابط
-        const docUpdates: any = {};
-        if (passportFile) { const url = await uploadDoc(passportFile, newId, "passport_doc"); if (url) docUpdates.passport_url = url; }
-        if (idFile)       { const url = await uploadDoc(idFile,       newId, "idcard");       if (url) docUpdates.national_id_url = url; }
-        if (Object.keys(docUpdates).length) {
-          await supabase.from("passengers").update(docUpdates).eq("id", newId);
-        }
-        const newP: Passenger = {
+        const docUpdates = await commitScannedDocs(newId, null);
+        /* الصفّ العائد من القاعدة أعمدته nullable بينما `Passenger`
+           يفترضها نصوصاً. كان `any` يخفي ذلك، وتصريح docUpdates كشفه.
+           التحويل يُبقي السلوك كما هو حرفياً؛ والعلاج الصحيح تمرير
+           الصفّ عبر `mapPassenger` — وهو نطاق PR «C» لا هذا. */
+        const newP = {
           ...data[0],
           ...docUpdates,
           services: { bus: "", flight: "", hotel_type: "", hotel_view: "", camp_mina: "", camp_arafa: "" },
-        };
+        } as unknown as Passenger;
         // نضيف بس لو مش موجود في الـ state (لتجنب التكرار مع الـ realtime)
         setPassengers(prev => prev.some(p => p.id === newP.id) ? prev : [...prev, newP]);
         showAlert("success", "تمت إضافة الإداري بنجاح");
@@ -341,24 +370,61 @@ function AdminsPage({
   // ============================================================
   // رفع المستندات
   // ============================================================
+  /* رفع مستند — والاستبدال حالة منه لا مساراً ثانياً.
+     الترتيب مُلزَم: يُرفع الجديد، ثم يُحفظ مرجعه، ولا يُحذف القديم
+     إلا بعد نجاح الحفظ. فلا توجد لحظة يشير فيها العمود إلى كائن
+     غير موجود، ولا لحظة يضيع فيها المستندان معاً. وإن فشل الحفظ
+     حُذف الكائن الجديد فوراً — الرفع الذي لم يُسجَّل لا يُترك يتيماً. */
   const handleAdminDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
     if (!assertWritable()) return;
+    const prevKey = (p as Record<string, any>)[field] as string | null;
     setDocUploading(docType);
-    const url = await uploadDoc(file, p.id, docType === "passport_doc" ? "passport_doc" : docType === "idcard" ? "idcard" : docType);
-    setDocUploading(null);
-    if (!url) return;
-    await supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id);
-    const updated = { ...p, [field]: url };
-    setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
-    setDocTarget(updated);
+    let newKey: string | null = null;
+    try {
+      newKey = await uploadDoc(file, p.id, docType);
+      if (!newKey) { showAlert("error", "تعذّر رفع الملف"); return; }
+      if (!await writeOk(
+        supabase.from("passengers").update({ [field]: newKey } as TablesUpdate<"passengers">).eq("id", p.id),
+        "تعذّر حفظ المستند، ولم يُحفظ شيء",
+      )) {
+        await removeDoc(newKey);
+        newKey = null;
+        return;
+      }
+      const updated = { ...p, [field]: newKey };
+      setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
+      setDocTarget(updated);
+      if (prevKey && docKey(prevKey) !== docKey(newKey)) await removeDoc(prevKey);
+    } catch (e) {
+      console.error("تعذّر رفع مستند الإداري", e);
+      if (newKey) await removeDoc(newKey);
+      showAlert("error", "تعذّر رفع المستند");
+    } finally {
+      /* المؤشّر يُطفأ في كل المخارج — لا دوران بلا نهاية بعد اليوم */
+      setDocUploading(null);
+    }
   };
 
-  const handleAdminDocDelete = async (p: Passenger, field: string) => {
+  /* الحذف: تأكيد، ثم القاعدة، ثم التخزين. والترتيب مقصود — لو فشل
+     حذف الكائن بقي كائن بلا مرجع (يُسجَّل في السجلّ)، وهو أهون من
+     مرجع بلا كائن. */
+  const handleAdminDocDelete = async (p: Passenger, field: string, label: string) => {
     if (!assertWritable()) return;
-    await supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id);
+    const key = (p as Record<string, any>)[field] as string | null;
+    if (!key) return;
+    if (!await confirmAction(
+      `سيُحذف «${label}» نهائياً من ملف ${p.short_ar || p.name_ar}.`,
+      { title: "حذف المستند", confirmLabel: "حذف" },
+    )) return;
+    if (!await writeOk(
+      supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id),
+      "تعذّر حذف المستند",
+    )) return;
     const updated = { ...p, [field]: null };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setDocTarget(updated);
+    if (docViewer?.url === key) setDocViewer(null);
+    await removeDoc(key);
   };
 
   // ============================================================
@@ -367,7 +433,7 @@ function AdminsPage({
   const saveAssign = async () => {
     if (!assertWritable()) return;
     if (!assignTarget) return;
-    const updates: any = {
+    const updates: TablesUpdate<"passengers"> = {
       bus_id:           assign.bus_id           ? Number(assign.bus_id)           : null,
       room_id:          assign.room_id          ? Number(assign.room_id)          : null,
       camp_mina_id:     assign.camp_mina_id     ? Number(assign.camp_mina_id)     : null,
@@ -375,10 +441,28 @@ function AdminsPage({
       flight_id:        assign.flight_id        ? Number(assign.flight_id)        : null,
       return_flight_id: assign.return_flight_id ? Number(assign.return_flight_id) : null,
       wants_flight:     assign.wants_flight,
+      /* الدرجة تُمحى مع إلغاء الطيران، فلا تبقى «درجة أولى» معلّقة
+         على من لا يسافر — ولا أثر مالي لها: الإداري خارج Finance. */
+      flight_class:     assign.wants_flight ? assign.flight_class : null,
     };
-    const { error } = await supabase.from("passengers").update(updates).eq("id", assignTarget.id);
-    if (error) { showAlert("error", "حدث خطأ أثناء الحفظ"); return; }
-    setPassengers(prev => prev.map(p => p.id === assignTarget.id ? { ...p, ...updates, passenger_type: p.passenger_type } : p));
+
+    /* السعة تُحذِّر ولا تمنع — وهو سلوك النظام القائم في الباصات
+       والغرف: القرار للمستخدم، والرقم أمامه. */
+    const over: string[] = [];
+    if (updates.room_id && updates.room_id !== assignTarget.room_id) {
+      const r = rooms.find(x => x.id === updates.room_id);
+      const cap = r ? ROOM_TYPE_CAP[r.type] || 0 : 0;
+      if (cap > 0 && occupantsOf("room_id", updates.room_id) >= cap) over.push(`الغرفة ${r?.number} مكتملة (${cap}/${cap})`);
+    }
+    if (updates.bus_id && updates.bus_id !== assignTarget.bus_id) {
+      const b = buses.find(x => x.id === updates.bus_id);
+      const cap = b?.capacity || 50;
+      if (occupantsOf("bus_id", updates.bus_id) >= cap) over.push(`الباص ${b?.name} مكتمل (${cap}/${cap})`);
+    }
+    if (over.length && !await confirmAction(`${over.join(" · ")} — هل تريد المتابعة؟`, { title: "تجاوز السعة", confirmLabel: "متابعة" })) return;
+
+    if (!await writeOk(supabase.from("passengers").update(updates).eq("id", assignTarget.id), "تعذّر حفظ التعيينات")) return;
+    setPassengers(prev => prev.map(p => p.id === assignTarget.id ? { ...p, ...updates } as Passenger : p));
     showAlert("success", "تم حفظ التعيينات");
     setAssignTarget(null);
   };
@@ -386,18 +470,32 @@ function AdminsPage({
   // ============================================================
   // حذف
   // ============================================================
+  /* حذف الإداري يأخذ معه مستنداته: الصفّ وحده كان يُحذف، فتبقى
+     كائناته في الحاوية بلا صاحب ولا مرجع يدلّ عليها. */
   const deleteAdmin = async (id: number) => {
     if (!assertWritable()) return;
-    const { error } = await supabase.from("passengers").delete().eq("id", id);
-    if (error) { showAlert("error", "حدث خطأ أثناء الحذف"); return; }
+    const target = passengers.find(p => p.id === id);
+    const keys = target
+      ? DOC_TYPES.map(d => (target as Record<string, any>)[d.field] as string | null).filter((k): k is string => !!k)
+      : [];
+    if (!await writeOk(supabase.from("passengers").delete().eq("id", id), "تعذّر حذف الإداري")) return;
     setPassengers(prev => prev.filter(p => p.id !== id));
     setDeleteTarget(null);
     showAlert("success", "تم حذف الإداري");
+    for (const k of keys) await removeDoc(k);
   };
 
   // ============================================================
   // فتح مودال التعيين
   // ============================================================
+  /* شاغلو المورد — حجاجاً وإداريين معاً، فالسعة لا تعرف التصنيف */
+  const occupantsOf = (key: "room_id" | "bus_id", id: number) =>
+    passengers.filter(p => p[key] === id).length;
+
+  /* مخيّمات الجنس المناسب — و«خاص» مفتوح للجنسين كما في صفحة المخيّمات */
+  const campsFor = (pageType: "منى" | "عرفة") =>
+    camps.filter(c => c.page_type === pageType && (c.type === "خاص" || !assignTarget || c.gender === assignTarget.gender));
+
   const openAssign = async (p: Passenger) => {
     await loadAssignData();
     setAssign({
@@ -408,6 +506,8 @@ function AdminsPage({
       flight_id:        p.flight_id        ? String(p.flight_id)        : "",
       return_flight_id: p.return_flight_id ? String(p.return_flight_id) : "",
       wants_flight: !!(p.flight_id || p.return_flight_id || (p as any).wants_flight || (p as any).services?.flight === "طيران"),
+      /* الافتراضي «عادي» — الدرجة الأولى استثناء يُختار لا يُفترض */
+      flight_class: p.flight_class === "درجة أولى" ? "درجة أولى" : "عادي",
     });
     setAssignTarget(p);
   };
@@ -428,6 +528,7 @@ function AdminsPage({
   return (
     <div style={{ padding: 14, overflowY: "auto", height: "100%" }}>
       <AlertModal alert={alert} onClose={() => showAlert(null)} />
+      <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
 
       <AdminStats admins={admins} />
 
@@ -604,14 +705,25 @@ function AdminsPage({
       {/* ============================================================ */}
       <Modal show={!!assignTarget} onClose={() => setAssignTarget(null)} title={`تعيين: ${assignTarget?.short_ar || assignTarget?.name_ar || ""}`}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* السعة والإشغال والمتبقّي داخل الخيار نفسه — القائمة كانت
+              عارية، فيُسنَد إلى غرفة مكتملة بلا أن يظهر ذلك أبداً */}
           <AssignSelect label="الباص"        value={assign.bus_id}           onChange={v => setAssign(a => ({ ...a, bus_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...buses.map(b => ({ id: String(b.id), label: `${b.name} (${b.type})` }))]} />
+            options={[{ id: "", label: "— بدون —" }, ...buses.map(b => {
+              const cap = b.capacity || 50, occ = occupantsOf("bus_id", b.id);
+              return { id: String(b.id), label: `${b.name} (${b.type}) — ${occ}/${cap}${occ >= cap ? " مكتمل" : ` · متبقٍّ ${cap - occ}`}` };
+            })]} />
           <AssignSelect label="غرفة الفندق"  value={assign.room_id}          onChange={v => setAssign(a => ({ ...a, room_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...rooms.map(r => ({ id: String(r.id), label: `${r.number} — ${r.type}${r.floor ? ` (ط${r.floor})` : ""}` }))]} />
+            options={[{ id: "", label: "— بدون —" }, ...rooms.map(r => {
+              const cap = ROOM_TYPE_CAP[r.type] || 0, occ = occupantsOf("room_id", r.id);
+              const state = cap === 0 ? "" : ` — ${occ}/${cap}${occ >= cap ? " مكتملة" : ` · متبقٍّ ${cap - occ}`}`;
+              return { id: String(r.id), label: `${r.number} — ${r.type}${r.floor ? ` (ط${r.floor})` : ""}${state}` };
+            })]} />
+          {/* المخيّمات مفصولة بالجنس في صفحة المخيّمات، وكانت هنا
+              مفتوحة للجميع — «خاص» وحده يقبل الجنسين */}
           <AssignSelect label="مخيم منى"     value={assign.camp_mina_id}     onChange={v => setAssign(a => ({ ...a, camp_mina_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...camps.filter(c => c.page_type === "منى").map(c => ({ id: String(c.id), label: c.name }))]} />
+            options={[{ id: "", label: "— بدون —" }, ...campsFor("منى").map(c => ({ id: String(c.id), label: c.name }))]} />
           <AssignSelect label="مخيم عرفة"    value={assign.camp_arafa_id}    onChange={v => setAssign(a => ({ ...a, camp_arafa_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...camps.filter(c => c.page_type === "عرفة").map(c => ({ id: String(c.id), label: c.name }))]} />
+            options={[{ id: "", label: "— بدون —" }, ...campsFor("عرفة").map(c => ({ id: String(c.id), label: c.name }))]} />
           {/* طيران / بدون */}
           <div>
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>الطيران</div>
@@ -629,6 +741,11 @@ function AdminsPage({
               options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "ذهاب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
             <AssignSelect label="رحلة الإياب"  value={assign.return_flight_id} onChange={v => setAssign(a => ({ ...a, return_flight_id: v }))}
               options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "إياب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
+            {/* درجة السفر: الإداري غالباً اقتصادي، لكن صاحب الحملة
+                وحالاتٍ أخرى قد تسافر بالدرجة الأولى — ولم يكن للنظام
+                مدخل يسجّلها، فكان الكشف يُرسل «اقتصادي» دائماً */}
+            <AssignSelect label="درجة السفر"   value={assign.flight_class}     onChange={v => setAssign(a => ({ ...a, flight_class: v }))}
+              options={[{ id: "عادي", label: "اقتصادية" }, { id: "درجة أولى", label: "درجة أولى" }]} />
           </>)}
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <button onClick={saveAssign} style={{ ...btnP({ flex: 1 }) }}>حفظ</button>
@@ -645,17 +762,16 @@ function AdminsPage({
         {docTarget && (
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
-              {([
-                ["صورة شخصية",   (docTarget as any).photo_url,        "photo_url",        "photo",        "image/*"],
-                ["جواز السفر",  (docTarget as any).passport_url,     "passport_url",     "passport_doc", "image/*"],
-                ["البطاقة",     (docTarget as any).national_id_url,  "national_id_url",  "idcard",       "image/*"],
-                ["العقد",       (docTarget as any).contract_url,     "contract_url",     "contract",     "image/*,application/pdf"],
-                ["تذكرة الطيران",(docTarget as any).flight_ticket_url,"flight_ticket_url","flight_ticket","image/*,application/pdf"],
-                ["تصريح الحاج", (docTarget as any).hajj_permit_url,  "hajj_permit_url",  "hajj_permit",  "image/*,application/pdf"],
-              ] as [string, string, string, string, string][]).map(([label, url, field, docType, accept]) => (
+              {DOC_TYPES.map(({ label, field, docType, accept }) => {
+                const url = (docTarget as Record<string, any>)[field] as string | null;
+                return (
                 <div key={label} style={{ padding: "8px 0", borderBottom: "0.5px solid var(--border)" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, color: url ? "var(--text)" : "var(--text-muted)" }}>{label}</span>
+                    {/* مدخل الملف واحد للرفع والاستبدال معاً — نفس الدالّة
+                        تتولّى الحالتين، فالاستبدال ليس مساراً ثانياً */}
+                    <input id={`admin-upload-${docType}`} type="file" accept={accept} style={{ display: "none" }}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleAdminDocUpload(docTarget, docType, field, f); e.currentTarget.value = ""; }} />
                     {docUploading === docType ? (
                       <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري الرفع...</span>
                     ) : url ? (
@@ -664,30 +780,35 @@ function AdminsPage({
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض
                         </button>
                         <button onClick={() => downloadFile(url)} style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>⬇</button>
-                        <button onClick={() => handleAdminDocDelete(docTarget, field)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>
+                        <button onClick={() => document.getElementById(`admin-upload-${docType}`)?.click()} title="استبدال"
+                          style={{ background: "var(--warning-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--warning)" }}>استبدال</button>
+                        <button onClick={() => handleAdminDocDelete(docTarget, field, label)} style={{ background: "var(--female-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--danger)" }}>
                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                         </button>
                       </div>
                     ) : (
-                      <>
-                        <input id={`admin-upload-${docType}`} type="file" accept={accept} style={{ display: "none" }}
-                          onChange={e => { const f = e.target.files?.[0]; if (f) handleAdminDocUpload(docTarget, docType, field, f); e.currentTarget.value = ""; }} />
-                        <button onClick={() => document.getElementById(`admin-upload-${docType}`)?.click()}
-                          style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> رفع
-                        </button>
-                      </>
+                      <button onClick={() => document.getElementById(`admin-upload-${docType}`)?.click()}
+                        style={{ background: "var(--success-bg)", border: "none", padding: "3px 8px", borderRadius: 6, fontSize: 10, cursor: "pointer", color: "var(--primary-dark)" }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> رفع
+                      </button>
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {/* عرض الصورة */}
             {docViewer && (
               <div style={{ width: 260, flexShrink: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{docViewer.label}</div>
-                <img src={docViewerUrl} alt={docViewer.label} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }}
-                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                {/* العقد والتذكرة والتصريح تصل PDF كثيراً، و`<img>` وحده
+                    كان يعرضها مربعاً فارغاً — نفس تمييز صفحة الحجاج */}
+                {docViewer.url.toLowerCase().includes("pdf") ? (
+                  <iframe src={docViewerUrl} title={docViewer.label} style={{ width: "100%", height: 340, border: "1px solid var(--border)", borderRadius: 8 }} />
+                ) : (
+                  <img src={docViewerUrl} alt={docViewer.label} style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                )}
               </div>
             )}
           </div>

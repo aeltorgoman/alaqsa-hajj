@@ -257,6 +257,14 @@ export async function scanDocument(file: File, mode: ScanMode): Promise<ScannedD
 const DOC_BUCKET = "passengers-docs";
 const PUBLIC_PREFIX = `/storage/v1/object/public/${DOC_BUCKET}/`;
 
+/* سعة الغرفة مشتقّة من نوعها — لا عمود `capacity` في `rooms`.
+   خرجت من صفحة الفندق إلى هنا حين احتاجتها صفحة الإداريين أيضاً:
+   نسختان من هذا الجدول تفترقان يوماً، وسعةٌ مختلفة بين شاشتين
+   تعني تسكيناً فوق سرير مشغول. الصفر يعني «بلا حدّ» (مجلس · أخرى). */
+export const ROOM_TYPE_CAP: Record<string, number> = {
+  "فردية": 1, "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "مجلس": 0, "أخرى": 0,
+};
+
 /** مدد الصلاحية المعتمدة — ق٣ */
 export const DOC_TTL = {
   /** عرض داخليّ للموظّف */
