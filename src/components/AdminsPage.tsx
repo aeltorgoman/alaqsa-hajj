@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
-import { isHajj } from "../utils/passenger";
+import { isHajj, mapPassenger, upsertPassenger } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
-import type { Passenger, Bus, Camp, Room, Flight } from "../types";
+import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
@@ -71,9 +71,11 @@ function AdminStats({ admins }: { admins: Passenger[] }) {
 function AdminsPage({
   passengers,
   setPassengers,
+  currentUser,
 }: {
   passengers: Passenger[];
   setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
+  currentUser?: User;
 }) {
   const { alert, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
@@ -120,7 +122,9 @@ function AdminsPage({
   /* س٦: العارض يفتح برابط موقّع لا بالقيمة المخزّنة */
   const docViewerUrl = useSignedDoc(docViewer?.url);
 
-  const admins = passengers.filter(p => p.passenger_type && p.passenger_type !== "حاج");
+  /* عقد واحد للتصنيف: `isHajj` لا شرط مكتوب باليد. المكتوب باليد
+     يعامل `passenger_type = null` كإداري، والعقد يعدّه حاجّاً. */
+  const admins = passengers.filter(p => !isHajj(p));
 
   // ============================================================
   // طباعة الإداريين
@@ -331,31 +335,33 @@ function AdminsPage({
     try {
       if (editTarget) {
         const { error } = await supabase.from("passengers")
-          .update({ ...form, short_ar, short_en })
+          .update({ ...form, short_ar, short_en, updated_by: currentUser?.name || null, updated_at: new Date().toISOString() })
           .eq("id", editTarget.id);
         if (error) throw error;
         const docUpdates = await commitScannedDocs(editTarget.id, editTarget);
-        setPassengers(prev => prev.map(p => p.id === editTarget.id
-          ? { ...p, ...form, short_ar, short_en, ...docUpdates } : p));
+        /* الصفّ يُقرأ من القاعدة بعد الكتابة ويمرّ بـ`mapPassenger`:
+           بناء الكائن يدوياً من `form` يترك الحالة المحلية تخالف
+           القاعدة في كل عمود لم يمرّ بالنموذج. */
+        const { data: row } = await supabase.from("passengers").select("*").eq("id", editTarget.id).single();
+        setPassengers(prev => row
+          ? upsertPassenger(prev, mapPassenger(row))
+          : prev.map(p => p.id === editTarget.id ? { ...p, ...form, short_ar, short_en, ...docUpdates } : p));
         showAlert("success", "تم تعديل بيانات الإداري");
       } else {
         const { data, error } = await supabase.from("passengers")
-          .insert([{ ...form, short_ar, short_en }])
-          .select();
-        if (error || !data?.[0]) throw error;
-        const newId = data[0].id;
-        const docUpdates = await commitScannedDocs(newId, null);
-        /* الصفّ العائد من القاعدة أعمدته nullable بينما `Passenger`
-           يفترضها نصوصاً. كان `any` يخفي ذلك، وتصريح docUpdates كشفه.
-           التحويل يُبقي السلوك كما هو حرفياً؛ والعلاج الصحيح تمرير
-           الصفّ عبر `mapPassenger` — وهو نطاق PR «C» لا هذا. */
-        const newP = {
-          ...data[0],
-          ...docUpdates,
-          services: { bus: "", flight: "", hotel_type: "", hotel_view: "", camp_mina: "", camp_arafa: "" },
-        } as unknown as Passenger;
-        // نضيف بس لو مش موجود في الـ state (لتجنب التكرار مع الـ realtime)
-        setPassengers(prev => prev.some(p => p.id === newP.id) ? prev : [...prev, newP]);
+          .insert([{ ...form, short_ar, short_en, created_by: currentUser?.name || null }])
+          .select()
+          .single();
+        if (error || !data) throw error;
+        const docUpdates = await commitScannedDocs(data.id, null);
+        /* `mapPassenger` هو العقد الوحيد لتحويل صفّ القاعدة إلى
+           `Passenger`. البناء اليدوي كان يخترع `services` بقيم فارغة
+           — وهي حقول حجّ مشتقّة من أعمدة الصفّ، لا شيء يخصّ الإداري
+           — ويحتاج تحويل نوع يُخفي أن أعمدة الصفّ nullable.
+           و`upsertPassenger` يجعل ترتيب وصول الإدراج المحلي وحدث
+           Realtime غير مؤثّر: لا صفّ مكرّر ولا حالة بائتة. */
+        const newP = mapPassenger({ ...data, ...docUpdates });
+        setPassengers(prev => upsertPassenger(prev, newP));
         showAlert("success", "تمت إضافة الإداري بنجاح");
       }
       setShowModal(false);
@@ -441,6 +447,8 @@ function AdminsPage({
       flight_id:        assign.flight_id        ? Number(assign.flight_id)        : null,
       return_flight_id: assign.return_flight_id ? Number(assign.return_flight_id) : null,
       wants_flight:     assign.wants_flight,
+      updated_by:       currentUser?.name || null,
+      updated_at:       new Date().toISOString(),
       /* الدرجة تُمحى مع إلغاء الطيران، فلا تبقى «درجة أولى» معلّقة
          على من لا يسافر — ولا أثر مالي لها: الإداري خارج Finance. */
       flight_class:     assign.wants_flight ? assign.flight_class : null,
