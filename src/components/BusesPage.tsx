@@ -523,10 +523,15 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                             {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</div>
-                            {willMismatch && isVIP && <div style={{ fontSize: 9, color: "#C62828", fontWeight: 700 }}>⚠ ليس VIP</div>}
+                            {/* الشارة قبل الإضافة لا بعدها فقط: من يختار
+                                لا يعرف أنه إداري إلا بعد فوات الاختيار */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</span>
+                              {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
+                            </div>
+                            {willMismatch && isVIP && isHajj(p) && <div style={{ fontSize: 9, color: "#C62828", fontWeight: 700 }}>⚠ ليس VIP</div>}
                           </div>
-                          {p.services?.bus === "VIP" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
+                          {isHajj(p) && p.services?.bus === "VIP" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>VIP</span>}
                         </div>
                       );
                     })}

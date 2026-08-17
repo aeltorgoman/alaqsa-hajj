@@ -537,7 +537,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     {avatarInitials(p.name_ar)}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.name_ar}{!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}</div>
+                    {/* الاسم المختصر لا الكامل — الصفّ ضيّق والاسم الرباعي
+                        يُقصّ. والشارة عنصر مستقلّ لا يُقصّ مع الاسم:
+                        لو كانت داخل صندوق القصّ اختفت كما اختفت أوّل مرّة. */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</span>
+                      {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
+                    </div>
                     <div style={{ fontSize: 10, color: "var(--muted)" }}>{p.passport || p.national_id || "—"}</div>
                   </div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{i + 1}</div>
@@ -563,8 +569,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
                       <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 600 }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</span>
                       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        {p.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
-                        {String(p.services?.hotel_type) === "خاص" && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
+                        {/* شارات الخدمات للحاجّ وحده: `mapPassenger` يمنح
+                            كل صفّ «مطلة» افتراضاً حين يكون العمود فارغاً،
+                            فكان الإداري يظهر «مطل» بلا معنى */}
+                        {isHajj(p) && p.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
+                        {isHajj(p) && String(p.services?.hotel_type) === "خاص" && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
                         {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99 }}>{p.passenger_type}</span>}
                       </div>
                     </div>
