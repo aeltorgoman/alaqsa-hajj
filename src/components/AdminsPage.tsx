@@ -673,7 +673,6 @@ function AdminsPage({
             فيها. الآن يظهر مع أوّل نقرة ويبقى حتى نجاح أو خطأ. */}
         {scanning && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-            <style>{`@keyframes hajjSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             <div style={{ width: 20, height: 20, border: "2.5px solid var(--line)", borderTopColor: "var(--warning)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite", flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--warning)" }}>جارٍ قراءة المستند…</div>
@@ -765,13 +764,6 @@ function AdminsPage({
                     <img src={src} alt={label} style={{ width: "100%", display: "block", border: "1px solid var(--border)", borderRadius: 8, filter: scanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
                     {scanning && (
                       <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        {/* `hajjSpin` هو دوران الهوية المعرَّف في
-                            `LoadingSpinner`، لكنه محلّي داخل ذلك المكوّن
-                            فلا يصل إلى هنا — فيُعرَّف معه. (اسم `spin`
-                            المستعمل في صفحة الحجاج غير معرَّف أصلاً في
-                            أيّ من ملفّي CSS، فحلقتها ساكنة لا تدور —
-                            مسجَّل ولم يُمسّ.) */}
-                        <style>{`@keyframes hajjSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                         <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.35)", borderTopColor: "var(--em7)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite" }} />
                         <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
                       </div>
