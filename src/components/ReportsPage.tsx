@@ -66,6 +66,36 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
+  /* ── كشف طلب الحجز ──────────────────────────────────────────
+     تعريف واحد للسكّان تقرأه الطبقات الأربع: بطاقة الدخول
+     والمعاينة والطباعة وملف الإكسل. كان لكلٍّ منها تعريفه، فتعطي
+     الشاشة رقماً ويعطي المطبوع رقماً آخر.
+
+     والكشف يُرسَل إلى شركة الطيران **قبل** أن تصل الحجوزات وأرقام
+     الرحلات ومواعيدها، فلا دور لـ`flight_id` ولا `return_flight_id`
+     في الدخول: المعيار هو من تطلب له الحملة تذكرة.
+
+     الحاجّ يعبّر عن ذلك بخدمته، والإداري بـ`wants_flight`. */
+  const bookingList = useMemo(
+    () => passengers.filter(p => isHajj(p) ? p.services?.flight !== "بدون" : !!p.wants_flight),
+    [passengers],
+  );
+  /* نزلاء الغرفة — كل من `room_id` يشير إليها. كان الكشف المطبوع
+     يحذف الإداري من كرت غرفته، فيوزّع موظّف الفندق المفاتيح على
+     أسماء ناقصة. والتقرير داخلي، فالتفصيل حاج/إداري مطلوب فيه. */
+  const roomOccupants = (roomId: number) => passengers.filter(p => p.room_id === roomId);
+  /* أسطر التركيبة في ملخّصات الإكسل — تظهر حين يوجد إداري فعلاً،
+     فلا يُثقَل الملخّص بسطر «صفر إداريين» في حملة بلا إداريين.
+     موحّدة للفندق والباصات والمخيّمات: سؤال واحد وجواب واحد. */
+  const breakdownRows = (list: Passenger[]): (string | number)[][] => {
+    const admins = list.filter(p => !isHajj(p)).length;
+    return admins ? [["منهم حجاج", list.length - admins], ["منهم إداريون", admins]] : [];
+  };
+
+
+  const bookingPilgrims = bookingList.filter(p => isHajj(p)).length;
+  const bookingAdmins = bookingList.length - bookingPilgrims;
+
   // الحجاج المرتبطين برحلة معينة — ذهاب عبر flight_id، إياب عبر return_flight_id (مستقلين)
   const passengersOfFlight = (flight: Flight) => passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id);
   // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
@@ -296,22 +326,26 @@ const getReportAirlineLogo = (airline: string): string | null => {
   return null;
 };
 
+  /* المستند الخارجي: الجميع «Passengers» بلا تصنيف داخلي. شركة
+     الطيران تحجز مقاعد لأشخاص، ولا يعنيها من منهم إداري — وإظهار
+     ذلك يسرّب بنية الحملة بلا فائدة. أما الدرجة فتبقى: تؤثّر في
+     الحجز. والتفصيل حاج/إداري يسكن الشاشة الداخلية وحدها. */
   const getAirlineHTML = () => {
-    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id || p.return_flight_id));
-    const list = [...passengers.filter(p => (isHajj(p)) && p.services?.flight !== "بدون"), ...adminsWithFlight];
+    const list = bookingList;
     const rows = list.map((p, i) => {
       const nat = natCode(p.nat);
       const gender = p.gender === "ذكر" ? "MR." : "MRS.";
       const cls = wantsFirstClass(p) ? "FIRST CLASS" : "";
       return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
-    const body = `<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
-    return mkHTML("Pilgrims Flight List", body, false);
+    const first = list.filter(p => wantsFirstClass(p)).length;
+    const summary = `<div dir="ltr" style="text-align:left;margin-bottom:8pt;font-size:10pt"><strong>Total Passengers:</strong> ${list.length} &nbsp;·&nbsp; <strong>First Class:</strong> ${first} &nbsp;·&nbsp; <strong>Economy:</strong> ${list.length - first}</div>`;
+    const body = `${summary}<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
+    return mkHTML("Flight Booking List", body, false);
   };
 
   const exportAirlineXLSX = () => {
-    const adminsWithFlight = passengers.filter(p => (p.passenger_type && p.passenger_type !== "حاج") && ((p as any).wants_flight || p.flight_id || p.return_flight_id));
-    const list = [...passengers.filter(p => (isHajj(p)) && p.services?.flight !== "بدون"), ...adminsWithFlight];
+    const list = bookingList;
     const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
       i + 1, p.name_en,
@@ -325,12 +359,14 @@ const getReportAirlineLogo = (airline: string): string | null => {
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Flight List");
-    addSummarySheet(wb, XLSX, "Pilgrims Flight List", companyName, [
-      ["إجمالي عدد الحجاج", list.length],
-      ["درجة أولى", list.filter(p => wantsFirstClass(p)).length],
-      ["درجة اقتصادية", list.filter(p => !wantsFirstClass(p)).length],
+    /* «إجمالي عدد الحجاج» فوق قائمة فيها إداريون كان اسماً يخالف
+       محتواه، ويخرج إلى طرف خارجي. */
+    addSummarySheet(wb, XLSX, "Flight Booking List", companyName, [
+      ["Total Passengers", list.length],
+      ["First Class", list.filter(p => wantsFirstClass(p)).length],
+      ["Economy", list.filter(p => !wantsFirstClass(p)).length],
     ]);
-    XLSX.writeFile(wb, "flight_list.xlsx");
+    XLSX.writeFile(wb, "flight_booking_list.xlsx");
   };
 
   // ============================================================
@@ -413,9 +449,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
       usedNames.add(n);
       XLSX.utils.book_append_sheet(wb, ws, n);
     });
+    const busRiders = passengers.filter(p => selBuses.some(b => b.id === p.bus_id));
     addSummarySheet(wb, XLSX, "تقرير الباصات", companyName, [
       ["إجمالي عدد الباصات", selBuses.length],
-      ["إجمالي عدد المسافرين", passengers.filter(p => selBuses.some(b => b.id === p.bus_id)).length],
+      ["إجمالي عدد المسافرين", busRiders.length],
+      ...breakdownRows(busRiders),
       ...selBuses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, passengers.filter(p => p.bus_id === b.id).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الباصات.xlsx");
@@ -473,9 +511,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
       usedNames.add(n);
       XLSX.utils.book_append_sheet(wb, ws, n);
     });
+    const campPeople = passengers.filter(p => (p as any)[campIdKey]);
     addSummarySheet(wb, XLSX, `تقرير مخيمات ${pageType}`, companyName, [
       ["إجمالي عدد المخيمات", pageCamps.length],
-      ["إجمالي عدد الحجاج", passengers.filter(p => (p as any)[campIdKey]).length],
+      ["إجمالي عدد الأشخاص", campPeople.length],
+      ...breakdownRows(campPeople),
       ...pageCamps.map(c => [`${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})`, passengers.filter(p => (p as any)[campIdKey] === c.id).length]),
     ]);
     XLSX.writeFile(wb, `تقرير_مخيمات_${pageType}.xlsx`);
@@ -533,7 +573,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
     const getRoomFontSize = (maxCapInPage: number): number => FONT_BY_MAX_CAP[Math.min(4, Math.max(1, maxCapInPage))] || 17;
 
     const renderRoomBlock = (room: Room, fontSize: number) => {
-      const rp = passengers.filter(p => p.room_id === room.id && (isHajj(p)));
+      const rp = roomOccupants(room.id);
       const actualLabel = roomLabelByCount(rp.length);
       const cap = Math.max(rp.length, 1); // عدد الصفوف = عدد الحجاج الفعليين (بحد أدنى صف واحد)
       const clr = PRINT_ROOM_COLORS[actualLabel] || "#5C1830";
@@ -588,7 +628,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
     </style>` +
       pages.map((pageRooms, pi) => {
         // أقصى عدد حجاج في غرفة واحدة ضمن هذه الصفحة يحدد حجم الخط المناسب لكل كروتها
-        const roomOccupancy = (room: Room) => passengers.filter(p => p.room_id === room.id && (isHajj(p))).length;
+        const roomOccupancy = (room: Room) => roomOccupants(room.id).length;
         const maxCapInPage = Math.max(1, ...pageRooms.map(r => Math.max(roomOccupancy(r), 1)));
         const fontSize = getRoomFontSize(maxCapInPage);
         const padded = [...pageRooms];
@@ -685,7 +725,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
         const guestRow: (string | number | null)[] = [];
         rowRooms.forEach(room => {
           if (room) {
-            const rp = passengers.filter(p => p.room_id === room.id && (isHajj(p)));
+            const rp = roomOccupants(room.id);
             const p = rp[g];
             guestRow.push(p ? g + 1 : "");
             guestRow.push(p ? (p.short_ar || p.name_ar) : "");
@@ -707,9 +747,13 @@ const getReportAirlineLogo = (airline: string): string | null => {
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     XLSX.utils.book_append_sheet(wb, ws, safeSheetName(`تقرير الفندق${subtitle}`));
 
+    const guests = passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id));
+    const majlisCount = filtered.filter(r => r.type === "مجلس").length;
     addSummarySheet(wb, XLSX, `تقرير الفندق${subtitle}`, companyName, [
       ["إجمالي عدد الغرف", filtered.length],
-      ["إجمالي عدد النزلاء", passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id) && (isHajj(p))).length],
+      ...(majlisCount ? [["عدد المجالس", majlisCount]] : []),
+      ["إجمالي عدد النزلاء", guests.length],
+      ...breakdownRows(guests),
       ...ROOM_TYPES.map(t => [`غرف ${t}`, filtered.filter(r => r.type === t).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الفندق.xlsx");
@@ -838,17 +882,27 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // KPI calculations للـ gateway
   // ============================================================
   const hajjTotal = passengers.filter(p => isHajj(p)).length || 1;
-  const withFlight = passengers.filter(p => (isHajj(p)) && p.flight_id != null).length;
+  /* ── اكتمال توزيع الطيران ──
+     المقام ليس كل الحجاج بل **المطلوب لهم طيران** وحدهم: من خدمته
+     «بدون» لا ينقصه شيء، وعدّه ناقصاً يجعل المؤشّر يشكو ممّا لا
+     شكوى فيه. والمكتمل من له الساقان معاً — فلا حالة عمل مشروعة
+     لساق واحدة، والاكتفاء بـ`flight_id` كان يخفي العودة تماماً.
+     وهذا وحده مؤشّر توزيع؛ بقيّة البطاقات على حالها. */
+  const flightNeeded = passengers.filter(p => isHajj(p) && p.services?.flight !== "بدون");
+  const flightOut    = flightNeeded.filter(p => p.flight_id != null).length;
+  const flightRet    = flightNeeded.filter(p => p.return_flight_id != null).length;
+  const flightBoth   = flightNeeded.filter(p => p.flight_id != null && p.return_flight_id != null).length;
+  const flightDen    = flightNeeded.length || 1;
+  const noFlight     = flightNeeded.length - flightBoth;
+  const pctFlight    = Math.round(flightBoth / flightDen * 100);
   const withBus    = passengers.filter(p => (isHajj(p)) && p.bus_id != null).length;
   const withMina   = passengers.filter(p => (isHajj(p)) && p.camp_mina_id != null).length;
   const withArafa  = passengers.filter(p => (isHajj(p)) && p.camp_arafa_id != null).length;
   const withRoom   = passengers.filter(p => (isHajj(p)) && p.room_id != null).length;
-  const noFlight   = hajjTotal - withFlight;
   const noBus      = hajjTotal - withBus;
   const noMina     = hajjTotal - withMina;
   const noArafa    = hajjTotal - withArafa;
   const noRoom     = hajjTotal - withRoom;
-  const pctFlight  = Math.round(withFlight / hajjTotal * 100);
   const pctBus     = Math.round(withBus    / hajjTotal * 100);
   const pctMina    = Math.round(withMina   / hajjTotal * 100);
   const pctArafa   = Math.round(withArafa  / hajjTotal * 100);
@@ -894,7 +948,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
             {[
               { id:"passengers_report", name:"تقرير الحجاج",  icon:`<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, color:"#2A9D8F", bg:"rgba(42,157,143,0.1)",  kpiNum: String(passengers.filter(p=>!p.passenger_type||p.passenger_type==="حاج").length), kpiLabel:"إجمالي الحجاج", kpiSub:"", pct:100, alert:false },
-              { id:"flight",            name:"تقرير الطيران", icon:`<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,                             color:"#0C447C", bg:"rgba(12,68,124,0.1)",   kpiNum:pctFlight+"%", kpiLabel:"لديهم تذاكر طيران", kpiSub: noFlight > 0 ? noFlight+" بدون تذكرة" : "جميعهم مكتملون", pct:pctFlight, alert: noFlight>0 },
+              { id:"flight",            name:"تقرير الطيران", icon:`<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,                             color:"#0C447C", bg:"rgba(12,68,124,0.1)",   kpiNum:`${flightBoth}/${flightNeeded.length}`, kpiLabel:"اكتمل توزيعهم ذهاباً وعودة", kpiSub: `ذهاب ${flightOut} · عودة ${flightRet}${noFlight > 0 ? ` · ${noFlight} لم تكتمل رحلاتهم` : ""}`, pct:pctFlight, alert: noFlight>0 },
               { id:"buses",             name:"تقرير الباصات", icon:`<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>`, color:"#3F51B5", bg:"rgba(63,81,181,0.1)",  kpiNum:pctBus+"%",    kpiLabel:"موزّعون على الباصات",  kpiSub: noBus   > 0 ? noBus+  " بدون باص"    : "جميعهم مكتملون", pct:pctBus,    alert: noBus>0 },
               { id:"mina",              name:"تقرير منى",     icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#5C7C2E", bg:"rgba(92,124,46,0.1)",   kpiNum:pctMina+"%",   kpiLabel:"في مخيمات منى",        kpiSub: noMina  > 0 ? noMina+ " لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctMina,   alert: noMina>0 },
               { id:"arafa",             name:"تقرير عرفة",    icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#B5651D", bg:"rgba(181,101,29,0.1)",  kpiNum:pctArafa+"%",  kpiLabel:"في مخيمات عرفة",       kpiSub: noArafa > 0 ? noArafa+" لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctArafa,  alert: noArafa>0 },
@@ -1051,7 +1105,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
               {!flightSubReport ? (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   {[
-                    { id: "airline", num: passengers.filter(p => isHajj(p)).length, label: "إجمالي الحجاج", sub: "كشف لإرسال شركة الطيران", color: "var(--primary)", name: "تقرير خطوط الطيران", icon: `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>` },
+                    { id: "airline", num: bookingList.length, label: "مطلوب لهم حجز", sub: `${bookingPilgrims} حاج · ${bookingAdmins} إداري`, color: "var(--primary)", name: "تقرير خطوط الطيران", icon: `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>` },
                     { id: "per_flight", num: flights.length, label: "رحلة", sub: "قائمة الحجاج لكل رحلة", color: "#1565C0", name: "تقرير كل رحلة", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
                   ].map(sub => (
                     <div key={sub.id} onClick={() => setFlightSubReport(sub.id as "airline" | "per_flight")}
@@ -1103,10 +1157,12 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       <div style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
                         <div onClick={() => toggleExpandedItem(-999)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "linear-gradient(135deg, var(--primary), var(--primary-dark))", cursor: "pointer", color: "#fff" }}>
                           <span style={{ fontSize: 13, fontWeight: 800 }}>قائمة الركاب</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{passengers.filter(p => p.services?.flight !== "بدون").length} مسافر · {expandedItems.has(-999) ? "▲" : "▼"}</span>
+                          {/* الشاشة داخلية: التفصيل حاج/إداري مطلوب هنا،
+                              وممنوع في المستند الخارجي */}
+                          <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{bookingList.length} مطلوب لهم حجز · {bookingPilgrims} حاج · {bookingAdmins} إداري · {expandedItems.has(-999) ? "▲" : "▼"}</span>
                         </div>
                         {expandedItems.has(-999) && (() => {
-                          const base = passengers.filter(p => p.services?.flight !== "بدون");
+                          const base = bookingList;
                           const sorted = [...base].sort((a, b) => {
                             if (airlineSortKey === "name") return (a.name_en || "").localeCompare(b.name_en || "");
                             if (airlineSortKey === "gender") return (a.gender || "").localeCompare(b.gender || "");

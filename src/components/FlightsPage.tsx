@@ -179,9 +179,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
   const currentFlight = flights.find(f => f.id === currentFlightId);
   const currentField = flightField(currentFlight?.type);
+  /* من يُتاح إسناده لهذه الرحلة: الحاجّ ما لم تكن خدمته «بدون»،
+     والإداري إن طلبت له الحملة تذكرة (`wants_flight`). كان الإداري
+     محجوباً هنا كلّياً فلا سبيل لإسناده إلا من صفحة الإداريين. */
   const availableP = passengers.filter(p => {
-    if (p.passenger_type && p.passenger_type !== "حاج") return false;
-    if (p.services?.flight === "بدون") return false;
+    if (isHajj(p)) { if (p.services?.flight === "بدون") return false; }
+    else if (!p.wants_flight) return false;
     if (!currentFlight) return false;
     const val = p[currentField];
     if (val === currentFlightId) return false;

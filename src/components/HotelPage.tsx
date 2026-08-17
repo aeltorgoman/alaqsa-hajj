@@ -111,7 +111,16 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const roomPassengers = (roomId: number) =>
     passengers.filter(p => p.room_id === roomId);
 
-  const unassigned = hajj.filter(p => !p.room_id);
+  /* من لا غرفة له — الإداري كذلك. كان يُسكَّن من صفحة الإداريين
+     وحدها، وهي أضعف مدخل: بلا سعة ولا حالة غرفة أمام المستخدم. */
+  const unassigned = passengers.filter(p => !p.room_id);
+
+  /* تفصيل الشاغلين: السعة تعدّ الجميع، والتشغيل يحتاج معرفة التركيبة */
+  const occBreakdown = (roomId: number) => {
+    const occ = roomPassengers(roomId);
+    const h = occ.filter(p => isHajj(p)).length;
+    return { total: occ.length, hajj: h, admins: occ.length - h };
+  };
 
   const getStatus = (room: Room) => {
     const cap = TYPE_CAP[room.type] || 0;
@@ -507,7 +516,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {[
               { label: "الدور", val: selectedRoom.floor },
               { label: "الوضع", val: (statusLabel[getStatus(selectedRoom)] || getStatus(selectedRoom)), color: statusColor[getStatus(selectedRoom)] },
-              { label: "عدد النزلاء", val: `${roomPassengers(selectedRoom.id).length}/${TYPE_CAP[selectedRoom.type] || "—"}` },
+              (() => { const b = occBreakdown(selectedRoom.id); return { label: b.admins ? `نزلاء · ${b.hajj} حاج + ${b.admins} إداري` : "عدد النزلاء", val: `${b.total}/${TYPE_CAP[selectedRoom.type] || "—"}` }; })(),
             ].map(k => (
               <div key={k.label} style={{ background: "var(--ivory)", borderRadius: 8, padding: "7px 8px", textAlign: "center" }}>
                 <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{k.label}</div>
@@ -528,7 +537,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     {avatarInitials(p.name_ar)}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name_ar}</div>
+                    {/* الاسم المختصر لا الكامل — الصفّ ضيّق والاسم الرباعي
+                        يُقصّ. والشارة عنصر مستقلّ لا يُقصّ مع الاسم:
+                        لو كانت داخل صندوق القصّ اختفت كما اختفت أوّل مرّة. */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</span>
+                      {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
+                    </div>
                     <div style={{ fontSize: 10, color: "var(--muted)" }}>{p.passport || p.national_id || "—"}</div>
                   </div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{i + 1}</div>
@@ -540,12 +555,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {/* إضافة حاج */}
             {selectedRoom.type !== "مجلس" && <button disabled={readOnly} onClick={() => setShowAddPilgrim(!showAddPilgrim)}
               style={{ ...roOff, width: "100%", padding: "9px", borderRadius: 9, border: `1.5px dashed var(--line)`, background: "transparent", color: primary, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 4, transition: "all .15s" }}>
-              + إضافة حاج للغرفة
+              + إضافة نزيل للغرفة
             </button>}
 
             {showAddPilgrim && (
               <div style={{ marginTop: 8, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
-                <input value={pSearch} onChange={e => setPSearch(e.target.value)} placeholder="ابحث في الحجاج..." style={{ ...inp, borderRadius: 0, borderWidth: "0 0 1px 0", fontSize: 12 }} />
+                <input value={pSearch} onChange={e => setPSearch(e.target.value)} placeholder="ابحث بالاسم..." style={{ ...inp, borderRadius: 0, borderWidth: "0 0 1px 0", fontSize: 12 }} />
                 <div style={{ maxHeight: 150, overflowY: "auto" }}>
                   {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).slice(0, 20).map(p => (
                     <div key={p.id} onClick={() => addToRoom(p.id)}
@@ -554,13 +569,17 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
                       <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 600 }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</span>
                       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        {p.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
-                        {String(p.services?.hotel_type) === "خاص" && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
+                        {/* شارات الخدمات للحاجّ وحده: `mapPassenger` يمنح
+                            كل صفّ «مطلة» افتراضاً حين يكون العمود فارغاً،
+                            فكان الإداري يظهر «مطل» بلا معنى */}
+                        {isHajj(p) && p.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
+                        {isHajj(p) && String(p.services?.hotel_type) === "خاص" && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
+                        {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99 }}>{p.passenger_type}</span>}
                       </div>
                     </div>
                   ))}
                   {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).length === 0 && (
-                    <div style={{ padding: "12px", textAlign: "center", color: "var(--muted)", fontSize: 12 }}>لا يوجد حجاج غير موزعين</div>
+                    <div style={{ padding: "12px", textAlign: "center", color: "var(--muted)", fontSize: 12 }}>لا يوجد غير موزّعين</div>
                   )}
                 </div>
               </div>
