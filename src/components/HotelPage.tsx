@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { isHajj } from "../utils/passenger";
+import { isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Room } from "../types";
@@ -20,7 +20,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const primary = useCompanyBranding().primaryColor;
   const { alert, showAlert } = useAlert();
 
-  const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
 
   /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية */
@@ -48,6 +48,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     return () => document.removeEventListener("keydown", h);
   }, [selectedRoom, showAddRoom, showAddPilgrim]);
   const [pSearch, setPSearch] = useState("");
+  /* ترتيب الأسماء داخل الغرفة — عرضٌ تشغيلي لكشف الفندق، وليس
+     إسناد أسرّة: الرقم موضع في القائمة لا سرير بعينه. ولم يكن
+     للغرفة ترتيب إطلاقاً قبل اليوم، فالأسماء تظهر بترتيب وصولها
+     من القاعدة. */
+  const [dragId, setDragId] = useState<number | null>(null);
 
   // Add Room form
   const [addMode, setAddMode] = useState<"single"|"range"|"template">("single");
@@ -109,7 +114,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
      تُبنى على مفتاح الإسناد لا على قائمة الحجاج. أما مؤشّرات «الحجاج
      الموزّعين» و«نسبة التوزيع» فتبقى حجّاجية، لأن معناها حجّاجي. */
   const roomPassengers = (roomId: number) =>
-    passengers.filter(p => p.room_id === roomId);
+    passengers.filter(p => p.room_id === roomId).sort(byOrder("room_sort_order"));
 
   /* من لا غرفة له — الإداري كذلك. كان يُسكَّن من صفحة الإداريين
      وحدها، وهي أضعف مدخل: بلا سعة ولا حالة غرفة أمام المستخدم. */
@@ -223,6 +228,18 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!await writeOk(supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } : p));
     setPSearch("");
+  };
+
+  const reorderRoom = async (roomId: number, fromId: number, toId: number) => {
+    if (fromId === toId) return;
+    const list = roomPassengers(roomId);
+    const from = list.findIndex(p => p.id === fromId);
+    const to   = list.findIndex(p => p.id === toId);
+    if (from === -1 || to === -1) return;
+    const next = [...list];
+    next.splice(to, 0, ...next.splice(from, 1));
+    setPassengers(prev => applyReorder(prev, "room_sort_order", next));
+    await writeAllOk(reorderUpdates("room_sort_order", next), "تعذّر حفظ ترتيب الغرفة");
   };
 
   const deleteRoom = async (room: Room) => {
@@ -527,12 +544,18 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
           {/* Body */}
           <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 8 }}>النزلاء الموجودون</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 8 }}>النزلاء الموجودون <span style={{ fontWeight: 500, letterSpacing: 0 }}>— اسحب لإعادة الترتيب</span></div>
             {roomPassengers(selectedRoom.id).length === 0 ? (
               <div style={{ textAlign: "center", padding: "16px 0", color: "var(--muted)", fontSize: 12 }}>لا يوجد نزلاء في هذه الغرفة</div>
             ) : (
               roomPassengers(selectedRoom.id).map((p, i) => (
-                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 6, background: "var(--ivory)" }}>
+                <div key={p.id}
+                  draggable={!readOnly}
+                  onDragStart={() => setDragId(p.id)}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => { if (dragId) reorderRoom(selectedRoom.id, dragId, p.id); setDragId(null); }}
+                  onDragEnd={() => setDragId(null)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 6, background: "var(--ivory)", cursor: readOnly ? "default" : "grab", opacity: dragId === p.id ? 0.5 : 1 }}>
                   <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg,${primary},${primary}99)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
                     {avatarInitials(p.name_ar)}
                   </div>

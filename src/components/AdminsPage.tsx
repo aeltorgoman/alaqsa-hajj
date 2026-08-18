@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { isHajj, mapPassenger, upsertPassenger } from "../utils/passenger";
+import { isHajj, mapPassenger, upsertPassenger, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
 import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
@@ -79,7 +79,7 @@ function AdminsPage({
 }) {
   const { alert, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
-  const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
   const branding = useReportBranding();
 
@@ -124,7 +124,24 @@ function AdminsPage({
 
   /* عقد واحد للتصنيف: `isHajj` لا شرط مكتوب باليد. المكتوب باليد
      يعامل `passenger_type = null` كإداري، والعقد يعدّه حاجّاً. */
-  const admins = passengers.filter(p => !isHajj(p));
+  const admins = passengers.filter(p => !isHajj(p)).sort(byOrder("sort_order"));
+
+  /* إعادة ترتيب الإداريين — بنفس نمط السحب المستقرّ في الباصات
+     والمخيّمات والغرف. والكتابة مقصورة على الإداريين، فالعمود نفسه
+     يسع تسلسلَين ما دام كل كاتب لا يتجاوز سكّانه: ترتيب الحجاج لا
+     يتزحزح، ولا يتزحزح ترتيب الإداريين بإعادة ترتيب الحجاج. */
+  const [dragId, setDragId] = useState<number | null>(null);
+
+  const reorderAdmins = async (fromId: number, toId: number) => {
+    if (fromId === toId || !assertWritable()) return;
+    const from = admins.findIndex(p => p.id === fromId);
+    const to   = admins.findIndex(p => p.id === toId);
+    if (from === -1 || to === -1) return;
+    const next = [...admins];
+    next.splice(to, 0, ...next.splice(from, 1));
+    setPassengers(prev => applyReorder(prev, "sort_order", next));
+    await writeAllOk(reorderUpdates("sort_order", next), "تعذّر حفظ ترتيب الإداريين");
+  };
 
   // ============================================================
   // طباعة الإداريين
@@ -622,7 +639,14 @@ function AdminsPage({
             const [bg, clr] = TYPE_COLORS[type] || ["var(--bg-2)", "var(--text)"];
             const hasAssign = p.bus_id || p.room_id || p.camp_mina_id || p.camp_arafa_id || p.flight_id || p.return_flight_id;
             return (
-              <div key={p.id} style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div key={p.id}
+                draggable={!readOnly}
+                onDragStart={() => setDragId(p.id)}
+                onDragOver={e => e.preventDefault()}
+                onDrop={() => { if (dragId) reorderAdmins(dragId, p.id); setDragId(null); }}
+                onDragEnd={() => setDragId(null)}
+                style={{ background: "var(--bg-card)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, cursor: readOnly ? "default" : "grab", opacity: dragId === p.id ? 0.5 : 1 }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, width: 16, textAlign: "center", flexShrink: 0 }}>{admins.findIndex(x => x.id === p.id) + 1}</span>
                 <Avatar gender={p.gender || "ذكر"} size={38} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>

@@ -514,6 +514,10 @@ export type Database = {
           short_ar: string | null
           short_en: string | null
           sort_order: number | null
+          bus_sort_order: number | null
+          camp_mina_sort_order: number | null
+          camp_arafa_sort_order: number | null
+          room_sort_order: number | null
           updated_at: string | null
           updated_by: string | null
           wants_flight: boolean | null
@@ -558,6 +562,10 @@ export type Database = {
           short_ar?: string | null
           short_en?: string | null
           sort_order?: number | null
+          bus_sort_order?: number | null
+          camp_mina_sort_order?: number | null
+          camp_arafa_sort_order?: number | null
+          room_sort_order?: number | null
           updated_at?: string | null
           updated_by?: string | null
           wants_flight?: boolean | null
@@ -602,6 +610,10 @@ export type Database = {
           short_ar?: string | null
           short_en?: string | null
           sort_order?: number | null
+          bus_sort_order?: number | null
+          camp_mina_sort_order?: number | null
+          camp_arafa_sort_order?: number | null
+          room_sort_order?: number | null
           updated_at?: string | null
           updated_by?: string | null
           wants_flight?: boolean | null

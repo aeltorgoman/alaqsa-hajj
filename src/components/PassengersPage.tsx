@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { mapPassenger, upsertPassenger, isHajj } from "../utils/passenger";
+import { mapPassenger, upsertPassenger, isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import * as XLSX from "xlsx";
@@ -323,7 +323,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (opsFilter === "no_permit") return !p.hajj_permit_url;
       return true;
     })
-    .sort((a, b) => ((a as any).sort_order || 0) - ((b as any).sort_order || 0)),
+    .sort(byOrder("sort_order")),
   [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter]);
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
@@ -891,23 +891,48 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setSelected(null);
   };
 
-  const moveP_order = async (p: Passenger, direction: "up" | "down") => {
-    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
-    const idx = sorted.findIndex((x: Passenger) => x.id === p.id);
-    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sorted.length) return;
-    const other = sorted[swapIdx] as any;
-    const myOrder = (p as any).sort_order || 0;
-    const otherOrder = other.sort_order || 0;
-    if (!await writeAllOk([
-      supabase.from("passengers").update({ sort_order: otherOrder }).eq("id", p.id),
-      supabase.from("passengers").update({ sort_order: myOrder }).eq("id", other.id),
-    ], "تعذّر تغيير الترتيب، لم يُحفظ أي تغيير")) return;
-    setPassengers(prev => prev.map(x =>
-      x.id === p.id ? { ...x, sort_order: otherOrder } :
-      x.id === other.id ? { ...x, sort_order: myOrder } : x
-    ));
+  /* ═══ إعادة ترتيب الحجاج — مسار واحد ═══
+     كانت ثلاث خوارزميات تفعل الشيء نفسه بثلاث طرق: واحدة تبدّل
+     قيمتين، وواحدة ترقّم بفجوات عشرة، وواحدة ترقّم ١،٢،٣. والأخطر
+     أن اثنتين منها تحسبان المواضع من **ترتيب المصفوفة** لا من
+     `sort_order`؛ والمصفوفة لا يُعاد فرزها بعد أي حفظ — تُحدَّث
+     قيمها في مواضعها — فتصير مواضعها بائتة بعد أول إعادة ترتيب.
+     ولم يظهر ذلك قبل س-١ لأن أغلب الصفوف كانت على القيمة صفر
+     فترتيب المصفوفة يوافق ترتيب القيم صدفةً؛ وحين صارت لكل صفّ
+     قيمة متمايزة انكشف الفارق.
+
+     فصار للجميع مدخل واحد: يفرز صراحةً، ويرقّم بفجوات عشرة، ويكتب
+     دفعةً واحدة، ومقصورٌ على الحجاج فلا يتزحزح إداريّ. */
+  const moveWithin = (ordered: Passenger[], id: number, targetIdx: number): Passenger[] | null => {
+    const from = ordered.findIndex(x => x.id === id);
+    if (from === -1) return null;
+    const to = Math.max(0, Math.min(targetIdx, ordered.length - 1));
+    if (from === to) return null;
+    const next = [...ordered];
+    next.splice(to, 0, ...next.splice(from, 1));
+    return next;
   };
+
+  const reorderHajj = async (arrange: (ordered: Passenger[]) => Passenger[] | null) => {
+    const ordered = passengers.filter(x => isHajj(x)).sort(byOrder("sort_order"));
+    const next = arrange(ordered);
+    if (!next) return;
+    if (!await writeAllOk(reorderUpdates("sort_order", next), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
+    setPassengers(prev => applyReorder(prev, "sort_order", next));
+  };
+
+  /* الرقم الظاهر **موضعٌ** لا قيمة خام، فحدوده حدود القائمة:
+     ١ ≤ الموضع ≤ عدد الحجاج. وأسهم حقل الرقم كانت تزيده بلا سقف
+     فيظهر ٢٦ في قائمة من ٢٥ — ثم يستقرّ الحاجّ آخرها عند الحفظ،
+     فيرى المستخدم رقماً لا يطابق موضعه. */
+  const hajjCount = passengers.filter(x => isHajj(x)).length;
+  const clampPos = (n: number) => Math.max(1, Math.min(n, hajjCount));
+
+  const moveP_order = (p: Passenger, direction: "up" | "down") =>
+    reorderHajj(ordered => {
+      const i = ordered.findIndex(x => x.id === p.id);
+      return i === -1 ? null : moveWithin(ordered, p.id, direction === "up" ? i - 1 : i + 1);
+    });
 
   // ===== Drag & Drop =====
   const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -925,21 +950,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setDraggingId(null); setDragOverId(null);
     dragFromId.current = null; dragToId.current = null;
     if (!fromId || !toId || fromId === toId) return;
-    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
-    const fromIdx = sorted.findIndex(p => p.id === fromId);
-    const toIdx = sorted.findIndex(p => p.id === toId);
-    if (fromIdx === -1 || toIdx === -1) return;
-    const newOrder = [...sorted];
-    const [moved] = newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, moved);
-    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
-    if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
-    setPassengers(prev => prev.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
+    await reorderHajj(ordered => moveWithin(ordered, fromId, ordered.findIndex(x => x.id === toId)));
   };
 
   // ===== رتب حسب العائلة =====
   const sortByFamily = async () => {
-    const sorted = [...passengers].filter(p => isHajj(p)).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = passengers.filter(p => isHajj(p)).sort(byOrder("sort_order"));
     const result: Passenger[] = [];
     const visited = new Set<number>();
     for (const p of sorted) {
@@ -951,28 +967,20 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         family.forEach(f => { visited.add(f.id); result.push(f); });
       }
     }
-    const updates = result.map((p, i) => ({ id: p.id, sort_order: (i + 1) * 10 }));
-    if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
-    setPassengers(prev => prev.map(p => { const u = updates.find(x => x.id === p.id); return u ? { ...p, sort_order: u.sort_order } : p; }));
+    if (!await writeAllOk(reorderUpdates("sort_order", result), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
+    setPassengers(prev => applyReorder(prev, "sort_order", result));
   };
 
   // ===== تغيير الرقم يدوياً =====
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingOrderVal, setEditingOrderVal] = useState("");
 
+  /* الرقم الذي يكتبه المستخدم **موضعٌ في القائمة** لا قيمة خام:
+     من المركز ٨ إلى ٢ يعني نقله إلى الثاني وإزاحة من بعده. */
   const applyOrderChange = async (p: Passenger, newNum: number) => {
     setEditingOrderId(null);
     if (!newNum || newNum < 1) return;
-    const sorted = [...passengers].filter(x => isHajj(x)).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
-    const currentIdx = sorted.findIndex(x => x.id === p.id);
-    const targetIdx = Math.min(newNum - 1, sorted.length - 1);
-    if (currentIdx === targetIdx) return;
-    const newOrder = [...sorted];
-    const [moved] = newOrder.splice(currentIdx, 1);
-    newOrder.splice(targetIdx, 0, moved);
-    const updates = newOrder.map((x, i) => ({ id: x.id, sort_order: (i + 1) * 10 }));
-    if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
-    setPassengers(prev => prev.map(x => { const u = updates.find(y => y.id === x.id); return u ? { ...x, sort_order: u.sort_order } : x; }));
+    await reorderHajj(ordered => moveWithin(ordered, p.id, newNum - 1));
   };
   const saveEdit = async (p: Passenger) => {
     if (!assertWritable()) return;
@@ -1186,15 +1194,17 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     <input
                       autoFocus
                       type="number"
+                      min={1}
+                      max={hajjCount}
                       value={editingOrderVal}
-                      onChange={e => setEditingOrderVal(e.target.value)}
+                      onChange={e => setEditingOrderVal(e.target.value === "" ? "" : String(clampPos(Number(e.target.value))))}
                       onBlur={() => applyOrderChange(p, parseInt(editingOrderVal))}
                       onKeyDown={e => { if (e.key === "Enter") applyOrderChange(p, parseInt(editingOrderVal)); if (e.key === "Escape") setEditingOrderId(null); e.stopPropagation(); }}
                       onClick={e => e.stopPropagation()}
                       style={{ width: 36, fontSize: 11, textAlign: "center", border: "1.5px solid var(--em7)", borderRadius: 6, padding: "2px 4px", outline: "none", flexShrink: 0 }}
                     />
                   ) : (
-                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String([...passengers].filter(x => isHajj(x)).sort((a:any,b:any)=>(a.sort_order||0)-(b.sort_order||0)).findIndex(x=>x.id===p.id)+1)); }} style={{ ...roOff, width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    <div onClick={e => { e.stopPropagation(); setEditingOrderId(p.id); setEditingOrderVal(String(passengers.filter(x => isHajj(x)).sort(byOrder("sort_order")).findIndex(x => x.id === p.id) + 1)); }} style={{ ...roOff, width: 28, height: 22, textAlign: "center", fontSize: 11, color: "var(--muted)", flexShrink: 0, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       {idx + 1}
@@ -1281,16 +1291,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       const fromId = Number(e.dataTransfer.getData("pid"));
                       const toId = p.id;
                       if (fromId === toId) return;
-                      const fromIdx = passengers.findIndex(x => x.id === fromId);
-                      const toIdx = passengers.findIndex(x => x.id === toId);
-                      if (fromIdx === -1 || toIdx === -1) return;
-                      const reordered = [...passengers];
-                      const [moved] = reordered.splice(fromIdx, 1);
-                      reordered.splice(toIdx, 0, moved);
-                      const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
-                      const orderById = new Map(updates.map(u => [u.id, u.sort_order]));
-                      if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
-                      setPassengers(prev => prev.map(x => orderById.has(x.id) ? { ...x, sort_order: orderById.get(x.id)! } : x));
+                      await reorderHajj(ordered => moveWithin(ordered, fromId, ordered.findIndex(x => x.id === toId)));
                     }}
                     onClick={() => setSelected(p)}
                     style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--paper)" : "var(--ivory)", borderBottom: "1px solid var(--line)", transition: "background .12s" }}
@@ -1302,18 +1303,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                           autoFocus
                           type="number"
                           min={1}
+                          max={hajjCount}
                           value={editingOrderVal}
-                          onChange={e => setEditingOrderVal(e.target.value)}
+                          onChange={e => setEditingOrderVal(e.target.value === "" ? "" : String(clampPos(Number(e.target.value))))}
                           onBlur={async () => {
                             const newOrder = parseInt(editingOrderVal);
-                            if (!isNaN(newOrder) && newOrder > 0) {
-                              const reordered = [...passengers].filter(x => x.id !== p.id);
-                              reordered.splice(Math.min(newOrder - 1, reordered.length), 0, p);
-                              const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
-                              const orderById = new Map(updates.map(u => [u.id, u.sort_order]));
-                              if (!await writeAllOk(updates.map(u => supabase.from("passengers").update({ sort_order: u.sort_order }).eq("id", u.id)), "تعذّر حفظ الترتيب الجديد، لم يتغيّر شيء")) return;
-                              setPassengers(prev => prev.map(x => orderById.has(x.id) ? { ...x, sort_order: orderById.get(x.id)! } : x));
-                            }
+                            if (!isNaN(newOrder) && newOrder > 0) await applyOrderChange(p, newOrder);
                             setEditingOrderId(null);
                             setEditingOrderVal("");
                           }}
