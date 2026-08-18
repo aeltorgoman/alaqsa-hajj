@@ -53,7 +53,22 @@ update passengers p set
 from ranked r
 where r.id = p.id;
 
--- ═══ ٣) تطبيع الترتيب العام — تسلسلان منفصلان ═══
+-- ═══ ٣) لقطة ما قبل التطبيع ═══
+-- الخطوة التالية وحدها في هذا الترحيل تكتب فوق بيانٍ قائم، فتسبقها
+-- لقطة تجعل التراجع كاملاً لا تقريبياً. وهي **مؤقّتة بحكم التصميم**:
+-- تُسقَط بيدك بعد استقرار الترحيل بسطر واحد موثّق في آخر الملف.
+create table if not exists _s1_sort_order_snapshot as
+  select id, sort_order from passengers;
+
+/* اللقطة في `public` فتراها PostgREST. وهي بلا سياسات: تفعيل RLS
+   بلا سياسة يعني منع الجميع — ويبقى مفتاح الخدمة وحده يقرؤها
+   للتراجع. جدولٌ مؤقّت لا يجوز أن يفتح سطحاً جديداً. */
+alter table _s1_sort_order_snapshot enable row level security;
+
+comment on table _s1_sort_order_snapshot is
+  'لقطة sort_order قبل تطبيع س-١ — للتراجع وحده. أسقِطها بعد الاستقرار: drop table _s1_sort_order_snapshot;';
+
+-- ═══ ٤) تطبيع الترتيب العام — تسلسلان منفصلان ═══
 -- ⚠️ هذه الخطوة **حافظة للترتيب الظاهر**: المستخدم يرى اليوم
 -- `order by sort_order, id`، وهو بالضبط ترتيب النافذة أدناه. فلا
 -- يتحرّك اسمٌ واحد عن موضعه؛ ما يتغيّر هو الأرقام لا الترتيب.
@@ -61,10 +76,14 @@ where r.id = p.id;
 -- وبعدها يصير لكل سكّان تسلسله: الحجاج 10,20,30… والإداريون
 -- 10,20,30… داخل كل موسم. والعمود يسع التسلسلين لأن كل قارئ
 -- وكاتب صار مقصوراً على سكّانه.
+-- ⚠️ تعريف السكّان هنا يطابق `isHajj` في التطبيق حرفياً: الصفّ بلا
+-- `passenger_type` **حاجّ**، وهو الافتراض القائم في القاعدة منذ ما
+-- قبل إضافة العمود. و`is distinct from 'حاج'` كان سيعدّ الفارغ
+-- إدارياً — فيفترق الخادم عن الواجهة في تصنيف الشخص نفسه.
 with ordered as (
   select id,
          row_number() over (
-           partition by season_id, (passenger_type is distinct from 'حاج')
+           partition by season_id, (passenger_type is not null and passenger_type <> 'حاج')
            order by sort_order nulls last, id
          ) * 10 as pos
   from passengers
@@ -72,7 +91,7 @@ with ordered as (
 update passengers p set sort_order = o.pos
 from ordered o where o.id = p.id;
 
--- ═══ ٤) القادم الجديد يأخذ آخر موضع في قائمته ═══
+-- ═══ ٥) القادم الجديد يأخذ آخر موضع في قائمته ═══
 -- لا مسار في الواجهة يُرسل `sort_order`، فالصفّ يولد على الصفر
 -- ويُدفن في وسط القائمة. والتخصيص هنا في القاعدة لا في الواجهة
 -- عن قصد: يغطّي كل مسارات الإدراج — القائمة اليوم والقادمة غداً —
@@ -88,7 +107,8 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  is_admin boolean := (new.passenger_type is distinct from 'حاج');
+  /* نفس تعريف `isHajj`: الفارغ حاجّ لا إداري */
+  is_admin boolean := (new.passenger_type is not null and new.passenger_type <> 'حاج');
 begin
   /* الصفر هو قيمة «لم يُحدَّد» — وهي default العمود. ومن يرسل رقماً
      صريحاً يُحترم رقمه. */
@@ -100,11 +120,16 @@ begin
       into new.sort_order
       from passengers
      where season_id is not distinct from new.season_id
-       and (passenger_type is distinct from 'حاج') = is_admin;
+       and (passenger_type is not null and passenger_type <> 'حاج') = is_admin;
   end if;
   return new;
 end;
 $$;
+
+/* دالّة محفِّز لا تُستدعى إلا من المحفِّز، فلا موجب لبقائها في سطح
+   الـAPI — PostgREST تنشر كل دالّة في `public` تحت /rpc/. وتنفيذ
+   المحفِّز لا يتطلّب EXECUTE من الدور المُدرِج، فالسحب آمن ومُختبَر. */
+revoke execute on function passengers_assign_sort_order() from public, anon, authenticated;
 
 comment on function passengers_assign_sort_order() is
   'يمنح الصفّ الجديد آخر موضع في تسلسل سكّانه (حاجّ/إداري) داخل موسمه';
@@ -114,18 +139,29 @@ create trigger passengers_assign_sort_order_trg
   for each row execute function passengers_assign_sort_order();
 
 -- ============================================================
--- التراجع
+-- التراجع — كامل: البيانات ثم البنية
 -- ============================================================
--- drop trigger passengers_assign_sort_order_trg on passengers;
--- drop function passengers_assign_sort_order();
--- alter table passengers
---   drop column bus_sort_order,
---   drop column camp_mina_sort_order,
---   drop column camp_arafa_sort_order,
---   drop column room_sort_order;
+-- ١) إعادة `sort_order` إلى قيمته السابقة بالضبط لكل صفّ:
+--      update passengers p set sort_order = s.sort_order
+--        from _s1_sort_order_snapshot s where s.id = p.id;
+--    (الصفوف المُنشأة **بعد** الترحيل ليست في اللقطة فتُترك على
+--     قيمها؛ وهي صفوف لم تكن موجودة قبله أصلاً.)
 --
--- أما الخطوة ٣ فلا يلزم التراجع عنها: هي إعادة ترقيم **حافظة
--- للترتيب الظاهر**، فإسقاطها لا يعيد شيئاً رآه المستخدم مختلفاً.
--- ومن أراد الاحتياط فليأخذ لقطة يدوياً قبل التطبيق ويُسقطها بعده:
---   create table _sort_order_snapshot as select id, sort_order from passengers;
--- ولا تُترك في الإنتاج.
+-- ٢) إزالة المحفِّز والدالّة:
+--      drop trigger passengers_assign_sort_order_trg on passengers;
+--      drop function passengers_assign_sort_order();
+--
+-- ٣) إزالة أعمدة الموارد:
+--      alter table passengers
+--        drop column bus_sort_order,
+--        drop column camp_mina_sort_order,
+--        drop column camp_arafa_sort_order,
+--        drop column room_sort_order;
+--
+-- ٤) إزالة اللقطة:
+--      drop table _s1_sort_order_snapshot;
+--
+-- ============================================================
+-- التنظيف بعد الاستقرار (بلا تراجع)
+-- ============================================================
+--      drop table _s1_sort_order_snapshot;
