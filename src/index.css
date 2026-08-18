@@ -146,3 +146,19 @@ code {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* دوران المؤشّرات — يجب أن يعيش هنا لا داخل <style> تُصيّره React.
+   العنصر المتحرّك يبحث عن @keyframes في أوراق أنماط المستند، وعقدة
+   <style> التي يديرها React 19 تُرفَع وتُدمَج وقد تُزال مع إعادة
+   التصيير الشرطي — فيبقى الاسم بلا تعريف، والحلقة ساكنة لا تدور.
+   (اسم `spin` المستعمل في صفحة الحجاج لم يكن معرَّفاً هنا أصلاً.) */
+@keyframes hajjSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* اسم قديم مستعمل في صفحة الحجاج — يُعرَّف هنا فتدور حلقتها كذلك */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

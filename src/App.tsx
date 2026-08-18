@@ -182,7 +182,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
       case "archive":    return <SeasonManagerPage currentUser={currentUser} />;
       case "users":      return <UsersPage currentUser={currentUser} />;
       case "finance":    return <FinancePage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
-      case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} />;
+      case "admins":     return <AdminsPage passengers={passengers} setPassengers={setPassengers} currentUser={currentUser!} />;
       case "portal":     return <PortalPage currentUser={currentUser!} />;
       default:           return <Dashboard passengers={passengers} setPage={setPage} currentUser={currentUser!} />;
     }

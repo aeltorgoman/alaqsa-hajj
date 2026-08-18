@@ -1,14 +1,14 @@
 import { useState, useRef } from "react";
-import { isHajj } from "../utils/passenger";
+import { isHajj, mapPassenger, upsertPassenger } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
-import type { Passenger, Bus, Camp, Room, Flight } from "../types";
+import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc } from "../utils";
+import { inp, btnP, btnS, makeShort, scanDocument, DocumentScanError, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc } from "../utils";
 import { useReportBranding } from "../company/CompanyContext";
 
 // ============================================================
@@ -71,9 +71,11 @@ function AdminStats({ admins }: { admins: Passenger[] }) {
 function AdminsPage({
   passengers,
   setPassengers,
+  currentUser,
 }: {
   passengers: Passenger[];
   setPassengers: React.Dispatch<React.SetStateAction<Passenger[]>>;
+  currentUser?: User;
 }) {
   const { alert, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
@@ -120,7 +122,9 @@ function AdminsPage({
   /* س٦: العارض يفتح برابط موقّع لا بالقيمة المخزّنة */
   const docViewerUrl = useSignedDoc(docViewer?.url);
 
-  const admins = passengers.filter(p => p.passenger_type && p.passenger_type !== "حاج");
+  /* عقد واحد للتصنيف: `isHajj` لا شرط مكتوب باليد. المكتوب باليد
+     يعامل `passenger_type = null` كإداري، والعقد يعدّه حاجّاً. */
+  const admins = passengers.filter(p => !isHajj(p));
 
   // ============================================================
   // طباعة الإداريين
@@ -190,6 +194,10 @@ function AdminsPage({
   // ============================================================
   // مسح جواز
   // ============================================================
+  /* القراءة تستغرق ثوانٍ، وكانت الصورة تظهر فور اختيار الملف
+     والحقول فارغة — فيقرأ المستخدم المشهد على أنه «انتهى ولم يقرأ».
+     فصار المؤشّر على الصورة نفسها: ضبابٌ وطبقةٌ ودوّار، وهو نمط
+     صفحة الحجاج نفسه لا نمط موازٍ. والخطأ يُعلَن ولا يُبتلع. */
   const handleScanPassport = async (file: File) => {
     setScanning(true);
     const reader = new FileReader();
@@ -211,15 +219,31 @@ function AdminsPage({
           expiry:     parsed.expiry     || prev.expiry,
           gender:     parsed.gender     || prev.gender,
         }));
-      } catch { /* تجاهل */ }
-      setScanning(false);
+      } catch (e) {
+        console.error("تعذّرت قراءة جواز الإداري", e);
+        showAlert("error", e instanceof DocumentScanError ? e.message : "تعذّرت قراءة الجواز — أدخل البيانات يدوياً");
+      } finally {
+        setScanning(false);
+      }
     };
+    /* فشل القراءة من القرص لا يترك المؤشّر دائراً */
+    reader.onerror = () => { setScanning(false); showAlert("error", "تعذّرت قراءة الملف"); };
     reader.readAsDataURL(file);
   };
 
   // ============================================================
   // مسح بطاقة
   // ============================================================
+  /* ── مسح البطاقة عند **إنشاء** إداري ──
+     هنا البطاقة مصدر إنشاء لا استكمال، فالمطلوب منها بياناتها
+     الأساسية كاملة. ووضع `idcard` في الدالّة المشتركة يُعيد حقلين
+     لا غير — «فقط الرقم والصلاحية» — بينما وضع `auto` يُعيد للبطاقة
+     الاسم والجنسية والميلاد والجنس مع الرقم والصلاحية. فالوضع
+     الصحيح موجود بالفعل، ولا حاجة لتوسيع أي عقد.
+     (وكانت الصفحة فوق ذلك تقرأ `parsed.expiry` — مفتاح الجواز —
+     بدل `id_expiry`، فتخرج الصلاحية فارغة دائماً.)
+     أما استكمال بطاقة إداري قائم فمسار آخر لا يلمس بياناته
+     الأساسية: مودال المستندات أدناه. */
   const handleScanId = async (file: File) => {
     setScanning(true);
     const reader = new FileReader();
@@ -227,19 +251,31 @@ function AdminsPage({
       setIdImg(ev.target?.result as string);
       setIdFile(file);
       try {
-        const parsed = await scanDocument(file, "idcard");
+        const parsed = await scanDocument(file, "auto");
+        if (parsed.doc_type !== "idcard") {
+          showAlert("warning", "المستند لا يبدو بطاقة شخصية — راجع الملف أو استعمل زرّ مسح الجواز");
+          return;
+        }
         setForm(prev => ({
           ...prev,
           name_ar:     parsed.name_ar     || prev.name_ar,
           short_ar:    parsed.name_ar     ? makeShort(parsed.name_ar) : prev.short_ar,
+          name_en:     parsed.name_en     || prev.name_en,
+          short_en:    parsed.name_en     ? makeShort(parsed.name_en) : prev.short_en,
           national_id: parsed.national_id || prev.national_id,
+          id_expiry:   parsed.id_expiry   || prev.id_expiry,
+          nat:         parsed.nationality || prev.nat,
           dob:         parsed.dob         || prev.dob,
-          id_expiry:   parsed.expiry      || prev.id_expiry,
           gender:      parsed.gender      || prev.gender,
         }));
-      } catch { /* تجاهل */ }
-      setScanning(false);
+      } catch (e) {
+        console.error("تعذّرت قراءة بطاقة الإداري", e);
+        showAlert("error", e instanceof DocumentScanError ? e.message : "تعذّرت قراءة البطاقة — أدخل البيانات يدوياً");
+      } finally {
+        setScanning(false);
+      }
     };
+    reader.onerror = () => { setScanning(false); showAlert("error", "تعذّرت قراءة الملف"); };
     reader.readAsDataURL(file);
   };
 
@@ -331,31 +367,33 @@ function AdminsPage({
     try {
       if (editTarget) {
         const { error } = await supabase.from("passengers")
-          .update({ ...form, short_ar, short_en })
+          .update({ ...form, short_ar, short_en, updated_by: currentUser?.name || null, updated_at: new Date().toISOString() })
           .eq("id", editTarget.id);
         if (error) throw error;
         const docUpdates = await commitScannedDocs(editTarget.id, editTarget);
-        setPassengers(prev => prev.map(p => p.id === editTarget.id
-          ? { ...p, ...form, short_ar, short_en, ...docUpdates } : p));
+        /* الصفّ يُقرأ من القاعدة بعد الكتابة ويمرّ بـ`mapPassenger`:
+           بناء الكائن يدوياً من `form` يترك الحالة المحلية تخالف
+           القاعدة في كل عمود لم يمرّ بالنموذج. */
+        const { data: row } = await supabase.from("passengers").select("*").eq("id", editTarget.id).single();
+        setPassengers(prev => row
+          ? upsertPassenger(prev, mapPassenger(row))
+          : prev.map(p => p.id === editTarget.id ? { ...p, ...form, short_ar, short_en, ...docUpdates } : p));
         showAlert("success", "تم تعديل بيانات الإداري");
       } else {
         const { data, error } = await supabase.from("passengers")
-          .insert([{ ...form, short_ar, short_en }])
-          .select();
-        if (error || !data?.[0]) throw error;
-        const newId = data[0].id;
-        const docUpdates = await commitScannedDocs(newId, null);
-        /* الصفّ العائد من القاعدة أعمدته nullable بينما `Passenger`
-           يفترضها نصوصاً. كان `any` يخفي ذلك، وتصريح docUpdates كشفه.
-           التحويل يُبقي السلوك كما هو حرفياً؛ والعلاج الصحيح تمرير
-           الصفّ عبر `mapPassenger` — وهو نطاق PR «C» لا هذا. */
-        const newP = {
-          ...data[0],
-          ...docUpdates,
-          services: { bus: "", flight: "", hotel_type: "", hotel_view: "", camp_mina: "", camp_arafa: "" },
-        } as unknown as Passenger;
-        // نضيف بس لو مش موجود في الـ state (لتجنب التكرار مع الـ realtime)
-        setPassengers(prev => prev.some(p => p.id === newP.id) ? prev : [...prev, newP]);
+          .insert([{ ...form, short_ar, short_en, created_by: currentUser?.name || null }])
+          .select()
+          .single();
+        if (error || !data) throw error;
+        const docUpdates = await commitScannedDocs(data.id, null);
+        /* `mapPassenger` هو العقد الوحيد لتحويل صفّ القاعدة إلى
+           `Passenger`. البناء اليدوي كان يخترع `services` بقيم فارغة
+           — وهي حقول حجّ مشتقّة من أعمدة الصفّ، لا شيء يخصّ الإداري
+           — ويحتاج تحويل نوع يُخفي أن أعمدة الصفّ nullable.
+           و`upsertPassenger` يجعل ترتيب وصول الإدراج المحلي وحدث
+           Realtime غير مؤثّر: لا صفّ مكرّر ولا حالة بائتة. */
+        const newP = mapPassenger({ ...data, ...docUpdates });
+        setPassengers(prev => upsertPassenger(prev, newP));
         showAlert("success", "تمت إضافة الإداري بنجاح");
       }
       setShowModal(false);
@@ -391,7 +429,27 @@ function AdminsPage({
         newKey = null;
         return;
       }
-      const updated = { ...p, [field]: newKey };
+      let updated = { ...p, [field]: newKey };
+      /* البطاقة لإداري قائم = مستند **استكمال** لا إنشاء: تُحدَّث
+         بياناتها وحدها (الرقم والصلاحية)، ولا يُمَسّ الاسم ولا
+         الميلاد ولا الجنس — فبياناته الأساسية مثبتة سلفاً ولا سبب
+         لأن يستبدلها مسحٌ عارض. (الإنشاء من البطاقة مسار آخر في
+         مودال الإضافة، وهناك تُستخرَج الأساسيات كاملة.)
+         وفشل القراءة لا يُبطل الرفع: الملف حُفظ ومرجعه حُفظ. */
+      if (docType === "idcard") {
+        try {
+          const parsed = await scanDocument(file, "idcard");
+          const card: { national_id?: string; id_expiry?: string } = {};
+          if (parsed.national_id) card.national_id = parsed.national_id;
+          if (parsed.id_expiry)   card.id_expiry   = parsed.id_expiry;
+          if (Object.keys(card).length && await writeOk(
+            supabase.from("passengers").update(card).eq("id", p.id),
+            "حُفظت البطاقة، وتعذّر تحديث بياناتها",
+          )) updated = { ...updated, ...card };
+        } catch (e) {
+          console.error("تعذّرت قراءة بطاقة الإداري بعد الرفع", e);
+        }
+      }
       setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
       setDocTarget(updated);
       if (prevKey && docKey(prevKey) !== docKey(newKey)) await removeDoc(prevKey);
@@ -441,6 +499,8 @@ function AdminsPage({
       flight_id:        assign.flight_id        ? Number(assign.flight_id)        : null,
       return_flight_id: assign.return_flight_id ? Number(assign.return_flight_id) : null,
       wants_flight:     assign.wants_flight,
+      updated_by:       currentUser?.name || null,
+      updated_at:       new Date().toISOString(),
       /* الدرجة تُمحى مع إلغاء الطيران، فلا تبقى «درجة أولى» معلّقة
          على من لا يسافر — ولا أثر مالي لها: الإداري خارج Finance. */
       flight_class:     assign.wants_flight ? assign.flight_class : null,
@@ -605,7 +665,21 @@ function AdminsPage({
       {/* ============================================================ */}
       {/* مودال الإضافة / التعديل */}
       {/* ============================================================ */}
-      <Modal show={showModal} onClose={() => { setShowModal(false); resetModal(); }} title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري"} maxWidth={(passportImg || idImg) ? 820 : 500}>
+      <Modal show={showModal} onClose={() => { if (!scanning) { setShowModal(false); resetModal(); } }} title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري"} maxWidth={(passportImg || idImg) ? 820 : 500}>
+        {/* المؤشّر على رأس المودال ومستقلّ عن الصورة عن قصد: كان
+            معلّقاً بظهور المعاينة، والمعاينة لا تظهر إلا بعد أن تنتهي
+            `FileReader` من قراءة الملف — ثوانٍ في صور الهاتف الكبيرة.
+            فكانت أطول لحظة انتظار هي بالضبط اللحظة التي لا مؤشّر
+            فيها. الآن يظهر مع أوّل نقرة ويبقى حتى نجاح أو خطأ. */}
+        {scanning && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+            <div style={{ width: 20, height: 20, border: "2.5px solid var(--line)", borderTopColor: "var(--warning)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--warning)" }}>جارٍ قراءة المستند…</div>
+              <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>قد تستغرق القراءة بضع ثوانٍ — لا تغلق النافذة</div>
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           {/* البيانات */}
           <div style={{ flex: 1 }}>
@@ -673,8 +747,8 @@ function AdminsPage({
 
             {/* أزرار الحفظ */}
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={saveAdmin} disabled={saving} style={{ ...btnP({ flex: 1, opacity: saving ? 0.6 : 1 }) }}>
-                {saving ? "جاري الحفظ..." : (editTarget ? "حفظ التعديل" : "إضافة")}
+              <button onClick={saveAdmin} disabled={saving || scanning} style={{ ...btnP({ flex: 1, opacity: (saving || scanning) ? 0.6 : 1 }) }}>
+                {saving ? "جاري الحفظ..." : scanning ? "جارٍ القراءة…" : (editTarget ? "حفظ التعديل" : "إضافة")}
               </button>
               <button onClick={() => { setShowModal(false); resetModal(); }} style={btnS()}>إلغاء</button>
             </div>
@@ -683,18 +757,20 @@ function AdminsPage({
           {/* صور المستندات */}
           {(passportImg || idImg) && (
             <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {passportImg && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>صورة الجواز</div>
-                  <img src={passportImg} alt="جواز" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
+              {([["صورة الجواز", passportImg], ["صورة البطاقة", idImg]] as [string, string | null][]).map(([label, src]) => src && (
+                <div key={label}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{label}</div>
+                  <div style={{ position: "relative", borderRadius: 8, overflow: "hidden" }}>
+                    <img src={src} alt={label} style={{ width: "100%", display: "block", border: "1px solid var(--border)", borderRadius: 8, filter: scanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
+                    {scanning && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.35)", borderTopColor: "var(--em7)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite" }} />
+                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-              {idImg && (
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>صورة البطاقة</div>
-                  <img src={idImg} alt="بطاقة" style={{ width: "100%", borderRadius: 8, border: "1px solid var(--border)" }} />
-                </div>
-              )}
+              ))}
             </div>
           )}
         </div>
