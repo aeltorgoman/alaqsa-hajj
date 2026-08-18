@@ -891,8 +891,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setSelected(null);
   };
 
+  /* ⚠️ كل إعادة ترتيب هنا مقصورة على الحجاج: `sort_order` يحمل
+     ترتيب الحجاج وترتيب الإداريين معاً، وفرزٌ غير مفلتر كان يُدخل
+     الإداري في سلسلة الحجاج ويعيد ترقيمه معهم. */
   const moveP_order = async (p: Passenger, direction: "up" | "down") => {
-    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = [...passengers].filter(x => isHajj(x)).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     const idx = sorted.findIndex((x: Passenger) => x.id === p.id);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= sorted.length) return;
@@ -925,7 +928,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setDraggingId(null); setDragOverId(null);
     dragFromId.current = null; dragToId.current = null;
     if (!fromId || !toId || fromId === toId) return;
-    const sorted = [...passengers].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
+    const sorted = [...passengers].filter(x => isHajj(x)).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
     const fromIdx = sorted.findIndex(p => p.id === fromId);
     const toIdx = sorted.findIndex(p => p.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
@@ -1281,10 +1284,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       const fromId = Number(e.dataTransfer.getData("pid"));
                       const toId = p.id;
                       if (fromId === toId) return;
-                      const fromIdx = passengers.findIndex(x => x.id === fromId);
-                      const toIdx = passengers.findIndex(x => x.id === toId);
+                      const hajjOnly = passengers.filter(x => isHajj(x));
+                      const fromIdx = hajjOnly.findIndex(x => x.id === fromId);
+                      const toIdx = hajjOnly.findIndex(x => x.id === toId);
                       if (fromIdx === -1 || toIdx === -1) return;
-                      const reordered = [...passengers];
+                      const reordered = [...hajjOnly];
                       const [moved] = reordered.splice(fromIdx, 1);
                       reordered.splice(toIdx, 0, moved);
                       const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
@@ -1307,7 +1311,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                           onBlur={async () => {
                             const newOrder = parseInt(editingOrderVal);
                             if (!isNaN(newOrder) && newOrder > 0) {
-                              const reordered = [...passengers].filter(x => x.id !== p.id);
+                              const reordered = passengers.filter(x => isHajj(x) && x.id !== p.id);
                               reordered.splice(Math.min(newOrder - 1, reordered.length), 0, p);
                               const updates = reordered.map((x, idx) => ({ id: x.id, sort_order: idx + 1 }));
                               const orderById = new Map(updates.map(u => [u.id, u.sort_order]));

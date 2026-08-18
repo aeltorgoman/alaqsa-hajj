@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { isHajj, sortOrderUpdates } from "../utils/passenger";
+import { isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -83,6 +83,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const dragType = useRef<"reorder"|"add">("reorder");
 
   const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
+  const campOrderKey = pageType === "منى" ? "camp_mina_sort_order" : "camp_arafa_sort_order";
   const serviceKey = pageType === "منى" ? "camp_mina" : "camp_arafa";
 
   const IconSvg = () => pageType === "منى"
@@ -101,7 +102,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   }, [pageType, viewedSeason.id]);
 
   const getCampPassengers = (campId: number) =>
-    passengers.filter(p => p[campIdKey] === campId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    passengers.filter(p => p[campIdKey] === campId).sort(byOrder(campOrderKey));
 
 
   const addCamp = async () => {
@@ -191,13 +192,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const [moved] = newOrder.splice(fromIdx, 1);
     newOrder.splice(toIdx, 0, moved);
 
-    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
-    setPassengers(prev => prev.map(p => {
-      const upd = updates.find(u => u.id === p.id);
-      return upd ? { ...p, sort_order: upd.sort_order } : p;
-    }));
+    /* عمود المخيّم وحده — ومنى وعرفة عمودان منفصلان، فترتيب أحدهما
+       لا يمسّ الآخر ولا يمسّ الترتيب العام. */
+    setPassengers(prev => applyReorder(prev, campOrderKey, newOrder));
     /* التحديث أعلاه يبقى تفاؤلياً كما كان — الإبلاغ يُضاف بلا تغيير سلوكي */
-    await writeAllOk(sortOrderUpdates(updates), "تعذر حفظ الترتيب الجديد");
+    await writeAllOk(reorderUpdates(campOrderKey, newOrder), "تعذر حفظ الترتيب الجديد");
 
     setDraggingId(null); setDragOverId(null);
     dragPassengerId.current = null; dragOverPassengerId.current = null;

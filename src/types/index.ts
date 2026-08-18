@@ -41,6 +41,11 @@ export interface Passenger {
   flight_class?: string;
   season_id?: number | null;
   sort_order?: number;
+  /* ترتيب داخل مورد بعينه — مستقلّ عن الترتيب العام وعن بقيّة الموارد */
+  bus_sort_order?: number | null;
+  camp_mina_sort_order?: number | null;
+  camp_arafa_sort_order?: number | null;
+  room_sort_order?: number | null;
   created_at?: string;
   created_by?: string | null;
   updated_by?: string | null;

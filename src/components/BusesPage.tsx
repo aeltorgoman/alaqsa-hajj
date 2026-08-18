@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { isHajj, sortOrderUpdates } from "../utils/passenger";
+import { isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
@@ -91,7 +91,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   }, [viewedSeason.id]);
 
   const getBusPassengers = (busId: number) =>
-    passengers.filter(p => p.bus_id === busId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    passengers.filter(p => p.bus_id === busId).sort(byOrder("bus_sort_order"));
 
 
   const addBus = async () => {
@@ -182,13 +182,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const [moved] = newOrder.splice(fromIdx, 1);
     newOrder.splice(toIdx, 0, moved);
 
-    const updates = newOrder.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
-    setPassengers(prev => prev.map(p => {
-      const upd = updates.find(u => u.id === p.id);
-      return upd ? { ...p, sort_order: upd.sort_order } : p;
-    }));
+    /* الكتابة في عمود الباص وحده: كانت تكتب في `sort_order` العام
+       فتسحق الترتيب العام وترتيب كل باص آخر معه — إذ يبدأ كل باص
+       ترقيمه من ١. */
+    setPassengers(prev => applyReorder(prev, "bus_sort_order", newOrder));
     /* التحديث أعلاه يبقى تفاؤلياً كما كان — الإبلاغ يُضاف بلا تغيير سلوكي */
-    await writeAllOk(sortOrderUpdates(updates), "تعذر حفظ الترتيب الجديد");
+    await writeAllOk(reorderUpdates("bus_sort_order", newOrder), "تعذر حفظ الترتيب الجديد");
 
     setDraggingId(null); setDragOverId(null);
     dragPassengerId.current = null; dragOverPassengerId.current = null;

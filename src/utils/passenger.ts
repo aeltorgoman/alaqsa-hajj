@@ -40,6 +40,10 @@ export function mapPassenger(p: PassengerRow): Passenger {
   flight_id: p.flight_id || null, flight_class: p.flight_class || undefined,
   return_flight_id: p.return_flight_id || null,
   sort_order: p.sort_order || 0,
+  bus_sort_order: p.bus_sort_order ?? null,
+  camp_mina_sort_order: p.camp_mina_sort_order ?? null,
+  camp_arafa_sort_order: p.camp_arafa_sort_order ?? null,
+  room_sort_order: p.room_sort_order ?? null,
   passenger_type: toPassengerType(p.passenger_type),
   wants_flight: p.wants_flight || false,
   /* حقول كانت تُسقَط صامتاً فتُعطَّل ميزة التدقيق في PassengersPage */
@@ -72,11 +76,39 @@ export function isHajj(p: { passenger_type?: string | null }): boolean {
   return !p.passenger_type || p.passenger_type === "حاج";
 }
 
-/* تحديثات ترتيب الحجاج — تُرجع الوعود ليفحصها writeAllOk عند
-   الاستدعاء، فلا تبتلع الأخطاء. كانت مكررة حرفياً في BusesPage
-   وCampsPage. */
-export function sortOrderUpdates(items: { id: number; sort_order: number }[]) {
-  return items.map(item =>
-    supabase.from("passengers").update({ sort_order: item.sort_order }).eq("id", item.id)
+/* ═══ الترتيب: عمودٌ لكل سياق ═══
+   `sort_order` للترتيب العام وحده. أما الترتيب داخل باص أو مخيّم
+   أو غرفة فلكلٍّ عموده — لأن العمود الواحد كان يحمل المعاني الثلاثة
+   معاً، فآخر شاشة تلمسه تقرّر معناه وتسحق ما كتبته الأخرى. */
+export type OrderColumn =
+  | "sort_order"
+  | "bus_sort_order"
+  | "camp_mina_sort_order"
+  | "camp_arafa_sort_order"
+  | "room_sort_order";
+
+/** مقارنة الترتيب داخل سياق واحد — و`id` يحسم التعادل فالنتيجة
+ *  محدَّدة لا عشوائية مهما كانت القيم القديمة متساوية. */
+export function byOrder(column: OrderColumn) {
+  return (a: Passenger, b: Passenger) =>
+    ((a[column] ?? 0) - (b[column] ?? 0)) || a.id - b.id;
+}
+
+/* إعادة ترقيم قائمة **داخل سياقها**: 10,20,30… بفجوةٍ تسمح
+   بالإدراج البينيّ بلا إعادة ترقيم شاملة. تُرجع الوعود ليفحصها
+   `writeAllOk` عند الاستدعاء، فلا تبتلع الأخطاء.
+   ⚠️ لا تُستدعى بـ`sort_order` إلا فوق سكّان واحدين — الحجاج
+   وحدهم أو الإداريون وحدهم — وإلا عاد الخلط الذي جاءت لتنهيه. */
+export function reorderUpdates(column: OrderColumn, ordered: { id: number }[]) {
+  return ordered.map((item, i) =>
+    supabase.from("passengers")
+      .update({ [column]: (i + 1) * 10 } as Database["public"]["Tables"]["passengers"]["Update"])
+      .eq("id", item.id)
   );
+}
+
+/** الحالة المحلّية المقابلة لنفس إعادة الترقيم */
+export function applyReorder(list: Passenger[], column: OrderColumn, ordered: { id: number }[]): Passenger[] {
+  const pos = new Map(ordered.map((item, i) => [item.id, (i + 1) * 10]));
+  return list.map(p => pos.has(p.id) ? { ...p, [column]: pos.get(p.id)! } : p);
 }
