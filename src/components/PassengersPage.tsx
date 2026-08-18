@@ -921,6 +921,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setPassengers(prev => applyReorder(prev, "sort_order", next));
   };
 
+  /* الرقم الظاهر **موضعٌ** لا قيمة خام، فحدوده حدود القائمة:
+     ١ ≤ الموضع ≤ عدد الحجاج. وأسهم حقل الرقم كانت تزيده بلا سقف
+     فيظهر ٢٦ في قائمة من ٢٥ — ثم يستقرّ الحاجّ آخرها عند الحفظ،
+     فيرى المستخدم رقماً لا يطابق موضعه. */
+  const hajjCount = passengers.filter(x => isHajj(x)).length;
+  const clampPos = (n: number) => Math.max(1, Math.min(n, hajjCount));
+
   const moveP_order = (p: Passenger, direction: "up" | "down") =>
     reorderHajj(ordered => {
       const i = ordered.findIndex(x => x.id === p.id);
@@ -1187,8 +1194,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     <input
                       autoFocus
                       type="number"
+                      min={1}
+                      max={hajjCount}
                       value={editingOrderVal}
-                      onChange={e => setEditingOrderVal(e.target.value)}
+                      onChange={e => setEditingOrderVal(e.target.value === "" ? "" : String(clampPos(Number(e.target.value))))}
                       onBlur={() => applyOrderChange(p, parseInt(editingOrderVal))}
                       onKeyDown={e => { if (e.key === "Enter") applyOrderChange(p, parseInt(editingOrderVal)); if (e.key === "Escape") setEditingOrderId(null); e.stopPropagation(); }}
                       onClick={e => e.stopPropagation()}
@@ -1294,8 +1303,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                           autoFocus
                           type="number"
                           min={1}
+                          max={hajjCount}
                           value={editingOrderVal}
-                          onChange={e => setEditingOrderVal(e.target.value)}
+                          onChange={e => setEditingOrderVal(e.target.value === "" ? "" : String(clampPos(Number(e.target.value))))}
                           onBlur={async () => {
                             const newOrder = parseInt(editingOrderVal);
                             if (!isNaN(newOrder) && newOrder > 0) await applyOrderChange(p, newOrder);
