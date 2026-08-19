@@ -32,6 +32,7 @@ supabase/
     ├── season-admin/                                 إقفال الموسم وحذفه
     ├── user-admin/                                   إنشاء المستخدمين وتعديلهم وحذفهم
     ├── Scan-passport/                                استخراج بيانات المستندات
+    ├── pilgrim-doc/                                  رابط موقّع لمستند الحاجّ (مجهول)
     └── send-pilgrim-push/                            دفع التنبيهات إلى أجهزة الحجاج
 ```
 
@@ -50,10 +51,14 @@ supabase/
 | ج٦ | `unregister_pilgrim_push()` | إلغاء التفعيل | `SECURITY DEFINER` | تنبيهات البوابة |
 | ج٧ | `mark_pilgrim_notification_read()` | تعليم التنبيه مقروءاً | `SECURITY DEFINER` · تحقّق داخليّ | تنبيهات البوابة |
 | ج٨ | `‎/auth/v1/token` | الدخول وتأكيد كلمة المرور | GoTrue خارج `public` · التسجيل الذاتي مُغلق | نظام الهوية |
+| ج٩ | **`pilgrim-doc`** (دالة Edge · `verify_jwt=false`) | الحاجّ بلا جلسة يفتح **مستنده هو** بعد خصخصة الحاوية | قائمة أنواع صريحة · وثيقة + ميلاد عبر `resolve_pilgrim_id` · **المفتاح تستخرجه الدالة من سجلّ الحاجّ** · رابط موقّع ١٥ دقيقة · ثلاثة حدود fail-closed · ٤٠٤ واحد لا يفرّق بين «لا حاجّ» و«لا مستند» | بوابة الحاج |
+| ج١٠ | حاوية **`company-assets`** (قراءة عامة) | شاشة الدخول تعرض الشعار والخلفية قبل وجود جلسة | حاوية مستقلّة عن المستندات · الكتابة لـ`authenticated` وحده | ملفّ الشركة |
+
+**حاوية `passengers-docs` خاصّة** منذ س٦ (`public=false`): لا قراءة لـ`anon` ولا كتابة،
+والقراءة كلها بروابط موقّعة — الموظّف يوقّعها بجلسته، والحاجّ عبر `pilgrim-doc` (ج٩).
 
 **مرصود ومؤجَّل بقرار — موثَّق فلا يُعدّ عيباً:**
-حاوية `passengers-docs` عامة القراءة (تُغلق في س٦ بروابط موقّعة) ·
-و`company_profile_public` يرفع تنبيه `security_definer_view` عند Advisors وهو **مقصود**.
+`company_profile_public` يرفع تنبيه `security_definer_view` عند Advisors وهو **مقصود**.
 
 > ⚠️ **`EXECUTE` ممنوح لـ`PUBLIC` افتراضاً في Postgres**، و`PUBLIC` تشمل `anon`.
 > فـ`revoke … from anon` يزيل صفّ `anon` **ويترك `PUBLIC` قائماً** — والدالة تبقى

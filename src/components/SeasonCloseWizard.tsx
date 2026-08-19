@@ -17,7 +17,7 @@ import type { Passenger, User } from "../types";
 import type { Season } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { confirmPassword } from "../season/confirmPassword";
-import { btnP, btnS, inp, getStoragePath } from "../utils";
+import { btnP, btnS, inp, getStoragePath, signedDocUrl, DOC_TTL } from "../utils";
 
 /* أعمدة المستندات الستة — مصدر العدّ ومصدر الحذف معاً */
 const DOC_COLUMNS = [
@@ -78,6 +78,10 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   const [dlFailed, setDlFailed] = useState(0);
   /* الخطوة ٤ */
   const [newName, setNewName] = useState(() => suggestName(activeSeason.name));
+  /* ⚠️ الادّعاء الوحيد المسموح بأن نسخةً موجودة: نُزّلت **وبلا فشل**.
+     خطوة التأكيد كانت تقرأ `downloaded` وحدها، فتُعلن «نُزّلت نسخة»
+     ولو فشل كل مستند — وهي الخطوة التي يُحذف بعدها الأصل. */
+  const backupComplete = downloaded && dlFailed === 0;
   /* النتيجة */
   const [result, setResult] = useState<{ newSeasonId: number; closedBy: string; at: string; docsMsg: string; docsOk: boolean } | null>(null);
 
@@ -150,30 +154,50 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   };
 
   /* ── الخطوة ٣: تنزيل نسخة ──────────────────────────────── */
+  /* ⚠️ القيم المخزّنة **مفاتيح كائنات** لا روابط (س٦/ق٤)، والحاوية
+     خاصّة. فالجلب المباشر لقيمة العمود كان يطلب مساراً نسبياً على
+     أصل التطبيق فيردّ ٤٠٤ — أي أن كل مستند كان يُعدّ فاشلاً وتخرج
+     النسخة فارغة. كل مفتاح يُوقَّع الآن قبل جلبه مباشرةً.
+
+     ولا تُسلَّم نسخة فارغة ولا تُرفع علامة نجاح: النسخة التي لم
+     تُنزَّل ليست نسخة، والمستخدم يحذف مستنداته واثقاً بها. */
   const downloadZip = async () => {
     setBusy(true); setError(""); setDlProgress(0); setDlFailed(0);
     let failed = 0;
+    let added = 0;
     try {
       /* استيراد ديناميكي: المكتبة لا تدخل الحزمة الرئيسية،
          وتُحمَّل عند الضغط على الزرّ لا قبله */
       const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       let done = 0;
-      for (const url of docUrls) {
-        const path = getStoragePath(url);
+      for (const value of docUrls) {
+        /* المسار داخل الأرشيف يبقى مفتاح الكائن — لا الرابط الموقّع */
+        const path = getStoragePath(value);
         /* الفشل يُعدّ ولا يُبتلع: نسخة ناقصة تخرج صامتة أسوأ من
            عدم التنزيل، لأن المستخدم يحذف المستندات واثقاً بها */
         if (!path) { failed++; }
         else {
           try {
+            const url = await signedDocUrl(value, DOC_TTL.view);
+            if (!url) throw new Error("تعذّر توقيع رابط المستند");
             const res = await fetch(url);
-            if (res.ok) zip.file(path, await res.blob());
-            else { failed++; console.error("تعذر تنزيل مستند", { url, status: res.status }); }
-          } catch (e) { failed++; console.error("تعذر تنزيل مستند", { url, e }); }
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            zip.file(path, await res.blob());
+            added++;
+          } catch (e) { failed++; console.error("تعذر تنزيل مستند", { path, e }); }
         }
         setDlProgress(++done);
       }
       setDlFailed(failed);
+
+      /* لا مستند واحد نجح: لا ملفّ يُسلَّم ولا `downloaded` تُرفع */
+      if (added === 0) {
+        setError("تعذّر تجهيز النسخة: لم يُنزَّل أي مستند. لا تُكمل الإقفال قبل الحصول على نسخة.");
+        setBusy(false);
+        return;
+      }
+
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -183,7 +207,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       setDownloaded(true);
     } catch (e) {
       console.error("تعذر تجهيز نسخة المستندات", e);
-      setError("تعذّر تجهيز النسخة. يمكنك المتابعة أو المحاولة مرة أخرى.");
+      setError("تعذّر تجهيز النسخة. يمكنك المحاولة مرة أخرى.");
     }
     setBusy(false);
   };
@@ -335,16 +359,23 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
           <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 14 }}>
             ⚠ ستُحذف نهائياً عند الإقفال ولا يمكن استعادتها.
           </div>
-          {downloaded
-            ? (dlFailed > 0
-                ? <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 12 }}>
-                    ⚠ تم تنزيل النسخة، لكن تعذّر تنزيل {dlFailed} مستنداً.
-                  </div>
-                : <div style={{ fontSize: 12, color: "var(--success)", marginBottom: 12 }}>✓ نُزّلت النسخة كاملة.</div>)
+          {backupComplete
+            ? <div style={{ fontSize: 12, color: "var(--success)", marginBottom: 12 }}>✓ نُزّلت النسخة كاملة.</div>
             : (
-              <button onClick={downloadZip} disabled={busy} style={btnS({ width: "100%", marginBottom: 12 })}>
-                {busy ? `جارٍ التجهيز… ${dlProgress} / ${docUrls.length}` : "تنزيل نسخة (ZIP)"}
-              </button>
+              <>
+                {downloaded && dlFailed > 0 && (
+                  <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 8 }}>
+                    ⚠ النسخة ناقصة: تعذّر تنزيل {dlFailed} من {docUrls.length} مستنداً.
+                  </div>
+                )}
+                {/* إعادة المحاولة تبقى متاحة بعد نسخة ناقصة —
+                    إخفاء الزرّ كان يترك المستخدم بلا سبيل إلى نسخة كاملة */}
+                <button onClick={downloadZip} disabled={busy} style={btnS({ width: "100%", marginBottom: 12 })}>
+                  {busy
+                    ? `جارٍ التجهيز… ${dlProgress} / ${docUrls.length}`
+                    : downloaded ? "إعادة المحاولة" : "تنزيل نسخة (ZIP)"}
+                </button>
+              </>
             )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setStep(4)} disabled={busy} style={btnP({ flex: 1 })}>التالي</button>
@@ -386,9 +417,11 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "var(--warning)" }}>يتطلب انتباهك</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, marginBottom: 16, color: "var(--warning)" }}>
                 <div>⚠ سيتم حذف مستندات موسم {activeSeason.name} من النظام.</div>
-                {downloaded
-                  ? <div style={{ color: "var(--success)" }}>✓ نُزّلت نسخة من المستندات.</div>
-                  : <div>⚠ إذا كنت ترغب في الاحتفاظ بها، قم بتنزيلها قبل المتابعة.</div>}
+                {backupComplete
+                  ? <div style={{ color: "var(--success)" }}>✓ نُزّلت نسخة كاملة من المستندات.</div>
+                  : downloaded
+                    ? <div><b>⚠ النسخة التي نُزّلت ناقصة</b> — تعذّر {dlFailed} من {docUrls.length} مستنداً. الحذف نهائيّ، فارجع وأعد المحاولة قبل المتابعة.</div>
+                    : <div>⚠ لم تُنزَّل أي نسخة. إذا كنت ترغب في الاحتفاظ بها، قم بتنزيلها قبل المتابعة.</div>}
               </div>
             </>
           )}
