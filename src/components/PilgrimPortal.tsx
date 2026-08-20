@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { portalDocUrl, usePortalDoc, type PortalCreds, type PortalDocType } from "../utils";
+import {
+  portalDocUrl, usePortalDoc, clearPortalDocCache, PORTAL_SESSION_KEY,
+  type PortalDocType, type PortalSession,
+} from "../utils";
 import { portalSupabase } from "../portalSupabase";
 import {
   getPushState, enablePush, disablePush, markNotificationRead,
@@ -89,6 +92,29 @@ const IVORY = "#F8F2E4";
 
 const mapsUrl = (q: string) => `https://maps.google.com/maps?q=${encodeURIComponent(q)}`;
 
+/* ═══ س٧ — الجلسة تحلّ محلّ الاعتماد الثابت (الثابت أ١٢) ═══
+   لم يعد على جهاز الحاجّ رقمُ جوازه وتاريخُ ميلاده. صار عليه رمزٌ
+   مبهم ينتهي خمولاً بعد ٣٠ يوماً، ويموت مطلقاً بعد ٩٠، ويُبطَل
+   بالخروج، ويسقط بإقفال الموسم. وموضعٌ واحد يعرف شكله. */
+function readSession(): string | null {
+  try {
+    const raw = localStorage.getItem(PORTAL_SESSION_KEY);
+    const t = raw ? (JSON.parse(raw) as PortalSession)?.token : null;
+    return typeof t === "string" && t ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+/** كل ما يخصّ الحاجّ على هذا الجهاز — يُمسح معاً أو لا يُمسح. */
+function clearPortalLocalState(): void {
+  localStorage.removeItem(PORTAL_SESSION_KEY);
+  localStorage.removeItem("portal_data");
+  localStorage.removeItem("portal_seen_alerts");
+  localStorage.removeItem("portal_acked_urgent");
+  clearPortalDocCache();
+}
+
 function PilgrimPortal() {
   /* تحميل الخطوط */
   useEffect(() => {
@@ -99,6 +125,17 @@ function PilgrimPortal() {
     return () => { document.head.removeChild(l); };
   }, []);
 
+  /* الجلسة تُقرأ أولاً: بلا جلسة لا بوابة، والملفّ المخزَّن أثرٌ لا
+     اعتماد فيُمسح — كي لا تُعرض شاشة تبدو داخلة وهي ليست كذلك */
+  const [session, setSession] = useState<string | null>(() => {
+    /* أ١٢ — أثر ما قبل س٧ يُمحى دائماً ولا يُقرأ أبداً. وليست هذه
+       هجرة صامتة: قيمته لا تتحوّل إلى جلسة، بل تُمسح فقط. والحاجّ
+       يدخل مرّة واحدة من جديد، وهو القرار المعتمد (ق٣) */
+    localStorage.removeItem("portal_creds");
+    const t = readSession();
+    if (!t) clearPortalLocalState();
+    return t;
+  });
   const [data, setData] = useState<PortalData | null>(() => {
     try { const s = localStorage.getItem("portal_data"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -113,11 +150,6 @@ function PilgrimPortal() {
   const [lostOpen, setLostOpen] = useState(false);
   const [docView, setDocView] = useState<{ title: string; url: string; isPdf: boolean } | null>(null);
   const [docBusy, setDocBusy] = useState<PortalDocType | null>(null);
-  /* بيانات الإثبات محفوظة كما كانت للدخول مرّة واحدة، وهي الآن أيضاً
-     ما تُطلَب به روابط المستندات — لا مفتاح يُخزَّن في الجهاز */
-  const [creds, setCreds] = useState<PortalCreds | null>(() => {
-    try { return JSON.parse(localStorage.getItem("portal_creds") || "null"); } catch { return null; }
-  });
   const [seenAlerts, setSeenAlerts] = useState<number>(() => Number(localStorage.getItem("portal_seen_alerts") || 0));
   const [ackedUrgent, setAckedUrgent] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("portal_acked_urgent") || "[]"); } catch { return []; }
@@ -135,16 +167,26 @@ function PilgrimPortal() {
 
   /* ─── تحديث تلقائي كامل عند كل فتح + كل ٣ دقائق (دخول مرة واحدة) ─── */
   useEffect(() => {
-    if (!data) return;
-    const creds = (() => { try { return JSON.parse(localStorage.getItem("portal_creds") || "null"); } catch { return null; } })();
+    if (!data || !session) return;
     const refreshAll = async () => {
-      if (creds) {
-        const { data: res } = await portalSupabase.rpc("get_pilgrim_portal", creds);
-        if (res) { setData(res as unknown as PortalData); localStorage.setItem("portal_data", JSON.stringify(res)); return; }
+      const { data: res, error } = await portalSupabase.rpc(
+        "get_pilgrim_portal_by_session", { p_token: session });
+
+      if (!error && res) {
+        setData(res as unknown as PortalData);
+        localStorage.setItem("portal_data", JSON.stringify(res));
+        return;
       }
-      /* الحاج anon، فلا يقرأ الجدول مباشرةً: إسقاط مضبوط خلف دالة
-         SECURITY DEFINER — نفس نمط get_pilgrim_portal (س٤ / §٣.٦).
-         الدالة ترشّح بالوقت والانتهاء وترتّب العاجل أولاً. */
+      if (!error) {
+        /* رفضٌ صريح لا عطل شبكة: الجلسة انتهت أو أُبطلت أو أُقفل
+           موسمها أو حُذف الحاجّ. لا نُبقي شاشة تبدو داخلة. */
+        clearPortalLocalState();
+        setSession(null);
+        setData(null);
+        return;
+      }
+      /* عطلٌ عابر: تبقى الجلسة، وتُحدَّث التنبيهات وحدها كما كان —
+         إسقاط مضبوط خلف دالة SECURITY DEFINER (س٤ / §٣.٦) */
       const { data: anns } = await portalSupabase.rpc("get_portal_announcements");
       if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
     };
@@ -152,7 +194,7 @@ function PilgrimPortal() {
     const t = setInterval(refreshAll, 180000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!data]);
+  }, [session, !!data]);
 
   /* ─── تهيئة التنبيهات: عامل الخدمة وملف تعريف التطبيق ─── */
   useEffect(() => {
@@ -247,7 +289,7 @@ function PilgrimPortal() {
 
   /* صورة الحاجّ: رابط موقّع قصير العمر يُطلب عند العرض — والخطّاف
      قبل أي عودة مبكّرة كي لا يتغيّر ترتيب الخطّافات بين عرض وآخر */
-  const photoUrl = usePortalDoc(creds, "photo", data?.pilgrim?.has_photo === true);
+  const photoUrl = usePortalDoc(session, "photo", data?.pilgrim?.has_photo === true);
 
   const arafa = useMemo(() => getSeasonArafa(), []);
   const postHajj = now > arafa.getTime() + 86400000;
@@ -273,26 +315,56 @@ function PilgrimPortal() {
     }
     setLoading(true);
     try {
-      const creds = { p_doc: doc.trim(), p_day: dNum, p_month: mNum, p_year: yNum };
-      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_portal", creds);
-      if (error || !res) setLoginError("البيانات غير صحيحة. تأكد من رقم الجواز أو البطاقة وتاريخ الميلاد.");
-      else {
-        setData(res as unknown as PortalData);
-        localStorage.setItem("portal_data", JSON.stringify(res));
-        localStorage.setItem("portal_creds", JSON.stringify(creds));
-        setCreds(creds);
+      /* خطوة ١ — إثبات الهوية **مرّة واحدة**. ما يُدخله الحاجّ
+         يُرسل ولا يُحفظ: هذه هي الدالة الوحيدة في النظام كلّه التي
+         تقبل «وثيقة + ميلاد» (§٨.١) */
+      const { data: issued, error } = await portalSupabase.rpc("create_pilgrim_session", {
+        p_doc: doc.trim(), p_day: dNum, p_month: mNum, p_year: yNum,
+      });
+      const s = issued as unknown as (PortalSession & { rate_limited?: boolean }) | null;
+
+      if (error || !s) {
+        setLoginError("البيانات غير صحيحة. تأكد من رقم الجواز أو البطاقة وتاريخ الميلاد.");
+      } else if (s.rate_limited) {
+        setLoginError("تجاوزت عدد المحاولات المسموح. يرجى المحاولة بعد قليل.");
+      } else {
+        /* خطوة ٢ — الملفّ بالجلسة. ولا يُرسل الاعتماد الثابت بعد
+           هذه اللحظة أبداً، ولا يُكتب على الجهاز */
+        clearPortalDocCache();
+        localStorage.setItem(PORTAL_SESSION_KEY, JSON.stringify(s));
+        const { data: res } = await portalSupabase.rpc(
+          "get_pilgrim_portal_by_session", { p_token: s.token });
+        if (!res) {
+          localStorage.removeItem(PORTAL_SESSION_KEY);
+          setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى.");
+        } else {
+          setSession(s.token);
+          setData(res as unknown as PortalData);
+          localStorage.setItem("portal_data", JSON.stringify(res));
+          /* ما أُدخل لا يبقى في ذاكرة الشاشة أيضاً */
+          setDoc(""); setDay(""); setMonth(""); setYear("");
+        }
       }
     } catch { setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى."); }
     setLoading(false);
   }
 
-  function logout() {
-    localStorage.removeItem("portal_data");
-    localStorage.removeItem("portal_creds");
-    localStorage.removeItem("portal_seen_alerts");
-    localStorage.removeItem("portal_acked_urgent");
+  async function logout() {
+    /* الإبطال في الخادم أولاً ما دامت الشبكة تسمح — فالخروج قبل س٧
+       كان مسحاً محلّياً بلا أثر، والرمز يبقى صالحاً لمن يقرأ التخزين.
+       ثم التنظيف المحلّي **دائماً**، نجح الإبطال أو فشل: لا يُترك
+       جهازٌ يبدو داخلاً لأن الشبكة كانت منقطعة. */
+    const t = session;
+    if (t) {
+      try {
+        await portalSupabase.rpc("revoke_pilgrim_session", { p_token: t });
+      } catch {
+        /* منقطع أو مرفوض — التنظيف المحلّي لا ينتظر */
+      }
+    }
+    clearPortalLocalState();
     setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
-    setCreds(null); setDocView(null);
+    setSession(null); setDocView(null);
   }
 
   function ackUrgent(id: number) {
@@ -416,7 +488,7 @@ function PilgrimPortal() {
           </button>
 
           <div style={{ textAlign: "center", fontSize: 13.5, color: "rgba(255,255,255,.8)", fontWeight: 600, marginTop: 24, lineHeight: 2.1 }}>
-            تدخل مرة واحدة فقط وتبقى بوابتك مفتوحة دائماً
+            تدخل مرة واحدة وتبقى بوابتك مفتوحة طوال الموسم
             {cfg?.admin_phone && <><br />للمساعدة: <a href={`tel:${cfg.admin_phone}`} style={{ direction: "ltr", display: "inline-block", color: goldBright, fontWeight: 800, textDecoration: "none" }}>{cfg.admin_phone}</a></>}
           </div>
         </div>
@@ -621,7 +693,7 @@ function PilgrimPortal() {
                 <div key={d.type} onClick={async () => {
                   if (!d.has || docBusy) return;
                   setDocBusy(d.type);
-                  const res = await portalDocUrl(creds, d.type);
+                  const res = await portalDocUrl(session, d.type);
                   setDocBusy(null);
                   if (res) setDocView({ title: d.t, url: res.url, isPdf: res.is_pdf });
                 }}

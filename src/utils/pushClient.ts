@@ -3,17 +3,19 @@
    ══════════════════════════════════════════════════════════════ */
 
 import { portalSupabase } from "../portalSupabase";
+import { PORTAL_SESSION_KEY, type PortalSession } from "./index";
 
 const VAPID_PUBLIC_KEY: string = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 const SW_PATH = "/sw-push.js";
 
-/* بيانات دخول الحاج المحفوظة في المتصفح */
-type Creds = { p_doc: string; p_day: number; p_month: number; p_year: number };
-
-export function getPortalCreds(): Creds | null {
+/* س٧ — رمز جلسة البوابة المحفوظ في المتصفح.
+   ولا يُحفظ رقم وثيقة ولا تاريخ ميلاد (الثابت أ١٢). */
+export function getPortalSession(): string | null {
   try {
-    const raw = localStorage.getItem("portal_creds");
-    return raw ? (JSON.parse(raw) as Creds) : null;
+    const raw = localStorage.getItem(PORTAL_SESSION_KEY);
+    if (!raw) return null;
+    const token = (JSON.parse(raw) as PortalSession)?.token;
+    return typeof token === "string" && token ? token : null;
   } catch {
     return null;
   }
@@ -113,13 +115,13 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
 export type EnableResult =
   | { ok: true }
-  | { ok: false; reason: "unsupported" | "denied" | "no-creds" | "failed" };
+  | { ok: false; reason: "unsupported" | "denied" | "no-session" | "failed" };
 
 export async function enablePush(): Promise<EnableResult> {
   if (!supportsPush() || !VAPID_PUBLIC_KEY) return { ok: false, reason: "unsupported" };
 
-  const creds = getPortalCreds();
-  if (!creds) return { ok: false, reason: "no-creds" };
+  const token = getPortalSession();
+  if (!token) return { ok: false, reason: "no-session" };
 
   /* الإذن يجب أن يُطلب استجابةً لضغطة الحاج نفسه */
   let permission = Notification.permission;
@@ -150,7 +152,7 @@ export async function enablePush(): Promise<EnableResult> {
     if (!p256dh || !auth) return { ok: false, reason: "failed" };
 
     const { data, error } = await portalSupabase.rpc("register_pilgrim_push", {
-      ...creds,
+      p_token: token,
       p_endpoint: sub.endpoint,
       p_p256dh: p256dh,
       p_auth: auth,
@@ -179,8 +181,14 @@ export async function disablePush(): Promise<boolean> {
     const endpoint = sub?.endpoint || localStorage.getItem("portal_push_endpoint");
 
     if (sub) await sub.unsubscribe().catch(() => undefined);
-    if (endpoint) {
-      await portalSupabase.rpc("unregister_pilgrim_push", { p_endpoint: endpoint });
+    /* س٧: الإلغاء صار مربوطاً بالهوية — يحذف اشتراك حاجّ الجلسة
+       وحده، فلا يُلغي مَن عرف عنواناً اشتراكَ غيره (ف٥) */
+    const token = getPortalSession();
+    if (endpoint && token) {
+      await portalSupabase.rpc("unregister_pilgrim_push", {
+        p_token: token,
+        p_endpoint: endpoint,
+      });
     }
     localStorage.removeItem("portal_push_endpoint");
     return true;
@@ -201,11 +209,11 @@ export async function resubscribeIfNeeded(): Promise<void> {
 /* ─── تسجيل قراءة التنبيه ─── */
 
 export async function markNotificationRead(announcementId: number): Promise<void> {
-  const creds = getPortalCreds();
-  if (!creds) return;
+  const token = getPortalSession();
+  if (!token) return;
   try {
     await portalSupabase.rpc("mark_pilgrim_notification_read", {
-      ...creds,
+      p_token: token,
       p_announcement_id: announcementId,
     });
   } catch {
