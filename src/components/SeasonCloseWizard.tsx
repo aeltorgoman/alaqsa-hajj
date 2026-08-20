@@ -17,13 +17,53 @@ import type { Passenger, User } from "../types";
 import type { Season } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { confirmPassword } from "../season/confirmPassword";
-import { btnP, btnS, inp, getStoragePath } from "../utils";
+import { btnP, btnS, inp, getStoragePath, fetchDocumentBytes } from "../utils";
 
-/* أعمدة المستندات الستة — مصدر العدّ ومصدر الحذف معاً */
-const DOC_COLUMNS = [
-  "photo_url", "passport_url", "national_id_url",
-  "contract_url", "hajj_permit_url", "flight_ticket_url",
+/* أعمدة المستندات الستة — مصدر العدّ ومصدر الحذف معاً.
+   ولكل عمود اسمُ ملفّ في الأرشيف ووسمٌ عربيّ يُقرأ عند الفشل. */
+const DOC_SPECS = [
+  { col: "passport_url",      file: "passport",       label: "جواز السفر" },
+  { col: "national_id_url",   file: "id-card",        label: "البطاقة الشخصية" },
+  { col: "photo_url",         file: "personal-photo", label: "الصورة الشخصية" },
+  { col: "contract_url",      file: "contract",       label: "العقد" },
+  { col: "hajj_permit_url",   file: "hajj-permit",    label: "تصريح الحج" },
+  { col: "flight_ticket_url", file: "ticket",         label: "تذكرة الطيران" },
 ] as const;
+const DOC_COLUMNS = DOC_SPECS.map(d => d.col);
+
+/* ── تسمية آمنة على Windows ──────────────────────────────────
+   الأرشيف يُفتح على أجهزة المستخدمين، وأسماء الحجاج عربية فيها
+   مسافات وقد تحمل محارف يرفضها نظام الملفات. تُنقّى هنا مرّة واحدة. */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+function safeSegment(raw: string, fallback: string): string {
+  let out = (raw || "")
+    .replace(/[<>:"/\\|?*]/g, " ")
+    /* محارف التحكّم تُزال بلا تعبير نمطيّ يشكو منه المدقّق */
+    .split("").filter(ch => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) !== 127).join("")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/, "");
+  if (!out) out = fallback;
+  if (WINDOWS_RESERVED.test(out)) out = `_${out}`;
+  return out.slice(0, 80);
+}
+
+/** امتداد الملفّ من مفتاح الكائن — لا من الرابط الموقّع */
+function extOf(key: string): string {
+  const ext = key.toLowerCase().split("?")[0].split(".").pop() ?? "";
+  return /^[a-z0-9]{2,5}$/.test(ext) ? ext : "bin";
+}
+
+type DocItem = {
+  /** القيمة المخزّنة (مفتاح الكائن) */
+  value: string;
+  /** مسار الملفّ داخل الأرشيف — مقروء للإنسان */
+  path: string;
+  /** لتسمية الفشل باسم صاحبه لا برقمه */
+  person: string;
+  label: string;
+};
 
 type Counts = { passengers: number; buses: number; camps: number; rooms: number };
 type Step = 1 | 2 | 3 | 4 | 5 | "executing" | "done";
@@ -71,19 +111,34 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   /* الخطوة ٢ */
   const [warnings, setWarnings] = useState<string[] | null>(null);
   /* الخطوة ٣ */
-  const [docUrls, setDocUrls] = useState<string[]>([]);
+  const [docItems, setDocItems] = useState<DocItem[]>([]);
+  /* المستندات التي تعذّرت — باسم صاحبها لا برقمه */
+  const [failures, setFailures] = useState<{ person: string; label: string; why: string }[]>([]);
   const [downloaded, setDownloaded] = useState(false);
   const [dlProgress, setDlProgress] = useState(0);
   /* عدد الملفات التي تعذّر ضمّها — نسخة ناقصة تُعلَن ولا تُقدَّم كاملة */
   const [dlFailed, setDlFailed] = useState(0);
+  /* وعدد ما نجح فعلاً: الاكتمال يُقاس بمطابقة المتوقَّع، لا بغياب الفشل */
+  const [dlSucceeded, setDlSucceeded] = useState(0);
   /* الخطوة ٤ */
   const [newName, setNewName] = useState(() => suggestName(activeSeason.name));
+  /* ⚠️ الادّعاء الوحيد المسموح بأن نسخةً موجودة: نُزّلت **وبلا فشل**.
+     خطوة التأكيد كانت تقرأ `downloaded` وحدها، فتُعلن «نُزّلت نسخة»
+     ولو فشل كل مستند — وهي الخطوة التي يُحذف بعدها الأصل. */
+  /* المتوقَّع = كل مستند في الموسم. والاكتمال **مطابقةٌ عدديّة**:
+     نجح كل ما هو متوقَّع، ولم يفشل شيء. غياب الفشل وحده لا يكفي —
+     قد لا يفشل شيء لأن شيئاً لم يُحاوَل أصلاً. */
+  const expectedDocs = docItems.length;
+  const backupComplete = expectedDocs > 0
+    && downloaded
+    && dlSucceeded === expectedDocs
+    && dlFailed === 0;
   /* النتيجة */
   const [result, setResult] = useState<{ newSeasonId: number; closedBy: string; at: string; docsMsg: string; docsOk: boolean } | null>(null);
 
   const reset = () => {
     setStep(1); setPassword(""); setError(""); setBusy(false);
-    setWarnings(null); setDocUrls([]); setDownloaded(false); setDlProgress(0); setDlFailed(0);
+    setWarnings(null); setDocItems([]); setFailures([]); setDownloaded(false); setDlProgress(0); setDlFailed(0); setDlSucceeded(0);
     setNewName(suggestName(activeSeason.name)); setResult(null);
   };
 
@@ -119,13 +174,14 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   const loadReview = async () => {
     const { data, error: err } = await supabase
       .from("passengers")
-      .select(`id,bus_id,room_id,camp_mina_id,camp_arafa_id,${DOC_COLUMNS.join(",")}`)
-      .eq("season_id", activeSeason.id);
+      .select(`id,name_ar,name_en,passport,national_id,bus_id,room_id,camp_mina_id,camp_arafa_id,${DOC_COLUMNS.join(",")}`)
+      .eq("season_id", activeSeason.id)
+      .order("id");
 
     if (err || !data) {
       /* الفحص استشاريّ، ففشله لا يوقف عملية إدارية */
       setWarnings(null);
-      setDocUrls([]);
+      setDocItems([]);
       return;
     }
     const rows = data as unknown as (Passenger & Record<string, string | null>)[];
@@ -134,9 +190,36 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       !p.bus_id || !p.room_id || !p.camp_mina_id || !p.camp_arafa_id).length;
     const noPassport = rows.filter(p => !p.passport_url).length;
 
-    const urls: string[] = [];
-    for (const p of rows) for (const c of DOC_COLUMNS) if (p[c]) urls.push(p[c] as string);
-    setDocUrls(urls);
+    /* ⚠️ الأرشيف يُفتح بعد إقفال الموسم، حين لا تكون القاعدة في
+       متناول اليد. فمجلّد اسمه «75» لا يقول لصاحبه شيئاً. الاسم هو
+       الهوية، ورقم الجواز مميّزٌ ثابت عند التشابه، والرقم الداخليّ
+       ملاذٌ أخير عند تكرار الاثنين. */
+    const used = new Map<string, number>();
+    const items: DocItem[] = [];
+    for (const p of rows) {
+      const name = safeSegment(String(p.name_ar || p.name_en || ""), `حاج ${p.id}`);
+      const tag = safeSegment(String(p.passport || p.national_id || ""), "");
+      let folder = tag && tag !== `حاج ${p.id}` ? `${name} - ${tag}` : name;
+      /* تكرارٌ حقيقيّ: يُفصل بالرقم الداخليّ — ترتيبٌ ثابت لأن
+         الصفوف مرتّبة بالمعرّف، فالأرشيف نفسه يخرج في كل مرّة */
+      const seen = used.get(folder);
+      if (seen !== undefined && seen !== p.id) folder = `${folder} (${p.id})`;
+      used.set(folder, p.id);
+
+      const person = String(p.name_ar || p.name_en || `حاج ${p.id}`);
+      for (const spec of DOC_SPECS) {
+        const value = p[spec.col] as string | null;
+        if (!value) continue;
+        const key = getStoragePath(value);
+        items.push({
+          value,
+          path: `${folder}/${spec.file}.${extOf(key || value)}`,
+          person,
+          label: spec.label,
+        });
+      }
+    }
+    setDocItems(items);
 
     const { count: scheduled } = await supabase
       .from("announcements").select("id", { count: "exact", head: true })
@@ -150,30 +233,48 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   };
 
   /* ── الخطوة ٣: تنزيل نسخة ──────────────────────────────── */
+  /* ⚠️ القيم المخزّنة **مفاتيح كائنات** لا روابط (س٦/ق٤)، والحاوية
+     خاصّة. فالجلب المباشر لقيمة العمود كان يطلب مساراً نسبياً على
+     أصل التطبيق فيردّ ٤٠٤ — أي أن كل مستند كان يُعدّ فاشلاً وتخرج
+     النسخة فارغة. كل مفتاح يُوقَّع الآن قبل جلبه مباشرةً.
+
+     ولا تُسلَّم نسخة فارغة ولا تُرفع علامة نجاح: النسخة التي لم
+     تُنزَّل ليست نسخة، والمستخدم يحذف مستنداته واثقاً بها. */
   const downloadZip = async () => {
-    setBusy(true); setError(""); setDlProgress(0); setDlFailed(0);
-    let failed = 0;
+    setBusy(true); setError(""); setDlProgress(0); setDlFailed(0); setFailures([]);
+    const failedItems: { person: string; label: string; why: string }[] = [];
+    let added = 0;
     try {
       /* استيراد ديناميكي: المكتبة لا تدخل الحزمة الرئيسية،
          وتُحمَّل عند الضغط على الزرّ لا قبله */
       const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       let done = 0;
-      for (const url of docUrls) {
-        const path = getStoragePath(url);
-        /* الفشل يُعدّ ولا يُبتلع: نسخة ناقصة تخرج صامتة أسوأ من
-           عدم التنزيل، لأن المستخدم يحذف المستندات واثقاً بها */
-        if (!path) { failed++; }
-        else {
-          try {
-            const res = await fetch(url);
-            if (res.ok) zip.file(path, await res.blob());
-            else { failed++; console.error("تعذر تنزيل مستند", { url, status: res.status }); }
-          } catch (e) { failed++; console.error("تعذر تنزيل مستند", { url, e }); }
+      for (const item of docItems) {
+        try {
+          /* بايتات مُتحقَّق منها: توقيعٌ ثنائيّ يطابق نوع الملفّ.
+             والحالة ٢٠٠ وحدها لا تكفي — إعادة كتابة المسارات في
+             الاستضافة تردّ قشرة التطبيق بحالة ناجحة. */
+          const bytes = await fetchDocumentBytes(item.value);
+          zip.file(item.path, bytes);
+          added++;
+        } catch (e) {
+          const why = e instanceof Error ? e.message : "سبب غير معروف";
+          failedItems.push({ person: item.person, label: item.label, why });
+          console.error("تعذر ضمّ مستند إلى الأرشيف", { path: item.path, why });
         }
         setDlProgress(++done);
       }
-      setDlFailed(failed);
+      setDlFailed(failedItems.length);
+      setFailures(failedItems);
+
+      /* لا مستند واحد نجح: لا ملفّ يُسلَّم ولا `downloaded` تُرفع */
+      if (added === 0) {
+        setError("تعذّر تجهيز النسخة: لم يُنزَّل أي مستند. لا تُكمل الإقفال قبل الحصول على نسخة.");
+        setBusy(false);
+        return;
+      }
+
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -181,9 +282,10 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       a.click();
       URL.revokeObjectURL(a.href);
       setDownloaded(true);
+      setDlSucceeded(added);
     } catch (e) {
       console.error("تعذر تجهيز نسخة المستندات", e);
-      setError("تعذّر تجهيز النسخة. يمكنك المتابعة أو المحاولة مرة أخرى.");
+      setError("تعذّر تجهيز النسخة. يمكنك المحاولة مرة أخرى.");
     }
     setBusy(false);
   };
@@ -206,8 +308,8 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
        الإقفال ولا يُعرض كقرار على المستخدم */
     let docsOk = true;
     let docsMsg = "لا مستندات في هذا الموسم.";
-    if (docUrls.length > 0) {
-      const paths = docUrls.map(getStoragePath).filter(Boolean);
+    if (docItems.length > 0) {
+      const paths = docItems.map(i => getStoragePath(i.value)).filter(Boolean);
       const { data: removedData, error: rmErr } = await supabase.storage.from("passengers-docs").remove(paths);
       /* remove() ينجح جزئياً: ما لم يُذكر في data لم يُحذف. المسارات
          الباقية تُسجَّل بأسمائها لا بعددها، فالملف اليتيم يُعثر عليه
@@ -224,7 +326,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
           error: rmErr,
         });
         docsOk = false;
-        docsMsg = `تعذّر حذف ${orphans.length || docUrls.length} من مستندات موسم ${activeSeason.name}، ويمكن معالجتها لاحقاً.`;
+        docsMsg = `تعذّر حذف ${orphans.length || docItems.length} من مستندات موسم ${activeSeason.name}، ويمكن معالجتها لاحقاً.`;
       } else {
         docsMsg = `حُذفت مستندات موسم ${activeSeason.name} (${paths.length} ملفاً).`;
       }
@@ -301,7 +403,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
             {counts
               ? `${counts.passengers} حاجاً · ${counts.buses} باصات · ${counts.camps} مخيمات · ${counts.rooms} غرف`
               : "تعذّر حساب المحتوى"}
-            {docUrls.length > 0 && <div style={{ marginTop: 6, color: "var(--text-muted)" }}>{docUrls.length} مستنداً مرفوعاً</div>}
+            {docItems.length > 0 && <div style={{ marginTop: 6, color: "var(--text-muted)" }}>{docItems.length} مستنداً مرفوعاً</div>}
           </div>
 
           {warnings === null ? (
@@ -320,7 +422,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
           )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button onClick={() => setStep(docUrls.length > 0 ? 3 : 4)} style={btnP({ flex: 1 })}>التالي</button>
+            <button onClick={() => setStep(docItems.length > 0 ? 3 : 4)} style={btnP({ flex: 1 })}>التالي</button>
             <button onClick={closeAndReset} style={btnS()}>إلغاء</button>
           </div>
         </>
@@ -330,21 +432,37 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       {step === 3 && (
         <>
           <div style={{ fontSize: 13, marginBottom: 8 }}>
-            موسم {activeSeason.name} يحتوي <b>{docUrls.length}</b> مستنداً.
+            موسم {activeSeason.name} يحتوي <b>{docItems.length}</b> مستنداً.
           </div>
           <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 14 }}>
             ⚠ ستُحذف نهائياً عند الإقفال ولا يمكن استعادتها.
           </div>
-          {downloaded
-            ? (dlFailed > 0
-                ? <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 12 }}>
-                    ⚠ تم تنزيل النسخة، لكن تعذّر تنزيل {dlFailed} مستنداً.
-                  </div>
-                : <div style={{ fontSize: 12, color: "var(--success)", marginBottom: 12 }}>✓ نُزّلت النسخة كاملة.</div>)
+          {backupComplete
+            ? <div style={{ fontSize: 12, color: "var(--success)", marginBottom: 12 }}>✓ نُزّلت النسخة كاملة.</div>
             : (
-              <button onClick={downloadZip} disabled={busy} style={btnS({ width: "100%", marginBottom: 12 })}>
-                {busy ? `جارٍ التجهيز… ${dlProgress} / ${docUrls.length}` : "تنزيل نسخة (ZIP)"}
-              </button>
+              <>
+                {downloaded && dlFailed > 0 && (
+                  <div style={{ fontSize: 12, color: "var(--warning)", marginBottom: 8 }}>
+                    <div style={{ marginBottom: 4 }}>
+                      ⚠ النسخة ناقصة: نجح {dlSucceeded} من {docItems.length}، وتعذّر {dlFailed}.
+                    </div>
+                    {/* ما فشل يُسمّى بصاحبه — رقمٌ مجرّد لا يُصلَح به شيء */}
+                    <ul style={{ margin: "4px 0 0", paddingInlineStart: 18, lineHeight: 1.7 }}>
+                      {failures.slice(0, 5).map((f, i) => (
+                        <li key={i}>{f.person} — {f.label} <span style={{ color: "var(--text-muted)" }}>({f.why})</span></li>
+                      ))}
+                      {failures.length > 5 && <li>وغيرها {failures.length - 5}…</li>}
+                    </ul>
+                  </div>
+                )}
+                {/* إعادة المحاولة تبقى متاحة بعد نسخة ناقصة —
+                    إخفاء الزرّ كان يترك المستخدم بلا سبيل إلى نسخة كاملة */}
+                <button onClick={downloadZip} disabled={busy} style={btnS({ width: "100%", marginBottom: 12 })}>
+                  {busy
+                    ? `جارٍ التجهيز… ${dlProgress} / ${docItems.length}`
+                    : downloaded ? "إعادة المحاولة" : "تنزيل نسخة (ZIP)"}
+                </button>
+              </>
             )}
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setStep(4)} disabled={busy} style={btnP({ flex: 1 })}>التالي</button>
@@ -365,7 +483,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
           {nameTaken && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>يوجد موسم بهذا الاسم.</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
             <button onClick={() => setStep(5)} disabled={!newName.trim() || nameTaken} style={btnP({ flex: 1, opacity: newName.trim() && !nameTaken ? 1 : 0.6 })}>التالي</button>
-            <button onClick={() => setStep(docUrls.length > 0 ? 3 : 2)} style={btnS()}>السابق</button>
+            <button onClick={() => setStep(docItems.length > 0 ? 3 : 2)} style={btnS()}>السابق</button>
             <button onClick={closeAndReset} style={btnS()}>إلغاء</button>
           </div>
         </>
@@ -379,16 +497,29 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
             <div>✅ سيتم إغلاق موسم {activeSeason.name}.</div>
             <div>✅ سيتم إنشاء موسم {newName.trim()}.</div>
             <div>✅ سيتم حفظ جميع بيانات موسم {activeSeason.name} داخل الأرشيف.</div>
+            {/* حالة الصفر تُقال صراحةً: لا تُحسب نجاحاً ولا فشلاً */}
+            {docItems.length === 0 && <div>✅ لا مستندات مرفوعة في هذا الموسم — لا شيء يُحذف.</div>}
           </div>
 
-          {docUrls.length > 0 && (
+          {docItems.length > 0 && (
             <>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: "var(--warning)" }}>يتطلب انتباهك</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, marginBottom: 16, color: "var(--warning)" }}>
                 <div>⚠ سيتم حذف مستندات موسم {activeSeason.name} من النظام.</div>
-                {downloaded
-                  ? <div style={{ color: "var(--success)" }}>✓ نُزّلت نسخة من المستندات.</div>
-                  : <div>⚠ إذا كنت ترغب في الاحتفاظ بها، قم بتنزيلها قبل المتابعة.</div>}
+                {backupComplete
+                  ? <div style={{ color: "var(--success)" }}>✓ نُزّلت نسخة كاملة من المستندات.</div>
+                  : downloaded
+                    ? <div>
+                        <b>⚠ النسخة التي نُزّلت ناقصة</b> — نجح {dlSucceeded} من {docItems.length}، وتعذّر {dlFailed}.
+                        {failures.length > 0 && (
+                          <div style={{ marginTop: 4 }}>
+                            أوّلها: {failures.slice(0, 3).map(f => `${f.person} — ${f.label}`).join(" · ")}
+                            {failures.length > 3 ? " …" : ""}
+                          </div>
+                        )}
+                        <div style={{ marginTop: 4 }}>الحذف نهائيّ، فارجع وأعد المحاولة قبل المتابعة.</div>
+                      </div>
+                    : <div>⚠ لم تُنزَّل أي نسخة. إذا كنت ترغب في الاحتفاظ بها، قم بتنزيلها قبل المتابعة.</div>}
               </div>
             </>
           )}
