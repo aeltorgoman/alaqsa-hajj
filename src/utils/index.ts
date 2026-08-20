@@ -314,6 +314,78 @@ export async function signedDocUrl(
   return data.signedUrl;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   جلب بايتات مستند — بالتحقّق لا بالثقة
+
+   🔴 الفخّ الذي كلّفنا أرشيفاً كاملاً: `vercel.json` يعيد كتابة
+   `/(.*)` إلى `/index.html`. فأي جلب لمسار نسبيّ — مفتاح كائن مثلاً —
+   لا يردّ ٤٠٤ بل **٢٠٠ ومعه قشرة التطبيق**. فتمرّ `response.ok`،
+   ويُحفَظ في الأرشيف ملفٌّ حجمه ٤٢٦١ بايت لكل «مستند»، صورةً كان
+   أو PDF. ولهذا **لا تكفي الحالة ٢٠٠ برهاناً**.
+
+   ثلاث بوّابات، أي واحدة تسقط تُسقط المستند:
+     ١) الرابط من مسار التوقيع في التخزين لا من أصل التطبيق
+     ٢) الحالة ناجحة، والنوع ليس نصّاً ولا HTML ولا JSON
+     ٣) **البايتات الأولى تطابق نوع الملفّ فعلاً** — والحكم الأخير
+   ═══════════════════════════════════════════════════════════════ */
+
+/** التوقيع الثنائي لكل نوع مسموح — البرهان الأخير على سلامة الحمولة */
+const MAGIC: Record<string, (b: Uint8Array) => boolean> = {
+  pdf:  b => b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46,          // %PDF
+  jpg:  b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  jpeg: b => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  png:  b => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  webp: b => b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46           // RIFF
+          && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,        // WEBP
+};
+
+const looksLikeMarkup = (b: Uint8Array): boolean => {
+  /* `<!DOCTYPE`، `<html`، `{`، `[` — قشرة تطبيق أو خطأ JSON */
+  const head = String.fromCharCode(...b.slice(0, 16)).trim().toLowerCase();
+  return head.startsWith("<!do") || head.startsWith("<htm") || head.startsWith("<") ||
+         head.startsWith("{") || head.startsWith("[");
+};
+
+export class DocumentFetchError extends Error {}
+
+/** يُعيد بايتات المستند الأصلية، أو يرمي بسبب مفهوم. */
+export async function fetchDocumentBytes(value: string): Promise<Uint8Array> {
+  const key = docKey(value);
+  if (!key) throw new DocumentFetchError("قيمة غير صالحة للمستند");
+
+  const url = await signedDocUrl(value, DOC_TTL.view);
+  if (!url) throw new DocumentFetchError("تعذّر توقيع الرابط");
+
+  /* (١) الرابط الموقّع وحده — لا أصل التطبيق ولا أي مسار آخر */
+  if (!url.includes("/storage/v1/object/sign/")) {
+    throw new DocumentFetchError("الرابط ليس رابط تخزين موقّعاً");
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) throw new DocumentFetchError(`HTTP ${res.status}`);
+
+  /* (٢) النوع المعلَن: نصّ أو HTML أو JSON = استجابة خطأ لا مستند */
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (/text\/|json|html/.test(contentType)) {
+    throw new DocumentFetchError(`نوع غير متوقّع: ${contentType || "غير معلوم"}`);
+  }
+
+  /* البايتات كما هي — لا تحويل إلى نصّ في أي خطوة */
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength === 0) throw new DocumentFetchError("حمولة فارغة");
+
+  /* (٣) التوقيع الثنائي — الحكم الأخير */
+  if (looksLikeMarkup(bytes)) throw new DocumentFetchError("الحمولة صفحة أو JSON لا مستند");
+
+  const ext = key.toLowerCase().split("?")[0].split(".").pop() ?? "";
+  const check = MAGIC[ext];
+  if (check && !check(bytes)) {
+    throw new DocumentFetchError(`البايتات لا تطابق نوع ${ext}`);
+  }
+
+  return bytes;
+}
+
 /* ── بوابة الحاج — س٦ / الخطوة ٤ ──
    `publicDocUrl` انتهت. الحاجّ المجهول لا يبني رابطاً بنفسه بعد
    اليوم، ولا يملك ما يبنيه به أصلاً: البوابة لم تعد تستلم مفاتيح
