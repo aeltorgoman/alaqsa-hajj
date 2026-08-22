@@ -185,7 +185,14 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     const { data: created, error } = await supabase.from("announcements").insert({
       title: title.trim() || null,
       body: body.trim(), priority,
-      show_at: show.toISOString(),
+      /* «الآن» تعني ساعة القاعدة لا ساعة المتصفّح.
+         العمود افتراضه `now()`، فإسقاطه يجعل الخادم يختم الوقت.
+         وإرسال ساعة الجهاز كان يضع `show_at` في المستقبل كلّما
+         تقدّمت ساعة الموظّف — فيصل الدفع إلى الحاجّ فوراً، وتُرشِّح
+         البوابة الإعلانَ بـ`show_at <= now()` فلا يجده في قائمته
+         حتى يمرّ الفارق. أمّا الموعد المجدوَل فيبقى كما اختاره
+         الموظّف: هو وقتٌ مقصود لا لحظة إرسال. */
+      ...(when === "now" ? {} : { show_at: show.toISOString() }),
       expires_at: expires ? expires.toISOString() : null,
       created_by: currentUser.name,
       target_type: targetKind,

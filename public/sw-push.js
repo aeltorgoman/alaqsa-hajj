@@ -15,6 +15,20 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+/* إبلاغ البوابة المفتوحة أن تنبيهاً وصل.
+   لا تُمرَّر حمولة الدفع: ليست مصدر حقيقة، والبوابة تجلب القائمة
+   من دالتها المعتادة فترشَّح بالوقت والانتهاء ويُرتَّب العاجل أولاً.
+   ولا تحمل هذه الرسالةُ معرّفاً ولا رمزاً ولا أي بيانات حاجّ. */
+function notifyOpenPortals() {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    for (const client of list) {
+      if (client.url.indexOf(PORTAL_PATH) !== -1) {
+        client.postMessage({ type: "NEW_ANNOUNCEMENT" });
+      }
+    }
+  });
+}
+
 /* استقبال التنبيه */
 self.addEventListener("push", (event) => {
   let payload = {};
@@ -46,7 +60,11 @@ self.addEventListener("push", (event) => {
     actions: [{ action: "open", title: "عرض التفاصيل" }],
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  /* العرض على الشاشة أولاً، ثم إخبار البوابة إن كانت مفتوحة — فلا
+     يبقى الحاجّ ينظر إلى قائمة قديمة وقد وصله التنبيه على جهازه */
+  event.waitUntil(
+    self.registration.showNotification(title, options).then(notifyOpenPortals)
+  );
 });
 
 /* الضغط على التنبيه */

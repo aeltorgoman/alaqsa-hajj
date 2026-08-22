@@ -713,6 +713,47 @@ export type Database = {
           },
         ]
       }
+      pilgrim_sessions: {
+        Row: {
+          absolute_expires_at: string
+          idle_expires_at: string
+          issued_at: string
+          last_seen_at: string
+          passenger_id: number
+          revoked_at: string | null
+          season_id: number
+          token_hash: string
+        }
+        Insert: {
+          absolute_expires_at: string
+          idle_expires_at: string
+          issued_at?: string
+          last_seen_at?: string
+          passenger_id: number
+          revoked_at?: string | null
+          season_id: number
+          token_hash: string
+        }
+        Update: {
+          absolute_expires_at?: string
+          idle_expires_at?: string
+          issued_at?: string
+          last_seen_at?: string
+          passenger_id?: number
+          revoked_at?: string | null
+          season_id?: number
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilgrim_sessions_passenger_id_fkey"
+            columns: ["passenger_id"]
+            isOneToOne: false
+            referencedRelation: "passengers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_settings: {
         Row: {
           amount: number
@@ -935,6 +976,7 @@ export type Database = {
       }
     }
     Functions: {
+      _pilgrim_session_owner: { Args: { p_token: string }; Returns: number }
       active_season_id: { Args: never; Returns: number }
       announcement_audience: {
         Args: { p_target_ids: number[]; p_target_type: string }
@@ -964,24 +1006,37 @@ export type Database = {
         }
         Returns: Json
       }
+      create_pilgrim_session: {
+        Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
+        Returns: Json
+      }
       delete_season: { Args: { p_season_id: number }; Returns: undefined }
       get_pilgrim_portal: {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: Json
       }
+      get_pilgrim_portal_by_session: {
+        Args: { p_token: string }
+        Returns: Json
+      }
       get_portal_announcements: { Args: never; Returns: Json }
       has_permission: { Args: { p_key: string }; Returns: boolean }
       is_active_employee: { Args: never; Returns: boolean }
-      mark_pilgrim_notification_read: {
-        Args: {
-          p_announcement_id: number
-          p_day: number
-          p_doc: string
-          p_month: number
-          p_year: number
-        }
-        Returns: boolean
-      }
+      mark_pilgrim_notification_read:
+        | {
+            Args: {
+              p_announcement_id: number
+              p_day: number
+              p_doc: string
+              p_month: number
+              p_year: number
+            }
+            Returns: boolean
+          }
+        | {
+            Args: { p_announcement_id: number; p_token: string }
+            Returns: boolean
+          }
       push_enabled_passengers: {
         Args: never
         Returns: {
@@ -989,28 +1044,41 @@ export type Database = {
           passenger_id: number
         }[]
       }
-      register_pilgrim_push: {
-        Args: {
-          p_auth: string
-          p_day: number
-          p_doc: string
-          p_endpoint: string
-          p_month: number
-          p_p256dh: string
-          p_platform?: string
-          p_user_agent?: string
-          p_year: number
-        }
-        Returns: boolean
-      }
+      register_pilgrim_push:
+        | {
+            Args: {
+              p_auth: string
+              p_day: number
+              p_doc: string
+              p_endpoint: string
+              p_month: number
+              p_p256dh: string
+              p_platform?: string
+              p_user_agent?: string
+              p_year: number
+            }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_auth: string
+              p_endpoint: string
+              p_p256dh: string
+              p_platform?: string
+              p_token: string
+              p_user_agent?: string
+            }
+            Returns: boolean
+          }
       resolve_pilgrim_id: {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: number
       }
-      unregister_pilgrim_push: {
-        Args: { p_endpoint: string }
-        Returns: boolean
-      }
+      revoke_pilgrim_session: { Args: { p_token: string }; Returns: boolean }
+      unregister_pilgrim_push:
+        | { Args: { p_endpoint: string }; Returns: boolean }
+        | { Args: { p_endpoint: string; p_token: string }; Returns: boolean }
+      verify_pilgrim_session: { Args: { p_token: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

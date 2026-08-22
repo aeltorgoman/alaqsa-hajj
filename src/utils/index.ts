@@ -396,42 +396,59 @@ export async function fetchDocumentBytes(value: string): Promise<Uint8Array> {
 /** أنواع المستندات المسموحة للبوابة — نفس قائمة السماح في الخادم */
 export type PortalDocType = "photo" | "hajj_permit" | "flight_ticket";
 
-export type PortalCreds = { p_doc: string; p_day: number; p_month: number; p_year: number };
+/* ── س٧: الجلسة تحلّ محلّ الاعتماد الثابت (الثابت أ١٢) ──
+   ما كان يُحفظ على جهاز الحاجّ رقمَ جوازه وتاريخ ميلاده — وثيقتان
+   حقيقيتان لا تُدوَّران ولا تُبطَلان. صار رمزاً عشوائياً ينتهي
+   ويُبطَل ويموت بموسمه. والرمز نصّ مبهم لا بنية له عند العميل:
+   الخادم وحده يعرف ما وراءه. */
+export type PortalSession = {
+  token: string;
+  idle_expires_at: string;
+  absolute_expires_at: string;
+};
+
+/** مفتاح التخزين المحلّي لرمز الجلسة — الموضع الوحيد الذي يُذكر فيه */
+export const PORTAL_SESSION_KEY = "portal_session";
 
 export type PortalDoc = { url: string; is_pdf: boolean };
 
-/* الرابط الموقّع لا يُخزَّن: ذاكرة الجلسة وحدها، وبهامش نصف دقيقة
-   يمنع تسليم رابط يموت بين الطلب والفتح */
-const portalDocCache = new Map<string, { doc: PortalDoc; expiresAt: number }>();
+/* الرابط الموقّع لا يُخزَّن: ذاكرة الصفحة وحدها، وبهامش نصف دقيقة
+   يمنع تسليم رابط يموت بين الطلب والفتح.
+   والمفتاح **النوعُ وحده** لا الرمز: لا سبب لأن يصير رمز جلسة
+   مفتاحَ خريطة، والجلسة واحدة في الصفحة على أي حال. */
+const portalDocCache = new Map<PortalDocType, { doc: PortalDoc; expiresAt: number }>();
+
+/** تُفرَّغ عند الدخول والخروج: روابط حاجٍّ لا تُسلَّم لجلسة أخرى. */
+export function clearPortalDocCache(): void {
+  portalDocCache.clear();
+}
 
 /** يطلب رابطاً موقّعاً (١٥ دقيقة) لمستند الحاجّ من `pilgrim-doc`.
- *  لا يُرسل مفتاحاً ولا رابطاً ولا رقم حاجّ — بيانات الإثبات والنوع فقط. */
+ *  لا يُرسل مفتاحاً ولا رابطاً ولا رقم حاجّ ولا اعتماداً ثابتاً —
+ *  رمز الجلسة والنوع فقط. */
 export async function portalDocUrl(
-  creds: PortalCreds | null,
+  token: string | null,
   docType: PortalDocType
 ): Promise<PortalDoc | null> {
-  if (!creds?.p_doc) return null;
+  if (!token) return null;
 
-  const cacheKey = `${creds.p_doc}|${docType}`;
-  const cached = portalDocCache.get(cacheKey);
+  const cached = portalDocCache.get(docType);
   if (cached && cached.expiresAt > Date.now()) return cached.doc;
 
   /* عميل البوابة لا العميل المشترك: `pilgrim-doc` عامة
      (`verify_jwt=false`) فلا تتأثر بوجود جلسة موظّف من عدمه — لكن
      لا سبب لإرسال رمز هوية موظّف إلى مسار عامّ لا يقرؤه */
   const { data, error } = await portalSupabase.functions.invoke("pilgrim-doc", {
-    body: {
-      doc: creds.p_doc, day: creds.p_day, month: creds.p_month, year: creds.p_year,
-      doc_type: docType,
-    },
+    body: { token, doc_type: docType },
   });
   if (error || !data?.url) {
+    /* الرمز لا يُسجَّل — النوع والخطأ يكفيان للتشخيص */
     console.error("تعذّر جلب رابط المستند", { docType, error });
     return null;
   }
 
   const doc: PortalDoc = { url: data.url, is_pdf: data.is_pdf === true };
-  portalDocCache.set(cacheKey, {
+  portalDocCache.set(docType, {
     doc,
     expiresAt: Date.now() + (Number(data.expires_in) || DOC_TTL.portal) * 1000 - SIGN_MARGIN_MS,
   });
@@ -440,18 +457,17 @@ export async function portalDocUrl(
 
 /** خطّاف عرض للبوابة — يطلب الرابط عند الحاجة ويعيده جاهزاً للـ`src`. */
 export function usePortalDoc(
-  creds: PortalCreds | null,
+  token: string | null,
   docType: PortalDocType,
   enabled: boolean
 ): string {
   const [url, setUrl] = useState("");
   useEffect(() => {
     let alive = true;
-    if (!enabled || !creds?.p_doc) { setUrl(""); return; }
-    void portalDocUrl(creds, docType).then(d => { if (alive) setUrl(d?.url ?? ""); });
+    if (!enabled || !token) { setUrl(""); return; }
+    void portalDocUrl(token, docType).then(d => { if (alive) setUrl(d?.url ?? ""); });
     return () => { alive = false; };
-    /* المفاتيح أوّليّة عن قصد: كائن الاعتماد يُعاد بناؤه كل عرض */
-  }, [creds?.p_doc, creds?.p_day, creds?.p_month, creds?.p_year, docType, enabled]);
+  }, [token, docType, enabled]);
   return url;
 }
 
