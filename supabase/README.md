@@ -13,15 +13,24 @@ supabase/
 │   ├── 20260802022009_season_close_and_delete_transactions.sql
 │   ├── 20260802022040_portal_active_season_only.sql
 │   ├── 20260802022310_season_restrict_close_and_delete_execution.sql
-│   ├── 20260804090000_s1_identity_foundation.sql
-│   ├── 20260806110000_company_profile_phase1.sql    ملف الشركة والأصول
-│   ├── 20260808120000_s4_portal_announcements.sql   تنبيهات البوابة خلف إسقاط
-│   ├── 20260808140000_s4_rls_and_anon_revocation.sql  سياسات RLS وسحب صلاحيات anon
-│   ├── 20260809100000_s9_pin_search_path.sql        تثبيت مسار البحث
-│   ├── 20260810100000_s9_edge_rate_limit.sql        عدّاد حدّ الاستدعاءات
-│   ├── 20260811090000_s5_drop_legacy_auth.sql       حذف نظام الهوية القديم
-│   ├── 20260820100000_s7_portal_session.sql        جلسة بوابة الحاجّ
-│   └── 20260820110000_s7_close_credential_path.sql إغلاق مسار الاعتماد الثابت
+│   ├── 20260804090000_s1_identity_foundation.sql     أساس الهوية
+│   ├── 20260804120000_s1_user_profiles_email.sql     البريد معرّف الدخول
+│   ├── 20260806110000_company_profile_phase1.sql     ملف الشركة والأصول
+│   ├── 20260808120000_s4_portal_announcements.sql    تنبيهات البوابة خلف إسقاط
+│   ├── 20260808140000_s4_rls_and_anon_revocation.sql سياسات RLS وسحب صلاحيات anon
+│   ├── 20260809100000_s9_pin_search_path.sql         تثبيت مسار البحث
+│   ├── 20260810100000_s9_edge_rate_limit.sql         عدّاد حدّ الاستدعاءات
+│   ├── 20260811090000_s5_drop_legacy_auth.sql        حذف نظام الهوية القديم
+│   ├── 20260811140000_s6_close_public_storage_writes.sql  إغلاق الكتابة العامة
+│   ├── 20260811160000_s6_backfill_object_keys.sql    مفاتيح الكائنات بدل الروابط
+│   ├── 20260811180000_s6_company_assets_bucket.sql   حاوية أصول الشركة
+│   ├── 20260811200000_s6_repoint_company_asset_refs.sql   توجيه المراجع إليها
+│   ├── 20260812090000_s6_portal_hardening.sql        تحصين البوابة وحدّ التحقّق
+│   ├── 20260815100000_s6_privatize_passengers_docs.sql    خصخصة حاوية المستندات
+│   ├── 20260818090000_s1_resource_ordering.sql       ترتيب الموارد لكل سياق
+│   ├── 20260819120000_b_permission_separation.sql    فصل الصلاحيتين
+│   ├── 20260820100000_s7_portal_session.sql          جلسة بوابة الحاجّ
+│   └── 20260820110000_s7_close_credential_path.sql   إغلاق مسار الاعتماد الثابت
 ├── scripts/
 │   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
 │   ├── seed_first_admin.mjs                          أداة طوارئ — لا مسار تثبيت

@@ -225,13 +225,13 @@ idle_expires_at := least( now() + interval '30 days', absolute_expires_at )
 
 ---
 
-# ٤. Anonymous Access Inventory — **الحالة الهدف** (ق٣)
+# ٤. Anonymous Access Inventory — **الحالة المنشورة** (ق٣)
 
 > ✅ **نُشرت واجتازت بوابة القبول، ونُقل هذا الجدول إلى `supabase/README.md`**
 > بوصفه الجرد النافذ (ج١–ج١٢). والدوال المنفَّذة لـ`anon` أُثبتت من الإنتاج:
 > ثمانٍ لا تاسعة، منها `delete_empty_financial_group` المرصودة في BACKLOG أ٧.
 
-| # | المورد | الحال بعد س٧ |
+| # | المورد | الحال بعد س٧ — **نافذة الآن** |
 |---|---|---|
 | ج٣ | `get_pilgrim_portal(doc,d,m,y)` | **يُحذف** — تُسحب `execute` ويُسقَط التوقيع في M2 |
 | **ج٣ (جديد)** | `create_pilgrim_session(doc,d,m,y)` | **جديد** — `SECURITY DEFINER` · حدّ المصدر قبل الهوية · حدّ الوثيقة عند الفشل وحده · كلاهما fail-closed · يُرجع رمزاً مبهماً يُخزَّن مُلخَّصاً |
