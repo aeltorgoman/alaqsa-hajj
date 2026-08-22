@@ -1,7 +1,7 @@
 # S8 — Audit Log
 # Implementation Design v1.0 — **تصميمٌ معتمد · غير منفَّذ · غير منشور**
 
-**تحكمها:** `SECURITY_ARCHITECTURE.md` **v1.6** — §٦.٤ · §١٠ · §١٠.١ (نمط الفاعل المفوَّض) · الثابت أ٧
+**تحكمها:** `SECURITY_ARCHITECTURE.md` **v1.7** — §٦.٤ · §١٠ · §١٠.١ (نمط الفاعل المفوَّض) · **§١٠.٢ (راية الإيقاف)** · الثابت أ٧
 **تغلق:** M3 — بحسب §١٤ من المعمارية · وتُفعِّل الثابت **أ٧**، آخر ثوابت س٠–س٩ غير المفروضة
 **تعتمد على:** س٤ (مكتملة ومنشورة) · وتستعمل `has_permission()` من س١ كما هي
 **الجذر المفحوص:** `5256ef5` — `docs(security): record S7 as implemented and deployed (#101)`
@@ -234,8 +234,11 @@ JWT الجلسة (`user-admin/index.ts` — `callerId`). **ولا يُقرأ م�
 كاملة لكل حاجّ** — داخل معاملة ثقيلة أصلاً. فينفجر الحجم، وتبطؤ عمليةٌ لا رجعة
 فيها، ويصير السجلّ غير مقروء للإنسان في اللحظة التي يُقرأ فيها فعلاً.
 
-**التصميم المعتمد:** GUC ثانٍ **محليّ بالمعاملة** يوقف المحفّزات الصفّية داخل
-`close_season()` و`delete_season()`، وتكتب الدالتان **صفّاً ملخَّصاً واحداً**:
+**التصميم المعتمد (بعد تصحيح v1.7):** راية إيقاف **صفٌّ في جدول
+`audit_suppression`** مربوطٌ بـ`txid_current()`، **لا GUC** — لأن الـGUC ليس
+كائناً يُمنح ويُسحب، فلا آلية تحرسه (§١٠.٢). والإيقاف **داخل `delete_season()`
+وحدها**؛ و`close_season()` **لا تستعمله** لأنها لا تحذف صفوفاً تغطّيها محفّزات
+التدقيق الصفّي. وتكتب الدالتان كلتاهما **صفّاً ملخَّصاً واحداً**:
 
 ```
 table_name = 'seasons' · row_id = معرّف الموسم · action = 'delete' (أو 'update' للإقفال)
@@ -255,8 +258,11 @@ new_value = { deleted_counts: { passengers: n, rooms: n, camps: n, buses: n,
 
 > **حدٌّ أصرّح به:** إيقاف المحفّز داخل هاتين الدالتين هو **الاستثناء الوحيد**
 > من التغطية الصفّية، ومبرَّرٌ بأنه **لا يخفي عملية** بل **يلخّصها**. ولا يجوز
-> توسيعه إلى أي مسار آخر، ولا استعماله لإسكات تدقيق كتابةٍ عاديّة. وGUC الإيقاف
-> **غير ممنوح لأي دور تطبيقيّ** — يُضبط داخل الدالتين المعتمدتين وحدهما.
+> توسيعه إلى أي مسار آخر، ولا استعماله لإسكات تدقيق كتابةٍ عاديّة. **وراية
+> الإيقاف جدولٌ بلا منح لأي دور** — `PUBLIC` ولا `anon` ولا `authenticated`
+> **ولا `service_role`** — فلا يكتبها إلا مالك الجدول من داخل `delete_season()`.
+> **ولا يُفحص الدور حارساً**: `current_user` داخل `SECURITY DEFINER` هو
+> `postgres` دائماً فلا يميّز المستدعي (§١٠.٢).
 
 ## ٣.٧ الإلحاق فقط — نموذج المنع (Append-Only / Immutability)
 
@@ -536,11 +542,13 @@ new_value = { deleted_counts: { passengers: n, rooms: n, camps: n, buses: n,
 | ٣ | `revoke all … from anon, authenticated` ثم `grant select … to authenticated` — ولا منح على المتتالية |
 | ٤ | سياسة `SELECT` واحدة بـ`has_permission('view_audit')` — **ولا سياسة كتابة لأحد** |
 | ٥ | `audit_log_immutable()` + محفّز `before update or delete or truncate` يرفع بلا شرط |
-| ٦ | `record_audit()` — `SECURITY DEFINER` · `search_path` مثبَّت · فروق التعديل · احترام راية الإيقاف |
+| ٥.١ | **`audit_suppression`** — جدول الراية · RLS مفعّلة بصفر سياسات · `revoke all` عن `public` و`anon` و`authenticated` **و`service_role`** |
+| ٥.٢ | **`revoke insert, update, delete, truncate, trigger, references` على `audit_log` عن `service_role`** — فلا كتابة مباشرة في السجل بمفتاح الخدمة |
+| ٦ | `record_audit()` — `SECURITY DEFINER` · `search_path` مثبَّت · فروق التعديل · لا تُوقف التسجيل إلا براية الجدول الموثوقة |
 | ٧ | `set_audit_actor(uuid)` — `revoke … from public` **أولاً** ثمّ `grant … to service_role` وحده |
 | ٨ | `admin_write_user_profile(...)` — `service_role` وحده · معامَلاتيّة (§٣.٥) |
 | ٩ | أربعة محفّزات `AFTER` بحسب §٤ |
-| ١٠ | `create or replace` لـ`close_season()` و`delete_season()` — راية الإيقاف + الصفّ الملخَّص + وسيط الفاعل · **وإسقاط توقيع `delete_season` القديم في الترحيل نفسه** (سابقة M2 من س٧) |
+| ١٠ | `create or replace` لـ`close_season()` و`delete_season()` — الصفّ الملخَّص + وسيط الفاعل · **وراية الإيقاف في `delete_season()` وحدها** · **وإسقاط التوقيعين القديمين في الترحيل نفسه** (سابقة M2 من س٧) |
 | ١١ | `revoke truncate, trigger, references on public.user_profiles from authenticated` — **شرط مسبق** |
 | ١٢ | `revoke execute on function public.delete_empty_financial_group() from public` |
 
@@ -746,11 +754,19 @@ public.audit_suppression (txid bigint primary key)
 **وما لا يُستدعى لا يُترك ممنوحاً**. والثلاث اليوم `(none)` تحت الامتيازات
 الافتراضية المعادية.
 
-**وحدٌّ يبقى مفتوحاً ويُذكر:** `service_role` يحتفظ بـ`INSERT` على `audit_log`
-نفسه من الامتيازات الافتراضية، فيستطيع حاملُ مفتاح الخدمة أن يُدرج صفّاً
-مختلقاً مباشرةً. و`UPDATE`/`DELETE`/`TRUNCATE` مسدودة بالمحفّز (مُثبَت حتى على
-`postgres`). **وهذا لم يُقرَّر فيه**، وسحبُه سطرٌ واحد بلا أثر وظيفيّ لأن
-الكاتبين `SECURITY DEFINER` يكتبان بامتياز المالك.
+**والحدّ الذي كان مفتوحاً أُغلق بقرار صاحب المشروع (v1.7):** كان
+`service_role` يحتفظ بـ`INSERT` على `audit_log` نفسه من الامتيازات الافتراضية،
+فيستطيع حاملُ مفتاح الخدمة أن يُدرج صفّاً مختلقاً مباشرةً. **فسُحبت عنه
+`insert` و`update` و`delete` و`truncate` و`trigger` و`references`.**
+
+و`trigger` مسحوبة معها عن قصد: من يملكها يستطيع ربط محفّزٍ بالجدول يبتلع
+الإدراج — **فمنعُ الكتابة المباشرة لا يتمّ بسدّ `insert` وحده**. ويبقى له
+`select` — القراءة ليست تزويراً.
+
+**ولا يُعطَّل بذلك مسارٌ شرعيّ واحد:** `record_audit` و`record_season_event`
+كلتاهما `SECURITY DEFINER` يملكهما `postgres`، فتكتبان بامتياز المالك لا
+بامتياز المستدعي. **ومالك القاعدة يبقى فوق حدّ الثقة التطبيقيّ** كما هو موثَّق
+في §١٠ من المعمارية.
 
 ## ١٨.٣ M-2 — `deleted_counts` كاملة بأصنافها العشرة
 

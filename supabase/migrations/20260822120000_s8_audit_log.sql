@@ -1,7 +1,7 @@
 -- ============================================================
 -- س٨ — سجل التدقيق (audit_log) والفاعل المفوَّض
 -- ============================================================
--- Security Architecture v1.6 · §٦.٤ · §١٠ · §١٠.١ · الثابت أ٧
+-- Security Architecture v1.7 · §٦.٤ · §١٠ · §١٠.١ · الثابت أ٧
 -- و`docs/architecture/S8_IMPLEMENTATION_DESIGN.md` v1.0 (ق١–ق١٢).
 --
 -- تُغلق M3، وتُفعِّل الثابت **أ٧** — آخر ثوابت س٠–س٩ غير المفروضة.
@@ -103,6 +103,21 @@ alter table public.audit_log enable row level security;
 
 revoke all on public.audit_log from anon, authenticated;
 grant select on public.audit_log to authenticated;
+
+-- و`service_role` كذلك **لا يكتب في السجل مباشرةً** (قرار صاحب المشروع).
+-- الامتيازات الافتراضية في Supabase تمنحه كل شيء على كل جدول جديد، فلولا
+-- هذا السحب لأمكن لحامل مفتاح الخدمة أن يسكّ صفّاً مختلقاً بفاعلٍ ينتحله.
+-- والكتابة الشرعية كلّها من `record_audit` و`record_season_event`، وهما
+-- `SECURITY DEFINER` يملكهما `postgres` فتكتبان بامتياز المالك لا بامتياز
+-- المستدعي — فالسحب لا يعطّل مساراً شرعياً واحداً.
+--
+-- و`trigger` مسحوب معه عن قصد: من يملك `TRIGGER` على الجدول يستطيع أن
+-- يربط به محفّزاً يبتلع الإدراج، فيصير مانعاً للكتابة من باب آخر. ومنعُ
+-- الكتابة المباشرة لا يتمّ بسدّ `insert` وحده.
+--
+-- ويبقى `select` له: القراءة ليست تزويراً، ودوال الخادم قد تحتاجها.
+revoke insert, update, delete, truncate, trigger, references
+  on public.audit_log from service_role;
 
 -- عمود الهوية `generated always as identity` متتاليته تابعة للجدول،
 -- وصلاحيتها مشتقّة من صلاحيته — فسحب الكتابة أعلاه يكفي، ولا يُمسّ
