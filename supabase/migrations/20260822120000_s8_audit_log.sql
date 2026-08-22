@@ -27,6 +27,22 @@
 -- وتضبطه الدالة داخلياً في معاملتها. ولا يوجد في هذا الملف مسار
 -- واحد يعتمد على بقاء GUC بين استدعاءين.
 --
+-- ═══ راية الإيقاف — حارسٌ بالصلاحية لا بالعُرف (B-1) ═══
+-- إيقاف المحفّزات الصفّية داخل `delete_season` **لا يُنقل براية GUC**.
+-- الـGUC ليس كائناً يُمنح ويُسحب، فلا آلية تحرسه: وقد ثبت بالاختبار
+-- أن دور `authenticated` القادر على `SET LOCAL` **يُسكت أثره بصمت**.
+--
+-- وفحصُ الدور لا يصلح حارساً كذلك — **مُثبَت لا مفترَض**: داخل
+-- `record_audit` وهي `SECURITY DEFINER` يملكها `postgres`، تكون
+-- `current_user = postgres` **دائماً**، سواء أطلق المحفّزَ موظّفٌ أم
+-- مفتاحُ خدمة. فشرطٌ على `current_user` صادقٌ أبداً ولا يحرس شيئاً.
+-- و`session_user` كذلك: `authenticator` لكل طلب من PostgREST.
+--
+-- **فالحارس صلاحية:** جدول `audit_suppression` بلا أي منح لأي دور —
+-- ولا حتى `service_role` — فلا يكتب فيه إلا مالكه، أي لا تبلغه إلا
+-- دالة `SECURITY DEFINER` يملكها `postgres`. والراية صفٌّ برقم
+-- المعاملة الجارية، يعيش داخلها ويموت معها.
+--
 -- ═══ ما لا تفعله هذه الهجرة ═══
 -- لا تمسّ سياسة RLS قائمة · ولا `has_permission()` · ولا مساراً من
 -- مسارات البوابة · ولا حاوية تخزين · ولا تضيف مدخلاً واحداً إلى
@@ -94,6 +110,23 @@ grant select on public.audit_log to authenticated;
 
 
 -- ------------------------------------------------------------
+-- ٢.١) راية الإيقاف — جدولٌ لا يبلغه دورٌ تطبيقيّ (B-1)
+-- ------------------------------------------------------------
+-- الصفّ يحمل رقم المعاملة الجارية، فلا يُقرأ في معاملة أخرى، ويموت
+-- بموت معاملته سواء أُتمّت أم أُجهضت. والحراسة **منحٌ مسحوب** —
+-- آلية حقيقية — لا افتراضُ أن PostgREST لا يعرّض `set_config`.
+create table if not exists public.audit_suppression (
+  txid bigint primary key
+);
+
+comment on table public.audit_suppression is
+  'راية إيقاف المحفّزات الصفّية داخل delete_season وحدها. بلا منح لأي دور — ولا service_role — فلا يكتب فيها إلا مالك القاعدة عبر دالة SECURITY DEFINER (B-1).';
+
+alter table public.audit_suppression enable row level security;
+revoke all on public.audit_suppression from public, anon, authenticated, service_role;
+
+
+-- ------------------------------------------------------------
 -- ٣) RLS — الطبقة الثانية: سياسة قراءة واحدة، ولا سياسة كتابة
 -- ------------------------------------------------------------
 -- `view_audit` صلاحية مستقلّة (ق٢ · D2): ربط رؤية السجل بـ
@@ -129,8 +162,10 @@ comment on function public.audit_log_immutable() is
   'يرفض أي تعديل أو حذف أو اقتطاع على audit_log — بلا شرط ولا استثناء ولا راية (ق٩).';
 
 -- دالة محفّز لا تُستدعى مباشرة — والقاعدة نفسها التي أُغلق بها البند
--- أ٧ في هذا الملف تسري عليها: ما لا يُستدعى لا يُترك ممنوحاً
-revoke execute on function public.audit_log_immutable() from public, anon, authenticated;
+-- أ٧ في هذا الملف تسري عليها: ما لا يُستدعى لا يُترك ممنوحاً.
+-- و`service_role` مشمولٌ بالسحب لأن الامتيازات الافتراضية في Supabase
+-- تمنحه كل دالة جديدة — فبدونه يكذب هذا التعليق على الإنتاج (M-1).
+revoke execute on function public.audit_log_immutable() from public, anon, authenticated, service_role;
 
 drop trigger if exists audit_log_immutable_row_trg  on public.audit_log;
 drop trigger if exists audit_log_immutable_stmt_trg on public.audit_log;
@@ -207,10 +242,13 @@ declare
   v_before   jsonb;
   v_after    jsonb;
 begin
-  /* راية الإيقاف — الاستثناء الوحيد، ونطاقه دالتا الموسم وحدهما
-     (§١٠.١ الحدّ الصريح). لا تُمنح لأي دور تطبيقيّ، ولا تُضبط إلا
-     داخل `close_season`/`delete_season`. */
-  if coalesce(current_setting('app.audit_suppress_rows', true), 'off') = 'on' then
+  /* راية الإيقاف — الاستثناء الوحيد، ونطاقه `delete_season` وحدها.
+     والحارس **صلاحية**: `audit_suppression` بلا منح لأي دور، فلا
+     يكتب فيها إلا مالك القاعدة. فراية مزوّرة من دور تطبيقيّ **لا
+     وجود لها أصلاً** — لا تُقرأ ولا تُكتب (B-1).
+     ولا يصحّ هنا فحص الدور: `current_user` داخل هذه الدالة
+     `postgres` دائماً لأنها `SECURITY DEFINER`. */
+  if exists (select 1 from public.audit_suppression where txid = txid_current()) then
     return null;
   end if;
 
@@ -276,7 +314,9 @@ $$;
 comment on function public.record_audit() is
   'الكاتب الوحيد لـaudit_log. الفاعل من auth.uid() أو من الفاعل المفوَّض، ولا يُقبل من العميل بحال (§١٠ قاعدة ٢).';
 
-revoke execute on function public.record_audit() from public, anon, authenticated;
+-- كاتب المحفّز — لا يُستدعى مباشرة، ولا يُترك ممنوحاً لأي دور بما
+-- فيها `service_role` (M-1). تنفّذه القاعدة وحدها عند إطلاق المحفّز.
+revoke execute on function public.record_audit() from public, anon, authenticated, service_role;
 
 
 -- ------------------------------------------------------------
@@ -457,8 +497,14 @@ $$;
 comment on function public.record_season_event(uuid, text, bigint, jsonb, jsonb) is
   'يكتب صفّ التدقيق الملخّص لعمليتَي الموسم — صفّ واحد لكل عملية لا صفّ لكل سطر ساقط (ق١٠).';
 
+-- كاتبٌ داخليّ بحت: لا يبلغه `PUBLIC` ولا `anon` ولا `authenticated`
+-- **ولا `service_role`** (M-1). والامتيازات الافتراضية في Supabase
+-- تمنح الدوال الجديدة لثلاثة أدوار، فالسحب هنا يشملها جميعاً —
+-- وإلا لأمكن لحامل مفتاح الخدمة أن يسكّ صفّ تدقيق بفاعلٍ مختلق.
+-- ولا تُستدعى إلا من `close_season`/`delete_season` وهما
+-- `SECURITY DEFINER` يملكهما `postgres`، فتنفّذانها بامتياز المالك.
 revoke execute on function public.record_season_event(uuid, text, bigint, jsonb, jsonb)
-  from public, anon, authenticated;
+  from public, anon, authenticated, service_role;
 
 
 drop function if exists public.close_season(text, text);
@@ -529,6 +575,10 @@ declare
   n_buses  bigint;
   n_pay    bigint;
   n_charge bigint;
+  n_fgm    bigint;
+  n_notif  bigint;
+  n_push   bigint;
+  n_sess   bigint;
 begin
   select closed_at, name, to_jsonb(s) into v_closed, v_name, v_row
     from public.seasons s where s.id = p_season_id for update;
@@ -541,19 +591,36 @@ begin
   end if;
 
   -- ما سيسقط بـ`on delete cascade` يُعدّ **قبل** الحذف: بعده لا
-  -- يبقى ما يُعدّ، والصفّ الملخّص بلا أعداد لا يثبت حجم ما جرى
+  -- يبقى ما يُعدّ، والصفّ الملخّص بلا أعداد لا يثبت حجم ما جرى.
+  --
+  -- والأصناف **العشرة كاملة** (M-2): أربعة تُحذف بالموسم مباشرةً،
+  -- وستّة تسقط بـ`on delete cascade` من `passengers` — وهي كل ما
+  -- يشير إلى `passengers` أو `seasons` في مخطَّط الإنتاج. فالعدّ
+  -- الناقص يوحي بحجمٍ أصغر مما جرى، والصفّ الملخّص دليلٌ لا ملخّص
+  -- تقريبيّ.
   select count(*) into n_pay    from public.payments       p
     join public.passengers pa on pa.id = p.passenger_id  where pa.season_id = p_season_id;
   select count(*) into n_charge from public.custom_charges c
     join public.passengers pa on pa.id = c.passenger_id  where pa.season_id = p_season_id;
+  select count(*) into n_fgm    from public.financial_group_members m
+    join public.passengers pa on pa.id = m.passenger_id  where pa.season_id = p_season_id;
+  select count(*) into n_notif  from public.notification_deliveries d
+    join public.passengers pa on pa.id = d.passenger_id  where pa.season_id = p_season_id;
+  select count(*) into n_push   from public.pilgrim_push_subscriptions s
+    join public.passengers pa on pa.id = s.passenger_id  where pa.season_id = p_season_id;
+  select count(*) into n_sess   from public.pilgrim_sessions ps
+    join public.passengers pa on pa.id = ps.passenger_id where pa.season_id = p_season_id;
 
   -- الحذف هو الاستثناء الوحيد لـ ث٣: المحفّز يمنع الكتابة على
   -- موسم مقفل، والحذف كتابة. المَنفذ محصور في هذه المعاملة وحدها،
   -- ولا سبيل لفتحه من الواجهة لأن PostgREST لا يمرّر إعدادات جلسة.
   set local app.season_maintenance = 'on';
 
-  -- والراية نفسها هي التي تجعل التدقيق ملخّصاً لا صفّاً لكل سطر
-  set local app.audit_suppress_rows = 'on';
+  -- وراية الإيقاف صفٌّ في جدولٍ لا يبلغه دورٌ تطبيقيّ (B-1) — لا
+  -- إعداد جلسة يستطيع أي دور تزويره. تعيش داخل هذه المعاملة وتموت
+  -- معها، أُتمّت أم أُجهضت.
+  insert into public.audit_suppression (txid) values (txid_current())
+    on conflict (txid) do nothing;
 
   -- الحجاج أولاً: التوابع (الدفعات · الرسوم · التسليمات ·
   -- الاشتراكات · عضويات المجموعات) تسقط بـ on delete cascade
@@ -570,20 +637,22 @@ begin
   -- في جدول أُضيف لاحقاً ونُسي هنا، يفشل هذا السطر بدل أن يُيتَّم
   delete from public.seasons where id = p_season_id;
 
-  set local app.audit_suppress_rows = 'off';
-  set local app.season_maintenance  = 'off';
+  delete from public.audit_suppression where txid = txid_current();
+  set local app.season_maintenance = 'off';
 
   perform public.record_season_event(
     p_actor, 'delete', p_season_id, v_row,
     jsonb_build_object('deleted_counts', jsonb_build_object(
-      'passengers', n_pass, 'rooms', n_rooms, 'camps', n_camps,
-      'buses', n_buses, 'payments', n_pay, 'custom_charges', n_charge))
+      'passengers', n_pass, 'rooms', n_rooms, 'camps', n_camps, 'buses', n_buses,
+      'payments', n_pay, 'custom_charges', n_charge,
+      'financial_group_members', n_fgm, 'notification_deliveries', n_notif,
+      'pilgrim_push_subscriptions', n_push, 'pilgrim_sessions', n_sess))
   );
 end;
 $$;
 
 comment on function public.delete_season(bigint, uuid) is
-  'يحذف موسماً مقفلاً وكل بياناته في معاملة واحدة، ويكتب صفّ تدقيق ملخّصاً واحداً بالفاعل والأعداد — لا صفّاً لكل سطر ساقط. الموسم المفتوح لا يُحذف.';
+  'يحذف موسماً مقفلاً وكل بياناته في معاملة واحدة، ويكتب صفّ تدقيق ملخّصاً واحداً بالفاعل وبأعداد الأصناف العشرة كاملةً — لا صفّاً لكل سطر ساقط. الموسم المفتوح لا يُحذف.';
 
 revoke execute on function public.close_season(text, text, uuid) from public, anon, authenticated;
 revoke execute on function public.delete_season(bigint, uuid)    from public, anon, authenticated;
