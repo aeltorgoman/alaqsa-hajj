@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   portalDocUrl, usePortalDoc, clearPortalDocCache, PORTAL_SESSION_KEY,
   type PortalDocType, type PortalSession,
@@ -165,33 +165,45 @@ function PilgrimPortal() {
     return () => clearInterval(t);
   }, []);
 
+  /* ─── تحديث الملفّ من الجلسة ───
+     نقطة واحدة يستدعيها المؤقّت **ورسائل عامل الخدمة** معاً، فلا
+     ينسخ أحدهما منطق الآخر. والرمز يُقرأ من التخزين لا من الحالة،
+     فتبقى الدالة بلا تبعيّات وتعمل بأحدث جلسة دائماً. */
+  const refreshPortal = useCallback(async () => {
+    const token = readSession();
+    if (!token) return;
+
+    const { data: res, error } = await portalSupabase.rpc(
+      "get_pilgrim_portal_by_session", { p_token: token });
+
+    if (!error && res) {
+      setData(res as unknown as PortalData);
+      localStorage.setItem("portal_data", JSON.stringify(res));
+      return;
+    }
+    if (!error) {
+      /* رفضٌ صريح لا عطل شبكة: الجلسة انتهت أو أُبطلت أو أُقفل
+         موسمها أو حُذف الحاجّ. لا نُبقي شاشة تبدو داخلة. */
+      clearPortalLocalState();
+      setSession(null);
+      setData(null);
+      return;
+    }
+    /* عطلٌ عابر: تبقى الجلسة، وتُحدَّث التنبيهات وحدها كما كان —
+       إسقاط مضبوط خلف دالة SECURITY DEFINER (س٤ / §٣.٦) */
+    const { data: anns } = await portalSupabase.rpc("get_portal_announcements");
+    if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
+  }, []);
+
   /* ─── تحديث تلقائي كامل عند كل فتح + كل ٣ دقائق (دخول مرة واحدة) ─── */
   useEffect(() => {
     if (!data || !session) return;
-    const refreshAll = async () => {
-      const { data: res, error } = await portalSupabase.rpc(
-        "get_pilgrim_portal_by_session", { p_token: session });
-
-      if (!error && res) {
-        setData(res as unknown as PortalData);
-        localStorage.setItem("portal_data", JSON.stringify(res));
-        return;
-      }
-      if (!error) {
-        /* رفضٌ صريح لا عطل شبكة: الجلسة انتهت أو أُبطلت أو أُقفل
-           موسمها أو حُذف الحاجّ. لا نُبقي شاشة تبدو داخلة. */
-        clearPortalLocalState();
-        setSession(null);
-        setData(null);
-        return;
-      }
-      /* عطلٌ عابر: تبقى الجلسة، وتُحدَّث التنبيهات وحدها كما كان —
-         إسقاط مضبوط خلف دالة SECURITY DEFINER (س٤ / §٣.٦) */
-      const { data: anns } = await portalSupabase.rpc("get_portal_announcements");
-      if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
-    };
-    refreshAll();
-    const t = setInterval(refreshAll, 180000);
+    /* جلبٌ أوّليّ متعمَّد: غير متزامن، وتحديث الحالة يقع بعد عودة
+       الشبكة لا داخل العرض. صار مرئياً للقاعدة لأن الدالة خرجت من
+       جوف الأثر لتُشارَك مع مستمع عامل الخدمة. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshPortal();
+    const t = setInterval(refreshPortal, 180000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, !!data]);
@@ -213,8 +225,13 @@ function PilgrimPortal() {
     })();
 
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === "OPEN_ALERTS") setTab("alerts");
+      if (e.data?.type === "OPEN_ALERTS") { setTab("alerts"); void refreshPortal(); }
       if (e.data?.type === "RESUBSCRIBE") resubscribeIfNeeded();
+      /* وصل تنبيه والبوابة مفتوحة: **نجلب من المصدر** ولا نبني
+         الإعلان من حمولة الدفع. الحمولة ليست مصدر حقيقة — والدالة
+         وحدها ترشّح بالوقت والانتهاء وترتّب العاجل أولاً. فلا نظام
+         تنبيهات ثانٍ، بل الطبقة القائمة تُخبَر فتعمل عملها. */
+      if (e.data?.type === "NEW_ANNOUNCEMENT") void refreshPortal();
     };
     navigator.serviceWorker?.addEventListener("message", onMessage);
 
