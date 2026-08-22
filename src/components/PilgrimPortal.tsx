@@ -110,16 +110,24 @@ function readSession(): string | null {
    نفس مخزن العامل (Cache Storage) كي يكون الأثر خطّاً زمنياً واحداً
    من A إلى I. ولا يُسجَّل رمز ولا وثيقة ولا ميلاد ولا معرّف حاجّ ولا
    نصّ تنبيه — أعدادٌ ومعرّف تنبيه أقصى وحدهما. */
-async function portalDiag(hop: string, info: Record<string, unknown> = {}): Promise<void> {
-  try {
-    const cache = await caches.open("s7-diag");
-    const prev = await cache.match("/__s7diag");
-    const list: unknown[] = prev ? await prev.json() : [];
-    list.push({ t: new Date().toISOString(), at: "page", hop, ...info });
-    await cache.put("/__s7diag", new Response(JSON.stringify(list.slice(-60)), {
-      headers: { "Content-Type": "application/json" },
-    }));
-  } catch { /* التشخيص لا يكسر البوابة */ }
+/* الكتابة **مسلسَلة**: كل نداء قراءةٌ فتعديلٌ فكتابة على مدخل واحد،
+   والنداءات المتلاحقة تدوس بعضها فتضيع محطّات — وهو ما أوقعنا في
+   قراءة خاطئة للأثر أوّل مرّة. السلسلة تجعل الترتيب مضموناً. */
+let diagChain: Promise<void> = Promise.resolve();
+function portalDiag(hop: string, info: Record<string, unknown> = {}): Promise<void> {
+  const entry = { t: new Date().toISOString(), at: "page", hop, ...info };
+  diagChain = diagChain.then(async () => {
+    try {
+      const cache = await caches.open("s7-diag");
+      const prev = await cache.match("/__s7diag");
+      const list: unknown[] = prev ? await prev.json() : [];
+      list.push(entry);
+      await cache.put("/__s7diag", new Response(JSON.stringify(list.slice(-80)), {
+        headers: { "Content-Type": "application/json" },
+      }));
+    } catch { /* التشخيص لا يكسر البوابة */ }
+  });
+  return diagChain;
 }
 
 /** كل ما يخصّ الحاجّ على هذا الجهاز — يُمسح معاً أو لا يُمسح. */

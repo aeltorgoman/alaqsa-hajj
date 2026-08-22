@@ -27,14 +27,22 @@ self.addEventListener("activate", (event) => {
 const DIAG_CACHE = "s7-diag";
 const DIAG_KEY = "/__s7diag";
 
+/* مسلسَلة كذلك — انظر تعليق الصفحة */
+let diagChain = Promise.resolve();
+
 function diag(hop, info) {
+  diagChain = diagChain.then(() => writeDiag(hop, info)).catch(() => undefined);
+  return diagChain;
+}
+
+function writeDiag(hop, info) {
   return caches.open(DIAG_CACHE)
     .then((cache) =>
       cache.match(DIAG_KEY)
         .then((prev) => (prev ? prev.json() : []))
         .then((list) => {
           list.push(Object.assign({ t: new Date().toISOString(), at: "sw", hop: hop }, info || {}));
-          return cache.put(DIAG_KEY, new Response(JSON.stringify(list.slice(-60)), {
+          return cache.put(DIAG_KEY, new Response(JSON.stringify(list.slice(-80)), {
             headers: { "Content-Type": "application/json" },
           }));
         }))
