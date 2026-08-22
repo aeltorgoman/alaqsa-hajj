@@ -901,6 +901,9 @@ export const ALL_PERMISSIONS = [
   { key: "manage_payments", label: "إدارة الحسابات المالية" },
   { key: "manage_admins", label: "إدارة الإداريين" },
   { key: "manage_portal", label: "بوابة الحاج (التنبيهات والإعدادات)" },
+  // س٨: صلاحية مستقلّة عمداً — لا تُدمج في manage_users، وإلا صار
+  // المراقِب هو المراقَب. ولا بند NAV لها: لا شاشة عارض في س٨ (ق٤).
+  { key: "view_audit", label: "سجل التدقيق (عرض)" },
 ];
 
 export const ROOM_TYPES = ["فردية", "ثنائية", "ثلاثية", "رباعية"] as const;
