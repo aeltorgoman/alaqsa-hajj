@@ -106,6 +106,22 @@ function readSession(): string | null {
   }
 }
 
+/* ═══ 🔬 تشخيص مؤقّت — **يُحذف قبل الدمج** ═══
+   نفس مخزن العامل (Cache Storage) كي يكون الأثر خطّاً زمنياً واحداً
+   من A إلى I. ولا يُسجَّل رمز ولا وثيقة ولا ميلاد ولا معرّف حاجّ ولا
+   نصّ تنبيه — أعدادٌ ومعرّف تنبيه أقصى وحدهما. */
+async function portalDiag(hop: string, info: Record<string, unknown> = {}): Promise<void> {
+  try {
+    const cache = await caches.open("s7-diag");
+    const prev = await cache.match("/__s7diag");
+    const list: unknown[] = prev ? await prev.json() : [];
+    list.push({ t: new Date().toISOString(), at: "page", hop, ...info });
+    await cache.put("/__s7diag", new Response(JSON.stringify(list.slice(-60)), {
+      headers: { "Content-Type": "application/json" },
+    }));
+  } catch { /* التشخيص لا يكسر البوابة */ }
+}
+
 /** كل ما يخصّ الحاجّ على هذا الجهاز — يُمسح معاً أو لا يُمسح. */
 function clearPortalLocalState(): void {
   localStorage.removeItem(PORTAL_SESSION_KEY);
@@ -169,18 +185,26 @@ function PilgrimPortal() {
      نقطة واحدة يستدعيها المؤقّت **ورسائل عامل الخدمة** معاً، فلا
      ينسخ أحدهما منطق الآخر. والرمز يُقرأ من التخزين لا من الحالة،
      فتبقى الدالة بلا تبعيّات وتعمل بأحدث جلسة دائماً. */
-  const refreshPortal = useCallback(async () => {
+  const refreshPortal = useCallback(async (reason: string = "timer") => {
     const token = readSession();
-    if (!token) return;
+    if (!token) { void portalDiag("F-skip", { reason }); return; }
+    void portalDiag("F", { reason });
 
     const { data: res, error } = await portalSupabase.rpc(
       "get_pilgrim_portal_by_session", { p_token: token });
 
     if (!error && res) {
+      const anns = ((res as unknown as PortalData).announcements ?? []) as Ann[];
+      void portalDiag("G", {
+        reason, ok: true, count: anns.length,
+        maxId: anns.reduce((m, a) => Math.max(m, a.id), 0),
+      });
       setData(res as unknown as PortalData);
       localStorage.setItem("portal_data", JSON.stringify(res));
+      void portalDiag("I", { reason, applied: true });
       return;
     }
+    void portalDiag("G", { reason, ok: false, transient: !!error });
     if (!error) {
       /* رفضٌ صريح لا عطل شبكة: الجلسة انتهت أو أُبطلت أو أُقفل
          موسمها أو حُذف الحاجّ. لا نُبقي شاشة تبدو داخلة. */
@@ -225,15 +249,38 @@ function PilgrimPortal() {
     })();
 
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === "OPEN_ALERTS") { setTab("alerts"); void refreshPortal(); }
+      void portalDiag("E", { type: String((e.data as { type?: unknown })?.type ?? "unknown") });
+      if (e.data?.type === "OPEN_ALERTS") { setTab("alerts"); void refreshPortal("click"); }
       if (e.data?.type === "RESUBSCRIBE") resubscribeIfNeeded();
       /* وصل تنبيه والبوابة مفتوحة: **نجلب من المصدر** ولا نبني
          الإعلان من حمولة الدفع. الحمولة ليست مصدر حقيقة — والدالة
          وحدها ترشّح بالوقت والانتهاء وترتّب العاجل أولاً. فلا نظام
          تنبيهات ثانٍ، بل الطبقة القائمة تُخبَر فتعمل عملها. */
-      if (e.data?.type === "NEW_ANNOUNCEMENT") void refreshPortal();
+      if (e.data?.type === "NEW_ANNOUNCEMENT") void refreshPortal("push");
     };
     navigator.serviceWorker?.addEventListener("message", onMessage);
+    /* تدفّق الرسائل من العامل إلى الصفحة يبدأ ضمنياً بعد تحميل
+       المستند، ويبدأ صراحةً بهذه. استدعاؤها لا يضرّ إن كان التدفّق
+       جارياً، ويحسم الشكّ إن لم يكن. */
+    navigator.serviceWorker?.startMessages?.();
+
+    /* 🔬 لقطة حالة العامل عند التركيب — تُجيب: أي نصّ يتحكّم بالصفحة،
+       وبأي نطاق، وهل هناك عامل ينتظر لم يُفعَّل بعد */
+    void (async () => {
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration();
+        await portalDiag("SW", {
+          path: location.pathname,
+          controlled: !!navigator.serviceWorker?.controller,
+          controllerScript: navigator.serviceWorker?.controller?.scriptURL ?? null,
+          scope: reg?.scope ?? null,
+          active: reg?.active?.scriptURL ?? null,
+          activeState: reg?.active?.state ?? null,
+          waiting: !!reg?.waiting,
+          installing: !!reg?.installing,
+        });
+      } catch { /* لا شيء */ }
+    })();
 
     return () => {
       alive = false;
