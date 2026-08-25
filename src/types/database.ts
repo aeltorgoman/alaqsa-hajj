@@ -56,6 +56,60 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_source: string
+          actor_username: string | null
+          at: string
+          id: number
+          new_value: Json | null
+          old_value: Json | null
+          row_id: string
+          season_id: number | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_source: string
+          actor_username?: string | null
+          at?: string
+          id?: never
+          new_value?: Json | null
+          old_value?: Json | null
+          row_id: string
+          season_id?: number | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_source?: string
+          actor_username?: string | null
+          at?: string
+          id?: never
+          new_value?: Json | null
+          old_value?: Json | null
+          row_id?: string
+          season_id?: number | null
+          table_name?: string
+        }
+        Relationships: []
+      }
+      audit_suppression: {
+        Row: {
+          txid: number
+        }
+        Insert: {
+          txid: number
+        }
+        Update: {
+          txid?: number
+        }
+        Relationships: []
+      }
       buses: {
         Row: {
           capacity: number | null
@@ -477,10 +531,13 @@ export type Database = {
         Row: {
           bus: string | null
           bus_id: number | null
+          bus_sort_order: number | null
           camp_arafa: string | null
           camp_arafa_id: number | null
+          camp_arafa_sort_order: number | null
           camp_mina: string | null
           camp_mina_id: number | null
+          camp_mina_sort_order: number | null
           contract_url: string | null
           created_at: string
           created_by: string | null
@@ -510,14 +567,11 @@ export type Database = {
           photo_url: string | null
           return_flight_id: number | null
           room_id: number | null
+          room_sort_order: number | null
           season_id: number
           short_ar: string | null
           short_en: string | null
           sort_order: number | null
-          bus_sort_order: number | null
-          camp_mina_sort_order: number | null
-          camp_arafa_sort_order: number | null
-          room_sort_order: number | null
           updated_at: string | null
           updated_by: string | null
           wants_flight: boolean | null
@@ -525,10 +579,13 @@ export type Database = {
         Insert: {
           bus?: string | null
           bus_id?: number | null
+          bus_sort_order?: number | null
           camp_arafa?: string | null
           camp_arafa_id?: number | null
+          camp_arafa_sort_order?: number | null
           camp_mina?: string | null
           camp_mina_id?: number | null
+          camp_mina_sort_order?: number | null
           contract_url?: string | null
           created_at?: string
           created_by?: string | null
@@ -558,14 +615,11 @@ export type Database = {
           photo_url?: string | null
           return_flight_id?: number | null
           room_id?: number | null
+          room_sort_order?: number | null
           season_id?: number
           short_ar?: string | null
           short_en?: string | null
           sort_order?: number | null
-          bus_sort_order?: number | null
-          camp_mina_sort_order?: number | null
-          camp_arafa_sort_order?: number | null
-          room_sort_order?: number | null
           updated_at?: string | null
           updated_by?: string | null
           wants_flight?: boolean | null
@@ -573,10 +627,13 @@ export type Database = {
         Update: {
           bus?: string | null
           bus_id?: number | null
+          bus_sort_order?: number | null
           camp_arafa?: string | null
           camp_arafa_id?: number | null
+          camp_arafa_sort_order?: number | null
           camp_mina?: string | null
           camp_mina_id?: number | null
+          camp_mina_sort_order?: number | null
           contract_url?: string | null
           created_at?: string
           created_by?: string | null
@@ -606,14 +663,11 @@ export type Database = {
           photo_url?: string | null
           return_flight_id?: number | null
           room_id?: number | null
+          room_sort_order?: number | null
           season_id?: number
           short_ar?: string | null
           short_en?: string | null
           sort_order?: number | null
-          bus_sort_order?: number | null
-          camp_mina_sort_order?: number | null
-          camp_arafa_sort_order?: number | null
-          room_sort_order?: number | null
           updated_at?: string | null
           updated_by?: string | null
           wants_flight?: boolean | null
@@ -978,6 +1032,22 @@ export type Database = {
     Functions: {
       _pilgrim_session_owner: { Args: { p_token: string }; Returns: number }
       active_season_id: { Args: never; Returns: number }
+      admin_delete_user_profile: {
+        Args: { p_actor: string; p_id: string }
+        Returns: undefined
+      }
+      admin_write_user_profile: {
+        Args: {
+          p_actor: string
+          p_email?: string
+          p_id: string
+          p_is_active?: boolean
+          p_mode: string
+          p_name?: string
+          p_permissions?: Json
+        }
+        Returns: undefined
+      }
       announcement_audience: {
         Args: { p_target_ids: number[]; p_target_type: string }
         Returns: {
@@ -985,7 +1055,7 @@ export type Database = {
         }[]
       }
       close_season: {
-        Args: { p_closed_by: string; p_new_name: string }
+        Args: { p_actor: string; p_closed_by: string; p_new_name: string }
         Returns: number
       }
       consume_rate_limit: {
@@ -1010,10 +1080,9 @@ export type Database = {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: Json
       }
-      delete_season: { Args: { p_season_id: number }; Returns: undefined }
-      get_pilgrim_portal: {
-        Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
-        Returns: Json
+      delete_season: {
+        Args: { p_actor: string; p_season_id: number }
+        Returns: undefined
       }
       get_pilgrim_portal_by_session: {
         Args: { p_token: string }
@@ -1022,21 +1091,10 @@ export type Database = {
       get_portal_announcements: { Args: never; Returns: Json }
       has_permission: { Args: { p_key: string }; Returns: boolean }
       is_active_employee: { Args: never; Returns: boolean }
-      mark_pilgrim_notification_read:
-        | {
-            Args: {
-              p_announcement_id: number
-              p_day: number
-              p_doc: string
-              p_month: number
-              p_year: number
-            }
-            Returns: boolean
-          }
-        | {
-            Args: { p_announcement_id: number; p_token: string }
-            Returns: boolean
-          }
+      mark_pilgrim_notification_read: {
+        Args: { p_announcement_id: number; p_token: string }
+        Returns: boolean
+      }
       push_enabled_passengers: {
         Args: never
         Returns: {
@@ -1044,40 +1102,37 @@ export type Database = {
           passenger_id: number
         }[]
       }
-      register_pilgrim_push:
-        | {
-            Args: {
-              p_auth: string
-              p_day: number
-              p_doc: string
-              p_endpoint: string
-              p_month: number
-              p_p256dh: string
-              p_platform?: string
-              p_user_agent?: string
-              p_year: number
-            }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              p_auth: string
-              p_endpoint: string
-              p_p256dh: string
-              p_platform?: string
-              p_token: string
-              p_user_agent?: string
-            }
-            Returns: boolean
-          }
+      record_season_event: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_new: Json
+          p_old: Json
+          p_season_id: number
+        }
+        Returns: undefined
+      }
+      register_pilgrim_push: {
+        Args: {
+          p_auth: string
+          p_endpoint: string
+          p_p256dh: string
+          p_platform?: string
+          p_token: string
+          p_user_agent?: string
+        }
+        Returns: boolean
+      }
       resolve_pilgrim_id: {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: number
       }
       revoke_pilgrim_session: { Args: { p_token: string }; Returns: boolean }
-      unregister_pilgrim_push:
-        | { Args: { p_endpoint: string }; Returns: boolean }
-        | { Args: { p_endpoint: string; p_token: string }; Returns: boolean }
+      set_audit_actor: { Args: { p_actor: string }; Returns: undefined }
+      unregister_pilgrim_push: {
+        Args: { p_endpoint: string; p_token: string }
+        Returns: boolean
+      }
       verify_pilgrim_session: { Args: { p_token: string }; Returns: number }
     }
     Enums: {
