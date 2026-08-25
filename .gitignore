@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Local environment files — أسرار البيئة لا تُلتزم إطلاقاً.
+# تشمل ملفّات إعداد بيئة الاختبار (Supabase preview): الرابط
+# ومفتاح النشر العلني. و`.env.local` مشمولٌ أصلاً بـ`*.local`
+# أعلاه، وهذه القواعد صريحة كي لا تسقط النيّة إن تغيّر ذلك السطر.
+# والاستثناءات تُبقي أي ملفّ مثال/قالب قابلاً للالتزام.
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
