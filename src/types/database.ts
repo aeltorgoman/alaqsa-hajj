@@ -873,6 +873,33 @@ export type Database = {
           },
         ]
       }
+      season_pricing_snapshot: {
+        Row: {
+          amount: number
+          captured_at: string
+          key: string
+          label: string
+          season_id: number
+          type: string
+        }
+        Insert: {
+          amount: number
+          captured_at?: string
+          key: string
+          label: string
+          season_id: number
+          type: string
+        }
+        Update: {
+          amount?: number
+          captured_at?: string
+          key?: string
+          label?: string
+          season_id?: number
+          type?: string
+        }
+        Relationships: []
+      }
       seasons: {
         Row: {
           closed_at: string | null
