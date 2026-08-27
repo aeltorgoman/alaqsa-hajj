@@ -13,6 +13,16 @@
 //   getUser(jwt) هنا           يمنع مفتاح anon (وهو JWT صالح!)
 //   has_permission بالخادم     يمنع غير المخوّل
 // الثلاثة معاً. أيّ اثنين منها لا يكفيان.
+//
+// ⚠️ س٨ — الفاعل المفوَّض (Security Architecture v1.6 §١٠.١):
+// كتابات user_profiles تمرّ بدوال قاعدة `service_role` وحدها،
+// تضبط الفاعل وتكتب **في المعاملة نفسها**. والسبب بنيويّ لا
+// تفضيليّ: كل طلب PostgREST معاملةٌ مستقلّة، فـGUC مضبوط في
+// استدعاء لا يعيش إلى الذي يليه — أي أن ضبط الفاعل باستدعاء
+// منفصل **لا يعمل**، لا أنه أقلّ أناقة.
+//
+// و`p_actor` مصدره **`callerId` المُثبَت من JWT** أعلاه، ولا
+// يُقرأ من جسد الطلب بحال. وحقلٌ باسم `actor` في الجسم مُهمَل.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const CORS = {
@@ -106,12 +116,14 @@ Deno.serve(async (req: Request) => {
       return fail(400, createErr?.message || "تعذّر إنشاء الحساب.");
     }
 
-    const { error: profErr } = await admin.from("user_profiles").insert({
-      id: created.user.id,
-      email,
-      name,
-      permissions: body.permissions ?? {},
-      is_active: body.is_active ?? true,
+    const { error: profErr } = await admin.rpc("admin_write_user_profile", {
+      p_actor: callerId,
+      p_mode: "insert",
+      p_id: created.user.id,
+      p_email: email,
+      p_name: name,
+      p_permissions: body.permissions ?? {},
+      p_is_active: body.is_active ?? true,
     });
 
     /* لا يبقى حساب بلا ملفّ: فشل الملفّ يُلغي الحساب المُنشأ.
@@ -152,9 +164,18 @@ Deno.serve(async (req: Request) => {
       if (error) return fail(400, error.message || "تعذّر تحديث بيانات الدخول.");
     }
 
+    /* `null` = «لم يُرسَل» فلا يُمسّ — والدالة تطبّق coalesce.
+       و`updated_at` تضبطه الدالة، فلا يأتي وقتٌ من العميل. */
     if (Object.keys(patch).length > 0) {
-      patch.updated_at = new Date().toISOString();
-      const { error } = await admin.from("user_profiles").update(patch).eq("id", id);
+      const { error } = await admin.rpc("admin_write_user_profile", {
+        p_actor: callerId,
+        p_mode: "update",
+        p_id: id,
+        p_email: (patch.email as string | undefined) ?? null,
+        p_name: (patch.name as string | undefined) ?? null,
+        p_permissions: (patch.permissions as Record<string, boolean> | undefined) ?? null,
+        p_is_active: (patch.is_active as boolean | undefined) ?? null,
+      });
       if (error) return fail(400, error.message || "تعذّر تحديث الملفّ.");
     }
     return json(200, { ok: true });
@@ -163,8 +184,21 @@ Deno.serve(async (req: Request) => {
   // ── حذف ──────────────────────────────────────────────────────
   const id = body.id;
   if (!id) return fail(400, "معرّف المستخدم مطلوب.");
-  /* حذف الحساب يُسقط الملفّ بـ ON DELETE CASCADE — لا حذف يدويّ */
+  /* الملفّ يُحذف أولاً **بفاعلٍ مُثبَت**، ثم الحساب. ولولا ذلك
+     لسقط الملفّ بـ`ON DELETE CASCADE` من داخل GoTrue — أي بفاعلٍ
+     فارغ، وهو أسوأ سؤالٍ يُترك بلا جواب: «من حذف هذا المستخدم؟».
+     والترتيب آمن في الاتجاه الصحيح: بلا ملفّ، `has_permission()`
+     تُرجع false — فالوصول يسقط أولاً ثم الحساب. */
+  const { error: profErr } = await admin.rpc("admin_delete_user_profile", {
+    p_actor: callerId,
+    p_id: id,
+  });
+  if (profErr) return fail(400, profErr.message || "تعذّر حذف ملفّ المستخدم.");
+
   const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return fail(400, error.message || "تعذّر حذف المستخدم.");
+  if (error) {
+    console.error("سقط ملفّ المستخدم وتعذّر حذف الحساب", error);
+    return fail(400, "حُذف ملفّ المستخدم وسقطت صلاحياته، وتعذّر حذف الحساب نفسه. أعد المحاولة.");
+  }
   return json(200, { ok: true });
 });

@@ -34,6 +34,16 @@ const DRY = process.argv.includes("--dry-run");
 
 /* كل الصلاحيات الأحد عشر المعرّفة في src/utils/index.ts — أول مدير
    يملكها كاملة، فلا يبقى النظام بلا من يديره */
+/* ⚠️ هذه القائمة **أقصر عمداً** من `ALL_PERMISSIONS` في
+   `src/utils/index.ts`: تلك تحمل اثني عشر مفتاحاً، وهذه أحد عشر.
+   الفارق `view_audit` (س٨)، و**استثناؤه هنا قرارٌ لا سهو**:
+   §٩ من `S8_IMPLEMENTATION_DESIGN.md` يقضي بأن صلاحية قراءة سجل
+   التدقيق تُمنح **لأقلّ عدد ممكن**، وحساب الإقلاع يُنشأ آلياً بلا
+   قرارٍ بشريّ في لحظته. فمن يقرأ تاريخ البيانات الحسّاسة كلّه
+   يُمنح بيدٍ لا بأداة.
+   ولا يُضاف هنا. ومن يحتاجه — ومنه اختبار ب٧/ب٨ في حملة القبول —
+   يُمنح `view_audit` صراحةً من `UsersPage` عبر `user-admin`،
+   فيُسجَّل المنح نفسه في سجلّ التدقيق بفاعلٍ مُثبَت. */
 const ALL_PERMISSIONS = [
   "manage_passengers", "manage_buses", "manage_camps", "manage_hotel",
   "view_reports", "manage_users", "view_archive", "manage_flights",

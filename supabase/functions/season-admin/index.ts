@@ -72,9 +72,14 @@ Deno.serve(async (req: Request) => {
     const name = (body.newSeasonName ?? "").trim();
     if (!name) return fail(req, 400, "اسم الموسم الجديد مطلوب.");
 
+    /* س٨: `p_actor` هو `userId` المُثبَت من JWT في `authorize()` —
+       لا من جسد الطلب. والدالة تضبط الفاعل وتكتب صفّ التدقيق
+       **في معاملتها نفسها**، لأن استدعاءين متتاليين لا يتشاركان
+       معاملة. و`p_closed_by` يبقى للإيصال ولا يُستبدل به. */
     const { data, error } = await admin.rpc("close_season", {
       p_new_name: name,
       p_closed_by: actor,
+      p_actor: userId,
     });
     /* أخطاء close_season عربية ومكتوبة للمستخدم (اسم مكرر · لا يوجد
        موسم مفتوح) فتُمرَّر كما هي بدل رسالة عامة تُخفي السبب */
@@ -88,7 +93,12 @@ Deno.serve(async (req: Request) => {
   const seasonId = body.seasonId;
   if (typeof seasonId !== "number") return fail(req, 400, "معرّف الموسم مطلوب.");
 
-  const { error } = await admin.rpc("delete_season", { p_season_id: seasonId });
+  /* س٨: العملية الهدّامة تحمل فاعلها معها — الدالة تكتب صفّاً
+     ملخّصاً واحداً بالأعداد والفاعل، لا صفّاً لكل سطر ساقط */
+  const { error } = await admin.rpc("delete_season", {
+    p_season_id: seasonId,
+    p_actor: userId,
+  });
   if (error) {
     console.error("تعذر حذف الموسم", error);
     return fail(req, 400, error.message || "تعذّر حذف الموسم.");
