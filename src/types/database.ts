@@ -23,6 +23,7 @@ export type Database = {
           id: number
           priority: string
           push_sent_at: string | null
+          season_id: number
           show_at: string
           target_ids: number[]
           target_type: string
@@ -36,6 +37,7 @@ export type Database = {
           id?: never
           priority?: string
           push_sent_at?: string | null
+          season_id?: number
           show_at?: string
           target_ids?: number[]
           target_type?: string
@@ -49,12 +51,21 @@ export type Database = {
           id?: never
           priority?: string
           push_sent_at?: string | null
+          season_id?: number
           show_at?: string
           target_ids?: number[]
           target_type?: string
           title?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "announcements_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       audit_log: {
         Row: {
@@ -450,6 +461,7 @@ export type Database = {
           from_airport: string | null
           id: number
           name: string | null
+          season_id: number
           time: string | null
           to_airport: string | null
           type: string | null
@@ -463,6 +475,7 @@ export type Database = {
           from_airport?: string | null
           id?: never
           name?: string | null
+          season_id?: number
           time?: string | null
           to_airport?: string | null
           type?: string | null
@@ -476,11 +489,20 @@ export type Database = {
           from_airport?: string | null
           id?: never
           name?: string | null
+          season_id?: number
           time?: string | null
           to_airport?: string | null
           type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "flights_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notification_deliveries: {
         Row: {

@@ -27,6 +27,13 @@
 -- وفيه دفعةٌ (ب٢) ورسمٌ مخصَّص (ب٣) على حاجَّين مختلفين، فلا يفسد
 -- اختبارٌ موضوعَ الآخر.
 --
+-- ═══ رحلات وتنبيهات م٧ ═══
+-- كل موسم يحمل رحلاته وتنبيهه، **منشأةً والموسمُ مفتوح** — فمحفّز
+-- ث٣ يرفض غير ذلك، والافتراض `active_season_id()` هو ما يختم
+-- الانتماء. ورحلة 1447 تحمل اسم رحلة 1446 نفسه عمداً، وتنبيها
+-- الموسمين المؤرشَفين **بلا `expires_at`** عمداً: تلك هي الحالة
+-- التي كانت تتسرّب إلى الموسم التالي قبل م٧.
+--
 -- ═══ مستندات البوابة — مراجع لا كائنات ═══
 -- إسقاط س٦ يعيد **قيماً منطقية** (`has_photo` …) مشتقّة من كون
 -- العمود غير فارغ، فلا يخرج مفتاح كائن من القاعدة. ولذلك تكفي هنا
@@ -55,6 +62,8 @@ declare
   v_bus   bigint;
   v_camp  bigint;
   v_room  bigint;
+  v_fgo   bigint;
+  v_fret  bigint;
   v_portal bigint;
 begin
   select count(*) into v_pax  from public.passengers;
@@ -101,6 +110,26 @@ begin
     ('حاج موسم 1446 الثاني', 'A1446002', 'مصري', '02/02/1971', 'أنثى', 'حاج',   v_bus, v_camp, v_room, 2),
     ('مشرف موسم 1446',       'A1446003', 'مصري', '03/03/1972', 'ذكر',  'مشرف',  v_bus, v_camp, v_room, 3);
 
+  /* ═══ م٧ — رحلات الموسم وتنبيهاته تُنشأ والموسم مفتوح ═══
+     العمود افتراضه `active_season_id()`، ومحفّز ث٣ يرفض أي كتابة
+     على موسم مقفل. فالإنشاء **قبل** الإقفال ليس ترتيباً تجميلياً:
+     هو المسار الوحيد الممكن، وهو نفسه المسار الحقيقيّ في التشغيل.
+     ولذلك لا يُمرَّر `season_id` صراحةً هنا — الافتراض يختمه، فتُختبر
+     الآلية نفسها بدل الالتفاف عليها. */
+  insert into public.flights (name, type, airline, date, from_airport, to_airport)
+  values ('MS1446', 'ذهاب', 'مصر للطيران', '2026-05-01', 'القاهرة', 'جدة') returning id into v_fgo;
+  insert into public.flights (name, type, airline, date, from_airport, to_airport)
+  values ('MS1446R', 'إياب', 'مصر للطيران', '2026-05-20', 'جدة', 'القاهرة') returning id into v_fret;
+
+  update public.passengers set flight_id = v_fgo, return_flight_id = v_fret
+   where passport in ('A1446001', 'A1446002');
+
+  /* تنبيهٌ **بلا `expires_at`** عمداً: هو الحالة التي كانت تتسرّب
+     قبل م٧ — لا نافذة زمنية تُنهيه، فكان يظهر لحجّاج 1448 إلى
+     الأبد. وبقاؤه هنا هو ما يجعل اختبار العزل ذا معنى. */
+  insert into public.announcements (title, body, priority, created_by)
+  values ('تنبيه موسم 1446', 'رسالة إلى حجّاج 1446 — بلا انتهاء صلاحية عمداً', 'عام', 'بذرة الاختبار');
+
   perform public.close_season('1447', 'بذرة الاختبار', null::uuid);
 
   /* رفعُ سعرٍ بعد الإقفال: موسم 1446 يجب أن يبقى على ١٠٬٠٠٠ مهما
@@ -115,6 +144,17 @@ begin
   values
     ('حاج موسم 1447 الأول',  'B1447001', 'أردني', '04/04/1973', 'ذكر',  'حاج',    v_bus, v_camp, v_room, 1),
     ('مرافق موسم 1447',      'B1447002', 'أردني', '05/05/1974', 'أنثى', 'مرافق',  v_bus, v_camp, v_room, 2);
+
+  /* م٧ — رحلة 1447 تحمل **الاسم نفسه** الذي حملته رحلة 1446 عمداً:
+     تشابه الأسماء بين المواسم هو الواقع التشغيليّ، وهو ما يكشف
+     خلطَ المواسم إن وقع — رقمان مختلفان باسم واحد. */
+  insert into public.flights (name, type, airline, date, from_airport, to_airport)
+  values ('MS1446', 'ذهاب', 'الملكية الأردنية', '2027-05-01', 'عمّان', 'جدة') returning id into v_fgo;
+
+  update public.passengers set flight_id = v_fgo where passport = 'B1447001';
+
+  insert into public.announcements (title, body, priority, created_by)
+  values ('تنبيه موسم 1447', 'رسالة إلى حجّاج 1447 — بلا انتهاء صلاحية عمداً', 'مهم', 'بذرة الاختبار');
 
   perform public.close_season('1448', 'بذرة الاختبار', null::uuid);
 
@@ -135,10 +175,20 @@ begin
   insert into public.rooms (number, floor, type) values ('303', 'الثالث', 'رباعية');
   insert into public.rooms (number, floor, type) values ('304', 'الثالث', 'فردية');
 
-  insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, sort_order)
+  /* م٧ — رحلتا الموسم النشط: عليهما تجري اختبارات الإسناد، ورحلات
+     1446/1447 هي الأهداف «من موسم آخر» التي يجب أن تُرفض. */
+  insert into public.flights (name, type, airline, date, from_airport, to_airport)
+  values ('SV1448', 'ذهاب', 'السعودية', '2028-05-01', 'الرياض', 'جدة') returning id into v_fgo;
+  insert into public.flights (name, type, airline, date, from_airport, to_airport)
+  values ('SV1448R', 'إياب', 'السعودية', '2028-05-20', 'جدة', 'الرياض') returning id into v_fret;
+
+  insert into public.announcements (title, body, priority, created_by)
+  values ('تنبيه موسم 1448', 'رسالة إلى حجّاج الموسم النشط', 'عاجل', 'بذرة الاختبار');
+
+  insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, flight_id, return_flight_id, sort_order)
   values
-    ('حاج موسم 1448 الأول',  'C1448001', 'سعودي', '06/06/1975', 'ذكر',  'حاج', v_bus, v_camp, v_room, 1),
-    ('حاج موسم 1448 الثاني', 'C1448002', 'سعودي', '07/07/1976', 'أنثى', 'حاج', v_bus, v_camp, v_room, 2);
+    ('حاج موسم 1448 الأول',  'C1448001', 'سعودي', '06/06/1975', 'ذكر',  'حاج', v_bus, v_camp, v_room, v_fgo, v_fret, 1),
+    ('حاج موسم 1448 الثاني', 'C1448002', 'سعودي', '07/07/1976', 'أنثى', 'حاج', v_bus, v_camp, v_room, v_fgo, v_fret, 2);
 
   /* ٢٨ حاجّاً مولَّدين بمجموعة لا بثمانيةٍ وعشرين كتلةً منسوخة:
      أقصر، وأسهل تدقيقاً، وحتميّ — الرقم يشتقّ منه كل حقل.
@@ -197,7 +247,9 @@ select s.id, s.name,
        (select count(*) from public.passengers p where p.season_id = s.id) as حجاج,
        (select count(*) from public.buses    b where b.season_id = s.id) as باصات,
        (select count(*) from public.camps    c where c.season_id = s.id) as مخيمات,
-       (select count(*) from public.rooms    r where r.season_id = s.id) as غرف
+       (select count(*) from public.rooms    r where r.season_id = s.id) as غرف,
+       (select count(*) from public.flights  f where f.season_id = s.id) as رحلات,
+       (select count(*) from public.announcements a where a.season_id = s.id) as تنبيهات
 from public.seasons s order by s.id;
 
 -- ── ما يخصّ حملة القبول تحديداً ──────────────────────────────

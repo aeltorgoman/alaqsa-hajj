@@ -198,8 +198,7 @@ function AdminsPage({
       supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
       supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("floor").order("number"),
       supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("name"),
-      /* الرحلات بلا season_id حتى م٧ — مقصود، لا سهو */
-      supabase.from("flights").select("*").order("date"),
+      supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date"),
     ]);
     if (b) setBuses(b as Bus[]);
     if (r) setRooms(r as Room[]);

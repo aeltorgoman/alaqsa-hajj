@@ -886,9 +886,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                   <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--text)" }}>إضافة إلى مجموعة موجودة</div>
                   {/* المجموعة المالية كيان موسميّ: موسم جديد يبدأ
                       بمجموعات جديدة، ولا تُعاد مجموعة موسم مضى.
-                      لكن الجدول لا يحمل season_id بعد — يُضاف في م٧ —
-                      فيقوم هذا الترشيح مقامه مؤقتاً باشتقاق الموسم من
-                      الأعضاء، ويُستبدل هناك بشرط في الاستعلام. */}
+                      لكن الجدول لا يحمل season_id، ولم يُضفه م٧ (نطاقه
+                      الرحلات والتنبيهات وحدهما) — فيقوم هذا الترشيح
+                      مقامه باشتقاق الموسم من الأعضاء. بندٌ مرصود لا
+                      سهو، ويُستبدل بشرط في الاستعلام متى صار موسمياً. */}
                   {groups.filter(g=>getGroupPassengers(g.id).length>0).map(g=>(
                     <div key={g.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
                       <div><div style={{ fontSize:13, fontWeight:600 }}>{g.name}</div><div style={{ fontSize:11, color:"var(--text-muted)" }}>{getGroupPassengers(g.id).length} أعضاء</div></div>

@@ -254,8 +254,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
         supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
         supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("created_at"),
         supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("number"),
-        /* الرحلات بلا season_id حتى م٧ — مقصود، لا سهو */
-        supabase.from("flights").select("*").order("date"),
+        supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date"),
       ]);
       /* الفشل يُبلَّغ عنه بدل عرض «لا يوجد باصات» على بيانات لم تصل أصلاً */
       setRefDataError(!!(eb || ec || er || ef) || !b || !c || !r || !f);

@@ -77,8 +77,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  /* م٧ — تنبيهات الموسم النشط وحده، و`activeSeason` لا `viewedSeason`
+     للسبب الموثَّق فوق قوائم الاستهداف: هذا التبويب أداة تشغيل
+     للبوابة لا شاشة أرشيف، والبوابة تخدم النشط وحده (§٦ من #42).
+     والقاعدة تفرض المطابقة نفسها: `active_season_id()` في دالّتي
+     البوابة، ومحفّز ث٣ يرفض الكتابة على موسم مقفل. */
   const load = async () => {
-    const { data, error } = await supabase.from("announcements").select("*").order("show_at", { ascending: false });
+    const { data, error } = await supabase.from("announcements").select("*").eq("season_id", activeSeason.id).order("show_at", { ascending: false });
     /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو «لا توجد تنبيهات». وload
        تعمل كل 30 ثانية، فآخر قائمة صحيحة تبقى معروضة عند فشل تحديث
        عابر بدل أن تُمحى الشاشة. */
@@ -97,7 +102,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     const t0 = setTimeout(load, 0);
     const t = setInterval(load, 30000);
     return () => { clearTimeout(t0); clearInterval(t); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSeason.id]);
 
   /* ─── قوائم الاستهداف ─── */
   /* ⚠️ استثناء معماريّ مقصود: هذا الموضع يقرأ activeSeason لا
