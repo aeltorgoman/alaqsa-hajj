@@ -880,7 +880,13 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // KPI calculations للـ gateway
   // ============================================================
-  const hajjTotal = passengers.filter(p => isHajj(p)).length || 1;
+  /* عددان لا واحد: `hajjCount` هو العدد الحقيقيّ، و`hajjTotal` مقامُ
+     النسبة وحده. و`|| 1` حارسُ قسمةٍ على صفر — فإن خدم العدَّ أيضاً
+     صار «صفر حاجّ» يُقرأ «حاجٌّ واحد ناقص»، وهو ما كانت تعرضه أربع
+     بطاقات على قاعدة فارغة. والنمط هنا هو نمط بطاقة الطيران أعلاه
+     نفسه: `flightDen` للمقام و`flightNeeded.length` للعدّ. */
+  const hajjCount = passengers.filter(p => isHajj(p)).length;
+  const hajjTotal = hajjCount || 1;
   /* ── اكتمال توزيع الطيران ──
      المقام ليس كل الحجاج بل **المطلوب لهم طيران** وحدهم: من خدمته
      «بدون» لا ينقصه شيء، وعدّه ناقصاً يجعل المؤشّر يشكو ممّا لا
@@ -898,10 +904,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
   const withMina   = passengers.filter(p => (isHajj(p)) && p.camp_mina_id != null).length;
   const withArafa  = passengers.filter(p => (isHajj(p)) && p.camp_arafa_id != null).length;
   const withRoom   = passengers.filter(p => (isHajj(p)) && p.room_id != null).length;
-  const noBus      = hajjTotal - withBus;
-  const noMina     = hajjTotal - withMina;
-  const noArafa    = hajjTotal - withArafa;
-  const noRoom     = hajjTotal - withRoom;
+  const noBus      = hajjCount - withBus;
+  const noMina     = hajjCount - withMina;
+  const noArafa    = hajjCount - withArafa;
+  const noRoom     = hajjCount - withRoom;
   const pctBus     = Math.round(withBus    / hajjTotal * 100);
   const pctMina    = Math.round(withMina   / hajjTotal * 100);
   const pctArafa   = Math.round(withArafa  / hajjTotal * 100);
