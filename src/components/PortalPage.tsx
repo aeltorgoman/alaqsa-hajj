@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { AlertModal, useAlert, useConfirm, ConfirmModal } from "./AlertModal";
 import { DeliveryReportModal } from "./DeliveryReportModal";
@@ -82,7 +82,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
      للبوابة لا شاشة أرشيف، والبوابة تخدم النشط وحده (§٦ من #42).
      والقاعدة تفرض المطابقة نفسها: `active_season_id()` في دالّتي
      البوابة، ومحفّز ث٣ يرفض الكتابة على موسم مقفل. */
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data, error } = await supabase.from("announcements").select("*").eq("season_id", activeSeason.id).order("show_at", { ascending: false });
     /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو «لا توجد تنبيهات». وload
        تعمل كل 30 ثانية، فآخر قائمة صحيحة تبقى معروضة عند فشل تحديث
@@ -96,14 +96,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       setItemsError(false);
     }
     setItemsLoading(false);
-  };
+  }, [activeSeason.id]);
 
   useEffect(() => {
     const t0 = setTimeout(load, 0);
     const t = setInterval(load, 30000);
     return () => { clearTimeout(t0); clearInterval(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSeason.id]);
+  }, [load]);
 
   /* ─── قوائم الاستهداف ─── */
   /* ⚠️ استثناء معماريّ مقصود: هذا الموضع يقرأ activeSeason لا
