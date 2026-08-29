@@ -70,10 +70,21 @@ grant select on public.season_pricing_snapshot to authenticated;
 
 -- سياسة قراءة حقيقية تُشحن مع الجدول نفسه: جدولٌ بلا سياسة يرفع
 -- ملاحظة Advisor، وبوابة «لا يزيد العدد» (ب١٢ من س٨) تُقاس عليه.
+--
+-- والشرط `is_active_employee()` **هو شرط `pricing_settings_select` نفسه**
+-- عمداً، لا `has_permission('manage_payments')`. فمن يقرأ سعر الباقة
+-- اليوم يقرأ ما كان سعرها أمس — والصلاحية تحرس *تعديل* التسعير لا
+-- *قراءته* (هذا هو نمط س٤: `_select` بـ`is_active_employee`، والكتابة
+-- بـ`has_permission`).
+--
+-- وتضييقها هنا كان سيُحدث عيباً ماليّاً حقيقياً: موظّفٌ نشِط بلا
+-- `manage_payments` يقرأ `pricing_settings` ولا يقرأ اللقطة، فيعود إلى
+-- التسعير الحيّ **ويرى أرقاماً تخالف ما يراه زميله على الشاشة نفسها**
+-- لموسمٍ مؤرشَف. وهو عين ما بُني هذا الجدول لمنعه.
 drop policy if exists season_pricing_snapshot_select on public.season_pricing_snapshot;
 create policy season_pricing_snapshot_select on public.season_pricing_snapshot
   for select to authenticated
-  using (public.has_permission('manage_payments'));
+  using (public.is_active_employee());
 
 
 -- ------------------------------------------------------------

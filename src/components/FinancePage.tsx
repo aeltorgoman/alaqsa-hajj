@@ -29,8 +29,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
        snapshot        الموسم مقفل   → لقطة تسعيره يوم الإقفال
        missing         الموسم مقفل ولا لقطة له (أُقفل قبل بناء الآلية)
                        → رجوعٌ إلى الحيّ **مع تحذير ظاهر**، لأن رقماً
-                       صامتاً غير قابل للتحقّق أسوأ من رقمٍ موصوف. */
-  const [pricingSource, setPricingSource] = useState<"live"|"snapshot"|"missing">("live");
+                       صامتاً غير قابل للتحقّق أسوأ من رقمٍ موصوف.
+       error           تعذّر جلب اللقطة — وهي **ليست** كغيابها: الغياب
+                       حقيقةٌ عن الماضي، والفشل عطلٌ في هذه اللحظة. ولو
+                       خُلطا لقال الشريط للمستخدم سبباً غير صحيح. */
+  const [pricingSource, setPricingSource] = useState<"live"|"snapshot"|"missing"|"error">("live");
 
   /* مداخل الكتابة هنا خصائص تُمرَّر إلى مكوّنات فرعية، فلا يُعطَّل
      زرّ في هذا الملف. الرفض يقع عند محاولة الفتح برسالة صريحة —
@@ -201,7 +204,9 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       setPricingSource("snapshot");
     } else if (pRes.data && !pRes.error) {
       setPricing(toMap(pRes.data as PricingRow[]));
-      setPricingSource(isArchived ? "missing" : "live");
+      /* فشلُ الجلب لا يُقرأ غياباً: «أُقفل قبل الآلية» جملةٌ عن الماضي
+         لا تصحّ حين يكون السبب عطلاً الآن. */
+      setPricingSource(!isArchived ? "live" : (snapRes.error ? "error" : "missing"));
     }
     if (pyRes.data && !pyRes.error) setPayments(pyRes.data as Payment[]);
     if (ccRes.data && !ccRes.error) setCustomCharges(ccRes.data as CustomCharge[]);
@@ -663,7 +668,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      ولقطةٌ مفقودة تُقال صراحةً: التسعير المعروض هو الحاليّ لا تسعير
      ذلك الموسم، والأرقام تتحرّك بتحرّكه. */
   const pricingNotice = pricingSource === "live" ? null : (() => {
-    const missing = pricingSource === "missing";
+    const missing = pricingSource !== "snapshot";
     return (
       <div style={{
         display:"flex", alignItems:"center", gap:8, marginBottom:14, padding:"9px 13px",
@@ -676,9 +681,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
         </svg>
         <span>
-          {missing
-            ? `موسم ${viewedSeason.name} أُقفل قبل تفعيل لقطة التسعير، فلا تسعير محفوظ له. الأرقام محسوبة بالتسعير الحاليّ للشركة وقد تتغيّر بتغيّره.`
-            : `الأرقام محسوبة بتسعير موسم ${viewedSeason.name} كما كان يوم إقفاله.`}
+          {pricingSource === "snapshot"
+            ? `الأرقام محسوبة بتسعير موسم ${viewedSeason.name} كما كان يوم إقفاله.`
+            : pricingSource === "error"
+              ? `تعذّر جلب لقطة تسعير موسم ${viewedSeason.name}. الأرقام معروضة بالتسعير الحاليّ للشركة ولا يُعتمد عليها — أعد تحميل الصفحة.`
+              : `موسم ${viewedSeason.name} أُقفل قبل تفعيل لقطة التسعير، فلا تسعير محفوظ له. الأرقام محسوبة بالتسعير الحاليّ للشركة وقد تتغيّر بتغيّره.`}
         </span>
       </div>
     );
