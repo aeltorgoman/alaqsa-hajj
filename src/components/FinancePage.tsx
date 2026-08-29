@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSeasonWrite } from "../season/useSeasonWrite";
+import { useSeason } from "../season/useSeason";
 import { isHajj } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -21,6 +22,18 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const reportBranding = useReportBranding();
   const { alert: alertState, showAlert } = useAlert();
   const { assertWritable } = useSeasonWrite(showAlert);
+  const { viewedSeason } = useSeason();
+
+  /* مصدر التسعير الذي حُسبت به أرقام هذه الشاشة:
+       live            الموسم مفتوح  → التسعير الحيّ، وهو الصحيح له
+       snapshot        الموسم مقفل   → لقطة تسعيره يوم الإقفال
+       missing         الموسم مقفل ولا لقطة له (أُقفل قبل بناء الآلية)
+                       → رجوعٌ إلى الحيّ **مع تحذير ظاهر**، لأن رقماً
+                       صامتاً غير قابل للتحقّق أسوأ من رقمٍ موصوف.
+       error           تعذّر جلب اللقطة — وهي **ليست** كغيابها: الغياب
+                       حقيقةٌ عن الماضي، والفشل عطلٌ في هذه اللحظة. ولو
+                       خُلطا لقال الشريط للمستخدم سبباً غير صحيح. */
+  const [pricingSource, setPricingSource] = useState<"live"|"snapshot"|"missing"|"error">("live");
 
   /* مداخل الكتابة هنا خصائص تُمرَّر إلى مكوّنات فرعية، فلا يُعطَّل
      زرّ في هذا الملف. الرفض يقع عند محاولة الفتح برسالة صريحة —
@@ -141,12 +154,20 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   async function loadFinanceData(silent = false) {
     if (silent) setRefreshing(true); else setLoading(true);
-    const [pRes, pyRes, ccRes, gRes, gmRes] = await Promise.all([
+    /* الموسم المقفل يقرأ لقطته، والمفتوح يقرأ الحيّ. والحيّ يُجلب في
+       الحالتين: محرّر الأسعار في تبويب الإعدادات يعرض الإعداد الحاليّ
+       للشركة دائماً، لا سعراً تاريخياً لا يُعدَّل. */
+    const isArchived = viewedSeason.closed_at !== null;
+
+    const [pRes, pyRes, ccRes, gRes, gmRes, snapRes] = await Promise.all([
       supabase.from("pricing_settings").select("*"),
       supabase.from("payments").select("*").order("payment_date", { ascending:false }),
       supabase.from("custom_charges").select("*"),
       supabase.from("financial_groups").select("*").order("created_at", { ascending:false }),
       supabase.from("financial_group_members").select("*"),
+      isArchived
+        ? supabase.from("season_pricing_snapshot").select("key,label,type,amount").eq("season_id", viewedSeason.id)
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     /* أي جزء يفشل يُبلَّغ عنه صراحةً ولا يُكتب في الحالة، حتى لا تُعرض
@@ -157,14 +178,35 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       { res: ccRes, label: "البنود الخاصة" },
       { res: gRes,  label: "المجموعات المالية" },
       { res: gmRes, label: "أعضاء المجموعات" },
+      { res: snapRes as { error: unknown }, label: "لقطة تسعير الموسم" },
     ];
     const failed = parts.filter(p => p.res.error).map(p => p.label);
 
-    if (pRes.data && !pRes.error) {
+    const toMap = (rows: PricingRow[]): PricingMap => {
       const map: PricingMap = {};
+      rows.forEach(r => { map[r.key] = { label: r.label, amount: Number(r.amount), type: r.type }; });
+      return map;
+    };
+
+    if (pRes.data && !pRes.error) {
       const em: Record<string,string> = {};
-      (pRes.data as PricingRow[]).forEach(r => { map[r.key]={label:r.label,amount:Number(r.amount),type:r.type}; em[r.key]=String(r.amount); });
-      setPricing(map); setEditPricing(em);
+      (pRes.data as PricingRow[]).forEach(r => { em[r.key] = String(r.amount); });
+      /* محرّر الأسعار من الحيّ دائماً — إعداد الشركة الحاليّ */
+      setEditPricing(em);
+    }
+
+    /* نقطة الحسم الوحيدة: من أين تأتي خريطة الأسعار التي تُحسب بها
+       الأرقام. `calcTotalDue` لا يتغيّر ولا يعرف بالفرق — يتغيّر
+       المصدر لا طريقة الحساب. */
+    const snapRows = (snapRes.data ?? []) as PricingRow[] | null;
+    if (isArchived && snapRows && snapRows.length > 0) {
+      setPricing(toMap(snapRows));
+      setPricingSource("snapshot");
+    } else if (pRes.data && !pRes.error) {
+      setPricing(toMap(pRes.data as PricingRow[]));
+      /* فشلُ الجلب لا يُقرأ غياباً: «أُقفل قبل الآلية» جملةٌ عن الماضي
+         لا تصحّ حين يكون السبب عطلاً الآن. */
+      setPricingSource(!isArchived ? "live" : (snapRes.error ? "error" : "missing"));
     }
     if (pyRes.data && !pyRes.error) setPayments(pyRes.data as Payment[]);
     if (ccRes.data && !ccRes.error) setCustomCharges(ccRes.data as CustomCharge[]);
@@ -621,11 +663,40 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   // ══════════════════════════════════════════════
   // SETTINGS VIEW
   // ══════════════════════════════════════════════
+  /* شريطٌ يقول للمستخدم بأيّ تسعيرٍ حُسبت الأرقام أمامه. الحالة
+     الوحيدة الصامتة هي `live` — وهي الحالة العادية للموسم المفتوح.
+     ولقطةٌ مفقودة تُقال صراحةً: التسعير المعروض هو الحاليّ لا تسعير
+     ذلك الموسم، والأرقام تتحرّك بتحرّكه. */
+  const pricingNotice = pricingSource === "live" ? null : (() => {
+    const missing = pricingSource !== "snapshot";
+    return (
+      <div style={{
+        display:"flex", alignItems:"center", gap:8, marginBottom:14, padding:"9px 13px",
+        borderRadius:9, fontSize:12.5, fontWeight:600, lineHeight:1.7,
+        background: missing ? "var(--warning-bg, #FFF4E5)" : "var(--info-bg, #EAF3FB)",
+        color:      missing ? "#8A5A00" : "var(--info, #1D4ED8)",
+        border:     `1px solid ${missing ? "rgba(138,90,0,.25)" : "rgba(29,78,216,.2)"}`,
+      }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink:0 }}>
+          <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
+        </svg>
+        <span>
+          {pricingSource === "snapshot"
+            ? `الأرقام محسوبة بتسعير موسم ${viewedSeason.name} كما كان يوم إقفاله.`
+            : pricingSource === "error"
+              ? `تعذّر جلب لقطة تسعير موسم ${viewedSeason.name}. الأرقام معروضة بالتسعير الحاليّ للشركة ولا يُعتمد عليها — أعد تحميل الصفحة.`
+              : `موسم ${viewedSeason.name} أُقفل قبل تفعيل لقطة التسعير، فلا تسعير محفوظ له. الأرقام محسوبة بالتسعير الحاليّ للشركة وقد تتغيّر بتغيّره.`}
+        </span>
+      </div>
+    );
+  })();
+
   if (subView === "settings") return (
     <div style={{ flex:1, overflowY:"auto", padding:20 }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
       <div style={{ maxWidth:560, margin:"0 auto" }}>
+        {pricingNotice}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
           <button onClick={() => setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
           <div style={{ fontFamily:"var(--font-heading)", fontSize:20, fontWeight:600, color:"var(--text)" }}>إعدادات الأسعار</div>
@@ -665,6 +736,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         <AlertModal alert={alertState} onClose={() => showAlert(null)} />
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <ReceiptModal />
+        {pricingNotice}
         <FinancialGroupView
           canManage={canManage}
           group={selectedGroup}
@@ -709,6 +781,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <ReceiptModal />
         <PaymentDetailModal />
+        {pricingNotice}
         <PassengerFinanceView
           canManage={canManage}
           passenger={selectedP}
@@ -867,6 +940,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <PaymentDetailModal />
+        {pricingNotice}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={()=>setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
           <div style={{ fontFamily:"var(--font-heading)", fontSize:18, fontWeight:700, color:"var(--text)" }}>التقارير المالية</div>
@@ -1010,6 +1084,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
       <ReceiptModal />
+      {pricingNotice}
       <FinanceListView
         canManage={canManage}
         sortedPassengers={sortedPassengers}

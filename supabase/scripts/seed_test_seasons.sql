@@ -70,6 +70,24 @@ begin
   else update public.seasons set name = '1446' where closed_at is null;
   end if;
 
+  /* ═══ التسعير — يُزرع قبل أوّل إقفال عمداً ═══
+     لقطة التسعير تُلتقط داخل `close_season`، فتسعيرٌ يُزرع بعد
+     الإقفال لا يُلتقط لذلك الموسم. والترتيب هنا هو الترتيب الزمنيّ
+     الحقيقيّ: تُسعَّر الشركة، ثمّ يُقفل الموسم، ثمّ يتغيّر السعر
+     للموسم التالي. وهذا وحده ما يجعل اختبار ثبات المالية التاريخية
+     ممكناً — بذرةٌ بسعرٍ واحد لكلّ المواسم لا تُثبت شيئاً. */
+  insert into public.pricing_settings (key, label, type, amount) values
+    ('package_double',     'باقة ثنائي',        'package',  10000),
+    ('package_triple',     'باقة ثلاثي',        'package',   9000),
+    ('package_quad',       'باقة رباعي',        'package',   8000),
+    ('package_suite',      'باقة فردية',        'package',  14000),
+    ('addon_view',         'إضافة مطلة',        'addon',     1500),
+    ('addon_mina',         'خيمة خاصة - منى',  'addon',     2000),
+    ('addon_arafa',        'خيمة خاصة - عرفة', 'addon',     1000),
+    ('addon_bus_vip',      'باص VIP',           'addon',      800),
+    ('addon_first_class',  'طيران درجة أولى',   'addon',     3000),
+    ('discount_no_ticket', 'خصم بدون تذكرة',    'discount',  2500);
+
   -- ── 1446 ──────────────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1446 أ', 'عادي') returning id into v_bus;
   insert into public.buses (name, type)  values ('باص 1446 ب', 'VIP');
@@ -85,6 +103,10 @@ begin
 
   perform public.close_season('1447', 'بذرة الاختبار', null::uuid);
 
+  /* رفعُ سعرٍ بعد الإقفال: موسم 1446 يجب أن يبقى على ١٠٬٠٠٠ مهما
+     تغيّر الحيّ بعده. وهذا هو الفارق الذي يقيسه الاختبار. */
+  update public.pricing_settings set amount = 11000 where key = 'package_double';
+
   -- ── 1447 ──────────────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1447', 'عادي') returning id into v_bus;
   insert into public.camps (name, page_type, type) values ('مخيم منى 1447', 'منى', 'خاص') returning id into v_camp;
@@ -95,6 +117,11 @@ begin
     ('مرافق موسم 1447',      'B1447002', 'أردني', '05/05/1974', 'أنثى', 'مرافق',  v_bus, v_camp, v_room, 2);
 
   perform public.close_season('1448', 'بذرة الاختبار', null::uuid);
+
+  /* رفعٌ ثانٍ: فتصير الأسعار الثلاثة متمايزة —
+     1446 = ١٠٬٠٠٠ (لقطة) · 1447 = ١١٬٠٠٠ (لقطة) · 1448 = ١٢٬٠٠٠ (حيّ).
+     ثلاث قيم مختلفة تُثبت أن كلّ موسم يقرأ تسعيره هو. */
+  update public.pricing_settings set amount = 12000 where key = 'package_double';
 
   -- ── 1448 — النشط ──────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1448', 'VIP') returning id into v_bus;
