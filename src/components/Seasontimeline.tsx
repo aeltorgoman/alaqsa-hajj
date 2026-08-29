@@ -3,6 +3,7 @@ import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { isMissingService } from "../utils";
+import { useSeason } from "../season/useSeason";
 
 /* ════════════════════════════════════════════════════════════
    منطق حساب مراحل الموسم — تلقائي بالكامل من البيانات
@@ -20,10 +21,13 @@ interface PhaseInfo {
 }
 
 function useSeasonPhases(passengers: Passenger[]) {
+  const { viewedSeason } = useSeason();
   const [flights, setFlights] = useState<Flight[]>([]);
+  /* م٧ — مواعيد السفر تُقرأ من رحلات الموسم المعروض وحده: مرحلة
+     «السفر» كانت تُحسب من تواريخ رحلات كل المواسم مجتمعةً. */
   useEffect(() => {
-    supabase.from("flights").select("*").then((res: any) => { if (res.data) setFlights(res.data as Flight[]); });
-  }, []);
+    supabase.from("flights").select("*").eq("season_id", viewedSeason.id).then((res: any) => { if (res.data) setFlights(res.data as Flight[]); });
+  }, [viewedSeason.id]);
 
   return useMemo(() => {
     const hajj = passengers.filter(p => isHajj(p));

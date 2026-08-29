@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { AlertModal, useAlert, useConfirm, ConfirmModal } from "./AlertModal";
 import { DeliveryReportModal } from "./DeliveryReportModal";
@@ -77,8 +77,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const load = async () => {
-    const { data, error } = await supabase.from("announcements").select("*").order("show_at", { ascending: false });
+  /* م٧ — تنبيهات الموسم النشط وحده، و`activeSeason` لا `viewedSeason`
+     للسبب الموثَّق فوق قوائم الاستهداف: هذا التبويب أداة تشغيل
+     للبوابة لا شاشة أرشيف، والبوابة تخدم النشط وحده (§٦ من #42).
+     والقاعدة تفرض المطابقة نفسها: `active_season_id()` في دالّتي
+     البوابة، ومحفّز ث٣ يرفض الكتابة على موسم مقفل. */
+  const load = useCallback(async () => {
+    const { data, error } = await supabase.from("announcements").select("*").eq("season_id", activeSeason.id).order("show_at", { ascending: false });
     /* الفشل يُبلَّغ عنه بدل قائمة فارغة تبدو «لا توجد تنبيهات». وload
        تعمل كل 30 ثانية، فآخر قائمة صحيحة تبقى معروضة عند فشل تحديث
        عابر بدل أن تُمحى الشاشة. */
@@ -91,13 +96,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       setItemsError(false);
     }
     setItemsLoading(false);
-  };
+  }, [activeSeason.id]);
 
   useEffect(() => {
     const t0 = setTimeout(load, 0);
     const t = setInterval(load, 30000);
     return () => { clearTimeout(t0); clearInterval(t); };
-  }, []);
+  }, [load]);
 
   /* ─── قوائم الاستهداف ─── */
   /* ⚠️ استثناء معماريّ مقصود: هذا الموضع يقرأ activeSeason لا

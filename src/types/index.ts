@@ -104,4 +104,7 @@ export interface Flight {
   arrival_time?: string | null;
   arrival_date?: string | null;
   created_at?: string;
+  /* م٧ — الموسم المالك للرحلة. تختمه القاعدة بافتراض
+     `active_season_id()`، فلا يُرسله العميل عند الإنشاء. */
+  season_id?: number;
 }

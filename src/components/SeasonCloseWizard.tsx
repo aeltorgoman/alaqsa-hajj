@@ -221,8 +221,11 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
     }
     setDocItems(items);
 
+    /* م٧ — تنبيهات هذا الموسم وحده: التحذير عن «ما لن يصل بعد
+       الإقفال» كان يعدّ مجدولات المواسم كلّها. */
     const { count: scheduled } = await supabase
       .from("announcements").select("id", { count: "exact", head: true })
+      .eq("season_id", activeSeason.id)
       .gt("show_at", new Date().toISOString());
 
     const list: string[] = [];

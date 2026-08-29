@@ -10,6 +10,7 @@ import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
 import { useSeasonWrite } from "../season/useSeasonWrite";
+import { useSeason } from "../season/useSeason";
 
 // رحلات الذهاب تستخدم flight_id، ورحلات الإياب تستخدم return_flight_id
 const flightField = (type?: string): "flight_id" | "return_flight_id" =>
@@ -65,10 +66,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { viewedSeason } = useSeason();
 
-  /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية.
-     ولا فلترة هنا: جدول flights بلا season_id حتى م٧، فالرحلات
-     مشتركة بين المواسم حتى ذلك الحين. */
+  /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية. */
   const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
   const [flights, setFlights] = useState<Flight[]>([]);
   const [flightsLoading, setFlightsLoading] = useState(true);
@@ -103,14 +103,22 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [pSearch, setPSearch] = useState("");
   const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
 
+  /* م٧ — الرحلات مملوكة للموسم: الصفحة تعرض رحلات الموسم المعروض
+     وحده، ويُعاد الجلب عند تبديله. وكان الجدول بلا موسم فتظهر رحلات
+     المواسم كلّها مختلطة في كل موسم. */
   useEffect(() => {
-    /* الفشل يُبلَّغ عنه بدل «لا يوجد رحلات بعد» على بيانات لم تصل */
-    supabase.from("flights").select("*").order("created_at").then(({ data, error }) => {
+    /* التحميل داخل دالّة لا في جسم الأثر مباشرةً — نمط ReportsPage
+       نفسه، ويرضي `react-hooks/set-state-in-effect`. */
+    const load = async () => {
+      setFlightsLoading(true);
+      /* الفشل يُبلَّغ عنه بدل «لا يوجد رحلات بعد» على بيانات لم تصل */
+      const { data, error } = await supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("created_at");
       if (error || !data) { console.error("تعذر تحميل الرحلات", error); setFlightsError(true); }
       else { setFlights(data as Flight[]); setFlightsError(false); }
       setFlightsLoading(false);
-    });
-  }, []);
+    };
+    load();
+  }, [viewedSeason.id]);
 
   const getFlightPassengers = (flight: Flight) => {
     const field = flightField(flight.type);

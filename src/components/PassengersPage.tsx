@@ -150,9 +150,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     supabase.from("buses").select("id,name").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
     supabase.from("rooms").select("id,number").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
     supabase.from("camps").select("id,name,page_type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
-    /* الرحلات بلا season_id بعد — يُضاف في م٧، وحتى ذلك الحين
-       تُجلب كلها كما كانت */
-    supabase.from("flights").select("id,name,type").then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
+    supabase.from("flights").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
   }, [viewedSeason.id]);
 
   // استقبال scan من Dashboard
