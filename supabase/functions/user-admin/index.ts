@@ -24,27 +24,26 @@
 // و`p_actor` مصدره **`callerId` المُثبَت من JWT** أعلاه، ولا
 // يُقرأ من جسد الطلب بحال. وحقلٌ باسم `actor` في الجسم مُهمَل.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+/* س٩ — حصر CORS: هذه الدالّة كانت الوحيدة الباقية على `*` مكتوبةً
+   في جسمها، فلا يبلغها سرّ `ALLOWED_ORIGINS`. وهي **أخطر الخمس**:
+   تُنشئ المستخدمين وتمنح الصلاحيات. صارت تستعمل `cors()` المشترك
+   كأخواتها الأربع، فيسري عليها السرّ نفسه بلا استثناء. */
+import { cors } from "../_shared/http.ts";
 
 const REQUIRED_PERMISSION = "manage_users";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function json(status: number, payload: unknown) {
+function json(req: Request, status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" },
+    headers: { ...cors(req), "Content-Type": "application/json" },
   });
 }
-const fail = (status: number, message: string) => json(status, { error: message });
+const fail = (req: Request, status: number, message: string) => json(req, status, { error: message });
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST") return fail(405, "الطريقة غير مدعومة.");
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
+  if (req.method !== "POST") return fail(req, 405, "الطريقة غير مدعومة.");
 
   let body: {
     action?: string;
@@ -55,11 +54,11 @@ Deno.serve(async (req: Request) => {
     permissions?: Record<string, boolean>;
     is_active?: boolean;
   };
-  try { body = await req.json(); } catch { return fail(400, "طلب غير صالح."); }
+  try { body = await req.json(); } catch { return fail(req, 400, "طلب غير صالح."); }
 
   const { action } = body;
   if (action !== "create" && action !== "update" && action !== "delete") {
-    return fail(400, "عملية غير معروفة.");
+    return fail(req, 400, "عملية غير معروفة.");
   }
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -71,10 +70,10 @@ Deno.serve(async (req: Request) => {
      لأنه JWT صالح، فهذا الفحص هو ما يميّز مستخدماً حقيقياً. */
   const authHeader = req.headers.get("Authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (!token) return fail(401, "غير مصرّح.");
+  if (!token) return fail(req, 401, "غير مصرّح.");
 
   const { data: caller, error: callerErr } = await admin.auth.getUser(token);
-  if (callerErr || !caller?.user) return fail(401, "غير مصرّح.");
+  if (callerErr || !caller?.user) return fail(req, 401, "غير مصرّح.");
   const callerId = caller.user.id;
 
   /* ٢) الصلاحية — تُقرأ من user_profiles على الخادم، لا مما يرسله
@@ -84,18 +83,18 @@ Deno.serve(async (req: Request) => {
 
   const perms = (callerProfile?.permissions ?? {}) as Record<string, boolean>;
   if (!callerProfile || callerProfile.is_active !== true || !perms[REQUIRED_PERMISSION]) {
-    return fail(403, "لا تملك صلاحية إدارة المستخدمين.");
+    return fail(req, 403, "لا تملك صلاحية إدارة المستخدمين.");
   }
 
   /* ٣) حرّاس منع القفل الذاتي — على الخادم لا على الأزرار.
      صفحة الإعدادات محجوبة خلف manage_users، فمن ينزعها عن نفسه أو
      يعطّل حسابه أو يحذفه يفقد الوصول نهائياً بلا وسيلة استعادة. */
   const targetsSelf = body.id === callerId;
-  if (action === "delete" && targetsSelf) return fail(400, "لا يمكنك حذف حسابك الحالي.");
+  if (action === "delete" && targetsSelf) return fail(req, 400, "لا يمكنك حذف حسابك الحالي.");
   if (action === "update" && targetsSelf) {
-    if (body.is_active === false) return fail(400, "لا يمكنك تعطيل حسابك الحالي.");
+    if (body.is_active === false) return fail(req, 400, "لا يمكنك تعطيل حسابك الحالي.");
     if (body.permissions && body.permissions[REQUIRED_PERMISSION] !== true) {
-      return fail(400, "لا يمكنك سحب صلاحية إدارة المستخدمين من حسابك.");
+      return fail(req, 400, "لا يمكنك سحب صلاحية إدارة المستخدمين من حسابك.");
     }
   }
 
@@ -103,9 +102,9 @@ Deno.serve(async (req: Request) => {
   if (action === "create") {
     const email = (body.email ?? "").trim().toLowerCase();
     const name = (body.name ?? "").trim();
-    if (!EMAIL_RE.test(email)) return fail(400, "معرّف الدخول يجب أن يكون بصيغة بريد صحيحة.");
-    if (!name) return fail(400, "الاسم مطلوب.");
-    if (!body.password || body.password.length < 8) return fail(400, "كلمة المرور ثمانية محارف فأكثر.");
+    if (!EMAIL_RE.test(email)) return fail(req, 400, "معرّف الدخول يجب أن يكون بصيغة بريد صحيحة.");
+    if (!name) return fail(req, 400, "الاسم مطلوب.");
+    if (!body.password || body.password.length < 8) return fail(req, 400, "كلمة المرور ثمانية محارف فأكثر.");
 
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email,
@@ -113,7 +112,7 @@ Deno.serve(async (req: Request) => {
       email_confirm: true, // البريد Login ID لا قناة اتصال — لا رسائل تأكيد
     });
     if (createErr || !created?.user) {
-      return fail(400, createErr?.message || "تعذّر إنشاء الحساب.");
+      return fail(req, 400, createErr?.message || "تعذّر إنشاء الحساب.");
     }
 
     const { error: profErr } = await admin.rpc("admin_write_user_profile", {
@@ -130,15 +129,15 @@ Deno.serve(async (req: Request) => {
        المتطلَّب ٢ من §١٠ — كل مستخدم له صفّ مقابل. */
     if (profErr) {
       await admin.auth.admin.deleteUser(created.user.id);
-      return fail(400, `تعذّر إنشاء ملفّ المستخدم: ${profErr.message}`);
+      return fail(req, 400, `تعذّر إنشاء ملفّ المستخدم: ${profErr.message}`);
     }
-    return json(200, { id: created.user.id, email });
+    return json(req, 200, { id: created.user.id, email });
   }
 
   // ── تعديل ────────────────────────────────────────────────────
   if (action === "update") {
     const id = body.id;
-    if (!id) return fail(400, "معرّف المستخدم مطلوب.");
+    if (!id) return fail(req, 400, "معرّف المستخدم مطلوب.");
 
     const patch: Record<string, unknown> = {};
     if (body.name !== undefined) patch.name = body.name.trim();
@@ -150,18 +149,18 @@ Deno.serve(async (req: Request) => {
     const authPatch: { email?: string; password?: string } = {};
     if (body.email !== undefined) {
       const email = body.email.trim().toLowerCase();
-      if (!EMAIL_RE.test(email)) return fail(400, "معرّف الدخول يجب أن يكون بصيغة بريد صحيحة.");
+      if (!EMAIL_RE.test(email)) return fail(req, 400, "معرّف الدخول يجب أن يكون بصيغة بريد صحيحة.");
       authPatch.email = email;
       patch.email = email;
     }
     if (body.password) {
-      if (body.password.length < 8) return fail(400, "كلمة المرور ثمانية محارف فأكثر.");
+      if (body.password.length < 8) return fail(req, 400, "كلمة المرور ثمانية محارف فأكثر.");
       authPatch.password = body.password;
     }
 
     if (Object.keys(authPatch).length > 0) {
       const { error } = await admin.auth.admin.updateUserById(id, authPatch);
-      if (error) return fail(400, error.message || "تعذّر تحديث بيانات الدخول.");
+      if (error) return fail(req, 400, error.message || "تعذّر تحديث بيانات الدخول.");
     }
 
     /* `null` = «لم يُرسَل» فلا يُمسّ — والدالة تطبّق coalesce.
@@ -176,14 +175,14 @@ Deno.serve(async (req: Request) => {
         p_permissions: (patch.permissions as Record<string, boolean> | undefined) ?? null,
         p_is_active: (patch.is_active as boolean | undefined) ?? null,
       });
-      if (error) return fail(400, error.message || "تعذّر تحديث الملفّ.");
+      if (error) return fail(req, 400, error.message || "تعذّر تحديث الملفّ.");
     }
-    return json(200, { ok: true });
+    return json(req, 200, { ok: true });
   }
 
   // ── حذف ──────────────────────────────────────────────────────
   const id = body.id;
-  if (!id) return fail(400, "معرّف المستخدم مطلوب.");
+  if (!id) return fail(req, 400, "معرّف المستخدم مطلوب.");
   /* الملفّ يُحذف أولاً **بفاعلٍ مُثبَت**، ثم الحساب. ولولا ذلك
      لسقط الملفّ بـ`ON DELETE CASCADE` من داخل GoTrue — أي بفاعلٍ
      فارغ، وهو أسوأ سؤالٍ يُترك بلا جواب: «من حذف هذا المستخدم؟».
@@ -193,12 +192,12 @@ Deno.serve(async (req: Request) => {
     p_actor: callerId,
     p_id: id,
   });
-  if (profErr) return fail(400, profErr.message || "تعذّر حذف ملفّ المستخدم.");
+  if (profErr) return fail(req, 400, profErr.message || "تعذّر حذف ملفّ المستخدم.");
 
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) {
     console.error("سقط ملفّ المستخدم وتعذّر حذف الحساب", error);
-    return fail(400, "حُذف ملفّ المستخدم وسقطت صلاحياته، وتعذّر حذف الحساب نفسه. أعد المحاولة.");
+    return fail(req, 400, "حُذف ملفّ المستخدم وسقطت صلاحياته، وتعذّر حذف الحساب نفسه. أعد المحاولة.");
   }
-  return json(200, { ok: true });
+  return json(req, 200, { ok: true });
 });
