@@ -189,6 +189,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   });
 
   // ===== WhatsApp State =====
+  /* ⚠️ مؤقّت — مسار الهجرة الاحتياطيّ فقط.
+     الرمز انتقل إلى أسرار Supabase، وهذان الحقلان يبقيان حتى يُثبت
+     المسار الخادميّ نفسه ميدانياً، ثم يُحذفان مع مسح localStorage. */
   const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
   const [waPhoneId, setWaPhoneId] = useState(() => localStorage.getItem("wa_phone_id") || "");
   const [waTemplate, setWaTemplate] = useState(() => localStorage.getItem("wa_template") ||
@@ -207,6 +210,58 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [waSelectedIds, setWaSelectedIds] = useState<Set<number>>(new Set());
   const [waSelectMode, setWaSelectMode] = useState<"all" | "select">("all");
   const [waTestPhone, setWaTestPhone] = useState("");
+
+  /* ═══ إرسال واتساب — الخادم أولاً، والمتصفّح احتياطاً مؤقّتاً ═══
+     الدالّة الحافّية `whatsapp-send` تحقن رمز Meta من أسرار البنية،
+     فلا يعود الرمز يعيش في المتصفّح. **رسالة واحدة لكل استدعاء**
+     عمداً: الحلقة والتقدّم يبقيان هنا، فلا سقف زمنيّ على الخادم
+     ولا تضيع حالة الصفوف الحيّة.
+
+     والاحتياطيّ يعمل فقط ما دام الموظّف يحمل رمزاً محلّياً — وهو
+     شبكة أمان الهجرة، تُحذف بعد التحقّق الميدانيّ. */
+  const waSendServer = async (payload: Record<string, unknown>): Promise<boolean> => {
+    const { data, error } = await supabase.functions.invoke("whatsapp-send", { body: payload });
+    if (error) return false;
+    return (data as { ok?: boolean } | null)?.ok === true;
+  };
+
+  /* المسار القديم — يُستعمل فقط إن فشل الخادم ووُجد رمز محلّي */
+  const waSendLegacy = async (payload: Record<string, unknown>): Promise<boolean> => {
+    if (!waToken || !waPhoneId) return false;
+    try {
+      const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return res.ok;
+    } catch { return false; }
+  };
+
+  /** نصّ إلى رقم — الخادم ثم الاحتياطيّ */
+  const waSendText = async (to: string, text: string): Promise<boolean> => {
+    const phone = to.replace(/\D/g, "");
+    if (await waSendServer({ kind: "text", to: phone, text })) return true;
+    return waSendLegacy({ messaging_product: "whatsapp", to: phone, type: "text", text: { body: text } });
+  };
+
+  /** مستند حاجّ — الخادم يوقّع الرابط بنفسه بعد التحقّق من الموسم.
+      والاحتياطيّ وحده هو الذي يوقّع من المتصفّح كما كان. */
+  const waSendDoc = async (
+    p: Passenger, docType: "hajj_permit" | "flight_ticket", caption: string, stored: string | null,
+  ): Promise<boolean> => {
+    const phone = (p.phone || "").replace(/\D/g, "");
+    if (!phone) return false;
+    if (await waSendServer({ kind: "document", to: phone, passengerId: p.id, docType })) return true;
+    const path = docKey(stored);
+    if (!path) return false;
+    const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, DOC_TTL.whatsapp);
+    if (!data?.signedUrl) return false;
+    return waSendLegacy({
+      messaging_product: "whatsapp", to: phone, type: "document",
+      document: { link: data.signedUrl, caption },
+    });
+  };
 
   // الأعمدة لتقرير الحجاج
   const ALL_COLS = [
@@ -2001,8 +2056,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
               <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 9, height: 9, borderRadius: "50%", background: waToken && waPhoneId ? "#25D366" : "#ccc" }} />
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{waToken && waPhoneId ? "API متصل ✔" : "API غير مضبوط"}</span>
+                    <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#25D366" }} />
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>الإرسال عبر الخادم ✔</span>
                   </div>
                   <button onClick={() => setWaShowSettings(p => !p)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
                     {waShowSettings ? "إخفاء" : "إعدادات API"}
@@ -2011,7 +2066,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 {waShowSettings && (
                   <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>API Token</div>
+                      <div style={{ fontSize: 11, color: "var(--warning)", marginBottom: 4, lineHeight: 1.5 }}>
+                        ⚠️ رمز احتياطيّ مؤقّت — لم يعد مطلوباً للإرسال.
+                        <br />الرمز الآن على الخادم، وهذا الحقل يُحذف بعد التحقّق.
+                      </div>
                       <input value={waToken} onChange={e => { setWaToken(e.target.value); localStorage.setItem("wa_token", e.target.value); }} placeholder="EAAxxxxx..." style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 11, fontFamily: "monospace", boxSizing: "border-box" }} />
                     </div>
                     <div>
@@ -2108,7 +2166,6 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   <input value={waTestPhone} onChange={e => setWaTestPhone(e.target.value)} placeholder="رقم الموبايل مع كود الدولة (مثال: 97450000000)" style={{ flex: 1, padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12, fontFamily: "var(--font-body)" }} />
                   <button onClick={async () => {
                     if (!waTestPhone) { showAlert("warning", "يرجى إدخال رقم الهاتف"); return; }
-                    if (!waToken || !waPhoneId) { showAlert("warning", "يرجى ضبط إعدادات API أولًا"); return; }
                     if (!passengers[0]) { showAlert("warning", "لا يوجد حجاج في القائمة"); return; }
                     const p = passengers[0];
                     const text = waTemplate
@@ -2118,12 +2175,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
-                    const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
-                      method: "POST",
-                      headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
-                      body: JSON.stringify({ messaging_product: "whatsapp", to: waTestPhone.replace(/\D/g, ""), type: "text", text: { body: text } })
-                    });
-                    showAlert(res.ok ? "success" : "error", res.ok ? "تم الإرسال التجريبي بنجاح" : "فشل الإرسال — يرجى التحقق من إعدادات API");
+                    const ok = await waSendText(waTestPhone, text);
+                    showAlert(ok ? "success" : "error", ok ? "تم الإرسال التجريبي بنجاح" : "فشل الإرسال — تحقّق من صلاحية إدارة البوابة أو إعدادات واتساب على الخادم");
                   }} style={{ padding: "7px 14px", borderRadius: 8, background: "var(--info-bg)", color: "var(--info)", border: "1px solid var(--info)", fontSize: 12, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
                     إرسال تجريبي
                   </button>
@@ -2136,7 +2189,6 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   ? passengers.filter(p => p.phone)
                   : passengers.filter(p => p.phone && waSelectedIds.has(p.id));
                 if (!sendList.length) { showAlert("warning", "لا يوجد حجاج محددون أو لديهم رقم هاتف"); return; }
-                if (!waToken || !waPhoneId) { showAlert("warning", "يرجى ضبط إعدادات API أولًا"); return; }
                 if (!confirm(`سيتم إرسال ${sendList.length} رسالة — هل أنت متأكد؟`)) return;
                 setWaSending(true);
                 setWaResults(sendList.map(p => ({ name: p.short_ar || p.name_ar, phone: p.phone, status: "pending" as const })));
@@ -2150,27 +2202,15 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
-                    const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
-                      method: "POST",
-                      headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
-                      body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "text", text: { body: text } })
-                    });
-                    if (res.ok) {
+                    const ok = await waSendText(p.phone, text);
+                    if (ok) {
                       // بعت التصريح لو مختار
                       if (waSendDocs.permit && p.hajj_permit_url) {
-                        const path = docKey(p.hajj_permit_url);
-                        if (path) {
-                          const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, DOC_TTL.whatsapp);
-                          if (data?.signedUrl) await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, { method: "POST", headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تصريح السفر" } }) });
-                        }
+                        await waSendDoc(p, "hajj_permit", "تصريح السفر", p.hajj_permit_url);
                       }
                       // بعت التذكرة لو مختارة
                       if (waSendDocs.ticket && p.flight_ticket_url) {
-                        const path = docKey(p.flight_ticket_url);
-                        if (path) {
-                          const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, DOC_TTL.whatsapp);
-                          if (data?.signedUrl) await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, { method: "POST", headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: p.phone.replace(/\D/g, ""), type: "document", document: { link: data.signedUrl, caption: "تذكرة الطيران" } }) });
-                        }
+                        await waSendDoc(p, "flight_ticket", "تذكرة الطيران", p.flight_ticket_url);
                       }
                       setWaResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: "success" as const } : r));
                     } else {
