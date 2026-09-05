@@ -282,6 +282,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             if (["بدون تذكرة"].includes(q)) return !p.flight_ticket_url;
             if (["بدون تصريح"].includes(q)) return !p.hajj_permit_url;
             if (["بدون جواز", "جواز غير مرفوع"].includes(q)) return !p.passport_url;
+            if (["بدون بطاقة", "بدون هوية"].includes(q)) return !p.national_id_url;
             return false;
           })();
           if (!smartMatch) return false;
