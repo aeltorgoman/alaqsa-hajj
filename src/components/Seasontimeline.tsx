@@ -317,24 +317,41 @@ interface AlertItem {
   target: string;
 }
 
-/* الأولوية **لون لا ترتيب**: عملٌ يخصّ المرحلة الحالية أو مرحلةً
-   سبقتها كان يجب أن ينتهي (متأخّر)، والمرحلة التالية مباشرةً تنبيهٌ
-   أخفّ، وما بعدها ليس متأخّراً لمجرّد أنه لم يبدأ. لا عتبات أيام
-   ولا قواعد زمنية مخترَعة — المرحلة وحدها مصدر الحكم. */
-type AlertTone = "due" | "soon" | "later";
+/* ═══ الظهور: المرحلة الحالية + ما لم يُحسم من مراحل مضت ═══
+   الكارت كان يعرض كل نقصٍ قائم منذ أول الموسم، فيشكو في مرحلة
+   «التسجيل» من ٢٢ حاجّاً بلا باص وبلا تذكرة وبلا تصريح — وهي
+   مهامّ لم يحن دورها بعد، فيغرق ما يمكن عمله اليوم فيما لا يمكن.
+   القاعدة: يظهر البند متى **بلغ الموسمُ مرحلته**، ولا يختفي بعدها
+   ما دام قائماً. وما لم تبلغه بعدُ يُخفى — لا يُخفَّف لونه.
+
+   وهذا حكمُ عرضٍ لا حكمُ مجال: `hasIssue("missing_bus", …)` تصدق
+   في «التسجيل» صدقاً تامّاً، وغرفة العمليات تعرضها هناك. الفرق أن
+   الداشبورد يسأل «هل يُنتظر من الموظّف عملٌ اليوم؟» لا «هل ينقص
+   الحاجّ شيء؟» — فلا مكان لهذا في `readiness.ts`. */
+const isReached = (phase: number, currentIdx: number) => phase <= currentIdx;
+
+/* الأولوية **لون لا ترتيب**، وقد صارت بندين لا ثلاثة بعد إخفاء
+   المستقبل: ما تأخّر عن مرحلةٍ مضت أشدّ ممّا هو عملُ اليوم. */
+type AlertTone = "overdue" | "current";
 /* `phase = -1` يعني «لا يخصّ مرحلة»: جوازٌ منتهٍ عطبٌ في الصلاحية
-   نفسها، لا عملٌ ينتظر دوره — فهو متأخّر في كل مرحلة. */
+   نفسها، لا عملٌ ينتظر دوره — فهو بالغٌ دائماً ومتأخّرٌ دائماً. */
 const alertTone = (phase: number, currentIdx: number): AlertTone =>
-  phase <= currentIdx ? "due" : phase === currentIdx + 1 ? "soon" : "later";
+  phase < currentIdx ? "overdue" : "current";
 const TONE_STYLE: Record<AlertTone, { color: string; bg: string }> = {
-  due:   { color: "var(--danger)",  bg: "var(--danger-bg)" },
-  soon:  { color: "var(--warning)", bg: "var(--warning-bg)" },
-  later: { color: "var(--muted)",   bg: "var(--ivory)" },
+  overdue: { color: "var(--danger)",  bg: "var(--danger-bg)" },
+  current: { color: "var(--warning)", bg: "var(--warning-bg)" },
 };
 
+/* «٥ بنود» — تمييزُ العربية لا صيغةٌ واحدة بـ«s» */
+function itemsLabel(n: number): string {
+  if (n === 1) return "بند واحد";
+  if (n === 2) return "بندان";
+  if (n <= 10) return `${n} بنود`;
+  return `${n} بنداً`;
+}
+
 function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
-  const { phases, currentIdx } = useSeasonPhases(passengers);
-  const phaseLabel = phases[currentIdx].label;
+  const { currentIdx } = useSeasonPhases(passengers);
   const hajj = passengers.filter(p => isHajj(p));
 
   /* الانتقال: التسجيل والسفر → صفحة الحجاج بالفلتر · التوزيع → صفحة الخدمة */
@@ -351,6 +368,8 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
        كيف يعرضه. وترتيب المصفوفة هو ترتيب العرض المعتمَد — ثابتٌ
        لا يتبع العدد ولا الشدّة ولا المرحلة. */
     const mk = (issue: IssueKey, label: string, icon: string, phase: number, target: string): AlertItem | null => {
+      /* شرطان معاً: بلغ الموسمُ مرحلة البند، وللبند عددٌ قائم */
+      if (!isReached(phase, currentIdx)) return null;
       const count = hajj.filter(p => hasIssue(issue, p)).length;
       return count > 0 ? { issue, label, count, icon, phase, target } : null;
     };
@@ -368,14 +387,16 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
       mk("missing_ticket",   "تذاكر طيران لم تُرفع", `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, 2, "passengers"),
       mk("missing_permit",   "تصاريح حج لم تُرفع", `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, 2, "passengers"),
 
-      /* ── ج) التوزيع — الترتيب المعتمَد: غرفة ← باص ← منى ← عرفة ← رحلة ── */
+      /* ── ج) التوزيع — الترتيب المعتمَد: غرفة ← باص ← منى ← عرفة ← رحلة.
+             وإسناد الرحلة مع التذاكر والتصاريح في «التجهيز» لا في
+             «التوزيع»: هذا ترتيبُ عرضٍ، وذاك مرحلةُ ظهور. ── */
       mk("missing_hotel",  "حجاج بدون غرفة فندق", `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, 1, "hotel"),
       mk("missing_bus",    "حجاج بدون باص", `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, 1, "buses"),
       mk("missing_mina",   "حجاج بدون مخيم منى", `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, 1, "mina"),
       mk("missing_arafah", "حجاج بدون مخيم عرفة", `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, 1, "arafa"),
-      mk("missing_flight", "حجاج بدون رحلة طيران", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 1, "flights"),
+      mk("missing_flight", "حجاج بدون رحلة طيران", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 2, "flights"),
     ].filter((it): it is AlertItem => it !== null);
-  }, [hajj]);
+  }, [hajj, currentIdx]);
 
   return (
     <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, boxShadow: "0 2px 10px rgba(0,0,0,.04)" }}>
@@ -383,8 +404,10 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
       <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-dark, var(--primary)))", padding: "11px 14px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: items.length > 0 ? "var(--danger-soft, #fca5a5)" : "var(--success-soft, #86efac)", animation: "blink 2s infinite", flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 900, color: "var(--text-inverse)", flex: 1 }}>يحتاج انتباهك</span>
-        <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--accent-soft, #F3D98B)", background: "rgba(0,0,0,.2)", padding: "2px 9px", borderRadius: 99, whiteSpace: "nowrap" }}>{phaseLabel}</span>
-        {items.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "var(--text-inverse)", padding: "2px 8px", borderRadius: 99 }}>{items.length}</span>}
+        {/* الشارة تعدّ ما يُعرض فعلاً. كانت تقول «١٣ التوزيع» —
+            رقماً يشمل بنوداً لم يحن دورها، ووسماً لمرحلةٍ واحدة
+            بينما الكارت يجمع مراحل بلغها الموسم كلَّها. */}
+        {items.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "var(--text-inverse)", padding: "2px 9px", borderRadius: 99, whiteSpace: "nowrap" }}>{itemsLabel(items.length)}</span>}
       </div>
 
       {/* البنود */}
