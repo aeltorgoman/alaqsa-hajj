@@ -3,6 +3,7 @@ import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { isMissingService } from "../utils";
+import { hasIssue, type IssueKey } from "../utils/readiness";
 import { useSeason } from "../season/useSeason";
 
 /* ════════════════════════════════════════════════════════════
@@ -144,8 +145,7 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
         {next && (
           <div style={{ minWidth: 135, background: "var(--ivory)", border: "1px solid var(--line)", borderRadius: 11, padding: "10px 14px" }}>
             <div style={{ fontSize: 10.5, color: "var(--accent-dark)", marginBottom: 3, fontWeight: 800 }}>المحطة القادمة</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--ink)", marginBottom: 1 }}>{next.label}</div>
-            <div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}>{next.sub}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--ink)" }}>{next.label}</div>
           </div>
         )}
       </div>
@@ -306,61 +306,97 @@ function TotalPilgrimsCard({ passengers }: { passengers: Passenger[] }) {
 
 
 /* ════════════════════════════════════════════════════════════
-   الكارت الذكي — تنبيهات حسب المرحلة الحالية
-   يقرأ المرحلة تلقائياً من useSeasonPhases
+   الكارت الذكي — العمل المتبقّي وحده: مستندات ناقصة ثم توزيعات
+   ناقصة، بترتيب ثابت لا يتغيّر بالمرحلة ولا بالعدد. المرحلة تدخل
+   في **الإبراز البصري** فقط (انظر alertTone).
    ════════════════════════════════════════════════════════════ */
-function isExpiredDate(d?: string | null) {
-  if (!d) return false;
-  return new Date(d) < new Date();
+interface AlertItem {
+  issue: IssueKey; label: string; count: number; icon: string;
+  /** المرحلة المالكة للعمل (فهرس في `phases`) — للإبراز البصريّ وحده */
+  phase: number;
+  target: string;
 }
-function isExpiringSoonDate(d?: string | null) {
-  if (!d) return false;
-  const dt = new Date(d).getTime();
-  const now = Date.now();
-  return dt >= now && dt <= now + 180 * 86400000;
+
+/* ═══ الظهور: المرحلة الحالية + ما لم يُحسم من مراحل مضت ═══
+   الكارت كان يعرض كل نقصٍ قائم منذ أول الموسم، فيشكو في مرحلة
+   «التسجيل» من ٢٢ حاجّاً بلا باص وبلا تذكرة وبلا تصريح — وهي
+   مهامّ لم يحن دورها بعد، فيغرق ما يمكن عمله اليوم فيما لا يمكن.
+   القاعدة: يظهر البند متى **بلغ الموسمُ مرحلته**، ولا يختفي بعدها
+   ما دام قائماً. وما لم تبلغه بعدُ يُخفى — لا يُخفَّف لونه.
+
+   وهذا حكمُ عرضٍ لا حكمُ مجال: `hasIssue("missing_bus", …)` تصدق
+   في «التسجيل» صدقاً تامّاً، وغرفة العمليات تعرضها هناك. الفرق أن
+   الداشبورد يسأل «هل يُنتظر من الموظّف عملٌ اليوم؟» لا «هل ينقص
+   الحاجّ شيء؟» — فلا مكان لهذا في `readiness.ts`. */
+const isReached = (phase: number, currentIdx: number) => phase <= currentIdx;
+
+/* الأولوية **لون لا ترتيب**، وقد صارت بندين لا ثلاثة بعد إخفاء
+   المستقبل: ما تأخّر عن مرحلةٍ مضت أشدّ ممّا هو عملُ اليوم. */
+type AlertTone = "overdue" | "current";
+/* `phase = -1` يعني «لا يخصّ مرحلة»: جوازٌ منتهٍ عطبٌ في الصلاحية
+   نفسها، لا عملٌ ينتظر دوره — فهو بالغٌ دائماً ومتأخّرٌ دائماً. */
+const alertTone = (phase: number, currentIdx: number): AlertTone =>
+  phase < currentIdx ? "overdue" : "current";
+const TONE_STYLE: Record<AlertTone, { color: string; bg: string }> = {
+  overdue: { color: "var(--danger)",  bg: "var(--danger-bg)" },
+  current: { color: "var(--warning)", bg: "var(--warning-bg)" },
+};
+
+/* «٥ بنود» — تمييزُ العربية لا صيغةٌ واحدة بـ«s» */
+function itemsLabel(n: number): string {
+  if (n === 1) return "بند واحد";
+  if (n === 2) return "بندان";
+  if (n <= 10) return `${n} بنود`;
+  return `${n} بنداً`;
 }
 
 function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
-  const { phases, currentIdx } = useSeasonPhases(passengers);
-  const phaseId = phases[currentIdx].id;
-  const phaseLabel = phases[currentIdx].label;
+  const { currentIdx } = useSeasonPhases(passengers);
   const hajj = passengers.filter(p => isHajj(p));
 
   /* الانتقال: التسجيل والسفر → صفحة الحجاج بالفلتر · التوزيع → صفحة الخدمة */
-  const go = (target: string, searchTerm?: string) => {
-    if (searchTerm) (window as any).__hajj_pending_search__ = searchTerm;
+  /* التنقّل بمفتاح النقص لا بالنصّ العربيّ: كان الكارت يمرّر
+     «بدون باص» فتعيد صفحة الحجاج استنباط الشرط من التسمية — أي
+     تعريفٌ ثالث للنقص مكتوبٌ بالبحث. الآن يعبر `IssueKey` نفسه. */
+  const go = (target: string, issue?: IssueKey) => {
+    if (issue) (window as { __hajj_pending_issue__?: IssueKey }).__hajj_pending_issue__ = issue;
     setPage(target);
   };
 
   const items = useMemo(() => {
-    const cnt = (fn: (p: Passenger) => boolean) => hajj.filter(fn).length;
-    const mk = (key: string, label: string, desc: string, count: number, icon: string, critical: boolean, target: string, term?: string) =>
-      count > 0 ? { key, label, desc, count, icon, critical, target, term } : null;
+    /* العدُّ من `hasIssue` وحدها: الكارت لا يعرف ما «النقص»، يعرف
+       كيف يعرضه. وترتيب المصفوفة هو ترتيب العرض المعتمَد — ثابتٌ
+       لا يتبع العدد ولا الشدّة ولا المرحلة. */
+    const mk = (issue: IssueKey, label: string, icon: string, phase: number, target: string): AlertItem | null => {
+      /* شرطان معاً: بلغ الموسمُ مرحلة البند، وللبند عددٌ قائم */
+      if (!isReached(phase, currentIdx)) return null;
+      const count = hajj.filter(p => hasIssue(issue, p)).length;
+      return count > 0 ? { issue, label, count, icon, phase, target } : null;
+    };
 
-    if (phaseId === "reg") {
-      return [
-        mk("expired_passport", "جوازات منتهية الصلاحية", "يحتاج تجديد فوري", cnt(p => isExpiredDate(p.expiry)), `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, true, "passengers", "جواز منتهي"),
-        mk("expiring_soon", "جوازات تنتهي خلال ٦ أشهر", "تحتاج متابعة عاجلة", cnt(p => !isExpiredDate(p.expiry) && isExpiringSoonDate(p.expiry)), `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, true, "passengers", "جواز قريب"),
-        mk("no_photo", "صور شخصية ناقصة", "مستند مطلوب للتسجيل", cnt(p => !p.photo_url), `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, false, "passengers", "بدون صورة"),
-        mk("no_passport_file", "جوازات لم يتم رفعها", "مستندات مفقودة", cnt(p => !p.passport_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, false, "passengers", "بدون جواز"),
-        mk("no_phone", "حجاج بدون رقم هاتف", "بيانات التواصل مفقودة", cnt(p => !p.phone), `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, false, "passengers", "بدون تليفون"),
-      ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
-    }
-    if (phaseId === "dist") {
-      return [
-        mk("no_bus", "حجاج بدون باص", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "bus")), `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, false, "buses"),
-        mk("no_flight", "حجاج بدون رحلة طيران", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "flight")), `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, false, "flights"),
-        mk("no_room", "حجاج بدون غرفة فندق", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "hotel_type")), `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, false, "hotel"),
-        mk("no_mina", "حجاج بدون مخيم منى", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "camp_mina")), `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, false, "mina"),
-        mk("no_arafa", "حجاج بدون مخيم عرفة", "لم يتم التوزيع بعد", cnt(p => isMissingService(p, "camp_arafa")), `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, false, "arafa"),
-      ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
-    }
-    /* prep + travel */
     return [
-      mk("no_permit", "حجاج بدون تصريح حج", "تصريح الحج مفقود", cnt(p => !p.hajj_permit_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, true, "passengers", "بدون تصريح"),
-      mk("no_ticket", "حجاج بدون تذكرة طيران", "مستند السفر مفقود", cnt(p => !p.flight_ticket_url), `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, false, "passengers", "بدون تذكرة"),
-    ].filter(Boolean).sort((a: any, b: any) => b.count - a.count) as any[];
-  }, [hajj, phaseId]);
+      /* ── أ) صلاحية الجواز — عطبٌ لا ينتظر مرحلة ── */
+      mk("expired_passport",  "جوازات منتهية الصلاحية", `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, -1, "passengers"),
+      mk("expiring_passport", "جوازات تنتهي خلال ٦ أشهر", `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, 0, "passengers"),
+
+      /* ── ب) تواصل ومستندات ── */
+      mk("missing_phone",    "حجاج بدون رقم هاتف", `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, 0, "passengers"),
+      mk("missing_passport", "جوازات لم تُرفع", `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 0, "passengers"),
+      mk("missing_id",       "بطاقات هوية لم تُرفع", `<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M14 10h5"/><path d="M14 14h3"/>`, 0, "passengers"),
+      mk("missing_photo",    "صور شخصية ناقصة", `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, 0, "passengers"),
+      mk("missing_ticket",   "تذاكر طيران لم تُرفع", `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, 2, "passengers"),
+      mk("missing_permit",   "تصاريح حج لم تُرفع", `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, 2, "passengers"),
+
+      /* ── ج) التوزيع — الترتيب المعتمَد: غرفة ← باص ← منى ← عرفة ← رحلة.
+             وإسناد الرحلة مع التذاكر والتصاريح في «التجهيز» لا في
+             «التوزيع»: هذا ترتيبُ عرضٍ، وذاك مرحلةُ ظهور. ── */
+      mk("missing_hotel",  "حجاج بدون غرفة فندق", `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, 1, "hotel"),
+      mk("missing_bus",    "حجاج بدون باص", `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, 1, "buses"),
+      mk("missing_mina",   "حجاج بدون مخيم منى", `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, 1, "mina"),
+      mk("missing_arafah", "حجاج بدون مخيم عرفة", `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, 1, "arafa"),
+      mk("missing_flight", "حجاج بدون رحلة طيران", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 2, "flights"),
+    ].filter((it): it is AlertItem => it !== null);
+  }, [hajj, currentIdx]);
 
   return (
     <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, boxShadow: "0 2px 10px rgba(0,0,0,.04)" }}>
@@ -368,36 +404,35 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
       <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-dark, var(--primary)))", padding: "11px 14px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: items.length > 0 ? "var(--danger-soft, #fca5a5)" : "var(--success-soft, #86efac)", animation: "blink 2s infinite", flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 900, color: "var(--text-inverse)", flex: 1 }}>يحتاج انتباهك</span>
-        <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--accent-soft, #F3D98B)", background: "rgba(0,0,0,.2)", padding: "2px 9px", borderRadius: 99, whiteSpace: "nowrap" }}>{phaseLabel}</span>
-        {items.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "var(--text-inverse)", padding: "2px 8px", borderRadius: 99 }}>{items.length}</span>}
+        {/* الشارة تعدّ ما يُعرض فعلاً. كانت تقول «١٣ التوزيع» —
+            رقماً يشمل بنوداً لم يحن دورها، ووسماً لمرحلةٍ واحدة
+            بينما الكارت يجمع مراحل بلغها الموسم كلَّها. */}
+        {items.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "var(--text-inverse)", padding: "2px 9px", borderRadius: 99, whiteSpace: "nowrap" }}>{itemsLabel(items.length)}</span>}
       </div>
 
       {/* البنود */}
-      <div style={{ padding: 8, flex: 1, overflowY: "auto", minHeight: 0 }}>
+      <div style={{ padding: "5px 6px", flex: 1, overflowY: "auto", minHeight: 0 }}>
         {items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "26px 14px", color: "var(--muted)" }}>
             <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.8" strokeLinecap="round" style={{ marginBottom: 8, opacity: .5 }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--success)" }}>كل شيء مكتمل</div>
-            <div style={{ fontSize: 10.5, marginTop: 3 }}>لا توجد بنود تحتاج متابعة في هذه المرحلة</div>
+            <div style={{ fontSize: 10.5, marginTop: 3 }}>لا مستندات ناقصة ولا توزيعات معلّقة</div>
           </div>
         ) : items.map(it => {
-          const clr = it.critical ? "var(--danger)" : "var(--warning)";
-          const bg  = it.critical ? "var(--danger-bg)" : "var(--warning-bg)";
+          const tone = alertTone(it.phase, currentIdx);
+          const { color: clr, bg } = TONE_STYLE[tone];
           return (
-            <div key={it.key} onClick={() => go(it.target, it.term)}
-              style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 9, marginBottom: 5, cursor: "pointer", border: "1px solid transparent", transition: ".12s" }}
+            <div key={it.issue} onClick={() => go(it.target, it.issue)}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 9px", borderRadius: 8, marginBottom: 1, cursor: "pointer", border: "1px solid transparent", transition: ".12s" }}
               onMouseEnter={e => { const t = e.currentTarget as HTMLDivElement; t.style.background = "var(--ivory)"; t.style.borderColor = "var(--line)"; }}
               onMouseLeave={e => { const t = e.currentTarget as HTMLDivElement; t.style.background = "transparent"; t.style.borderColor = "transparent"; }}>
-              <span style={{ width: 30, height: 30, borderRadius: 9, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: it.icon }} />
+              <span style={{ width: 24, height: 24, borderRadius: 7, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: it.icon }} />
               </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</div>
-                {it.desc && <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 600, marginTop: 1 }}>{it.desc}</div>}
-              </span>
-              <span style={{ fontSize: 19, fontWeight: 900, lineHeight: 1, color: clr, flexShrink: 0, fontFamily: "var(--font-heading)" }}>{it.count}</span>
-              <span style={{ color: "var(--line)", flexShrink: 0 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.label}</span>
+              <span style={{ fontSize: 16, fontWeight: 900, lineHeight: 1, color: clr, flexShrink: 0, fontFamily: "var(--font-heading)" }}>{it.count}</span>
+              <span style={{ color: "var(--line)", flexShrink: 0, display: "flex" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
               </span>
             </div>
           );
@@ -405,20 +440,11 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
       </div>
 
       {items.length > 0 && (
-        <div style={{ borderTop: "1px solid var(--line)", padding: "7px 12px", background: "var(--ivory)", flexShrink: 0 }}>
-          {phaseId === "dist" && (() => {
-            const incomplete = hajj.filter(p => isMissingService(p, "bus") || isMissingService(p, "flight") || isMissingService(p, "hotel_type") || isMissingService(p, "camp_mina") || isMissingService(p, "camp_arafa")).length;
-            return incomplete > 0 ? (
-              <div style={{ fontSize: 10.5, color: "var(--ink)", fontWeight: 800, marginBottom: 5, paddingBottom: 5, borderBottom: "1px dashed var(--line)" }}>
-                {incomplete} حاج لم يكتمل توزيعهم
-                <span style={{ fontWeight: 600, color: "var(--muted)", fontSize: 9.5 }}> · قد يظهر الحاج في أكثر من بند</span>
-              </div>
-            ) : null;
-          })()}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 700 }}>اضغط أي بند للانتقال</span>
-            <span onClick={() => setPage("passengers")} style={{ fontSize: 10.5, color: "var(--primary)", fontWeight: 800, cursor: "pointer" }}>عرض الكل ←</span>
-          </div>
+        <div style={{ borderTop: "1px solid var(--line)", padding: "6px 12px", background: "var(--ivory)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          {/* التذييل سطرٌ واحد: التنويه ضروريّ (الحاجّ قد يتكرّر) لكنه
+              لا يستحق صفّاً مستقلاً بعد ضغط الكارت. */}
+          <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>اضغط أي بند للانتقال · قد يظهر الحاج في أكثر من بند</span>
+          <span onClick={() => setPage("passengers")} style={{ fontSize: 10.5, color: "var(--primary)", fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>عرض الكل ←</span>
         </div>
       )}
     </div>

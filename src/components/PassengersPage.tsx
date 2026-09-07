@@ -13,7 +13,8 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { DocImage } from "./DocImage";
-import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { hasIssue, isIssueKey, type IssueKey } from "../utils/readiness";
 /* المقارنة بالاسم تسكن مع المودال: كلاهما يخدم نفس السؤال، ونسخة
    واحدة منها تكفي المسارين */
 import { PermitConfirmModal } from "./PermitConfirmModal";
@@ -116,6 +117,44 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
+/* عبارات البحث الطبيعيّ → مفتاح النقص. الجدول تسمياتٌ لا منطق:
+   لا شرط هنا، فقط أيّ عبارةٍ تعني أيّ مفتاح. */
+const SEARCH_ISSUE_PHRASES: Record<string, IssueKey> = {
+  "بدون صورة": "missing_photo", "ناقص صورة": "missing_photo",
+  "بدون تليفون": "missing_phone", "بدون هاتف": "missing_phone",
+  "جواز منتهي": "expired_passport", "جواز منتهي الصلاحية": "expired_passport",
+  "جواز قريب": "expiring_passport", "ينتهي قريبا": "expiring_passport", "ينتهي قريباً": "expiring_passport",
+  "بدون رحلة": "missing_flight", "بدون طيران": "missing_flight",
+  "بدون باص": "missing_bus", "بدون حافلة": "missing_bus",
+  "بدون فندق": "missing_hotel", "بدون غرفة": "missing_hotel",
+  "بدون تذكرة": "missing_ticket",
+  "بدون تصريح": "missing_permit",
+  "بدون جواز": "missing_passport", "جواز غير مرفوع": "missing_passport",
+  "بدون بطاقة": "missing_id", "بدون هوية": "missing_id",
+};
+
+/* فلتر غرفة العمليات: مفتاح نقصٍ مشترك، أو «أرقام مكرّرة» — وهذا
+   الأخير شرطٌ بين الحجّاج لا شرطُ حاجٍّ واحد، فلا مكان له في وحدة
+   الجاهزية ويبقى محليّاً. */
+type OpsFilter = IssueKey | "dup_phones" | null;
+
+/* الأرقام المكرّرة: **مجموعة معرّفات** لا عدّاد أرقام. كان الشارة
+   تعدّ الأرقامَ المكرّرة والفلترُ يعرض الحجّاجَ حاملي تلك الأرقام،
+   فثلاثةُ حجّاج على رقمٍ واحد كانت تُقرأ «١» ثم تفتح على ثلاثة.
+   والمجموعة الواحدة تخدم العدّ والقائمة معاً فلا يفترقان. */
+function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
+  const byPhone = new Map<string, number[]>();
+  for (const p of hajj) {
+    const phone = (p.phone || "").trim();
+    if (!phone) continue;
+    const list = byPhone.get(phone);
+    if (list) list.push(p.id); else byPhone.set(phone, [p.id]);
+  }
+  const ids = new Set<number>();
+  for (const list of byPhone.values()) if (list.length > 1) list.forEach(id => ids.add(id));
+  return ids;
+}
+
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const reportBranding = useReportBranding();
   const companyIdentity = useCompanyIdentity();
@@ -139,7 +178,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
   const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
-  const [opsFilter, setOpsFilter] = useState<string | null>(null);
+  const [opsFilter, setOpsFilter] = useState<OpsFilter>(null);
   const [profileTab, setProfileTab] = useState<"data" | "svc" | "docs" | "family">("data");
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
@@ -162,12 +201,15 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
   }, []);
 
-  // استقبال فلتر البحث من الكارت الذكي في الداشبورد
+  /* استقبال التنقّل من كارت «يحتاج انتباهك»: يصل **مفتاح النقص**
+     لا نصّه العربيّ، فيدخل فلتر غرفة العمليات نفسه — تعريفٌ واحد
+     للشرط بدل استنباطه من تسمية مترجَمة. */
   useEffect(() => {
-    const term = (window as any).__hajj_pending_search__;
-    if (term) {
-      (window as any).__hajj_pending_search__ = null;
-      setSearch(term);
+    const w = window as { __hajj_pending_issue__?: IssueKey };
+    const issue = w.__hajj_pending_issue__;
+    if (issue && isIssueKey(issue)) {
+      w.__hajj_pending_issue__ = undefined;
+      setOpsFilter(issue);
     }
   }, []);
 
@@ -224,9 +266,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     { key: "nat", label: "الجنسية", opts: optsFrom(p => p.nat) },
   ];
 
+  /* مصدرٌ واحد للأرقام المكرّرة: منه تُحسب الشارة ومنه تُبنى
+     القائمة، على نطاق الحجّاج وحدهم في الحالتين. */
+  const dupPhoneIds = useMemo(() => duplicatePhoneIds(passengers.filter(p => isHajj(p))), [passengers]);
+
   const filtered = useMemo(() => passengers
     .filter(p => {
-      if (p.passenger_type && p.passenger_type !== "حاج") return false;
+      if (!isHajj(p)) return false;
       if (search) {
         const q = search.trim().toLowerCase();
 
@@ -272,17 +318,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch && !roomMatch) {
           // Smart Search — كلمات طبيعية
           const smartMatch = (() => {
-            if (["بدون صورة", "ناقص صورة"].includes(q)) return !p.photo_url;
-            if (["بدون تليفون", "بدون هاتف"].includes(q)) return !p.phone;
-            if (["جواز منتهي", "جواز منتهي الصلاحية"].includes(q)) return !!(p.expiry && isExpired(p.expiry));
-            if (["جواز قريب", "ينتهي قريبا", "ينتهي قريباً"].includes(q)) return !!(p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry));
-            if (["بدون رحلة", "بدون طيران"].includes(q)) return !(p as any).flight_id;
-            if (["بدون باص", "بدون حافلة"].includes(q)) return !(p as any).bus_id;
-            if (["بدون فندق", "بدون غرفة"].includes(q)) return !(p as any).room_id;
-            if (["بدون تذكرة"].includes(q)) return !p.flight_ticket_url;
-            if (["بدون تصريح"].includes(q)) return !p.hajj_permit_url;
-            if (["بدون جواز", "جواز غير مرفوع"].includes(q)) return !p.passport_url;
-            return false;
+            /* العبارات وظيفةُ بحثٍ للمستخدم فتبقى — لكنها لم تعد
+               تحمل تعريف الشرط: كل عبارة تُترجَم إلى `IssueKey`
+               والحكمُ من `hasIssue` وحدها. لهذا صار «بدون باص»
+               يحترم استثناء «بدون» كما تفعل بقيّة الشاشات. */
+            const issue = SEARCH_ISSUE_PHRASES[q];
+            return issue ? hasIssue(issue, p) : false;
           })();
           if (!smartMatch) return false;
         }
@@ -302,27 +343,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     })
     .filter(p => {
       if (!opsFilter) return true;
-      if (opsFilter === "no_photo") return !p.photo_url;
-      if (opsFilter === "no_passport_file") return !p.passport_url;
-      if (opsFilter === "expired_passport") return !!(p.expiry && isExpired(p.expiry));
-      if (opsFilter === "expiring_soon") return !!(p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry));
-      if (opsFilter === "no_phone") return !p.phone;
-      if (opsFilter === "dup_phones") {
-        const phoneCounts: Record<string, number> = {};
-        passengers.forEach(x => { if (x.phone) phoneCounts[x.phone] = (phoneCounts[x.phone] || 0) + 1; });
-        return !!(p.phone && phoneCounts[p.phone] > 1);
-      }
-      if (opsFilter === "no_flight") return isMissingService(p, "flight");
-      if (opsFilter === "no_bus") return isMissingService(p, "bus");
-      if (opsFilter === "no_room") return isMissingService(p, "hotel_type");
-      if (opsFilter === "no_mina") return isMissingService(p, "camp_mina");
-      if (opsFilter === "no_arafa") return isMissingService(p, "camp_arafa");
-      if (opsFilter === "no_ticket") return !p.flight_ticket_url;
-      if (opsFilter === "no_permit") return !p.hajj_permit_url;
-      return true;
+      if (opsFilter === "dup_phones") return dupPhoneIds.has(p.id);
+      /* بندٌ إخباريّ («تم تسجيل N اليوم») ليس نقصاً ولا يفلتر —
+         كما كان قبل التوحيد. */
+      if (!isIssueKey(opsFilter)) return true;
+      return hasIssue(opsFilter, p);
     })
     .sort(byOrder("sort_order")),
-  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter]);
+  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter, dupPhoneIds]);
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
@@ -1409,40 +1437,42 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         {/* ══ مركز العمليات — جانبي بالطول ══ */}
         {(() => {
           const hajj = passengers.filter(p => isHajj(p));
-          const noPhoto = hajj.filter(p => !p.photo_url).length;
-          const noPassportFile = hajj.filter(p => !p.passport_url).length;
-          const expiredPassport = hajj.filter(p => p.expiry && isExpired(p.expiry)).length;
-          const expiringSoon = hajj.filter(p => p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry)).length;
-          const noPhone = hajj.filter(p => !p.phone).length;
-          const phoneCounts: Record<string, number> = {};
-          hajj.forEach(p => { if (p.phone) phoneCounts[p.phone] = (phoneCounts[p.phone] || 0) + 1; });
-          const dupPhones = Object.values(phoneCounts).filter(c => c > 1).length;
-          const noFlight = hajj.filter(p => isMissingService(p, "flight")).length;
-          const noBus = hajj.filter(p => isMissingService(p, "bus")).length;
-          const noRoom = hajj.filter(p => isMissingService(p, "hotel_type")).length;
-          const noMina = hajj.filter(p => isMissingService(p, "camp_mina")).length;
-          const noArafa = hajj.filter(p => isMissingService(p, "camp_arafa")).length;
-          const noTicket = hajj.filter(p => !p.flight_ticket_url).length;
-          const noPermit = hajj.filter(p => !p.hajj_permit_url).length;
+          /* العدُّ من `hasIssue` — وهي نفسها التي يفلتر بها
+             `opsFilter` أدناه. فما تقوله الشارة هو ما تفتح عليه. */
+          const n = (issue: IssueKey) => hajj.filter(p => hasIssue(issue, p)).length;
+          const noPhoto = n("missing_photo");
+          const noPassportFile = n("missing_passport");
+          const expiredPassport = n("expired_passport");
+          const expiringSoon = n("expiring_passport");
+          const noPhone = n("missing_phone");
+          /* حجّاجٌ لا أرقام: نفس المجموعة التي يفلتر بها الضغط */
+          const dupPhones = dupPhoneIds.size;
+          const noFlight = n("missing_flight");
+          const noBus = n("missing_bus");
+          const noRoom = n("missing_hotel");
+          const noMina = n("missing_mina");
+          const noArafa = n("missing_arafah");
+          const noTicket = n("missing_ticket");
+          const noPermit = n("missing_permit");
 
           // نظام الأولويات
           const criticalItems = [
             expiredPassport > 0 && { key: "expired_passport", label: "جوازات منتهية الصلاحية", desc: "يحتاج تجديد فوري", count: expiredPassport, icon: `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, priority: "critical" as const },
-            expiringSoon > 0 && { key: "expiring_soon", label: "جوازات تنتهي خلال ٦ أشهر", desc: "تحتاج متابعة عاجلة", count: expiringSoon, icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, priority: "critical" as const },
+            expiringSoon > 0 && { key: "expiring_passport", label: "جوازات تنتهي خلال ٦ أشهر", desc: "تحتاج متابعة عاجلة", count: expiringSoon, icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, priority: "critical" as const },
           ].filter(Boolean) as any[];
 
           const importantItems = [
-            noPhoto > 0 && { key: "no_photo", label: "صور شخصية ناقصة", desc: "مستند مطلوب للتسجيل", count: noPhoto, icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, priority: "important" as const },
-            noPassportFile > 0 && { key: "no_passport_file", label: "جوازات لم يتم رفعها", desc: "مستندات مفقودة", count: noPassportFile, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, priority: "important" as const },
-            noPhone > 0 && { key: "no_phone", label: "حجاج بدون رقم هاتف", desc: "بيانات التواصل مفقودة", count: noPhone, icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, priority: "important" as const },
+            noPhoto > 0 && { key: "missing_photo", label: "صور شخصية ناقصة", desc: "مستند مطلوب للتسجيل", count: noPhoto, icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, priority: "important" as const },
+            noPassportFile > 0 && { key: "missing_passport", label: "جوازات لم يتم رفعها", desc: "مستندات مفقودة", count: noPassportFile, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, priority: "important" as const },
+            noPhone > 0 && { key: "missing_phone", label: "حجاج بدون رقم هاتف", desc: "بيانات التواصل مفقودة", count: noPhone, icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, priority: "important" as const },
             dupPhones > 0 && { key: "dup_phones", label: "أرقام هواتف مكررة", desc: "يحتاج مراجعة ومطابقة", count: dupPhones, icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>`, priority: "important" as const },
-            noFlight > 0 && { key: "no_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, priority: "important" as const },
-            noBus > 0 && { key: "no_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>`, priority: "important" as const },
-            noRoom > 0 && { key: "no_room", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
-            noMina > 0 && { key: "no_mina", label: "حجاج بدون مخيم منى", desc: "لم يتم التوزيع بعد", count: noMina, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
-            noArafa > 0 && { key: "no_arafa", label: "حجاج بدون مخيم عرفة", desc: "لم يتم التوزيع بعد", count: noArafa, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
-            noTicket > 0 && { key: "no_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>`, priority: "important" as const },
-            noPermit > 0 && { key: "no_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, priority: "important" as const },
+            noFlight > 0 && { key: "missing_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, priority: "important" as const },
+            noBus > 0 && { key: "missing_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>`, priority: "important" as const },
+            noRoom > 0 && { key: "missing_hotel", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
+            noMina > 0 && { key: "missing_mina", label: "حجاج بدون مخيم منى", desc: "لم يتم التوزيع بعد", count: noMina, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
+            noArafa > 0 && { key: "missing_arafah", label: "حجاج بدون مخيم عرفة", desc: "لم يتم التوزيع بعد", count: noArafa, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
+            noTicket > 0 && { key: "missing_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>`, priority: "important" as const },
+            noPermit > 0 && { key: "missing_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, priority: "important" as const },
           ].filter(Boolean) as any[];
 
           // حجاج اليوم
@@ -1453,9 +1483,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           ].filter(Boolean) as any[];
 
           const allItems = [...criticalItems, ...importantItems, ...infoItems];
-          const regKeys = ["no_photo", "no_passport_file", "expired_passport", "expiring_soon", "no_phone", "dup_phones"];
-          const distKeys = ["no_flight", "no_bus", "no_room", "no_mina", "no_arafa"];
-          const travelKeys = ["no_ticket", "no_permit", "added_today"];
+          const regKeys = ["missing_photo", "missing_passport", "expired_passport", "expiring_passport", "missing_phone", "dup_phones"];
+          const distKeys = ["missing_flight", "missing_bus", "missing_hotel", "missing_mina", "missing_arafah"];
+          const travelKeys = ["missing_ticket", "missing_permit", "added_today"];
           const items = opsTab === "reg" ? allItems.filter(i => regKeys.includes(i.key)) :
                         opsTab === "dist" ? allItems.filter(i => distKeys.includes(i.key)) :
                         allItems.filter(i => travelKeys.includes(i.key));
