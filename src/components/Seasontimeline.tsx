@@ -3,6 +3,7 @@ import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
 import { isMissingService } from "../utils";
+import { hasIssue, type IssueKey } from "../utils/readiness";
 import { useSeason } from "../season/useSeason";
 
 /* ════════════════════════════════════════════════════════════
@@ -310,10 +311,10 @@ function TotalPilgrimsCard({ passengers }: { passengers: Passenger[] }) {
    في **الإبراز البصري** فقط (انظر alertTone).
    ════════════════════════════════════════════════════════════ */
 interface AlertItem {
-  key: string; label: string; count: number; icon: string;
+  issue: IssueKey; label: string; count: number; icon: string;
   /** المرحلة المالكة للعمل (فهرس في `phases`) — للإبراز البصريّ وحده */
   phase: number;
-  target: string; term?: string;
+  target: string;
 }
 
 /* الأولوية **لون لا ترتيب**: عملٌ يخصّ المرحلة الحالية أو مرحلةً
@@ -321,6 +322,8 @@ interface AlertItem {
    أخفّ، وما بعدها ليس متأخّراً لمجرّد أنه لم يبدأ. لا عتبات أيام
    ولا قواعد زمنية مخترَعة — المرحلة وحدها مصدر الحكم. */
 type AlertTone = "due" | "soon" | "later";
+/* `phase = -1` يعني «لا يخصّ مرحلة»: جوازٌ منتهٍ عطبٌ في الصلاحية
+   نفسها، لا عملٌ ينتظر دوره — فهو متأخّر في كل مرحلة. */
 const alertTone = (phase: number, currentIdx: number): AlertTone =>
   phase <= currentIdx ? "due" : phase === currentIdx + 1 ? "soon" : "later";
 const TONE_STYLE: Record<AlertTone, { color: string; bg: string }> = {
@@ -335,33 +338,43 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
   const hajj = passengers.filter(p => isHajj(p));
 
   /* الانتقال: التسجيل والسفر → صفحة الحجاج بالفلتر · التوزيع → صفحة الخدمة */
-  const go = (target: string, searchTerm?: string) => {
-    if (searchTerm) (window as any).__hajj_pending_search__ = searchTerm;
+  /* التنقّل بمفتاح النقص لا بالنصّ العربيّ: كان الكارت يمرّر
+     «بدون باص» فتعيد صفحة الحجاج استنباط الشرط من التسمية — أي
+     تعريفٌ ثالث للنقص مكتوبٌ بالبحث. الآن يعبر `IssueKey` نفسه. */
+  const go = (target: string, issue?: IssueKey) => {
+    if (issue) (window as { __hajj_pending_issue__?: IssueKey }).__hajj_pending_issue__ = issue;
     setPage(target);
   };
 
   const items = useMemo(() => {
-    const cnt = (fn: (p: Passenger) => boolean) => hajj.filter(fn).length;
-    /* `phase` هو **رقم المرحلة المالكة للعمل** لا ترتيب العرض:
-       الترتيب أدناه ثابت ومعتمَد، والمرحلة تُغيّر اللون وحده. */
-    const mk = (key: string, label: string, count: number, icon: string, phase: number, target: string, term?: string) =>
-      count > 0 ? { key, label, count, icon, phase, target, term } : null;
+    /* العدُّ من `hasIssue` وحدها: الكارت لا يعرف ما «النقص»، يعرف
+       كيف يعرضه. وترتيب المصفوفة هو ترتيب العرض المعتمَد — ثابتٌ
+       لا يتبع العدد ولا الشدّة ولا المرحلة. */
+    const mk = (issue: IssueKey, label: string, icon: string, phase: number, target: string): AlertItem | null => {
+      const count = hajj.filter(p => hasIssue(issue, p)).length;
+      return count > 0 ? { issue, label, count, icon, phase, target } : null;
+    };
 
     return [
-      /* ── أ) مستندات ناقصة — بترتيب دورة مستندات الحاجّ ── */
-      mk("no_passport", "جوازات لم تُرفع", cnt(p => !p.passport_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 0, "passengers", "بدون جواز"),
-      mk("no_id", "بطاقات هوية لم تُرفع", cnt(p => !p.national_id_url), `<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M14 10h5"/><path d="M14 14h3"/>`, 0, "passengers", "بدون بطاقة"),
-      mk("no_photo", "صور شخصية ناقصة", cnt(p => !p.photo_url), `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, 0, "passengers", "بدون صورة"),
-      mk("no_ticket", "تذاكر طيران لم تُرفع", cnt(p => !p.flight_ticket_url), `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, 2, "passengers", "بدون تذكرة"),
-      mk("no_permit", "تصاريح حج لم تُرفع", cnt(p => !p.hajj_permit_url), `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, 2, "passengers", "بدون تصريح"),
+      /* ── أ) صلاحية الجواز — عطبٌ لا ينتظر مرحلة ── */
+      mk("expired_passport",  "جوازات منتهية الصلاحية", `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, -1, "passengers"),
+      mk("expiring_passport", "جوازات تنتهي خلال ٦ أشهر", `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, 0, "passengers"),
 
-      /* ── ب) توزيعات ناقصة — الترتيب المعتمَد: غرفة ← باص ← منى ← عرفة ← رحلة ── */
-      mk("no_room", "حجاج بدون غرفة فندق", cnt(p => isMissingService(p, "hotel_type")), `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, 1, "hotel"),
-      mk("no_bus", "حجاج بدون باص", cnt(p => isMissingService(p, "bus")), `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, 1, "buses"),
-      mk("no_mina", "حجاج بدون مخيم منى", cnt(p => isMissingService(p, "camp_mina")), `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, 1, "mina"),
-      mk("no_arafa", "حجاج بدون مخيم عرفة", cnt(p => isMissingService(p, "camp_arafa")), `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, 1, "arafa"),
-      mk("no_flight", "حجاج بدون رحلة طيران", cnt(p => isMissingService(p, "flight")), `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 1, "flights"),
-    ].filter(Boolean) as AlertItem[];
+      /* ── ب) تواصل ومستندات ── */
+      mk("missing_phone",    "حجاج بدون رقم هاتف", `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, 0, "passengers"),
+      mk("missing_passport", "جوازات لم تُرفع", `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, 0, "passengers"),
+      mk("missing_id",       "بطاقات هوية لم تُرفع", `<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M14 10h5"/><path d="M14 14h3"/>`, 0, "passengers"),
+      mk("missing_photo",    "صور شخصية ناقصة", `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, 0, "passengers"),
+      mk("missing_ticket",   "تذاكر طيران لم تُرفع", `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`, 2, "passengers"),
+      mk("missing_permit",   "تصاريح حج لم تُرفع", `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, 2, "passengers"),
+
+      /* ── ج) التوزيع — الترتيب المعتمَد: غرفة ← باص ← منى ← عرفة ← رحلة ── */
+      mk("missing_hotel",  "حجاج بدون غرفة فندق", `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`, 1, "hotel"),
+      mk("missing_bus",    "حجاج بدون باص", `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, 1, "buses"),
+      mk("missing_mina",   "حجاج بدون مخيم منى", `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, 1, "mina"),
+      mk("missing_arafah", "حجاج بدون مخيم عرفة", `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, 1, "arafa"),
+      mk("missing_flight", "حجاج بدون رحلة طيران", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 1, "flights"),
+    ].filter((it): it is AlertItem => it !== null);
   }, [hajj]);
 
   return (
@@ -386,7 +399,7 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
           const tone = alertTone(it.phase, currentIdx);
           const { color: clr, bg } = TONE_STYLE[tone];
           return (
-            <div key={it.key} onClick={() => go(it.target, it.term)}
+            <div key={it.issue} onClick={() => go(it.target, it.issue)}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 9px", borderRadius: 8, marginBottom: 1, cursor: "pointer", border: "1px solid transparent", transition: ".12s" }}
               onMouseEnter={e => { const t = e.currentTarget as HTMLDivElement; t.style.background = "var(--ivory)"; t.style.borderColor = "var(--line)"; }}
               onMouseLeave={e => { const t = e.currentTarget as HTMLDivElement; t.style.background = "transparent"; t.style.borderColor = "transparent"; }}>
