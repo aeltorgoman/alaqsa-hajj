@@ -258,6 +258,17 @@ function expiryNotice(p: Passenger): { tone: "expired" | "soon"; text: string } 
   return null;
 }
 
+/* وجهةُ إدارة كل خدمة. غرفة العمليات تسلك هذا الطريق نفسه منذ
+   #110 — الحدث `hajj_goto_page` والصلاحية القائمة — فلا طريق ثانٍ.
+   الملفّ يبقى **عرضاً**: الضغط ينقل إلى مكان الإسناد، ولا يُسنِد. */
+const SERVICE_DEST: Record<ServiceKey, { page: string; perm: string; label: string }> = {
+  bus:        { page: "buses",   perm: "manage_buses",   label: "الباصات" },
+  hotel_type: { page: "hotel",   perm: "manage_hotel",   label: "الفندق" },
+  camp_mina:  { page: "mina",    perm: "manage_camps",   label: "مخيمات منى" },
+  camp_arafa: { page: "arafa",   perm: "manage_camps",   label: "مخيمات عرفة" },
+  flight:     { page: "flights", perm: "manage_flights", label: "الرحلات" },
+};
+
 const opsFilterLabel = (f: Exclude<OpsFilter, null>) =>
   f === "dup_phones" ? DUP_PHONES_UI.label : ISSUE_UI[f].label;
 
@@ -377,18 +388,32 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
      لا أعمدةٌ خمسة جديدة. الخدمة المطلوبة تبقى القيمة الأولى
      (وهي ما يهمّ في التسجيل)، والإسناد يظهر تحتها في التوزيع.
      ولا شيء يُخترع: إن لم يوجد إسناد فلا سطر — والنقص شأنُ غرفة
-     العمليات لا شأنُ كل خليّةٍ في الجدول. */
+     العمليات لا شأنُ كل خليّةٍ في الجدول.
+
+     ويحمل السطر **تصنيف الكيان المُسنَد نفسه** حين يخزّنه الكيان:
+     `Bus.type` و`Room.type` و`Camp.type` أعمدةٌ قائمة مستقلّة عن
+     `services`. فيُقرأ «VIP ← باص ٤ · عادي» فيُرى التفاوت بين ما
+     طُلب وما أُسنِد بلا محرّك مطابقةٍ ولا تنبيه. والتصنيف **لا
+     يُشتقّ من طلب الحاجّ أبداً**: لو اشتُقّ لصار السطران يقولان
+     الشيء نفسه مرّتين، ولاستحال أن يظهر تفاوتٌ أصلاً. */
   const allocationOf = (p: Passenger, key: string): string => {
     const one = (list: any[], id: number | null | undefined, get: (m: any) => string) => {
       if (id == null) return "";
       const m = list.find((x: any) => x.id === id);
       return m ? get(m) : "";
     };
+    /* التصنيف يُضاف إن وُجد على الكيان، ويُسكَت عنه إن غاب */
+    const withType = (label: string, type: unknown) => {
+      const t = String(type ?? "").trim();
+      return t ? `${label} · ${t}` : label;
+    };
     switch (key) {
-      case "bus":        return one(metaBuses, p.bus_id, m => `باص ${m.name}`);
-      case "hotel_type": return one(metaRooms, p.room_id, m => `غرفة ${m.number}`);
-      case "camp_mina":  return one(metaCamps, p.camp_mina_id, m => m.name);
-      case "camp_arafa": return one(metaCamps, p.camp_arafa_id, m => m.name);
+      case "bus":        return one(metaBuses, p.bus_id, m => withType(`باص ${m.name}`, m.type));
+      case "hotel_type": return one(metaRooms, p.room_id, m => withType(`غرفة ${m.number}`, m.type));
+      case "camp_mina":  return one(metaCamps, p.camp_mina_id, m => withType(m.name, m.type));
+      case "camp_arafa": return one(metaCamps, p.camp_arafa_id, m => withType(m.name, m.type));
+      /* الرحلة لا تحمل تصنيفاً يقابل «عادي/درجة أولى»: `Flight.type`
+         اتّجاهٌ (ذهاب/إياب) لا درجة. فالاسم وحده — ولا يُخترع. */
       case "flight": {
         const out = one(metaFlights, p.flight_id, m => m.name);
         const ret = one(metaFlights, p.return_flight_id, m => m.name);
@@ -398,10 +423,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
   };
 
-  /* «إطلالة الغرفة» خرجت من أعمدة الشاشة لتُخلي عرضاً لسطر
-     الإسناد الثانويّ، لكنها **لم تخرج من الورق**: الكشف المطبوع
-     وملفّ الإكسل يُشاركان خارج النظام، وحذف عمودٍ منهما خسارةٌ
-     لا توفيرُ مساحة. والإطلالة باقيةٌ في الملفّ وفي الفلاتر. */
   const EXPORT_COLS = [
     ...COLS.slice(0, COLS.findIndex(c => c.key === "hotel_type") + 1),
     { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
@@ -1944,11 +1965,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           )}
           {profileTab === "svc" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {/* قيمة الإسناد من `allocationOf` نفسها التي يعرضها
+                الجدول — بتصنيف الكيان المُسنَد، لا بتصنيف ما طُلب.
+                وبطاقتا الطيران تُبقيان على اتّجاهيهما المنفصلين. */}
             {([
-              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null, "#E3F2FD", "#1.5px solid #90CAF9", "#0D47A1", "#1565C0", false],
-              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null, "#FFF8E1", "1.5px solid #FFD54F", "#8B6700", "#B8880F", false],
-              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null, "#E8F5E9", "1.5px solid #A5D6A7", "#1B5E20", "#2E7D32", false],
-              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null, "#F3E5F5", "1.5px solid #CE93D8", "#6A1B9A", "#7B1FA2", false],
+              ["الباص",   selected.services?.bus,       selected.bus_id != null ? (allocationOf(selected, "bus") || `باص #${selected.bus_id}`) : null, "#E3F2FD", "#1.5px solid #90CAF9", "#0D47A1", "#1565C0", false],
+              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), selected.room_id != null ? (allocationOf(selected, "hotel_type") || `غرفة #${selected.room_id}`) : null, "#FFF8E1", "1.5px solid #FFD54F", "#8B6700", "#B8880F", false],
+              ["منى",     selected.services?.camp_mina, selected.camp_mina_id != null ? (allocationOf(selected, "camp_mina") || `خيمة #${selected.camp_mina_id}`) : null, "#E8F5E9", "1.5px solid #A5D6A7", "#1B5E20", "#2E7D32", false],
+              ["عرفة",    selected.services?.camp_arafa,selected.camp_arafa_id != null ? (allocationOf(selected, "camp_arafa") || `خيمة #${selected.camp_arafa_id}`) : null, "#F3E5F5", "1.5px solid #CE93D8", "#6A1B9A", "#7B1FA2", false],
               ["طيران الذهاب", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", false],
               ["طيران العودة", selected.services?.flight,    (selected as any).return_flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).return_flight_id)?.name || `رحلة #${(selected as any).return_flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", false],
             ] as [string, string | undefined, string | null, string, string, string, string, boolean][]).map(([lbl, cls, assign, bg, border, valColor, lblColor, full]) => {
@@ -1963,6 +1987,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                  وتلك تسأل عن الذهاب — والشرط المشترك هو الاستثناء
                  وحده، وهو `wantsService`. */
               const pending = !optedOut && !assign;
+              const dest = svcKey ? SERVICE_DEST[svcKey] : null;
+              /* الصلاحية نفسها التي تحرس زرّ غرفة العمليات */
+              const mayGo = dest ? !!currentUser?.permissions?.[dest.perm] : false;
               return (
               <div key={lbl} style={{ background: bg, border, borderRadius: 12, padding: "11px 12px", gridColumn: full ? "span 2" : undefined }}>
                 <div style={{ fontSize: 9.5, fontWeight: 800, color: lblColor, marginBottom: 4 }}>{lbl}{cls ? ` · ${cls}` : ""}</div>
@@ -1971,7 +1998,26 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     الاعتذار عنه. الحكم من `isMissingService` نفسها
                     التي تعدّ بها غرفة العمليات، فلا يشكو الملفّ ممّا
                     لا تشكو منه، ولا العكس. */}
-                <div style={{ fontSize: 14, fontWeight: 900, color: valColor, lineHeight: 1.2 }}>{assign || (optedOut ? "لم يطلب هذه الخدمة" : "لم يُوزع بعد")}</div>
+                {(() => {
+                  const text = assign || (optedOut ? "لم يطلب هذه الخدمة" : "لم يُوزع بعد");
+                  /* المعتذر عن الطيران ليس أمامه عملٌ يُقصد، فلا سهم له */
+                  const canGo = !!dest && !optedOut;
+                  const style = { fontSize: 14, fontWeight: 900, color: valColor, lineHeight: 1.2 } as const;
+                  if (!canGo) return <div style={style}>{text}</div>;
+                  return (
+                    <div
+                      onClick={() => { if (mayGo) window.dispatchEvent(new CustomEvent("hajj_goto_page", { detail: dest!.page })); }}
+                      title={mayGo ? `الانتقال إلى ${dest!.label}` : "لا تملك صلاحية هذه الصفحة"}
+                      style={{ ...style, display: "inline-flex", alignItems: "center", gap: 5, cursor: mayGo ? "pointer" : "not-allowed", opacity: mayGo ? 1 : .55, borderBottom: `1px dashed ${valColor}`, paddingBottom: 1, transition: "opacity .14s" }}
+                      onMouseEnter={e => { if (mayGo) e.currentTarget.style.opacity = ".72"; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = mayGo ? "1" : ".55"; }}>
+                      {text}
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                      </svg>
+                    </div>
+                  );
+                })()}
                 {!assign && !optedOut && pending && <div style={{ fontSize: 9.5, fontWeight: 800, color: "#B71C1C", marginTop: 3 }}>بانتظار التوزيع</div>}
               </div>
               );
