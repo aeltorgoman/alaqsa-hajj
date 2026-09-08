@@ -22,6 +22,8 @@ import { isExpired, isExpiringSoon, isMissingService } from "./index";
 export type IssueKey =
   | "expired_passport"
   | "expiring_passport"
+  | "expired_id"
+  | "expiring_id"
   | "missing_phone"
   | "missing_passport"
   | "missing_id"
@@ -43,6 +45,14 @@ const RULES: Record<IssueKey, Predicate> = {
   expired_passport:  p => isExpired(p.expiry),
   /* «يقترب» يستبعد «انتهى»: بندان لا بند واحد مكرّر */
   expiring_passport: p => !isExpired(p.expiry) && isExpiringSoon(p.expiry),
+
+  /* صلاحية البطاقة: بالنافذة نفسها ودالّتَي التاريخ نفسيهما.
+     كانت تُقرأ في صفحة الحجاج وحدها — تلوّن صفّاً وتفتح لافتةً في
+     الملفّ — ولا يعرفها الداشبورد ولا غرفة العمليات، فلا سبيل إلى
+     جمع أصحابها ولا عدّهم. والحقل قائم: تملؤه القراءة الضوئية
+     ويحرّره الموظّف. */
+  expired_id:        p => isExpired(p.id_expiry ?? ""),
+  expiring_id:       p => !isExpired(p.id_expiry ?? "") && isExpiringSoon(p.id_expiry ?? ""),
 
   missing_phone:     p => !p.phone,
 
