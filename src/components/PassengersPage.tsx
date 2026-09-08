@@ -1659,13 +1659,31 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       </div>
                       {/* التوزيعات لا تُحَلّ في ملفّ الحاجّ: زرٌّ صريح
                           إلى مكان الحلّ، يظهر عند اختيار البند. */}
+                      {/* مملوءٌ لا مفرَّغ: الحدُّ الشفيف على أرضيّة البند
+                          المختار كان يذوب فيها فلا يُقرأ زرّاً. واللون
+                          لونُ البند نفسه فلا يزاحمه. */}
                       {on && page && (
                         <button
                           onClick={() => { if (mayGo) window.dispatchEvent(new CustomEvent("hajj_goto_page", { detail: page.page })); }}
                           disabled={!mayGo}
                           title={mayGo ? undefined : "لا تملك صلاحية هذه الصفحة"}
-                          style={{ width: "calc(100% - 20px)", margin: "0 10px 8px", padding: "6px", borderRadius: 8, border: `1px solid ${cfg.color}40`, background: "var(--paper)", color: mayGo ? cfg.color : "var(--muted)", cursor: mayGo ? "pointer" : "not-allowed", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 800, opacity: mayGo ? 1 : .6 }}>
-                          {page.action} ←
+                          onMouseEnter={e => { if (mayGo) e.currentTarget.style.filter = "brightness(1.12)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
+                          style={{
+                            width: "calc(100% - 20px)", margin: "0 10px 8px", padding: "7px 10px",
+                            borderRadius: 8, border: "none",
+                            background: mayGo ? cfg.color : "var(--ivory2)",
+                            color: mayGo ? "var(--text-inverse)" : "var(--muted)",
+                            boxShadow: mayGo ? "0 1px 3px rgba(0,0,0,.18)" : "none",
+                            cursor: mayGo ? "pointer" : "not-allowed",
+                            fontFamily: "var(--font-body)", fontSize: 10.5, fontWeight: 900,
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                            transition: "filter .14s",
+                          }}>
+                          {page.action}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                          </svg>
                         </button>
                       )}
                     </div>
