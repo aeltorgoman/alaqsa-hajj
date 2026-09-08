@@ -12,6 +12,16 @@ export function makeShort(fullName: string): string {
   return [parts[0], parts[1], parts[parts.length - 1]].join(" ");
 }
 
+/* «٥ بنود» — تمييزُ العربية لا صيغةٌ واحدة بـ«s». يسكن هنا لأن
+   كارت الداشبورد وغرفة العمليات كليهما يعدّ بنوداً، ونسختان منه
+   تفترقان بالكلمة أو بالعتبة عند أول تعديل. */
+export function itemsLabel(n: number): string {
+  if (n === 1) return "بند واحد";
+  if (n === 2) return "بندان";
+  if (n <= 10) return `${n} بنود`;
+  return `${n} بنداً`;
+}
+
 export function isExpiringSoon(dateStr: string): boolean {
   const d = parseDate(dateStr);
   if (!d) return false;
