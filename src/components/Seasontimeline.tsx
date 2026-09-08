@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
-import { isMissingService } from "../utils";
+import { isMissingService, itemsLabel } from "../utils";
 import { hasIssue, type IssueKey } from "../utils/readiness";
 import { useSeason } from "../season/useSeason";
 
@@ -341,14 +341,6 @@ const TONE_STYLE: Record<AlertTone, { color: string; bg: string }> = {
   overdue: { color: "var(--danger)",  bg: "var(--danger-bg)" },
   current: { color: "var(--warning)", bg: "var(--warning-bg)" },
 };
-
-/* «٥ بنود» — تمييزُ العربية لا صيغةٌ واحدة بـ«s» */
-function itemsLabel(n: number): string {
-  if (n === 1) return "بند واحد";
-  if (n === 2) return "بندان";
-  if (n <= 10) return `${n} بنود`;
-  return `${n} بنداً`;
-}
 
 function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; setPage: (p: string) => void }) {
   const { currentIdx } = useSeasonPhases(passengers);
