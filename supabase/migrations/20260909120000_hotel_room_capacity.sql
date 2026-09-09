@@ -89,6 +89,10 @@ begin
   if coalesce(current_setting('app.season_maintenance', true), '') = 'on' then
     return new;
   end if;
+  /* `old` لا معنى له عند الإدراج، والغرفة الجديدة بلا ساكنين */
+  if tg_op <> 'UPDATE' then
+    return new;
+  end if;
   if new.capacity is not distinct from old.capacity then
     return new;
   end if;
@@ -171,6 +175,19 @@ drop trigger if exists trg_reject_room_over_capacity on public.passengers;
 create trigger trg_reject_room_over_capacity
   before insert or update of room_id on public.passengers
   for each row execute function public.reject_room_over_capacity();
+
+-- ═══ ٧) الصلاحيات — نهج `reject_write_closed_season` نفسه ═══
+-- دوالّ المحفّزات لا تُستدعى مباشرةً أبداً: يستدعيها محرّك المحفّزات
+-- بلا فحص EXECUTE. فسحبُها من الجميع لا يعطّل شيئاً ويمنع أن تُنادى
+-- من واجهة PostgREST.
+revoke execute on function public.rooms_apply_capacity()               from public, anon, authenticated;
+revoke execute on function public.rooms_capacity_not_below_occupancy() from public, anon, authenticated;
+revoke execute on function public.reject_room_over_capacity()          from public, anon, authenticated;
+
+-- أما `room_type_capacity(text)` فتبقى قابلةً للتنفيذ: تستدعيها
+-- `rooms_apply_capacity` من داخل جسمها وهي **ليست** security definer،
+-- فتُفحص صلاحية المستدعي عليها. وهي دالّة بحثٍ نقيّة (immutable) لا
+-- تقرأ جدولاً ولا تكشف شيئاً — سحبُها يكسر المحفّز بلا مكسب.
 
 -- ⚠️ الصفوف المخالفة القائمة تبقى كما هي: الحارس يمنع **الزيادة**
 -- ولا يطرد أحداً. غرفةٌ فرديّة فيها اثنان تبقى وتظهر في الواجهة
