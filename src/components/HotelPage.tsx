@@ -215,12 +215,6 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   /* سعة النموذج: النوع القياسيّ يفرضها، و«خاص» تُقرأ من الحقل.
      تُرسَل دائماً، والقاعدة تُصحّح القياسيّ وترفض «خاص» بلا سعة. */
-  /* ⚠️ `src/types/database.ts` مولَّدٌ من الإنتاج (ق٤: لا يُحرَّر
-     يدوياً)، والهجرة لم تُطبَّق بعد — فلا يعرف عمود `capacity`.
-     هذا التمرير مؤقّت حتى تُعاد التوليد بعد تطبيق الهجرة، وهو
-     محصورٌ في نداءات الغرف وحدها. */
-  const withCap = <T,>(rows: T) => rows as never;
-
   const formCapacity = (type: Room["type"], raw: string): number | null => {
     if (isFixedCapType(type)) return null;   // القاعدة تفرضها
     const n = parseInt(raw, 10);
@@ -234,7 +228,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!addNum.trim() || !addFloor.trim()) { showAlert("error", "رقم الغرفة والدور مطلوبان"); return; }
     if (capError(addType, addCap)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     const cap = formCapacity(addType, addCap);
-    const { data, error } = await supabase.from("rooms").insert(withCap([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }])).select();
+    const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }]).select();
     if (error) { showAlert("error", error.message || "حدث خطأ أثناء الإضافة"); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number)));
     setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes(""); setAddCap("");
@@ -249,7 +243,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (capError(rangeType, rangeCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     const rCap = formCapacity(rangeType, rangeCap);
     const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType, capacity: rCap }));
-    const { data, error } = await supabase.from("rooms").insert(withCap(entries)).select();
+    const { data, error } = await supabase.from("rooms").insert(entries).select();
     if (error) { showAlert("error", error.message || "حدث خطأ أثناء الإضافة"); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
     setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setShowAddRoom(false);
@@ -269,7 +263,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         entries.push({ number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType, capacity: tCap });
       }
     }
-    const { data, error } = await supabase.from("rooms").insert(withCap(entries)).select();
+    const { data, error } = await supabase.from("rooms").insert(entries).select();
     if (error) { showAlert("error", error.message || "حدث خطأ أثناء الإضافة"); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
     setTplFloors(""); setTplRoomsPerFloor(""); setTplStartNum(""); setTplFloorStart(""); setTplCap(""); setShowAddRoom(false);
@@ -351,7 +345,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       return;
     }
     const payload = { type, capacity: isFixedCapType(type) ? null : nextCap };
-    const { error } = await supabase.from("rooms").update(withCap(payload)).eq("id", selectedRoom.id).select();
+    const { error } = await supabase.from("rooms").update(payload).eq("id", selectedRoom.id).select();
     if (error) { showAlert("error", error.message || "تعذر تعديل نوع الغرفة"); return; }
     /* القاعدة تفرض سعة النوع القياسيّ، فتُقرأ منها لا تُخمَّن */
     const applied = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : nextCap;
