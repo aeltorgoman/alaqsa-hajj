@@ -334,9 +334,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaFlights, setMetaFlights] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from("buses").select("id,name").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
-    supabase.from("rooms").select("id,number").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
-    supabase.from("camps").select("id,name,page_type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
+    /* `type` عمودٌ مطلوب لا زينة: سطرُ الإسناد يعرض **تصنيف الكيان
+       المُسنَد** (باص ٤ · عادي · غرفة ١٢٠١ · ثنائية)، وهو الذي
+       يُظهر التفاوت بين ما طُلب وما أُسنِد. وبغيره يصل `undefined`
+       فيسكت السطر عن التصنيف بلا خطأ يُرى. */
+    supabase.from("buses").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
+    supabase.from("rooms").select("id,number,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
+    supabase.from("camps").select("id,name,page_type,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
     supabase.from("flights").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
   }, [viewedSeason.id]);
 
