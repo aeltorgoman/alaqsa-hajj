@@ -6,15 +6,16 @@ import type { Passenger, Room } from "../types";
 import { useCompanyBranding } from "../company/CompanyContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
-import { ROOM_TYPE_CAP as TYPE_CAP } from "../utils";
+import { HOTEL_ROOM_TYPES, isFixedCapType, roomCapacity, ROOM_TYPE_CAP as ROOM_TYPE_CAP_UI } from "../utils";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 
-const ROOM_TYPES: Room["type"][] = ["فردية", "ثنائية", "ثلاثية", "رباعية", "مجلس", "أخرى"];
+const ROOM_TYPES = HOTEL_ROOM_TYPES as readonly Room["type"][];
 
-function avatarInitials(name: string) {
-  return name.trim().split(" ").map(w => w[0]).slice(0, 2).join("");
-}
+/* حالات الغرفة — «مجلس» **نوع** لا حالة. كانت تُشتقّ من `cap === 0`
+   فتبتلع «أخرى» وكل نوعٍ لا تعرفه الخريطة، فتصف غرفةً عاديةً بأنها
+   مجلس. والآن الحالة من الإشغال والسعة، والنوع يُقرأ من النوع. */
+type RoomStatus = "مكتملة" | "قيد التسكين" | "جاهزة" | "مجلس" | "تجاوز" | "غير محدّدة";
 
 function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const primary = useCompanyBranding().primaryColor;
@@ -60,23 +61,30 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [addFloor, setAddFloor] = useState("");
   const [addType, setAddType] = useState<Room["type"]>("ثنائية");
   const [addNotes, setAddNotes] = useState("");
+  /* سعة «خاص» — تُطلب صراحةً، والقاعدة ترفض ما دونها */
+  const [addCap, setAddCap] = useState("");
   // Range mode
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeFloor, setRangeFloor] = useState("");
   const [rangeType, setRangeType] = useState<Room["type"]>("ثنائية");
+  const [rangeCap, setRangeCap] = useState("");
   // Template mode
   const [tplFloors, setTplFloors] = useState("");
   const [tplRoomsPerFloor, setTplRoomsPerFloor] = useState("");
   const [tplStartNum, setTplStartNum] = useState("");
   const [tplType, setTplType] = useState<Room["type"]>("ثنائية");
   const [tplFloorStart, setTplFloorStart] = useState("");
+  const [tplCap, setTplCap] = useState("");
 
   // Panel notes
   const [panelNotes, setPanelNotes] = useState("");
   const [panelType, setPanelType] = useState<Room["type"]>("ثنائية");
   const [editingRoomNum, setEditingRoomNum] = useState(false);
   const [newRoomNum, setNewRoomNum] = useState("");
+  const [panelCap, setPanelCap] = useState("");
+  const [moveFor, setMoveFor] = useState<Passenger | null>(null);
+  const [moveSearch, setMoveSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
@@ -127,26 +135,46 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     return { total: occ.length, hajj: h, admins: occ.length - h };
   };
 
-  const getStatus = (room: Room) => {
-    const cap = TYPE_CAP[room.type] || 0;
+  /* السعة المحفوظة أولاً — لا تُشتقّ من النوع إلا حين يغيب العمود
+     (صفٌّ لم تمرّ عليه الهجرة بعد). و`null` تعني «غير محدّدة». */
+  const capOf = (room: Room) => roomCapacity(room);
+
+  const getStatus = (room: Room): RoomStatus => {
+    if (room.type === "مجلس") return "مجلس";
+    const cap = capOf(room);
+    if (cap == null) return "غير محدّدة";
     const occ = roomPassengers(room.id).length;
-    if (cap === 0 || room.type === "مجلس") return "مجلس";
+    /* بياناتٌ قديمة تجاوزت سقفها: تُعرَض ولا تُصحَّح ذاتياً، ولا
+       تُخفى خلف شريطٍ ممتلئٍ يبدو طبيعياً. */
+    if (occ > cap) return "تجاوز";
     if (occ === 0) return "جاهزة";
     if (occ >= cap) return "مكتملة";
     return "قيد التسكين";
   };
 
-  const statusColor: Record<string, string> = {
+  const statusColor: Record<RoomStatus, string> = {
     "مكتملة": "#7D1F3C",
     "قيد التسكين": "#1D4ED8",
     "جاهزة": "#059669",
     "مجلس": "#7C3AED",
+    "تجاوز": "#B91C1C",
+    "غير محدّدة": "#6B7280",
   };
-  const statusLabel: Record<string, string> = {
+  const statusLabel: Record<RoomStatus, string> = {
     "مكتملة": "🔴 مكتملة",
     "قيد التسكين": "🔵 قيد التسكين",
     "جاهزة": "🟢 جاهزة",
     "مجلس": "مجلس",
+    "تجاوز": "⚠️ تجاوز السعة",
+    "غير محدّدة": "السعة غير محدّدة",
+  };
+
+  /* هل تقبل الغرفة نزيلاً آخر؟ حكمٌ واحد تستعمله الأزرار والقوائم
+     والنقل — وهو صدى حارس القاعدة لا بديلٌ عنه. */
+  const roomFull = (room: Room) => {
+    const cap = capOf(room);
+    if (cap == null || cap === 0) return true;
+    return roomPassengers(room.id).length >= cap;
   };
 
 
@@ -167,23 +195,49 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   // KPIs
   const totalRooms = rooms.length;
   const withRoom = hajj.filter(p => p.room_id).length;
+  const noRoom = hajj.length - withRoom;
   const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
-  const availableRooms = rooms.filter(r => { const c = TYPE_CAP[r.type] || 0; return c > 0 && roomPassengers(r.id).length < c; }).length;
+  /* أَسِرّة لا غرف: «غرف متاحة» كانت تعدّ الغرف التي فيها متّسع،
+     فتُقرأ «غرفٌ فارغة» وهي ليست كذلك. والسرير هو القيد الحقيقيّ. */
+  const freeBeds = rooms.reduce((n, r) => {
+    const cap = capOf(r);
+    if (cap == null || cap === 0) return n;
+    return n + Math.max(0, cap - roomPassengers(r.id).length);
+  }, 0);
 
   const hotelCards: StatCardData[] = [
     { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
-    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajj.length} حاج`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-    { label: "غرف متاحة", num: String(availableRooms), sub: "فيها مساحة", tone: "warning", icon: `<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>` },
-    { label: "نسبة التوزيع", num: `${pct}٪`, sub: `${withRoom} من ${hajj.length}`, tone: "info", featured: true, icon: `<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>` },
+    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajj.length} حاج · ${pct}٪`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+    /* الرقم الذي يقول «هل انتهى عمل اليوم؟» — كان يُستنبط ذهنياً */
+    { label: "حجاج بدون غرفة", num: String(noRoom), sub: noRoom === 0 ? "اكتمل التسكين" : "بانتظار التسكين", tone: noRoom === 0 ? "success" : "warning", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/>` },
+    { label: "أَسِرّة شاغرة", num: String(freeBeds), sub: "سرير متاح للتسكين", tone: "info", featured: true, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
   ];
+
+  /* سعة النموذج: النوع القياسيّ يفرضها، و«خاص» تُقرأ من الحقل.
+     تُرسَل دائماً، والقاعدة تُصحّح القياسيّ وترفض «خاص» بلا سعة. */
+  /* ⚠️ `src/types/database.ts` مولَّدٌ من الإنتاج (ق٤: لا يُحرَّر
+     يدوياً)، والهجرة لم تُطبَّق بعد — فلا يعرف عمود `capacity`.
+     هذا التمرير مؤقّت حتى تُعاد التوليد بعد تطبيق الهجرة، وهو
+     محصورٌ في نداءات الغرف وحدها. */
+  const withCap = <T,>(rows: T) => rows as never;
+
+  const formCapacity = (type: Room["type"], raw: string): number | null => {
+    if (isFixedCapType(type)) return null;   // القاعدة تفرضها
+    const n = parseInt(raw, 10);
+    return Number.isInteger(n) && n > 0 ? n : NaN as unknown as number;
+  };
+  const capError = (type: Room["type"], raw: string) =>
+    !isFixedCapType(type) && !(parseInt(raw, 10) > 0);
 
   const addRoom = async () => {
     if (!assertWritable()) return;
     if (!addNum.trim() || !addFloor.trim()) { showAlert("error", "رقم الغرفة والدور مطلوبان"); return; }
-    const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, notes: addNotes.trim() || null }]).select();
-    if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
+    if (capError(addType, addCap)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
+    const cap = formCapacity(addType, addCap);
+    const { data, error } = await supabase.from("rooms").insert(withCap([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }])).select();
+    if (error) { showAlert("error", error.message || "حدث خطأ أثناء الإضافة"); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number)));
-    setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes("");
+    setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes(""); setAddCap("");
     setShowAddRoom(false);
     showAlert("success", "تمت إضافة الغرفة"); setTimeout(() => showAlert(null), 2500);
   };
@@ -192,9 +246,11 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!assertWritable()) return;
     const from = parseInt(rangeFrom), to = parseInt(rangeTo);
     if (!rangeFloor.trim() || isNaN(from) || isNaN(to) || from > to) { showAlert("error", "يرجى إدخال نطاق صحيح ودور صحيح"); return; }
-    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType }));
-    const { data, error } = await supabase.from("rooms").insert(entries).select();
-    if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
+    if (capError(rangeType, rangeCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
+    const rCap = formCapacity(rangeType, rangeCap);
+    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType, capacity: rCap }));
+    const { data, error } = await supabase.from("rooms").insert(withCap(entries)).select();
+    if (error) { showAlert("error", error.message || "حدث خطأ أثناء الإضافة"); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
     setRangeFrom(""); setRangeTo(""); setRangeFloor(""); setShowAddRoom(false);
     showAlert("success", `تمت إضافة ${entries.length} غرفة`);
@@ -205,29 +261,60 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const numFloors = parseInt(tplFloors), rPerFloor = parseInt(tplRoomsPerFloor);
     const startNum = parseInt(tplStartNum), floorStart = parseInt(tplFloorStart);
     if (isNaN(numFloors)||isNaN(rPerFloor)||isNaN(startNum)||isNaN(floorStart)||numFloors<1||rPerFloor<1) { showAlert("error", "يرجى تعبئة جميع الحقول بشكل صحيح"); return; }
-    const entries: {number:string;floor:string;type:Room["type"]}[] = [];
+    if (capError(tplType, tplCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
+    const tCap = formCapacity(tplType, tplCap);
+    const entries: {number:string;floor:string;type:Room["type"];capacity:number|null}[] = [];
     for (let f = 0; f < numFloors; f++) {
       for (let r = 0; r < rPerFloor; r++) {
-        entries.push({ number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType });
+        entries.push({ number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType, capacity: tCap });
       }
     }
-    const { data, error } = await supabase.from("rooms").insert(entries).select();
-    if (error) { showAlert("error", "حدث خطأ أثناء الإضافة"); return; }
+    const { data, error } = await supabase.from("rooms").insert(withCap(entries)).select();
+    if (error) { showAlert("error", error.message || "حدث خطأ أثناء الإضافة"); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0)-(parseInt(b.floor)||0)||(parseInt(a.number)||0)-(parseInt(b.number)||0)));
-    setTplFloors(""); setTplRoomsPerFloor(""); setTplStartNum(""); setTplFloorStart(""); setShowAddRoom(false);
+    setTplFloors(""); setTplRoomsPerFloor(""); setTplStartNum(""); setTplFloorStart(""); setTplCap(""); setShowAddRoom(false);
     showAlert("success", `تمت إضافة ${entries.length} غرفة`);
   };
 
   const removeFromRoom = async (pId: number) => {
+    if (!assertWritable()) return;
     if (!await writeOk(supabase.from("passengers").update({ room_id: null }).eq("id", pId), "تعذر إخراج الحاج من الغرفة")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } : p));
+    showAlert("success", "تمت الإزالة من الغرفة"); setTimeout(() => showAlert(null), 2000);
+  };
+
+  /* الإسناد: فحصٌ في الواجهة **وحارسٌ في القاعدة**. الأول يمنع
+     الضغطة، والثاني يمنع ما تفلت منه — حالةٌ قديمة في المتصفّح، أو
+     موظّفان على السرير الأخير معاً. */
+  const assignToRoom = async (pId: number, room: Room) => {
+    if (!assertWritable()) return false;
+    if (roomFull(room)) {
+      const cap = capOf(room);
+      showAlert("error", cap === 0 ? `الغرفة ${room.number} من نوع «${room.type}» ولا تستقبل نزلاء`
+        : cap == null ? `الغرفة ${room.number} بلا سعة محدّدة — حدّد سعتها أولاً`
+        : `الغرفة ${room.number} مكتملة (${roomPassengers(room.id).length}/${cap})`);
+      return false;
+    }
+    if (!await writeOk(supabase.from("passengers").update({ room_id: room.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return false;
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: room.id } : p));
+    return true;
   };
 
   const addToRoom = async (pId: number) => {
     if (!selectedRoom) return;
-    if (!await writeOk(supabase.from("passengers").update({ room_id: selectedRoom.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: selectedRoom.id } : p));
-    setPSearch("");
+    if (await assignToRoom(pId, selectedRoom)) setPSearch("");
+  };
+
+  /* النقل المباشر: عمليةٌ واحدة تكتب `room_id` وحده. كان الموظّف
+     يُخرج من الأولى ثم يبحث عن الثانية، فيمرّ الحاجّ بحالة «بلا
+     غرفة» بينهما. والخدمة المطلوبة لا تُمَسّ في أيّ من المسارين. */
+  const moveToRoom = async (p: Passenger, dest: Room) => {
+    if (dest.id === p.room_id) return;
+    if (await assignToRoom(p.id, dest)) {
+      setMoveFor(null); setMoveSearch("");
+      showAlert("success", `تم نقل ${p.short_ar || p.name_ar} إلى الغرفة ${dest.number}`);
+      setTimeout(() => showAlert(null), 2500);
+    }
   };
 
   const reorderRoom = async (roomId: number, fromId: number, toId: number) => {
@@ -252,13 +339,28 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     showAlert("success", "تم حذف الغرفة"); setTimeout(() => showAlert(null), 2500);
   };
 
-  const saveRoomType = async (type: Room["type"]) => {
-    if (!selectedRoom) return;
-    if (!await writeOk(supabase.from("rooms").update({ type }).eq("id", selectedRoom.id), "تعذر تعديل نوع الغرفة")) return;
-    setPanelType(type);
-    setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, type } : r));
-    setSelectedRoom(prev => prev ? { ...prev, type } : prev);
+  /* تغيير النوع/السعة لا ينزل تحت عدد الساكنين. كانت رباعيةٌ فيها
+     أربعة تصير فرديّة بضغطة، فتُقرأ ٤/١ بلا أن يُخرَج أحد. */
+  const saveRoomCapacity = async (type: Room["type"], rawCap: string) => {
+    if (!selectedRoom || !assertWritable()) return;
+    const occ = roomPassengers(selectedRoom.id).length;
+    const nextCap = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : parseInt(rawCap, 10);
+    if (!isFixedCapType(type) && !(nextCap > 0)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
+    if (nextCap < occ) {
+      showAlert("error", `الغرفة تضمّ ${occ} نزيلاً، فلا تُخفَّض سعتها إلى ${nextCap}. أخرِج النزلاء أولاً.`);
+      return;
+    }
+    const payload = { type, capacity: isFixedCapType(type) ? null : nextCap };
+    const { error } = await supabase.from("rooms").update(withCap(payload)).eq("id", selectedRoom.id).select();
+    if (error) { showAlert("error", error.message || "تعذر تعديل نوع الغرفة"); return; }
+    /* القاعدة تفرض سعة النوع القياسيّ، فتُقرأ منها لا تُخمَّن */
+    const applied = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : nextCap;
+    setPanelType(type); setPanelCap(String(applied));
+    setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, type, capacity: applied } : r));
+    setSelectedRoom(prev => prev ? { ...prev, type, capacity: applied } : prev);
+    showAlert("success", "تم تحديث الغرفة"); setTimeout(() => showAlert(null), 2000);
   };
+  const saveRoomType = (type: Room["type"]) => saveRoomCapacity(type, panelCap);
 
   const saveNotes = async () => {
     if (!selectedRoom) return;
@@ -279,7 +381,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const openPanel = (room: Room) => {
     setSelectedRoom(room);
     setPanelType(room.type);
+    setPanelCap(String(capOf(room) ?? ""));
     setPanelNotes(room.notes || "");
+    setMoveFor(null); setMoveSearch("");
     setShowAddPilgrim(false);
     setPSearch("");
     setEditingRoomNum(false);
@@ -301,13 +405,21 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         {/* كروت KPI — موحّدة مع باقي الصفحات */}
         <StatsRow cards={hotelCards} />
 
+        {/* الموسم المعروض للقراءة: الأزرار باهتة، وهذا سببها */}
+        {readOnly && (
+          <div style={{ margin: "0 12px", padding: "7px 12px", borderRadius: 9, background: "var(--warning-bg)", border: "1px solid var(--warning)", color: "var(--warning)", fontSize: 11, fontWeight: 800, flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            موسم مؤرشَف — للعرض فقط. التسكين والتعديل معطّلان.
+          </div>
+        )}
+
         {/* Row 1: كروت أنواع الغرف + بحث + فلتر + إضافة */}
         <div style={{ display: "flex", gap: 6, padding: "8px 12px 0", flexShrink: 0, alignItems: "center", flexWrap: "wrap" }}>
           {/* كروت الأنواع */}
-          {(["فردية","ثنائية","ثلاثية","رباعية","سويت","مجلس"] as const).map(type => {
+          {ROOM_TYPES.map(type => {
             const typeRooms = rooms.filter(r => r.type === type);
             if (typeRooms.length === 0) return null;
-            const TYPE_COLORS: Record<string,string> = { فردية:"#7D1F3C",ثنائية:"#0C5FA8",ثلاثية:"#2A9D8F",رباعية:"#E65100",سويت:"#6A0DAD",مجلس:"#3F51B5" };
+            const TYPE_COLORS: Record<string,string> = { فردية:"#7D1F3C",ثنائية:"#0C5FA8",ثلاثية:"#2A9D8F",رباعية:"#E65100",خاص:"#6A0DAD",مجلس:"#3F51B5" };
             const color = TYPE_COLORS[type] || primary;
             const active = filterType === type;
             return (
@@ -323,7 +435,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث..." style={{ ...inp, width:130, flex:"none" }} />
           {/* فلتر الحالة */}
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width:"auto" }}>
-            {["الكل","مكتملة","قيد التسكين","جاهزة"].map(s => <option key={s}>{s}</option>)}
+            {["الكل","جاهزة","قيد التسكين","مكتملة","تجاوز","مجلس"].map(s => <option key={s}>{s}</option>)}
           </select>
           {/* إضافة */}
           <button disabled={readOnly} onClick={() => setShowAddRoom(true)} style={{ ...btnP, ...roOff, display:"flex",alignItems:"center",gap:5,flexShrink:0 }}>
@@ -333,17 +445,27 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         </div>
 
         {/* Row 2: أزرار الأدوار */}
-        <div style={{ display:"flex",gap:4,padding:"6px 12px 0",flexShrink:0,overflowX:"auto",msOverflowStyle:"none",scrollbarWidth:"none" }}>
+        {/* شريط الأدوار: كان `scrollbarWidth:"none"` يُخفي شريط
+            التمرير كلَّه، فلا يعرف الموظّف على شاشة ١٣٦٦ أن بعد
+            «ط١٣» أدواراً. والإشغال على كل زرّ يقول أين العمل. */}
+        <div style={{ display:"flex",gap:4,padding:"6px 12px 2px",flexShrink:0,overflowX:"auto",scrollbarWidth:"thin" }}>
           <button onClick={() => setFilterFloor("الكل")}
             style={{ padding:"4px 12px",borderRadius:99,border: filterFloor==="الكل"?"1.5px solid var(--primary)":"1.5px solid var(--line)",background: filterFloor==="الكل"?"var(--primary)":"var(--paper)",color: filterFloor==="الكل"?"white":"var(--muted)",fontFamily:"var(--font-body)",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0,transition:"all .15s" }}>
             الكل
           </button>
-          {floors.map(f => (
-            <button key={f} onClick={() => setFilterFloor(f)}
-              style={{ padding:"4px 12px",borderRadius:99,border: filterFloor===f?"1.5px solid var(--primary)":"1.5px solid var(--line)",background: filterFloor===f?"var(--primary)":"var(--paper)",color: filterFloor===f?"white":"var(--muted)",fontFamily:"var(--font-body)",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0,transition:"all .15s" }}>
-              ط{f}
-            </button>
-          ))}
+          {floors.map(f => {
+            const fr = rooms.filter(r => r.floor === f);
+            const beds = fr.reduce((n, r) => n + (capOf(r) ?? 0), 0);
+            const used = fr.reduce((n, r) => n + (capOf(r) ? roomPassengers(r.id).length : 0), 0);
+            const on = filterFloor === f;
+            return (
+              <button key={f} onClick={() => setFilterFloor(f)} title={`الدور ${f} — ${used} من ${beds} سرير`}
+                style={{ padding:"3px 11px",borderRadius:99,border: on?"1.5px solid var(--primary)":"1.5px solid var(--line)",background: on?"var(--primary)":"var(--paper)",color: on?"white":"var(--muted)",fontFamily:"var(--font-body)",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0,transition:"all .15s",display:"flex",flexDirection:"column",alignItems:"center",lineHeight:1.25 }}>
+                <span>ط{f}</span>
+                {beds > 0 && <span style={{ fontSize:8.5,fontWeight:800,opacity: on?.85:.7 }} dir="ltr">{used}/{beds}</span>}
+              </button>
+            );
+          })}
         </div>
 
         {/* Rooms Grid */}
@@ -359,12 +481,29 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             if (floorRooms.length === 0) return null;
             return (
               <div key={floor} style={{ marginBottom: 16 }}>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                {/* عنوان الدور — كان غائباً تماماً، فتُقرأ عشرون
+                    طابقاً شريطاً واحداً بلا فاصل في عرض «الكل». */}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "10px 2px 6px", position: "sticky", top: 0, background: "var(--bg, var(--paper))", zIndex: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: "var(--ink)" }}>الدور {floor}</span>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700 }}>
+                    {floorRooms.length} غرفة
+                    {(() => {
+                      const beds = floorRooms.reduce((n, r) => n + (capOf(r) ?? 0), 0);
+                      const used = floorRooms.reduce((n, r) => n + (capOf(r) ? roomPassengers(r.id).length : 0), 0);
+                      return beds > 0 ? <> · <span dir="ltr">{used}/{beds}</span> سرير</> : null;
+                    })()}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
+                </div>
+                {/* شبكة متجاوبة: كانت `repeat(4,1fr)` ثابتة — أربعة
+                    أعمدة ضيّقة على ١٣٦٦ وأربعة عريضة على شاشةٍ كبيرة
+                    مع فراغٍ مهدور، و١٥٠ غرفة تصير ٣٨ صفّاً. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8 }}>
                   {floorRooms.map(room => {
                     const occ = roomPassengers(room.id);
-                    const cap = TYPE_CAP[room.type] || 0;
+                    const cap = capOf(room) ?? 0;
                     const status = getStatus(room);
+                    const over = status === "تجاوز";
                     const color = statusColor[status] || primary;
                     const isSelected = selectedRoom?.id === room.id;
                     const isMajlis = room.type === "مجلس";
@@ -415,7 +554,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                               {!isMajlis && <>
                                 <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700, flexShrink: 0 }}>{room.type}</span>
                                 <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: `${color}15`, color, flexShrink: 0, whiteSpace: "nowrap" }}>
-                                  {statusLabel[status]?.split(" ").slice(0,1).join("") || ""} {status}
+                                  {over ? `⚠️ تجاوز ${occ.length}/${cap}` : status}
                                 </span>
                               </>}
                               {isMajlis && <span style={{ fontSize: 9, color: "#7c3aed", fontWeight: 700 }}>مجلس</span>}
@@ -466,7 +605,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                                 <div style={{ flex: 1, height: 3, borderRadius: 99, background: `${color}15`, overflow: "hidden" }}>
                                   <div style={{ height: "100%", borderRadius: 99, background: color, width: `${cap ? Math.min(100,(occ.length/cap)*100) : 0}%`, transition: "width .3s" }} />
                                 </div>
-                                <span style={{ fontSize: 9, fontWeight: 800, color, flexShrink: 0 }}>{occ.length}/{cap}</span>
+                                {/* الشريط يمتلئ عند ١٠٠٪ فيبتلع التجاوز:
+                                    ٣/٢ تبدو ٢/٢. فالرقم يقولها والوسم
+                                    يؤكّدها بدل أن تمرّ بصمت. */}
+                                <span style={{ fontSize: 9, fontWeight: 800, color, flexShrink: 0 }} dir="ltr">{occ.length}/{capOf(room) ?? "—"}</span>
                               </div>
                             )}
                           </div>
@@ -501,8 +643,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   ) : (
                     <>
                       <div style={{ fontSize: 22, fontWeight: 900, color: primary, lineHeight: 1 }}>غرفة {selectedRoom.number}</div>
-                      <button onClick={() => { setEditingRoomNum(true); setNewRoomNum(selectedRoom.number); }}
-                        style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", background: "var(--ivory)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
+                      <button disabled={readOnly} onClick={() => { setEditingRoomNum(true); setNewRoomNum(selectedRoom.number); }}
+                        style={{ ...roOff, width: 22, height: 22, borderRadius: 6, border: "1px solid var(--line)", background: "var(--ivory)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
                       </button>
                     </>
@@ -517,30 +659,42 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                 <button onClick={() => setSelectedRoom(null)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--muted)" }}>×</button>
               </div>
             </div>
-            {/* النوع selector */}
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-              {ROOM_TYPES.map(t => (
-                <button key={t} onClick={() => saveRoomType(t)}
-                  style={{ padding: "4px 8px", borderRadius: 99, border: "1.5px solid", borderColor: panelType === t ? primary : "var(--line)", background: panelType === t ? primary : "var(--paper)", color: panelType === t ? "#fff" : "var(--ink)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .12s" }}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* KPI mini */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-            {[
-              { label: "الدور", val: selectedRoom.floor },
-              { label: "الوضع", val: (statusLabel[getStatus(selectedRoom)] || getStatus(selectedRoom)), color: statusColor[getStatus(selectedRoom)] },
-              (() => { const b = occBreakdown(selectedRoom.id); return { label: b.admins ? `نزلاء · ${b.hajj} حاج + ${b.admins} إداري` : "عدد النزلاء", val: `${b.total}/${TYPE_CAP[selectedRoom.type] || "—"}` }; })(),
-            ].map(k => (
-              <div key={k.label} style={{ background: "var(--ivory)", borderRadius: 8, padding: "7px 8px", textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>{k.label}</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: k.color || "var(--ink)" }}>{k.val}</div>
+          {/* ملخّصٌ واحد بدل ثلاثة صناديق تكرّر ما في الترويسة */}
+          {(() => {
+            const st = getStatus(selectedRoom);
+            const cap = capOf(selectedRoom);
+            const b = occBreakdown(selectedRoom.id);
+            const clr = statusColor[st];
+            const pctFill = cap ? Math.min(100, (b.total / cap) * 100) : 0;
+            return (
+              <div style={{ padding: "8px 14px 10px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>الدور {selectedRoom.floor}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>·</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "var(--ink)" }}>{selectedRoom.type}</span>
+                  <div style={{ flex: 1 }} />
+                  <span style={{ fontSize: 10, fontWeight: 900, padding: "2px 9px", borderRadius: 99, background: `${clr}15`, color: clr, whiteSpace: "nowrap" }}>{statusLabel[st]}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 5, borderRadius: 99, background: `${clr}18`, overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 99, background: clr, width: `${pctFill}%`, transition: "width .3s" }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: clr, flexShrink: 0 }} dir="ltr">{b.total}/{cap ?? "—"}</span>
+                </div>
+                {b.admins > 0 && <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, marginTop: 4 }}>{b.hajj} حاج + {b.admins} إداري</div>}
+                {st === "تجاوز" && (
+                  <div style={{ fontSize: 10, fontWeight: 800, color: statusColor["تجاوز"], background: "var(--danger-bg)", borderRadius: 7, padding: "5px 8px", marginTop: 6, lineHeight: 1.5 }}>
+                    عدد النزلاء يتجاوز سعة الغرفة. لن يُقبل نزيلٌ جديد — أخرِج أو انقل نزيلاً لتسوية الوضع.
+                  </div>
+                )}
+                {cap == null && (
+                  <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", background: "var(--ivory)", borderRadius: 7, padding: "5px 8px", marginTop: 6, lineHeight: 1.5 }}>
+                    سعة هذه الغرفة غير محدّدة — حدّدها من إعدادات الغرفة قبل التسكين.
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* Body */}
           <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
@@ -548,32 +702,74 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             {roomPassengers(selectedRoom.id).length === 0 ? (
               <div style={{ textAlign: "center", padding: "16px 0", color: "var(--muted)", fontSize: 12 }}>لا يوجد نزلاء في هذه الغرفة</div>
             ) : (
-              roomPassengers(selectedRoom.id).map((p, i) => (
+              roomPassengers(selectedRoom.id).map((p, i) => {
+                /* أقارب هذا النزيل ممّن لا غرفة لهم — رقمٌ مضغوط
+                   يقود إلى قائمة الإضافة، لا أسماء تُزاحم الصفّ. */
+                const kinFree = p.family_id ? unassigned.filter(x => x.family_id === p.family_id && x.id !== p.id).length : 0;
+                const want = isHajj(p) ? (p.services?.hotel_type || "").trim() : "";
+                return (
                 <div key={p.id}
                   draggable={!readOnly}
                   onDragStart={() => setDragId(p.id)}
                   onDragOver={e => e.preventDefault()}
                   onDrop={() => { if (dragId) reorderRoom(selectedRoom.id, dragId, p.id); setDragId(null); }}
                   onDragEnd={() => setDragId(null)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 6, background: "var(--ivory)", cursor: readOnly ? "default" : "grab", opacity: dragId === p.id ? 0.5 : 1 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: `linear-gradient(135deg,${primary},${primary}99)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-                    {avatarInitials(p.name_ar)}
-                  </div>
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 9px", borderRadius: 9, border: "1px solid var(--line)", marginBottom: 5, background: "var(--ivory)", cursor: readOnly ? "default" : "grab", opacity: dragId === p.id ? 0.5 : 1 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", width: 12, flexShrink: 0 }}>{i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* الاسم المختصر لا الكامل — الصفّ ضيّق والاسم الرباعي
-                        يُقصّ. والشارة عنصر مستقلّ لا يُقصّ مع الاسم:
-                        لو كانت داخل صندوق القصّ اختفت كما اختفت أوّل مرّة. */}
                     <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || p.name_ar}</span>
                       {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--muted)" }}>{p.passport || p.national_id || "—"}</div>
+                    {/* رقم الجواز خرج من هنا: لا يخدم قرار التسكين
+                        ويأكل سطراً. مكانه ما يخدمه — الخدمة المطلوبة
+                        وأقاربُ بلا غرفة. */}
+                    <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, marginTop: 1, display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {want && <span>المطلوب: {want}</span>}
+                      {kinFree > 0 && <span style={{ color: "var(--primary)" }}>أسرة · {kinFree} بدون غرفة</span>}
+                      {!want && kinFree === 0 && <span>—</span>}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{i + 1}</div>
-                  <button onClick={() => removeFromRoom(p.id)} style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>×</button>
+                  <button disabled={readOnly} onClick={() => { setMoveFor(p); setMoveSearch(""); }} title="نقل إلى غرفة أخرى"
+                    style={{ ...roOff, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", cursor: "pointer", fontSize: 9.5, fontWeight: 800, fontFamily: "var(--font-body)", flexShrink: 0 }}>نقل</button>
+                  <button disabled={readOnly} onClick={() => removeFromRoom(p.id)} title="إزالة من الغرفة"
+                    style={{ ...roOff, width: 24, height: 24, borderRadius: 6, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>×</button>
                 </div>
-              ))
+                );
+              })
             )}
+
+            {/* ═══ لوحة النقل ═══ */}
+            {moveFor && (() => {
+              const q = moveSearch.trim();
+              const dests = rooms.filter(r => r.id !== selectedRoom.id && !roomFull(r) && (!q || r.number.includes(q) || r.floor.includes(q)));
+              return (
+                <div style={{ border: `1.5px solid ${primary}`, borderRadius: 10, padding: 8, marginBottom: 8, background: "var(--paper)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: "var(--ink)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>نقل {moveFor.short_ar || moveFor.name_ar} إلى</span>
+                    <button onClick={() => setMoveFor(null)} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 15, lineHeight: 1 }}>×</button>
+                  </div>
+                  <input value={moveSearch} onChange={e => setMoveSearch(e.target.value)} placeholder="رقم الغرفة أو الدور..." style={{ ...inp, fontSize: 11, padding: "6px 9px", marginBottom: 6 }} />
+                  {/* الوجهات الممتلئة والمجالس لا تُعرض أصلاً: القائمة
+                      لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */}
+                  <div style={{ maxHeight: 168, overflowY: "auto" }}>
+                    {dests.length === 0 ? (
+                      <div style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>لا توجد غرفة فيها متّسع</div>
+                    ) : dests.slice(0, 40).map(r => (
+                      <div key={r.id} onClick={() => moveToRoom(moveFor, r)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 7, cursor: "pointer", borderBottom: "1px solid var(--ivory)" }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: primary, flexShrink: 0 }}>{r.number}</span>
+                        <span style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, flex: 1, minWidth: 0 }}>ط{r.floor} · {r.type}</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)" }} dir="ltr">{roomPassengers(r.id).length}/{capOf(r)}</span>
+                      </div>
+                    ))}
+                    {dests.length > 40 && <div style={{ padding: "6px", textAlign: "center", color: "var(--muted)", fontSize: 9.5 }}>يُعرض ٤٠ من {dests.length} — ابحث لتضييق النتائج</div>}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* إضافة حاج */}
             {selectedRoom.type !== "مجلس" && <button disabled={readOnly} onClick={() => setShowAddPilgrim(!showAddPilgrim)}
@@ -581,40 +777,89 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               + إضافة نزيل للغرفة
             </button>}
 
-            {showAddPilgrim && (
-              <div style={{ marginTop: 8, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
-                <input value={pSearch} onChange={e => setPSearch(e.target.value)} placeholder="ابحث بالاسم..." style={{ ...inp, borderRadius: 0, borderWidth: "0 0 1px 0", fontSize: 12 }} />
-                <div style={{ maxHeight: 150, overflowY: "auto" }}>
-                  {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).slice(0, 20).map(p => (
-                    <div key={p.id} onClick={() => addToRoom(p.id)}
-                      style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid var(--ivory)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
-                      <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 600 }}>{p.short_ar || p.name_ar.split(" ").slice(0,2).join(" ")}</span>
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        {/* شارات الخدمات للحاجّ وحده: `mapPassenger` يمنح
-                            كل صفّ «مطلة» افتراضاً حين يكون العمود فارغاً،
-                            فكان الإداري يظهر «مطل» بلا معنى */}
-                        {isHajj(p) && p.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
-                        {isHajj(p) && String(p.services?.hotel_type) === "خاص" && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>خاص</span>}
-                        {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99 }}>{p.passenger_type}</span>}
-                      </div>
-                    </div>
-                  ))}
-                  {unassigned.filter(p => !pSearch || p.name_ar.includes(pSearch)).length === 0 && (
-                    <div style={{ padding: "12px", textAlign: "center", color: "var(--muted)", fontSize: 12 }}>لا يوجد غير موزّعين</div>
-                  )}
+            {showAddPilgrim && (() => {
+              const q = pSearch.trim();
+              const match = (x: Passenger) => !q || (x.name_ar || "").includes(q) || (x.short_ar || "").includes(q) || (x.passport || "").includes(q);
+              const pool = unassigned.filter(match);
+              /* أقارب الساكنين أولاً: تسكينُ الأسرة معاً هو القيد
+                 الأول في العمل اليوميّ، وكان يتطلّب تذكّر الأسماء.
+                 لا اختيار تلقائيّ ولا إسناد — ترتيبُ عرضٍ فقط. */
+              const famIds = new Set(roomPassengers(selectedRoom.id).map(o => o.family_id).filter(Boolean) as string[]);
+              const kin = pool.filter(x => x.family_id && famIds.has(x.family_id));
+              const rest = pool.filter(x => !(x.family_id && famIds.has(x.family_id)));
+              const CAP = 25;
+              const full = roomFull(selectedRoom);
+
+              const row = (x: Passenger) => (
+                <div key={x.id} onClick={() => { if (!full) addToRoom(x.id); }}
+                  style={{ padding: "7px 11px", cursor: full ? "not-allowed" : "pointer", opacity: full ? .5 : 1, borderBottom: "1px solid var(--ivory)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}
+                  onMouseEnter={e => { if (!full) (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
+                  onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
+                  <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.short_ar || x.name_ar.split(" ").slice(0,2).join(" ")}</span>
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    {isHajj(x) && x.services?.hotel_type && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>{x.services.hotel_type}</span>}
+                    {isHajj(x) && x.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
+                    {!isHajj(x) && <span style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99 }}>{x.passenger_type}</span>}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+              const head = (t: string) => (
+                <div style={{ padding: "5px 11px", fontSize: 9.5, fontWeight: 800, color: "var(--muted)", background: "var(--ivory)", borderBottom: "1px solid var(--line)" }}>{t}</div>
+              );
+
+              return (
+                <div style={{ marginTop: 8, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+                  <input value={pSearch} onChange={e => setPSearch(e.target.value)} placeholder="ابحث بالاسم أو الجواز..." style={{ ...inp, borderRadius: 0, borderWidth: "0 0 1px 0", fontSize: 12 }} />
+                  {full && <div style={{ padding: "8px 11px", fontSize: 10.5, fontWeight: 800, color: statusColor["مكتملة"], background: "var(--danger-bg)" }}>الغرفة مكتملة — لا تتّسع لنزيلٍ آخر</div>}
+                  <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                    {pool.length === 0 ? (
+                      <div style={{ padding: "12px", textAlign: "center", color: "var(--muted)", fontSize: 12 }}>{q ? "لا نتائج مطابقة" : "لا يوجد غير موزّعين"}</div>
+                    ) : (
+                      <>
+                        {kin.length > 0 && head(`أفراد من نفس الأسرة بدون غرفة · ${kin.length}`)}
+                        {kin.slice(0, CAP).map(row)}
+                        {rest.length > 0 && kin.length > 0 && head(`باقي الحجاج بدون غرفة · ${rest.length}`)}
+                        {rest.slice(0, Math.max(0, CAP - Math.min(kin.length, CAP))).map(row)}
+                      </>
+                    )}
+                  </div>
+                  {/* العدّ الحقيقيّ دائماً: كانت القائمة تقصّ عند
+                      عشرين بلا كلمة، فيُقرأ «بقي عشرون» وهم مئة. */}
+                  <div style={{ padding: "6px 11px", fontSize: 9.5, fontWeight: 700, color: "var(--muted)", borderTop: "1px solid var(--line)", background: "var(--paper)" }}>
+                    {pool.length > CAP
+                      ? `يُعرض ${Math.min(CAP, pool.length)} من ${pool.length} — ابحث لتضييق النتائج`
+                      : `${pool.length} بدون غرفة${q ? " (مطابق للبحث)" : ""}`}
+                    {!q && unassigned.length !== pool.length ? "" : ""}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ═══ إعدادات الغرفة ═══
+                أسفل الملفّ لا أعلاه: النوع والسعة يُضبطان مرّة عند
+                إنشاء الفندق، بينما النزلاء يتغيّرون كل يوم. كانت
+                الأزرار تتصدّر اللوحة فتبدو شاشةَ إعدادات. */}
+            <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px dashed var(--line)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 6 }}>إعدادات الغرفة</div>
+            {/* النوع selector — والسعة معه حين تكون «خاص» */}
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {ROOM_TYPES.map(t => (
+                <button key={t} disabled={readOnly} onClick={() => saveRoomType(t)}
+                  style={{ padding: "4px 8px", borderRadius: 99, border: "1.5px solid", borderColor: panelType === t ? primary : "var(--line)", background: panelType === t ? primary : "var(--paper)", color: panelType === t ? "#fff" : "var(--ink)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .12s" }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+            </div>
 
             {/* ملاحظات */}
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", letterSpacing: ".05em", marginBottom: 6 }}>ملاحظات</div>
-              <textarea value={panelNotes} onChange={e => setPanelNotes(e.target.value)}
+              <textarea value={panelNotes} disabled={readOnly} onChange={e => setPanelNotes(e.target.value)}
                 placeholder="أضف ملاحظات على الغرفة..."
                 style={{ ...inp, resize: "none", height: 70, fontSize: 12 }} />
-              <button onClick={saveNotes} style={{ ...btnP, width: "100%", marginTop: 6, fontSize: 11 }}>حفظ الملاحظات</button>
+              <button disabled={readOnly} onClick={saveNotes} style={{ ...btnP, ...roOff, width: "100%", marginTop: 6, fontSize: 11 }}>حفظ الملاحظات</button>
             </div>
           </div>
 
@@ -680,6 +925,22 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {ROOM_TYPES.map(t => <button key={t} onClick={() => setAddType(t)} style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: addType === t ? primary : "var(--line)", background: addType === t ? primary : "var(--paper)", color: addType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>)}
                   </div>
+            {!isFixedCapType(panelType) && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", flexShrink: 0 }}>السعة</span>
+                <input value={panelCap} disabled={readOnly} onChange={e => setPanelCap(e.target.value.replace(/\D/g, ""))} inputMode="numeric"
+                  style={{ ...inp, ...roOff, width: 64, padding: "4px 8px", fontSize: 12, flex: "none" }} />
+                <button disabled={readOnly} onClick={() => saveRoomCapacity(panelType, panelCap)}
+                  style={{ ...roOff, padding: "4px 10px", borderRadius: 7, border: "none", background: primary, color: "#fff", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>حفظ السعة</button>
+              </div>
+            )}
+                    {!isFixedCapType(addType) && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 5 }}>سعة الغرفة <span style={{ color: "var(--danger)" }}>*</span></div>
+                        <input value={addCap} onChange={e => setAddCap(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="عدد الأَسِرّة الفعليّ" style={{ ...inp }} />
+                        <div style={{ fontSize: 9.5, color: "var(--muted)", marginTop: 4, lineHeight: 1.6 }}>«خاص» تصنيفٌ تجاريّ لا عدّةَ أَسِرّة — أدخل السعة الحقيقية.</div>
+                      </div>
+                    )}
                 </div>
                 <div style={{ marginBottom: 16 }}><div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>ملاحظة (اختياري)</div><input value={addNotes} onChange={e => setAddNotes(e.target.value)} style={inp} placeholder="ملاحظات..." /></div>
                 <div style={{ display: "flex", gap: 8 }}><button onClick={addRoom} style={{ ...btnP, flex: 1 }}>إضافة</button><button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button></div>
@@ -704,6 +965,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {ROOM_TYPES.map(t => <button key={t} onClick={() => setRangeType(t)} style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: rangeType === t ? primary : "var(--line)", background: rangeType === t ? primary : "var(--paper)", color: rangeType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>)}
                   </div>
+                    {!isFixedCapType(rangeType) && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 5 }}>سعة الغرفة <span style={{ color: "var(--danger)" }}>*</span></div>
+                        <input value={rangeCap} onChange={e => setRangeCap(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="عدد الأَسِرّة الفعليّ" style={{ ...inp }} />
+                        <div style={{ fontSize: 9.5, color: "var(--muted)", marginTop: 4, lineHeight: 1.6 }}>«خاص» تصنيفٌ تجاريّ لا عدّةَ أَسِرّة — أدخل السعة الحقيقية.</div>
+                      </div>
+                    )}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}><button onClick={addRoomRange} style={{ ...btnP, flex: 1 }}>إضافة النطاق</button><button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button></div>
               </>
@@ -728,6 +996,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {ROOM_TYPES.map(t => <button key={t} onClick={() => setTplType(t)} style={{ padding: "5px 11px", borderRadius: 99, border: "1.5px solid", borderColor: tplType === t ? primary : "var(--line)", background: tplType === t ? primary : "var(--paper)", color: tplType === t ? "#fff" : "var(--ink)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>)}
                   </div>
+                    {!isFixedCapType(tplType) && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 5 }}>سعة الغرفة <span style={{ color: "var(--danger)" }}>*</span></div>
+                        <input value={tplCap} onChange={e => setTplCap(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="عدد الأَسِرّة الفعليّ" style={{ ...inp }} />
+                        <div style={{ fontSize: 9.5, color: "var(--muted)", marginTop: 4, lineHeight: 1.6 }}>«خاص» تصنيفٌ تجاريّ لا عدّةَ أَسِرّة — أدخل السعة الحقيقية.</div>
+                      </div>
+                    )}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}><button onClick={addRoomTemplate} style={{ ...btnP, flex: 1 }}>إنشاء القالب</button><button onClick={() => setShowAddRoom(false)} style={{ ...btnS, flex: 1 }}>إلغاء</button></div>
               </>
