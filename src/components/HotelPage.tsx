@@ -172,6 +172,20 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     "غير محدّدة": "السعة غير محدّدة",
   };
 
+  /* وسم الحالة في الترويسة يقف على أرضيّة `--paper`، وهي داكنة في
+     السمة الداكنة. فألوانه من رموز الحالة في السمة (`--danger`
+     و`--warning`…) لا من `statusColor` الثابتة أعلاه — تلك تبقى
+     لبطاقات الشبكة كما اعتُمدت، وهذه تنقلب مع السمة فتُقرأ في
+     الداكنة كما في الفاتحة. */
+  const statusToken: Record<RoomStatus, string> = {
+    "مكتملة": "var(--primary)",
+    "قيد التسكين": "var(--info)",
+    "جاهزة": "var(--success)",
+    "مجلس": "var(--accent-dark, var(--accent))",
+    "تجاوز": "var(--danger)",
+    "غير محدّدة": "var(--muted)",
+  };
+
   /* هل تقبل الغرفة نزيلاً آخر؟ حكمٌ واحد تستعمله الأزرار والقوائم
      والنقل — وهو صدى حارس القاعدة لا بديلٌ عنه. */
   const roomFull = (room: Room) => {
@@ -661,6 +675,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       {selectedRoom && (
         <div style={{ width: 272, flexShrink: 0, background: "var(--paper)", borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* ═══ ترويسة ملفّ الغرفة ═══
+              ألوانها من **متغيّرات السمة** لا من `primaryColor` الخاصّ
+              بهوية الشركة: الأول يتبدّل مع السمة المختارة (`data-theme`
+              — أربع سمات) والثاني ثابتٌ في القاعدة. فكانت الترويسة تبقى
+              نبيتيّةً بعد تبديل السمة بينما تتبدّل بقيّة الصفحة. والنمط
+              نمطُ ترويسة «يحتاج انتباهك» في الداشبورد. والأسطح الشفيفة
+              على `--text-inverse` فتنقلب معه، والمصمتة على `--paper`
+              فتُقرأ في الداكنة كما في الفاتحة.
               أرضيّة ملوّنة تفصل هوية الغرفة عن محتواها — كان الأعلى
               أبيضَ كبقيّة اللوحة فيُقرأ إعداداتٍ لا هويّة. والنوع
               صعد إلى هنا: يُقرأ فوراً، ويُحرَّر بضغطةٍ لا بكتلةٍ
@@ -669,10 +690,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
             const st = getStatus(selectedRoom);
             const cap = capOf(selectedRoom);
             const b = occBreakdown(selectedRoom.id);
-            const clr = statusColor[st];
             const pctFill = cap ? Math.min(100, (b.total / cap) * 100) : 0;
             return (
-              <div style={{ background: `linear-gradient(150deg, ${primary}, ${primary}cc)`, color: "var(--text-inverse)", padding: "12px 14px 11px", flexShrink: 0 }}>
+              <div style={{ background: "linear-gradient(150deg, var(--primary), var(--primary-dark, var(--primary)))", color: "var(--text-inverse)", padding: "12px 14px 11px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -680,16 +700,16 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                         <>
                           <input value={newRoomNum} onChange={e => setNewRoomNum(e.target.value)}
                             onKeyDown={e => { if (e.key === "Enter") saveRoomNumber(); if (e.key === "Escape") setEditingRoomNum(false); }}
-                            style={{ width: 78, fontSize: 17, fontWeight: 900, color: "var(--text-inverse)", border: "none", borderBottom: "2px solid rgba(255,255,255,.6)", outline: "none", background: "transparent", fontFamily: "var(--font-body)", textAlign: "right" }}
+                            style={{ width: 78, fontSize: 17, fontWeight: 900, color: "var(--text-inverse)", border: "none", borderBottom: "2px solid color-mix(in srgb, var(--text-inverse) 60%, transparent)", outline: "none", background: "transparent", fontFamily: "var(--font-body)", textAlign: "right" }}
                             autoFocus />
-                          <button onClick={saveRoomNumber} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "none", background: "rgba(255,255,255,.9)", color: primary, cursor: "pointer", fontFamily: "var(--font-body)", fontWeight: 800 }}>حفظ</button>
-                          <button onClick={() => setEditingRoomNum(false)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,.35)", background: "transparent", color: "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>إلغاء</button>
+                          <button onClick={saveRoomNumber} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "none", background: "var(--paper)", color: "var(--primary)", cursor: "pointer", fontFamily: "var(--font-body)", fontWeight: 800 }}>حفظ</button>
+                          <button onClick={() => setEditingRoomNum(false)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: "transparent", color: "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>إلغاء</button>
                         </>
                       ) : (
                         <>
                           <span style={{ fontSize: 21, fontWeight: 900, lineHeight: 1.1 }}>غرفة {selectedRoom.number}</span>
                           <button disabled={readOnly} onClick={() => { setEditingRoomNum(true); setNewRoomNum(selectedRoom.number); }} title="تعديل رقم الغرفة"
-                            style={{ ...roOff, width: 20, height: 20, borderRadius: 5, border: "1px solid rgba(255,255,255,.3)", background: "rgba(255,255,255,.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-inverse)", flexShrink: 0 }}>
+                            style={{ ...roOff, width: 20, height: 20, borderRadius: 5, border: "1px solid color-mix(in srgb, var(--text-inverse) 30%, transparent)", background: "color-mix(in srgb, var(--text-inverse) 12%, transparent)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-inverse)", flexShrink: 0 }}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
                           </button>
                         </>
@@ -698,34 +718,34 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     <div style={{ fontSize: 10.5, fontWeight: 700, opacity: .8, marginTop: 3 }}>الطابق {selectedRoom.floor}</div>
                   </div>
                   <button onClick={() => setSelectedRoom(null)} title="إغلاق"
-                    style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid rgba(255,255,255,.3)", background: "rgba(255,255,255,.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "var(--text-inverse)", flexShrink: 0, lineHeight: 1 }}>×</button>
+                    style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid color-mix(in srgb, var(--text-inverse) 30%, transparent)", background: "color-mix(in srgb, var(--text-inverse) 12%, transparent)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "var(--text-inverse)", flexShrink: 0, lineHeight: 1 }}>×</button>
                 </div>
 
                 {/* النوع + الحالة */}
                 <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", marginBottom: 7 }}>
                   <button disabled={readOnly} onClick={() => setEditingType(v => !v)} title="تغيير نوع الغرفة"
-                    style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 900, padding: "3px 9px", borderRadius: 99, border: "1px solid rgba(255,255,255,.35)", background: editingType ? "rgba(255,255,255,.92)" : "rgba(255,255,255,.14)", color: editingType ? primary : "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                    style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 900, padding: "3px 9px", borderRadius: 99, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: editingType ? "var(--paper)" : "color-mix(in srgb, var(--text-inverse) 14%, transparent)", color: editingType ? "var(--primary)" : "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>
                     {selectedRoom.type}
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                   </button>
-                  <span style={{ fontSize: 10, fontWeight: 900, padding: "3px 9px", borderRadius: 99, background: "rgba(255,255,255,.92)", color: clr, whiteSpace: "nowrap" }}>{statusLabel[st]}</span>
+                  <span style={{ fontSize: 10, fontWeight: 900, padding: "3px 9px", borderRadius: 99, background: "var(--paper)", color: statusToken[st], whiteSpace: "nowrap" }}>{statusLabel[st]}</span>
                   {b.admins > 0 && <span style={{ fontSize: 9.5, fontWeight: 800, opacity: .85 }}>{b.hajj} حاج + {b.admins} إداري</span>}
                 </div>
 
                 {/* اختيار النوع — يظهر عند الطلب فقط */}
                 {editingType && !readOnly && (
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, padding: "7px 8px", borderRadius: 9, background: "rgba(0,0,0,.18)" }}>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8, padding: "7px 8px", borderRadius: 9, background: "color-mix(in srgb, var(--ink) 18%, transparent)" }}>
                     {ROOM_TYPES.map(t => (
                       <button key={t} onClick={() => { saveRoomType(t); if (isFixedCapType(t)) setEditingType(false); }}
-                        style={{ padding: "3px 8px", borderRadius: 99, border: "1px solid", borderColor: panelType === t ? "transparent" : "rgba(255,255,255,.3)", background: panelType === t ? "rgba(255,255,255,.92)" : "transparent", color: panelType === t ? primary : "var(--text-inverse)", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>
+                        style={{ padding: "3px 8px", borderRadius: 99, border: "1px solid", borderColor: panelType === t ? "transparent" : "color-mix(in srgb, var(--text-inverse) 30%, transparent)", background: panelType === t ? "var(--paper)" : "transparent", color: panelType === t ? "var(--primary)" : "var(--text-inverse)", fontSize: 10, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>{t}</button>
                     ))}
                     {!isFixedCapType(panelType) && (
                       <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%", marginTop: 5 }}>
                         <span style={{ fontSize: 9.5, fontWeight: 800, opacity: .85, flexShrink: 0 }}>السعة</span>
                         <input value={panelCap} onChange={e => setPanelCap(e.target.value.replace(/\D/g, ""))} inputMode="numeric"
-                          style={{ width: 56, padding: "3px 7px", borderRadius: 6, border: "1px solid rgba(255,255,255,.35)", background: "rgba(255,255,255,.92)", color: "var(--ink)", fontSize: 11, fontFamily: "var(--font-body)", outline: "none" }} />
+                          style={{ width: 56, padding: "3px 7px", borderRadius: 6, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: "var(--paper)", color: "var(--ink)", fontSize: 11, fontFamily: "var(--font-body)", outline: "none" }} />
                         <button onClick={() => { saveRoomCapacity(panelType, panelCap); setEditingType(false); }}
-                          style={{ padding: "3px 10px", borderRadius: 6, border: "none", background: "rgba(255,255,255,.92)", color: primary, fontSize: 10, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-body)" }}>حفظ</button>
+                          style={{ padding: "3px 10px", borderRadius: 6, border: "none", background: "var(--paper)", color: "var(--primary)", fontSize: 10, fontWeight: 900, cursor: "pointer", fontFamily: "var(--font-body)" }}>حفظ</button>
                       </div>
                     )}
                   </div>
@@ -733,19 +753,19 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
                 {/* الإشغال */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ flex: 1, height: 5, borderRadius: 99, background: "rgba(0,0,0,.25)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 99, background: st === "تجاوز" ? "#ff8a80" : "rgba(255,255,255,.92)", width: `${pctFill}%`, transition: "width .3s" }} />
+                  <div style={{ flex: 1, height: 5, borderRadius: 99, background: "color-mix(in srgb, var(--ink) 25%, transparent)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 99, background: st === "تجاوز" ? "var(--danger-bg)" : "var(--paper)", width: `${pctFill}%`, transition: "width .3s" }} />
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 900, flexShrink: 0 }} dir="ltr">{b.total}/{cap ?? "—"}</span>
                 </div>
 
                 {st === "تجاوز" && (
-                  <div style={{ fontSize: 9.5, fontWeight: 800, background: "rgba(0,0,0,.28)", borderRadius: 7, padding: "5px 8px", marginTop: 7, lineHeight: 1.55 }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, background: "color-mix(in srgb, var(--ink) 28%, transparent)", borderRadius: 7, padding: "5px 8px", marginTop: 7, lineHeight: 1.55 }}>
                     عدد النزلاء يتجاوز سعة الغرفة. لن يُقبل نزيلٌ جديد — أخرِج أو انقل نزيلاً لتسوية الوضع.
                   </div>
                 )}
                 {cap == null && (
-                  <div style={{ fontSize: 9.5, fontWeight: 800, background: "rgba(0,0,0,.28)", borderRadius: 7, padding: "5px 8px", marginTop: 7, lineHeight: 1.55 }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, background: "color-mix(in srgb, var(--ink) 28%, transparent)", borderRadius: 7, padding: "5px 8px", marginTop: 7, lineHeight: 1.55 }}>
                     سعة هذه الغرفة غير محدّدة — حدّدها من النوع أعلاه قبل التسكين.
                   </div>
                 )}
