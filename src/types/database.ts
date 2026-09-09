@@ -859,6 +859,7 @@ export type Database = {
       }
       rooms: {
         Row: {
+          capacity: number | null
           created_at: string | null
           floor: string | null
           id: number
@@ -868,6 +869,7 @@ export type Database = {
           type: string | null
         }
         Insert: {
+          capacity?: number | null
           created_at?: string | null
           floor?: string | null
           id?: never
@@ -877,6 +879,7 @@ export type Database = {
           type?: string | null
         }
         Update: {
+          capacity?: number | null
           created_at?: string | null
           floor?: string | null
           id?: never
@@ -1177,6 +1180,7 @@ export type Database = {
         Returns: number
       }
       revoke_pilgrim_session: { Args: { p_token: string }; Returns: boolean }
+      room_type_capacity: { Args: { p_type: string }; Returns: number }
       set_audit_actor: { Args: { p_actor: string }; Returns: undefined }
       unregister_pilgrim_push: {
         Args: { p_endpoint: string; p_token: string }

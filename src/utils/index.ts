@@ -271,9 +271,27 @@ const PUBLIC_PREFIX = `/storage/v1/object/public/${DOC_BUCKET}/`;
    خرجت من صفحة الفندق إلى هنا حين احتاجتها صفحة الإداريين أيضاً:
    نسختان من هذا الجدول تفترقان يوماً، وسعةٌ مختلفة بين شاشتين
    تعني تسكيناً فوق سرير مشغول. الصفر يعني «بلا حدّ» (مجلس · أخرى). */
+/* سعة الأنواع القياسية — نسخةُ الواجهة من `room_type_capacity()` في
+   القاعدة. «خاص» ليست هنا عمداً: لا سعة ثابتة لها، تُدخَل صراحةً
+   وتُقرأ من `rooms.capacity`. والقاعدة هي الحَكَم عند الكتابة. */
 export const ROOM_TYPE_CAP: Record<string, number> = {
-  "فردية": 1, "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "مجلس": 0, "أخرى": 0,
+  "فردية": 1, "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "مجلس": 0,
 };
+
+/* أنواع غرف الفندق المعتمَدة بترتيب العرض. تُميَّز عن `ROOM_TYPES`
+   أدناه: تلك أنواع التسعير الأربعة (عدد الأَسِرّة)، وهذه مفردات
+   صفحة الفندق كاملةً ومنها «خاص» و«مجلس». */
+export const HOTEL_ROOM_TYPES = ["فردية", "ثنائية", "ثلاثية", "رباعية", "خاص", "مجلس"] as const;
+
+/** هل يفرض النوع سعته؟ «خاص» وحدها لا تفرضها */
+export const isFixedCapType = (t: string) => t in ROOM_TYPE_CAP;
+
+/** السعة الفعلية للغرفة — المحفوظة أولاً، ثم سعة نوعها القياسيّ */
+export function roomCapacity(room: { type?: string | null; capacity?: number | null }): number | null {
+  if (room.capacity != null) return room.capacity;
+  const t = (room.type || "").trim();
+  return t in ROOM_TYPE_CAP ? ROOM_TYPE_CAP[t] : null;
+}
 
 /** مدد الصلاحية المعتمدة — ق٣ */
 export const DOC_TTL = {
