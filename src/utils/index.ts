@@ -1163,11 +1163,20 @@ export function buildStickersHTML(passengers: StickerPassenger[], cfg: StickerCo
 
 // ============================================================
 // هل الحاج طالب هذه الخدمة؟
-// إذا كان طلبه "بدون" فهو غير مطلوب — لا يُحتسب ناقصاً في التوزيع
 // ============================================================
+// **الطيران وحده** يقبل «بدون» — قرارُ منتَجٍ لا تفصيل: الحاجّ قد
+// يصل بتذكرته، فيُخصم «بدون تذكرة» من حسابه. أما الباص والغرفة
+// ومخيّما منى وعرفة فخدماتٌ لا يستغني عنها حاجّ، ولا تعرضها أي
+// قائمةٍ في النظام أصلاً (شاشة المسح والإضافة والتعديل تعرض
+// «بدون» للطيران وحده). فكان تعميمُ الاستثناء على الخمس بابَ
+// صمتٍ: قيمةٌ شاذّة في `services.bus` تُسقط الحاجّ من كل تنبيهات
+// الباص بلا أثر يُرى.
 export type ServiceKey = "bus" | "flight" | "hotel_type" | "camp_mina" | "camp_arafa";
 
+const OPTIONAL_SERVICES: ReadonlySet<ServiceKey> = new Set<ServiceKey>(["flight"]);
+
 export function wantsService(p: any, key: ServiceKey): boolean {
+  if (!OPTIONAL_SERVICES.has(key)) return true;
   const v = (p?.services?.[key] ?? "").toString().trim();
   return v !== "بدون";
 }
