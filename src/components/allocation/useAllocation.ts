@@ -18,7 +18,11 @@ import { reorderUpdates, applyReorder } from "../../utils/passenger";
 import type { OrderColumn } from "../../utils/passenger";
 
 /* عمود الإسناد — حرفيّ لا string عام، فالفهرسة به آمنة نوعياً */
-export type AllocColumn = "bus_id" | "camp_mina_id" | "camp_arafa_id";
+export type AllocColumn =
+  | "bus_id" | "camp_mina_id" | "camp_arafa_id"
+  /* الطيران ساقان مستقلّتان، وكلٌّ عمودُ إسنادٍ كالباص والمخيّم —
+     فالبدائل نفسها تخدمهما. والقواعد تبقى في `FlightsPage`. */
+  | "flight_id" | "return_flight_id";
 
 /* رسائل القاعدة بالعربية وجاهزةٌ للعرض (errcode P0001): السقف
    والجنس والموسم ونوع الصفحة. فتُعرض كما هي بدل نصٍّ عامٍّ يخفيها.

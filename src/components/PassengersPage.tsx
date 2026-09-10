@@ -125,7 +125,8 @@ const SEARCH_ISSUE_PHRASES: Record<string, IssueKey> = {
   "بدون تليفون": "missing_phone", "بدون هاتف": "missing_phone",
   "جواز منتهي": "expired_passport", "جواز منتهي الصلاحية": "expired_passport",
   "جواز قريب": "expiring_passport", "ينتهي قريبا": "expiring_passport", "ينتهي قريباً": "expiring_passport",
-  "بدون رحلة": "missing_flight", "بدون طيران": "missing_flight",
+  "بدون رحلة": "missing_flight", "بدون طيران": "missing_flight", "بدون ذهاب": "missing_flight",
+  "بدون عودة": "missing_return_flight", "بدون اياب": "missing_return_flight", "بدون إياب": "missing_return_flight",
   "بدون باص": "missing_bus", "بدون حافلة": "missing_bus",
   "بدون فندق": "missing_hotel", "بدون غرفة": "missing_hotel",
   "بدون تذكرة": "missing_ticket",
@@ -215,8 +216,15 @@ const ISSUE_UI: Record<IssueKey, IssueUI> = {
     icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,
     resolve: { kind: "page", page: "arafa", perm: "manage_camps", action: "الذهاب لتوزيع عرفة" },
   },
+  /* الطيران بندان: الذهاب والعودة. فمن حُجزت له رحلة الذهاب بلا
+     عودة يظهر في «رحلة العودة غير موزعة» — وكان يُعدّ مكتملاً. */
   missing_flight: {
-    label: "حجاج بدون رحلة طيران", tab: "dist", severity: "normal",
+    label: "رحلة الذهاب غير موزعة", tab: "dist", severity: "normal",
+    icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,
+    resolve: { kind: "page", page: "flights", perm: "manage_flights", action: "الذهاب للرحلات" },
+  },
+  missing_return_flight: {
+    label: "رحلة العودة غير موزعة", tab: "dist", severity: "normal",
     icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,
     resolve: { kind: "page", page: "flights", perm: "manage_flights", action: "الذهاب للرحلات" },
   },

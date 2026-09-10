@@ -520,7 +520,11 @@ function AdminsPage({
       updated_at:       new Date().toISOString(),
       /* الدرجة تُمحى مع إلغاء الطيران، فلا تبقى «درجة أولى» معلّقة
          على من لا يسافر — ولا أثر مالي لها: الإداري خارج Finance. */
-      flight_class:     assign.wants_flight ? assign.flight_class : null,
+      /* الدرجة المحجوزة تتبع المدفوعة — تُشتقّ ولا تُختار. والقاعدة
+         ترفض أي مخالفة، فلا تبقى صفحةُ الإداريين باباً للتجاوز. */
+      flight_class:     assign.wants_flight
+        ? (assignTarget.services?.flight === "درجة أولى" ? "درجة أولى" : "عادي")
+        : null,
     };
 
     /* السعة كانت تُحذِّر ثم تمضي بـ«متابعة». وقد صار للغرفة حارسٌ في
@@ -537,7 +541,21 @@ function AdminsPage({
       const cap = b?.capacity ?? 0;
       if (occupantsOf("bus_id", updates.bus_id) >= cap) over.push(`الباص ${b?.name} مكتمل (${cap}/${cap})`);
     }
-    if (over.length) { showAlert("warning", `${over.join(" · ")} — أخرِج أحداً أو ارفع السعة أولاً.`); return; }
+    /* مقاعد الرحلة المخصَّصة للحملة — حدٌّ صلب كالغرفة والباص */
+    for (const [field, label] of [["flight_id", "الذهاب"], ["return_flight_id", "الإياب"]] as const) {
+      const id = updates[field];
+      if (!id || id === assignTarget[field]) continue;
+      const fl = flights.find(x => x.id === id);
+      if (!fl) continue;
+      if (fl.capacity == null) { over.push(`رحلة ${label} «${fl.name}» بلا مقاعد محدَّدة للحملة`); continue; }
+      const occ = passengers.filter(p => p[field] === id).length;
+      if (occ >= fl.capacity) over.push(`رحلة ${label} «${fl.name}» مكتملة (${occ}/${fl.capacity})`);
+    }
+    /* «بدون طيران» استبعادٌ تجاريّ صلب — لا تُحجَز له تذكرة بحال */
+    if ((updates.flight_id || updates.return_flight_id) && assignTarget.services?.flight === "بدون") {
+      over.push("طلب «بدون طيران» — لا تُحجَز له تذكرة");
+    }
+    if (over.length) { showAlert("warning", `${over.join(" · ")} — عالِج ذلك أولاً.`); return; }
 
     /* رسالة القاعدة تُعرض كما هي: «الباص «١» مكتمل» و«المخيّم «٢»
        مخيّم رجال…» أوضح من «تعذّر حفظ التعيينات». */
@@ -851,11 +869,13 @@ function AdminsPage({
               options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "ذهاب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
             <AssignSelect label="رحلة الإياب"  value={assign.return_flight_id} onChange={v => setAssign(a => ({ ...a, return_flight_id: v }))}
               options={[{ id: "", label: "— بدون —" }, ...flights.filter(f => f.type === "إياب").map(f => ({ id: String(f.id), label: `${f.name} — ${f.airline} (${f.date})` }))]} />
-            {/* درجة السفر: الإداري غالباً اقتصادي، لكن صاحب الحملة
-                وحالاتٍ أخرى قد تسافر بالدرجة الأولى — ولم يكن للنظام
-                مدخل يسجّلها، فكان الكشف يُرسل «اقتصادي» دائماً */}
-            <AssignSelect label="درجة السفر"   value={assign.flight_class}     onChange={v => setAssign(a => ({ ...a, flight_class: v }))}
-              options={[{ id: "عادي", label: "اقتصادية" }, { id: "درجة أولى", label: "درجة أولى" }]} />
+            {/* الدرجة لا تُختار هنا: قرار المنتج أن الدرجة المحجوزة
+                تتبع الدرجة المدفوعة في `flight` ولا تخالفها، والقاعدة
+                ترفض المخالفة. فالاختيار الحرّ كان باب تجاوزٍ للقاعدة
+                — ويُضبط بتعديل خدمة الطيران نفسها لا بحقلٍ ثانٍ. */}
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              درجة السفر تتبع الدرجة المدفوعة: <b style={{ color: "var(--ink)" }}>{assignTarget?.services?.flight === "درجة أولى" ? "درجة أولى" : "اقتصادية"}</b>
+            </div>
           </>)}
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <button onClick={saveAssign} style={{ ...btnP({ flex: 1 }) }}>حفظ</button>
