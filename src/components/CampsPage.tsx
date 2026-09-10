@@ -414,7 +414,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                 icon={<Icon />} title={`مخيم ${camp.name}`} badge={camp.type === "خاص" ? specialBadge(true) : undefined}
                 subtitle={camp.gender === "ذكر" ? "رجال" : "نساء"}
                 occ={dwellers(camp.id).length} cap={camp.capacity ?? null}
-                emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} />
+                emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} noteNeedsAction={camp.capacity == null} />
             ))}
           </div>}
       </div>

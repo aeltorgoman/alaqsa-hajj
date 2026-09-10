@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
 import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
 import { useSeasonWrite } from "../season/useSeasonWrite";
+import { allocWriteError } from "./allocation/useAllocation";
 import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
@@ -522,8 +523,9 @@ function AdminsPage({
       flight_class:     assign.wants_flight ? assign.flight_class : null,
     };
 
-    /* السعة تُحذِّر ولا تمنع — وهو سلوك النظام القائم في الباصات
-       والغرف: القرار للمستخدم، والرقم أمامه. */
+    /* السعة كانت تُحذِّر ثم تمضي بـ«متابعة». وقد صار للغرفة حارسٌ في
+       القاعدة، وللباص والمخيّم مثله — فالوعد بالمتابعة صار وعداً
+       تكسره القاعدة بعد سطر. فالسقف يمنع هنا كما يمنع هناك. */
     const over: string[] = [];
     if (updates.room_id && updates.room_id !== assignTarget.room_id) {
       const r = rooms.find(x => x.id === updates.room_id);
@@ -532,12 +534,19 @@ function AdminsPage({
     }
     if (updates.bus_id && updates.bus_id !== assignTarget.bus_id) {
       const b = buses.find(x => x.id === updates.bus_id);
-      const cap = b?.capacity || 50;
+      const cap = b?.capacity ?? 0;
       if (occupantsOf("bus_id", updates.bus_id) >= cap) over.push(`الباص ${b?.name} مكتمل (${cap}/${cap})`);
     }
-    if (over.length && !await confirmAction(`${over.join(" · ")} — هل تريد المتابعة؟`, { title: "تجاوز السعة", confirmLabel: "متابعة" })) return;
+    if (over.length) { showAlert("warning", `${over.join(" · ")} — أخرِج أحداً أو ارفع السعة أولاً.`); return; }
 
-    if (!await writeOk(supabase.from("passengers").update(updates).eq("id", assignTarget.id), "تعذّر حفظ التعيينات")) return;
+    /* رسالة القاعدة تُعرض كما هي: «الباص «١» مكتمل» و«المخيّم «٢»
+       مخيّم رجال…» أوضح من «تعذّر حفظ التعيينات». */
+    const { error: assignErr } = await supabase.from("passengers").update(updates).eq("id", assignTarget.id);
+    if (assignErr) {
+      console.error("تعذّر حفظ التعيينات", assignErr);
+      showAlert("error", allocWriteError("تعذّر حفظ التعيينات", assignErr.message));
+      return;
+    }
     setPassengers(prev => prev.map(p => p.id === assignTarget.id ? { ...p, ...updates } as Passenger : p));
     showAlert("success", "تم حفظ التعيينات");
     setAssignTarget(null);

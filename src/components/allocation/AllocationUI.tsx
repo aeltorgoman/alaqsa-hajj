@@ -50,7 +50,7 @@ export function CapacityBar({ occ, cap, height = 8, onDark }: { occ: number; cap
 // كارت الحاوية
 // ═══════════════════════════════════════════════════════════
 export function AllocationCard({
-  title, badge, icon, occ, cap, capacityNote, emptyHint, subtitle, selected, onClick,
+  title, badge, icon, occ, cap, capacityNote, noteNeedsAction, emptyHint, subtitle, selected, onClick,
 }: {
   title: React.ReactNode;
   badge?: React.ReactNode;      // VIP · خاص · ما يميّز الحاوية
@@ -58,6 +58,9 @@ export function AllocationCard({
   occ: number;
   cap: number | null;           // null = السعة غير محدّدة
   capacityNote: React.ReactNode; // «٨ مقاعد متبقية» — النصّ من نطاقه
+  /* حالٌ تحتاج فعلَ الموظّف لا مجرّد خبر — «السعة غير محدّدة»
+     مثلاً. تُقرأ تحذيراً لا هامشاً رمادياً. */
+  noteNeedsAction?: boolean;
   emptyHint: React.ReactNode;   // «＋ إضافة مسافر»
   subtitle?: React.ReactNode;   // رجال/نساء مثلاً
   selected: boolean;
@@ -100,7 +103,7 @@ export function AllocationCard({
           </div>
         )}
         <CapacityBar occ={occ} cap={cap} />
-        <div style={{ fontSize: 10, fontWeight: 800, marginTop: 5, color: over ? "var(--danger)" : "var(--muted)" }}>{capacityNote}</div>
+        <div style={{ fontSize: 10, fontWeight: 800, marginTop: 5, color: over ? "var(--danger)" : noteNeedsAction ? "var(--warning)" : "var(--muted)" }}>{capacityNote}</div>
       </div>
     </div>
   );
