@@ -9,7 +9,7 @@
 // ما هنا **ميكانيكا**: تسحب، ترتّب، تكتب ما يُقال لها. ولا تقرّر
 // شيئاً — لا جنساً ولا سعةً ولا تطابق خدمة. كل ذلك يبقى مكتوباً في
 // `BusesPage` و`CampsPage` حيث يُراجَع.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../../supabase";
 import type { Passenger } from "../../types";
@@ -170,11 +170,10 @@ export function useContainerSelection() {
   const [pickerSearch, setPickerSearch] = useState("");
   const [picked, setPicked] = useState<Set<number>>(new Set());
 
+  /* الفتح والإغلاق يصفّران البحث والتحديد معاً: «٣ محدد» من باصٍ
+     آخر خطأٌ ينتظر، فلا يُحمل من حاوية إلى حاوية. */
   const close = useCallback(() => { setSelectedId(null); setPickerSearch(""); setPicked(new Set()); }, []);
   const open = useCallback((id: number) => { setSelectedId(id); setPickerSearch(""); setPicked(new Set()); }, []);
-
-  /* تبديل الحاوية يصفّر التحديد: «٣ محدد» من باصٍ آخر خطأٌ ينتظر */
-  useEffect(() => { setPicked(new Set()); }, [selectedId]);
 
   const toggle = useCallback((id: number) => {
     setPicked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });

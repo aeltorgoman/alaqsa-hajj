@@ -568,9 +568,11 @@ function AdminsPage({
   const occupantsOf = (key: "room_id" | "bus_id", id: number) =>
     passengers.filter(p => p[key] === id).length;
 
-  /* مخيّمات الجنس المناسب — و«خاص» مفتوح للجنسين كما في صفحة المخيّمات */
+  /* مخيّمات الجنس المناسب. و«خاص» لم يعد استثناءً من الفصل: قرار
+     المنتج ألغى ذلك، والقاعدة ترفضه الآن — فعرضُه هنا كان سيقدّم
+     خياراً محكوماً عليه بالفشل. */
   const campsFor = (pageType: "منى" | "عرفة") =>
-    camps.filter(c => c.page_type === pageType && (c.type === "خاص" || !assignTarget || c.gender === assignTarget.gender));
+    camps.filter(c => c.page_type === pageType && (!assignTarget || c.gender === assignTarget.gender));
 
   const openAssign = async (p: Passenger) => {
     await loadAssignData();

@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
+import { useState, useEffect, useMemo } from "react";
+import { isHajj, byOrder } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
-import type { TablesUpdate } from "../types/database";
 import type { Passenger, Camp } from "../types";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -11,12 +10,34 @@ import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
+import {
+  ALLOC_GRID, ALLOC_GAP, AllocationCard, AllocationDialog, AllocationSearch, AllocationStates,
+  AssignedRow, CapacityBar, DialogAction, PassengerPicker, RosterHeader, SuggestionStrip,
+  type PickerItem, type SuggestionItem,
+} from "./allocation/AllocationUI";
+import {
+  allocWriteError, matchesPassenger, useAllocationDrag, useAllocationWrites, useContainerSelection,
+} from "./allocation/useAllocation";
 
-// ===== ألوان أيقونات المخيمات (دورة ألوان موحّدة) =====
-
-/* مفتاحا العمود والخدمة — حرفيان لا string عام، فالفهرسة بهما آمنة نوعياً */
+/* مفاتيح الأعمدة والخدمة — حرفيّة لا string عام، فالفهرسة بها آمنة
+   نوعياً. ومنى وعرفة يفترقان هنا وحدهما: عمودُ إسنادٍ وعمودُ ترتيبٍ
+   ومفتاحُ خدمة. ما بعد ذلك واحد. */
 type CampIdKey = "camp_mina_id" | "camp_arafa_id";
 type CampServiceKey = "camp_mina" | "camp_arafa";
+
+const MinaIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="M3.5 21 14 3" /><path d="M20.5 21 10 3" /><path d="M15.5 21 12 15l-3.5 6" /><path d="M2 21h20" />
+  </svg>
+);
+const ArafaIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="m8 3 4 8 5-5 5 15H2L8 3z" />
+  </svg>
+);
+
+const paxLabel = (n: number) => n === 1 ? "نازل واحد" : n === 2 ? "نازلان" : n <= 10 ? `${n} نازلين` : `${n} نازلاً`;
+const placesLabel = (n: number) => n === 1 ? "مكان واحد متبقٍ" : n === 2 ? "مكانان متبقيان" : n <= 10 ? `${n} أماكن متبقية` : `${n} مكاناً متبقياً`;
 
 // ===== إحصائيات المخيمات =====
 function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: Camp[]; passengers: Passenger[]; campIdKey: CampIdKey; campServiceKey: CampServiceKey }) {
@@ -27,12 +48,19 @@ function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: C
     const unassigned = total - assignedCount;
     const specialRequested = hajj.filter(p => p.services[campServiceKey] === "خاص").length;
     return { total, assignedCount, unassigned, specialRequested };
-  }, [camps, passengers, campIdKey, campServiceKey]);
+  }, [passengers, campIdKey, campServiceKey]);
   const { total, assignedCount, unassigned, specialRequested } = stats;
+
+  /* السعة قد تكون غير محدّدة لمخيّمٍ أُنشئ قبل عمود السعة، فلا
+     تُحتسب في الإجمالي — وإلا صار «١٢ مكاناً متاحاً» كذباً */
+  const withCap = camps.filter(c => c.capacity != null);
+  const totalPlaces = withCap.reduce((s, c) => s + (c.capacity || 0), 0);
+  const takenInCapped = passengers.filter(p => withCap.some(c => c.id === p[campIdKey])).length;
 
   const cards: StatCardData[] = [
     { label: "إجمالي الحجاج", num: total, sub: "الموسم الحالي", tone: "brand" },
     { label: "غير موزّعين", num: unassigned, sub: unassigned > 0 ? "يحتاج توزيع" : "مكتمل", tone: unassigned > 0 ? "danger" : "muted" },
+    { label: "أماكن متاحة", num: Math.max(0, totalPlaces - takenInCapped), sub: withCap.length === camps.length ? `من ${totalPlaces} مكان` : `${camps.length - withCap.length} مخيّم بلا سعة`, tone: "info" },
     { label: "طالبين خاص", num: specialRequested, sub: `${total ? Math.round(specialRequested / total * 100) : 0}٪ من الإجمالي`, tone: "warning" },
     { label: "نسبة التوزيع", num: `${total ? Math.round(assignedCount / total * 100) : 0}٪`, sub: `${assignedCount} من ${total} حاج`, tone: "success", featured: true },
   ];
@@ -40,59 +68,40 @@ function CampsStats({ camps, passengers, campIdKey, campServiceKey }: { camps: C
   return <StatsRow cards={cards} />;
 }
 
-// ===== صفحة المخيمات =====
+// ===== صفحة المخيمات — منى وعرفة تهيئتان لتطبيقٍ واحد =====
 function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى" | "عرفة"; passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
   const branding = useReportBranding();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
-  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
 
-  /* التعطيل البصري لمداخل الكتابة في موسم للعرض فقط — طبقة تجربة
-     لا حماية؛ الضمانة محفّز القاعدة */
   const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
+  const isMina = pageType === "منى";
+  const campIdKey: CampIdKey = isMina ? "camp_mina_id" : "camp_arafa_id";
+  const campOrderKey = isMina ? "camp_mina_sort_order" : "camp_arafa_sort_order";
+  const serviceKey: CampServiceKey = isMina ? "camp_mina" : "camp_arafa";
+  const Icon = isMina ? MinaIcon : ArafaIcon;
+
   const [camps, setCamps] = useState<Camp[]>([]);
   const [campsLoading, setCampsLoading] = useState(true);
   const [campsError, setCampsError] = useState(false);
-  const [editingCampId, setEditingCampId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [editingCap, setEditingCap] = useState(false);
+  const [capDraft, setCapDraft] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [campName, setCampName] = useState("");
   const [campGender, setCampGender] = useState<"ذكر" | "أنثى">("ذكر");
   const [campType, setCampType] = useState<"عادي" | "خاص">("عادي");
-  const [nameError, setNameError] = useState("");
-
-  // Drag state
-  const dragPassengerId = useRef<number | null>(null);
-  const dragOverPassengerId = useRef<number | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [dragOverId, setDragOverId] = useState<number | null>(null);
-  const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
-
-  /* إغلاق المودال بمفتاح Escape */
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectedCampId != null) { setSelectedCampId(null); setAddSearch(""); }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [selectedCampId]);
-  const [dismissedCampSuggestions, setDismissedCampSuggestions] = useState(new Set<number>());
-  const [selectedAdd, setSelectedAdd] = useState(new Set<number>());
+  const [campCapacity, setCampCapacity] = useState("");
+  const [formError, setFormError] = useState("");
+  const [dismissed, setDismissed] = useState(new Set<number>());
   const [campSearch, setCampSearch] = useState("");
-  const [addSearch, setAddSearch] = useState("");
-  const dragType = useRef<"reorder"|"add">("reorder");
 
-  const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-  const campOrderKey = pageType === "منى" ? "camp_mina_sort_order" : "camp_arafa_sort_order";
-  const serviceKey = pageType === "منى" ? "camp_mina" : "camp_arafa";
-
-  const IconSvg = () => pageType === "منى"
-    ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>
-    : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>;
-  const iconTitle = pageType === "منى" ? "مخيمات منى" : "مخيمات عرفة";
+  const sel = useContainerSelection();
+  const selectedCamp = camps.find(c => c.id === sel.selectedId) || null;
 
   useEffect(() => {
-    /* الفشل يُبلَّغ عنه بدل «لا يوجد مخيمات بعد» على بيانات لم تصل */
     setCampsLoading(true);
     supabase.from("camps").select("*").eq("page_type", pageType).eq("season_id", viewedSeason.id).order("created_at").then(({ data, error }) => {
       if (error || !data) { console.error("تعذر تحميل المخيمات", error); setCampsError(true); }
@@ -101,196 +110,314 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     });
   }, [pageType, viewedSeason.id]);
 
-  const getCampPassengers = (campId: number) =>
-    passengers.filter(p => p[campIdKey] === campId).sort(byOrder(campOrderKey));
+  const dwellers = (campId: number) => passengers.filter(p => p[campIdKey] === campId).sort(byOrder(campOrderKey));
+  const remainingOf = (c: Camp) => c.capacity == null ? null : Math.max(0, c.capacity - dwellers(c.id).length);
 
+  const writes = useAllocationWrites({
+    column: campIdKey, orderColumn: campOrderKey, setPassengers, readOnly, showAlert,
+    onBlocked: () => assertWritable(),
+  });
 
+  // ══════════════════════════════════════════════════════════
+  // قواعد المخيّم — حدود صلبة ثم تعارض طريّ
+  // ══════════════════════════════════════════════════════════
+
+  /* الفصل بالجنس مطلق: «خاص» تصنيفٌ تجاريّ لا استثناءٌ من الفصل.
+     كانت الواجهة تجعله يقبل الجنسين، وقرار المنتج ألغى ذلك.
+     والقاعدة ترفضه أيضاً، فلا يمرّ من مسارٍ آخر. */
+  const genderOk = (camp: Camp, p: Passenger) => !!p.gender && p.gender === camp.gender;
+
+  const hardBlock = (camp: Camp, chosen: Passenger[]): string | null => {
+    const bad = chosen.find(p => !genderOk(camp, p));
+    if (bad) {
+      return bad.gender
+        ? `المخيّم «${camp.name}» مخيّم ${camp.gender === "ذكر" ? "رجال" : "نساء"}، و${bad.short_ar || bad.name_ar} ${bad.gender}. الفصل بالجنس لا يُتجاوز.`
+        : `${bad.short_ar || bad.name_ar} بلا جنسٍ مسجَّل — سجّله قبل الإسناد.`;
+    }
+    if (camp.capacity == null) return `المخيّم «${camp.name}» بلا سعة محدّدة — حدّد سعته قبل الإسناد.`;
+    const left = remainingOf(camp) ?? 0;
+    if (left <= 0) return `المخيّم «${camp.name}» مكتمل (${dwellers(camp.id).length}/${camp.capacity}) — لا يتّسع لنازلٍ آخر.`;
+    if (chosen.length > left) return `المخيّم «${camp.name}» فيه ${placesLabel(left)} فقط، وقد حدّدت ${paxLabel(chosen.length)}. قلّل التحديد أو وزّع على مخيّمٍ آخر.`;
+    return null;
+  };
+
+  /* التعارض الطريّ: نوع المخيّم المطلوب غير نوع المخيّم الفعليّ.
+     يُعلَن ويُؤكَّد ولا يُمنع — والخدمة المطلوبة تبقى كما هي فلا
+     تُعاد كتابتها لتوافق التوزيع. */
+  const typeMismatch = (camp: Camp, p: Passenger) => {
+    const wanted = p.services?.[serviceKey] === "خاص" ? "خاص" : "عادي";
+    return wanted !== (camp.type === "خاص" ? "خاص" : "عادي");
+  };
+
+  const confirmMismatch = async (camp: Camp, chosen: Passenger[]): Promise<boolean> => {
+    const bad = chosen.filter(p => typeMismatch(camp, p));
+    if (!bad.length) return true;
+    const names = bad.slice(0, 3).map(p => p.short_ar || p.name_ar).join(" · ");
+    const more = bad.length > 3 ? ` و${bad.length - 3} غيرهم` : "";
+    return confirmAction(
+      camp.type === "خاص"
+        ? `${names}${more} طلبوا خيمة عادية، والمخيّم «${camp.name}» خاصّ. الخدمة المطلوبة تبقى كما هي ولا تُعدَّل.`
+        : `${names}${more} طلبوا خيمة خاصّة، والمخيّم «${camp.name}» عاديّ. الخدمة المطلوبة تبقى كما هي ولا تُعدَّل.`,
+      { title: "الخدمة المطلوبة تخالف التوزيع", confirmLabel: "وزّع على أي حال", cancelLabel: "إلغاء" },
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════
+  // مسارات الكتابة
+  // ══════════════════════════════════════════════════════════
+  const addOne = async (camp: Camp, pId: number) => {
+    const p = passengers.find(x => x.id === pId);
+    if (!p) return;
+    const blocked = hardBlock(camp, [p]);
+    if (blocked) { showAlert("warning", blocked); return; }
+    if (!await confirmMismatch(camp, [p])) return;
+    await writes.assign(pId, camp.id, "تعذر إضافة المسافر إلى المخيم");
+  };
+
+  const addPicked = async (camp: Camp) => {
+    const chosen = passengers.filter(p => sel.picked.has(p.id) && p[campIdKey] == null);
+    if (!chosen.length) return;
+    const blocked = hardBlock(camp, chosen);
+    if (blocked) { showAlert("warning", blocked); return; }
+    if (!await confirmMismatch(camp, chosen)) return;
+    const done = await writes.assignMany(chosen.map(p => p.id), camp.id, "تعذر إضافة بعض النازلين إلى المخيم");
+    if (done === chosen.length) sel.setPicked(new Set());
+    else sel.setPicked(new Set(chosen.slice(done).map(p => p.id)));
+  };
+
+  /* النقل كان يعود بـ `return` صامت عند مخالفة الجنس — فلا يفهم
+     الموظّف لماذا لم يقع شيء. الآن يُشرَح. */
+  const moveP = async (p: Passenger, toId: string) => {
+    if (!toId) return;
+    const target = camps.find(c => c.id === parseInt(toId, 10));
+    if (!target) return;
+    const blocked = hardBlock(target, [p]);
+    if (blocked) { showAlert("warning", blocked); return; }
+    if (!await confirmMismatch(target, [p])) return;
+    await writes.assign(p.id, target.id, "تعذر نقل المسافر إلى المخيم الآخر");
+  };
+
+  const drag = useAllocationDrag({
+    onAdd: pId => { if (selectedCamp) void addOne(selectedCamp, pId); },
+    onReorder: ordered => { void writes.reorder(ordered, "تعذر حفظ الترتيب الجديد"); },
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // الحاوية — إنشاء وتعديل وحذف
+  // ══════════════════════════════════════════════════════════
   const addCamp = async () => {
     if (!assertWritable()) return;
-    if (!campName.trim()) { setNameError("يرجى إدخال اسم المخيم"); return; }
-    if (camps.some(c => c.name.trim() === campName.trim() && c.gender === campGender)) { setNameError(`يوجد مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} بالاسم "${campName}" بالفعل`); return; }
-    setNameError("");
-    const { data, error } = await supabase.from("camps").insert([{ name: campName.trim(), gender: campGender, type: campType, page_type: pageType }]).select();
-    if (error) { console.error("فشل إضافة المخيم", error); showAlert("error", "فشل إضافة المخيم، يرجى المحاولة مرة أخرى"); return; }
-    if (!error && data?.[0]) {
-      setCamps((prev: Camp[]) => [...prev, data[0] as Camp]);
-      setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setShowAdd(false);
+    const name = campName.trim();
+    const cap = parseInt(campCapacity, 10);
+    if (!name) { setFormError("يرجى إدخال اسم المخيم"); return; }
+    /* الجنس جزءٌ من هويّة المخيّم: «منى ٢ رجال» و«منى ٢ نساء»
+       مخيّمان مختلفان — وهو حدّ التميُّز في القاعدة كذلك. */
+    if (camps.some(c => c.name.trim() === name && c.gender === campGender)) {
+      setFormError(`يوجد مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} بالاسم "${name}" بالفعل`); return;
+    }
+    if (!Number.isFinite(cap) || cap < 1) { setFormError("السعة مطلوبة، ويجب أن تكون عدداً أكبر من صفر"); return; }
+    setFormError("");
+    const { data, error } = await supabase.from("camps")
+      .insert([{ name, gender: campGender, type: campType, page_type: pageType, capacity: cap }]).select();
+    if (error) {
+      console.error("فشل إضافة المخيم", error);
+      showAlert("error", allocWriteError("فشل إضافة المخيم، يرجى المحاولة مرة أخرى", error.message));
+      return;
+    }
+    if (data?.[0]) {
+      setCamps(prev => [...prev, data[0] as Camp]);
+      setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setCampCapacity(""); setShowAdd(false);
     }
   };
 
-  const deleteCamp = async (id: number) => {
+  const deleteCamp = async (camp: Camp) => {
     if (!assertWritable()) return;
-    if (getCampPassengers(id).length > 0) { showAlert("warning", "يرجى إزالة المسافرين قبل حذف المخيم"); return; }
-    const { error } = await supabase.from("camps").delete().eq("id", id);
-    if (error) { console.error("فشل حذف المخيم", error); showAlert("error", "فشل حذف المخيم، يرجى المحاولة مرة أخرى"); return; }
-    setCamps((prev: Camp[]) => prev.filter(c => c.id !== id));
+    if (dwellers(camp.id).length > 0) { showAlert("warning", `المخيّم «${camp.name}» يضمّ ${paxLabel(dwellers(camp.id).length)} — أخرِجهم قبل حذفه.`); return; }
+    const { error } = await supabase.from("camps").delete().eq("id", camp.id);
+    if (error) { console.error("فشل حذف المخيم", error); showAlert("error", allocWriteError("فشل حذف المخيم، يرجى المحاولة مرة أخرى", error.message)); return; }
+    setCamps(prev => prev.filter(c => c.id !== camp.id));
+    sel.close();
   };
 
-
-
-
-  const removeP = async (pId: number) => {
-    if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: null } as TablesUpdate<"passengers">).eq("id", pId), "تعذر إزالة المسافر من المخيم")) return;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [campIdKey]: null } : p));
+  const renameCamp = async (camp: Camp, name: string) => {
+    if (!assertWritable()) return;
+    const next = name.trim();
+    if (!next || next === camp.name) { setEditingName(false); return; }
+    if (camps.some(c => c.id !== camp.id && c.name.trim() === next && c.gender === camp.gender)) {
+      showAlert("warning", `يوجد مخيم ${camp.gender === "ذكر" ? "رجال" : "نساء"} بالاسم "${next}" بالفعل`); return;
+    }
+    const { error } = await supabase.from("camps").update({ name: next }).eq("id", camp.id);
+    if (error) { console.error("تعذر تعديل اسم المخيم", error); showAlert("error", allocWriteError("تعذر تعديل اسم المخيم", error.message)); return; }
+    setCamps(prev => prev.map(c => c.id === camp.id ? { ...c, name: next } : c));
+    setEditingName(false);
   };
 
-  const moveP = async (pId: number, toId: string) => {
-    if (!toId) return;
-    const newCampId = parseInt(toId);
-    const fc = camps.find(c => c.id === passengers.find(p => p.id === pId)?.[campIdKey]);
-    const tc = camps.find(c => c.id === newCampId);
-    if (fc && tc && fc.gender !== tc.gender && tc.type !== "خاص") return;
-    if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: newCampId } as TablesUpdate<"passengers">).eq("id", pId), "تعذر نقل المسافر إلى المخيم الآخر")) return;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, [campIdKey]: newCampId } : p));
+  const saveCapacity = async (camp: Camp) => {
+    if (!assertWritable()) return;
+    const cap = parseInt(capDraft, 10);
+    const occ = dwellers(camp.id).length;
+    if (!Number.isFinite(cap) || cap < 1) { showAlert("warning", "السعة يجب أن تكون عدداً أكبر من صفر"); return; }
+    if (cap < occ) { showAlert("warning", `المخيّم «${camp.name}» يضمّ ${paxLabel(occ)}، فلا تُخفَّض سعته إلى ${cap}. أخرِج النازلين أولاً.`); return; }
+    const { error } = await supabase.from("camps").update({ capacity: cap }).eq("id", camp.id);
+    if (error) { console.error("تعذر تعديل سعة المخيم", error); showAlert("error", allocWriteError("تعذر تعديل سعة المخيم", error.message)); return; }
+    setCamps(prev => prev.map(c => c.id === camp.id ? { ...c, capacity: cap } : c));
+    setEditingCap(false);
   };
 
-  const renameCamp = async (id: number, name: string) => {
-    if (!await writeOk(supabase.from("camps").update({ name }).eq("id", id), "تعذر تعديل اسم المخيم")) return;
-    setCamps(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+  // ══════════════════════════════════════════════════════════
+  // الاقتراحات الذكيّة — منى وحدها
+  // ══════════════════════════════════════════════════════════
+  // الأولويّة: قرابة، ثم غرفة الفندق، ثم الباص. ومنى تحتاجها لأن
+  // مخيّماتها كثيرةٌ صغيرة، والموظّف يحتاج معونةً في حفظ المجموعات.
+  //
+  // ⚠️ عرفة لا اقتراحات لها — قرارُ منتج: مخيّم رجالٍ واحد ومخيّم
+  // نساءٍ واحد في الغالب، فلا مجموعاتٍ تُوزَّع. ولها بدلاً منها
+  // «ترتيب حسب منى» أدناه.
+  const minaSuggestions = (camp: Camp): SuggestionItem[] => {
+    if (!isMina) return [];
+    const inCamp = dwellers(camp.id);
+    const famIds = new Set(inCamp.map(p => p.family_id).filter(Boolean));
+    const roomIds = new Set(inCamp.map(p => p.room_id).filter(Boolean));
+    const busIds = new Set(inCamp.map(p => p.bus_id).filter(Boolean));
+
+    return passengers
+      /* الحدود الصلبة ترشّح الأهليّة: خارج هذا المخيّم، حاجّ،
+         وجنسه جنس المخيّم. التعارض الطريّ (خاص/عادي) لا يُخرجه —
+         يبقى ويُطلب التأكيد عند القبول. */
+      .filter(p => p[campIdKey] !== camp.id && isHajj(p) && !dismissed.has(p.id) && genderOk(camp, p))
+      .map(p => ({
+        p,
+        s: {
+          kin: !!(p.family_id && famIds.has(p.family_id)),
+          room: !!(p.room_id && roomIds.has(p.room_id)),
+          bus: !!(p.bus_id && busIds.has(p.bus_id)),
+        },
+      }))
+      .filter(({ s }) => s.kin || s.room || s.bus)
+      .map(({ p, s }) => ({ p, s, score: (s.kin ? 4 : 0) + (s.room ? 2 : 0) + (s.bus ? 1 : 0) }))
+      .sort((a, b) => b.score - a.score || a.p.id - b.p.id)
+      .map(({ p, s }) => {
+        const withWhom = inCamp.find(x =>
+          s.kin ? x.family_id === p.family_id : s.room ? x.room_id === p.room_id : x.bus_id === p.bus_id);
+        const name = withWhom?.short_ar || withWhom?.name_ar?.split(" ").slice(0, 2).join(" ") || "";
+        const why = [s.kin && "صلة قرابة", s.room && "نفس الغرفة", s.bus && "نفس الباص"].filter(Boolean).join(" · ");
+        return {
+          id: p.id,
+          name: p.short_ar || p.name_ar,
+          tone: (s.kin ? "kin" : s.room ? "room" : "other") as SuggestionItem["tone"],
+          reason: <>{why}{name ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {name}</span> : null}</>,
+        };
+      });
   };
 
-  // ===== Drag & Drop handlers =====
-  const handleDragStart = (pId: number) => {
-    dragType.current = "reorder";
-    dragPassengerId.current = pId;
-    setDraggingId(pId);
-  };
+  // ══════════════════════════════════════════════════════════
+  // «ترتيب حسب منى» — عرفة وحدها، وترتيبٌ لا إسناد
+  // ══════════════════════════════════════════════════════════
+  // عرفة مخيّمٌ كبير، ومنى مخيّماتٌ صغيرة. ومن نزل في منى معاً
+  // يُراد له أن يبقى متجاوراً في عرفة. فيُقرأ ترتيب منى — ترتيبُ
+  // مخيّماتها ثم ترتيبُ النازلين داخل كلٍّ منها — ويُطبَّق على من
+  // هم **أصلاً** في مخيّم عرفة المفتوح.
+  //
+  // لا يُسنِد أحداً، ولا ينقل أحداً بين مخيّمات عرفة، ولا يمسّ منى،
+  // ولا يغيّر سعةً ولا جنساً ولا نوعاً. يكتب في
+  // `camp_arafa_sort_order` وحده.
+  const orderByMina = async (camp: Camp) => {
+    if (!assertWritable()) return;
 
-  const handleDragStartAdd = (pId: number) => {
-    dragType.current = "add";
-    dragPassengerId.current = pId;
-    setDraggingId(pId);
-  };
+    const ok = await confirmAction(
+      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيبهم في مخيّمات منى.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
+      { title: "ترتيب حسب منى", confirmLabel: "رتّب", cancelLabel: "إلغاء" },
+    );
+    if (!ok) return;
 
-  const handleDragOver = (e: React.DragEvent, pId: number) => {
-    e.preventDefault();
-    dragOverPassengerId.current = pId;
-    setDragOverId(pId);
-  };
-
-  const handleDrop = async (campId: number) => {
-    const fromId = dragPassengerId.current;
-    if (dragType.current === "add" && fromId) {
-      if (await writeOk(supabase.from("passengers").update({ [campIdKey]: campId } as TablesUpdate<"passengers">).eq("id", fromId), "تعذر إضافة المسافر إلى المخيم")) {
-        setPassengers(prev => prev.map(x => x.id === fromId ? { ...x, [campIdKey]: campId } : x));
-      }
-      setDraggingId(null); dragPassengerId.current = null; dragOverPassengerId.current = null;
+    /* ترتيب مخيّمات منى كما تعرضه صفحة منى نفسها: `created_at` */
+    const { data, error } = await supabase.from("camps")
+      .select("id").eq("page_type", "منى").eq("season_id", viewedSeason.id).order("created_at");
+    if (error || !data) {
+      console.error("تعذر قراءة ترتيب مخيّمات منى", error);
+      showAlert("error", "تعذر قراءة ترتيب مخيّمات منى — يرجى المحاولة مرة أخرى");
       return;
     }
-    const toId = dragOverPassengerId.current;
-    if (!fromId || !toId || fromId === toId) {
-      setDraggingId(null); setDragOverId(null);
-      dragPassengerId.current = null; dragOverPassengerId.current = null;
+
+    const current = dwellers(camp.id);
+    const here = new Set(current.map(p => p.id));
+
+    /* ١) تسطيح منى: مخيّماً بعد مخيّم، وداخل كلٍّ بترتيب نازليه */
+    const fromMina: Passenger[] = [];
+    for (const m of data as { id: number }[]) {
+      passengers
+        .filter(p => p.camp_mina_id === m.id && here.has(p.id))
+        .sort(byOrder("camp_mina_sort_order"))
+        .forEach(p => fromMina.push(p));
+    }
+
+    /* ٢) من لا منى له يبقى بعدهم، بترتيبه الحاليّ في عرفة */
+    const seen = new Set(fromMina.map(p => p.id));
+    const rest = current.filter(p => !seen.has(p.id));
+    const next = [...fromMina, ...rest];
+
+    if (!fromMina.length) {
+      showAlert("warning", `لا أحد من نازلي «${camp.name}» مُسنَدٌ إلى مخيّم منى — لا ترتيب يُشتقّ.`);
       return;
     }
-    const cp = getCampPassengers(campId);
-    const fromIdx = cp.findIndex(p => p.id === fromId);
-    const toIdx = cp.findIndex(p => p.id === toId);
-    if (fromIdx === -1 || toIdx === -1) return;
+    /* لا كتابةَ بلا تغيير */
+    if (next.every((p, i) => p.id === current[i]?.id)) {
+      showAlert("warning", `ترتيب «${camp.name}» يتبع منى بالفعل — لا تغيير.`);
+      return;
+    }
 
-    const newOrder = [...cp];
-    const [moved] = newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, moved);
-
-    /* عمود المخيّم وحده — ومنى وعرفة عمودان منفصلان، فترتيب أحدهما
-       لا يمسّ الآخر ولا يمسّ الترتيب العام. */
-    setPassengers(prev => applyReorder(prev, campOrderKey, newOrder));
-    /* التحديث أعلاه يبقى تفاؤلياً كما كان — الإبلاغ يُضاف بلا تغيير سلوكي */
-    await writeAllOk(reorderUpdates(campOrderKey, newOrder), "تعذر حفظ الترتيب الجديد");
-
-    setDraggingId(null); setDragOverId(null);
-    dragPassengerId.current = null; dragOverPassengerId.current = null;
+    if (await writes.reorder(next, "تعذر حفظ الترتيب الجديد")) {
+      showAlert("success", `تمّ ترتيب «${camp.name}» حسب منى — ${paxLabel(fromMina.length)} من مخيّمات منى، و${rest.length} بعدهم.`);
+    }
   };
 
-  const handleDragEnd = () => {
-    setDraggingId(null); setDragOverId(null);
-    dragPassengerId.current = null; dragOverPassengerId.current = null;
-  };
-
-
+  // ══════════════════════════════════════════════════════════
   const printCamp = (camp: Camp) => {
-    const cp = getCampPassengers(camp.id);
-    const isMale = camp.gender === "ذكر";
-    const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", branding.primaryColor), branding);
+    const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, camp.gender === "ذكر" ? "رجال" : "نساء", renderNamesTable(dwellers(camp.id), "اسم الحاج", branding.primaryColor), branding);
     printInPage(makeHTML(`مخيمات ${pageType}`, section, branding, { noHeader: true }));
   };
 
   const printAll = () => {
-    const sections = camps.map(camp => {
-      const cp = getCampPassengers(camp.id);
-      const isMale = camp.gender === "ذكر";
-      return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", branding.primaryColor), branding);
-    });
+    const sections = camps.map(camp =>
+      makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, camp.gender === "ذكر" ? "رجال" : "نساء", renderNamesTable(dwellers(camp.id), "اسم الحاج", branding.primaryColor), branding));
     printInPage(makeHTML(`مخيمات ${pageType}`, joinSections(sections), branding, { noHeader: true }));
   };
 
-  const maleCamps = camps.filter(c => c.gender === "ذكر");
-  const femaleCamps = camps.filter(c => c.gender === "أنثى");
+  const specialBadge = (light?: boolean) => (
+    <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>خاص</span>
+  );
 
-  const renderGroup = (groupCamps: Camp[], gender: "ذكر" | "أنثى") => {
-    const genderColor = gender === "ذكر" ? "#1D4ED8" : "#BE185D";
-    const filteredGroup = groupCamps.filter(c => !campSearch || c.name.includes(campSearch) || getCampPassengers(c.id).some(p => p.name_ar.includes(campSearch)));
+  /* هويّة الجنس برموز السمة القائمة — لا وردياً ولا أزرقَ مثبَّتاً */
+  const genderPill = (g: string) => (
+    <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)", color: g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)" }}>
+      {g === "ذكر" ? "رجال" : "نساء"}
+    </span>
+  );
+
+  const capNote = (c: Camp) => {
+    if (c.capacity == null) return "السعة غير محدّدة";
+    const left = c.capacity - dwellers(c.id).length;
+    return left > 0 ? placesLabel(left) : left === 0 ? "مكتمل" : `تجاوز السعة بـ ${-left}`;
+  };
+
+  const renderGroup = (gender: "ذكر" | "أنثى") => {
+    const group = camps.filter(c => c.gender === gender);
+    const shown = group.filter(c => !campSearch || c.name.includes(campSearch.trim()) || dwellers(c.id).some(p => matchesPassenger(p, campSearch)));
     return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: gender === "ذكر" ? "var(--male-bg)" : "var(--female-bg)", color: genderColor, display: "inline-block" }}>
-          {gender === "ذكر" ? "رجال" : "نساء"} ({groupCamps.length})
-        </span>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 10 }}>{genderPill(gender)} <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>({group.length})</span></div>
+        {shown.length === 0
+          ? <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 0" }}>{campSearch ? "لا نتائج لهذا البحث" : "لا يوجد مخيمات بعد"}</div>
+          : <div style={{ display: "grid", gridTemplateColumns: ALLOC_GRID, gap: ALLOC_GAP }}>
+            {shown.map(camp => (
+              <AllocationCard key={camp.id} selected={sel.selectedId === camp.id} onClick={() => sel.open(camp.id)}
+                icon={<Icon />} title={`مخيم ${camp.name}`} badge={camp.type === "خاص" ? specialBadge(true) : undefined}
+                subtitle={camp.gender === "ذكر" ? "رجال" : "نساء"}
+                occ={dwellers(camp.id).length} cap={camp.capacity ?? null}
+                emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} />
+            ))}
+          </div>}
       </div>
-      {filteredGroup.length === 0
-        ? <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 0" }}>لا يوجد مخيمات بعد</div>
-        : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 12 }}>
-          {filteredGroup.map(camp => {
-            const cp = getCampPassengers(camp.id);
-            const isSpecial = camp.type === "خاص";
-            const campColor = isSpecial ? "#D4A017" : genderColor;
-            const isSelected = selectedCampId === camp.id;
-            return (
-              <div key={camp.id} onClick={() => setSelectedCampId(camp.id)}
-                style={{
-                  background: "var(--paper)", borderRadius: 14, cursor: "pointer",
-                  border: isSelected ? `2.5px solid ${campColor}` : "1px solid var(--line)",
-                  boxShadow: isSelected ? `0 4px 16px ${campColor}30` : "0 1px 4px rgba(0,0,0,.06)",
-                  transition: "all .18s", overflow: "hidden",
-                  transform: isSelected ? "translateY(-2px)" : "none",
-                }}
-                onMouseEnter={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 18px ${campColor}22`; } }}
-                onMouseLeave={e => { if (!isSelected) { (e.currentTarget as HTMLDivElement).style.transform = "none"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,.06)"; } }}>
-                {/* لافتة المخيم */}
-                <div style={{ background: `linear-gradient(135deg,${campColor},${campColor}cc)`, padding: "10px 12px 8px", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", left: -8, bottom: -12, opacity: .08, pointerEvents: "none" }}>
-                    <IconSvg />
-                  </div>
-                  <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }}>مخيم {camp.name}</div>
-                    {isSpecial && <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>خاص</span>}
-                  </div>
-                </div>
-                <div style={{ padding: "10px 12px 10px" }}>
-                  {cp.length === 0 ? (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 0" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: campColor, padding: "4px 12px", borderRadius: 8, border: `1px dashed ${campColor}60`, background: `${campColor}06` }}>
-                        ＋ إضافة مسافر
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                      <span style={{ fontSize: 36, fontWeight: 900, color: campColor, lineHeight: 1, fontFamily: "var(--font-heading)" }}>{cp.length}</span>
-                      <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>مسافر</span>
-                    </div>
-                  )}
-                  {cp.length > 0 && (
-                    <div style={{ height: 6, borderRadius: 99, background: `${campColor}18`, overflow: "hidden" }}>
-                      <div style={{ height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${campColor},${campColor}cc)`, width: "100%", transition: "width .3s" }} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      }
-    </div>
     );
   };
 
@@ -299,273 +426,219 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} campServiceKey={serviceKey} />
+
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12 }}>
-        <button disabled={readOnly} onClick={() => setShowAdd(true)} style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(125,31,60,0.06)"; e.currentTarget.style.borderColor = "var(--em7)"; }} onMouseLeave={e => { e.currentTarget.style.background = "var(--paper)"; e.currentTarget.style.borderColor = "var(--line)"; }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> مخيم جديد
+        <button disabled={readOnly} onClick={() => setShowAdd(true)}
+          style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--primary)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> مخيم جديد
         </button>
-        {camps.length > 0 && <button onClick={printAll} style={btnS()}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> طباعة الكل</button>}
+        {camps.length > 0 && <button onClick={printAll} style={btnS()}><svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg> طباعة الكل</button>}
       </div>
 
-      {/* بحث */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "7px 14px", marginBottom: 14, boxShadow: "0 1px 4px rgba(0,0,0,.04)" }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input value={campSearch} onChange={e => setCampSearch(e.target.value)} placeholder="ابحث عن مخيم أو مسافر..." style={{ border: "none", background: "transparent", fontSize: 13, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} />
-        {campSearch && <button onClick={() => setCampSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 16 }}>✕</button>}
+      <div style={{ marginBottom: 14 }}>
+        <AllocationSearch value={campSearch} onChange={setCampSearch} placeholder="ابحث عن مخيم أو مسافر..." />
       </div>
 
-      {campsLoading
-        ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}>جاري التحميل...</div>
-        : campsError
-        ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>تعذر تحميل المخيمات — يرجى التحقق من الاتصال وتحديث الصفحة</div>
-        : !camps.length
-        ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 12 }}><div style={{ marginBottom: 8 }}><IconSvg /></div>لا يوجد مخيمات بعد</div>
-        : <>{renderGroup(maleCamps, "ذكر")}{renderGroup(femaleCamps, "أنثى")}</>
-      }
+      <AllocationStates loading={campsLoading} error={campsError} empty={!camps.length}
+        icon={<Icon />} errorText="تعذر تحميل المخيمات — يرجى التحقق من الاتصال وتحديث الصفحة" emptyText="لا يوجد مخيمات بعد" />
 
-      {/* ===== مودال تفاصيل المخيم — عمودين ===== */}
-      {selectedCampId !== null && (() => {
-        const camp = camps.find(c => c.id === selectedCampId);
-        if (!camp) return null;
-        const cp = getCampPassengers(camp.id);
-        const isSpecial = camp.type === "خاص";
-        const campColor = isSpecial ? "#D4A017" : (camp.gender === "ذكر" ? "#1D4ED8" : "#BE185D");
-        const sameCamps = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
-        const genderPool = camp.type === "خاص" ? passengers : passengers.filter(p => p.gender === camp.gender);
-        /* الإداري ينزل المخيّم كالحاجّ — والفصل بالجنس محفوظ في
-           `genderPool` أعلاه، و«خاص» وحده يقبل الجنسين */
-        const addFiltered = genderPool.filter(p => p[campIdKey] == null && (!addSearch || p.name_ar.includes(addSearch) || (p.short_ar||"").includes(addSearch)));
+      {!campsLoading && !campsError && camps.length > 0 && <>{renderGroup("ذكر")}{renderGroup("أنثى")}</>}
+
+      {/* ═══ مودال المخيّم ═══ */}
+      {selectedCamp && (() => {
+        const camp = selectedCamp;
+        const list = dwellers(camp.id);
+        const left = remainingOf(camp);
+        /* النقل إلى مخيّماتٍ من نفس الجنس وحدها — الفصل مطلق */
+        const others = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
+        /* الأهليّة: غير موزَّع في هذه الصفحة، ومن جنس المخيّم */
+        const pickerSource = passengers.filter(p =>
+          p[campIdKey] == null && genderOk(camp, p) && matchesPassenger(p, sel.pickerSearch));
+
+        const items: PickerItem[] = pickerSource.map(p => ({
+          id: p.id,
+          name: p.short_ar || p.name_ar,
+          badges: (
+            <>
+              {!isHajj(p) && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
+              {p.services?.[serviceKey] === "خاص" && specialBadge()}
+            </>
+          ),
+          notice: typeMismatch(camp, p)
+            ? <div style={{ fontSize: 9, color: "var(--danger)", fontWeight: 700 }}>⚠ {camp.type === "خاص" ? "طلب خيمة عادية" : "طلب خيمة خاصة"}</div>
+            : undefined,
+        }));
+
+        const blockedReason = readOnly ? "موسم للعرض فقط"
+          : camp.capacity == null ? "السعة غير محدّدة"
+          : (left ?? 0) <= 0 ? "المخيّم مكتمل" : undefined;
+
         return (
-          <div onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "var(--paper)", borderRadius: 20, width: 960, height: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.35)", overflow: "hidden" }}>
-              {/* هيدر */}
-              <div style={{ background: `linear-gradient(135deg,${campColor},${campColor}cc)`, padding: "14px 18px", flexShrink: 0, position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", left: -10, bottom: -14, opacity: .08 }}><IconSvg /></div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative", zIndex: 1 }}>
-                  <div style={{ width: 72, height: 72, borderRadius: 16, background: "rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><div style={{ transform: "scale(2.2)" }}><IconSvg /></div></div>
-                  <div style={{ flex: 1 }}>
-                    {editingCampId === camp.id ? (
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <input defaultValue={camp.name} id={`cm-${camp.id}`} style={{ fontSize: 15, fontWeight: 800, padding: "4px 10px", borderRadius: 8, border: "none", outline: "none", width: 140, fontFamily: "var(--font-body)" }} autoFocus
-                          onKeyDown={e => { if (e.key === "Enter") { const v = (document.getElementById(`cm-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameCamp(camp.id, v); } setEditingCampId(null); } if (e.key === "Escape") setEditingCampId(null); }} />
-                        <button onClick={() => { const v = (document.getElementById(`cm-${camp.id}`) as HTMLInputElement)?.value?.trim(); if (v) { renameCamp(camp.id, v); } setEditingCampId(null); }} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: "rgba(255,255,255,.25)", color: "white", border: "none", cursor: "pointer" }}>✓</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ fontSize: 26, fontWeight: 900, color: "white", lineHeight: 1, fontFamily: "var(--font-heading)" }} onDoubleClick={() => setEditingCampId(camp.id)}>مخيم {camp.name}</div>
-                        {isSpecial && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,.22)", color: "white" }}>خاص</span>}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.85)", marginTop: 4 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`} · {camp.gender === "ذكر" ? "رجال" : "نساء"}</div>
-                  </div>
-                  <button onClick={() => printCamp(camp)} title="طباعة" style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="9" y1="21" x2="12" y2="21"/><circle cx="18" cy="11.5" r="1" fill="currentColor"/></svg>
-                  </button>
-                  <button onClick={async () => { const ok = await confirmAction(`هل تريد حذف مخيم ${camp.name}؟`, { title: "حذف المخيم" }); if (ok) { deleteCamp(camp.id); setSelectedCampId(null); } }} title="حذف المخيم" style={{ ...roOff, width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "#fca5a5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                  </button>
-                  <button onClick={() => { setSelectedCampId(null); setAddSearch(""); }} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.15)", cursor: "pointer", color: "rgba(255,255,255,.9)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-                </div>
-              </div>
-
-              {/* العمودين */}
-              <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-                {/* يمين: المسافرون */}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid var(--line)" }}>
-                  <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>المسافرون المضافون</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: campColor, background: `${campColor}12`, padding: "2px 8px", borderRadius: 99 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                    {/* التركيبة لا الإجمالي وحده */}
-                    {cp.some(p => !isHajj(p)) && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)" }}>{cp.filter(p => isHajj(p)).length} حاج · {cp.filter(p => !isHajj(p)).length} إداري</span>}
-                  </div>
-                  <div style={{ flex: 1, overflowY: "auto" }} onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(camp.id)}>
-                    {cp.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد مسافرون بعد</div>
-                    ) : cp.map((p, i) => (
-                      <div key={p.id} draggable onDragStart={() => handleDragStart(p.id)} onDragOver={e => handleDragOver(e, p.id)} onDragEnd={handleDragEnd}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderBottom: "1px solid var(--line)", background: draggingId === p.id ? `${campColor}08` : dragOverId === p.id ? `${campColor}04` : "transparent", cursor: "grab", opacity: draggingId === p.id ? 0.5 : 1 }}>
-                        <span style={{ color: "var(--muted)", cursor: "grab", flexShrink: 0 }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="19" r="1" fill="currentColor"/><circle cx="15" cy="19" r="1" fill="currentColor"/></svg>
-                        </span>
-                        <span style={{ fontSize: 10, color: "var(--muted)", width: 16, textAlign: "center", flexShrink: 0 }}>{i + 1}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
-                            {p.short_ar || p.name_ar}
-                            {p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
-                            {p.services[serviceKey] === "خاص" && <span style={{ fontSize: 8, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 5px", borderRadius: 99, flexShrink: 0, opacity: .9 }}>خاص</span>}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, opacity: .6 }}>
-                          {sameCamps.length > 0 && (
-                            <div style={{ position: "relative", display: "inline-flex" }}>
-                              <select onChange={e => moveP(p.id, e.target.value)} defaultValue="" title="نقل لمخيم آخر" style={{ appearance: "none", WebkitAppearance: "none", MozAppearance: "none", fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 8px 3px 24px", fontFamily: "var(--font-body)", cursor: "pointer", minWidth: 62, textAlign: "center" }}>
-                                <option value="">نقل</option>
-                                {sameCamps.map(c => <option key={c.id} value={c.id}>مخيم {c.name}</option>)}
-                              </select>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round" style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                            </div>
-                          )}
-                          <button disabled={readOnly} onClick={() => removeP(p.id)} title="إزالة من المخيم" style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                {/* اقتراحات ذكية */}
-                {(() => {
-                  const busIds = new Set(cp.map(p => p.bus_id).filter(Boolean));
-                  const roomIds = new Set(cp.map(p => p.room_id).filter(Boolean));
-                  const famIds = new Set(cp.filter(p => p.family_id).map(p => p.family_id));
-                  const allSuggestions = passengers
-                    .filter(p =>
-                      p[campIdKey] !== camp.id &&
-                      !dismissedCampSuggestions.has(p.id!) &&
-                      (isHajj(p)) &&
-                      (camp.type === "خاص" || p.gender === camp.gender) &&
-                      ((p.family_id && famIds.has(p.family_id)) ||
-                       (p.bus_id && busIds.has(p.bus_id)) ||
-                       (p.room_id && roomIds.has(p.room_id)))
-                    )
-                    .sort((a, b) => {
-                      const sc = (x: Passenger) => (x.family_id && famIds.has(x.family_id) ? 4 : 0) + (x.bus_id && busIds.has(x.bus_id) ? 2 : 0) + (x.room_id && roomIds.has(x.room_id) ? 1 : 0);
-                      return sc(b) - sc(a);
-                    });
-                  if (!allSuggestions.length) return null;
-                  return (
-                    <div style={{ flexShrink: 0, borderTop: "2px solid var(--line)", background: "var(--ivory)", padding: "8px 12px" }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, color: "#1565C0", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4"/></svg>
-                        اقتراحات ذكية
-                        <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 700 }}>({allSuggestions.length})</span>
-                      </div>
-                      <div style={{ maxHeight: 114, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-                        {allSuggestions.map(p => {
-                          const hasFam = p.family_id && famIds.has(p.family_id);
-                          const hasBus = p.bus_id && busIds.has(p.bus_id);
-                          const reason = hasFam ? "صلة قرابة" : hasBus ? "نفس الباص" : "نفس الغرفة";
-                          const matchPax = cp.find(x => hasFam ? x.family_id === p.family_id : hasBus ? x.bus_id === p.bus_id : x.room_id === p.room_id);
-                          const matchName = matchPax?.short_ar || matchPax?.name_ar?.split(" ").slice(0,2).join(" ") || "";
-                          const isTypeMismatch = camp.type === "خاص" && p.services?.[serviceKey] !== "خاص";
-                          return (
-                            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${hasFam ? "#A5D6A7" : hasBus ? "#90CAF9" : "#FFD54F"}`, background: hasFam ? "#F1F8E9" : hasBus ? "#E3F2FD" : "#FFFDE7" }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontSize: 11.5, fontWeight: 900, color: "var(--ink)" }}>{p.short_ar || p.name_ar}</span>
-                                <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", marginRight: 5 }}>· {reason}{matchName ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {matchName}</span> : null}</span>
-                              </div>
-                              <button onClick={async () => {
-                                if (isTypeMismatch) { showAlert("warning", `تنبيه: ${p.short_ar || p.name_ar} طالب خيمة عادية وليس خاصة`); }
-                                if (!await writeOk(supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", p.id), "تعذر إضافة المسافر إلى المخيم")) return;
-                                setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, [campIdKey]: camp.id } : x));
-                              }} title="إضافة للمخيم" style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#2A9D8F", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                              </button>
-                              <button onClick={() => setDismissedCampSuggestions(prev => new Set([...prev, p.id!]))} style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--ivory2)", cursor: "pointer", color: "var(--muted)", fontSize: 11, flexShrink: 0 }}>✕</button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-                </div>
-
-                {/* شمال: إضافة */}
-                <div style={{ width: 290, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--ivory)" }}>
-                  <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>إضافة مسافرين</span>
-                  </div>
-                  <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 9, padding: "6px 10px" }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                      <input style={{ border: "none", background: "transparent", fontSize: 12, flex: 1, outline: "none", fontFamily: "var(--font-body)" }} placeholder="ابحث عن مسافر..." value={addSearch} onChange={e => setAddSearch(e.target.value)} autoFocus />
-                      {addSearch && <button onClick={() => setAddSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 13 }}>✕</button>}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 14px", borderBottom: "1px solid var(--line)", background: "var(--ivory)", flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{addFiltered.length} مسافر</span>
-                    <button onClick={() => {
-                      if (selectedAdd.size === addFiltered.length) setSelectedAdd(new Set());
-                      else setSelectedAdd(new Set(addFiltered.map(p => p.id)));
-                    }} style={{ fontSize: 11, fontWeight: 800, color: "var(--primary)", background: "none", border: "none", cursor: "pointer" }}>
-                      {selectedAdd.size === addFiltered.length && addFiltered.length > 0 ? "إلغاء تحديد الكل" : "تحديد الكل"}
+          <AllocationDialog onClose={sel.close} icon={<Icon />}
+            title={editingName ? (
+              <input defaultValue={camp.name} autoFocus aria-label="اسم المخيم"
+                onBlur={e => renameCamp(camp, e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") renameCamp(camp, (e.target as HTMLInputElement).value); if (e.key === "Escape") setEditingName(false); }}
+                style={{ width: 140, fontSize: 18, fontWeight: 900, padding: "2px 8px", borderRadius: 8, border: "none", outline: "none", fontFamily: "var(--font-body)" }} />
+            ) : (
+              <span onDoubleClick={() => !readOnly && setEditingName(true)} title="انقر نقرتين لتعديل الاسم">مخيم {camp.name}</span>
+            )}
+            badges={
+              <>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "color-mix(in srgb, var(--text-inverse) 22%, transparent)" }}>
+                  {camp.gender === "ذكر" ? "رجال" : "نساء"}
+                </span>
+                {camp.type === "خاص" && specialBadge(true)}
+              </>
+            }
+            meta={
+              <div style={{ maxWidth: 420 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, fontWeight: 800, marginBottom: 5, flexWrap: "wrap" }}>
+                  <span dir="ltr">{list.length} / {camp.capacity ?? "—"}</span>
+                  <span style={{ opacity: .85 }}>· {capNote(camp)}</span>
+                  {editingCap ? (
+                    <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                      <input value={capDraft} onChange={e => setCapDraft(e.target.value)} type="number" min="1" autoFocus aria-label="سعة المخيم"
+                        style={{ width: 56, padding: "2px 6px", borderRadius: 6, border: "none", outline: "none", background: "var(--paper)", color: "var(--ink)", fontSize: 11, fontFamily: "var(--font-body)" }} />
+                      <button onClick={() => saveCapacity(camp)} style={{ fontSize: 10, fontWeight: 900, padding: "2px 8px", borderRadius: 6, border: "none", background: "var(--paper)", color: "var(--primary)", cursor: "pointer", fontFamily: "var(--font-body)" }}>حفظ</button>
+                      <button onClick={() => setEditingCap(false)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: "transparent", color: "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>إلغاء</button>
+                    </span>
+                  ) : (
+                    <button disabled={readOnly} onClick={() => { setCapDraft(camp.capacity != null ? String(camp.capacity) : ""); setEditingCap(true); }}
+                      style={{ ...roOff, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: "color-mix(in srgb, var(--text-inverse) 14%, transparent)", color: "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                      {camp.capacity == null ? "حدّد السعة" : "تعديل السعة"}
                     </button>
-                  </div>
-                  <div style={{ flex: 1, overflowY: "auto" }}>
-                    {addFiltered.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "1.5rem", color: "var(--muted)", fontSize: 11 }}>{addSearch ? "لا توجد نتائج" : "جميع الحجاج موزعون"}</div>
-                    ) : addFiltered.map(p => (
-                      <div key={p.id}
-                        draggable onDragStart={() => handleDragStartAdd(p.id)} onDragEnd={handleDragEnd}
-                        onClick={() => { setSelectedAdd(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", borderBottom: "1px solid var(--line)", background: selectedAdd.has(p.id) ? `${campColor}12` : draggingId === p.id ? `${campColor}05` : "transparent" }}
-                        onMouseEnter={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "var(--paper)"; }}
-                        onMouseLeave={e => { if (draggingId !== p.id) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 5 }}>{p.short_ar || p.name_ar}{p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 6px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}</div>
-                        </div>
-                        {p.services[serviceKey] === "خاص" && <span style={{ fontSize: 9, fontWeight: 800, background: "#E8951A", color: "#fff", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>خاص</span>}
-                        <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${selectedAdd.has(p.id) ? campColor : "var(--line)"}`, background: selectedAdd.has(p.id) ? campColor : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {selectedAdd.has(p.id) && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* زر إضافة المحدد */}
-                  {selectedAdd.size > 0 && (
-                    <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)", flexShrink: 0, background: "var(--ivory)" }}>
-                      <button onClick={async () => {
-                        const ids = [...selectedAdd];
-                        const mismatch = ids.filter(id => { const p = passengers.find(x => x.id === id); return camp.type === "خاص" && p?.services?.[serviceKey] !== "خاص"; });
-                        if (mismatch.length) showAlert("warning", `تنبيه: ${mismatch.length === 1 ? "حاج" : `${mismatch.length} حجاج`} طالبون خيمة عادية وليس خاصة`);
-                        if (!await writeAllOk(ids.map(id => supabase.from("passengers").update({ [campIdKey]: camp.id } as TablesUpdate<"passengers">).eq("id", id)), "تعذر إضافة بعض المسافرين إلى المخيم")) return;
-                        setPassengers(prev => prev.map(x => selectedAdd.has(x.id) ? { ...x, [campIdKey]: camp.id } : x));
-                        setSelectedAdd(new Set());
-                      }} style={{ width: "100%", padding: "9px", borderRadius: 9, border: "none", background: campColor, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                        إضافة {selectedAdd.size === 1 ? "مسافر" : selectedAdd.size === 2 ? "مسافران" : `${selectedAdd.size} مسافرين`}
-                      </button>
-                    </div>
                   )}
                 </div>
+                <CapacityBar occ={list.length} cap={camp.capacity ?? null} height={6} />
               </div>
-            </div>
-          </div>
+            }
+            actions={
+              <>
+                {/* ترتيب حسب منى — عرفة وحدها */}
+                {!isMina && (
+                  <DialogAction disabled={readOnly} label="ترتيب حسب منى" onClick={() => void orderByMina(camp)}>
+                    <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h13" /><path d="M3 12h9" /><path d="M3 18h5" /><path d="m18 9 3 3-3 3" /></svg>
+                  </DialogAction>
+                )}
+                <DialogAction onClick={() => printCamp(camp)} label="طباعة قائمة المخيم">
+                  <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" /></svg>
+                </DialogAction>
+                <DialogAction danger disabled={readOnly} label="حذف المخيم"
+                  onClick={async () => { if (await confirmAction(`هل تريد حذف مخيم ${camp.name}؟`, { title: "حذف المخيم", danger: true })) void deleteCamp(camp); }}>
+                  <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+                </DialogAction>
+              </>
+            }
+            roster={
+              <>
+                <RosterHeader count={paxLabel(list.length)}
+                  breakdown={list.some(p => !isHajj(p)) ? `${list.filter(p => isHajj(p)).length} حاج · ${list.filter(p => !isHajj(p)).length} إداري` : undefined} />
+                <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }} onDragOver={e => e.preventDefault()} onDrop={() => drag.drop(list)}>
+                  {list.length === 0
+                    ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا يوجد نازلون بعد</div>
+                    : list.map((p, i) => (
+                      <AssignedRow key={p.id} index={i + 1} name={p.short_ar || p.name_ar}
+                        drag={readOnly ? undefined : {
+                          onDragStart: () => drag.startReorder(p.id),
+                          onDragOver: e => drag.over(e, p.id),
+                          onDragEnd: drag.end,
+                          dragging: drag.draggingId === p.id,
+                          dragOver: drag.dragOverId === p.id,
+                        }}
+                        badges={
+                          <>
+                            {p.passenger_type && p.passenger_type !== "حاج" && <span style={{ fontSize: 8.5, fontWeight: 800, padding: "1px 5px", borderRadius: 99, background: "var(--warning-bg)", color: "var(--warning)", flexShrink: 0 }}>{p.passenger_type}</span>}
+                            {p.services?.[serviceKey] === "خاص" && !typeMismatch(camp, p) && specialBadge()}
+                          </>
+                        }
+                        notice={typeMismatch(camp, p) ? (
+                          <span style={{ fontSize: 9, fontWeight: 800, color: "var(--danger)", background: "var(--danger-bg)", padding: "1px 6px", borderRadius: 99, flexShrink: 0 }}>
+                            {camp.type === "خاص" ? "طلب عادية" : "طلب خاصة"}
+                          </span>
+                        ) : undefined}
+                        actions={
+                          <>
+                            {others.length > 0 && (
+                              <select onChange={e => { void moveP(p, e.target.value); e.currentTarget.value = ""; }} defaultValue="" disabled={readOnly}
+                                aria-label={`نقل ${p.short_ar || p.name_ar} إلى مخيم آخر`} title="نقل لمخيم آخر"
+                                style={{ ...roOff, fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 8px", fontFamily: "var(--font-body)", cursor: "pointer", minWidth: 62 }}>
+                                <option value="">نقل</option>
+                                {others.map(c => <option key={c.id} value={c.id}>{c.name} ({c.capacity == null ? "بلا سعة" : `${remainingOf(c)} متاح`})</option>)}
+                              </select>
+                            )}
+                            <button disabled={readOnly} onClick={() => void writes.unassign(p.id, "تعذر إزالة المسافر من المخيم")}
+                              aria-label={`إزالة ${p.short_ar || p.name_ar} من المخيم`} title="إزالة من المخيم"
+                              style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--danger)", background: "var(--paper)", cursor: "pointer", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>
+                            </button>
+                          </>
+                        } />
+                    ))}
+                </div>
+                {/* عرفة بلا اقتراحات — قرار منتج، لا نقصٌ في التنفيذ */}
+                {isMina && (
+                  <SuggestionStrip items={minaSuggestions(camp)} blockedReason={blockedReason}
+                    onAccept={pId => void addOne(camp, pId)}
+                    onDismiss={pId => setDismissed(prev => new Set([...prev, pId]))} />
+                )}
+              </>
+            }
+            picker={
+              <PassengerPicker title="إضافة نازلين" search={sel.pickerSearch} onSearch={sel.setPickerSearch}
+                items={items} selected={sel.picked} onToggle={sel.toggle} disabled={readOnly}
+                onToggleAll={() => sel.setPicked(sel.picked.size === items.length ? new Set() : new Set(items.map(i => i.id)))}
+                countText={`${items.length} ${camp.gender === "ذكر" ? "من الرجال" : "من النساء"} غير موزّع · ${camp.capacity == null ? "السعة غير محدّدة" : (left ?? 0) > 0 ? placesLabel(left ?? 0) : "المخيّم مكتمل"}`}
+                emptyText={sel.pickerSearch ? "لا توجد نتائج" : `جميع ${camp.gender === "ذكر" ? "الرجال" : "النساء"} موزعون`}
+                drag={readOnly ? undefined : { onDragStart: drag.startAdd, onDragEnd: drag.end, draggingId: drag.draggingId }}
+                footer={sel.picked.size > 0 && (
+                  <button disabled={readOnly} onClick={() => void addPicked(camp)}
+                    style={{ ...roOff, width: "100%", padding: 9, borderRadius: 10, border: "none", background: "var(--primary)", color: "var(--text-inverse)", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                    إضافة {paxLabel(sel.picked.size)}
+                  </button>
+                )} />
+            } />
         );
       })()}
 
-      {/* Modal إضافة مخيم */}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setNameError(""); }} title={`${iconTitle} — مخيم جديد`} maxWidth={340}>
+      {/* Modal إضافة مخيم — نوع الصفحة من سياقها لا من اختيارٍ يدويّ */}
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setFormError(""); }} title={`مخيمات ${pageType} — مخيم جديد`} maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم / اسم المخيم</div>
-          <input style={{ ...inp, borderColor: nameError ? "var(--danger)" : "var(--border)" }} value={campName} onChange={e => { setCampName(e.target.value); setNameError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
-          {nameError && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 4 }}>{nameError}</div>}
+          <input style={{ ...inp, borderColor: formError ? "var(--danger)" : "var(--border)" }} value={campName} onChange={e => { setCampName(e.target.value); setFormError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
         </div>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الجنس</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["ذكر", "أنثى"] as const).map(g => (
-              <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campGender === g ? (g === "ذكر" ? "var(--info)" : "var(--female-fg)") : "var(--text-muted)" }}>
+              <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 12, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", color: campGender === g ? (g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)") : "var(--text-muted)" }}>
                 {g === "ذكر" ? "رجال" : "نساء"}
               </div>
             ))}
           </div>
         </div>
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع المخيم</div>
           <div style={{ display: "flex", gap: 8 }}>
             {(["عادي", "خاص"] as const).map(t => (
-              <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, border: `1.5px solid ${campType === t ? "var(--em7)" : "var(--border)"}`, background: campType === t ? "rgba(125,31,60,.08)" : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: campType === t ? "var(--em7)" : "var(--text-muted)" }}>
+              <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 12, border: `1.5px solid ${campType === t ? "var(--primary)" : "var(--border)"}`, background: campType === t ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "transparent", color: campType === t ? "var(--primary)" : "var(--text-muted)" }}>
                 {t}
               </div>
             ))}
           </div>
+          {/* «خاص» تصنيفٌ تجاريّ لا استثناءٌ من الفصل بالجنس */}
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5 }}>«خاص» لا يقبل الجنسين — الفصل بالجنس يسري على كل المخيّمات.</div>
         </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>السعة (عدد الأماكن) — مطلوبة</div>
+          <input style={inp} type="number" value={campCapacity} onChange={e => { setCampCapacity(e.target.value); setFormError(""); }} placeholder="مثال: 20" min="1" />
+        </div>
+        {formError && <div role="alert" style={{ fontSize: 11, color: "var(--danger)", marginBottom: 10 }}>{formError}</div>}
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addCamp} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> إضافة</button>
-          <button onClick={() => { setShowAdd(false); setNameError(""); }} style={btnS()}>إلغاء</button>
+          <button onClick={addCamp} style={{ ...btnP(), flex: 1 }}><svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg> إضافة</button>
+          <button onClick={() => { setShowAdd(false); setFormError(""); }} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
-
     </div>
   );
 }
