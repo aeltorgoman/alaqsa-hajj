@@ -510,7 +510,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     </button>
                   )}
                 </div>
-                <CapacityBar occ={list.length} cap={camp.capacity ?? null} height={6} />
+                <CapacityBar occ={list.length} cap={camp.capacity ?? null} height={6} onDark />
               </div>
             }
             actions={

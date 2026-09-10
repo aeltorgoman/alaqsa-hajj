@@ -385,7 +385,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       style={{ ...roOff, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: "color-mix(in srgb, var(--text-inverse) 14%, transparent)", color: "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>تعديل السعة</button>
                   )}
                 </div>
-                <CapacityBar occ={list.length} cap={bus.capacity} height={6} />
+                <CapacityBar occ={list.length} cap={bus.capacity} height={6} onDark />
               </div>
             }
             actions={

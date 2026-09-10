@@ -26,14 +26,21 @@ export const ALLOC_GAP = 12;
 // كان شريط المخيّم مثبَّتاً على `width: "100%"` لأنه بلا سعة، فيقول
 // «ممتلئ» عن مخيّمٍ فيه نازلٌ واحد. وشريط الباص يقصّ التجاوز بـ
 // `Math.min(100, …)` فيبدو ٦٠/٥٠ كأنه ٥٠/٥٠.
-export function CapacityBar({ occ, cap, height = 8 }: { occ: number; cap: number | null; height?: number }) {
+// `onDark` لأن الشريط يظهر في موضعين: على ورق الكارت، وعلى ترويسة
+// المودال الملوّنة بـ`--primary` نفسه — وهناك يكون تعبئةً بلون
+// أرضيّته، أي غير مرئيّ. فيقلب على `--text-inverse`.
+export function CapacityBar({ occ, cap, height = 8, onDark }: { occ: number; cap: number | null; height?: number; onDark?: boolean }) {
   const over = cap != null && occ > cap;
   const pct = cap && cap > 0 ? Math.min(100, Math.round((occ / cap) * 100)) : 0;
   return (
-    <div style={{ height, borderRadius: 99, background: "color-mix(in srgb, var(--ink) 12%, transparent)", overflow: "hidden" }}>
+    <div style={{
+      height, borderRadius: 99, overflow: "hidden",
+      background: onDark ? "color-mix(in srgb, var(--ink) 30%, transparent)" : "color-mix(in srgb, var(--ink) 12%, transparent)",
+    }}>
       <div style={{
         height: "100%", borderRadius: 99, width: `${cap == null ? 0 : pct}%`,
-        background: over ? "var(--danger)" : "var(--primary)", transition: "width .3s",
+        background: over ? "var(--danger)" : onDark ? "var(--text-inverse)" : "var(--primary)",
+        transition: "width .3s",
       }} />
     </div>
   );
