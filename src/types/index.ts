@@ -66,8 +66,9 @@ export interface Bus {
   id: number;
   name: string;
   type: string;
-  /* عمود قائم في القاعدة بافتراضي 50 — كان غيابه يفرض (bus as any).capacity */
-  capacity?: number | null;
+  /* عمود قائم في القاعدة بافتراضي ٥٠، وصار `not null` مع حارس
+     السقف — فلا يعود `bus.capacity || 50` تفسيراً في الواجهة. */
+  capacity: number;
   season_id?: number | null;
   created_at?: string;
 }
@@ -78,6 +79,10 @@ export interface Camp {
   gender: string;
   type: string;
   page_type: string;
+  /* السعة الحقيقية — يُدخِلها الموظّف، لا تُستنبط من نوع.
+     `null` تعني «غير محدّدة»: مخيّمٌ أُنشئ قبل عمود السعة، لا يقبل
+     إسناداً حتى تُحدَّد سعته. */
+  capacity?: number | null;
   season_id?: number | null;
   created_at?: string;
 }

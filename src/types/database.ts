@@ -123,7 +123,7 @@ export type Database = {
       }
       buses: {
         Row: {
-          capacity: number | null
+          capacity: number
           created_at: string | null
           id: number
           name: string | null
@@ -131,7 +131,7 @@ export type Database = {
           type: string | null
         }
         Insert: {
-          capacity?: number | null
+          capacity?: number
           created_at?: string | null
           id?: never
           name?: string | null
@@ -139,7 +139,7 @@ export type Database = {
           type?: string | null
         }
         Update: {
-          capacity?: number | null
+          capacity?: number
           created_at?: string | null
           id?: never
           name?: string | null
@@ -158,29 +158,32 @@ export type Database = {
       }
       camps: {
         Row: {
+          capacity: number | null
           created_at: string | null
-          gender: string | null
+          gender: string
           id: number
           name: string | null
-          page_type: string | null
+          page_type: string
           season_id: number
           type: string | null
         }
         Insert: {
+          capacity?: number | null
           created_at?: string | null
-          gender?: string | null
+          gender: string
           id?: never
           name?: string | null
-          page_type?: string | null
+          page_type: string
           season_id?: number
           type?: string | null
         }
         Update: {
+          capacity?: number | null
           created_at?: string | null
-          gender?: string | null
+          gender?: string
           id?: never
           name?: string | null
-          page_type?: string | null
+          page_type?: string
           season_id?: number
           type?: string | null
         }
@@ -695,6 +698,27 @@ export type Database = {
           wants_flight?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "passengers_bus_id_fkey"
+            columns: ["bus_id"]
+            isOneToOne: false
+            referencedRelation: "buses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_camp_arafa_id_fkey"
+            columns: ["camp_arafa_id"]
+            isOneToOne: false
+            referencedRelation: "camps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_camp_mina_id_fkey"
+            columns: ["camp_mina_id"]
+            isOneToOne: false
+            referencedRelation: "camps"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "passengers_season_id_fkey"
             columns: ["season_id"]
