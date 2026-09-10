@@ -549,10 +549,42 @@ create trigger trg_camps_guard_occupants
 
 -- ═══ ٧) الصلاحيات — نهج `reject_write_closed_season` نفسه ═══
 -- دوالّ المحفّزات لا تُستدعى مباشرةً: يستدعيها محرّك المحفّزات بلا
--- فحص EXECUTE. وسحبُها من الجميع لا يعطّل شيئاً ويمنع أن تُنادى من
--- واجهة PostgREST. و`assert_camp_admits` مساعِدةٌ للمحفّز وحده،
--- فتُسحَب كذلك — وهي security definer فتُنادى من جسم المحفّز
--- بامتياز المالك بلا حاجةٍ إلى منحٍ لأي دور.
+-- فحص EXECUTE. وسحبُها من الأدوار التي يبلغها المتصفّح لا يعطّل
+-- شيئاً ويمنع أن تُنادى من واجهة PostgREST. و`assert_camp_admits`
+-- مساعِدةٌ للمحفّز وحده، فتُسحَب كذلك — وهي security definer
+-- فتُنادى من جسم المحفّز بامتياز المالك بلا حاجةٍ إلى منحٍ لأي دور.
+--
+-- ── حدّ الأمان المقصود، صريحاً ────────────────────────────────
+--   PUBLIC        : لا EXECUTE
+--   anon          : لا EXECUTE
+--   authenticated : لا EXECUTE
+--   service_role  : EXECUTE **باقٍ، وهو مقبولٌ ومتوقَّع**
+--
+-- ولماذا يبقى `service_role`: القاعدة تحمل
+--   alter default privileges … in schema public grant execute on functions
+--     to authenticated, service_role
+-- (يضعها Supabase بدورَي `postgres` و`supabase_admin`)، فكل دالّة
+-- يُنشئها `postgres` في `public` تولد ومعها `service_role=X/postgres`
+-- منحاً صريحاً في `proacl`. والسحب أعلاه يزيل `authenticated`
+-- ويؤكّد خلوّ `anon` و`PUBLIC` — ولا يذكر `service_role` قصداً.
+--
+-- وهو غير ذي أثر أمنيّ: أربعٌ من الخمس تُرجع `trigger`، وبوستجرس
+-- يرفض استدعاءها مباشرةً مهما كانت الصلاحية، وPostgREST لا تنشر
+-- ما يُرجع `trigger` أصلاً. والخامسة `assert_camp_admits` لا تكتب
+-- شيئاً — تعدّ وترفع استثناءً. و`service_role` هو دور المفتاح
+-- السرّيّ الخادميّ، ويملك أصلاً `rawd` على `passengers` و`camps`
+-- و`buses` و`rooms` مع `bypassrls`. فلا تمنحه هذه الدوالّ شيئاً
+-- لا يملكه.
+--
+-- وهذا هو حال كل دوالّ المشروع القائمة —
+-- `reject_write_closed_season` و`passengers_assign_sort_order`
+-- ودوالّ الفندق الثلاث — فالنمط واحد لا استثناء فيه.
+--
+-- ⚠️ تصحيح توقُّع سابق: كان تحقّق ما بعد التطبيق ينتظر
+-- «لا EXECUTE لأحد» شاملاً `service_role`. وذلك التوقُّع خطأ: لم
+-- يسحب هذا الترحيل من `service_role` قطّ، فما كان ذلك الناتج
+-- ممكناً بحكم SQL الملف نفسه. والتوقُّع الصحيح هو الحدّ الأربعة
+-- أعلاه.
 revoke execute on function public.reject_invalid_allocation()  from public, anon, authenticated;
 revoke execute on function public.buses_guard_occupants()      from public, anon, authenticated;
 revoke execute on function public.camps_guard_occupants()      from public, anon, authenticated;
