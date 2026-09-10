@@ -189,3 +189,55 @@ export function matchesPassenger(p: { name_ar?: string | null; short_ar?: string
   const t = q.trim();
   return (p.name_ar || "").includes(t) || (p.short_ar || "").includes(t);
 }
+
+// ═══════════════════════════════════════════════════════════
+// ترتيب الحاويات — بطاقاتٌ لا نازلين
+// ═══════════════════════════════════════════════════════════
+// هذا **ليس** `useAllocationDrag`. ذاك يسحب مسافراً داخل قائمة
+// حاويةٍ واحدة أو من المنتقي إليها؛ وهذا يسحب الحاوية نفسها بين
+// أخواتها. والدلالتان تختلفان اختلافاً تاماً:
+//
+//   `passengers.camp_mina_sort_order` — ترتيب النازل داخل مخيّم.
+//   `camps.sort_order`                — ترتيب المخيّمات نفسها.
+//
+// وخلطهما في خطّافٍ واحد كان سيوفّر أسطراً ويكلّف وضوحاً — والوضوح
+// أغلى. فالحالة منفصلة هنا، والمجموعة (`groupKey`) تمنع الإفلات
+// عبر الحدود: بطاقة رجالٍ لا تُفلَت في مجموعة النساء، ومنى لا
+// تُفلَت في عرفة — لأن كل مجموعةٍ تُرسم بمفتاحها ولا يتقاطعان.
+export function useContainerReorder<T extends { id: number }>({ onReorder }: {
+  onReorder: (groupKey: string, ordered: T[]) => void;
+}) {
+  const from = useRef<{ id: number; group: string } | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [overId, setOverId] = useState<number | null>(null);
+
+  const reset = useCallback(() => { from.current = null; setDraggingId(null); setOverId(null); }, []);
+
+  const start = useCallback((id: number, group: string) => {
+    from.current = { id, group };
+    setDraggingId(id);
+  }, []);
+
+  /* الإفلات خارج المجموعة يُلغى بلا كتابة — لا يُنقل جنسٌ ولا
+     نوعُ صفحة، ولا تتغيّر أي خاصّيّة للمخيّم غير موضعه. */
+  const over = useCallback((e: React.DragEvent, id: number, group: string) => {
+    if (!from.current || from.current.group !== group) return;
+    e.preventDefault();
+    setOverId(id);
+  }, []);
+
+  const drop = useCallback((group: string, items: T[]) => {
+    const src = from.current;
+    if (!src || src.group !== group || overId == null || overId === src.id) { reset(); return; }
+    const fromIdx = items.findIndex(c => c.id === src.id);
+    const toIdx = items.findIndex(c => c.id === overId);
+    if (fromIdx === -1 || toIdx === -1) { reset(); return; }
+    const next = [...items];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    onReorder(group, next);
+    reset();
+  }, [onReorder, overId, reset]);
+
+  return { draggingId, overId, start, over, drop, end: reset };
+}

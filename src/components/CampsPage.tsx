@@ -16,7 +16,7 @@ import {
   type PickerItem, type SuggestionItem,
 } from "./allocation/AllocationUI";
 import {
-  allocWriteError, matchesPassenger, useAllocationDrag, useAllocationWrites, useContainerSelection,
+  allocWriteError, matchesPassenger, useAllocationDrag, useAllocationWrites, useContainerReorder, useContainerSelection,
 } from "./allocation/useAllocation";
 
 /* مفاتيح الأعمدة والخدمة — حرفيّة لا string عام، فالفهرسة بها آمنة
@@ -103,7 +103,12 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   useEffect(() => {
     setCampsLoading(true);
-    supabase.from("camps").select("*").eq("page_type", pageType).eq("season_id", viewedSeason.id).order("created_at").then(({ data, error }) => {
+    /* `sort_order` هو المصدر التشغيليّ لترتيب الحاويات منذ ترحيل
+       ٢٠٢٦٠٩١٠، و`id` يحسم التساوي فالنتيجة محدَّدة لا عشوائية.
+       ولم يعد `created_at` مرجعاً — كان أثراً لتسلسل الإنشاء لا
+       قراراً يملكه الموظّف. */
+    supabase.from("camps").select("*").eq("page_type", pageType).eq("season_id", viewedSeason.id)
+      .order("sort_order", { nullsFirst: false }).order("id").then(({ data, error }) => {
       if (error || !data) { console.error("تعذر تحميل المخيمات", error); setCampsError(true); }
       else { setCamps(data as Camp[]); setCampsError(false); }
       setCampsLoading(false);
@@ -117,6 +122,42 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     column: campIdKey, orderColumn: campOrderKey, setPassengers, readOnly, showAlert,
     onBlocked: () => assertWritable(),
   });
+
+  // ══════════════════════════════════════════════════════════
+  // ترتيب الحاويات — بطاقات المخيّمات، لا نازليها
+  // ══════════════════════════════════════════════════════════
+  // ⚠️ `camps.sort_order` ترتيبُ المخيّمات داخل مجموعتها
+  // (الموسم · نوع الصفحة · الجنس). و`camp_mina_sort_order` /
+  // `camp_arafa_sort_order` ترتيبُ النازلين داخل مخيّم. مفهومان
+  // منفصلان، وعمودان منفصلان، وخطّافان منفصلان.
+  const byContainerOrder = (a: Camp, b: Camp) =>
+    ((a.sort_order ?? 0) - (b.sort_order ?? 0)) || a.id - b.id;
+
+  const inGroup = (gender: "ذكر" | "أنثى") => camps.filter(c => c.gender === gender).sort(byContainerOrder);
+
+  /* إعادة الترقيم بفجوة عشرة — نفس عُرف `reorderUpdates` للنازلين،
+     وفي القاعدة نفسها في التعبئة الرجعيّة. */
+  const saveContainerOrder = async (gender: string, ordered: Camp[]) => {
+    if (!assertWritable()) return;
+    /* الحدّ الأخير على النطاق: لا يُكتب إلا لمن هم فعلاً في مجموعة
+       الجنس المسحوب فيها — فبطاقةٌ من مجموعةٍ أخرى لا تُرقَّم هنا. */
+    if (ordered.some(c => c.gender !== gender)) { console.error("محاولة ترتيب عبر مجموعتَي الجنس — أُلغيت"); return; }
+    const before = camps;
+    const pos = new Map(ordered.map((c, i) => [c.id, (i + 1) * 10]));
+    /* تفاؤليّ مع تراجعٍ آمن: البطاقات تستقرّ فوراً، وإن رفضت
+       القاعدة عادت الحالة كما كانت بدل أن تبقى كذبةً على الشاشة. */
+    setCamps(prev => prev.map(c => pos.has(c.id) ? { ...c, sort_order: pos.get(c.id)! } : c));
+    const results = await Promise.all(
+      ordered.map((c, i) => supabase.from("camps").update({ sort_order: (i + 1) * 10 }).eq("id", c.id)));
+    const failed = results.filter(r => r.error);
+    if (failed.length) {
+      console.error("تعذر حفظ ترتيب المخيمات", failed.map(f => f.error));
+      setCamps(before);
+      showAlert("error", allocWriteError("تعذر حفظ ترتيب المخيمات", failed[0].error?.message));
+    }
+  };
+
+  const cardDrag = useContainerReorder<Camp>({ onReorder: saveContainerOrder });
 
   // ══════════════════════════════════════════════════════════
   // قواعد المخيّم — حدود صلبة ثم تعارض طريّ
@@ -315,8 +356,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   // ══════════════════════════════════════════════════════════
   // عرفة مخيّمٌ كبير، ومنى مخيّماتٌ صغيرة. ومن نزل في منى معاً
   // يُراد له أن يبقى متجاوراً في عرفة. فيُقرأ ترتيب منى — ترتيبُ
-  // مخيّماتها ثم ترتيبُ النازلين داخل كلٍّ منها — ويُطبَّق على من
-  // هم **أصلاً** في مخيّم عرفة المفتوح.
+  // مخيّماتها من `camps.sort_order` ثم ترتيبُ النازلين داخل كلٍّ
+  // منها من `camp_mina_sort_order` — ويُطبَّق على من هم **أصلاً**
+  // في مخيّم عرفة المفتوح.
   //
   // لا يُسنِد أحداً، ولا ينقل أحداً بين مخيّمات عرفة، ولا يمسّ منى،
   // ولا يغيّر سعةً ولا جنساً ولا نوعاً. يكتب في
@@ -325,14 +367,20 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!assertWritable()) return;
 
     const ok = await confirmAction(
-      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيبهم في مخيّمات منى.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
+      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيب مخيّمات منى ${camp.gender === "ذكر" ? "للرجال" : "للنساء"} وترتيبَ نازليها.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
       { title: "ترتيب حسب منى", confirmLabel: "رتّب", cancelLabel: "إلغاء" },
     );
     if (!ok) return;
 
-    /* ترتيب مخيّمات منى كما تعرضه صفحة منى نفسها: `created_at` */
+    /* مصدر ترتيب حاويات منى هو `camps.sort_order` — القرار
+       التشغيليّ الذي يملكه الموظّف بسحب البطاقات، لا `created_at`
+       الذي كان أثراً لتسلسل الإنشاء. و`id` يحسم التساوي وحده.
+       ⚠️ والجنس شرطٌ لا زينة: الفصل بالجنس حدٌّ صلب، فمخيّم عرفة
+       للرجال يشتقّ ترتيبه من مخيّمات منى للرجال وحدها — ولا
+       يختلط التيّاران. و«خاص» لا يستثنى. */
     const { data, error } = await supabase.from("camps")
-      .select("id").eq("page_type", "منى").eq("season_id", viewedSeason.id).order("created_at");
+      .select("id").eq("page_type", "منى").eq("season_id", viewedSeason.id).eq("gender", camp.gender)
+      .order("sort_order", { nullsFirst: false }).order("id");
     if (error || !data) {
       console.error("تعذر قراءة ترتيب مخيّمات منى", error);
       showAlert("error", "تعذر قراءة ترتيب مخيّمات منى — يرجى المحاولة مرة أخرى");
@@ -401,8 +449,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   };
 
   const renderGroup = (gender: "ذكر" | "أنثى") => {
-    const group = camps.filter(c => c.gender === gender);
+    const group = inGroup(gender);
     const shown = group.filter(c => !campSearch || c.name.includes(campSearch.trim()) || dwellers(c.id).some(p => matchesPassenger(p, campSearch)));
+    /* السحب يُعطَّل أثناء البحث: القائمة المعروضة ليست المجموعة
+       كاملةً، فإعادة الترقيم فوقها تُفسد مواضع المخفيّين. */
+    const canReorder = !readOnly && !campSearch && group.length > 1;
     return (
       <div style={{ marginBottom: 20 }}>
         <div style={{ marginBottom: 10 }}>{genderPill(gender)} <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>({group.length})</span></div>
@@ -414,7 +465,14 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                 icon={<Icon />} title={`مخيم ${camp.name}`} badge={camp.type === "خاص" ? specialBadge(true) : undefined}
                 subtitle={camp.gender === "ذكر" ? "رجال" : "نساء"}
                 occ={dwellers(camp.id).length} cap={camp.capacity ?? null}
-                emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} noteNeedsAction={camp.capacity == null} />
+                emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} noteNeedsAction={camp.capacity == null}
+                reorder={canReorder ? {
+                  onDragStart: () => cardDrag.start(camp.id, gender),
+                  onDragOver: e => cardDrag.over(e, camp.id, gender),
+                  onDragEnd: () => cardDrag.drop(gender, group),
+                  dragging: cardDrag.draggingId === camp.id,
+                  dragOver: cardDrag.overId === camp.id && cardDrag.draggingId !== camp.id,
+                } : undefined} />
             ))}
           </div>}
       </div>

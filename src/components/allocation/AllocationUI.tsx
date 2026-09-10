@@ -50,7 +50,7 @@ export function CapacityBar({ occ, cap, height = 8, onDark }: { occ: number; cap
 // كارت الحاوية
 // ═══════════════════════════════════════════════════════════
 export function AllocationCard({
-  title, badge, icon, occ, cap, capacityNote, noteNeedsAction, emptyHint, subtitle, selected, onClick,
+  title, badge, icon, occ, cap, capacityNote, noteNeedsAction, emptyHint, subtitle, selected, onClick, reorder,
 }: {
   title: React.ReactNode;
   badge?: React.ReactNode;      // VIP · خاص · ما يميّز الحاوية
@@ -65,15 +65,27 @@ export function AllocationCard({
   subtitle?: React.ReactNode;   // رجال/نساء مثلاً
   selected: boolean;
   onClick: () => void;
+  /* سحبُ البطاقة نفسها لترتيب الحاويات — اختياريّ، ولا علاقة له
+     بسحب المسافرين داخل المودال. غيابه يعني بطاقةً غير مرتَّبة. */
+  reorder?: {
+    onDragStart: () => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDragEnd: () => void;
+    dragging: boolean;
+    dragOver: boolean;
+  };
 }) {
   const over = cap != null && occ > cap;
   return (
     <div onClick={onClick} role="button" tabIndex={0}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
+      draggable={!!reorder} onDragStart={reorder?.onDragStart} onDragOver={reorder?.onDragOver} onDragEnd={reorder?.onDragEnd}
       style={{
         background: "var(--paper)", borderRadius: 12, cursor: "pointer", overflow: "hidden",
-        border: selected ? "2.5px solid var(--primary)" : "1px solid var(--line)",
+        border: reorder?.dragOver ? "2.5px dashed var(--primary)"
+          : selected ? "2.5px solid var(--primary)" : "1px solid var(--line)",
         boxShadow: selected ? "0 4px 16px color-mix(in srgb, var(--primary) 28%, transparent)" : "0 1px 4px rgba(0,0,0,.06)",
+        opacity: reorder?.dragging ? .45 : 1,
         transform: selected ? "translateY(-2px)" : "none", transition: "all .18s",
       }}
       onMouseEnter={e => { if (!selected) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px color-mix(in srgb, var(--primary) 20%, transparent)"; } }}
@@ -83,7 +95,14 @@ export function AllocationCard({
       <div style={{ background: "linear-gradient(150deg, var(--primary), var(--primary-dark, var(--primary)))", color: "var(--text-inverse)", padding: "10px 12px 8px", position: "relative", overflow: "hidden" }}>
         <div aria-hidden style={{ position: "absolute", insetInlineStart: -8, bottom: -12, opacity: .12, pointerEvents: "none", transform: "scale(3.2)", transformOrigin: "bottom left" }}>{icon}</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, position: "relative", zIndex: 1 }}>
-          <div style={{ fontSize: 21, fontWeight: 900, lineHeight: 1.15, fontFamily: "var(--font-heading)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
+          {/* المقبض — لغةُ السحب نفسها المستعملة في صفوف المسافرين،
+              فيُقرأ «هذه تُسحب» بلا سطرِ تعليماتٍ يسكن الصفحة */}
+          {reorder && (
+            <span aria-hidden title="اسحب لإعادة الترتيب" style={{ cursor: "grab", opacity: .55, flexShrink: 0, display: "flex" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="5" r="1" fill="currentColor" /><circle cx="15" cy="5" r="1" fill="currentColor" /><circle cx="9" cy="12" r="1" fill="currentColor" /><circle cx="15" cy="12" r="1" fill="currentColor" /><circle cx="9" cy="19" r="1" fill="currentColor" /><circle cx="15" cy="19" r="1" fill="currentColor" /></svg>
+            </span>
+          )}
+          <div style={{ fontSize: 21, fontWeight: 900, lineHeight: 1.15, fontFamily: "var(--font-heading)", minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
           {badge}
         </div>
         {subtitle && <div style={{ fontSize: 10.5, fontWeight: 700, opacity: .85, marginTop: 3, position: "relative", zIndex: 1 }}>{subtitle}</div>}

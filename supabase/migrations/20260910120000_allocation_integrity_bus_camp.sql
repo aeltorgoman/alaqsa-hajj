@@ -161,6 +161,85 @@ end $$;
 comment on column public.camps.capacity is
   'سعة المخيّم — يُدخِلها الموظّف، لا تُستنبط من نوعٍ. null = غير محدّدة: لا تقبل إسناداً حتى تُحدَّد.';
 
+-- ═══ ١ب) ترتيب حاويات المخيّمات — عمودٌ يملكه الموظّف ═══
+-- لم يكن للمخيّمات ترتيبٌ محفوظ قطّ: `CampsPage` و`ReportsPage`
+-- ترتّبان بـ`created_at`، و`AdminsPage` بـ`name`، و`PortalPage`
+-- بـ`id`. فالترتيب المعروض كان أثراً لتسلسل الإنشاء لا قراراً
+-- تشغيلياً، ولا يملك الموظّف تغييره.
+--
+-- وهذا لا يكفي لـ«ترتيب حسب منى»: تلك الميزة تقرأ ترتيب مخيّمات
+-- منى لتشتقّ منه ترتيب نازلي عرفة، فإن كان المصدر تسلسلَ إنشاءٍ
+-- صار الترتيب المشتقّ بلا معنى تشغيليّ.
+--
+-- ⚠️ عمودٌ واحد لا عمودان: الصفّ الواحد يتبع `page_type` واحداً
+-- و`gender` واحداً، فترتيبه نسبيٌّ داخل مجموعته وحدها:
+--        (season_id · page_type · gender)
+-- ولا تميُّزَ مطلوب عليه: التساوي يحسمه `id`، والفجوات لا تضرّ.
+alter table public.camps add column if not exists sort_order integer;
+
+comment on column public.camps.sort_order is
+  'ترتيب المخيّم داخل مجموعته (الموسم · نوع الصفحة · الجنس) — قرارٌ تشغيليّ يملكه الموظّف. ليس فريداً، والفجوات مقبولة، و`id` يحسم التساوي. ⚠️ لا يُخلَط مع passengers.camp_mina_sort_order / camp_arafa_sort_order: تلك ترتيب النازلين داخل مخيّم، وهذا ترتيب المخيّمات نفسها.';
+
+-- ── التعبئة: توافقيّةٌ لا قرار ───────────────────────────────
+-- تُشتقّ من التسلسل الذي تعرضه `CampsPage` اليوم بالضبط
+-- (`created_at` ثم `id` حاسماً للتساوي)، فتطبيق الترحيل لا يقلب
+-- ترتيباً يراه الموظّف. وبعد التعبئة يصير `sort_order` هو المصدر،
+-- ولا يعود `created_at` مرجعاً تشغيلياً.
+-- الفجوة عشرة كما في `s1_resource_ordering` — تسمح بالإدراج
+-- البينيّ بلا إعادة ترقيم شاملة.
+with ranked as (
+  select id,
+         row_number() over (
+           partition by season_id, page_type, gender
+           order by created_at nulls last, id
+         ) * 10 as pos
+    from public.camps
+)
+update public.camps c
+   set sort_order = r.pos
+  from ranked r
+ where r.id = c.id
+   and c.sort_order is null;
+
+-- ── القادم الجديد يأخذ آخر موضعٍ في مجموعته ─────────────────
+-- نهج `passengers_assign_sort_order` نفسه: قفلٌ استشاريّ على مدى
+-- المعاملة، مفتاحه نطاقُ الترتيب، ثم `max + 10`.
+--
+-- ولماذا لا `max+1` من المتصفّح: موظّفان يُنشئان مخيّماً في اللحظة
+-- نفسها يقرأان `max` واحداً فيكتبان الرقم نفسه — فيصير الترتيب
+-- بينهما رهن `id`، وهو ليس ما قصده أحد. والقفل يُسلسل الحاسبتين
+-- فيأخذ الثاني ما بعد الأول فعلاً. ومداه المجموعة وحدها، فإنشاءُ
+-- مخيّم رجالٍ في منى لا ينتظر إنشاءَ مخيّم نساءٍ في عرفة.
+create or replace function public.camps_assign_sort_order()
+returns trigger language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if new.sort_order is null or new.sort_order = 0 then
+    perform pg_advisory_xact_lock(
+      hashtext('camps.sort_order:' || coalesce(new.season_id, 0)::text
+               || ':' || coalesce(new.page_type, '') || ':' || coalesce(new.gender, ''))
+    );
+    select coalesce(max(sort_order), 0) + 10
+      into new.sort_order
+      from public.camps
+     where season_id  is not distinct from new.season_id
+       and page_type  is not distinct from new.page_type
+       and gender     is not distinct from new.gender;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists camps_assign_sort_order_trg on public.camps;
+create trigger camps_assign_sort_order_trg
+  before insert on public.camps
+  for each row execute function public.camps_assign_sort_order();
+
+-- فهرسٌ يخدم قراءة المجموعة مرتَّبةً — وهو قراءةُ كل صفحة مخيّمات
+create index if not exists idx_camps_group_order
+  on public.camps (season_id, page_type, gender, sort_order, id);
+
 -- ═══ ٢) سعة الباص تصير حدّاً لا تلميحاً ═══
 -- العمود قائم بافتراضي ٥٠، لكنه كان يقبل `null` فتصير السعة
 -- مسألةَ تفسيرٍ في الواجهة (`bus.capacity || 50`). لا صفَّ فارغاً
@@ -477,6 +556,7 @@ create trigger trg_camps_guard_occupants
 revoke execute on function public.reject_invalid_allocation()  from public, anon, authenticated;
 revoke execute on function public.buses_guard_occupants()      from public, anon, authenticated;
 revoke execute on function public.camps_guard_occupants()      from public, anon, authenticated;
+revoke execute on function public.camps_assign_sort_order()    from public, anon, authenticated;
 revoke execute on function public.assert_camp_admits(bigint, bigint, bigint, text, bigint, integer, text, text, text)
   from public, anon, authenticated;
 
@@ -489,6 +569,10 @@ revoke execute on function public.assert_camp_admits(bigint, bigint, bigint, tex
 -- drop trigger if exists trg_buses_guard_occupants      on public.buses;
 -- drop trigger if exists trg_reject_invalid_allocation  on public.passengers;
 -- drop function if exists public.camps_guard_occupants();
+-- drop trigger if exists camps_assign_sort_order_trg on public.camps;
+-- drop function if exists public.camps_assign_sort_order();
+-- drop index if exists public.idx_camps_group_order;
+-- alter table public.camps drop column if exists sort_order;
 -- drop function if exists public.buses_guard_occupants();
 -- drop function if exists public.reject_invalid_allocation();
 -- drop function if exists public.assert_camp_admits(bigint, bigint, bigint, text, bigint, integer, text, text, text);

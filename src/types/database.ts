@@ -165,6 +165,7 @@ export type Database = {
           name: string | null
           page_type: string
           season_id: number
+          sort_order: number | null
           type: string | null
         }
         Insert: {
@@ -175,6 +176,7 @@ export type Database = {
           name?: string | null
           page_type: string
           season_id?: number
+          sort_order?: number | null
           type?: string | null
         }
         Update: {
@@ -185,6 +187,7 @@ export type Database = {
           name?: string | null
           page_type?: string
           season_id?: number
+          sort_order?: number | null
           type?: string | null
         }
         Relationships: [
