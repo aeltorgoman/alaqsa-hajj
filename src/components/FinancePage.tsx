@@ -9,7 +9,7 @@ import { useReportBranding } from "../company/CompanyContext";
 import type { Passenger, User } from "../types";
 
 import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
-import { PRICING_KEYS, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, paidFlightService, fmtAmt, financeStatus } from "./finance/finance.utils";
+import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, isSpecialPackage, matchesPackageFilter, matchesServiceFilter, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
 import { FinancialGroupView } from "./finance/FinancialGroupView";
@@ -65,6 +65,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const [searchTerm, setSearchTerm]       = useState("");
   const [filterStatus, setFilterStatus]   = useState<FinanceFilterStatus>("all");
   const [filterPackage, setFilterPackage] = useState("all");
+  /* فلترُ الخدمة المطلوبة — مفاتيحُ `pricing_settings` نفسها */
+  const [filterService, setFilterService] = useState("all");
   /* `manual` هو الترتيب المعتمَد (sort_order ثم id) وهو الافتراضيّ؛
      وبقيّة المفاتيح عرضٌ للتحصيل لا تغيّر ترتيباً محفوظاً. */
   const [sortKey, setSortKey] = useState<FinanceSortKey>("manual");
@@ -640,7 +642,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const wanted: Record<string,string> = { paid:"مسدد", partial:"جزئي", unpaid:"لم يدفع", unpriced:"غير مسعّر", credit:"رصيد دائن" };
     const rows = sortedPassengers.filter(p => {
       if (!matchesFinanceSearch(p, searchTerm)) return false;
-      if (filterPackage !== "all" && getPackageKey(p.services.hotel_type) !== filterPackage) return false;
+      if (!matchesPackageFilter(p, filterPackage)) return false;
+      if (!matchesServiceFilter(p, filterService)) return false;
       if (filterStatus !== "all") {
         const t = totalsByPassenger.get(p.id);
         if (!t) return false;
@@ -649,7 +652,14 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       return true;
     });
     return sortFinanceRows(rows, totalsByPassenger, sortKey, sortDir);
-  }, [sortedPassengers, totalsByPassenger, searchTerm, filterPackage, filterStatus, sortKey, sortDir]);
+  }, [sortedPassengers, totalsByPassenger, searchTerm, filterPackage, filterService, filterStatus, sortKey, sortDir]);
+
+  /* «سعر خاص» — عددُهم ومجموعُ أسعارهم اليدويّة. مصدرٌ واحد تقرأه
+     الشاشة، ونسخةُ الطباعة تحسبه بالمنطق نفسه في `finance.print.ts`. */
+  const specialPkg = useMemo(() => {
+    const rows = sortedPassengers.filter(isSpecialPackage);
+    return { count: rows.length, total: rows.reduce((sum, p) => sum + (Number(p.services.custom_price) || 0), 0) };
+  }, [sortedPassengers]);
 
   /* ضغطةٌ على العمود نفسه تقلب الاتّجاه، وعلى عمودٍ آخر تبدأ تنازلياً
      للمبالغ (الأكبر أوّلاً هو المطلوب في التحصيل) وتصاعدياً للاسم. */
@@ -1074,7 +1084,20 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الباقة</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي المستحق</th></tr></thead>
-              <tbody>{PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>
+                {PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}
+                {/* «خاص» سعرُها يدويّ لكل حاجّ فلا سعرَ واحد لها — ومجموعُها
+                    مجموعُ أسعارهم، كما في نسخة الطباعة القائمة. وكانت تسقط من
+                    الشاشة فيقرأ الموظّف مجموعاً أقلّ من الحقيقة. */}
+                {specialPkg.count > 0 && (
+                  <tr style={{ background:"var(--warning-bg)" }}>
+                    <td style={tdStyle}>{SPECIAL_PACKAGE_LABEL}</td>
+                    <td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{specialPkg.count}</td>
+                    <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
+                    <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(specialPkg.total)}</td>
+                  </tr>
+                )}
+              </tbody>
             </table>
           </div>
         )}
@@ -1082,7 +1105,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الإضافة / الخصم</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي</th></tr></thead>
-              <tbody>{[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>paidFlightService(p)==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>paidFlightService(p)==="بدون"}].map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pricing[a.key]?.label||a.key}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>{SERVICE_FILTERS.map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{serviceLabel(a.key, pricing)}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
             </table>
           </div>
         )}
@@ -1171,13 +1194,15 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         searchTerm={searchTerm}
         filterStatus={filterStatus}
         filterPackage={filterPackage}
+        filterService={filterService}
         sortKey={sortKey}
         sortDir={sortDir}
         onSortChange={changeSort}
         onSearchTermChange={setSearchTerm}
         onFilterStatusChange={setFilterStatus}
         onFilterPackageChange={setFilterPackage}
-        onClearFilters={()=>{setSearchTerm("");setFilterStatus("all");setFilterPackage("all");}}
+        onFilterServiceChange={setFilterService}
+        onClearFilters={()=>{setSearchTerm("");setFilterStatus("all");setFilterPackage("all");setFilterService("all");}}
         onRefresh={()=>loadFinanceData(true)}
         onOpenReports={()=>setSubView("reports")}
         onOpenSettings={()=>setSubView("settings")}

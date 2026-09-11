@@ -3,7 +3,7 @@
 // ============================================================
 import type { Passenger } from "../../types";
 import type { PricingMap, Payment, CustomCharge, FinancialGroup, PrintBrand, FinanceRow, CashflowByDate } from "./finance.types";
-import { esc, fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, PRICING_KEYS } from "./finance.utils";
+import { esc, fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, isSpecialPackage, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, PRICING_KEYS } from "./finance.utils";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../../company/safety";
 
 function safePrintBrand(brand: PrintBrand): PrintBrand {
@@ -448,19 +448,20 @@ export function printPaymentsReport(payments: Payment[], passengers: Passenger[]
 
 export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
   const { primaryColor } = safePrintBrand(brand);
-  const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>p.services.hotel_type!=="خاص"&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
-  const specialPassengers = passengers.filter(p=>p.services.hotel_type==="خاص");
+  const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
+  const specialPassengers = passengers.filter(isSpecialPackage);
   if (specialPassengers.length>0) {
     const specialTotal = specialPassengers.reduce((s,p)=>s+(Number(p.services.custom_price)||0),0);
-    rows.push(["سعر خاص",String(specialPassengers.length),"—",`<strong>${fmtAmt(specialTotal)}</strong>`]);
+    rows.push([SPECIAL_PACKAGE_LABEL,String(specialPassengers.length),"—",`<strong>${fmtAmt(specialTotal)}</strong>`]);
   }
   printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor), brand));
 }
 
 export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
   const { primaryColor } = safePrintBrand(brand);
-  const checks=[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>paidFlightService(p)==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>paidFlightService(p)==="بدون"}];
-  const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[esc(pricing[a.key]?.label||a.key),String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
+  /* المصدر المشترك نفسه الذي يغذّي فلترَ الخدمات والشاشة — لا قائمةٌ ثالثة */
+  const checks=SERVICE_FILTERS;
+  const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[esc(serviceLabel(a.key, pricing)),String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
   printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor), brand));
 }
 export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBrand }) {

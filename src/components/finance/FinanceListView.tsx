@@ -5,7 +5,7 @@
 import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
 import type { PricingMap, FinancialGroup, FinanceFilterStatus, FinanceTotals, FinanceSortKey, FinanceSortDir } from "./finance.types";
-import { PRICING_KEYS, getPriceInfo, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
+import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_VALUE, SPECIAL_PACKAGE_LABEL, getPriceInfo, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
 export type FinanceListViewProps = {
@@ -32,11 +32,13 @@ export type FinanceListViewProps = {
   searchTerm: string;
   filterStatus: FinanceFilterStatus;
   filterPackage: string;
+  filterService: string;
   sortKey: FinanceSortKey;
   sortDir: FinanceSortDir;
   onSearchTermChange: (value: string) => void;
   onFilterStatusChange: (value: FinanceFilterStatus) => void;
   onFilterPackageChange: (value: string) => void;
+  onFilterServiceChange: (value: string) => void;
   onSortChange: (key: FinanceSortKey) => void;
   onClearFilters: () => void;
 
@@ -69,12 +71,12 @@ export function FinanceListView({
   sortedPassengers, filteredPassengers, pricing, totalsByPassenger, summary, getPassengerGroup,
   canManage,
   loading, refreshing, lastUpdated, loadError,
-  searchTerm, filterStatus, filterPackage, sortKey, sortDir,
-  onSearchTermChange, onFilterStatusChange, onFilterPackageChange, onSortChange, onClearFilters,
+  searchTerm, filterStatus, filterPackage, filterService, sortKey, sortDir,
+  onSearchTermChange, onFilterStatusChange, onFilterPackageChange, onFilterServiceChange, onSortChange, onClearFilters,
   onRefresh, onOpenReports, onOpenSettings, onSelectPassenger, onSelectGroup,
   thStyle, tdStyle,
 }: FinanceListViewProps) {
-  const filtersOn = !!searchTerm || filterStatus !== "all" || filterPackage !== "all";
+  const filtersOn = !!searchTerm || filterStatus !== "all" || filterPackage !== "all" || filterService !== "all";
   const cards = [
     { label:"إجمالي المطلوب", value:fmtAmt(summary.due),     color:"var(--text)",    unit:"ر.ق" },
     { label:"إجمالي المحصل",  value:fmtAmt(summary.paid),    color:"var(--success)", unit:"ر.ق" },
@@ -126,6 +128,13 @@ export function FinanceListView({
         <select value={filterPackage} onChange={e=>onFilterPackageChange(e.target.value)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:130 }}>
           <option value="all">كل الباقات</option>
           {PRICING_KEYS.filter(k=>k.type==="package").map(pk=><option key={pk.key} value={pk.key}>{pk.label}</option>)}
+          {/* الإقامة «خاص» سعرُها يدويّ فلا مفتاحَ باقةٍ لها — وتُفرَز بقيمتها الخاصّة */}
+          <option value={SPECIAL_PACKAGE_VALUE}>{SPECIAL_PACKAGE_LABEL}</option>
+        </select>
+        {/* محدّدٌ واحد للخدمات المطلوبة — مفاتيحُ التسعير نفسها وتسميتُها الحيّة */}
+        <select value={filterService} onChange={e=>onFilterServiceChange(e.target.value)} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, minWidth:150 }}>
+          <option value="all">كل الخدمات</option>
+          {SERVICE_FILTERS.map(f=><option key={f.key} value={f.key}>{serviceLabel(f.key, pricing)}</option>)}
         </select>
         {filtersOn&&<button onClick={()=>onClearFilters()} style={{ padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer", color:"var(--danger)", whiteSpace:"nowrap" }}>✕ مسح</button>}
       </div>

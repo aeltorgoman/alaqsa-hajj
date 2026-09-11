@@ -185,11 +185,30 @@ export function PassengerFinanceView({
                 <td style={{ ...tdStyle, textAlign:"center" }}>{canManage && <button onClick={e=>{e.stopPropagation();onDeletePayment(py.id);}} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--danger)", fontSize:14 }}>✕</button>}</td>
               </tr>
             ))}
-            <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}>
-              <td style={{ padding:"10px 12px" }}>الرصيد المتبقي</td>
-              <td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totalDue)}</td>
-              <td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(totalPaid)}</td>
-              <td style={{ padding:"10px 12px" }}></td>
+            {/* تسلسلٌ محاسبيّ صريح: مجموعُ المدين، ثم مجموعُ الدائن، ثم
+                الرصيد نتيجةً بعدهما — لا عنوانُ «الرصيد» على صفّ المجموعين.
+                والقيم هي القيم نفسها: `totalDue` و`totalPaid` و`balance`
+                كما حُسبت، بلا مصدرِ حسابٍ ثانٍ. */}
+            <tr style={{ background:"var(--bg-2)", fontWeight:700 }}>
+              <td style={{ ...tdStyle, fontWeight:700 }}>إجمالي المدين (المطلوب)</td>
+              <td style={{ ...tdStyle, textAlign:"center", color:"var(--danger)", fontWeight:800 }}>{fmtAmt(totalDue)}</td>
+              <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
+              <td style={tdStyle}></td>
+            </tr>
+            <tr style={{ background:"var(--bg-2)", fontWeight:700 }}>
+              <td style={{ ...tdStyle, fontWeight:700 }}>إجمالي الدائن (المدفوع)</td>
+              <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
+              <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:800 }}>{fmtAmt(totalPaid)}</td>
+              <td style={tdStyle}></td>
+            </tr>
+            <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:800 }}>
+              <td style={{ padding:"12px" }}>الرصيد المتبقي</td>
+              <td colSpan={2} style={{ padding:"12px", textAlign:"center", fontSize:15 }}>
+                {fmtAmt(Math.abs(balance))} ر.ق
+                {balance < 0 && <span style={{ fontSize:11, fontWeight:700, marginRight:8, opacity:.9 }}>(رصيد دائن للحاج)</span>}
+                {balance === 0 && <span style={{ fontSize:11, fontWeight:700, marginRight:8, opacity:.9 }}>(مسدد بالكامل)</span>}
+              </td>
+              <td style={{ padding:"12px" }}></td>
             </tr>
           </tbody>
         </table>
