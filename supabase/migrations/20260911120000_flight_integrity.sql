@@ -277,17 +277,22 @@ begin
     end if;
   end if;
 
-  -- ── الدرجة المحجوزة تطابق المدفوعة ─────────────────────────
-  -- تُفحَص على المُسنَد وحده: غير المُسنَد لا درجةَ محجوزةً له.
-  -- والقاعدة تُصحّح الفارغ ولا تسمح بمخالفةٍ صريحة — فلا اختيارَ
-  -- حرّاً للدرجة من أي واجهة.
+  -- ── الدرجة المحجوزة تتبع المدفوعة ──────────────────────────
+  -- `flight_class` ليست قراراً للموظّف: تُشتقّ من المدفوع كلّما وُجدت
+  -- ساق، وتُمحى إذا خلت الساقان — فلا تبقى حالةُ حجزٍ بلا حجز.
+  -- ويبقى المرفوض هو الكتابةُ الصريحة المخالفة وحدها؛ أما القيمةُ
+  -- الموروثة التي تقادمت بتغيُّر المدفوع فتُصحَّح ولا تُجمِّد الصفّ.
   if new.flight_id is not null or new.return_flight_id is not null then
-    if new.flight_class is null then
-      new.flight_class := v_want;
-    elsif new.flight_class <> v_want then
+    /* «صريحة» = قيمةٌ غير فارغةٍ جاءت في هذه الجملة نفسها: كلُّ
+       قيمةٍ في الإدراج، وفي التحديث ما خالف `old` وحده. */
+    if new.flight_class is not null and new.flight_class <> v_want
+       and (tg_op = 'INSERT' or new.flight_class is distinct from old.flight_class) then
       raise exception 'الدرجة المحجوزة «%» تخالف المدفوعة «%» — لا تُحجَز درجةٌ غير التي دُفعت.',
         new.flight_class, v_want using errcode = 'P0001';
     end if;
+    new.flight_class := v_want;
+  else
+    new.flight_class := null;
   end if;
 
   return new;
