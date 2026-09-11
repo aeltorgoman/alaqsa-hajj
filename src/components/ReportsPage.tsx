@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSeason } from "../season/useSeason";
-import { isHajj } from "../utils/passenger";
+import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
@@ -64,6 +64,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
      readOnly ولا تُعطَّل فيها طباعة ولا تصدير ولا بحث */
   const { viewedSeason } = useSeason();
   const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
+  /* ترتيب كشف طلب الحجز — ثلاثة أوضاع ولا رابع، ولا «حسب الرحلة» */
+  const [bookingSort, setBookingSort] = useState<"manual" | "alpha" | "gender">("manual");
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
   /* ── كشف طلب الحجز ──────────────────────────────────────────
@@ -76,10 +78,52 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
      في الدخول: المعيار هو من تطلب له الحملة تذكرة.
 
      الحاجّ يعبّر عن ذلك بخدمته، والإداري بـ`wants_flight`. */
-  const bookingList = useMemo(
+  const bookingPopulation = useMemo(
     () => passengers.filter(p => isHajj(p) ? p.services?.flight !== "بدون" : !!p.wants_flight),
     [passengers],
   );
+
+  /* ── ترتيب كشف طلب الحجز ────────────────────────────────────
+     ثلاثة أوضاع يختارها الموظّف، ولا رابع. ولا «ترتيب حسب الرحلة»:
+     الكشف يُرسَل قبل أن توجد الرحلات أصلاً.
+
+     «ترتيب الحجاج» وحده يضع الإداريين بعد الحجّاج، ويستعمل الترتيب
+     اليدويّ المعتمَد (`passengers.sort_order`) عبر
+     `orderHajjThenAdmins` — المصدر الوحيد، ولا ترتيبَ ثانٍ يُبتكر.
+
+     والوضعان الآخران يعاملان الحاجّ والإداريّ سواءً: لا يُدفع
+     الإداريّ إلى الذيل. */
+  const arCmp = (a: Passenger, b: Passenger) =>
+    (a.short_ar || a.name_ar || "").localeCompare(b.short_ar || b.name_ar || "", "ar") || a.id - b.id;
+
+  const bookingList = useMemo(() => {
+    if (bookingSort === "alpha") return [...bookingPopulation].sort(arCmp);
+    if (bookingSort === "gender") {
+      const males = bookingPopulation.filter(p => p.gender === "ذكر").sort(arCmp);
+      const females = bookingPopulation.filter(p => p.gender !== "ذكر").sort(arCmp);
+      return [...males, ...females];
+    }
+    return orderHajjThenAdmins(bookingPopulation);
+  }, [bookingPopulation, bookingSort]);
+
+  /* علامة المجموعة — رقمٌ خفيف يجمع أفراد الأسرة الواحدة ليفهم
+     موظّف شركة الطيران أن المتجاورين أسرة. لا يغيّر الترتيب، ولا
+     يُظهر `family_id` ولا يخترع صلةً (زوج/ابن) لا يحفظها النظام.
+     ويظهر في وضع «ترتيب الحجاج» وحده — حيث التجاور ذو معنى. */
+  const familyGroupNo = useMemo(() => {
+    const m = new Map<number, number>();
+    if (bookingSort !== "manual") return m;
+    const counts = new Map<string, number>();
+    bookingList.forEach(p => { if (p.family_id) counts.set(p.family_id, (counts.get(p.family_id) || 0) + 1); });
+    let n = 0;
+    const seen = new Map<string, number>();
+    bookingList.forEach(p => {
+      if (!p.family_id || (counts.get(p.family_id) || 0) < 2) return;
+      if (!seen.has(p.family_id)) seen.set(p.family_id, ++n);
+      m.set(p.id, seen.get(p.family_id)!);
+    });
+    return m;
+  }, [bookingList, bookingSort]);
   /* نزلاء الغرفة — كل من `room_id` يشير إليها. كان الكشف المطبوع
      يحذف الإداري من كرت غرفته، فيوزّع موظّف الفندق المفاتيح على
      أسماء ناقصة. والتقرير داخلي، فالتفصيل حاج/إداري مطلوب فيه. */
@@ -97,7 +141,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const bookingAdmins = bookingList.length - bookingPilgrims;
 
   // الحجاج المرتبطين برحلة معينة — ذهاب عبر flight_id، إياب عبر return_flight_id (مستقلين)
-  const passengersOfFlight = (flight: Flight) => passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id);
+  /* كشف الرحلة الواحدة: الترتيب اليدويّ المعتمَد للحجّاج ثم
+     الإداريون بعدهم — المصدر نفسه الذي تستعمله صفحة الرحلات
+     وطباعتها، فلا ترتيبَ ثانٍ ولا محدّد ترتيبٍ منفصل. */
+  const passengersOfFlight = (flight: Flight) =>
+    orderHajjThenAdmins(passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id));
   // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
   const flightNameFor = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || flights.find(f => f.id === p.return_flight_id)?.name || "—";
   const reportBranding = useReportBranding();
@@ -163,7 +211,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
 
   // تقرير الطيران — نوع التقرير الفرعي
   const [flightSubReport, setFlightSubReport] = useState<"airline" | "per_flight" | null>(null);
-  const [airlineSortKey, setAirlineSortKey] = useState<"default" | "name" | "gender">("default");
   const [docType, setDocType] = useState<"passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url">("passport_url");
   const [docSelected, setDocSelected] = useState<Record<string, Set<number>>>({});
   const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
@@ -331,30 +378,35 @@ const getReportAirlineLogo = (airline: string): string | null => {
      الحجز. والتفصيل حاج/إداري يسكن الشاشة الداخلية وحدها. */
   const getAirlineHTML = () => {
     const list = bookingList;
+    const grp = familyGroupNo.size > 0;
     const rows = list.map((p, i) => {
       const nat = natCode(p.nat);
       const gender = p.gender === "ذكر" ? "MR." : "MRS.";
       const cls = wantsFirstClass(p) ? "FIRST CLASS" : "";
-      return `<tr><td style="text-align:center">${i + 1}</td><td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
+      /* علامة المجموعة خفيفة وصالحة للطباعة: رقمٌ لا لون ولا صلة */
+      const g = grp ? `<td style="text-align:center;color:#666">${familyGroupNo.get(p.id) ?? ""}</td>` : "";
+      return `<tr><td style="text-align:center">${i + 1}</td>${g}<td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
     const first = list.filter(p => wantsFirstClass(p)).length;
     const summary = `<div dir="ltr" style="text-align:left;margin-bottom:8pt;font-size:10pt"><strong>Total Passengers:</strong> ${list.length} &nbsp;·&nbsp; <strong>First Class:</strong> ${first} &nbsp;·&nbsp; <strong>Economy:</strong> ${list.length - first}</div>`;
-    const body = `${summary}<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th><th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
+    const grpTh = grp ? `<th style="text-align:center;width:34px">GRP</th>` : "";
+    const body = `${summary}<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th>${grpTh}<th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
     return mkHTML("Flight Booking List", body, false);
   };
 
   const exportAirlineXLSX = () => {
     const list = bookingList;
-    const headers = ["S.N.", "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
+    const grp = familyGroupNo.size > 0;
+    const headers = ["S.N.", ...(grp ? ["GRP"] : []), "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
-      i + 1, p.name_en,
+      i + 1, ...(grp ? [familyGroupNo.get(p.id) ?? ""] : []), p.name_en,
       natCode(p.nat),
       p.passport, p.phone || "—",
       p.gender === "ذكر" ? "MR." : "MRS.",
       wantsFirstClass(p) ? "FIRST CLASS" : ""
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws["!cols"] = [{ wch: 5 }, { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
+    ws["!cols"] = [{ wch: 5 }, ...(grp ? [{ wch: 5 }] : []), { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Flight List");
@@ -1151,12 +1203,19 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       {/* خيارات الترتيب */}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                         <span style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)" }}>ترتيب حسب:</span>
-                        {([["default", "الإضافة"], ["name", "الاسم أبجدياً"], ["gender", "الجنس"]] as const).map(([val, lbl]) => (
-                          <button key={val} onClick={() => setAirlineSortKey(val)}
-                            style={{ padding: "4px 11px", borderRadius: 8, border: `1.5px solid ${airlineSortKey === val ? "var(--primary)" : "var(--line)"}`, background: airlineSortKey === val ? "var(--primary)" : "var(--paper)", color: airlineSortKey === val ? "#fff" : "var(--muted)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                        {/* ثلاثة أوضاع ولا رابع — ولا «حسب الرحلة»: الكشف
+                            يُرسَل قبل أن توجد الرحلات. والوضع يسري على
+                            المعاينة والطباعة والإكسل معاً، فلا تقول
+                            الشاشة ترتيباً ويقول المطبوع غيره. */}
+                        {([["manual", "ترتيب الحجاج"], ["alpha", "أبجدي"], ["gender", "رجال ثم نساء"]] as const).map(([val, lbl]) => (
+                          <button key={val} onClick={() => setBookingSort(val)}
+                            style={{ padding: "4px 11px", borderRadius: 8, border: `1.5px solid ${bookingSort === val ? "var(--primary)" : "var(--line)"}`, background: bookingSort === val ? "var(--primary)" : "var(--paper)", color: bookingSort === val ? "var(--text-inverse)" : "var(--muted)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
                             {lbl}
                           </button>
                         ))}
+                        {bookingSort === "manual" && familyGroupNo.size > 0 && (
+                          <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 700 }}>· عمود GRP يجمع أفراد الأسرة الواحدة</span>
+                        )}
                       </div>
                       {/* accordion الجدول */}
                       <div style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
@@ -1167,12 +1226,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{bookingList.length} مطلوب لهم حجز · {bookingPilgrims} حاج · {bookingAdmins} إداري · {expandedItems.has(-999) ? "▲" : "▼"}</span>
                         </div>
                         {expandedItems.has(-999) && (() => {
-                          const base = bookingList;
-                          const sorted = [...base].sort((a, b) => {
-                            if (airlineSortKey === "name") return (a.name_en || "").localeCompare(b.name_en || "");
-                            if (airlineSortKey === "gender") return (a.gender || "").localeCompare(b.gender || "");
-                            return 0;
-                          });
+                          /* `bookingList` مرتَّبةٌ بالوضع المختار أصلاً —
+                             فالمعاينة والمطبوع والإكسل ترتيبٌ واحد. */
+                          const sorted = bookingList;
                           const isAdmin = (p: any) => p.passenger_type && p.passenger_type !== "حاج";
                           return (
                         <div style={{ overflowX: "auto", direction: "ltr" }}>

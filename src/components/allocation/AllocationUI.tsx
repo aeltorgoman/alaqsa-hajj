@@ -216,7 +216,7 @@ export type PickerItem = { id: number; name: string; badges?: React.ReactNode; n
 
 export function PassengerPicker({
   title, search, onSearch, items, selected, onToggle, onToggleAll,
-  emptyText, countText, footer, drag, disabled,
+  emptyText, countText, footer, drag, disabled, onQuickAdd,
 }: {
   title: React.ReactNode;
   search: string;
@@ -230,6 +230,9 @@ export function PassengerPicker({
   footer?: React.ReactNode;      // زرّ الإضافة الجماعيّة — نصّه وقواعده من نطاقه
   drag?: { onDragStart: (id: number) => void; onDragEnd: () => void; draggingId: number | null };
   disabled?: boolean;
+  /* إضافةٌ مفردة بضغطةٍ واحدة — لا تحديدٌ ثم زرّ. اختياريّة: الصفحات
+     التي تسحب وتُفلت لا تحتاجها، والطيران يحتاجها (لا سحب فيه). */
+  onQuickAdd?: (id: number) => void;
 }) {
   const allOn = items.length > 0 && selected.size === items.length;
   return (
@@ -283,6 +286,13 @@ export function PassengerPicker({
                 </div>
                 {p.notice}
               </div>
+              {onQuickAdd && !disabled && (
+                <button onClick={e => { e.stopPropagation(); onQuickAdd(p.id); }}
+                  title="إضافة" aria-label={`إضافة ${p.name}`}
+                  style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "var(--success)", color: "var(--text-inverse)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+                  <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                </button>
+              )}
             </div>
           );
         })}

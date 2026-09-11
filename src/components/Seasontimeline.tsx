@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { isHajj } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { Passenger, Flight } from "../types";
-import { isMissingService, itemsLabel } from "../utils";
+import { itemsLabel } from "../utils";
 import { hasIssue, type IssueKey } from "../utils/readiness";
 import { useSeason } from "../season/useSeason";
 
@@ -38,7 +38,12 @@ function useSeasonPhases(passengers: Passenger[]) {
     const regPct = total ? Math.round(docsComplete / total * 100) : 0;
     const distributed = hajj.filter(p => p.bus_id != null || p.room_id != null).length;
     const distActive = distributed >= PHASE_THRESHOLD;
-    const fullyDist = hajj.filter(p => !isMissingService(p, "bus") && !isMissingService(p, "flight") && !isMissingService(p, "hotel_type") && !isMissingService(p, "camp_mina") && !isMissingService(p, "camp_arafa")).length;
+    /* «اكتمل توزيعه» يعني الخدمات الخمس كلّها — والطيران ساقان:
+       من حُجزت له رحلة الذهاب بلا عودة ليس مكتملاً. فالبندان
+       يُقرآن من `readiness` نفسها لا بشرطٍ مكتوبٍ باليد. */
+    const fullyDist = hajj.filter(p =>
+      !hasIssue("missing_bus", p) && !hasIssue("missing_flight", p) && !hasIssue("missing_return_flight", p)
+      && !hasIssue("missing_hotel", p) && !hasIssue("missing_mina", p) && !hasIssue("missing_arafah", p)).length;
     const distPct = total ? Math.round(fullyDist / total * 100) : 0;
     const permits = hajj.filter(p => p.hajj_permit_url).length;
     const tickets = hajj.filter(p => p.flight_ticket_url).length;
@@ -390,7 +395,10 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
       mk("missing_bus",    "حجاج بدون باص", `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`, 1, "buses"),
       mk("missing_mina",   "حجاج بدون مخيم منى", `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`, 1, "mina"),
       mk("missing_arafah", "حجاج بدون مخيم عرفة", `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`, 1, "arafa"),
-      mk("missing_flight", "حجاج بدون رحلة طيران", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 2, "flights"),
+      /* الطيران ساقان: الذهاب والعودة بندان منفصلان — ومن حُجز له
+         الذهاب بلا عودة كان يُعدّ مكتملاً. */
+      mk("missing_flight", "رحلة الذهاب غير موزعة", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 2, "flights"),
+      mk("missing_return_flight", "رحلة العودة غير موزعة", `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, 2, "flights"),
     ].filter((it): it is AlertItem => it !== null);
   }, [hajj, currentIdx]);
 

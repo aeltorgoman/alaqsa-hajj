@@ -16,7 +16,7 @@
 // شرطُ حاجٍّ واحد، فلا يُقاس بدالّة على صفٍّ واحد ويبقى في غرفة
 // العمليات وحدها.
 import type { Passenger } from "../types";
-import { isExpired, isExpiringSoon, isMissingService } from "./index";
+import { isExpired, isExpiringSoon, isMissingService, wantsService } from "./index";
 
 /** مفتاح النقص — هوية ثابتة تعبر بين الشاشات بدل النصّ المترجَم */
 export type IssueKey =
@@ -34,7 +34,8 @@ export type IssueKey =
   | "missing_bus"
   | "missing_mina"
   | "missing_arafah"
-  | "missing_flight";
+  | "missing_flight"
+  | "missing_return_flight";
 
 type Predicate = (p: Passenger) => boolean;
 
@@ -68,7 +69,13 @@ const RULES: Record<IssueKey, Predicate> = {
   missing_bus:       p => isMissingService(p, "bus"),
   missing_mina:      p => isMissingService(p, "camp_mina"),
   missing_arafah:    p => isMissingService(p, "camp_arafa"),
-  missing_flight:    p => isMissingService(p, "flight"),
+  /* الطيران ساقان لا ساقٌ واحدة. وكان `missing_flight` يسأل عن
+     `flight_id` وحده، فمن حُجزت له رحلة الذهاب بلا عودة يُعدّ
+     مكتملاً — وهو نصف محجوز. فصار البندان بندين منفصلين، كلٌّ
+     قابلٌ للعدّ والفتح والمعالجة وحده. و«بدون» مستثنى من كليهما
+     عبر `wantsService` نفسها. */
+  missing_flight:        p => isMissingService(p, "flight"),
+  missing_return_flight: p => wantsService(p, "flight") && p.return_flight_id == null,
 };
 
 /** هل ينطبق هذا النقص على هذا الحاجّ؟ — المصدر الوحيد للحكم */

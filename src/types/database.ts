@@ -462,6 +462,7 @@ export type Database = {
           airline: string | null
           arrival_date: string | null
           arrival_time: string | null
+          capacity: number | null
           created_at: string | null
           date: string | null
           from_airport: string | null
@@ -470,12 +471,13 @@ export type Database = {
           season_id: number
           time: string | null
           to_airport: string | null
-          type: string | null
+          type: string
         }
         Insert: {
           airline?: string | null
           arrival_date?: string | null
           arrival_time?: string | null
+          capacity?: number | null
           created_at?: string | null
           date?: string | null
           from_airport?: string | null
@@ -484,12 +486,13 @@ export type Database = {
           season_id?: number
           time?: string | null
           to_airport?: string | null
-          type?: string | null
+          type: string
         }
         Update: {
           airline?: string | null
           arrival_date?: string | null
           arrival_time?: string | null
+          capacity?: number | null
           created_at?: string | null
           date?: string | null
           from_airport?: string | null
@@ -498,7 +501,7 @@ export type Database = {
           season_id?: number
           time?: string | null
           to_airport?: string | null
-          type?: string | null
+          type?: string
         }
         Relationships: [
           {
@@ -720,6 +723,20 @@ export type Database = {
             columns: ["camp_mina_id"]
             isOneToOne: false
             referencedRelation: "camps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_return_flight_id_fkey"
+            columns: ["return_flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
             referencedColumns: ["id"]
           },
           {
