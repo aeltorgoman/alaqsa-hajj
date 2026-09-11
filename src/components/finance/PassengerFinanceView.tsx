@@ -4,8 +4,10 @@
 // ============================================================
 import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
-import type { PricingMap, Payment, CustomCharge, FinancialGroup } from "./finance.types";
-import { getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance.utils";
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, AllocTypeMaps } from "./finance.types";
+import { getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
+import { serviceContextRows } from "./finance.context";
+import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
 export type PassengerFinanceViewProps = {
   // بيانات الحاج
@@ -15,6 +17,8 @@ export type PassengerFinanceViewProps = {
   passengerCharges: CustomCharge[];
   group: FinancialGroup | null;
   groups: FinancialGroup[];
+  /* تصنيفُ الكيان المُسنَد (id → type) — للسياق وحده، لا يدخل أي حساب */
+  allocTypes: AllocTypeMaps;
 
   // الصلاحيات
   canManage: boolean;
@@ -52,7 +56,7 @@ export type PassengerFinanceViewProps = {
 };
 
 export function PassengerFinanceView({
-  passenger, pricing, passengerPayments, passengerCharges, group, groups,
+  passenger, pricing, passengerPayments, passengerCharges, group, groups, allocTypes,
   canManage,
   editingCustomPrice, customPriceInput, savingCustomPrice,
   onBack, onPrintStatement,
@@ -74,10 +78,15 @@ export function PassengerFinanceView({
   if (s.camp_mina==="خاص")  addonRows.push({label:"خيمة خاصة - منى",amount:pricing["addon_mina"]?.amount||0});
   if (s.camp_arafa==="خاص") addonRows.push({label:"خيمة خاصة - عرفة",amount:pricing["addon_arafa"]?.amount||0});
   if (s.bus==="VIP")         addonRows.push({label:"باص VIP",amount:pricing["addon_bus_vip"]?.amount||0});
-  if (passenger.flight_class==="درجة أولى") addonRows.push({label:"طيران درجة أولى",amount:pricing["addon_first_class"]?.amount||0});
-  if (passenger.flight_class==="بدون")      addonRows.push({label:"خصم بدون تذكرة",amount:pricing["discount_no_ticket"]?.amount||0,isDiscount:true});
+  /* الطيران من الخدمة المطلوبة/المدفوعة — لا من حالة الحجز التشغيليّة،
+     فالمبلغ لا يتحرّك بإسناد رحلةٍ ولا بإلغائه. */
+  const flightPaid = paidFlightService(passenger);
+  if (flightPaid==="درجة أولى") addonRows.push({label:"طيران درجة أولى",amount:pricing["addon_first_class"]?.amount||0});
+  if (flightPaid==="بدون")      addonRows.push({label:"خصم بدون تذكرة",amount:pricing["discount_no_ticket"]?.amount||0,isDiscount:true});
+  const contextRows = serviceContextRows(passenger, allocTypes);
   return (
     <div style={{ maxWidth:720, margin:"0 auto" }}>
+      <style>{FINANCE_RESPONSIVE_CSS}</style>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
         <button onClick={()=>onBack()} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
         <div>
@@ -87,7 +96,7 @@ export function PassengerFinanceView({
         <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span>
         <button onClick={()=>onPrintStatement()} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:5, fontFamily:"var(--font-body)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
+      <div className="fin-trio" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
         {[{label:"المطلوب",value:fmtAmt(totalDue),color:"var(--text)"},{label:"المدفوع",value:fmtAmt(totalPaid),color:"var(--success)"},{label:"المتبقي",value:fmtAmt(balance),color:balance>0?"var(--danger)":"var(--success)"}].map(card=>(
           <div key={card.label} style={{ background:"var(--bg-card)", borderRadius:12, padding:"14px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}>
             <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{card.label}</div>
@@ -98,6 +107,7 @@ export function PassengerFinanceView({
       </div>
       <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)", marginBottom:16 }}>
         <div style={{ background:"var(--em8)", color:"#fff", padding:"10px 16px", fontWeight:700, fontSize:14 }}>كشف الحساب</div>
+        <div className="fin-table-wrap">
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead>
             <tr style={{ background:"var(--bg-2)" }}>
@@ -134,11 +144,17 @@ export function PassengerFinanceView({
                     </button>
                   </div>
                 ) : (
-                  <span
-                    onClick={isSpecial && canManage ? () => onEditCustomPrice() : undefined}
-                    style={{ cursor: isSpecial && canManage ? "pointer" : "default", borderBottom: isSpecial && canManage ? "1px dashed var(--danger)" : "none" }}
-                  >
+                  /* أخطرُ حقلٍ في الصفحة لا يكون أخفى عنصرٍ فيها: زرُّ تعديلٍ
+                     صريحٌ بأيقونةٍ وتلميح بدل رقمٍ قابلٍ للضغط بحدٍّ منقّط */
+                  <span style={{ display:"inline-flex", alignItems:"center", gap:6, justifyContent:"center" }}>
                     {fmtAmt(pkgAmt)}
+                    {isSpecial && canManage && (
+                      <button onClick={() => onEditCustomPrice()} title="تعديل السعر الخاص" aria-label="تعديل السعر الخاص"
+                        style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"2px 8px", borderRadius:6, border:"1px solid var(--warning)", background:"var(--warning-bg)", color:"var(--warning)", fontFamily:"var(--font-body)", fontSize:10, fontWeight:700, cursor:"pointer" }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        تعديل
+                      </button>
+                    )}
                   </span>
                 )}
               </td>
@@ -177,15 +193,35 @@ export function PassengerFinanceView({
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
       {canManage && (
-        <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+        <div className="fin-actions" style={{ display:"flex", gap:10, marginBottom:16 }}>
         <button onClick={()=>onAddPayment()} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ تسجيل دفعة</button>
         <button onClick={()=>onAddCharge("إضافة")} style={{ flex:1, padding:10, background:"var(--warning)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ بند خاص</button>
         <button onClick={()=>onAddCharge("خصم")} style={{ flex:1, padding:10, background:"var(--danger)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>− خصم خاص</button>
       </div>
       )}
-      <div style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)" }}>
+      {contextRows.length > 0 && (
+        <div className="fin-pad" style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)", marginBottom:16 }}>
+          <div style={{ fontWeight:700, fontSize:13, color:"var(--text)", marginBottom:4 }}>الخدمة المطلوبة مقابل المُسنَد</div>
+          <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:10, lineHeight:1.8 }}>
+            للعلم فقط — الحساب على ما طُلب ودُفع، ولا يتغيّر بالإسناد الفعليّ.
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {contextRows.map(r => (
+              <div key={r.service} style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", fontSize:12, padding:"6px 10px", borderRadius:8, background: r.mismatch ? "var(--warning-bg)" : "var(--bg-2)" }}>
+                <span style={{ color:"var(--text-muted)", minWidth:72 }}>{r.service}</span>
+                <span style={{ fontWeight:700, color:"var(--text)" }}>{r.wanted}</span>
+                <span style={{ color:"var(--text-muted)" }}>←</span>
+                <span style={{ fontWeight:600, color: r.mismatch ? "var(--warning)" : "var(--text)" }}>{r.actual}</span>
+                {r.mismatch && <span style={{ marginRight:"auto", fontSize:10, padding:"1px 7px", borderRadius:99, background:"var(--warning)", color:"var(--text-inverse)", fontWeight:700 }}>تفاوت</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="fin-pad" style={{ background:"var(--bg-card)", borderRadius:12, padding:16, boxShadow:"var(--shadow-sm)" }}>
         <div style={{ fontWeight:700, fontSize:13, color:"var(--text)", marginBottom:12 }}>المجموعة المالية</div>
         {group ? (
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>

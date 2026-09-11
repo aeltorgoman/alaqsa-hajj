@@ -6,6 +6,7 @@ import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
 import type { PricingMap, Payment, CustomCharge, FinancialGroup, GroupPayForm } from "./finance.types";
 import { calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance.utils";
+import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
 export type FinancialGroupViewProps = {
   // بيانات المجموعة
@@ -66,6 +67,7 @@ export function FinancialGroupView({
   const gSt=financeStatus(gTotDue,gTotPaid);
   return (
     <div style={{ maxWidth:720, margin:"0 auto" }}>
+      <style>{FINANCE_RESPONSIVE_CSS}</style>
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
         <button onClick={() => onBack()} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
         <div>
@@ -75,7 +77,7 @@ export function FinancialGroupView({
         <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:gSt.bg, color:gSt.color, fontWeight:700 }}>{gSt.label}</span>
         {canManage && <button onClick={() => onDeleteGroup(group.id)} style={{ padding:"6px 12px", background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:8, fontSize:12, cursor:"pointer" }}>حذف المجموعة</button>}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
+      <div className="fin-trio" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
         {[{label:"إجمالي المطلوب",value:fmtAmt(gTotDue),color:"var(--text)"},{label:"إجمالي المدفوع",value:fmtAmt(gTotPaid),color:"var(--success)"},{label:"إجمالي المتبقي",value:fmtAmt(gTotBal),color:gTotBal>0?"var(--danger)":"var(--success)"}].map(card=>(
           <div key={card.label} style={{ background:"var(--bg-card)", borderRadius:12, padding:"14px 16px", textAlign:"center", boxShadow:"var(--shadow-sm)" }}>
             <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4 }}>{card.label}</div>
@@ -85,7 +87,7 @@ export function FinancialGroupView({
         ))}
       </div>
       {canManage && (
-      <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+      <div className="fin-actions" style={{ display:"flex", gap:10, marginBottom:16 }}>
         <button onClick={() => onOpenGroupPayModal()} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>+ دفعة مشتركة تُوزَّع على الأعضاء</button>
         <button onClick={() => onOpenAddMemberModal()} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>+ إضافة عضو</button>
       </div>
@@ -95,6 +97,7 @@ export function FinancialGroupView({
       </div>
       <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
         <div style={{ background:"var(--em8)", color:"#fff", padding:"10px 16px", fontWeight:700, fontSize:14 }}>أعضاء المجموعة</div>
+        <div className="fin-table-wrap">
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead><tr>
             <th style={thStyle}>الاسم</th>
@@ -118,6 +121,7 @@ export function FinancialGroupView({
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* مودال: إضافة عضو للمجموعة */}
