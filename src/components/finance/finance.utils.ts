@@ -2,7 +2,7 @@
 // دوال وثوابت الحسابات المالية (بدون React ولا JSX)
 // ============================================================
 import type { Passenger } from "../../types";
-import type { PricingMap, CustomCharge, Payment, ChargeSource, PaymentSource } from "./finance.types";
+import type { PricingMap, CustomCharge, Payment, ChargeSource, PaymentSource, FinanceTotals, FinanceSortKey, FinanceSortDir } from "./finance.types";
 
 export const PRICING_KEYS = [
   { key: "package_double",     label: "باقة ثنائي",        type: "package"  },
@@ -36,6 +36,19 @@ export function getPackageKey(hotel_type: string): string | null {
   return null;
 }
 
+/* الدرجة التجاريّة للطيران — **المصدر الوحيد للتسعير**.
+   `services.flight` هي الخدمة المطلوبة/المدفوعة: قرارٌ تجاريّ يتّخذه
+   الحاجّ عند التسجيل، ولا يكتبها أيّ مسارٍ تشغيليّ.
+   أمّا `passengers.flight_class` فحالةُ حجزٍ مشتقّة: تشتقّها القاعدة
+   من المدفوع عند وجود ساق، وتمحوها إذا خلت الساقان. فلا يُبنى عليها
+   سعرٌ أبداً — وإلّا تحرّك المال بفعلِ توزيعٍ لا علاقة له به. */
+export function paidFlightService(p: Passenger): "عادي" | "درجة أولى" | "بدون" {
+  const v = p.services?.flight;
+  if (v === "درجة أولى") return "درجة أولى";
+  if (v === "بدون")      return "بدون";
+  return "عادي";
+}
+
 // السعر يدوي لو الإقامة "خاص"، غير كده بياخد سعر الباقة الثابتة
 export function getPriceInfo(s: Passenger["services"], pricing: PricingMap): { label: string; amount: number; unpriced?: boolean } {
   if (s.hotel_type === "خاص") {
@@ -61,8 +74,9 @@ export function calcTotalDue(p: Passenger, pricing: PricingMap, custom: ChargeSo
   if (s.camp_mina === "خاص")  total += pricing["addon_mina"]?.amount    || 0;
   if (s.camp_arafa === "خاص") total += pricing["addon_arafa"]?.amount   || 0;
   if (s.bus === "VIP")         total += pricing["addon_bus_vip"]?.amount || 0;
-  if (p.flight_class === "درجة أولى") total += pricing["addon_first_class"]?.amount  || 0;
-  if (p.flight_class === "بدون")      total -= pricing["discount_no_ticket"]?.amount || 0;
+  const flightPaid = paidFlightService(p);
+  if (flightPaid === "درجة أولى") total += pricing["addon_first_class"]?.amount  || 0;
+  if (flightPaid === "بدون")      total -= pricing["discount_no_ticket"]?.amount || 0;
   chargesFor(p.id, custom).forEach(c => {
     if (c.type === "إضافة") total += c.amount; else total -= c.amount;
   });
@@ -83,4 +97,80 @@ export function financeStatus(due: number, paid: number) {
   if (paid >= due && due > 0) return { label: "مسدد",       color: "var(--success)",    bg: "var(--success-bg)" };
   if (paid > 0)               return { label: "جزئي",       color: "var(--warning)",    bg: "var(--warning-bg)" };
   return                             { label: "لم يدفع",    color: "var(--danger)",     bg: "var(--danger-bg)"  };
+}
+
+/* المطلوب والمدفوع والمتبقّي في مرورٍ واحد — فلا تُنادى `calcTotalDue`
+   أربع مرّاتٍ لكل صفّ في كل رسمة. الحساب نفسه لا يتغيّر: هي تستدعيه. */
+export function totalsFor(p: Passenger, pricing: PricingMap, charges: ChargeSource, payments: PaymentSource): FinanceTotals {
+  const due  = calcTotalDue(p, pricing, charges);
+  const paid = calcTotalPaid(p.id, payments);
+  return { due, paid, balance: due - paid };
+}
+
+/* البحث بالاسم والجواز والبطاقة والهاتف — بنهج صفحة الحجاج نفسه
+   (`PassengersPage` السطر ٥١٤-٥١٧)، فلا سلوكَ بحثٍ ثانٍ يتعلّمه الموظّف. */
+export function matchesFinanceSearch(p: Passenger, term: string): boolean {
+  const q = term.trim().toLowerCase();
+  if (!q) return true;
+  const name = `${p.name_ar ?? ""} ${p.name_en ?? ""} ${p.short_ar ?? ""} ${p.short_en ?? ""}`.toLowerCase();
+  const docs = `${p.passport ?? ""} ${p.national_id ?? ""} ${p.phone ?? ""}`.toLowerCase();
+  return name.includes(q) || docs.includes(q);
+}
+
+/* ترتيب صفوف القائمة — `manual` هو الترتيب المعتمَد كما وصل (sort_order
+   ثم id)، فلا يُعاد فرزه هنا بل يُعكَس عند الطلب. وبقيّة المفاتيح عرضٌ
+   لا تمسّ ترتيباً محفوظاً. و`id` يحسم التعادل فالنتيجة محدَّدة. */
+export function sortFinanceRows(
+  rows: Passenger[], totals: Map<number, FinanceTotals>, key: FinanceSortKey, dir: FinanceSortDir,
+): Passenger[] {
+  if (key === "manual") return dir === "asc" ? rows : [...rows].reverse();
+  const sign = dir === "asc" ? 1 : -1;
+  const amount = (p: Passenger) => {
+    const t = totals.get(p.id);
+    if (key === "due")  return t?.due  ?? 0;
+    if (key === "paid") return t?.paid ?? 0;
+    return t?.balance ?? 0;
+  };
+  return [...rows].sort((a, b) => key === "name"
+    ? sign * (a.short_ar || a.name_ar || "").localeCompare(b.short_ar || b.name_ar || "", "ar") || a.id - b.id
+    : sign * (amount(a) - amount(b)) || a.id - b.id);
+}
+
+/* ═══ الخدمات المطلوبة — مصدرٌ واحد للفلتر وللتقارير ═══
+   المفاتيح مفاتيحُ `pricing_settings` نفسها، والتسميةُ تُقرأ منها حيّةً
+   فلا تنحرف عن إعداد الشركة. والشروط هي شروطُ `calcTotalDue` حرفياً:
+   خدمةٌ مطلوبة (`services`) لا إسنادٌ فعليّ. */
+export const SERVICE_FILTERS: { key: string; check: (p: Passenger) => boolean }[] = [
+  { key: "addon_view",         check: p => p.services.hotel_view === "مطلة" },
+  { key: "addon_mina",         check: p => p.services.camp_mina  === "خاص"  },
+  { key: "addon_arafa",        check: p => p.services.camp_arafa === "خاص"  },
+  { key: "addon_bus_vip",      check: p => p.services.bus        === "VIP"  },
+  { key: "addon_first_class",  check: p => paidFlightService(p)  === "درجة أولى" },
+  { key: "discount_no_ticket", check: p => paidFlightService(p)  === "بدون" },
+];
+
+/** تسمية الخدمة كما في إعداد الشركة، وإلّا فالتسمية المعيارية. */
+export function serviceLabel(key: string, pricing: PricingMap): string {
+  return pricing[key]?.label || PRICING_KEYS.find(k => k.key === key)?.label || key;
+}
+
+export function matchesServiceFilter(p: Passenger, value: string): boolean {
+  if (value === "all") return true;
+  return SERVICE_FILTERS.find(f => f.key === value)?.check(p) ?? true;
+}
+
+/* الإقامة «خاص» ليست مفتاحَ باقةٍ في `pricing_settings` — سعرُها يدويّ
+   في `services.custom_price`، ولهذا تُرجِع `getPackageKey` لها `null`.
+   فلها قيمةُ فلترٍ خاصّةٌ بها لا مفتاحٌ مُختَرعٌ في القاعدة. */
+export const SPECIAL_PACKAGE_VALUE = "special";
+export const SPECIAL_PACKAGE_LABEL = "سعر خاص";
+
+export function isSpecialPackage(p: Passenger): boolean {
+  return p.services.hotel_type === "خاص";
+}
+
+export function matchesPackageFilter(p: Passenger, value: string): boolean {
+  if (value === "all") return true;
+  if (value === SPECIAL_PACKAGE_VALUE) return isSpecialPackage(p);
+  return getPackageKey(p.services.hotel_type) === value;
 }
