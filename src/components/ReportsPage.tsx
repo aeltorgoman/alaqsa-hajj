@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSeason } from "../season/useSeason";
 import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
+/* ═══ الكشوفُ المشتركة ═══
+   من في الباص والمخيّم والرحلة، وبأيّ ترتيب، وبأيّ عنوان — من المصدر
+   نفسه الذي تطبع منه صفحاتُ الإسناد. فالورقةُ واحدةٌ من أيّ باب طُبعت. */
+import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder, flightsInOrder } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
@@ -144,8 +148,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   /* كشف الرحلة الواحدة: الترتيب اليدويّ المعتمَد للحجّاج ثم
      الإداريون بعدهم — المصدر نفسه الذي تستعمله صفحة الرحلات
      وطباعتها، فلا ترتيبَ ثانٍ ولا محدّد ترتيبٍ منفصل. */
-  const passengersOfFlight = (flight: Flight) =>
-    orderHajjThenAdmins(passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id));
+  const passengersOfFlight = (flight: Flight) => flightPassengers(flight, passengers);
   // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
   const flightNameFor = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || flights.find(f => f.id === p.return_flight_id)?.name || "—";
   const reportBranding = useReportBranding();
@@ -299,9 +302,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       setLoading(true);
       const [{ data: b, error: eb }, { data: c, error: ec }, { data: r, error: er }, { data: f, error: ef }] = await Promise.all([
         supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
-        supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("created_at"),
+        /* المخيّماتُ بترتيبها المحفوظ (#113) لا بتسلسل إنشائها، والرحلاتُ
+           بالتاريخ ثم الوقت ثم المعرّف — كصفحتَيهما بالضبط. */
+        supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("sort_order", { nullsFirst: false }).order("id"),
         supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("number"),
-        supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date"),
+        supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date").order("time").order("id"),
       ]);
       /* الفشل يُبلَّغ عنه بدل عرض «لا يوجد باصات» على بيانات لم تصل أصلاً */
       setRefDataError(!!(eb || ec || er || ef) || !b || !c || !r || !f);
@@ -424,7 +429,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // تقرير الطيران — كل رحلة
   // ============================================================
   const getPerFlightHTML = () => {
-    const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
+    const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
     // نفس نداء صفحة تنظيم الطيران بالظبط
     if (selFlights.length === 1) {
       const flight = selFlights[0];
@@ -436,7 +441,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
   };
 
   const exportPerFlightXLSX = () => {
-    const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
+    const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
     const wb = XLSX.utils.book_new();
     selFlights.forEach(flight => {
       const fp = passengersOfFlight(flight);
@@ -464,28 +469,28 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الباصات
   // ============================================================
-  const getBusesHTML = () => {
-    const selBuses = buses.filter(b => selectedBusIds.has(b.id));
-    const sections = selBuses.map(bus => {
-      const bp = passengers.filter(p => p.bus_id === bus.id);
-      return makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
-    });
-    return mkHTML("تقرير الباصات", joinSections(sections), false, true);
+  const busSection = (bus: Bus) => {
+    const m = busManifest(bus, passengers);
+    return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج / الحاجة", primaryColor), branding);
   };
 
-  const getSingleBusHTML = (bus: any) => {
-    const bp = passengers.filter(p => p.bus_id === bus.id);
-    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
-    return mkHTML(`باص ${bus.name}`, section, false, true);
+  const getBusesHTML = () => {
+    const selBuses = buses.filter(b => selectedBusIds.has(b.id));
+    return mkHTML("تقرير الباصات", joinSections(selBuses.map(busSection)), false, true);
   };
+
+  const getSingleBusHTML = (bus: Bus) =>
+    mkHTML(`باص ${bus.name}`, busSection(bus), false, true);
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
     selBuses.forEach(bus => {
-      const bp = passengers.filter(p => p.bus_id === bus.id);
-      const title = `باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`;
+      /* الإكسلُ يقرأ الكشفَ المشترك كالمطبوع — لا ترتيبَ ثالثاً */
+      const m = busManifest(bus, passengers);
+      const bp = m.people;
+      const title = m.title;
       const aoa: (string | number | null)[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
       bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
       if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
@@ -500,12 +505,12 @@ const getReportAirlineLogo = (airline: string): string | null => {
       usedNames.add(n);
       XLSX.utils.book_append_sheet(wb, ws, n);
     });
-    const busRiders = passengers.filter(p => selBuses.some(b => b.id === p.bus_id));
+    const allRiders = selBuses.flatMap(b => busManifest(b, passengers).people);
     addSummarySheet(wb, XLSX, "تقرير الباصات", companyName, [
       ["إجمالي عدد الباصات", selBuses.length],
-      ["إجمالي عدد المسافرين", busRiders.length],
-      ...breakdownRows(busRiders),
-      ...selBuses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, passengers.filter(p => p.bus_id === b.id).length]),
+      ["إجمالي عدد المسافرين", allRiders.length],
+      ...breakdownRows(allRiders),
+      ...selBuses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, busManifest(b, passengers).people.length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الباصات.xlsx");
   };
@@ -513,32 +518,28 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير المخيمات (منى / عرفة)
   // ============================================================
-  const getCampsHTML = (pageType: "منى" | "عرفة") => {
-    const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
-    const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
-    const sections = pageCamps.map(camp => {
-      const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
-      const isMale = camp.gender === "ذكر";
-      return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
-    });
-    return mkHTML(`مخيمات ${pageType}`, joinSections(sections), false, true);
+  const campSection = (camp: Camp, pageType: "منى" | "عرفة") => {
+    const m = campManifest(camp, passengers, pageType);
+    return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج", primaryColor), branding);
   };
 
-  const getSingleCampHTML = (camp: any, cp: any[], pageType: string) => {
-    const isMale = camp.gender === "ذكر";
-    const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
-    return mkHTML(`مخيم ${pageType} ${camp.name}`, section, false, true);
+  const getCampsHTML = (pageType: "منى" | "عرفة") => {
+    const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
+    const pageCamps = campsInOrder(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)));
+    return mkHTML(`مخيمات ${pageType}`, joinSections(pageCamps.map(c => campSection(c, pageType))), false, true);
   };
+
+  const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
+    mkHTML(campManifest(camp, passengers, pageType).title, campSection(camp, pageType), false, true);
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
+    const pageCamps = campsInOrder(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)));
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
     pageCamps.forEach(camp => {
-      const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
+      const cp = campManifest(camp, passengers, pageType).people;
       const isMale = camp.gender === "ذكر";
       const half = Math.ceil(cp.length / 2);
       const col1 = cp.slice(0, half);
@@ -567,7 +568,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
       ["إجمالي عدد المخيمات", pageCamps.length],
       ["إجمالي عدد الأشخاص", campPeople.length],
       ...breakdownRows(campPeople),
-      ...pageCamps.map(c => [`${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})`, passengers.filter(p => (p as any)[campIdKey] === c.id).length]),
+      ...pageCamps.map(c => [`${c.name} (${campSubtitle(c)})`, campManifest(c, passengers, pageType).people.length]),
     ]);
     XLSX.writeFile(wb, `تقرير_مخيمات_${pageType}.xlsx`);
   };
@@ -1399,7 +1400,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   />
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
                     {buses.map((bus) => {
-                      const bp = passengers.filter(p => p.bus_id === bus.id);
+                      const bp = busManifest(bus, passengers).people;
                       const isOpen = expandedItems.has(bus.id);
                       const isVip = bus.type === "VIP";
                       const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
@@ -1437,7 +1438,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   </div>
                   {/* التفاصيل تحت صف الكروت */}
                   {buses.filter(bus => expandedItems.has(bus.id) && selectedBusIds.has(bus.id)).map(bus => {
-                    const bp = passengers.filter(p => p.bus_id === bus.id);
+                    const bp = busManifest(bus, passengers).people;
                     const isVip = bus.type === "VIP";
                     const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
                     return (
@@ -1503,7 +1504,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1530,7 +1531,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1589,7 +1590,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1616,7 +1617,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>

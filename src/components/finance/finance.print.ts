@@ -2,89 +2,35 @@
 // إنشاء صفحات HTML والطباعة للحسابات (بدون React ولا JSX)
 // ============================================================
 import type { Passenger } from "../../types";
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, PrintBrand, FinanceRow, CashflowByDate } from "./finance.types";
-import { esc, fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, isSpecialPackage, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, PRICING_KEYS } from "./finance.utils";
-import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../../company/safety";
-
-function safePrintBrand(brand: PrintBrand): PrintBrand {
-  return {
-    ...brand,
-    logoUrl: normalizeCompanyAssetUrl(brand.logoUrl) || "",
-    primaryColor: normalizeCompanyColor(brand.primaryColor, "#1D9E75"),
-    accentColor: normalizeCompanyColor(brand.accentColor, "#085041"),
-  };
-}
-
-export function printInPage(html: string) {
-  const existing = document.getElementById("__print_frame__");
-  if (existing) existing.remove();
-  const iframe = document.createElement("iframe");
-  iframe.id = "__print_frame__";
-  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;";
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!doc) return;
-  doc.open(); doc.write(html); doc.close();
-  setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 600);
-}
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate } from "./finance.types";
+import type { PrintBranding } from "../../print";
+import { fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, isSpecialPackage, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, PRICING_KEYS } from "./finance.utils";
+/* ═══ البنيةُ المشتركة للطباعة ═══
+   لا قشرةَ موازية بعد R1 ولا `printInPage` ثانية ولا تهريبَ ثانٍ ولا
+   تطبيعَ هويّةٍ ثانٍ. وهذا الملفّ صار **منتِجَ تقاريرَ ماليّة** يبني
+   أجساماً ويسلّمها للبنية المشتركة.
+   ⚠️ ولا حسابَ انتقل إلى هنا ولا تغيّر: `calcTotalDue` تبقى المصدرَ
+   الوحيد، وسلوكُ المالية V1 (#115) كما هو حرفاً. */
+import { esc, safeBranding, logoOrInitial, issuedStamp, pageRule,
+         COLOR_ADJUST_RULE_ALL, makeFinanceHTML, printInPage } from "../../print";
+export { makeFinanceHTML, printInPage };
 
 
-// ============================================================
-// HTML نظيف للتقارير المالية (بدون نقوش)
-// ============================================================
-export function makeFinanceHTML(
-  title: string, body: string, brand: PrintBrand
-): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
-  const timeStr = now.toLocaleTimeString("ar-EG", { hour:"2-digit", minute:"2-digit" });
-  const logoHtml = logoUrl ? `<img src="${esc(logoUrl)}" alt="logo" />` : `<span>${esc((companyName||"ح").trim().charAt(0))}</span>`;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<style>
-  @page { size: A4 portrait; margin: 10mm 12mm; }
-  * { box-sizing: border-box; }
-  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:10pt; color:#1c1c1c; background:#fff; }
-  .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:8pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:6pt; }
-  .logo-box { width:18mm; height:18mm; border-radius:3mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:14pt; font-weight:800; flex-shrink:0; }
-  .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company-name { font-size:13pt; font-weight:800; color:${primaryColor}; }
-  .tagline { font-size:8pt; color:#888; margin-top:2pt; }
-  .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:7pt; border-radius:5pt; font-size:13pt; font-weight:800; margin:8pt 0 10pt; }
-  table { width:100%; border-collapse:collapse; margin-bottom:10pt; }
-  th { background:${primaryColor}; color:#fff; padding:6pt 8pt; text-align:right; font-size:10pt; font-weight:700; }
-  td { border:0.5pt solid #e0e0e0; padding:5pt 8pt; text-align:right; font-size:10pt; }
-  tr:nth-child(even) td { background:#f9f7f4; }
-  .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
-  @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
-</style></head><body>
-<div class="doc-header">
-  <div style="display:flex;align-items:center;gap:12px">
-    <div class="logo-box">${logoHtml}</div>
-    <div><div class="company-name">${esc(companyName)}</div>${tagline?`<div class="tagline">${esc(tagline)}</div>`:""}</div>
-  </div>
-  <div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
-    <div>تاريخ الإصدار: ${dateStr}</div><div>الساعة: ${timeStr}</div>
-  </div>
-</div>
-<div class="doc-title-bar">${esc(title)}</div>
-${body}
-<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · ${esc(title)}</div>
-</body></html>`;
-}
+
+
 
 // ============================================================
 // HTML إيصال الدفعة
 // ============================================================
 export function makeReceiptHTML(
-  passengerName: string, payment: Payment, brand: PrintBrand
+  passengerName: string, payment: Payment, brand: PrintBranding
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
-  const logoHtml = logoUrl ? `<img src="${esc(logoUrl)}" alt="logo" />` : `<span>${esc((companyName||"ح").trim().charAt(0))}</span>`;
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
+  const logoHtml = logoOrInitial(logoUrl, companyName);
   const receiptNo = String(payment.id).padStart(5, "0");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>إيصال استلام دفعة</title>
 <style>
-  @page { size: A5 portrait; margin: 10mm; }
+  ${pageRule("10mm", false, "A5")}
   * { box-sizing: border-box; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; }
   .receipt { border:2px solid ${primaryColor}; border-radius:12px; overflow:hidden; }
@@ -107,7 +53,7 @@ export function makeReceiptHTML(
   .stamp-label { font-size:10px; color:#aaa; margin-bottom:6px; }
   .stamp-box { border:1px dashed #ccc; border-radius:8px; height:70px; display:flex; align-items:center; justify-content:center; }
   .receipt-no { text-align:center; font-size:10px; color:#bbb; margin-top:12px; }
-  @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+  ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
 <div class="receipt">
   <div class="receipt-header">
@@ -151,9 +97,9 @@ export function makeReceiptHTML(
 // كشف حساب الحاج الفردي - تصميم كبير للطباعة
 // ============================================================
 export function makePassengerStatementHTML(
-  p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], brand: PrintBrand
+  p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const s = p.services;
   const priceInfo = getPriceInfo(s, pricing);
   const pkgAmt = priceInfo.amount;
@@ -162,9 +108,8 @@ export function makePassengerStatementHTML(
   const totalDue  = calcTotalDue(p, pricing, customCharges);
   const totalPaid = calcTotalPaid(p.id, payments);
   const balance   = totalDue - totalPaid;
-  const logoHtml  = logoUrl ? `<img src="${esc(logoUrl)}" alt="logo" />` : `<span>${esc((companyName||"ح").trim().charAt(0))}</span>`;
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
+  const logoHtml  = logoOrInitial(logoUrl, companyName);
+  const { dateStr } = issuedStamp();
 
   /* الدرجة التجاريّة من الخدمة المطلوبة لا من حالة الحجز — نفس مصدر `calcTotalDue` */
   const flightPaid = paidFlightService(p);
@@ -183,7 +128,7 @@ export function makePassengerStatementHTML(
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب — ${esc(p.short_ar||p.name_ar)}</title>
 <style>
-  @page { size: A4 portrait; margin: 14mm 12mm; }
+  ${pageRule("14mm 12mm")}
   * { box-sizing: border-box; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:12pt; }
   .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:8pt; }
@@ -220,7 +165,7 @@ export function makePassengerStatementHTML(
   .total-row td { background:${primaryColor}; color:#fff; font-weight:800; font-size:12pt; padding:10pt 12pt; text-align:center; }
   .total-row td:first-child { text-align:right; }
   .footer { text-align:center; font-size:8pt; color:#bbb; margin-top:14pt; border-top:0.5pt solid #eee; padding-top:8pt; }
-  @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+  ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
 <div class="header">
   <div style="display:flex;align-items:center;gap:14px">
@@ -254,12 +199,11 @@ export function makePassengerStatementHTML(
 // ============================================================
 export function makeGroupStatementHTML(
   group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap,
-  customCharges: CustomCharge[], payments: Payment[], brand: PrintBrand
+  customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safePrintBrand(brand);
-  const logoHtml  = logoUrl ? `<img src="${esc(logoUrl)}" alt="logo" />` : `<span>${esc((companyName||"ح").trim().charAt(0))}</span>`;
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("ar-EG", { year:"numeric", month:"long", day:"numeric" });
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
+  const logoHtml  = logoOrInitial(logoUrl, companyName);
+  const { dateStr } = issuedStamp();
   const gTotDue  = gPassengers.reduce((s,p) => s+calcTotalDue(p,pricing,customCharges), 0);
   const gTotPaid = gPassengers.reduce((s,p) => s+calcTotalPaid(p.id,payments), 0);
   const gTotBal  = gTotDue - gTotPaid;
@@ -292,7 +236,7 @@ export function makeGroupStatementHTML(
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>كشف حساب مجموعة — ${esc(group.name)}</title>
 <style>
-  @page { size: A4 portrait; margin: 14mm 12mm; }
+  ${pageRule("14mm 12mm")}
   * { box-sizing: border-box; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; font-size:11pt; }
   .header { display:flex; align-items:center; justify-content:space-between; padding-bottom:10pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:8pt; }
@@ -305,7 +249,7 @@ export function makeGroupStatementHTML(
   .sum-val { font-size:18pt; font-weight:900; line-height:1; }
   .sum-cur { font-size:8pt; color:#888; margin-top:3pt; }
   .footer { text-align:center; font-size:8pt; color:#bbb; margin-top:14pt; border-top:0.5pt solid #eee; padding-top:8pt; }
-  @media print { * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; } }
+  ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
 <div class="header">
   <div style="display:flex;align-items:center;gap:14px">
@@ -339,8 +283,8 @@ export function printTable(headers: string[], rows: string[][], primaryColor: st
 }
 
 
-export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: PrintBrand, title = "تقرير الحجاج المالي الكامل") {
-  const { primaryColor } = safePrintBrand(brand);
+export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: PrintBranding, title = "تقرير الحجاج المالي الكامل") {
+  const { primaryColor } = safeBranding(brand);
   const tD=data.reduce((s,r)=>s+r.due,0), tP=data.reduce((s,r)=>s+r.paid,0), tB=tD-tP;
   const PER_PAGE = 30;
   const header = `<tr style="background:${primaryColor};color:#fff">
@@ -386,8 +330,8 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
 }
 
 
-export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBrand, from = "", to = "") {
-  const { primaryColor } = safePrintBrand(brand);
+export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBranding, from = "", to = "") {
+  const { primaryColor } = safeBranding(brand);
   const periodLine = `<div style="margin-bottom:10pt;font-size:11pt;color:#555">الفترة: من <b>${esc(from || "البداية")}</b> إلى <b>${esc(to || "اليوم")}</b> · عدد الدفعات: <b>${payments.length}</b></div>`;
   const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
   const total=payments.reduce((s,p)=>s+Number(p.amount),0);
@@ -446,8 +390,8 @@ export function printPaymentsReport(payments: Payment[], passengers: Passenger[]
   printInPage(makeFinanceHTML("سجل الدفعات التفصيلي", periodLine + pages.join("") + methodSummary, brand));
 }
 
-export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
-  const { primaryColor } = safePrintBrand(brand);
+export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding) {
+  const { primaryColor } = safeBranding(brand);
   const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
   const specialPassengers = passengers.filter(isSpecialPackage);
   if (specialPassengers.length>0) {
@@ -457,16 +401,16 @@ export function printPackagesReport(passengers: Passenger[], pricing: PricingMap
   printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor), brand));
 }
 
-export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBrand) {
-  const { primaryColor } = safePrintBrand(brand);
+export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding) {
+  const { primaryColor } = safeBranding(brand);
   /* المصدر المشترك نفسه الذي يغذّي فلترَ الخدمات والشاشة — لا قائمةٌ ثالثة */
   const checks=SERVICE_FILTERS;
   const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[esc(serviceLabel(a.key, pricing)),String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
   printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor), brand));
 }
-export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBrand }) {
+export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBranding }) {
   const { dates: cfDates, byDate: cfByDate, total: cfTotal, from: cashflowFrom, to: cashflowTo, brand } = params;
-  const { primaryColor } = safePrintBrand(brand);
+  const { primaryColor } = safeBranding(brand);
   const fromLabel = esc(cashflowFrom || "البداية");
   const toLabel   = esc(cashflowTo   || "اليوم");
   const rows = cfDates.map(d => {

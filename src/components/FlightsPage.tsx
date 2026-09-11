@@ -8,6 +8,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
+import { flightPassengers, flightsInOrder } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -143,7 +144,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   /* الترتيب المعتمَد للكشوف: الحجّاج بترتيبهم اليدويّ
      (`passengers.sort_order`) ثم الإداريون بترتيبهم. مصدرٌ واحد
      يستعمله العرض والطباعة — لا ترتيبَ ثانٍ للطيران. */
-  const onFlight = (f: Flight) => orderHajjThenAdmins(passengers.filter(p => p[legOf(f.type)] === f.id));
+  /* قائمةُ الرحلة من الكشف المشترك — `orderHajjThenAdmins` كما أُقرّ
+     في #114، والمصدرُ نفسه الذي تطبع منه صفحةُ التقارير. */
+  const onFlight = (f: Flight) => flightPassengers(f, passengers);
   const occOf = (f: Flight) => passengers.filter(p => p[legOf(f.type)] === f.id).length;
   const remainingOf = (f: Flight) => f.capacity == null ? null : Math.max(0, f.capacity - occOf(f));
 
@@ -378,7 +381,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const printFlight = (f: Flight) =>
     printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(f, onFlight(f), branding), branding));
   const printAll = () =>
-    printInPage(makeHTML("تقرير الرحلات", joinSections(flights.map(f => makeFlightSectionHTML(f, onFlight(f), branding))), branding, { noHeader: true }));
+    printInPage(makeHTML("تقرير الرحلات", joinSections(flightsInOrder(flights).map(f => makeFlightSectionHTML(f, onFlight(f), branding))), branding, { noHeader: true }));
 
   // ══════════════════════════════════════════════════════════
   const dirBadge = (type: string, light?: boolean) => (
