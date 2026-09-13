@@ -118,6 +118,12 @@ export function makeFinanceHTML(
   th { background:${primaryColor}; color:#fff; padding:6pt 8pt; text-align:right; font-size:10pt; font-weight:700; }
   td { border:0.5pt solid #e0e0e0; padding:5pt 8pt; text-align:right; font-size:10pt; }
   tr:nth-child(even) td { background:#f9f7f4; }
+  /* صفُّ الإجمالي: الخلفيّةُ على الخليّة لا على الصفّ.
+     خلفيّةُ الخليّة تُرسَم فوق خلفيّة الصفّ، وقاعدةُ الصفوف الزوجيّة
+     أعلى تخصيصاً من نمطٍ مكتوبٍ على الصفّ — فكان صفُّ الإجمالي يقع
+     في موضعٍ زوجيّ فيُلوَّن فاتحاً ويبقى نصُّه أبيض: تباينٌ ١٫٠٧،
+     أي أبيضُ على أبيض. موجودٌ في HTML وغيرُ مرئيّ على الورق. */
+  tr.tot-row td { background: ${primaryColor} !important; color: #fff; font-weight: 700; }
   .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
   ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>

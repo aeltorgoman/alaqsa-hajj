@@ -8,12 +8,12 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
          busesReportDocument, busReportDocument,
          campsReportDocument, campReportDocument,
          flightReportDocument, flightsReportDocument,
-         docFileKind, docPrintBody } from "../print";
+         docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl } from "../utils";
+import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -221,6 +221,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [docType, setDocType] = useState<"passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url">("passport_url");
   const [docSelected, setDocSelected] = useState<Record<string, Set<number>>>({});
   const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
+  /* تصييرُ الـPDF يأخذ وقتاً — والزرُّ يقول ذلك بدل أن يبدو معطَّلاً */
+  const [docPreparing, setDocPreparing] = useState(false);
   const [docPersonFilter, setDocPersonFilter] = useState<"all" | "hajj" | "admin">("all");
 
   /* ─── مطبوعات الشنط ─── */
@@ -892,36 +894,69 @@ const getReportAirlineLogo = (airline: string): string | null => {
      تظهر صورة. والمسارُ الوحيد للقراءة رابطٌ موقَّعٌ قصير العمر
      (`signedDocUrl` بـ`DOC_TTL.view` = خمس دقائق) — وهو ما تستعمله
      شاشاتُ العرض أصلاً. فلا حاويةَ تُفتح، ولا رابطَ دائمٌ يُكشَف. */
+  /* ⚠️ مسارُ المستندات — بابٌ واحدٌ لكلّ نوع:
+       الصورة → رابطٌ موقَّعٌ مباشرةً في `<img>`
+       الـPDF  → بايتاتُه تُقرأ بالبوّابات الثلاث، ثم تُصيَّر صفحاتُه
+                 صوراً بـpdf.js، فتدخل المطبوع كأيّ صورة
+     فصفحاتُ التصريح تُطبَع مع الباقي في ورقةٍ واحدة، ولا يُطلَب من
+     الموظّف أن يطبعها من نافذةٍ أخرى. والمستندُ متعدّدُ الصفحات
+     يأخذ بطاقةً لكل صفحة، مرقَّمةً.
+     والأمنُ كما هو: توقيعٌ قصير العمر، والتصييرُ في متصفّح الموظّف. */
   const printDocuments = async () => {
     const toPrint = docList.filter(p => docSelectedIds.has(p.id));
     if (!toPrint.length) { showAlert("warning", "يرجى تحديد حاج واحد على الأقل"); return; }
-    const signed = await Promise.all(
-      toPrint.map(p => signedDocUrl((p as unknown as Record<string, string>)[docType], DOC_TTL.view)),
-    );
-    const urlOf = new Map(toPrint.map((p, i) => [p.id, signed[i]]));
-    /* نوعُ كلّ مستندٍ من مفتاحه: التصريح في الإنتاج PDF والجواز JPG،
-       و`<img>` لا يعرض PDF — فلكلٍّ عنصرُه. */
-    const kindOf = new Map(toPrint.map(p => [p.id, docFileKind((p as unknown as Record<string, string>)[docType])]));
-    const missing = toPrint.filter(p => !urlOf.get(p.id)).length;
-    const pdfCount = toPrint.filter(p => urlOf.get(p.id) && kindOf.get(p.id) === "pdf").length;
-    if (missing === toPrint.length) { showAlert("error", "تعذّر تجهيز المستندات للطباعة — تحقّق من رفعها ثم أعد المحاولة"); return; }
-    if (missing > 0) showAlert("warning", `${missing} من المحدَّدين لا مستندَ لهم من هذا النوع — طُبع الباقي`);
-    else if (pdfCount > 0) showAlert("warning", `${pdfCount} من المستندات ملفّات PDF لا صور — تُعرَض بعارض المتصفّح، وقد تحتاج طباعتها من نافذتها`);
+
+    setDocPreparing(true);
+    /* مصيِّرُ الـPDF يُحمَّل عند أوّل ملفٍّ يحتاجه، لا قبل ذلك */
+    let renderPdf: Awaited<ReturnType<typeof loadPdfPageRenderer>> | null = null;
+    type Card = { name: string; body: string };
+    const cards: Card[] = [];
+    let failed = 0;
+    try {
+      for (const p of toPrint) {
+        const value = (p as unknown as Record<string, string>)[docType];
+        const name = p.short_ar || p.name_ar;
+        const kind = docFileKind(value);
+        if (!value) { failed++; cards.push({ name, body: docFailedBody("لا مستند") }); continue; }
+        if (kind === "pdf") {
+          try {
+            if (!renderPdf) renderPdf = await loadPdfPageRenderer();
+            const bytes = await fetchDocumentBytes(value);
+            const pages = await renderPdf(bytes);
+            if (pages.length === 0) { failed++; cards.push({ name, body: docFailedBody() }); continue; }
+            pages.forEach((src, i) => cards.push({
+              name: pages.length > 1 ? `${name} (${i + 1}/${pages.length})` : name,
+              body: docImageBody(src),
+            }));
+          } catch { failed++; cards.push({ name, body: docFailedBody() }); }
+          continue;
+        }
+        const url = await signedDocUrl(value, DOC_TTL.view);
+        if (!url) { failed++; cards.push({ name, body: docFailedBody() }); continue; }
+        cards.push({ name, body: docImageBody(url) });
+      }
+    } finally {
+      setDocPreparing(false);
+    }
+
+    if (failed === toPrint.length) { showAlert("error", "تعذّر تجهيز المستندات للطباعة — تحقّق من رفعها ثم أعد المحاولة"); return; }
+    if (failed > 0) showAlert("warning", `${failed} من المحدَّدين تعذّر تجهيز مستندهم — طُبع الباقي`);
+
     const cols = docPerPage === 4 ? 2 : 1;
     const rows = docPerPage === 1 ? 1 : 2;
-    const pages: Passenger[][] = [];
-    for (let i = 0; i < toPrint.length; i += docPerPage) pages.push(toPrint.slice(i, i + docPerPage));
+    const pages: Card[][] = [];
+    for (let i = 0; i < cards.length; i += docPerPage) pages.push(cards.slice(i, i + docPerPage));
     const pagesHTML = pages.map(pg => `
       <div style="page-break-after:always;height:100vh;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:10px;padding:10px;box-sizing:border-box">
-        ${pg.map(p => `
+        ${pg.map(c => `
           <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
-            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}${kindOf.get(p.id) === "pdf" ? " (PDF)" : ""}</div>
+            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${c.name} — ${docTypeLabel}</div>
             <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
-              ${docPrintBody(urlOf.get(p.id) || "", kindOf.get(p.id) || "unknown")}
+              ${c.body}
             </div>
           </div>`).join("")}
       </div>`).join("");
-    /* الطباعةُ تنتظر وصولَ الصور — لا ساعةً ثابتة تسبقها */
+    /* كلُّ المحتوى صارَ صوراً — فانتظارُ الصور يغطّي الـPDF كذلك */
     printInPage(mkHTML(docTypeLabel, pagesHTML, false, true), { waitForImages: true });
   };
 
@@ -1827,7 +1862,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>طباعة المستندات</div>
                 {docList.length > 0 && (
-                  <button onClick={() => { void printDocuments(); }} style={printBtnStyle}>{printIcon} طباعة ({docSelectedIds.size})</button>
+                  <button onClick={() => { void printDocuments(); }} disabled={docPreparing} style={printBtnStyle}>{printIcon} {docPreparing ? "جارٍ التجهيز..." : `طباعة (${docSelectedIds.size})`}</button>
                 )}
               </div>
 

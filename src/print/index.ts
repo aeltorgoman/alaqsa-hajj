@@ -29,4 +29,13 @@ export { flightSection, flightReportDocument, flightsReportDocument,
          busSection, busReportDocument, busesReportDocument,
          campSection, campReportDocument, campsReportDocument } from "./print.reports";
 export type { DocKind } from "./print.docs";
-export { docFileKind, docPrintBody } from "./print.docs";
+export { docFileKind, docImageBody, docFailedBody } from "./print.docs";
+export type { PdfRenderOptions } from "./print.pdf";
+/* ⚠️ pdf.js تُحمَّل عند الحاجة لا مع كلّ صفحة: المفسّرُ وعاملُه ثقيلان
+   (‏+٣٤٤ك على الحزمة الرئيسة إن استُوردا مباشرةً)، ولا يلزمان إلا حين
+   يُطبَع مستندُ PDF فعلاً. فالاستيرادُ ديناميكيّ، والحزمةُ الرئيسة
+   تبقى كما كانت. */
+export async function loadPdfPageRenderer() {
+  const mod = await import("./print.pdf");
+  return mod.renderPdfPagesToImages;
+}

@@ -7,9 +7,10 @@
    **JPG** — و`<img src="….pdf">` لا يعرض شيئاً في أيّ متصفّح.
    فالعطبُ أن الطباعة كانت تفترض أن كلّ مستندٍ صورة.
 
-   فُحص بمتصفّحٍ حقيقيّ على PDF صحيح:
-     `<img>`   → `naturalWidth = 0`  — لا يُعرض بحال
-     `<embed>` → عنصرٌ بارتفاعٍ كامل — يُعرض
+   والحلُّ ليس عنصرَ عرضٍ آخر يُحيل الموظّف إلى نافذةٍ ثانية، بل
+   **تصييرُ صفحات الـPDF صوراً قبل الطباعة** (`print.pdf.ts`) — فيدخل
+   التصريحُ المطبوعَ كأيّ صورة. ولهذا لم يبق هنا إلا نوعُ الملفّ
+   وجسمُ الصورة: بابٌ واحدٌ لكل مستند.
 
    والقرارُ هنا حدٌّ مشترك لا ترقيعٌ في موضع: نوعُ الملفّ يُعرَف من
    مفتاحه، وكلُّ منتِجِ مطبوعٍ يسأل هذه الدالّة. */
@@ -31,12 +32,13 @@ export function docFileKind(keyOrUrl: string | null | undefined): DocKind {
 
 /** جسمُ بطاقةِ مستندٍ واحد داخل شبكة الطباعة — بحسب نوعه.
  *  ⚠️ الرابطُ موقَّعٌ قصيرُ العمر يأتي من `signedDocUrl`؛ لا يُبنى هنا. */
-export function docPrintBody(signedUrl: string, kind: DocKind): string {
-  if (!signedUrl) return `<div style="color:#999;font-size:12px">لا مستند</div>`;
-  if (kind === "pdf") {
-    /* الـPDF لا يُحقَن في `<img>`. و`<embed>` يعرضه، وإخراجُه إلى
-       الورق يتبع عارضَ المتصفّح — ولهذا يُقال للموظّف إنه PDF. */
-    return `<embed src="${signedUrl}" type="application/pdf" style="width:100%;height:100%;min-height:0;border:0" />`;
-  }
-  return `<img src="${signedUrl}" style="max-width:100%;max-height:100%;object-fit:contain" />`;
+/** جسمُ بطاقةِ صورةٍ — سواءٌ صورةُ مستندٍ موقَّعة أو صفحةُ PDF مُصيَّرة. */
+export function docImageBody(src: string): string {
+  if (!src) return `<div style="color:#999;font-size:12px">لا مستند</div>`;
+  return `<img src="${src}" style="max-width:100%;max-height:100%;object-fit:contain" />`;
+}
+
+/** رسالةٌ صريحة حين يتعذّر تجهيز المستند — لا صندوقٌ فارغٌ صامت. */
+export function docFailedBody(reason = "تعذّر تجهيز المستند"): string {
+  return `<div style="color:#999;font-size:12px">${reason}</div>`;
 }
