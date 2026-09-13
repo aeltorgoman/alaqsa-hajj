@@ -7,8 +7,8 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
-import { busManifest, busRiders, BUSES_DOC_TITLE } from "../print";
+import { inp, btnP, btnS, printInPage } from "../utils";
+import { busRiders, busReportDocument, busesReportDocument } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -279,18 +279,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   // ══════════════════════════════════════════════════════════
   // الطباعة — بلا تغيير
   // ══════════════════════════════════════════════════════════
-  const busSection = (bus: Bus) => {
-    const m = busManifest(bus, passengers);
-    return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج / الحاجة", branding.primaryColor), branding);
-  };
-
-  /* عنوانُ المستند من الكشف نفسه — فالورقةُ الواحدة عنوانُها واحدٌ من
-     أيّ مدخلٍ طُبعت، وترويسةُ المتصفّح لا تقول قولين. */
-  const printBus = (bus: Bus) =>
-    printInPage(makeHTML(busManifest(bus, passengers).docTitle, busSection(bus), branding, { noHeader: true }));
-
-  const printAll = () =>
-    printInPage(makeHTML(BUSES_DOC_TITLE, joinSections(buses.map(busSection)), branding, { noHeader: true }));
+  const printBus = (bus: Bus) => printInPage(busReportDocument(bus, passengers, branding));
+  const printAll = () => printInPage(busesReportDocument(buses, passengers, branding));
 
   // ══════════════════════════════════════════════════════════
   const vipBadge = (light?: boolean) => (

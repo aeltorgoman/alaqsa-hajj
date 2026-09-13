@@ -25,3 +25,8 @@ export { busTitle, busRiders, busManifest,
          campIdKeyOf, campOrderKeyOf, campTitle, campSubtitle, campDwellers, campManifest,
          flightLegOf, flightPassengers, flightManifest,
          campsInOrder, flightsInOrder } from "./print.manifests";
+export { flightSection, flightReportDocument, flightsReportDocument,
+         busSection, busReportDocument, busesReportDocument,
+         campSection, campReportDocument, campsReportDocument } from "./print.reports";
+export type { DocKind } from "./print.docs";
+export { docFileKind, docPrintBody } from "./print.docs";

@@ -7,8 +7,8 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
-import { campManifest, campDwellers, campsInOrder, campsDocTitle } from "../print";
+import { inp, btnP, btnS, printInPage } from "../utils";
+import { campDwellers, campReportDocument, campsReportDocument } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -423,16 +423,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   };
 
   // ══════════════════════════════════════════════════════════
-  const campSection = (camp: Camp) => {
-    const m = campManifest(camp, passengers, pageType);
-    return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج", branding.primaryColor), branding);
-  };
-
-  const printCamp = (camp: Camp) =>
-    printInPage(makeHTML(campManifest(camp, passengers, pageType).docTitle, campSection(camp), branding, { noHeader: true }));
-
-  const printAll = () =>
-    printInPage(makeHTML(campsDocTitle(pageType), joinSections(campsInOrder(camps).map(campSection)), branding, { noHeader: true }));
+  const printCamp = (camp: Camp) => printInPage(campReportDocument(camp, passengers, pageType, branding));
+  const printAll = () => printInPage(campsReportDocument(camps, passengers, pageType, branding));
 
   const specialBadge = (light?: boolean) => (
     <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>خاص</span>

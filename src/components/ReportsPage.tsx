@@ -4,12 +4,16 @@ import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
 /* ═══ الكشوفُ المشتركة ═══
    من في الباص والمخيّم والرحلة، وبأيّ ترتيب، وبأيّ عنوان — من المصدر
    نفسه الذي تطبع منه صفحاتُ الإسناد. فالورقةُ واحدةٌ من أيّ باب طُبعت. */
-import { busManifest, campManifest, campSubtitle, flightManifest, flightPassengers, campsInOrder, flightsInOrder, BUSES_DOC_TITLE, campsDocTitle, FLIGHTS_DOC_TITLE } from "../print";
+import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder, flightsInOrder,
+         busesReportDocument, busReportDocument,
+         campsReportDocument, campReportDocument,
+         flightReportDocument, flightsReportDocument,
+         docFileKind, docPrintBody } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl } from "../utils";
+import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -428,17 +432,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الطيران — كل رحلة
   // ============================================================
-  const getPerFlightHTML = () => {
-    const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
-    // نفس نداء صفحة تنظيم الطيران بالظبط
-    if (selFlights.length === 1) {
-      const flight = selFlights[0];
-      const fp = passengersOfFlight(flight);
-      return makeHTML(flightManifest(flight, passengers).docTitle, makeFlightSectionHTML(flight, fp, branding), reportBranding);
-    }
-    const sections = selFlights.map(flight => makeFlightSectionHTML(flight, passengersOfFlight(flight), branding));
-    return makeHTML(FLIGHTS_DOC_TITLE, joinSections(sections), reportBranding);
-  };
+  const getPerFlightHTML = () =>
+    flightsReportDocument(flights.filter(f => selectedFlightIds.has(f.id)), passengers, branding);
 
   const exportPerFlightXLSX = () => {
     const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
@@ -469,18 +464,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الباصات
   // ============================================================
-  const busSection = (bus: Bus) => {
-    const m = busManifest(bus, passengers);
-    return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج / الحاجة", primaryColor), branding);
-  };
+  const getBusesHTML = () =>
+    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding);
 
-  const getBusesHTML = () => {
-    const selBuses = buses.filter(b => selectedBusIds.has(b.id));
-    return mkHTML(BUSES_DOC_TITLE, joinSections(selBuses.map(busSection)), false, true);
-  };
-
-  const getSingleBusHTML = (bus: Bus) =>
-    mkHTML(busManifest(bus, passengers).docTitle, busSection(bus), false, true);
+  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding);
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
@@ -518,19 +505,13 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير المخيمات (منى / عرفة)
   // ============================================================
-  const campSection = (camp: Camp, pageType: "منى" | "عرفة") => {
-    const m = campManifest(camp, passengers, pageType);
-    return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج", primaryColor), branding);
-  };
-
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    const pageCamps = campsInOrder(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)));
-    return mkHTML(campsDocTitle(pageType), joinSections(pageCamps.map(c => campSection(c, pageType))), false, true);
+    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding);
   };
 
   const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
-    mkHTML(campManifest(camp, passengers, pageType).docTitle, campSection(camp, pageType), false, true);
+    campReportDocument(camp, passengers, pageType, branding);
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
@@ -918,9 +899,14 @@ const getReportAirlineLogo = (airline: string): string | null => {
       toPrint.map(p => signedDocUrl((p as unknown as Record<string, string>)[docType], DOC_TTL.view)),
     );
     const urlOf = new Map(toPrint.map((p, i) => [p.id, signed[i]]));
+    /* نوعُ كلّ مستندٍ من مفتاحه: التصريح في الإنتاج PDF والجواز JPG،
+       و`<img>` لا يعرض PDF — فلكلٍّ عنصرُه. */
+    const kindOf = new Map(toPrint.map(p => [p.id, docFileKind((p as unknown as Record<string, string>)[docType])]));
     const missing = toPrint.filter(p => !urlOf.get(p.id)).length;
+    const pdfCount = toPrint.filter(p => urlOf.get(p.id) && kindOf.get(p.id) === "pdf").length;
     if (missing === toPrint.length) { showAlert("error", "تعذّر تجهيز المستندات للطباعة — تحقّق من رفعها ثم أعد المحاولة"); return; }
     if (missing > 0) showAlert("warning", `${missing} من المحدَّدين لا مستندَ لهم من هذا النوع — طُبع الباقي`);
+    else if (pdfCount > 0) showAlert("warning", `${pdfCount} من المستندات ملفّات PDF لا صور — تُعرَض بعارض المتصفّح، وقد تحتاج طباعتها من نافذتها`);
     const cols = docPerPage === 4 ? 2 : 1;
     const rows = docPerPage === 1 ? 1 : 2;
     const pages: Passenger[][] = [];
@@ -929,11 +915,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
       <div style="page-break-after:always;height:100vh;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:10px;padding:10px;box-sizing:border-box">
         ${pg.map(p => `
           <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
-            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}</div>
+            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}${kindOf.get(p.id) === "pdf" ? " (PDF)" : ""}</div>
             <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
-              ${urlOf.get(p.id)
-                ? `<img src="${urlOf.get(p.id)}" style="max-width:100%;max-height:100%;object-fit:contain" />`
-                : `<div style="color:#999;font-size:12px">لا مستند</div>`}
+              ${docPrintBody(urlOf.get(p.id) || "", kindOf.get(p.id) || "unknown")}
             </div>
           </div>`).join("")}
       </div>`).join("");
@@ -1329,7 +1313,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                                     {flight.date && <div style={{ fontSize: 10, opacity: .65 }}>{flight.date}{flight.time ? ` · ${flight.time}` : ""}</div>}
                                   </div>
                                   {/* أيقونة طباعة */}
-                                  <button onClick={e => { e.stopPropagation(); printInPage(mkHTML(`تقرير رحلة ${flight.name}`, makeTwoLogoSectionHTML(`رحلة ${flight.name} — ${flight.type}`, `${flight.airline} · ${flight.date}`, renderNamesTable(fp, "اسم الحاج / الحاجة", primaryColor), reportBranding), false, true)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <button onClick={e => { e.stopPropagation(); printInPage(flightReportDocument(flight, passengers, branding)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                                   </button>
                                 </div>

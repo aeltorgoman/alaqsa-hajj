@@ -7,8 +7,8 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
-import { flightPassengers, flightsInOrder, flightManifest, FLIGHTS_DOC_TITLE } from "../print";
+import { inp, btnP, btnS, printInPage } from "../utils";
+import { flightPassengers, flightReportDocument, flightsReportDocument } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -378,10 +378,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ══════════════════════════════════════════════════════════
   // الطباعة — بلا تغيير في المحتوى، والترتيب هو ترتيب الكشوف
   // ══════════════════════════════════════════════════════════
-  const printFlight = (f: Flight) =>
-    printInPage(makeHTML(flightManifest(f, passengers).docTitle, makeFlightSectionHTML(f, onFlight(f), branding), branding));
-  const printAll = () =>
-    printInPage(makeHTML(FLIGHTS_DOC_TITLE, joinSections(flightsInOrder(flights).map(f => makeFlightSectionHTML(f, onFlight(f), branding))), branding, { noHeader: true }));
+  /* المستندُ كلُّه من المصدر المشترك — هيئةً كما بياناتٍ، فلا تنفرد
+     صفحةٌ بعارضٍ دون أخرى. وهذه الهيئةُ هي المرجع ولم تتغيّر. */
+  const printFlight = (f: Flight) => printInPage(flightReportDocument(f, passengers, branding));
+  const printAll = () => printInPage(flightsReportDocument(flights, passengers, branding));
 
   // ══════════════════════════════════════════════════════════
   const dirBadge = (type: string, light?: boolean) => (
