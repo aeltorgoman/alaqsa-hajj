@@ -8,7 +8,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
-import { busManifest, busRiders } from "../print";
+import { busManifest, busRiders, BUSES_DOC_TITLE } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -284,11 +284,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     return makeTwoLogoSectionHTML(m.title, m.subtitle, renderNamesTable(m.people, "اسم الحاج / الحاجة", branding.primaryColor), branding);
   };
 
+  /* عنوانُ المستند من الكشف نفسه — فالورقةُ الواحدة عنوانُها واحدٌ من
+     أيّ مدخلٍ طُبعت، وترويسةُ المتصفّح لا تقول قولين. */
   const printBus = (bus: Bus) =>
-    printInPage(makeHTML("تقرير الباصات", busSection(bus), branding, { noHeader: true }));
+    printInPage(makeHTML(busManifest(bus, passengers).docTitle, busSection(bus), branding, { noHeader: true }));
 
   const printAll = () =>
-    printInPage(makeHTML("تقرير الباصات", joinSections(buses.map(busSection)), branding, { noHeader: true }));
+    printInPage(makeHTML(BUSES_DOC_TITLE, joinSections(buses.map(busSection)), branding, { noHeader: true }));
 
   // ══════════════════════════════════════════════════════════
   const vipBadge = (light?: boolean) => (

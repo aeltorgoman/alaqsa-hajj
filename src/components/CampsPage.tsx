@@ -8,7 +8,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
-import { campManifest, campDwellers, campsInOrder } from "../print";
+import { campManifest, campDwellers, campsInOrder, campsDocTitle } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -429,10 +429,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   };
 
   const printCamp = (camp: Camp) =>
-    printInPage(makeHTML(`مخيمات ${pageType}`, campSection(camp), branding, { noHeader: true }));
+    printInPage(makeHTML(campManifest(camp, passengers, pageType).docTitle, campSection(camp), branding, { noHeader: true }));
 
   const printAll = () =>
-    printInPage(makeHTML(`مخيمات ${pageType}`, joinSections(campsInOrder(camps).map(campSection)), branding, { noHeader: true }));
+    printInPage(makeHTML(campsDocTitle(pageType), joinSections(campsInOrder(camps).map(campSection)), branding, { noHeader: true }));
 
   const specialBadge = (light?: boolean) => (
     <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>خاص</span>

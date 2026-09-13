@@ -8,7 +8,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, makeHTML, printInPage, makeFlightSectionHTML, joinSections } from "../utils";
-import { flightPassengers, flightsInOrder } from "../print";
+import { flightPassengers, flightsInOrder, flightManifest, FLIGHTS_DOC_TITLE } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -379,9 +379,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // الطباعة — بلا تغيير في المحتوى، والترتيب هو ترتيب الكشوف
   // ══════════════════════════════════════════════════════════
   const printFlight = (f: Flight) =>
-    printInPage(makeHTML("تقرير الرحلة", makeFlightSectionHTML(f, onFlight(f), branding), branding));
+    printInPage(makeHTML(flightManifest(f, passengers).docTitle, makeFlightSectionHTML(f, onFlight(f), branding), branding));
   const printAll = () =>
-    printInPage(makeHTML("تقرير الرحلات", joinSections(flightsInOrder(flights).map(f => makeFlightSectionHTML(f, onFlight(f), branding))), branding, { noHeader: true }));
+    printInPage(makeHTML(FLIGHTS_DOC_TITLE, joinSections(flightsInOrder(flights).map(f => makeFlightSectionHTML(f, onFlight(f), branding))), branding, { noHeader: true }));
 
   // ══════════════════════════════════════════════════════════
   const dirBadge = (type: string, light?: boolean) => (

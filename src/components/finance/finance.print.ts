@@ -5,6 +5,21 @@ import type { Passenger } from "../../types";
 import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate } from "./finance.types";
 import type { PrintBranding } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, isSpecialPackage, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, PRICING_KEYS } from "./finance.utils";
+/* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
+   إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
+   القيمةُ ويرث النصُّ لونَ أبيه — وقد يكون أبيضَ على أبيض. فألوانُ
+   الأرقام في الطباعة قيمٌ صريحةٌ كبقيّة هذا الملفّ. */
+const PRINT_DANGER  = "#C0392B";
+const PRINT_SUCCESS = "#2A9D8F";
+const balanceColor = (balance: number) => (balance > 0 ? PRINT_DANGER : PRINT_SUCCESS);
+/* `financeStatus` تُرجِع ألوانَ السمة للشاشة — وهي المصدرُ نفسه للتسمية،
+   فلا حسابَ ثانٍ هنا: التسميةُ منها، واللونُ يُترجَم للطباعة. */
+const PRINT_STATUS_COLOR: Record<string, string> = {
+  "مسدد": PRINT_SUCCESS, "جزئي": "#D4A017", "لم يدفع": PRINT_DANGER,
+  "رصيد دائن": "#1565A8", "غير مسعّر": "#888888",
+};
+const printStatusColor = (label: string) => PRINT_STATUS_COLOR[label] || "#1c1c1c";
+
 /* ═══ البنيةُ المشتركة للطباعة ═══
    لا قشرةَ موازية بعد R1 ولا `printInPage` ثانية ولا تهريبَ ثانٍ ولا
    تطبيعَ هويّةٍ ثانٍ. وهذا الملفّ صار **منتِجَ تقاريرَ ماليّة** يبني
@@ -223,7 +238,7 @@ export function makeGroupStatementHTML(
         <div style="display:flex;gap:16px;font-size:13px">
           <span>مطلوب: <strong style="color:${primaryColor}">${fmtAmt(due)}</strong></span>
           <span>مدفوع: <strong style="color:#2A9D8F">${fmtAmt(paid)}</strong></span>
-          <span>متبقي: <strong style="color:${bal>0?"var(--danger)":"var(--success)"}">${fmtAmt(bal)}</strong></span>
+          <span>متبقي: <strong style="color:${balanceColor(bal)}">${fmtAmt(bal)}</strong></span>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
@@ -264,7 +279,7 @@ export function makeGroupStatementHTML(
 <div class="summary">
   <div class="sum-card" style="background:${primaryColor}08;border-color:${primaryColor}"><div class="sum-label">إجمالي المطلوب</div><div class="sum-val" style="color:${primaryColor}">${fmtAmt(gTotDue)}</div><div class="sum-cur">ر.ق</div></div>
   <div class="sum-card" style="background:#2A9D8F10;border-color:#2A9D8F"><div class="sum-label">إجمالي المدفوع</div><div class="sum-val" style="color:#2A9D8F">${fmtAmt(gTotPaid)}</div><div class="sum-cur">ر.ق</div></div>
-  <div class="sum-card" style="background:${gTotBal>0?"#C0392B10":"#2A9D8F10"};border-color:${gTotBal>0?"var(--danger)":"var(--success)"}"><div class="sum-label">إجمالي المتبقي</div><div class="sum-val" style="color:${gTotBal>0?"var(--danger)":"var(--success)"}">${fmtAmt(gTotBal)}</div><div class="sum-cur">ر.ق</div></div>
+  <div class="sum-card" style="background:${gTotBal>0?"#C0392B10":"#2A9D8F10"};border-color:${balanceColor(gTotBal)}"><div class="sum-label">إجمالي المتبقي</div><div class="sum-val" style="color:${balanceColor(gTotBal)}">${fmtAmt(gTotBal)}</div><div class="sum-cur">ر.ق</div></div>
   <div class="sum-card" style="background:#E8951A10;border-color:#E8951A"><div class="sum-label">عدد الأعضاء</div><div class="sum-val" style="color:#E8951A">${gPassengers.length}</div><div class="sum-cur">حاج</div></div>
 </div>
 ${memberRows}
@@ -312,8 +327,8 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
         <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${esc(getPriceInfo(r.p.services, pricing).label.replace("باقة ",""))}</td>
         <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
         <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
-        <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${r.balance>0?"var(--danger)":"var(--success)"};font-weight:700">${fmtAmt(r.balance)}</td>
-        <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:${st.color};font-weight:700">${st.label}</td>
+        <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${balanceColor(r.balance)};font-weight:700">${fmtAmt(r.balance)}</td>
+        <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:${printStatusColor(st.label)};font-weight:700">${st.label}</td>
       </tr>`;
     }).join("");
     const totRow = isLast ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
@@ -398,15 +413,27 @@ export function printPackagesReport(passengers: Passenger[], pricing: PricingMap
     const specialTotal = specialPassengers.reduce((s,p)=>s+(Number(p.services.custom_price)||0),0);
     rows.push([SPECIAL_PACKAGE_LABEL,String(specialPassengers.length),"—",`<strong>${fmtAmt(specialTotal)}</strong>`]);
   }
-  printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor), brand));
+  /* الإجماليُّ يُجمَع من الصفوف المعروضة نفسها — لا مسارَ حسابٍ ثانٍ،
+     ولا رقمَ في الورقة لا يُرى من أين جاء. */
+  const pkgCount = rows.reduce((n,r)=>n+Number(r[1]),0);
+  const pkgTotal = PRICING_KEYS.filter(k=>k.type==="package")
+      .reduce((sum,pk)=>sum+passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length*(pricing[pk.key]?.amount||0),0)
+    + specialPassengers.reduce((sum,p)=>sum+(Number(p.services.custom_price)||0),0);
+  printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor,
+    ["الإجمالي", String(pkgCount), "—", fmtAmt(pkgTotal)]), brand));
 }
 
 export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding) {
   const { primaryColor } = safeBranding(brand);
   /* المصدر المشترك نفسه الذي يغذّي فلترَ الخدمات والشاشة — لا قائمةٌ ثالثة */
   const checks=SERVICE_FILTERS;
-  const rows=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return[esc(serviceLabel(a.key, pricing)),String(count),fmtAmt(price),isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)];});
-  printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor), brand));
+  const amounts=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return{a,count,price,isDis,sum:count*price};});
+  const rows=amounts.map(({a,count,price,isDis,sum})=>[esc(serviceLabel(a.key, pricing)),String(count),fmtAmt(price),isDis?`(${fmtAmt(sum)})`:fmtAmt(sum)]);
+  /* صافي الإضافات: الإضافاتُ تُجمَع والخصمُ يُطرَح — كما في `calcTotalDue` */
+  const addonNet=amounts.reduce((n,x)=>n+(x.isDis?-x.sum:x.sum),0);
+  const addonCount=amounts.reduce((n,x)=>n+x.count,0);
+  printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor,
+    ["الصافي", String(addonCount), "—", fmtAmt(addonNet)]), brand));
 }
 export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBranding }) {
   const { dates: cfDates, byDate: cfByDate, total: cfTotal, from: cashflowFrom, to: cashflowTo, brand } = params;

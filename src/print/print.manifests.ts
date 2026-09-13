@@ -14,10 +14,17 @@
 import type { Passenger, Bus, Camp, Flight } from "../types";
 import { byOrder, orderHajjThenAdmins } from "../utils/passenger";
 
-/** كشفٌ واحدٌ جاهزٌ للطباعة: من فيه، وبأيّ ترتيب، وبأيّ عنوان. */
+/** كشفٌ واحدٌ جاهزٌ للطباعة: من فيه، وبأيّ ترتيب، وبأيّ عنوان.
+ *
+ *  و`docTitle` عنوانُ **المستند** لا عنوانُ القسم. والفرقُ بينهما ليس
+ *  تجميلاً: الكشوفُ التشغيليّة تُطبَع بـ`noHeader` فيسقط شريطُ العنوان
+ *  المنسَّق داخل الصفحة، ويبقى `<title>` وحده ظاهراً — في **ترويسة
+ *  المتصفّح** عند الطباعة، بخطّه هو لا بخطّ التقرير. فإن اختلف بين
+ *  مدخلين ظهرت الورقةُ نفسها بعنوانين مختلفَي الشكل. */
 export type Manifest = {
   title: string;
   subtitle: string;
+  docTitle: string;
   people: Passenger[];
 };
 
@@ -35,8 +42,13 @@ export function busRiders(bus: Bus, passengers: Passenger[]): Passenger[] {
 }
 
 export function busManifest(bus: Bus, passengers: Passenger[]): Manifest {
-  return { title: busTitle(bus), subtitle: "", people: busRiders(bus, passengers) };
+  return { title: busTitle(bus), subtitle: "", docTitle: busTitle(bus), people: busRiders(bus, passengers) };
 }
+
+/** عنوانُ مستندِ المطبوع الجامع — واحدٌ من أيّ مدخلٍ طُبع. */
+export const BUSES_DOC_TITLE = "تقرير الباصات";
+export const campsDocTitle = (pageType: CampPageType) => `مخيمات ${pageType}`;
+export const FLIGHTS_DOC_TITLE = "تقرير الرحلات";
 
 /* ═══ المخيّم (منى · عرفة) ═══ */
 export const campIdKeyOf = (pageType: CampPageType) =>
@@ -61,6 +73,7 @@ export function campManifest(camp: Camp, passengers: Passenger[], pageType: Camp
   return {
     title: campTitle(camp, pageType),
     subtitle: campSubtitle(camp),
+    docTitle: campTitle(camp, pageType),
     people: campDwellers(camp, passengers, pageType),
   };
 }
@@ -77,11 +90,8 @@ export function flightPassengers(flight: Flight, passengers: Passenger[]): Passe
 }
 
 export function flightManifest(flight: Flight, passengers: Passenger[]): Manifest {
-  return {
-    title: `${flight.name}${flight.type ? ` — ${flight.type}` : ""}`,
-    subtitle: "",
-    people: flightPassengers(flight, passengers),
-  };
+  const title = `${flight.name}${flight.type ? ` — ${flight.type}` : ""}`;
+  return { title, subtitle: "", docTitle: title, people: flightPassengers(flight, passengers) };
 }
 
 /* ═══ ترتيبُ الحاويات نفسها في المطبوع الجامع ═══

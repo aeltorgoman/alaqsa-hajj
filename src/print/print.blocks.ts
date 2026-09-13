@@ -101,7 +101,8 @@ export function joinSections(sections: string[]): string {
 }
 
 // قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)
-export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string; services?: { flight?: string } })[], b: PrintBranding): string {
+/* وقتُ الوصول من عمودَيه القائمَين في القاعدة — لا يُشتقّ ولا يُحسَب */
+export function makeFlightSectionHTML(flight: { name: string; type?: string; airline?: string; date?: string; time?: string; arrival_date?: string | null; arrival_time?: string | null; from_airport?: string; to_airport?: string }, fp: (NameItem & { nat?: string; passport?: string; phone?: string; gender?: string; flight_class?: string; services?: { flight?: string } })[], b: PrintBranding): string {
   const primaryColor = normalizeCompanyColor(b.primaryColor, "#1D9E75");
   const rows = fp.map((p, i) => {
     const wantsFirst = p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
@@ -112,10 +113,12 @@ export function makeFlightSectionHTML(flight: { name: string; type?: string; air
     <div style="font-size:20px;font-weight:700;color:${primaryColor};margin-bottom:10px">${flight.name}${flight.type ? ` — ${flight.type}` : ""}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
       <div><span style="color:#888">الخط:</span> ${flight.airline || "—"}</div>
-      <div><span style="color:#888">التاريخ:</span> ${flight.date || "—"}</div>
-      <div><span style="color:#888">الوقت:</span> ${flight.time || "—"}</div>
+      <div><span style="color:#888">تاريخ المغادرة:</span> ${flight.date || "—"}</div>
+      <div><span style="color:#888">وقت المغادرة:</span> ${flight.time || "—"}</div>
       <div><span style="color:#888">من:</span> ${flight.from_airport || "—"}</div>
       <div><span style="color:#888">إلى:</span> ${flight.to_airport || "—"}</div>
+      <div><span style="color:#888">تاريخ الوصول:</span> ${flight.arrival_date || "—"}</div>
+      <div><span style="color:#888">وقت الوصول:</span> ${flight.arrival_time || "—"}</div>
       <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
     </div>
   </div>

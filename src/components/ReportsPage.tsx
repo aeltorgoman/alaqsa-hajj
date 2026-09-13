@@ -4,12 +4,12 @@ import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
 /* ═══ الكشوفُ المشتركة ═══
    من في الباص والمخيّم والرحلة، وبأيّ ترتيب، وبأيّ عنوان — من المصدر
    نفسه الذي تطبع منه صفحاتُ الإسناد. فالورقةُ واحدةٌ من أيّ باب طُبعت. */
-import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder, flightsInOrder } from "../print";
+import { busManifest, campManifest, campSubtitle, flightManifest, flightPassengers, campsInOrder, flightsInOrder, BUSES_DOC_TITLE, campsDocTitle, FLIGHTS_DOC_TITLE } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL } from "../utils";
+import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -434,10 +434,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
     if (selFlights.length === 1) {
       const flight = selFlights[0];
       const fp = passengersOfFlight(flight);
-      return makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), reportBranding);
+      return makeHTML(flightManifest(flight, passengers).docTitle, makeFlightSectionHTML(flight, fp, branding), reportBranding);
     }
     const sections = selFlights.map(flight => makeFlightSectionHTML(flight, passengersOfFlight(flight), branding));
-    return makeHTML("تقرير الرحلات", joinSections(sections), reportBranding);
+    return makeHTML(FLIGHTS_DOC_TITLE, joinSections(sections), reportBranding);
   };
 
   const exportPerFlightXLSX = () => {
@@ -476,11 +476,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
 
   const getBusesHTML = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
-    return mkHTML("تقرير الباصات", joinSections(selBuses.map(busSection)), false, true);
+    return mkHTML(BUSES_DOC_TITLE, joinSections(selBuses.map(busSection)), false, true);
   };
 
   const getSingleBusHTML = (bus: Bus) =>
-    mkHTML(`باص ${bus.name}`, busSection(bus), false, true);
+    mkHTML(busManifest(bus, passengers).docTitle, busSection(bus), false, true);
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
@@ -526,11 +526,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
     const pageCamps = campsInOrder(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)));
-    return mkHTML(`مخيمات ${pageType}`, joinSections(pageCamps.map(c => campSection(c, pageType))), false, true);
+    return mkHTML(campsDocTitle(pageType), joinSections(pageCamps.map(c => campSection(c, pageType))), false, true);
   };
 
   const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
-    mkHTML(campManifest(camp, passengers, pageType).title, campSection(camp, pageType), false, true);
+    mkHTML(campManifest(camp, passengers, pageType).docTitle, campSection(camp, pageType), false, true);
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
@@ -906,9 +906,21 @@ const getReportAirlineLogo = (airline: string): string | null => {
     if (cur.has(id)) cur.delete(id); else cur.add(id);
     return { ...prev, [docType]: cur };
   });
-  const printDocuments = () => {
+  /* ⚠️ أعمدةُ المستندات تحمل **مفاتيحَ كائنات** لا روابط منذ خصخصةِ
+     الحاوية (س٦): `<img src="{المفتاح}">` يُفسَّر مساراً نسبياً فلا
+     تظهر صورة. والمسارُ الوحيد للقراءة رابطٌ موقَّعٌ قصير العمر
+     (`signedDocUrl` بـ`DOC_TTL.view` = خمس دقائق) — وهو ما تستعمله
+     شاشاتُ العرض أصلاً. فلا حاويةَ تُفتح، ولا رابطَ دائمٌ يُكشَف. */
+  const printDocuments = async () => {
     const toPrint = docList.filter(p => docSelectedIds.has(p.id));
     if (!toPrint.length) { showAlert("warning", "يرجى تحديد حاج واحد على الأقل"); return; }
+    const signed = await Promise.all(
+      toPrint.map(p => signedDocUrl((p as unknown as Record<string, string>)[docType], DOC_TTL.view)),
+    );
+    const urlOf = new Map(toPrint.map((p, i) => [p.id, signed[i]]));
+    const missing = toPrint.filter(p => !urlOf.get(p.id)).length;
+    if (missing === toPrint.length) { showAlert("error", "تعذّر تجهيز المستندات للطباعة — تحقّق من رفعها ثم أعد المحاولة"); return; }
+    if (missing > 0) showAlert("warning", `${missing} من المحدَّدين لا مستندَ لهم من هذا النوع — طُبع الباقي`);
     const cols = docPerPage === 4 ? 2 : 1;
     const rows = docPerPage === 1 ? 1 : 2;
     const pages: Passenger[][] = [];
@@ -919,11 +931,14 @@ const getReportAirlineLogo = (airline: string): string | null => {
           <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
             <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}</div>
             <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
-              <img src="${(p as any)[docType]}" style="max-width:100%;max-height:100%;object-fit:contain" />
+              ${urlOf.get(p.id)
+                ? `<img src="${urlOf.get(p.id)}" style="max-width:100%;max-height:100%;object-fit:contain" />`
+                : `<div style="color:#999;font-size:12px">لا مستند</div>`}
             </div>
           </div>`).join("")}
       </div>`).join("");
-    printInPage(mkHTML(docTypeLabel, pagesHTML, false, true));
+    /* الطباعةُ تنتظر وصولَ الصور — لا ساعةً ثابتة تسبقها */
+    printInPage(mkHTML(docTypeLabel, pagesHTML, false, true), { waitForImages: true });
   };
 
 
@@ -1828,7 +1843,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>طباعة المستندات</div>
                 {docList.length > 0 && (
-                  <button onClick={printDocuments} style={printBtnStyle}>{printIcon} طباعة ({docSelectedIds.size})</button>
+                  <button onClick={() => { void printDocuments(); }} style={printBtnStyle}>{printIcon} طباعة ({docSelectedIds.size})</button>
                 )}
               </div>
 
