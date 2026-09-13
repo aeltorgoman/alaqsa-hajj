@@ -17,15 +17,10 @@ export const PRICING_KEYS = [
   { key: "discount_no_ticket", label: "خصم بدون تذكرة",    type: "discount" },
 ];
 
-// تهريب الرموز الخاصة قبل إدراج القيم داخل صفحات الطباعة
-export function esc(value: unknown): string {
-  return String(value ?? "")
-    .split("&").join("&amp;")
-    .split("<").join("&lt;")
-    .split(">").join("&gt;")
-    .split('"').join("&quot;")
-    .split("'").join("&#039;");
-}
+/* تهريبُ الرموز الخاصّة — تطبيقٌ واحدٌ في النظام.
+   كان هنا تطبيقٌ ثانٍ بـ`split/join` يطابق المشتركَ حرفاً، فصار
+   إعادةَ تصديرٍ فلا تطبيقان يفترقان يوماً بإصلاحٍ في أحدهما. */
+export { esc } from "../../print";
 
 // يعيد null إذا كان نوع الإقامة غير معروف — لا يُفترض سعر تلقائياً
 export function getPackageKey(hotel_type: string): string | null {

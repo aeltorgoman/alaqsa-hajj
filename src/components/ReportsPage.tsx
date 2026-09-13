@@ -1,11 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSeason } from "../season/useSeason";
 import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
+/* ═══ الكشوفُ المشتركة ═══
+   من في الباص والمخيّم والرحلة، وبأيّ ترتيب، وبأيّ عنوان — من المصدر
+   نفسه الذي تطبع منه صفحاتُ الإسناد. فالورقةُ واحدةٌ من أيّ باب طُبعت. */
+import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder, flightsInOrder,
+         busesReportDocument, busReportDocument,
+         campsReportDocument, campReportDocument,
+         flightReportDocument, flightsReportDocument,
+         docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, makeFlightSectionHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, renderNamesTable, makeTwoLogoSectionHTML, joinSections, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL } from "../utils";
+import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 
 // ============================================================
@@ -144,8 +152,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   /* كشف الرحلة الواحدة: الترتيب اليدويّ المعتمَد للحجّاج ثم
      الإداريون بعدهم — المصدر نفسه الذي تستعمله صفحة الرحلات
      وطباعتها، فلا ترتيبَ ثانٍ ولا محدّد ترتيبٍ منفصل. */
-  const passengersOfFlight = (flight: Flight) =>
-    orderHajjThenAdmins(passengers.filter(p => (flight.type === "إياب" ? p.return_flight_id : p.flight_id) === flight.id));
+  const passengersOfFlight = (flight: Flight) => flightPassengers(flight, passengers);
   // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
   const flightNameFor = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || flights.find(f => f.id === p.return_flight_id)?.name || "—";
   const reportBranding = useReportBranding();
@@ -214,6 +221,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [docType, setDocType] = useState<"passport_url" | "national_id_url" | "hajj_permit_url" | "flight_ticket_url">("passport_url");
   const [docSelected, setDocSelected] = useState<Record<string, Set<number>>>({});
   const [docPerPage, setDocPerPage] = useState<1 | 2 | 4>(2);
+  /* تصييرُ الـPDF يأخذ وقتاً — والزرُّ يقول ذلك بدل أن يبدو معطَّلاً */
+  const [docPreparing, setDocPreparing] = useState(false);
   const [docPersonFilter, setDocPersonFilter] = useState<"all" | "hajj" | "admin">("all");
 
   /* ─── مطبوعات الشنط ─── */
@@ -299,9 +308,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
       setLoading(true);
       const [{ data: b, error: eb }, { data: c, error: ec }, { data: r, error: er }, { data: f, error: ef }] = await Promise.all([
         supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
-        supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("created_at"),
+        /* المخيّماتُ بترتيبها المحفوظ (#113) لا بتسلسل إنشائها، والرحلاتُ
+           بالتاريخ ثم الوقت ثم المعرّف — كصفحتَيهما بالضبط. */
+        supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("sort_order", { nullsFirst: false }).order("id"),
         supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("number"),
-        supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date"),
+        supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date").order("time").order("id"),
       ]);
       /* الفشل يُبلَّغ عنه بدل عرض «لا يوجد باصات» على بيانات لم تصل أصلاً */
       setRefDataError(!!(eb || ec || er || ef) || !b || !c || !r || !f);
@@ -423,20 +434,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الطيران — كل رحلة
   // ============================================================
-  const getPerFlightHTML = () => {
-    const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
-    // نفس نداء صفحة تنظيم الطيران بالظبط
-    if (selFlights.length === 1) {
-      const flight = selFlights[0];
-      const fp = passengersOfFlight(flight);
-      return makeHTML("تقرير الرحلة", makeFlightSectionHTML(flight, fp, branding), reportBranding);
-    }
-    const sections = selFlights.map(flight => makeFlightSectionHTML(flight, passengersOfFlight(flight), branding));
-    return makeHTML("تقرير الرحلات", joinSections(sections), reportBranding);
-  };
+  const getPerFlightHTML = () =>
+    flightsReportDocument(flights.filter(f => selectedFlightIds.has(f.id)), passengers, branding);
 
   const exportPerFlightXLSX = () => {
-    const selFlights = flights.filter(f => selectedFlightIds.has(f.id));
+    const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
     const wb = XLSX.utils.book_new();
     selFlights.forEach(flight => {
       const fp = passengersOfFlight(flight);
@@ -464,28 +466,20 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الباصات
   // ============================================================
-  const getBusesHTML = () => {
-    const selBuses = buses.filter(b => selectedBusIds.has(b.id));
-    const sections = selBuses.map(bus => {
-      const bp = passengers.filter(p => p.bus_id === bus.id);
-      return makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
-    });
-    return mkHTML("تقرير الباصات", joinSections(sections), false, true);
-  };
+  const getBusesHTML = () =>
+    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding);
 
-  const getSingleBusHTML = (bus: any) => {
-    const bp = passengers.filter(p => p.bus_id === bus.id);
-    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`, "", renderNamesTable(bp, "اسم الحاج / الحاجة", primaryColor), branding);
-    return mkHTML(`باص ${bus.name}`, section, false, true);
-  };
+  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding);
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
     selBuses.forEach(bus => {
-      const bp = passengers.filter(p => p.bus_id === bus.id);
-      const title = `باص ${bus.name}${bus.type === "VIP" ? " — VIP" : ""}`;
+      /* الإكسلُ يقرأ الكشفَ المشترك كالمطبوع — لا ترتيبَ ثالثاً */
+      const m = busManifest(bus, passengers);
+      const bp = m.people;
+      const title = m.title;
       const aoa: (string | number | null)[][] = [[title], ["م", "اسم الحاج / الحاجة", "الجنس", "الجنسية"]];
       bp.forEach((p, i) => aoa.push([i + 1, p.short_ar || p.name_ar, p.gender, p.nat]));
       if (bp.length === 0) aoa.push(["", "لا يوجد مسافرون", "", ""]);
@@ -500,12 +494,12 @@ const getReportAirlineLogo = (airline: string): string | null => {
       usedNames.add(n);
       XLSX.utils.book_append_sheet(wb, ws, n);
     });
-    const busRiders = passengers.filter(p => selBuses.some(b => b.id === p.bus_id));
+    const allRiders = selBuses.flatMap(b => busManifest(b, passengers).people);
     addSummarySheet(wb, XLSX, "تقرير الباصات", companyName, [
       ["إجمالي عدد الباصات", selBuses.length],
-      ["إجمالي عدد المسافرين", busRiders.length],
-      ...breakdownRows(busRiders),
-      ...selBuses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, passengers.filter(p => p.bus_id === b.id).length]),
+      ["إجمالي عدد المسافرين", allRiders.length],
+      ...breakdownRows(allRiders),
+      ...selBuses.map(b => [`${b.name}${b.type === "VIP" ? " (VIP)" : ""}`, busManifest(b, passengers).people.length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الباصات.xlsx");
   };
@@ -514,31 +508,21 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // تقرير المخيمات (منى / عرفة)
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
-    const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
-    const sections = pageCamps.map(camp => {
-      const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
-      const isMale = camp.gender === "ذكر";
-      return makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
-    });
-    return mkHTML(`مخيمات ${pageType}`, joinSections(sections), false, true);
+    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding);
   };
 
-  const getSingleCampHTML = (camp: any, cp: any[], pageType: string) => {
-    const isMale = camp.gender === "ذكر";
-    const section = makeTwoLogoSectionHTML(`مخيم ${pageType} ${camp.name}`, isMale ? "رجال" : "نساء", renderNamesTable(cp, "اسم الحاج", primaryColor), branding);
-    return mkHTML(`مخيم ${pageType} ${camp.name}`, section, false, true);
-  };
+  const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
+    campReportDocument(camp, passengers, pageType, branding);
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    const pageCamps = camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id));
+    const pageCamps = campsInOrder(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)));
     const wb = XLSX.utils.book_new();
     const usedNames = new Set<string>();
     pageCamps.forEach(camp => {
-      const cp = passengers.filter(p => (p as any)[campIdKey] === camp.id);
+      const cp = campManifest(camp, passengers, pageType).people;
       const isMale = camp.gender === "ذكر";
       const half = Math.ceil(cp.length / 2);
       const col1 = cp.slice(0, half);
@@ -567,7 +551,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
       ["إجمالي عدد المخيمات", pageCamps.length],
       ["إجمالي عدد الأشخاص", campPeople.length],
       ...breakdownRows(campPeople),
-      ...pageCamps.map(c => [`${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})`, passengers.filter(p => (p as any)[campIdKey] === c.id).length]),
+      ...pageCamps.map(c => [`${c.name} (${campSubtitle(c)})`, campManifest(c, passengers, pageType).people.length]),
     ]);
     XLSX.writeFile(wb, `تقرير_مخيمات_${pageType}.xlsx`);
   };
@@ -905,24 +889,75 @@ const getReportAirlineLogo = (airline: string): string | null => {
     if (cur.has(id)) cur.delete(id); else cur.add(id);
     return { ...prev, [docType]: cur };
   });
-  const printDocuments = () => {
+  /* ⚠️ أعمدةُ المستندات تحمل **مفاتيحَ كائنات** لا روابط منذ خصخصةِ
+     الحاوية (س٦): `<img src="{المفتاح}">` يُفسَّر مساراً نسبياً فلا
+     تظهر صورة. والمسارُ الوحيد للقراءة رابطٌ موقَّعٌ قصير العمر
+     (`signedDocUrl` بـ`DOC_TTL.view` = خمس دقائق) — وهو ما تستعمله
+     شاشاتُ العرض أصلاً. فلا حاويةَ تُفتح، ولا رابطَ دائمٌ يُكشَف. */
+  /* ⚠️ مسارُ المستندات — بابٌ واحدٌ لكلّ نوع:
+       الصورة → رابطٌ موقَّعٌ مباشرةً في `<img>`
+       الـPDF  → بايتاتُه تُقرأ بالبوّابات الثلاث، ثم تُصيَّر صفحاتُه
+                 صوراً بـpdf.js، فتدخل المطبوع كأيّ صورة
+     فصفحاتُ التصريح تُطبَع مع الباقي في ورقةٍ واحدة، ولا يُطلَب من
+     الموظّف أن يطبعها من نافذةٍ أخرى. والمستندُ متعدّدُ الصفحات
+     يأخذ بطاقةً لكل صفحة، مرقَّمةً.
+     والأمنُ كما هو: توقيعٌ قصير العمر، والتصييرُ في متصفّح الموظّف. */
+  const printDocuments = async () => {
     const toPrint = docList.filter(p => docSelectedIds.has(p.id));
     if (!toPrint.length) { showAlert("warning", "يرجى تحديد حاج واحد على الأقل"); return; }
+
+    setDocPreparing(true);
+    /* مصيِّرُ الـPDF يُحمَّل عند أوّل ملفٍّ يحتاجه، لا قبل ذلك */
+    let renderPdf: Awaited<ReturnType<typeof loadPdfPageRenderer>> | null = null;
+    type Card = { name: string; body: string };
+    const cards: Card[] = [];
+    let failed = 0;
+    try {
+      for (const p of toPrint) {
+        const value = (p as unknown as Record<string, string>)[docType];
+        const name = p.short_ar || p.name_ar;
+        const kind = docFileKind(value);
+        if (!value) { failed++; cards.push({ name, body: docFailedBody("لا مستند") }); continue; }
+        if (kind === "pdf") {
+          try {
+            if (!renderPdf) renderPdf = await loadPdfPageRenderer();
+            const bytes = await fetchDocumentBytes(value);
+            const pages = await renderPdf(bytes);
+            if (pages.length === 0) { failed++; cards.push({ name, body: docFailedBody() }); continue; }
+            pages.forEach((src, i) => cards.push({
+              name: pages.length > 1 ? `${name} (${i + 1}/${pages.length})` : name,
+              body: docImageBody(src),
+            }));
+          } catch { failed++; cards.push({ name, body: docFailedBody() }); }
+          continue;
+        }
+        const url = await signedDocUrl(value, DOC_TTL.view);
+        if (!url) { failed++; cards.push({ name, body: docFailedBody() }); continue; }
+        cards.push({ name, body: docImageBody(url) });
+      }
+    } finally {
+      setDocPreparing(false);
+    }
+
+    if (failed === toPrint.length) { showAlert("error", "تعذّر تجهيز المستندات للطباعة — تحقّق من رفعها ثم أعد المحاولة"); return; }
+    if (failed > 0) showAlert("warning", `${failed} من المحدَّدين تعذّر تجهيز مستندهم — طُبع الباقي`);
+
     const cols = docPerPage === 4 ? 2 : 1;
     const rows = docPerPage === 1 ? 1 : 2;
-    const pages: Passenger[][] = [];
-    for (let i = 0; i < toPrint.length; i += docPerPage) pages.push(toPrint.slice(i, i + docPerPage));
+    const pages: Card[][] = [];
+    for (let i = 0; i < cards.length; i += docPerPage) pages.push(cards.slice(i, i + docPerPage));
     const pagesHTML = pages.map(pg => `
       <div style="page-break-after:always;height:100vh;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:10px;padding:10px;box-sizing:border-box">
-        ${pg.map(p => `
+        ${pg.map(c => `
           <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
-            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${p.short_ar || p.name_ar} — ${docTypeLabel}</div>
+            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${c.name} — ${docTypeLabel}</div>
             <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
-              <img src="${(p as any)[docType]}" style="max-width:100%;max-height:100%;object-fit:contain" />
+              ${c.body}
             </div>
           </div>`).join("")}
       </div>`).join("");
-    printInPage(mkHTML(docTypeLabel, pagesHTML, false, true));
+    /* كلُّ المحتوى صارَ صوراً — فانتظارُ الصور يغطّي الـPDF كذلك */
+    printInPage(mkHTML(docTypeLabel, pagesHTML, false, true), { waitForImages: true });
   };
 
 
@@ -1313,7 +1348,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                                     {flight.date && <div style={{ fontSize: 10, opacity: .65 }}>{flight.date}{flight.time ? ` · ${flight.time}` : ""}</div>}
                                   </div>
                                   {/* أيقونة طباعة */}
-                                  <button onClick={e => { e.stopPropagation(); printInPage(mkHTML(`تقرير رحلة ${flight.name}`, makeTwoLogoSectionHTML(`رحلة ${flight.name} — ${flight.type}`, `${flight.airline} · ${flight.date}`, renderNamesTable(fp, "اسم الحاج / الحاجة", primaryColor), reportBranding), false, true)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <button onClick={e => { e.stopPropagation(); printInPage(flightReportDocument(flight, passengers, branding)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                                   </button>
                                 </div>
@@ -1399,7 +1434,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   />
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
                     {buses.map((bus) => {
-                      const bp = passengers.filter(p => p.bus_id === bus.id);
+                      const bp = busManifest(bus, passengers).people;
                       const isOpen = expandedItems.has(bus.id);
                       const isVip = bus.type === "VIP";
                       const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
@@ -1437,7 +1472,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   </div>
                   {/* التفاصيل تحت صف الكروت */}
                   {buses.filter(bus => expandedItems.has(bus.id) && selectedBusIds.has(bus.id)).map(bus => {
-                    const bp = passengers.filter(p => p.bus_id === bus.id);
+                    const bp = busManifest(bus, passengers).people;
                     const isVip = bus.type === "VIP";
                     const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
                     return (
@@ -1503,7 +1538,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1530,7 +1565,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1589,7 +1624,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1616,7 +1651,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, cp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1827,7 +1862,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>طباعة المستندات</div>
                 {docList.length > 0 && (
-                  <button onClick={printDocuments} style={printBtnStyle}>{printIcon} طباعة ({docSelectedIds.size})</button>
+                  <button onClick={() => { void printDocuments(); }} disabled={docPreparing} style={printBtnStyle}>{printIcon} {docPreparing ? "جارٍ التجهيز..." : `طباعة (${docSelectedIds.size})`}</button>
                 )}
               </div>
 

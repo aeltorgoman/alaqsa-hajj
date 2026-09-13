@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { isHajj, byOrder } from "../utils/passenger";
+import { isHajj } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Passenger, Bus } from "../types";
@@ -7,7 +7,8 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
-import { inp, btnP, btnS, makeHTML, printInPage, makeTwoLogoSectionHTML, joinSections, renderNamesTable } from "../utils";
+import { inp, btnP, btnS, printInPage } from "../utils";
+import { busRiders, busReportDocument, busesReportDocument } from "../print";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -97,7 +98,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     });
   }, [viewedSeason.id]);
 
-  const riders = (busId: number) => passengers.filter(p => p.bus_id === busId).sort(byOrder("bus_sort_order"));
+  /* الركّابُ والعنوانُ من الكشف المشترك — المصدرُ نفسه الذي تطبع منه
+     صفحةُ التقارير، فلا ترتيبان للركّاب أنفسهم. */
+  const riders = (busId: number) => busRiders({ id: busId } as Bus, passengers);
   const remainingOf = (bus: Bus) => Math.max(0, bus.capacity - riders(bus.id).length);
 
   const writes = useAllocationWrites({
@@ -276,16 +279,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   // ══════════════════════════════════════════════════════════
   // الطباعة — بلا تغيير
   // ══════════════════════════════════════════════════════════
-  const printBus = (bus: Bus) => {
-    const section = makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(riders(bus.id), "اسم الحاج / الحاجة", branding.primaryColor), branding);
-    printInPage(makeHTML("تقرير الباصات", section, branding, { noHeader: true }));
-  };
-
-  const printAll = () => {
-    const sections = buses.map(bus =>
-      makeTwoLogoSectionHTML(`باص ${bus.name}${bus.type === "VIP" ? " ⭐ VIP" : ""}`, "", renderNamesTable(riders(bus.id), "اسم الحاج / الحاجة", branding.primaryColor), branding));
-    printInPage(makeHTML("تقرير الباصات", joinSections(sections), branding, { noHeader: true }));
-  };
+  const printBus = (bus: Bus) => printInPage(busReportDocument(bus, passengers, branding));
+  const printAll = () => printInPage(busesReportDocument(buses, passengers, branding));
 
   // ══════════════════════════════════════════════════════════
   const vipBadge = (light?: boolean) => (
