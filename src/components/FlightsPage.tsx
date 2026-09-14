@@ -380,8 +380,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ══════════════════════════════════════════════════════════
   /* المستندُ كلُّه من المصدر المشترك — هيئةً كما بياناتٍ، فلا تنفرد
      صفحةٌ بعارضٍ دون أخرى. وهذه الهيئةُ هي المرجع ولم تتغيّر. */
-  const printFlight = (f: Flight) => printInPage(flightReportDocument(f, passengers, branding));
-  const printAll = () => printInPage(flightsReportDocument(flights, passengers, branding));
+  /* الجامعُ يستعيد ترويستَه؛ والهيئةُ الداخليّة وترتيبُها كما أُقرّت */
+  const printFlight = (f: Flight) => printInPage(flightReportDocument(f, passengers, branding, { season: viewedSeason }));
+  const printAll = () => printInPage(flightsReportDocument(flights, passengers, branding, { season: viewedSeason, pageNumbers: true }));
 
   // ══════════════════════════════════════════════════════════
   const dirBadge = (type: string, light?: boolean) => (

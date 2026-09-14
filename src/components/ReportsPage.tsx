@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSeason } from "../season/useSeason";
 import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
 /* ═══ الكشوفُ المشتركة ═══
@@ -8,13 +8,15 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
          busesReportDocument, busReportDocument,
          campsReportDocument, campReportDocument,
          flightReportDocument, flightsReportDocument,
-         docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer } from "../print";
+         docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer,
+         hotelReportDocument } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
-import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, ROOM_TYPES, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
+import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
+import { REPORTS_RESPONSIVE_CSS } from "./reports.responsive";
 
 // ============================================================
 // تحويل الجنسية لكود إنجليزي موحّد لتقرير خطوط الطيران
@@ -74,6 +76,8 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
   /* ترتيب كشف طلب الحجز — ثلاثة أوضاع ولا رابع، ولا «حسب الرحلة» */
   const [bookingSort, setBookingSort] = useState<"manual" | "alpha" | "gender">("manual");
+  /* عمودُ انتهاء الجواز — اختياريّ: تطلبه بعضُ الخطوط ولا تطلبه أخرى */
+  const [airlineShowExpiry, setAirlineShowExpiry] = useState(false);
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
   /* ── كشف طلب الحجز ──────────────────────────────────────────
@@ -189,12 +193,40 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [camps, setCamps] = useState<Camp[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refDataError, setRefDataError] = useState(false);
-  // رسالة موحّدة عند فشل الجلب — تفرّق بين «لا يوجد» و«لم نستطع القراءة»
-  const refErrorBox = (
-    <div style={{ textAlign: "center", padding: "2rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
-      تعذر تحميل البيانات — يرجى التحقق من الاتصال وتحديث الصفحة
+  /* ── حالةُ كلّ مرجعٍ على حدة ──────────────────────────────────
+     كانت رايةٌ واحدة (`refDataError`) ترتفع إن سقط أيُّ استعلامٍ من
+     الأربعة، فيُعطَّل تقريرُ الباصات لأنّ استعلامَ الرحلات تعثّر —
+     وهما لا يمسّ أحدهما الآخر. والآن لكلّ مرجعٍ حالتُه، فلا يُعطَّل
+     إلا ما سقط فعلاً.
+     وإعادةُ المحاولة نداءُ دالّةٍ لا تحديثُ صفحة. */
+  type LoadState = "idle" | "loading" | "ready" | "error";
+  type RefKey = "buses" | "camps" | "rooms" | "flights";
+  const [refState, setRefState] = useState<Record<RefKey, LoadState>>({
+    buses: "idle", camps: "idle", rooms: "idle", flights: "idle",
+  });
+  const isLoading = (...keys: RefKey[]) => keys.some(k => refState[k] === "loading" || refState[k] === "idle");
+  const isFailed  = (...keys: RefKey[]) => keys.some(k => refState[k] === "error");
+
+  const loadingBox = (
+    <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 13 }}>
+      <div className="rep-spin" style={{ width: 22, height: 22, margin: "0 auto 10px", borderRadius: "50%", border: "2.5px solid var(--line)", borderTopColor: "var(--primary)" }} />
+      جاري التحميل...
+    </div>
+  );
+  /* الخطأُ يقول ما الذي سقط، ويعطي بابَ الخروج منه */
+  const errorBox = (keys: RefKey[], what: string) => (
+    <div style={{ textAlign: "center", padding: "1.6rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
+      <div style={{ marginBottom: 4 }}>تعذّر تحميل {what}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 12 }}>تحقّق من الاتصال ثم أعد المحاولة — لا حاجة لتحديث الصفحة</div>
+      <button onClick={() => loadRefData(keys)} style={{ ...btnP({ fontSize: 12, fontWeight: 700, padding: "6px 16px", borderRadius: "var(--radius-sm)" }) }}>
+        إعادة المحاولة
+      </button>
+    </div>
+  );
+  const emptyBox = (what: string, hint?: string) => (
+    <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)", fontSize: 13 }}>
+      <div style={{ fontWeight: 700, marginBottom: hint ? 4 : 0 }}>{what}</div>
+      {hint && <div style={{ fontSize: 11 }}>{hint}</div>}
     </div>
   );
 
@@ -303,53 +335,81 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   }), [passengers, filterNat, filterPType]);
   const activeCols = ALL_COLS.filter(c => selectedCols.includes(c.key));
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const [{ data: b, error: eb }, { data: c, error: ec }, { data: r, error: er }, { data: f, error: ef }] = await Promise.all([
-        supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
-        /* المخيّماتُ بترتيبها المحفوظ (#113) لا بتسلسل إنشائها، والرحلاتُ
-           بالتاريخ ثم الوقت ثم المعرّف — كصفحتَيهما بالضبط. */
-        supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("sort_order", { nullsFirst: false }).order("id"),
-        supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("number"),
-        supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date").order("time").order("id"),
-      ]);
-      /* الفشل يُبلَّغ عنه بدل عرض «لا يوجد باصات» على بيانات لم تصل أصلاً */
-      setRefDataError(!!(eb || ec || er || ef) || !b || !c || !r || !f);
-      if (b) {
-        const validBuses = (b as Bus[]).filter(x => x.type || passengers.some(p => p.bus_id === x.id));
-        setBuses(validBuses);
-        setSelectedBusIds(new Set(validBuses.map(x => x.id)));
-      }
-      if (c) {
-        const validCamps = (c as Camp[]).filter(x => x.type || passengers.some(p => p.camp_mina_id === x.id || p.camp_arafa_id === x.id));
-        setCamps(validCamps);
-        setSelectedMinaCampIds(new Set(validCamps.filter(x => x.page_type === "منى").map(x => x.id)));
-        setSelectedArafaCampIds(new Set(validCamps.filter(x => x.page_type === "عرفة").map(x => x.id)));
-      }
-      if (r) {
-        setRooms(r as Room[]);
-        setSelectedFloors(new Set((r as Room[]).map(x => x.floor ? String(x.floor) : "بدون طابق")));
-      }
-      if (f) {
-        const validFlights = (f as Flight[]).filter(x => x.type || passengers.some(p => p.flight_id === x.id || p.return_flight_id === x.id));
-        setFlights(validFlights);
-        setSelectedFlightIds(new Set(validFlights.map(x => x.id)));
-      }
-      setLoading(false);
-    };
-    load();
+  /* جالبٌ واحدٌ لكلّ مرجع — يُنادى للكلّ عند فتح الصفحة، ولواحدٍ
+     عند إعادة المحاولة. وسقوطُ أحدها لا يمسّ إخوته. */
+  const loadRefData = useCallback(async (keys: RefKey[] = ["buses", "camps", "rooms", "flights"]) => {
+    const want = new Set(keys);
+    setRefState(prev => {
+      const next = { ...prev };
+      keys.forEach(k => { next[k] = "loading"; });
+      return next;
+    });
+    const sid = viewedSeason.id;
+    const mark = (k: RefKey, ok: boolean) => setRefState(prev => ({ ...prev, [k]: ok ? "ready" : "error" }));
+
+    const jobs: Promise<void>[] = [];
+    if (want.has("buses")) jobs.push((async () => {
+      const { data, error } = await supabase.from("buses").select("*").eq("season_id", sid).order("created_at");
+      if (error || !data) { mark("buses", false); return; }
+      const valid = (data as Bus[]).filter(x => x.type || passengers.some(p => p.bus_id === x.id));
+      setBuses(valid); setSelectedBusIds(new Set(valid.map(x => x.id))); mark("buses", true);
+    })());
+    /* المخيّماتُ بترتيبها المحفوظ (#113) لا بتسلسل إنشائها، والرحلاتُ
+       بالتاريخ ثم الوقت ثم المعرّف — كصفحتَيهما بالضبط. */
+    if (want.has("camps")) jobs.push((async () => {
+      const { data, error } = await supabase.from("camps").select("*").eq("season_id", sid).order("sort_order", { nullsFirst: false }).order("id");
+      if (error || !data) { mark("camps", false); return; }
+      const valid = (data as Camp[]).filter(x => x.type || passengers.some(p => p.camp_mina_id === x.id || p.camp_arafa_id === x.id));
+      setCamps(valid);
+      setSelectedMinaCampIds(new Set(valid.filter(x => x.page_type === "منى").map(x => x.id)));
+      setSelectedArafaCampIds(new Set(valid.filter(x => x.page_type === "عرفة").map(x => x.id)));
+      mark("camps", true);
+    })());
+    if (want.has("rooms")) jobs.push((async () => {
+      const { data, error } = await supabase.from("rooms").select("*").eq("season_id", sid).order("number");
+      if (error || !data) { mark("rooms", false); return; }
+      setRooms(data as Room[]);
+      setSelectedFloors(new Set((data as Room[]).map(x => x.floor ? String(x.floor) : "بدون طابق")));
+      mark("rooms", true);
+    })());
+    if (want.has("flights")) jobs.push((async () => {
+      const { data, error } = await supabase.from("flights").select("*").eq("season_id", sid).order("date").order("time").order("id");
+      if (error || !data) { mark("flights", false); return; }
+      const valid = (data as Flight[]).filter(x => x.type || passengers.some(p => p.flight_id === x.id || p.return_flight_id === x.id));
+      setFlights(valid); setSelectedFlightIds(new Set(valid.map(x => x.id))); mark("flights", true);
+    })());
+    await Promise.all(jobs);
+  // `passengers` تُقرأ للتصفية وحدها؛ إدراجُها يعيد الجلب مع كل تحديث حيّ
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewedSeason.id]);
+
+  useEffect(() => { void loadRefData(); }, [loadRefData]);
 
   // ============================================================
   // تقرير الحجاج
   // ============================================================
+  /* نطاقُ كشف الحجاج — الجنسيةُ والفئةُ وعددُ الأعمدة المعروضة */
+  const passengersScopeCaption = (): string | null => {
+    const parts: string[] = [];
+    if (filterNat !== "الكل") parts.push(`الجنسية: ${filterNat}`);
+    if (filterPType !== "الكل") parts.push(`الفئة: ${filterPType}`);
+    if (activeCols.length !== ALL_COLS.length) parts.push(`${activeCols.length} من ${ALL_COLS.length} عموداً`);
+    return parts.length ? parts.join(" · ") : null;
+  };
+
   const getPassengersHTML = () => {
     const rows = filteredPassengers.map((p, i) =>
       `<tr><td style="text-align:center">${i + 1}</td>${activeCols.map(c => `<td>${c.get(p) || "—"}</td>`).join("")}</tr>`
     ).join("");
     const body = `<table style="width:100%;border-collapse:collapse;table-layout:auto"><tr><th style="text-align:center;width:25pt;background:${primaryColor};color:#fff;padding:5pt 4pt;font-size:9pt">م</th>${activeCols.map(c => `<th style="background:${primaryColor};color:#fff;padding:5pt 6pt;font-size:9pt;text-align:right">${c.label}</th>`).join("")}</tr>${rows}</table>`;
-    return mkHTML("كشف الحجاج", body, activeCols.length > 5);
+    return makeHTML("كشف الحجاج", body, reportBranding, {
+      landscape: activeCols.length > 5,
+      chrome: {
+        season: viewedSeason,
+        resultCount: { label: "عدد النتائج", value: filteredPassengers.length },
+        scope: passengersScopeCaption(),
+      },
+    });
   };
 
   const exportPassengersXLSX = () => {
@@ -387,6 +447,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
      الطيران تحجز مقاعد لأشخاص، ولا يعنيها من منهم إداري — وإظهار
      ذلك يسرّب بنية الحملة بلا فائدة. أما الدرجة فتبقى: تؤثّر في
      الحجز. والتفصيل حاج/إداري يسكن الشاشة الداخلية وحدها. */
+  const airlineScopeCaption = (): string | null => {
+    const label = bookingSort === "alpha" ? "ترتيب أبجدي" : bookingSort === "gender" ? "ترتيب حسب الجنس" : "ترتيب الحجاج";
+    return label;
+  };
+
   const getAirlineHTML = () => {
     const list = bookingList;
     const grp = familyGroupNo.size > 0;
@@ -396,28 +461,36 @@ const getReportAirlineLogo = (airline: string): string | null => {
       const cls = wantsFirstClass(p) ? "FIRST CLASS" : "";
       /* علامة المجموعة خفيفة وصالحة للطباعة: رقمٌ لا لون ولا صلة */
       const g = grp ? `<td style="text-align:center;color:#666">${familyGroupNo.get(p.id) ?? ""}</td>` : "";
-      return `<tr><td style="text-align:center">${i + 1}</td>${g}<td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td><td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
+      const exp = airlineShowExpiry ? `<td>${p.expiry || "—"}</td>` : "";
+      return `<tr><td style="text-align:center">${i + 1}</td>${g}<td>${p.name_en}</td><td>${nat}</td><td>${p.passport}</td>${exp}<td>${p.phone || "—"}</td><td>${gender}</td><td>${cls}</td></tr>`;
     }).join("");
     const first = list.filter(p => wantsFirstClass(p)).length;
     const summary = `<div dir="ltr" style="text-align:left;margin-bottom:8pt;font-size:10pt"><strong>Total Passengers:</strong> ${list.length} &nbsp;·&nbsp; <strong>First Class:</strong> ${first} &nbsp;·&nbsp; <strong>Economy:</strong> ${list.length - first}</div>`;
     const grpTh = grp ? `<th style="text-align:center;width:34px">GRP</th>` : "";
-    const body = `${summary}<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th>${grpTh}<th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th><th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
-    return mkHTML("Flight Booking List", body, false);
+    const expTh = airlineShowExpiry ? `<th>PASSPORT EXPIRY</th>` : "";
+    const body = `${summary}<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th>${grpTh}<th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th>${expTh}<th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
+    return makeHTML("Flight Booking List", body, reportBranding, {
+      chrome: {
+        season: viewedSeason,
+        resultCount: { label: "عدد المسافرين", value: list.length },
+        scope: airlineScopeCaption(),
+      },
+    });
   };
 
   const exportAirlineXLSX = () => {
     const list = bookingList;
     const grp = familyGroupNo.size > 0;
-    const headers = ["S.N.", ...(grp ? ["GRP"] : []), "FULL NAME", "NAT.", "PASSPORT NO.", "TEL. NO.", "GENDER", "CLASS"];
+    const headers = ["S.N.", ...(grp ? ["GRP"] : []), "FULL NAME", "NAT.", "PASSPORT NO.", ...(airlineShowExpiry ? ["PASSPORT EXPIRY"] : []), "TEL. NO.", "GENDER", "CLASS"];
     const rows = list.map((p, i) => [
       i + 1, ...(grp ? [familyGroupNo.get(p.id) ?? ""] : []), p.name_en,
       natCode(p.nat),
-      p.passport, p.phone || "—",
+      p.passport, ...(airlineShowExpiry ? [p.expiry || "—"] : []), p.phone || "—",
       p.gender === "ذكر" ? "MR." : "MRS.",
       wantsFirstClass(p) ? "FIRST CLASS" : ""
     ]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws["!cols"] = [{ wch: 5 }, ...(grp ? [{ wch: 5 }] : []), { wch: 32 }, { wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 7 }, { wch: 13 }];
+    ws["!cols"] = [{ wch: 5 }, ...(grp ? [{ wch: 5 }] : []), { wch: 32 }, { wch: 6 }, { wch: 14 }, ...(airlineShowExpiry ? [{ wch: 15 }] : []), { wch: 14 }, { wch: 7 }, { wch: 13 }];
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Flight List");
@@ -435,7 +508,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // تقرير الطيران — كل رحلة
   // ============================================================
   const getPerFlightHTML = () =>
-    flightsReportDocument(flights.filter(f => selectedFlightIds.has(f.id)), passengers, branding);
+    flightsReportDocument(flights.filter(f => selectedFlightIds.has(f.id)), passengers, branding,
+      { season: viewedSeason, pageNumbers: true });
 
   const exportPerFlightXLSX = () => {
     const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
@@ -466,10 +540,12 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الباصات
   // ============================================================
+  /* الباص: الموسمُ معتمَد، والترقيمُ **لا** يُفرَض — الهيئةُ التشغيليّة
+     البسيطة تبقى كما هي. */
   const getBusesHTML = () =>
-    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding);
+    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding, { season: viewedSeason });
 
-  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding);
+  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding, { season: viewedSeason });
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
@@ -559,166 +635,47 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   // تقرير الفندق
   // ============================================================
+  /* وصفٌ مُوجَز لنطاق المطبوع — يُكتب حين يضيف معنًى فقط، فإن كان
+     التقريرُ شاملاً لم يُكتب شيء. */
+  const hotelScopeCaption = (): string | null => {
+    const parts: string[] = [];
+    if (hotelPrintFilter === "type" && hotelPrintType) parts.push(`النوع: ${hotelPrintType}`);
+    const allFloors = floorItems.length > 0 && floorItems.every(f => selectedFloors.has(f.id));
+    if (!allFloors) parts.push(`الطوابق: ${floorItems.filter(f => selectedFloors.has(f.id)).map(f => f.label).join("، ") || "—"}`);
+    return parts.length ? parts.join(" · ") : null;
+  };
+
   const getFilteredRooms = () => {
     let r = rooms.filter(rm => selectedFloors.has(floorKey(rm)));
     if (hotelPrintFilter === "type") r = r.filter(rm => rm.type === hotelPrintType);
     return r;
   };
 
-  // حالة الغرفة — نفس منطق صفحة التنظيم
-  const ROOM_TYPE_CAP: Record<string, number> = { "ثنائية": 2, "ثلاثية": 3, "رباعية": 4, "خماسية": 5, "فردية": 1, "مجلس": 0 };
-  const ROOM_STATUS_COLOR: Record<string, string> = { "مكتملة": "#7D1F3C", "قيد التسكين": "#1D4ED8", "جاهزة": "#059669", "مجلس": "#7C3AED" };
+  /* حالةُ الغرفة — بالسعة المعتمَدة (`roomCapacity`) لا بجدولٍ محلّيّ.
+     كان هنا `ROOM_TYPE_CAP` ثانٍ بلا «خاص» وبـ«خماسية» لا وجود لها،
+     فتُقرأ الغرفةُ نفسها بحالتين بين شاشتين. */
+  const ROOM_STATUS_COLOR: Record<string, string> = { "مكتملة": "#7D1F3C", "قيد التسكين": "#1D4ED8", "جاهزة": "#059669", "مجلس": "#7C3AED", "تجاوز": "#C0392B", "غير محدّدة": "#888888" };
   const getRoomStatus = (room: Room): string => {
     if (room.type === "مجلس") return "مجلس";
-    const cap = ROOM_TYPE_CAP[room.type] || 0;
+    const cap = roomCapacity(room);
     const occ = passengers.filter(p => p.room_id === room.id).length;
-    if (cap > 0 && occ >= cap) return "مكتملة";
-    if (occ > 0) return "قيد التسكين";
-    return "جاهزة";
+    if (cap == null) return "غير محدّدة";
+    if (occ > cap) return "تجاوز";
+    if (occ === 0) return "جاهزة";
+    if (occ >= cap) return "مكتملة";
+    return "قيد التسكين";
   };
 
-  const getHotelHTML = (opts?: { landscape?: boolean; showPattern?: boolean }) => {
-    const landscape = opts?.landscape ?? false;
-    const showPattern = opts?.showPattern ?? true;
-    const filtered = getFilteredRooms();
-    const COLS = landscape ? 5 : 4;
-    const ROWS = landscape ? 3 : 4;
-    const PER_PAGE = COLS * ROWS; // landscape: 15 غرفة | portrait: 16 غرفة
-
-    // ألوان واضحة ومريحة لكل نوع غرفة — الترويسة بلون مصمت كامل ونص أبيض
-    const PRINT_ROOM_COLORS: Record<string, string> = {
-      "فردية":  "#b8762a",  // كهرماني دافئ
-      "ثنائية": "#1565a8",  // أزرق واضح
-      "ثلاثية": "#6B21A8",  // بنفسجي واضح
-      "رباعية": "#1f8a4c",  // أخضر واضح
-    };
-
-    // نوع وسعة الغرفة الفعلية تُحسب من عدد الحجاج المتعيّنين فيها فعلياً
-    // (وليس من حقل room.type المخزّن، الذي قد لا يعكس الواقع)
-    const roomLabelByCount = (count: number): string => {
-      if (count <= 1) return "فردية";
-      if (count === 2) return "ثنائية";
-      if (count === 3) return "ثلاثية";
-      return "رباعية";
-    };
-
-    // حجم الخط لكروت الغرف يُحدَّد ديناميكياً حسب أعلى سعة غرفة موجودة فعلياً في الصفحة
-    // (معايرة حقيقية مُختبرة بمحاكاة طباعة A4 لضمان عدم الفيضان مع استغلال أكبر مساحة ممكنة)
-    const FONT_BY_MAX_CAP: Record<number, number> = { 1: 22, 2: 22, 3: 21, 4: 17 };
-    const getRoomFontSize = (maxCapInPage: number): number => FONT_BY_MAX_CAP[Math.min(4, Math.max(1, maxCapInPage))] || 17;
-
-    const renderRoomBlock = (room: Room, fontSize: number) => {
-      const rp = roomOccupants(room.id);
-      const actualLabel = roomLabelByCount(rp.length);
-      const cap = Math.max(rp.length, 1); // عدد الصفوف = عدد الحجاج الفعليين (بحد أدنى صف واحد)
-      const clr = PRINT_ROOM_COLORS[actualLabel] || "#5C1830";
-      const rowPad = Math.round(fontSize * 0.28 * 10) / 10;
-      const numSize = fontSize - 1;
-      const headerFs = Math.min(15, fontSize + 2);
-      const rows = Array.from({ length: cap }, (_, i) => {
-        const p = rp[i];
-        return p
-          ? `<tr>
-              <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
-              <td class="auto-fit-name" data-max-size="${fontSize}" style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.short_ar || p.name_ar}</td>
-            </tr>`
-          : `<tr>
-              <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
-              <td style="padding:${rowPad}px 7px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
-            </tr>`;
-      }).join("");
-
-      const cardBg = showPattern ? "rgba(255,255,255,0.4)" : "#ffffff";
-      return `<div style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
-        <div style="background:${clr};color:#ffffff;padding:5px 7px;flex-shrink:0;text-align:center;font-size:${headerFs}px;font-weight:800;line-height:1.3">
-          غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
-        </div>
-        <table style="margin:0;width:100%;table-layout:fixed;border-collapse:collapse;flex:1;font-family:'Cairo',sans-serif;background:transparent">
-          ${rows}
-        </table>
-      </div>`;
-    };
-
-    const pages: Room[][] = [];
-    for (let i = 0; i < filtered.length; i += PER_PAGE) {
-      pages.push(filtered.slice(i, i + PER_PAGE));
-    }
-
-    const cairoFont = `@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');`;
-
-    const pagesHTML = `<style>
-      ${cairoFont}
-      * { font-family: 'Cairo', sans-serif !important; }
-      ${showPattern ? "" : "html, body { background-image: none !important; background: #ffffff !important; }"}
-      /* تصغير الهيدر العلوي خاصة بتقرير الفندق لاستيعاب 16 غرفة في الصفحة */
-      .doc-header { padding-bottom: 4px !important; margin-bottom: 2px !important; }
-      .doc-header .logo-box { width: 14mm !important; height: 14mm !important; font-size: 11pt !important; }
-      .doc-header .company-name { font-size: 10pt !important; }
-      .doc-header .tagline { font-size: 6.5pt !important; }
-      .doc-title-bar { padding: 3pt 0 !important; margin: 4pt 0 6pt !important; font-size: 11pt !important; }
-      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 6px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
-      .hotel-page table { margin: 0 !important; }
-      .hotel-page td { border: none; white-space: normal !important; vertical-align: middle; }
-      .hotel-page tr:nth-child(even) td { background: transparent !important; }
-    </style>` +
-      pages.map((pageRooms, pi) => {
-        // أقصى عدد حجاج في غرفة واحدة ضمن هذه الصفحة يحدد حجم الخط المناسب لكل كروتها
-        const roomOccupancy = (room: Room) => roomOccupants(room.id).length;
-        const maxCapInPage = Math.max(1, ...pageRooms.map(r => Math.max(roomOccupancy(r), 1)));
-        const fontSize = getRoomFontSize(maxCapInPage);
-        const padded = [...pageRooms];
-        while (padded.length < PER_PAGE) padded.push(null as any);
-        const cells = padded.map(room =>
-          room
-            ? renderRoomBlock(room, fontSize)
-            : `<div style="background:transparent"></div>`
-        ).join("");
-        return `<div class="hotel-page" style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"}">
-          ${cells}
-        </div>`;
-      }).join("");
-
-    // سكريبت يضبط حجم خط كل اسم بشكل مستقل حسب طوله الفعلي:
-    // الاسم القصير يحتفظ بالحجم الأقصى المحسوب للصفحة، والاسم الطويل يصغر فقط بقدر ما يلزم ليبقى في سطر واحد
-    const autoFitScript = `<script>
-      (function() {
-        function fitNames() {
-          var cells = document.querySelectorAll('.auto-fit-name');
-          var canvas = document.createElement('canvas');
-          var ctx = canvas.getContext('2d');
-          cells.forEach(function(cell) {
-            var maxSize = parseFloat(cell.getAttribute('data-max-size')) || 17;
-            var minSize = 8;
-            var available = cell.clientWidth - 14; // طرح padding التقريبي يمين/يسار
-            var text = cell.textContent;
-            var size = maxSize;
-            while (size > minSize) {
-              ctx.font = '600 ' + size + 'px Cairo, sans-serif';
-              if (ctx.measureText(text).width <= available) break;
-              size -= 0.5;
-            }
-            cell.style.fontSize = size + 'px';
-          });
-          document.documentElement.setAttribute('data-fit-done', '1');
-        }
-        function runWhenFontReady() {
-          if (document.fonts && document.fonts.load) {
-            // نجبر تحميل الخط فعلياً بنفس الوزن المستخدم في القياس قبل أي حساب
-            Promise.all([
-              document.fonts.load('600 17px Cairo'),
-              document.fonts.ready
-            ]).then(fitNames).catch(fitNames);
-          } else {
-            window.addEventListener('load', fitNames);
-          }
-        }
-        runWhenFontReady();
-      })();
-    </script>`;
-
-    const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
-    return mkHTML(`تقرير الفندق${subtitle}`, pagesHTML + autoFitScript, landscape, false, showPattern ? 0.04 : 0);
-  };
+  /* مستندُ الفندق يُبنى في `print.reports.ts` — تناديه هذه الصفحة
+     وصفحةُ الفندق معاً، فلا نسختان. والنوعُ والسعةُ من القاعدة:
+     `rooms.type` و`roomCapacity()`، لا من عدد الساكنين. */
+  const getHotelHTML = (opts?: { landscape?: boolean; showPattern?: boolean }) =>
+    hotelReportDocument(getFilteredRooms(), passengers, branding, {
+      landscape: opts?.landscape ?? false,
+      showPattern: opts?.showPattern ?? true,
+      subtitle: hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "",
+      chrome: { season: viewedSeason, pageNumbers: true, scope: hotelScopeCaption() },
+    });
 
   const exportHotelXLSX = () => {
     const filtered = getFilteredRooms();
@@ -789,7 +746,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
       ...(majlisCount ? [["عدد المجالس", majlisCount]] : []),
       ["إجمالي عدد النزلاء", guests.length],
       ...breakdownRows(guests),
-      ...ROOM_TYPES.map(t => [`غرف ${t}`, filtered.filter(r => r.type === t).length]),
+      /* الأنواعُ الستّةُ المعتمَدة — و«خاص» و«مجلس» منها، وكانتا تسقطان */
+      ...HOTEL_ROOM_TYPES.filter(t => t !== "مجلس").map(t => [`غرف ${t}`, filtered.filter(r => r.type === t).length]),
     ]);
     XLSX.writeFile(wb, "تقرير_الفندق.xlsx");
   };
@@ -804,15 +762,16 @@ const getReportAirlineLogo = (airline: string): string | null => {
   const printIcon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
   const excelIcon = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
 
+  /* `onView` كان وسيطاً لا يمرّره أحد — زرٌّ موعودٌ لا وجود له.
+     والمعاينةُ مؤجَّلة، فلا يبقى في الواجهة وعدٌ لا يُنجَز. */
   const ExportButtons = ({
-    title, onView, onExcel, onPrint
-  }: { title?: string; onView?: () => void; onExcel: () => void; onPrint: () => void }) => (
+    title, onExcel, onPrint
+  }: { title?: string; onExcel: () => void; onPrint: () => void }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       {title && <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
+      <div className="rep-actions" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
         <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
         <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
-        {onView && <button onClick={onView} style={{ ...btnS({ padding: "5px 10px", fontSize: 12, borderRadius: "var(--radius-sm)" }) }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg> عرض</button>}
       </div>
     </div>
   );
@@ -1006,11 +965,13 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   return (
     <div style={{ padding: "0 2px", overflowY: "auto", height: "100%" }}>
+      {/* الاستجابة CSS لا JavaScript — وفوق ٨٨٠ بكسل لا شيء يتغيّر */}
+      <style>{REPORTS_RESPONSIVE_CSS}{"@keyframes rep-spin{to{transform:rotate(360deg)}}.rep-spin{animation:rep-spin .7s linear infinite}"}</style>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       {!activeReport ? (
         <>
           {/* Quick Actions */}
-          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+          <div className="rep-quick" style={{ display:"flex", gap:10, marginBottom:16 }}>
             {[
               { id:"documents", label:"طباعة المستندات", sub:"جواز · بطاقة · تصريح · تذكرة", bg:"rgba(125,31,60,0.08)", color:"var(--primary)", icon:`<path d="M3 3h18v18H3z M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z M8 16s1-2 4-2 4 2 4 2"/>` },
               { id:"whatsapp",  label:"رسائل WhatsApp",  sub:"إرسال رسائل مخصصة للحجاج",    bg:"rgba(37,211,102,0.08)", color:"#25D366", icon:`<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>` },
@@ -1037,14 +998,14 @@ const getReportAirlineLogo = (airline: string): string | null => {
             تقارير الأقسام
             <div style={{ flex:1, height:1, background:"linear-gradient(to left, transparent, var(--line))" }} />
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+          <div className="rep-cards" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
             {[
               { id:"passengers_report", name:"تقرير الحجاج",  icon:`<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`, color:"#2A9D8F", bg:"rgba(42,157,143,0.1)",  kpiNum: String(passengers.filter(p=>!p.passenger_type||p.passenger_type==="حاج").length), kpiLabel:"إجمالي الحجاج", kpiSub:"", pct:100, alert:false },
-              { id:"flight",            name:"تقرير الطيران", icon:`<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,                             color:"#0C447C", bg:"rgba(12,68,124,0.1)",   kpiNum:`${flightBoth}/${flightNeeded.length}`, kpiLabel:"اكتمل توزيعهم ذهاباً وعودة", kpiSub: `ذهاب ${flightOut} · عودة ${flightRet}${noFlight > 0 ? ` · ${noFlight} لم تكتمل رحلاتهم` : ""}`, pct:pctFlight, alert: noFlight>0 },
-              { id:"buses",             name:"تقرير الباصات", icon:`<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>`, color:"#3F51B5", bg:"rgba(63,81,181,0.1)",  kpiNum:pctBus+"%",    kpiLabel:"موزّعون على الباصات",  kpiSub: noBus   > 0 ? noBus+  " بدون باص"    : "جميعهم مكتملون", pct:pctBus,    alert: noBus>0 },
-              { id:"mina",              name:"تقرير منى",     icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#5C7C2E", bg:"rgba(92,124,46,0.1)",   kpiNum:pctMina+"%",   kpiLabel:"في مخيمات منى",        kpiSub: noMina  > 0 ? noMina+ " لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctMina,   alert: noMina>0 },
-              { id:"arafa",             name:"تقرير عرفة",    icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#B5651D", bg:"rgba(181,101,29,0.1)",  kpiNum:pctArafa+"%",  kpiLabel:"في مخيمات عرفة",       kpiSub: noArafa > 0 ? noArafa+" لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctArafa,  alert: noArafa>0 },
-              { id:"hotel",             name:"تقرير الفندق",  icon:`<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/>`,                                                                                    color:"#8B3A6B", bg:"rgba(139,58,107,0.1)",  kpiNum:pctRoom+"%",   kpiLabel:"تم تسكينهم بالفندق",  kpiSub: noRoom  > 0 ? noRoom+ " بدون غرفة"   : "جميعهم مكتملون", pct:pctRoom,   alert: noRoom>0 },
+              { id:"flight",            name:"تقرير الطيران", icon:`<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,                             color:"#0C447C", bg:"rgba(12,68,124,0.1)",   kpiNum:`${flightBoth}/${flightNeeded.length}`, kpiLabel:`اكتمل توزيعهم ذهاباً وعودة (من ${flightNeeded.length} مطلوب لهم طيران)`, kpiSub: `ذهاب ${flightOut} · عودة ${flightRet}${noFlight > 0 ? ` · ${noFlight} لم تكتمل رحلاتهم` : ""}`, pct:pctFlight, alert: noFlight>0 },
+              { id:"buses",             name:"تقرير الباصات", icon:`<path d="M8 6v6"/><path d="M15 6v6"/><path d="M2 12h19.6"/><path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3"/><circle cx="7" cy="18" r="2"/><circle cx="15" cy="18" r="2"/>`, color:"#3F51B5", bg:"rgba(63,81,181,0.1)",  kpiNum:pctBus+"%",    kpiLabel:`موزّعون على الباصات (من ${hajjCount} حاجاً)`,  kpiSub: noBus   > 0 ? noBus+  " بدون باص"    : "جميعهم مكتملون", pct:pctBus,    alert: noBus>0 },
+              { id:"mina",              name:"تقرير منى",     icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#5C7C2E", bg:"rgba(92,124,46,0.1)",   kpiNum:pctMina+"%",   kpiLabel:`في مخيمات منى (من ${hajjCount} حاجاً)`,        kpiSub: noMina  > 0 ? noMina+ " لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctMina,   alert: noMina>0 },
+              { id:"arafa",             name:"تقرير عرفة",    icon:`<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,                                                                           color:"#B5651D", bg:"rgba(181,101,29,0.1)",  kpiNum:pctArafa+"%",  kpiLabel:`في مخيمات عرفة (من ${hajjCount} حاجاً)`,       kpiSub: noArafa > 0 ? noArafa+" لم يُعيَّنوا" : "جميعهم مكتملون", pct:pctArafa,  alert: noArafa>0 },
+              { id:"hotel",             name:"تقرير الفندق",  icon:`<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/>`,                                                                                    color:"#8B3A6B", bg:"rgba(139,58,107,0.1)",  kpiNum:pctRoom+"%",   kpiLabel:`تم تسكينهم بالفندق (من ${hajjCount} حاجاً)`,  kpiSub: noRoom  > 0 ? noRoom+ " بدون غرفة"   : "جميعهم مكتملون", pct:pctRoom,   alert: noRoom>0 },
             ].map(card => (
               <div key={card.id} onClick={() => { setActiveReport(card.id); setFlightSubReport(null); }}
                 style={{ background:"var(--paper)", border:"1.5px solid var(--line)", borderRadius:16, padding:"16px 16px 0", cursor:"pointer", display:"flex", flexDirection:"column", overflow:"hidden", position:"relative", transition:"all 0.2s" }}
@@ -1126,7 +1087,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                         {title}
                         <span style={{ flex: 1, height: 1, background: "linear-gradient(90deg, var(--line), transparent)" }} />
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                      <div className="rep-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
                         {ALL_COLS.filter(c => c.group === grp).map(col => {
                           const on = selectedCols.includes(col.key);
                           return (
@@ -1195,7 +1156,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
             <>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الطيران</div>
               {!flightSubReport ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="rep-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   {[
                     { id: "airline", num: bookingList.length, label: "مطلوب لهم حجز", sub: `${bookingPilgrims} حاج · ${bookingAdmins} إداري`, color: "var(--primary)", name: "تقرير خطوط الطيران", icon: `<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>` },
                     { id: "per_flight", num: flights.length, label: "رحلة", sub: "قائمة الحجاج لكل رحلة", color: "#1565C0", name: "تقرير كل رحلة", icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
@@ -1251,6 +1212,14 @@ const getReportAirlineLogo = (airline: string): string | null => {
                         {bookingSort === "manual" && familyGroupNo.size > 0 && (
                           <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 700 }}>· عمود GRP يجمع أفراد الأسرة الواحدة</span>
                         )}
+                      </div>
+                      {/* عمودٌ اختياريّ — تطلبه بعضُ الخطوط. يسري على
+                          المطبوع والإكسل معاً، فلا يفترق البابان. */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: airlineShowExpiry ? "var(--primary)" : "var(--muted)", cursor: "pointer" }}>
+                          <input type="checkbox" checked={airlineShowExpiry} onChange={e => setAirlineShowExpiry(e.target.checked)} style={{ cursor: "pointer" }} />
+                          إظهار عمود انتهاء الجواز (PASSPORT EXPIRY)
+                        </label>
                       </div>
                       {/* accordion الجدول */}
                       <div style={{ border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
@@ -1309,7 +1278,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <button onClick={() => printInPage(getPerFlightHTML())} style={printBtnStyle}>{printIcon} طباعة</button>
                         </div>
                       </div>
-                      {!loading && flights.length > 0 && (
+                      {!isLoading("flights") && !isFailed("flights") && flights.length > 0 && (
                         <SelectionPanel
                           title="الرحلات المطلوبة في التقرير"
                           items={flights.map(f => ({ id: f.id, label: `${f.name} — ${f.type}` }))}
@@ -1319,9 +1288,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           setSelected={(s) => setSelectedFlightIds(s as Set<number>)}
                         />
                       )}
-                      {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
-                        refDataError ? refErrorBox :
-                        flights.length === 0 ? <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>لا يوجد رحلات</div> :
+                      {isLoading("flights") ? loadingBox :
+                        isFailed("flights") ? errorBox(["flights"], "بيانات الرحلات") :
+                        flights.length === 0 ? emptyBox("لا يوجد رحلات", "أضف الرحلات من صفحة الطيران أولاً") :
                         flights.map((flight) => {
                           const fp = passengersOfFlight(flight);
                           const isOpen = expandedItems.has(flight.id);
@@ -1415,8 +1384,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {/* ===== تقرير الباصات ===== */}
           {activeReport === "buses" && (
             <>
-              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
-                refDataError ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>{refErrorBox}</> :
+              {isLoading("buses") ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>{loadingBox}</> :
+                isFailed("buses") ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div>{errorBox(["buses"], "بيانات الباصات")}</> :
                 buses.length === 0 ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير الباصات</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد باصات</div></> :
                 <>
                   <ExportButtons
@@ -1432,14 +1401,15 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     selected={selectedBusIds}
                     setSelected={(s) => setSelectedBusIds(s as Set<number>)}
                   />
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                  <div className="rep-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
                     {buses.map((bus) => {
                       const bp = busManifest(bus, passengers).people;
                       const isOpen = expandedItems.has(bus.id);
                       const isVip = bus.type === "VIP";
                       const stripBg = isVip ? "linear-gradient(135deg,#D4A017,#B8880F)" : "linear-gradient(135deg,#1976D2,#1565C0)";
                       const fillCls = isVip ? "#D4A017" : "#1976D2";
-                      const capacity = (bus as any).capacity || 50;
+                      /* السعةُ عمودٌ `not null` في القاعدة — ولا يُختلَق لها بديل */
+                      const capacity = bus.capacity;
                       const pct = capacity ? Math.round(bp.length / capacity * 100) : 0;
                       return (
                         <div key={bus.id} onClick={() => toggleExpandedItem(bus.id)} style={{ borderRadius: 14, overflow: "hidden", border: `1.5px solid ${isOpen ? "#90CAF9" : "var(--line)"}`, background: "var(--paper)", cursor: "pointer", transition: ".15s" }}>
@@ -1506,8 +1476,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {/* ===== تقرير منى ===== */}
           {activeReport === "mina" && (
             <>
-              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
-                refDataError ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>{refErrorBox}</> :
+              {isLoading("camps") ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>{loadingBox}</> :
+                isFailed("camps") ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div>{errorBox(["camps"], "بيانات المخيمات")}</> :
                 camps.filter(c => c.page_type === "منى").length === 0 ?
                   <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات منى</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
@@ -1524,7 +1494,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     selected={selectedMinaCampIds}
                     setSelected={(s) => setSelectedMinaCampIds(s as Set<number>)}
                   />
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                  <div className="rep-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
                     {camps.filter(c => c.page_type === "منى").map(camp => {
                       const cp = passengers.filter(p => p.camp_mina_id === camp.id);
                       const isMale = camp.gender === "ذكر";
@@ -1592,8 +1562,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {/* ===== تقرير عرفة ===== */}
           {activeReport === "arafa" && (
             <>
-              {loading ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div></> :
-                refDataError ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>{refErrorBox}</> :
+              {isLoading("camps") ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>{loadingBox}</> :
+                isFailed("camps") ? <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div>{errorBox(["camps"], "بيانات المخيمات")}</> :
                 camps.filter(c => c.page_type === "عرفة").length === 0 ?
                   <><div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>تقرير مخيمات عرفة</div><div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد مخيمات</div></> :
                 <>
@@ -1610,7 +1580,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     selected={selectedArafaCampIds}
                     setSelected={(s) => setSelectedArafaCampIds(s as Set<number>)}
                   />
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                  <div className="rep-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
                     {camps.filter(c => c.page_type === "عرفة").map(camp => {
                       const cp = passengers.filter(p => p.camp_arafa_id === camp.id);
                       const isMale = camp.gender === "ذكر";
@@ -1702,7 +1672,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   [String(cReady), "جاهزة (شاغرة)", "var(--g6)"],
                 ];
                 return (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+                  <div className="rep-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
                     {kpis.map(([num, lbl, clr]) => (
                       <div key={lbl} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 8px rgba(92,24,48,.05)" }}>
                         <div style={{ height: 4, background: clr }} />
@@ -1733,8 +1703,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   </div>
                   {hotelPrintFilter === "type" && (
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 12 }}>
-                      {ROOM_TYPES.map(t => {
-                        const [bg, clr] = ROOM_COLORS[t];
+                      {HOTEL_ROOM_TYPES.map(t => {
+                        const [bg, clr] = ROOM_COLORS[t] ?? ["var(--ivory2)", "var(--muted)"];
                         return (
                           <div key={t} onClick={() => setHotelPrintType(t)}
                             style={{ flex: 1, padding: 6, borderRadius: 8, border: `1.5px solid ${hotelPrintType === t ? clr : "var(--line)"}`, background: hotelPrintType === t ? bg : "var(--ivory)", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 700, color: hotelPrintType === t ? clr : "var(--muted)" }}>
@@ -1763,13 +1733,15 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 onExcel={exportHotelXLSX}
                 onPrint={() => printInPage(getHotelHTML())}
               />
+              {/* طباعةٌ عرضيّة — خمس عشرة غرفةً في الورقة بدل ستّ عشرة.
+                  حلّت محلَّ زرٍّ تجريبيّ كان يشحن إلى الإنتاج باسم «تجربة». */}
               <div style={{ marginTop: -6, marginBottom: 16 }}>
                 <button
-                  onClick={() => printInPage(getHotelHTML({ landscape: true, showPattern: true }))}
+                  onClick={() => printInPage(getHotelHTML({ landscape: true }))}
                   style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", border: "1px dashed var(--accent-dark)", color: "var(--accent-dark)", padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: 11, cursor: "pointer", fontFamily: "var(--font-body)" }}
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66 4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/></svg>
-                  تجربة: عرض + نقشة ظاهرة
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
+                  طباعة عرضيّة (١٥ غرفة في الورقة)
                 </button>
               </div>
 
@@ -1782,10 +1754,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 ))}
               </div>
 
-              {loading ? <div style={{ textAlign: "center", color: "var(--text-muted)" }}>جاري التحميل...</div> :
-                refDataError ? refErrorBox :
-                rooms.length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>لا يوجد غرف</div> :
-                getFilteredRooms().length === 0 ? <div style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>اختر طابقاً واحداً على الأقل</div> :
+              {isLoading("rooms") ? loadingBox :
+                isFailed("rooms") ? errorBox(["rooms"], "بيانات الغرف") :
+                rooms.length === 0 ? emptyBox("لا يوجد غرف", "أضف الغرف من صفحة الفندق أولاً") :
+                getFilteredRooms().length === 0 ? emptyBox("لا توجد غرف ضمن النطاق المحدّد", "اختر طابقاً واحداً على الأقل") :
                 <>
                   {/* عرض بالطوابق — كروت مربّعة */}
                   {[...new Set(getFilteredRooms().map(r => floorKey(r)))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)).map(floor => {
@@ -1806,7 +1778,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{fDone} مكتملة · {fReady} جاهزة</span>
                         </div>
                         {/* شبكة الغرف */}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                        <div className="rep-doc-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
                           {floorRooms.map(room => {
                             const rp = passengers.filter(p => p.room_id === room.id);
                             const status = getRoomStatus(room);

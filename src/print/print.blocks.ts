@@ -5,6 +5,7 @@
    مُختبَرةٌ بمحاكاة A4 فعليّة، ولا تُعاد. */
 import type { PrintBranding } from "./print.brand";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor } from "./print.brand";
+import { pageStampHTML } from "./print.chrome";
 
 // ============================================================
 
@@ -96,8 +97,14 @@ export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTM
 }
 
 // تجميع أقسام متعددة مع فاصل صفحة قبل كل قسم إلا الأول
-export function joinSections(sections: string[]): string {
-  return sections.map((s, idx) => `<div class="${idx > 0 ? "page-break-before" : ""}">${s}</div>`).join("");
+/* والقسمُ هنا صفحةٌ ببنائه — فمن طلب ترقيماً نالَه محسوباً لا مقاساً.
+   والافتراضُ بلا ترقيم: مطبوعٌ لم يطلبه يخرج كما كان بالحرف. */
+export function joinSections(sections: string[], options: { pageNumbers?: boolean } = {}): string {
+  const total = sections.length;
+  return sections.map((s, idx) => {
+    const stamp = options.pageNumbers ? pageStampHTML(idx + 1, total) : "";
+    return `<div class="${idx > 0 ? "page-break-before" : ""}">${s}${stamp}</div>`;
+  }).join("");
 }
 
 // قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)

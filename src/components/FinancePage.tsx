@@ -1014,7 +1014,9 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     });
     const cfDates = Object.keys(cfByDate).sort();
     const cfTotal = cfPayments.reduce((s, p) => s + Number(p.amount), 0);
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين"), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand }) };
+    /* الموسمُ قدرةٌ مشتركة — والحسابُ والجداولُ كما هي بالحرف */
+    const finChrome = { season: viewedSeason, pageNumbers: true };
+    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>

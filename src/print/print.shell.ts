@@ -7,6 +7,8 @@
    ⚠️ R1 ينقل المعماريّة ولا يُعيد تصميم مطبوعٍ قائم: النمطان معلَنان
    في `print.theme.ts`، وتوحيدُهما بصرياً قرارُ مرحلةٍ تالية. */
 import type { PrintBranding } from "./print.brand";
+import type { PrintChrome, HeaderMode } from "./print.chrome";
+import { compactHeaderHTML, chromeMetaHTML, CHROME_CSS } from "./print.chrome";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
 import { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK, COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternDataURL } from "./print.theme";
 
@@ -15,7 +17,7 @@ export function makeHTML(
   title: string,
   body: string,
   branding: PrintBranding,
-  options: { landscape?: boolean; noHeader?: boolean; patternOpacity?: number } = {}
+  options: { landscape?: boolean; noHeader?: boolean; patternOpacity?: number; chrome?: PrintChrome } = {}
 ) {
   const companyName = escapeCompanyHtml(branding.companyName);
   const tagline = escapeCompanyHtml(branding.tagline);
@@ -25,7 +27,11 @@ export function makeHTML(
   const logoUrl = normalizeCompanyAssetUrl(branding.logoUrl);
   const headerUrl = normalizeCompanyAssetUrl(branding.headerUrl);
   const safeTitle = escapeCompanyHtml(title);
-  const { landscape = false, noHeader = false, patternOpacity = 0.08 } = options;
+  const { landscape = false, noHeader = false, patternOpacity = 0.08, chrome = {} } = options;
+  /* `noHeader` القديمة اسمٌ ثانٍ لـ`header:"none"` — تبقى عاملةً كما
+     كانت، فلا يتغيّر معنى نداءٍ قائم. والأولويّةُ للصريح. */
+  const headerMode: HeaderMode = chrome.header ?? (noHeader ? "none" : "full");
+  const metaHTML = chromeMetaHTML(chrome);
   const initial = (companyName || "ح").trim().charAt(0);
   const logoHtml = logoUrl
     ? `<img src="${logoUrl}" alt="logo" />`
@@ -36,7 +42,7 @@ export function makeHTML(
   // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح (حوالي 5 نقشات في الصف)
   // النقشة وإعدادُ الصفحة من `print.theme.ts` — مقياسٌ معلَنٌ لا نصٌّ مبعثر
   const patternURL = patternDataURL(patternOpacity);
-  const headerHTML = noHeader ? "" : `${headerUrl ? `<img src="${headerUrl}" alt="" style="display:block;width:100%;max-height:28mm;object-fit:contain;margin-bottom:4mm" />` : ""}<div class="doc-header">
+  const fullHeaderHTML = `${headerUrl ? `<img src="${headerUrl}" alt="" style="display:block;width:100%;max-height:28mm;object-fit:contain;margin-bottom:4mm" />` : ""}<div class="doc-header">
   <div class="brand">
     <div class="logo-box">${logoHtml}</div>
     <div>
@@ -50,6 +56,12 @@ export function makeHTML(
   </div>
 </div>
   <div class="doc-title-bar">${safeTitle}</div>`;
+  /* أنماطُ القشرة لا تُحقَن إلا إن استُعملت — فالمطبوعُ الذي لم يطلب
+     شيئاً يخرج بالبايتات نفسها التي كان يخرج بها قبل R2. */
+  const chromeCSS = (metaHTML || headerMode === "compact" || chrome.pageNumbers) ? `\n  ${CHROME_CSS}` : "";
+  const headerHTML = headerMode === "none" ? ""
+    : headerMode === "compact" ? compactHeaderHTML(branding, title)
+    : fullHeaderHTML;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${safeTitle}</title>
 ${FONT_LINK}
@@ -85,9 +97,9 @@ ${FONT_LINK}
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
   .footer { text-align: center; color: #aaa; font-size: 7pt; margin-top: 10pt; border-top: 0.5pt solid #eee; padding-top: 5pt; }
-  ${COLOR_ADJUST_RULE}
+  ${COLOR_ADJUST_RULE}${chromeCSS}
 </style></head><body>
-${headerHTML}
+${headerHTML}${metaHTML}
 ${body}
 <div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>
 </body></html>`;
@@ -97,12 +109,15 @@ ${body}
    كانت قشرةً موازيةً كاملة في `finance.print.ts` بـ`<!DOCTYPE>` و`@page`
    و`printInPage` خاصّةٍ بها. المُخرَج هو المُخرَج نفسه حرفياً. */
 export function makeFinanceHTML(
-  title: string, body: string, brand: PrintBranding
+  title: string, body: string, brand: PrintBranding, chrome: PrintChrome = {}
 ): string {
   const safeTitle = escapeCompanyHtml(title);
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const { dateStr, timeStr } = issuedStamp();
   const logoHtml = logoOrInitial(logoUrl, companyName);
+  /* المالية تحمل ختمَ الإصدار في ترويستها أصلاً، فلا يُكرَّر في السطر */
+  const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
+  const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
 <style>
   ${pageRule(PAGE_MARGIN_FINANCE)}
@@ -125,7 +140,7 @@ export function makeFinanceHTML(
      أي أبيضُ على أبيض. موجودٌ في HTML وغيرُ مرئيّ على الورق. */
   tr.tot-row td { background: ${primaryColor} !important; color: #fff; font-weight: 700; }
   .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
-  ${COLOR_ADJUST_RULE_ALL}
+  ${COLOR_ADJUST_RULE_ALL}${chromeCSS}
 </style></head><body>
 <div class="doc-header">
   <div style="display:flex;align-items:center;gap:12px">
@@ -136,7 +151,7 @@ export function makeFinanceHTML(
     <div>تاريخ الإصدار: ${dateStr}</div><div>الساعة: ${timeStr}</div>
   </div>
 </div>
-<div class="doc-title-bar">${safeTitle}</div>
+<div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}
 <div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>
 </body></html>`;
