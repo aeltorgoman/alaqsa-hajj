@@ -543,9 +543,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
   /* الباص: الموسمُ معتمَد، والترقيمُ **لا** يُفرَض — الهيئةُ التشغيليّة
      البسيطة تبقى كما هي. */
   const getBusesHTML = () =>
-    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding, { season: viewedSeason });
+    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding, { season: viewedSeason, seasonProminent: true });
 
-  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding, { season: viewedSeason });
+  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding, { season: viewedSeason, seasonProminent: true });
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
@@ -585,11 +585,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding);
+    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding, { season: viewedSeason, seasonProminent: true });
   };
 
   const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
-    campReportDocument(camp, passengers, pageType, branding);
+    campReportDocument(camp, passengers, pageType, branding, { season: viewedSeason, seasonProminent: true });
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
@@ -764,14 +764,17 @@ const getReportAirlineLogo = (airline: string): string | null => {
 
   /* `onView` كان وسيطاً لا يمرّره أحد — زرٌّ موعودٌ لا وجود له.
      والمعاينةُ مؤجَّلة، فلا يبقى في الواجهة وعدٌ لا يُنجَز. */
+  /* `onPrint` زرُّ طباعةٍ واحد، و`printActions` بديلُه حين يكون
+     للتقرير اتّجاهان (الفندق) — لا مسارَ طباعةٍ ثالث، بل موضعٌ
+     في الشريط نفسه. */
   const ExportButtons = ({
-    title, onExcel, onPrint
-  }: { title?: string; onExcel: () => void; onPrint: () => void }) => (
+    title, onExcel, onPrint, printActions
+  }: { title?: string; onExcel: () => void; onPrint?: () => void; printActions?: React.ReactNode }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       {title && <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>}
       <div className="rep-actions" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
         <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
-        <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>
+        {printActions ?? (onPrint && <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>)}
       </div>
     </div>
   );
@@ -1729,21 +1732,25 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 </div>
               </div>
 
+              {/* اتّجاهُ الورقة اختيارٌ صريحٌ لا زرٌّ جانبيّ: «بالطول»
+                  ستّ عشرة غرفةً في الورقة، و«بالعرض» خمسَ عشرة بكروتٍ
+                  أعرض تُبقي الاسمَ الطويل في سطرٍ واحد. وكلاهما
+                  ينادي `hotelReportDocument` نفسه — لا بانيَ ثانٍ.
+                  وقد حلّا محلَّ زرّ «طباعة عرضيّة» المنفصل، فلا يبقى
+                  مساران في الواجهة يعنيان الشيءَ نفسه. */}
               <ExportButtons
                 onExcel={exportHotelXLSX}
-                onPrint={() => printInPage(getHotelHTML())}
+                printActions={
+                  <>
+                    <button onClick={() => printInPage(getHotelHTML({ landscape: false }))} style={printBtnStyle} title="ستّ عشرة غرفة في الورقة">
+                      {printIcon} طباعة بالطول
+                    </button>
+                    <button onClick={() => printInPage(getHotelHTML({ landscape: true }))} style={printBtnStyle} title="خمس عشرة غرفة في الورقة — أسماء أوسع">
+                      {printIcon} طباعة بالعرض
+                    </button>
+                  </>
+                }
               />
-              {/* طباعةٌ عرضيّة — خمس عشرة غرفةً في الورقة بدل ستّ عشرة.
-                  حلّت محلَّ زرٍّ تجريبيّ كان يشحن إلى الإنتاج باسم «تجربة». */}
-              <div style={{ marginTop: -6, marginBottom: 16 }}>
-                <button
-                  onClick={() => printInPage(getHotelHTML({ landscape: true }))}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "transparent", border: "1px dashed var(--accent-dark)", color: "var(--accent-dark)", padding: "4px 10px", borderRadius: "var(--radius-sm)", fontSize: 11, cursor: "pointer", fontFamily: "var(--font-body)" }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
-                  طباعة عرضيّة (١٥ غرفة في الورقة)
-                </button>
-              </div>
 
               {/* مفتاح الألوان */}
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16, padding: "10px 14px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10 }}>

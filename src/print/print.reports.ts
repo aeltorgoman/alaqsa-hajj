@@ -72,10 +72,10 @@ export function campSection(camp: Camp, passengers: Passenger[], pageType: CampP
     renderNamesTable(m.people, "اسم الحاج", branding.primaryColor ?? undefined), branding);
 }
 
-/* ⚠️ منى وعرفة: «لا تغيّر فيه». القدرةُ موجودةٌ معماريّاً — `chrome`
-   وسيطٌ كأيّ تقرير — لكنّ المنادي لا يمرّر شيئاً، فالمظهرُ الافتراضيّ
-   هو المعتمَدُ نفسه بالحرف. ولا تُضاف ترويسةٌ ولا موسمٌ ولا ترقيمٌ
-   لمجرّد أنّ القشرةَ تدعمها. */
+/* منى وعرفة: الجسمُ والأعمدةُ والترتيبُ كما هي بالحرف، ويُزاد
+   **الموسمُ وحده** — بالمعاملة البارزة نفسها التي نالها الباص، فتُقرأ
+   الكشوفُ التشغيليّة الثلاثة أخواتٍ لا غرباء. ولا ترويسةَ ولا ترقيمَ
+   ولا سعةَ ولا حاشيةَ أخرى تُزاد. */
 export function campReportDocument(camp: Camp, passengers: Passenger[], pageType: CampPageType, branding: PrintBranding, chrome: PrintChrome = {}): string {
   return makeHTML(campManifest(camp, passengers, pageType).docTitle,
     campSection(camp, passengers, pageType, branding), branding, { noHeader: true, chrome });
@@ -132,9 +132,21 @@ const rowCountFor = (room: Room, occupancy: number): number => {
   return Math.max(cap, occupancy, 1);
 };
 
+/* الوضعُ العرضيّ يمنح الكرتَ عرضاً أكبر (نحو ٥٤مم مقابل ٤٦مم طولاً)،
+   فيُعطى الاسمُ ذلك الفضلَ صراحةً: حشوٌ أضيق وعمودُ ترقيمٍ أنحف —
+   فيبقى الاسمُ الطويل في سطرٍ واحدٍ ما أمكن. والمعايرةُ نفسها لا
+   تُمسّ: جدولُ أحجام الخطّ وعددُ الكروت في الورقة كما هما. */
+type CardMetrics = { idxWidth: number; namePad: number };
+const CARD_METRICS: Record<"portrait" | "landscape", CardMetrics> = {
+  portrait:  { idxWidth: 18, namePad: 7 },
+  landscape: { idxWidth: 16, namePad: 5 },
+};
+
 export function hotelRoomCard(
   room: Room, occupants: { short_ar?: string; name_ar: string }[], fontSize: number, showPattern: boolean,
+  orientation: "portrait" | "landscape" = "portrait",
 ): string {
+  const { idxWidth, namePad } = CARD_METRICS[orientation];
   const type = (room.type || "").trim();
   const clr = PRINT_ROOM_COLORS[type] || ROOM_COLOR_FALLBACK;
   const rowPad = Math.round(fontSize * 0.28 * 10) / 10;
@@ -145,12 +157,12 @@ export function hotelRoomCard(
     const p = occupants[i];
     return p
       ? `<tr>
-              <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:18px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
-              <td class="auto-fit-name" data-max-size="${fontSize}" style="padding:${rowPad}px 7px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.short_ar || p.name_ar}</td>
+              <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:${idxWidth}px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
+              <td class="auto-fit-name" data-max-size="${fontSize}" data-pad="${namePad * 2}" style="padding:${rowPad}px ${namePad}px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.short_ar || p.name_ar}</td>
             </tr>`
       : `<tr>
-              <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:18px">&nbsp;</td>
-              <td style="padding:${rowPad}px 7px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
+              <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:${idxWidth}px">&nbsp;</td>
+              <td style="padding:${rowPad}px ${namePad}px;border-bottom:1px solid rgba(0,0,0,0.06)">&nbsp;</td>
             </tr>`;
   }).join("");
   const cardBg = showPattern ? "rgba(255,255,255,0.4)" : "#ffffff";
@@ -207,7 +219,7 @@ export function hotelReportDocument(
       const padded: (Room | null)[] = [...pageRooms];
       while (padded.length < PER_PAGE) padded.push(null);
       const cells = padded.map(room =>
-        room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern)
+        room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern, landscape ? "landscape" : "portrait")
              : `<div style="background:transparent"></div>`
       ).join("");
       const stamp = chrome.pageNumbers ? pageStampHTML(pi + 1, pages.length) : "";
@@ -226,7 +238,7 @@ export function hotelReportDocument(
           cells.forEach(function(cell) {
             var maxSize = parseFloat(cell.getAttribute('data-max-size')) || 17;
             var minSize = 8;
-            var available = cell.clientWidth - 14;
+            var available = cell.clientWidth - (parseFloat(cell.getAttribute('data-pad')) || 14);
             var text = cell.textContent;
             var size = maxSize;
             while (size > minSize) {

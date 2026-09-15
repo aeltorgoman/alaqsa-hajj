@@ -34,6 +34,11 @@ export type PrintChrome = {
   resultCount?: { label: string; value: number } | null;
   /** ترقيمُ الصفحات — لا يُدعَم إلا لمستندٍ مقسَّمٍ ببنائه (انظر أدناه). */
   pageNumbers?: boolean;
+  /** الموسمُ ظاهرٌ لا هامشيّ: يسارَ الورقة وبخطٍّ يُقرأ من بعيد.
+   *  معاينةُ الباص أظهرت أنّ سطرَ البيانات الدقيق وسطَ الورقة لا
+   *  يُقرأ — والموسمُ في كشفٍ تشغيليّ ليس حاشيةً بل هويّةُ الورقة.
+   *  وهو المعاملةُ نفسها في الباص ومنى وعرفة، فالثلاثةُ إخوة. */
+  seasonProminent?: boolean;
 };
 
 /* ═══ الموسم ═══ */
@@ -71,8 +76,15 @@ export function compactHeaderHTML(b: PrintBranding, title: string): string {
 export function chromeMetaHTML(chrome: PrintChrome = {}): string {
   const parts: string[] = [];
   const season = seasonLabel(chrome.season);
+  const archived = !!(chrome.season && chrome.season.closed_at);
+
+  /* الموسمُ البارز سطرٌ قائمٌ بذاته يسارَ الورقة — لا عنصرٌ في سطرِ
+     حواشٍ موسَّط. وبقيّةُ الحواشي تتبعه إن وُجدت. */
+  if (season && chrome.seasonProminent) {
+    const rest = chromeMetaHTML({ ...chrome, season: null, seasonProminent: false });
+    return `<div class="doc-season${archived ? " doc-season-archived" : ""}">${escapeCompanyHtml(season)}</div>${rest}`;
+  }
   if (season) {
-    const archived = !!(chrome.season && chrome.season.closed_at);
     parts.push(`<span class="meta-season${archived ? " meta-archived" : ""}">${escapeCompanyHtml(season)}</span>`);
   }
   if (chrome.resultCount) {
@@ -110,6 +122,10 @@ export const CHROME_CSS = `
   .doc-meta .meta-season { font-weight: 700; color: #555; }
   .doc-meta .meta-archived { color: #8a6a10; }
   .page-stamp { text-align: center; font-size: 7pt; color: #aaa; margin-top: 4pt; }
+  /* الموسمُ البارز: يسارَ الورقة، وبحجمٍ يُقرأ — لا حاشيةٌ وسطى */
+  .doc-season { text-align: left; font-size: 11pt; font-weight: 700; color: #555;
+                margin: 0 0 6pt; padding-bottom: 3pt; border-bottom: 0.5pt solid #e6e6e6; }
+  .doc-season-archived { color: #8a6a10; }
   .doc-header-compact .logo-box { width: 14mm; height: 14mm; font-size: 11pt; }
   .doc-header-compact .company-name { font-size: 10pt; }
   .doc-header-compact .tagline { font-size: 6.5pt; }

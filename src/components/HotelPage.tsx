@@ -432,13 +432,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   /* الطباعةُ من صفحة الفندق — بالمصدر المشترك وبنطاق ما يراه الموظّف
      على الشاشة الآن (الدور والنوع). فالورقةُ لا تختلف بباب طُبعت منه. */
   const reportBranding = useReportBranding();
-  const printRooms = () => {
+  const printRooms = (landscape: boolean) => {
     if (filteredRooms.length === 0) { showAlert("warning", "لا توجد غرف ضمن التصفية الحالية"); return; }
     const scope: string[] = [];
     if (filterFloor !== "الكل") scope.push(`الطابق: ${filterFloor}`);
     if (filterType) scope.push(`النوع: ${filterType}`);
     if (filterStatus !== "الكل") scope.push(`الحالة: ${filterStatus}`);
     printInPage(hotelReportDocument(filteredRooms, passengers, reportBranding, {
+      landscape,
       subtitle: filterType ? ` — ${filterType}` : "",
       chrome: { season: viewedSeason, pageNumbers: true, scope: scope.length ? scope.join(" · ") : null },
     }));
@@ -498,13 +499,17 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           </button>
         </div>
 
-        {/* زرُّ الطباعة — بابُ الفندق إلى المطبوع، وكان معدوماً */}
-        <div style={{ display:"flex", gap:6, padding:"6px 12px 0", flexShrink:0 }}>
-          <button onClick={printRooms} title="طباعة كشف الغرف بنطاق التصفية الحالي"
-            style={{ display:"inline-flex",alignItems:"center",gap:5,background:"var(--bg-2, var(--paper))",border:"1px solid var(--line)",color:"var(--ink)",padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"var(--font-body)" }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            طباعة ({filteredRooms.length})
-          </button>
+        {/* بابُ الفندق إلى المطبوع — وباتّجاهَي الورقة كصفحة التقارير
+            بالضبط، وبالمستند المشترك نفسه لا بنسخةٍ ثانية. */}
+        <div style={{ display:"flex", gap:6, padding:"6px 12px 0", flexShrink:0, flexWrap:"wrap" }}>
+          {([[false, "طباعة بالطول", "ستّ عشرة غرفة في الورقة"],
+             [true,  "طباعة بالعرض", "خمس عشرة غرفة في الورقة — أسماء أوسع"]] as [boolean, string, string][]).map(([land, lbl, tip]) => (
+            <button key={lbl} onClick={() => printRooms(land)} title={tip}
+              style={{ display:"inline-flex",alignItems:"center",gap:5,background:"var(--paper)",border:"1px solid var(--line)",color:"var(--ink)",padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"var(--font-body)" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              {lbl} ({filteredRooms.length})
+            </button>
+          ))}
         </div>
 
         {/* Row 2: أزرار الأدوار */}
