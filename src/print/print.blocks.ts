@@ -82,15 +82,28 @@ export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحا
 }
 
 // قسم بشعارين (يمين/شمال) وعنوان كبير في الوسط + جدول أسماء — مستخدم لكل باص/مخيم
-export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTML: string, b: PrintBranding): string {
+/* ⚠️ الموسمُ ينتمي إلى العنوان لا إلى حافّة الورقة: المعاينةُ أظهرت أن
+   سطراً قائماً بذاته أقصى اليسار يُقرأ لكنّه منفصلٌ عن التقرير. فصار
+   سطراً ثانوياً تحت الاسم مباشرةً — واسمُ المخيّم ثم «موسم حج ١٤٤٨هـ •
+   رجال». والجنسُ ينضمّ إليه فلا يُفقَد ولا يُكرَّر، وتصير الكشوفُ
+   التشغيليّةُ الثلاثة على لسانٍ واحد. */
+export function makeTwoLogoSectionHTML(
+  title: string, subtitle: string, namesHTML: string, b: PrintBranding,
+  meta: (string | null | undefined)[] = [],
+): string {
   const logo = sectionLogoHtml(b);
   const safeTitle = escapeCompanyHtml(title);
-  const safeSubtitle = escapeCompanyHtml(subtitle);
+  /* العنوانُ الفرعيّ القديم (الجنس) ينضمّ إلى السطر الثانويّ إن وُجد،
+     فلا سطران يتنافسان تحت الاسم. */
+  const parts = [...meta, subtitle].filter((x): x is string => !!x && !!x.trim());
+  const metaHTML = parts.length
+    ? `<div class="camp-meta">${parts.map(escapeCompanyHtml).join(`<span class="camp-meta-sep">•</span>`)}</div>`
+    : "";
   return `<div class="camp-header">
     <div class="camp-logo">${logo}</div>
     <div class="camp-title-box">
       <div class="camp-title">${safeTitle}</div>
-      ${safeSubtitle ? `<div class="camp-subtitle">${safeSubtitle}</div>` : ""}
+      ${metaHTML}
     </div>
     <div class="camp-logo">${logo}</div>
   </div>${namesHTML}`;

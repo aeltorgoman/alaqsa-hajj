@@ -424,8 +424,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
   // ══════════════════════════════════════════════════════════
   /* الموسمُ وحده يُزاد — والجسمُ والأعمدةُ والترتيبُ كما هي */
-  const printCamp = (camp: Camp) => printInPage(campReportDocument(camp, passengers, pageType, branding, { season: viewedSeason, seasonProminent: true }));
-  const printAll = () => printInPage(campsReportDocument(camps, passengers, pageType, branding, { season: viewedSeason, seasonProminent: true }));
+  const printCamp = (camp: Camp) => printInPage(campReportDocument(camp, passengers, pageType, branding, { season: viewedSeason }));
+  const printAll = () => printInPage(campsReportDocument(camps, passengers, pageType, branding, { season: viewedSeason }));
 
   const specialBadge = (light?: boolean) => (
     <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>خاص</span>

@@ -18,6 +18,8 @@ const LAYOUT_SETTLE_MS = 1_000;
 export type PrintOptions = {
   /** انتظرِ اكتمالَ تحميل الصور قبل الطباعة — لصفحات المستندات. */
   waitForImages?: boolean;
+  /** تجاوزٌ صريح لاتّجاه الورقة؛ والافتراضُ أن يُقرأ من `@page` في المستند. */
+  landscape?: boolean;
 };
 
 /** ينتظر كلَّ صورةٍ حتى تكتمل أو تفشل، بسقفٍ زمنيّ لا يُتجاوز. */
@@ -37,12 +39,25 @@ function imagesSettled(doc: Document): Promise<void> {
   ]);
 }
 
+/* ⚠️ عطبٌ أظهرته الـPDF الحقيقيّة: الإطارُ كان بمقاس A4 **طوليّ دائماً**
+   (٢١٠مم عرضاً)، فمستندُ العرض يُخطَّط على ٢١٠مم ثم يُطبَع على ورقةٍ
+   عرضُها ٢٩٧مم — فيقع المحتوى في نحو سبعين بالمئة من الورقة ويبدو
+   كأنّه دُوِّر. وقياساً: أعمدةُ شبكة الفندق ١٥١بك بدل ٢١٧بك، أي أضيق
+   حتى من الطباعة الطوليّة — فيضيع فضلُ العرض كلُّه.
+
+   والاتّجاهُ يُقرأ من المستند نفسه لا من وسيطٍ يمرّره كلُّ منادٍ:
+   قاعدةُ `@page` مكتوبةٌ في الـHTML، فهي الحَكَم. فلا يسهو نداءٌ عن
+   تمريره، ولا يفترق ما يُخطَّط عمّا يُطبَع. */
+const LANDSCAPE_PAGE = /@page[^}]*size:\s*A4\s+landscape/i;
+
 export function printInPage(html: string, options: PrintOptions = {}) {
   const existing = document.getElementById("__print_frame__");
   if (existing) existing.remove();
+  const landscape = options.landscape ?? LANDSCAPE_PAGE.test(html);
+  const [w, h] = landscape ? ["297mm", "210mm"] : ["210mm", "297mm"];
   const iframe = document.createElement("iframe");
   iframe.id = "__print_frame__";
-  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:210mm;height:297mm;border:none;";
+  iframe.style.cssText = `position:fixed;top:-9999px;left:-9999px;width:${w};height:${h};border:none;`;
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!doc) return;

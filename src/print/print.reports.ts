@@ -15,7 +15,7 @@
    يفترق مدخلان. وهيئةُ `FlightsPage` هي المرجع، ولا تُغيَّر. */
 import type { Passenger, Bus, Camp, Flight, Room } from "../types";
 import { roomCapacity } from "../utils/room";
-import { chromeMetaHTML, pageStampHTML, type PrintChrome } from "./print.chrome";
+import { chromeMetaHTML, pageStampHTML, seasonLabel, type PrintChrome, type PrintSeason } from "./print.chrome";
 import type { PrintBranding } from "./print.brand";
 import { makeHTML } from "./print.shell";
 import { makeFlightSectionHTML, makeTwoLogoSectionHTML, renderNamesTable, joinSections } from "./print.blocks";
@@ -45,31 +45,40 @@ export function flightsReportDocument(flights: Flight[], passengers: Passenger[]
 }
 
 /* ═══ الباص ═══ (الهيئةُ المقبولة في R1 — شعاران وجدولُ أسماء) */
-export function busSection(bus: Bus, passengers: Passenger[], branding: PrintBranding): string {
+/* الموسمُ يدخل سطرَ العنوان الثانويّ، لا حاشيةً على حافّة الورقة. */
+export function busSection(bus: Bus, passengers: Passenger[], branding: PrintBranding, season?: PrintSeason): string {
   const m = busManifest(bus, passengers);
   return makeTwoLogoSectionHTML(m.title, m.subtitle,
-    renderNamesTable(m.people, "اسم الحاج / الحاجة", branding.primaryColor ?? undefined), branding);
+    renderNamesTable(m.people, "اسم الحاج / الحاجة", branding.primaryColor ?? undefined), branding,
+    [seasonLabel(season)]);
 }
 
 /* ⚠️ الباصُ يبقى على هيئته التشغيليّة البسيطة: لا ترويسةَ تُفرَض ولا
    ترقيمَ يُفرَض. والموسمُ **قدرةٌ** يمرّرها المنادي إن شاء، والافتراضُ
    بلا قشرةٍ إضافيّة — فمن لم يمرّر شيئاً خرجت ورقتُه كما كانت. */
+/* والموسمُ لا يُمرَّر إلى القشرة أيضاً، وإلا ظهر مرّتين: هنا في
+   العنوان، وهناك حاشيةً. فهو من نصيب القسم وحده. */
 export function busReportDocument(bus: Bus, passengers: Passenger[], branding: PrintBranding, chrome: PrintChrome = {}): string {
-  return makeHTML(busManifest(bus, passengers).docTitle, busSection(bus, passengers, branding), branding,
-    { noHeader: true, chrome });
+  const { season, ...rest } = chrome;
+  return makeHTML(busManifest(bus, passengers).docTitle, busSection(bus, passengers, branding, season), branding,
+    { noHeader: true, chrome: rest });
 }
 
 export function busesReportDocument(buses: Bus[], passengers: Passenger[], branding: PrintBranding, chrome: PrintChrome = {}): string {
+  const { season, ...rest } = chrome;
   return makeHTML(BUSES_DOC_TITLE,
-    joinSections(buses.map(b => busSection(b, passengers, branding)), { pageNumbers: chrome.pageNumbers }),
-    branding, { noHeader: true, chrome });
+    joinSections(buses.map(b => busSection(b, passengers, branding, season)), { pageNumbers: chrome.pageNumbers }),
+    branding, { noHeader: true, chrome: rest });
 }
 
 /* ═══ المخيّم ═══ */
-export function campSection(camp: Camp, passengers: Passenger[], pageType: CampPageType, branding: PrintBranding): string {
+/* المخيّم: «مخيم منى أ» ثم «موسم حج ١٤٤٧هـ • رجال» — الجنسُ باقٍ
+   ينضمّ إلى الموسم في السطر نفسه، فلا يُفقَد ولا يُزاحم. */
+export function campSection(camp: Camp, passengers: Passenger[], pageType: CampPageType, branding: PrintBranding, season?: PrintSeason): string {
   const m = campManifest(camp, passengers, pageType);
   return makeTwoLogoSectionHTML(m.title, m.subtitle,
-    renderNamesTable(m.people, "اسم الحاج", branding.primaryColor ?? undefined), branding);
+    renderNamesTable(m.people, "اسم الحاج", branding.primaryColor ?? undefined), branding,
+    [seasonLabel(season)]);
 }
 
 /* منى وعرفة: الجسمُ والأعمدةُ والترتيبُ كما هي بالحرف، ويُزاد
@@ -77,14 +86,16 @@ export function campSection(camp: Camp, passengers: Passenger[], pageType: CampP
    الكشوفُ التشغيليّة الثلاثة أخواتٍ لا غرباء. ولا ترويسةَ ولا ترقيمَ
    ولا سعةَ ولا حاشيةَ أخرى تُزاد. */
 export function campReportDocument(camp: Camp, passengers: Passenger[], pageType: CampPageType, branding: PrintBranding, chrome: PrintChrome = {}): string {
+  const { season, ...rest } = chrome;
   return makeHTML(campManifest(camp, passengers, pageType).docTitle,
-    campSection(camp, passengers, pageType, branding), branding, { noHeader: true, chrome });
+    campSection(camp, passengers, pageType, branding, season), branding, { noHeader: true, chrome: rest });
 }
 
 export function campsReportDocument(camps: Camp[], passengers: Passenger[], pageType: CampPageType, branding: PrintBranding, chrome: PrintChrome = {}): string {
+  const { season, ...rest } = chrome;
   return makeHTML(campsDocTitle(pageType),
-    joinSections(campsInOrder(camps).map(c => campSection(c, passengers, pageType, branding)), { pageNumbers: chrome.pageNumbers }),
-    branding, { noHeader: true, chrome });
+    joinSections(campsInOrder(camps).map(c => campSection(c, passengers, pageType, branding, season)), { pageNumbers: chrome.pageNumbers }),
+    branding, { noHeader: true, chrome: rest });
 }
 
 /* ═══ الفندق ═══
@@ -113,9 +124,40 @@ const ROOM_COLOR_FALLBACK = "#5C1830";
 
 /* معايرةٌ مُختبَرة بمحاكاة طباعة A4 — تبقى كما هي، ومقياسُها الآن
    سعةُ الغرفة المعتمَدة لا عددُ ساكنيها. */
-const FONT_BY_MAX_CAP: Record<number, number> = { 1: 22, 2: 22, 3: 21, 4: 17 };
+/* الأربعةُ الأولى كما هي لم تُمسّ. وزِيد ما فوقها: «خاص» تُدخَل سعتُها
+   صراحةً وقد تبلغ ستّاً، فكانت تُقصَر إلى الأربعة فيُرسَم ستّةُ صفوفٍ
+   بخطِّ الأربعة — فتفيض عن الكرت وعن الورقة. */
+const FONT_BY_MAX_CAP: Record<number, number> = { 1: 22, 2: 22, 3: 21, 4: 17, 5: 15, 6: 13.5, 7: 12, 8: 11 };
 const roomFontSize = (maxCapInPage: number): number =>
-  FONT_BY_MAX_CAP[Math.min(4, Math.max(1, maxCapInPage))] || 17;
+  FONT_BY_MAX_CAP[Math.min(8, Math.max(1, maxCapInPage))] || 11;
+
+/* ═══ ارتفاعُ الورقة — الدواءُ الحقيقيّ لصفحةٍ زائدةٍ فارغة ═══
+   ⚠️ ما أظهرته الـPDF الحقيقيّة: `.hotel-page` كانت بلا ارتفاعٍ محدَّد،
+   و`grid-template-rows: repeat(N, 1fr)` بلا ارتفاعِ حاويةٍ يقيس الصفَّ
+   بأطولِ كرتٍ فيه. وبعد أن صارت صفوفُ الكرت تتبع **السعة** (لتظهر
+   الأَسِرّةُ الشاغرة) طال أطولُ كرتٍ — فبلغت الشبكةُ ٢٦٧مم والمساحةُ
+   المطبوعة ٢٦٩مم، ومعها ترويسةٌ ٢٨٫٦مم — ففاضت، وتبعها التذييلُ إلى
+   ورقةٍ ثانيةٍ ليس فيها إلا هو. وكذلك كان سطرُ الترقيم يقع **خارج**
+   الورقة التي يرقّمها فيُدفَع إلى التالية.
+
+   فالورقةُ الآن ذاتُ ارتفاعٍ مصرَّحٍ به، والترقيمُ داخلها: الشبكةُ
+   تأخذ ما بقي بعد الترويسة والترقيم والتذييل لا أكثر. والخطُّ وحجمُ
+   الكرت كما هما — لم يُصغَّر شيءٌ لعلاج الترقيم. */
+const SHEET = {
+  /** المساحةُ المطبوعة: A4 ناقص هامشَي `PAGE_MARGIN_REPORT` (١٤مم × ٢). */
+  printableH: { portrait: 269, landscape: 182 },
+  /** الترويسةُ المضغوطة + شريطُ العنوان + سطرُ الموسم — مقيسةٌ لا مقدَّرة. */
+  chromeH: 30,
+  /** سطرُ «صفحة س من ص». */
+  stampH: 4,
+  /** تذييلُ القشرة بهامشه وحدّه. */
+  footerH: 10,
+  /* هامشُ أمانٍ لا يُستغنى عنه: القياسُ أظهر أنّ الجسم كان يبلغ
+     ٢٦٩٫٢مم في مساحةٍ سعتُها ٢٦٩ — فيفيض بعُشرَي مليمتر، ويولّد
+     ورقةً كاملة. والخطوطُ تُحمَّل من الشبكة فتختلف أطوالُ الأسطر
+     قليلاً بين جهازٍ وآخر، فلا يُبنى الصحّةُ على حدٍّ حرفيّ. */
+  safetyH: 4,
+} as const;
 
 /** وسمُ الغرفة: «رباعية — ٢/٤»، و«خاص — ٢/٦»، وبلا سعةٍ «مجلس — ٢ (سعة غير محدّدة)». */
 export function roomTypeBadge(room: Room, occupancy: number): string {
@@ -207,7 +249,10 @@ export function hotelReportDocument(
       ${cairoFont}
       * { font-family: 'Cairo', sans-serif !important; }
       ${showPattern ? "" : "html, body { background-image: none !important; background: #ffffff !important; }"}
-      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 6px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
+      /* الورقةُ وعاءٌ بارتفاعٍ مصرَّح، والشبكةُ تملأ ما بقي منه —
+         فتنضغط الصفوفُ داخل الورقة بدل أن تفيض عنها. */
+      .hotel-sheet { display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
+      .hotel-page { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 6px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
       .hotel-page table { margin: 0 !important; }
       .hotel-page td { border: none; white-space: normal !important; vertical-align: middle; }
       .hotel-page tr:nth-child(even) td { background: transparent !important; }
@@ -222,10 +267,18 @@ export function hotelReportDocument(
         room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern, landscape ? "landscape" : "portrait")
              : `<div style="background:transparent"></div>`
       ).join("");
+      /* الترقيمُ **داخل** ورقته لا بعدها — وإلا رُقِّمت الورقةُ في التي تليها */
       const stamp = chrome.pageNumbers ? pageStampHTML(pi + 1, pages.length) : "";
-      return `<div class="hotel-page" style="page-break-after:${pi < pages.length - 1 ? "always" : "avoid"}">
-          ${cells}
-        </div>${stamp}`;
+      const isLast = pi === pages.length - 1;
+      const avail = SHEET.printableH[landscape ? "landscape" : "portrait"]
+        - (pi === 0 ? SHEET.chromeH : 0)
+        - (chrome.pageNumbers ? SHEET.stampH : 0)
+        - (isLast ? SHEET.footerH : 0)
+        - SHEET.safetyH;
+      return `<div class="hotel-sheet" style="height:${avail}mm;page-break-after:${isLast ? "avoid" : "always"}">
+          <div class="hotel-page">${cells}</div>
+          ${stamp}
+        </div>`;
     }).join("");
 
   /* ضبطُ حجم كلّ اسمٍ على حدة — منقولٌ بحرفه، ومعايرتُه مُختبَرة */

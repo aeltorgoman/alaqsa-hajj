@@ -85,6 +85,11 @@ ${FONT_LINK}
   .camp-header .camp-title-box { flex: 1; text-align: center; }
   .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 6pt 20pt; border-radius: 5pt; font-size: 18pt; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; }
   .camp-header .camp-subtitle { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  /* السطرُ الثانويّ تحت اسم الكشف: الموسمُ والجنس — تابعٌ للعنوان لا
+     حاشيةٌ على حافّة الورقة. وهو وريثُ camp-subtitle وبمقاسه.
+     ولا علامةَ اقتباسٍ مائلة هنا: النصّ داخل قالبٍ نصّيّ. */
+  .camp-header .camp-meta { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-meta-sep { margin: 0 6pt; opacity: 0.55; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 8pt; border-radius: 6pt; overflow: hidden; }
   th { background: ${primaryColor}; color: #fff; padding: 5pt 7pt; text-align: right; font-size: 9pt; font-weight: 600; }

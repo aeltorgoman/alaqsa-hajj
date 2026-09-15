@@ -280,8 +280,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   // الطباعة — بلا تغيير
   // ══════════════════════════════════════════════════════════
   /* الموسمُ معتمَد للباص وبارزٌ يسارَ الورقة — والترقيمُ لا يُفرَض */
-  const printBus = (bus: Bus) => printInPage(busReportDocument(bus, passengers, branding, { season: viewedSeason, seasonProminent: true }));
-  const printAll = () => printInPage(busesReportDocument(buses, passengers, branding, { season: viewedSeason, seasonProminent: true }));
+  const printBus = (bus: Bus) => printInPage(busReportDocument(bus, passengers, branding, { season: viewedSeason }));
+  const printAll = () => printInPage(busesReportDocument(buses, passengers, branding, { season: viewedSeason }));
 
   // ══════════════════════════════════════════════════════════
   const vipBadge = (light?: boolean) => (

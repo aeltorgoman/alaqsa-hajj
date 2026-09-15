@@ -543,9 +543,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
   /* الباص: الموسمُ معتمَد، والترقيمُ **لا** يُفرَض — الهيئةُ التشغيليّة
      البسيطة تبقى كما هي. */
   const getBusesHTML = () =>
-    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding, { season: viewedSeason, seasonProminent: true });
+    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding, { season: viewedSeason });
 
-  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding, { season: viewedSeason, seasonProminent: true });
+  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding, { season: viewedSeason });
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
@@ -585,11 +585,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding, { season: viewedSeason, seasonProminent: true });
+    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding, { season: viewedSeason });
   };
 
   const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
-    campReportDocument(camp, passengers, pageType, branding, { season: viewedSeason, seasonProminent: true });
+    campReportDocument(camp, passengers, pageType, branding, { season: viewedSeason });
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
