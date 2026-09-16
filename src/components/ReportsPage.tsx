@@ -9,7 +9,9 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
          campsReportDocument, campReportDocument,
          flightReportDocument, flightsReportDocument,
          docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer,
-         hotelReportDocument } from "../print";
+         hotelReportDocument, initialPrintOptions, chromeFromOptions,
+         type PrintReportKey, type PrintOptionsState } from "../print";
+import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
@@ -76,8 +78,22 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
   /* ترتيب كشف طلب الحجز — ثلاثة أوضاع ولا رابع، ولا «حسب الرحلة» */
   const [bookingSort, setBookingSort] = useState<"manual" | "alpha" | "gender">("manual");
-  /* عمودُ انتهاء الجواز — اختياريّ: تطلبه بعضُ الخطوط ولا تطلبه أخرى */
+  /* عمودُ انتهاء الجواز — اختياريّ: تطلبه بعضُ الخطوط ولا تطلبه أخرى.
+     ⚠️ وهو **عمودُ بيانات** لا خيارُ عرض، فيبقى مستقلّاً عن «خيارات
+     الطباعة» ولا يُدرَج فيها. */
   const [airlineShowExpiry, setAirlineShowExpiry] = useState(false);
+
+  /* خياراتُ العرض لكلّ منطقة تقرير — خريطةٌ واحدة، لا حالةٌ لكلّ تقرير.
+     وكلُّ مفتاحٍ يبدأ بمظهره المعتمَد كما تصفه `PRINT_SPECS`. */
+  const [printOpts, setPrintOpts] = useState<Record<string, PrintOptionsState>>({});
+  const optsFor = (k: PrintReportKey) => printOpts[k] ?? initialPrintOptions(k);
+  const setOptsFor = (k: PrintReportKey) => (next: PrintOptionsState) =>
+    setPrintOpts(prev => ({ ...prev, [k]: next }));
+  const chromeFor = (k: PrintReportKey, inputs: Parameters<typeof chromeFromOptions>[2] = {}) =>
+    chromeFromOptions(k, optsFor(k), inputs);
+  const optionsMenu = (k: PrintReportKey) => (
+    <PrintOptionsMenu report={k} value={optsFor(k)} onChange={setOptsFor(k)} />
+  );
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
   /* ── كشف طلب الحجز ──────────────────────────────────────────
@@ -167,8 +183,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // بحيث يثبّت كل عميل/شركة لونه الخاص في المطبوعات بصرف النظر عن الثيم الذي يستخدمه الموظف على الشاشة
   /* هوية الطباعة — نسخة واحدة تخدم كل مولّدات التقارير أدناه */
   const branding = reportBranding;
-  const mkHTML = (title: string, body: string, landscape = false, noHeader = false, patternOpacity?: number) =>
-    makeHTML(title, body, reportBranding, { landscape, noHeader, patternOpacity });
 
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -404,11 +418,11 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     const body = `<table style="width:100%;border-collapse:collapse;table-layout:auto"><tr><th style="text-align:center;width:25pt;background:${primaryColor};color:#fff;padding:5pt 4pt;font-size:9pt">م</th>${activeCols.map(c => `<th style="background:${primaryColor};color:#fff;padding:5pt 6pt;font-size:9pt;text-align:right">${c.label}</th>`).join("")}</tr>${rows}</table>`;
     return makeHTML("كشف الحجاج", body, reportBranding, {
       landscape: activeCols.length > 5,
-      chrome: {
+      chrome: chromeFor("pilgrims", {
         season: viewedSeason,
         resultCount: { label: "عدد النتائج", value: filteredPassengers.length },
         scope: passengersScopeCaption(),
-      },
+      }),
     });
   };
 
@@ -470,11 +484,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
     const expTh = airlineShowExpiry ? `<th>PASSPORT EXPIRY</th>` : "";
     const body = `${summary}<div dir="ltr" style="text-align:left"><table class="flight-table ltr-table" style="direction:ltr;margin-left:0;margin-right:auto"><tr><th style="text-align:center;width:30px">S.N.</th>${grpTh}<th>FULL NAME</th><th>NAT.</th><th>PASSPORT NO.</th>${expTh}<th>TEL. NO.</th><th>GENDER</th><th>CLASS</th></tr>${rows}</table></div>`;
     return makeHTML("Flight Booking List", body, reportBranding, {
-      chrome: {
+      chrome: chromeFor("airline", {
         season: viewedSeason,
         resultCount: { label: "عدد المسافرين", value: list.length },
         scope: airlineScopeCaption(),
-      },
+      }),
     });
   };
 
@@ -509,7 +523,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   const getPerFlightHTML = () =>
     flightsReportDocument(flights.filter(f => selectedFlightIds.has(f.id)), passengers, branding,
-      { season: viewedSeason, pageNumbers: true });
+      chromeFor("flights", { season: viewedSeason }));
 
   const exportPerFlightXLSX = () => {
     const selFlights = flightsInOrder(flights.filter(f => selectedFlightIds.has(f.id)));
@@ -543,9 +557,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
   /* الباص: الموسمُ معتمَد، والترقيمُ **لا** يُفرَض — الهيئةُ التشغيليّة
      البسيطة تبقى كما هي. */
   const getBusesHTML = () =>
-    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding, { season: viewedSeason });
+    busesReportDocument(buses.filter(b => selectedBusIds.has(b.id)), passengers, branding,
+      chromeFor("bus", { season: viewedSeason }));
 
-  const getSingleBusHTML = (bus: Bus) => busReportDocument(bus, passengers, branding, { season: viewedSeason });
+  const getSingleBusHTML = (bus: Bus) =>
+    busReportDocument(bus, passengers, branding, chromeFor("bus", { season: viewedSeason }));
 
   const exportBusesXLSX = () => {
     const selBuses = buses.filter(b => selectedBusIds.has(b.id));
@@ -585,11 +601,13 @@ const getReportAirlineLogo = (airline: string): string | null => {
   // ============================================================
   const getCampsHTML = (pageType: "منى" | "عرفة") => {
     const selectedCampIds = pageType === "منى" ? selectedMinaCampIds : selectedArafaCampIds;
-    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding, { season: viewedSeason });
+    return campsReportDocument(camps.filter(c => c.page_type === pageType && selectedCampIds.has(c.id)), passengers, pageType, branding,
+      chromeFor(pageType === "منى" ? "mina" : "arafa", { season: viewedSeason }));
   };
 
   const getSingleCampHTML = (camp: Camp, pageType: "منى" | "عرفة") =>
-    campReportDocument(camp, passengers, pageType, branding, { season: viewedSeason });
+    campReportDocument(camp, passengers, pageType, branding,
+      chromeFor(pageType === "منى" ? "mina" : "arafa", { season: viewedSeason }));
 
   const exportCampsXLSX = (pageType: "منى" | "عرفة") => {
     const campIdKey = pageType === "منى" ? "camp_mina_id" : "camp_arafa_id";
@@ -767,12 +785,15 @@ const getReportAirlineLogo = (airline: string): string | null => {
   /* `onPrint` زرُّ طباعةٍ واحد، و`printActions` بديلُه حين يكون
      للتقرير اتّجاهان (الفندق) — لا مسارَ طباعةٍ ثالث، بل موضعٌ
      في الشريط نفسه. */
+  /* `options` موضعُ زرّ «خيارات الطباعة» — ولا يُمرَّر للفندق: مطبوعُه
+     أُقفل بشكله المقبول فلا خيارَ يُعرَض عليه. */
   const ExportButtons = ({
-    title, onExcel, onPrint, printActions
-  }: { title?: string; onExcel: () => void; onPrint?: () => void; printActions?: React.ReactNode }) => (
+    title, onExcel, onPrint, printActions, options
+  }: { title?: string; onExcel: () => void; onPrint?: () => void; printActions?: React.ReactNode; options?: React.ReactNode }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
       {title && <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>}
       <div className="rep-actions" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
+        {options}
         <button onClick={onExcel} style={excelBtnStyle}>{excelIcon} Excel</button>
         {printActions ?? (onPrint && <button onClick={onPrint} style={printBtnStyle}>{printIcon} طباعة</button>)}
       </div>
@@ -919,7 +940,12 @@ const getReportAirlineLogo = (airline: string): string | null => {
           </div>`).join("")}
       </div>`).join("");
     /* كلُّ المحتوى صارَ صوراً — فانتظارُ الصور يغطّي الـPDF كذلك */
-    printInPage(mkHTML(docTypeLabel, pagesHTML, false, true), { waitForImages: true });
+    /* مظهرُ المستندات المقبول هو الافتراض: بلا ترويسةٍ ولا حواشٍ ولا
+       ترقيم. والخياراتُ تفتحها إن طلبها الموظّف — ومسارُ التصيير
+       (الصورة والـPDF) لا يمسّه شيءٌ من ذلك. */
+    printInPage(makeHTML(docTypeLabel, pagesHTML, reportBranding, {
+      chrome: chromeFor("documents", { season: viewedSeason }),
+    }), { waitForImages: true });
   };
 
 
@@ -1065,6 +1091,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 title="تقرير الحجاج"
                 onExcel={exportPassengersXLSX}
                 onPrint={() => printInPage(getPassengersHTML())}
+                options={optionsMenu("pilgrims")}
               />
 
               {/* كارت اختيار الأعمدة — مجموعات */}
@@ -1198,6 +1225,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                         title="تقرير خطوط الطيران"
                         onExcel={exportAirlineXLSX}
                         onPrint={() => printInPage(getAirlineHTML())}
+                        options={optionsMenu("airline")}
                       />
                       {/* خيارات الترتيب */}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -1278,6 +1306,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                         <div style={{ fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg> تقرير كل رحلة</div>
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
                           <button onClick={exportPerFlightXLSX} style={excelBtnStyle}>{excelIcon} Excel</button>
+                          {optionsMenu("flights")}
                           <button onClick={() => printInPage(getPerFlightHTML())} style={printBtnStyle}>{printIcon} طباعة</button>
                         </div>
                       </div>
@@ -1394,6 +1423,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   <ExportButtons
                     title="تقرير الباصات"
                     onExcel={exportBusesXLSX}
+                    options={optionsMenu("bus")}
                     onPrint={() => printInPage(getBusesHTML())}
                   />
                   <SelectionPanel
@@ -1487,6 +1517,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   <ExportButtons
                     title="تقرير مخيمات منى"
                     onExcel={() => exportCampsXLSX("منى")}
+                    options={optionsMenu("mina")}
                     onPrint={() => printInPage(getCampsHTML("منى"))}
                   />
                   <SelectionPanel
@@ -1573,6 +1604,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   <ExportButtons
                     title="تقرير مخيمات عرفة"
                     onExcel={() => exportCampsXLSX("عرفة")}
+                    options={optionsMenu("arafa")}
                     onPrint={() => printInPage(getCampsHTML("عرفة"))}
                   />
                   <SelectionPanel
@@ -1841,7 +1873,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 10, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>طباعة المستندات</div>
                 {docList.length > 0 && (
-                  <button onClick={() => { void printDocuments(); }} disabled={docPreparing} style={printBtnStyle}>{printIcon} {docPreparing ? "جارٍ التجهيز..." : `طباعة (${docSelectedIds.size})`}</button>
+                  <div className="rep-actions" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {optionsMenu("documents")}
+                    <button onClick={() => { void printDocuments(); }} disabled={docPreparing} style={printBtnStyle}>{printIcon} {docPreparing ? "جارٍ التجهيز..." : `طباعة (${docSelectedIds.size})`}</button>
+                  </div>
                 )}
               </div>
 
