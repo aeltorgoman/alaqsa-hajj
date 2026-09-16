@@ -18,7 +18,7 @@ import { roomCapacity } from "../utils/room";
 import { chromeMetaHTML, pageStampHTML, seasonLabel, compactHeaderHTML,
          type PrintChrome, type PrintSeason } from "./print.chrome";
 import type { PrintBranding } from "./print.brand";
-import { safeBranding } from "./print.brand";
+import { safeBranding, escapeCompanyHtml } from "./print.brand";
 import { makeHTML } from "./print.shell";
 import { makeFlightSectionHTML, makeTwoLogoSectionHTML, renderNamesTable, joinSections } from "./print.blocks";
 import { busManifest, campManifest, flightManifest, flightsInOrder, campsInOrder,
@@ -236,8 +236,31 @@ export function hotelReportDocument(
   const PER_PAGE = COLS * ROWS;
   const occupantsOf = (roomId: number) => passengers.filter(p => p.room_id === roomId);
 
+  /* ═══ الدورُ حدُّ مجموعةٍ لا حدُّ صفحة ═══
+     الدورُ وحدةٌ تشغيليّة: موظّفُ الفندق يحمل ورقةَ الدور ويصعد بها.
+     فلو مُلئ فراغُ آخرِ ورقةٍ من الدور الثاني عشر بغرفٍ من الثالث عشر،
+     حملت الورقةُ الواحدةُ دورَين — وهذا ما لا يُقرأ ولا يُوزَّع.
+
+     فالتقسيمُ يجري **داخل كلّ دورٍ على حدة** ثم تُوصَل المجموعات:
+     ثمانيةٌ وثمانيةٌ صارت ورقتين لا ورقة، وعشرون وستّةٌ صارت ثلاثاً
+     (١٦ + ٤ ثم ٦). والفراغُ في آخرِ ورقةِ كلّ دورٍ مقصود.
+
+     ⚠️ ولا يُعاد ترتيبُ شيء: الأدوارُ بترتيب أوّلِ ظهورها في المدخل،
+     والغرفُ داخل الدور بترتيبها المعتمَد كما وصلت. فمن طبع دوراً
+     واحداً لم يتغيّر مطبوعُه بحال. */
+  const floorKeyOf = (r: Room) => (r.floor ? String(r.floor) : "");
+  const byFloor = new Map<string, Room[]>();
+  for (const r of rooms) {
+    const k = floorKeyOf(r);
+    const bucket = byFloor.get(k);
+    if (bucket) bucket.push(r); else byFloor.set(k, [r]);
+  }
   const pages: Room[][] = [];
-  for (let i = 0; i < rooms.length; i += PER_PAGE) pages.push(rooms.slice(i, i + PER_PAGE));
+  for (const floorRooms of byFloor.values()) {
+    for (let i = 0; i < floorRooms.length; i += PER_PAGE) {
+      pages.push(floorRooms.slice(i, i + PER_PAGE));
+    }
+  }
 
   const cairoFont = `@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');`;
 
@@ -288,8 +311,11 @@ export function hotelReportDocument(
              : `<div style="background:transparent"></div>`
       ).join("");
       const stamp = chrome.pageNumbers ? pageStampHTML(pi + 1, pages.length) : "";
+      /* الدورُ متاحٌ على الورقة بياناً لا زينة: سمةٌ تُقرأ آلياً ولا
+         تضيف حرفاً مرئيّاً إلى تقريرٍ قُبل شكلُه. */
+      const pageFloor = pageRooms.length ? floorKeyOf(pageRooms[0]) : "";
       /* ورقةٌ واحدةٌ كاملة: هويّةٌ وعنوانٌ وحواشٍ وشبكةٌ وترقيمٌ وتذييل */
-      return `<div class="hotel-print-page">${headerHTML}${metaHTML}` +
+      return `<div class="hotel-print-page" data-floor="${escapeCompanyHtml(pageFloor)}">${headerHTML}${metaHTML}` +
              `<div class="hotel-page">${cells}</div>${stamp}` +
              `<div class="hotel-foot">${footerLine}</div></div>`;
     }).join("");
