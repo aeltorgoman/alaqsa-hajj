@@ -10,6 +10,7 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
          flightReportDocument, flightsReportDocument,
          docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer,
          hotelReportDocument, initialPrintOptions, chromeFromOptions,
+         compactHeaderHTML, chromeMetaHTML, pageStampHTML, PAGE_MARGIN_REPORT,
          type PrintReportKey, type PrintOptionsState } from "../print";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import * as XLSX from "xlsx";
@@ -929,22 +930,53 @@ const getReportAirlineLogo = (airline: string): string | null => {
     const rows = docPerPage === 1 ? 1 : 2;
     const pages: Card[][] = [];
     for (let i = 0; i < cards.length; i += docPerPage) pages.push(cards.slice(i, i + docPerPage));
-    const pagesHTML = pages.map(pg => `
-      <div style="page-break-after:always;height:100vh;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);gap:10px;padding:10px;box-sizing:border-box">
-        ${pg.map(c => `
-          <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
-            <div style="background:${primaryColor};color:#fff;padding:6px 12px;font-size:13px;font-weight:700">${c.name} — ${docTypeLabel}</div>
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px;min-height:0">
-              ${c.body}
-            </div>
-          </div>`).join("")}
+
+    /* ⚠️ درسُ الفندق مطبَّقاً على المستندات — لا منقولاً عنه حرفاً:
+       كانت الورقةُ هنا ثلاثةَ مشاركين مستقلّين في التقطيع (ترويسةُ
+       القشرة، وشبكاتُ البطاقات، وتذييلُ القشرة)، فكان المتصفّح يقطع
+       بينها كما يشاء. وقد قِيس ذلك لا خُمِّن: كلُّ حالةٍ من أربعَ
+       عشرةَ حالةً مقيسةً أخرجت ورقةً زائدةً في آخرها ليس فيها إلا
+       التذييل، وكلُّ حالةٍ أُشعلت فيها الترويسةُ أخرجت ورقةً ثانيةً
+       زائدةً لأنّ `height:100vh` كان يقيس الورقةَ كاملةً (٢٩٧مم) بينما
+       المساحةُ المطبوعة ٢٦٩مم، فيفيض كلُّ سطحٍ بفارقٍ يصير ورقة.
+
+       فصارت كلُّ ورقةٍ مقصودةٍ غلافاً ذرّيّاً واحداً يملك قياسَه
+       وحاشيتَه وترويستَه وترقيمَه، والقشرةُ بلا هامشٍ ولا ترويسةٍ ولا
+       تذييل. والقطعُ **بين** الأغلفة فقط — فلا قطعَ بعد آخرها، ولا
+       ورقةَ تولد من فيض. ومسارُ التصيير (pdf.js ← صورُ صفحات ← HTML)
+       لم يُمسّ: البطاقاتُ أعلاه هي هي. */
+    const docChrome = chromeFor("documents", { season: viewedSeason });
+    const docHead = docChrome.header === "none" ? "" : compactHeaderHTML(reportBranding, docTypeLabel);
+    const docMeta = chromeMetaHTML(docChrome);
+    const docCSS = `<style>
+      .doc-print-page { box-sizing: border-box; width: 210mm; height: 297mm; margin: 0;
+        padding: ${PAGE_MARGIN_REPORT}; overflow: hidden; display: flex; flex-direction: column;
+        break-inside: avoid; page-break-inside: avoid; }
+      .doc-print-page + .doc-print-page { break-before: page; page-break-before: always; }
+      .doc-print-page > * { flex-shrink: 0; }
+      .doc-print-grid { flex: 1 1 auto; min-height: 0; display: grid; gap: 10px; }
+      .doc-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden;
+                  display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+      .doc-card-title { background: ${primaryColor}; color: #fff; padding: 6px 12px;
+                        font-size: 13px; font-weight: 700; }
+      .doc-card-body { flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
+                       padding: 6px; min-height: 0; overflow: hidden; }
+    </style>`;
+    const pagesHTML = pages.map((pg, i) => `
+      <div class="doc-print-page">
+        ${docHead}${docMeta}
+        <div class="doc-print-grid" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">
+          ${pg.map(c => `
+            <div class="doc-card">
+              <div class="doc-card-title">${c.name} — ${docTypeLabel}</div>
+              <div class="doc-card-body">${c.body}</div>
+            </div>`).join("")}
+        </div>
+        ${docChrome.pageNumbers ? pageStampHTML(i + 1, pages.length) : ""}
       </div>`).join("");
     /* كلُّ المحتوى صارَ صوراً — فانتظارُ الصور يغطّي الـPDF كذلك */
-    /* مظهرُ المستندات المقبول هو الافتراض: بلا ترويسةٍ ولا حواشٍ ولا
-       ترقيم. والخياراتُ تفتحها إن طلبها الموظّف — ومسارُ التصيير
-       (الصورة والـPDF) لا يمسّه شيءٌ من ذلك. */
-    printInPage(makeHTML(docTypeLabel, pagesHTML, reportBranding, {
-      chrome: chromeFor("documents", { season: viewedSeason }),
+    printInPage(makeHTML(docTypeLabel, docCSS + pagesHTML, reportBranding, {
+      chrome: { header: "none" }, pageMargin: "0", footer: false,
     }), { waitForImages: true });
   };
 
