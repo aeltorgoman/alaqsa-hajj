@@ -43,7 +43,19 @@ export function makeHTML(
   /* `noHeader` القديمة اسمٌ ثانٍ لـ`header:"none"` — تبقى عاملةً كما
      كانت، فلا يتغيّر معنى نداءٍ قائم. والأولويّةُ للصريح. */
   const headerMode: HeaderMode = chrome.header ?? (noHeader ? "none" : "full");
-  const metaHTML = chromeMetaHTML(chrome);
+  /* ⚠️ تاريخُ الطباعة يُرسَم مرّةً واحدةً لا مرّتين، وفي موضعه المعتمَد.
+     فالترويسةُ الكاملةُ تحمل تاريخَها منذ ما قبل R2 — وهو الموضعُ
+     المقبول — فتبقى هي راسمتَه، ويكفُّ سطرُ الحواشي عن رسم ثانٍ.
+     و«إظهار تاريخ الطباعة» صار يتحكّم في **ذاك** التاريخِ نفسِه:
+       • غيرُ محدَّد (نداءٌ قديم لا يعرف الخيارات) → يظهر كما كان.
+       • `true`  → يظهر في موضعه المعتمَد.
+       • `false` → يختفي، فلا يبقى تاريخٌ في الورقة البتّة.
+     وما لا ترويسةَ كاملةَ له (الباص والمخيّم والمستندات) يرسمه سطرُ
+     الحواشي — فلكلّ تقريرٍ راسمٌ واحد، ولا يُنقَل تاريخٌ من موضعه
+     المقبول طلباً لتماثلٍ معماريّ. */
+  const showHeaderDate = headerMode === "full" && chrome.issuedAt !== false;
+  const metaHTML = chromeMetaHTML(
+    headerMode === "full" ? { ...chrome, issuedAt: false } : chrome);
   const initial = (companyName || "ح").trim().charAt(0);
   const logoHtml = logoUrl
     ? `<img src="${logoUrl}" alt="logo" />`
@@ -62,10 +74,10 @@ export function makeHTML(
       ${tagline ? `<div class="tagline">${tagline}</div>` : ""}
     </div>
   </div>
-  <div class="meta">
+  ${showHeaderDate ? `<div class="meta">
     <div>تاريخ الإصدار: ${dateStr}</div>
     <div>الساعة: ${timeStr}</div>
-  </div>
+  </div>` : ""}
 </div>
   <div class="doc-title-bar">${safeTitle}</div>`;
   /* أنماطُ القشرة لا تُحقَن إلا إن استُعملت — فالمطبوعُ الذي لم يطلب
@@ -132,7 +144,9 @@ export function makeFinanceHTML(
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const { dateStr, timeStr } = issuedStamp();
   const logoHtml = logoOrInitial(logoUrl, companyName);
-  /* المالية تحمل ختمَ الإصدار في ترويستها أصلاً، فلا يُكرَّر في السطر */
+  /* المالية تحمل ختمَ الإصدار في ترويستها أصلاً، فلا يُكرَّر في السطر —
+     وترويستُها هي راسمتُه، والخيارُ يتحكّم فيها كما في القشرة العامّة. */
+  const showHeaderDate = chrome.issuedAt !== false;
   const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
   const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
@@ -164,9 +178,9 @@ export function makeFinanceHTML(
     <div class="logo-box">${logoHtml}</div>
     <div><div class="company-name">${companyName}</div>${tagline?`<div class="tagline">${tagline}</div>`:""}</div>
   </div>
-  <div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
+  ${showHeaderDate ? `<div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
     <div>تاريخ الإصدار: ${dateStr}</div><div>الساعة: ${timeStr}</div>
-  </div>
+  </div>` : ""}
 </div>
 <div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}

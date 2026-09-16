@@ -65,28 +65,33 @@ export const PRINT_SPECS = {
   bus:   OPERATIONAL,
   mina:  OPERATIONAL,
   arafa: OPERATIONAL,
-  /* الرحلات: الترويسةُ والترقيمُ جزءٌ من المطبوع المقبول */
+  /* ⚠️ ما كانت ترويستُه الكاملةُ تحمل تاريخاً قبل الخيارات يبدأ
+     بـ`issuedAt: true` — فالخيارُ يصف ما هو كائنٌ على الورق، لا ما
+     نتمنّاه. وإطفاؤه يُخفي ذاك التاريخَ نفسَه في موضعه، ولا يُنشئ
+     تاريخاً ثانياً في غيره. */
+  /* الرحلات: الترويسةُ والترقيمُ والتاريخُ جزءٌ من المطبوع المقبول */
   flights: {
     available: ["header", "season", "issuedAt", "pageNumbers"],
-    defaults: state({ header: true, season: true, pageNumbers: true }),
+    defaults: state({ header: true, season: true, issuedAt: true, pageNumbers: true }),
     headerMode: "full",
   } as PrintOptionsSpec,
   /* كشفُ الطيران مستندٌ متدفّق: لا ترقيمَ يُعرَض عليه */
   airline: {
     available: ["header", "season", "issuedAt"],
-    defaults: state({ header: true, season: true }),
+    defaults: state({ header: true, season: true, issuedAt: true }),
     headerMode: "full",
   } as PrintOptionsSpec,
   /* كشفُ الحجاج متدفّقٌ كذلك، وله نطاقُ فرزٍ ذو معنى */
   pilgrims: {
     available: ["header", "season", "issuedAt", "scope"],
-    defaults: state({ header: true, season: true, scope: true }),
+    defaults: state({ header: true, season: true, issuedAt: true, scope: true }),
     headerMode: "full",
   } as PrintOptionsSpec,
-  /* المالية: صفحاتُها مبنيّةٌ مصفوفةً فالترقيمُ يصحّ عليها */
+  /* المالية: صفحاتُها مبنيّةٌ مصفوفةً فالترقيمُ يصحّ عليها، وترويستُها
+     تحمل تاريخَها منذ ما قبل R2 */
   finance: {
     available: ["header", "season", "issuedAt", "pageNumbers"],
-    defaults: state({ header: true, season: true, pageNumbers: true }),
+    defaults: state({ header: true, season: true, issuedAt: true, pageNumbers: true }),
     headerMode: "full",
   } as PrintOptionsSpec,
   /* المستندات: مظهرُها المقبول بلا ترويسةٍ ولا حواشٍ — فكلُّها مطفأة */
