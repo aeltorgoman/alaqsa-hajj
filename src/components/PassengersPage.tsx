@@ -599,7 +599,21 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       <thead><tr><th style="text-align:center;padding:4pt 5pt;background:${reportBranding.primaryColor};color:#fff;width:20pt;font-size:8pt">م</th>${headers}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-    const html = makeHTML("كشف الحجاج", body, reportBranding, { landscape: true });
+    /* الأعمدةُ ثابتةٌ هنا عن قصد — كشفٌ تشغيليّ، لا كشفُ التقارير
+       القابلُ للتهيئة. والمستندان يبقيان مختلفَين، ويشتركان في
+       القشرة وحدها: الموسمُ وعدُّ النتائج ونطاقُ الفرز. */
+    const scope: string[] = [];
+    if (search.trim()) scope.push(`بحث: ${search.trim()}`);
+    Object.entries(filters).forEach(([k, v]) => { if (v) scope.push(`${k}: ${v}`); });
+    if (opsFilter) scope.push(opsFilterLabel(opsFilter));
+    const html = makeHTML("كشف الحجاج", body, reportBranding, {
+      landscape: true,
+      chrome: {
+        season: viewedSeason,
+        resultCount: { label: "عدد النتائج", value: filtered.length },
+        scope: scope.length ? scope.join(" · ") : null,
+      },
+    });
     printInPage(html);
   };
 

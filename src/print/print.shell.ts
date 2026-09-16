@@ -7,6 +7,8 @@
    ⚠️ R1 ينقل المعماريّة ولا يُعيد تصميم مطبوعٍ قائم: النمطان معلَنان
    في `print.theme.ts`، وتوحيدُهما بصرياً قرارُ مرحلةٍ تالية. */
 import type { PrintBranding } from "./print.brand";
+import type { PrintChrome, HeaderMode } from "./print.chrome";
+import { compactHeaderHTML, chromeMetaHTML, CHROME_CSS } from "./print.chrome";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
 import { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK, COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternDataURL } from "./print.theme";
 
@@ -15,7 +17,18 @@ export function makeHTML(
   title: string,
   body: string,
   branding: PrintBranding,
-  options: { landscape?: boolean; noHeader?: boolean; patternOpacity?: number } = {}
+  options: {
+    landscape?: boolean; noHeader?: boolean; patternOpacity?: number; chrome?: PrintChrome;
+    /* ⚠️ خياران يخدمان تقريراً يملك صفحاتِه الفيزيائيّة بنفسه (الفندق):
+       - `pageMargin`: هامشُ `@page`. صفراً يعني أنّ الورقةَ كلَّها ملكُ
+         المحتوى، فيضبط هو حشوَه — ولا حسابَ «المساحة المطبوعة ناقص
+         كذا» الذي يفيض بكسرِ مليمتر.
+       - `footer: false`: يمنع القشرةَ من إلحاق كتلةٍ بعد الجسم. فتلك
+         الكتلةُ شريكٌ مستقلٌّ في التقسيم، وهي التي كانت تولّد ورقةً
+         ليس فيها إلا تذييل.
+       وكلاهما بافتراضٍ يُبقي كلَّ مطبوعٍ آخرَ كما هو بالحرف. */
+    pageMargin?: string; footer?: boolean;
+  } = {}
 ) {
   const companyName = escapeCompanyHtml(branding.companyName);
   const tagline = escapeCompanyHtml(branding.tagline);
@@ -25,7 +38,24 @@ export function makeHTML(
   const logoUrl = normalizeCompanyAssetUrl(branding.logoUrl);
   const headerUrl = normalizeCompanyAssetUrl(branding.headerUrl);
   const safeTitle = escapeCompanyHtml(title);
-  const { landscape = false, noHeader = false, patternOpacity = 0.08 } = options;
+  const { landscape = false, noHeader = false, patternOpacity = 0.08, chrome = {},
+          pageMargin = PAGE_MARGIN_REPORT, footer = true } = options;
+  /* `noHeader` القديمة اسمٌ ثانٍ لـ`header:"none"` — تبقى عاملةً كما
+     كانت، فلا يتغيّر معنى نداءٍ قائم. والأولويّةُ للصريح. */
+  const headerMode: HeaderMode = chrome.header ?? (noHeader ? "none" : "full");
+  /* ⚠️ تاريخُ الطباعة يُرسَم مرّةً واحدةً لا مرّتين، وفي موضعه المعتمَد.
+     فالترويسةُ الكاملةُ تحمل تاريخَها منذ ما قبل R2 — وهو الموضعُ
+     المقبول — فتبقى هي راسمتَه، ويكفُّ سطرُ الحواشي عن رسم ثانٍ.
+     و«إظهار تاريخ الطباعة» صار يتحكّم في **ذاك** التاريخِ نفسِه:
+       • غيرُ محدَّد (نداءٌ قديم لا يعرف الخيارات) → يظهر كما كان.
+       • `true`  → يظهر في موضعه المعتمَد.
+       • `false` → يختفي، فلا يبقى تاريخٌ في الورقة البتّة.
+     وما لا ترويسةَ كاملةَ له (الباص والمخيّم والمستندات) يرسمه سطرُ
+     الحواشي — فلكلّ تقريرٍ راسمٌ واحد، ولا يُنقَل تاريخٌ من موضعه
+     المقبول طلباً لتماثلٍ معماريّ. */
+  const showHeaderDate = headerMode === "full" && chrome.issuedAt !== false;
+  const metaHTML = chromeMetaHTML(
+    headerMode === "full" ? { ...chrome, issuedAt: false } : chrome);
   const initial = (companyName || "ح").trim().charAt(0);
   const logoHtml = logoUrl
     ? `<img src="${logoUrl}" alt="logo" />`
@@ -36,7 +66,7 @@ export function makeHTML(
   // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح (حوالي 5 نقشات في الصف)
   // النقشة وإعدادُ الصفحة من `print.theme.ts` — مقياسٌ معلَنٌ لا نصٌّ مبعثر
   const patternURL = patternDataURL(patternOpacity);
-  const headerHTML = noHeader ? "" : `${headerUrl ? `<img src="${headerUrl}" alt="" style="display:block;width:100%;max-height:28mm;object-fit:contain;margin-bottom:4mm" />` : ""}<div class="doc-header">
+  const fullHeaderHTML = `${headerUrl ? `<img src="${headerUrl}" alt="" style="display:block;width:100%;max-height:28mm;object-fit:contain;margin-bottom:4mm" />` : ""}<div class="doc-header">
   <div class="brand">
     <div class="logo-box">${logoHtml}</div>
     <div>
@@ -44,17 +74,23 @@ export function makeHTML(
       ${tagline ? `<div class="tagline">${tagline}</div>` : ""}
     </div>
   </div>
-  <div class="meta">
+  ${showHeaderDate ? `<div class="meta">
     <div>تاريخ الإصدار: ${dateStr}</div>
     <div>الساعة: ${timeStr}</div>
-  </div>
+  </div>` : ""}
 </div>
   <div class="doc-title-bar">${safeTitle}</div>`;
+  /* أنماطُ القشرة لا تُحقَن إلا إن استُعملت — فالمطبوعُ الذي لم يطلب
+     شيئاً يخرج بالبايتات نفسها التي كان يخرج بها قبل R2. */
+  const chromeCSS = (metaHTML || headerMode === "compact" || chrome.pageNumbers) ? `\n  ${CHROME_CSS}` : "";
+  const headerHTML = headerMode === "none" ? ""
+    : headerMode === "compact" ? compactHeaderHTML(branding, title)
+    : fullHeaderHTML;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${safeTitle}</title>
 ${FONT_LINK}
 <style>
-  ${pageRule(PAGE_MARGIN_REPORT, landscape)}
+  ${pageRule(pageMargin, landscape)}
   * { box-sizing: border-box; }
   html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
   body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 9pt; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
@@ -73,6 +109,11 @@ ${FONT_LINK}
   .camp-header .camp-title-box { flex: 1; text-align: center; }
   .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 6pt 20pt; border-radius: 5pt; font-size: 18pt; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; }
   .camp-header .camp-subtitle { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  /* السطرُ الثانويّ تحت اسم الكشف: الموسمُ والجنس — تابعٌ للعنوان لا
+     حاشيةٌ على حافّة الورقة. وهو وريثُ camp-subtitle وبمقاسه.
+     ولا علامةَ اقتباسٍ مائلة هنا: النصّ داخل قالبٍ نصّيّ. */
+  .camp-header .camp-meta { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-meta-sep { margin: 0 6pt; opacity: 0.55; }
   .camp-table th { background: ${primaryColor}; color: #fff; }
   table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 8pt; border-radius: 6pt; overflow: hidden; }
   th { background: ${primaryColor}; color: #fff; padding: 5pt 7pt; text-align: right; font-size: 9pt; font-weight: 600; }
@@ -85,11 +126,11 @@ ${FONT_LINK}
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
   .footer { text-align: center; color: #aaa; font-size: 7pt; margin-top: 10pt; border-top: 0.5pt solid #eee; padding-top: 5pt; }
-  ${COLOR_ADJUST_RULE}
+  ${COLOR_ADJUST_RULE}${chromeCSS}
 </style></head><body>
-${headerHTML}
+${headerHTML}${metaHTML}
 ${body}
-<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>
+${footer ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}
 </body></html>`;
 }
 
@@ -97,12 +138,27 @@ ${body}
    كانت قشرةً موازيةً كاملة في `finance.print.ts` بـ`<!DOCTYPE>` و`@page`
    و`printInPage` خاصّةٍ بها. المُخرَج هو المُخرَج نفسه حرفياً. */
 export function makeFinanceHTML(
-  title: string, body: string, brand: PrintBranding
+  title: string, body: string, brand: PrintBranding, chrome: PrintChrome = {}
 ): string {
   const safeTitle = escapeCompanyHtml(title);
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const { dateStr, timeStr } = issuedStamp();
   const logoHtml = logoOrInitial(logoUrl, companyName);
+  /* ⚠️ قشرةُ المالية كانت تتجاهل `chrome.header` جملةً: تُخرج ترويستَها
+     في كلّ حال، فيبقى زرُّ «إظهار الترويسة» بلا أثر. والآن تحترمه.
+
+     والهويّةُ والتاريخُ مستقلّان وإن سكنا صندوقاً واحداً — لأنّ الواجهةَ
+     تعرضهما خيارَين منفصلَين، فلا يجوز أن يُخفي أحدُهما الآخر:
+       • كلاهما مُشعَل  → الصندوقُ كما قُبل: الهويّةُ يميناً والتاريخُ يساراً.
+       • الهويّةُ وحدها → الصندوقُ بلا تاريخ.
+       • التاريخُ وحده → الصندوقُ بحاجزٍ فارغٍ مكانَ الهويّة، فيبقى
+         التاريخُ في موضعه الأيسر المعتمَد ولا ينزلق.
+       • كلاهما مطفأ   → لا صندوقَ البتّة، ولا خطَّ سفليَّ معلَّق.
+     والافتراضُ (نداءٌ قديم لا يعرف الخيارات) يُظهرهما كما كانا. */
+  const showBrand = chrome.header !== "none";
+  const showHeaderDate = chrome.issuedAt !== false;
+  const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
+  const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
 <style>
   ${pageRule(PAGE_MARGIN_FINANCE)}
@@ -125,18 +181,18 @@ export function makeFinanceHTML(
      أي أبيضُ على أبيض. موجودٌ في HTML وغيرُ مرئيّ على الورق. */
   tr.tot-row td { background: ${primaryColor} !important; color: #fff; font-weight: 700; }
   .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
-  ${COLOR_ADJUST_RULE_ALL}
+  ${COLOR_ADJUST_RULE_ALL}${chromeCSS}
 </style></head><body>
-<div class="doc-header">
-  <div style="display:flex;align-items:center;gap:12px">
+${(showBrand || showHeaderDate) ? `<div class="doc-header">
+  ${showBrand ? `<div style="display:flex;align-items:center;gap:12px">
     <div class="logo-box">${logoHtml}</div>
     <div><div class="company-name">${companyName}</div>${tagline?`<div class="tagline">${tagline}</div>`:""}</div>
-  </div>
-  <div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
+  </div>` : `<div></div>`}
+  ${showHeaderDate ? `<div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
     <div>تاريخ الإصدار: ${dateStr}</div><div>الساعة: ${timeStr}</div>
-  </div>
-</div>
-<div class="doc-title-bar">${safeTitle}</div>
+  </div>` : ""}
+</div>` : ""}
+<div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}
 <div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>
 </body></html>`;

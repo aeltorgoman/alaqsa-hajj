@@ -8,7 +8,9 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, printInPage } from "../utils";
-import { campDwellers, campReportDocument, campsReportDocument } from "../print";
+import { campDwellers, campReportDocument, campsReportDocument,
+         initialPrintOptions, chromeFromOptions } from "../print";
+import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
@@ -423,8 +425,12 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   };
 
   // ══════════════════════════════════════════════════════════
-  const printCamp = (camp: Camp) => printInPage(campReportDocument(camp, passengers, pageType, branding));
-  const printAll = () => printInPage(campsReportDocument(camps, passengers, pageType, branding));
+  /* منى وعرفةُ يشتركان في المواصفة نفسها — والحالُ لكلّ صفحةٍ على حدة */
+  const optKey = pageType === "منى" ? "mina" as const : "arafa" as const;
+  const [printOpts, setPrintOpts] = useState(() => initialPrintOptions(optKey));
+  const campChrome = () => chromeFromOptions(optKey, printOpts, { season: viewedSeason });
+  const printCamp = (camp: Camp) => printInPage(campReportDocument(camp, passengers, pageType, branding, campChrome()));
+  const printAll = () => printInPage(campsReportDocument(camps, passengers, pageType, branding, campChrome()));
 
   const specialBadge = (light?: boolean) => (
     <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>خاص</span>
@@ -485,6 +491,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
           style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--primary)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> مخيم جديد
         </button>
+        {camps.length > 0 && <PrintOptionsMenu report={optKey} value={printOpts} onChange={setPrintOpts} />}
         {camps.length > 0 && <button onClick={printAll} style={btnS()}><svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg> طباعة الكل</button>}
       </div>
 

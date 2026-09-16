@@ -28,6 +28,7 @@ const printStatusColor = (label: string) => PRINT_STATUS_COLOR[label] || "#1c1c1
    الوحيد، وسلوكُ المالية V1 (#115) كما هو حرفاً. */
 import { esc, safeBranding, logoOrInitial, issuedStamp, pageRule,
          COLOR_ADJUST_RULE_ALL, makeFinanceHTML, printInPage } from "../../print";
+import type { PrintChrome } from "../../print";
 export { makeFinanceHTML, printInPage };
 
 
@@ -298,7 +299,7 @@ export function printTable(headers: string[], rows: string[][], primaryColor: st
 }
 
 
-export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: PrintBranding, title = "تقرير الحجاج المالي الكامل") {
+export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: PrintBranding, title = "تقرير الحجاج المالي الكامل", chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
   const tD=data.reduce((s,r)=>s+r.due,0), tP=data.reduce((s,r)=>s+r.paid,0), tB=tD-tP;
   const PER_PAGE = 30;
@@ -341,11 +342,11 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
     pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table style="table-layout:fixed">${header}${rows}${totRow}</table></div>`);
   }
   const body = pages.join("");
-  printInPage(makeFinanceHTML(title, body, brand));
+  printInPage(makeFinanceHTML(title, body, brand, chrome));
 }
 
 
-export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBranding, from = "", to = "") {
+export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBranding, from = "", to = "", chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
   const periodLine = `<div style="margin-bottom:10pt;font-size:11pt;color:#555">الفترة: من <b>${esc(from || "البداية")}</b> إلى <b>${esc(to || "اليوم")}</b> · عدد الدفعات: <b>${payments.length}</b></div>`;
   const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
@@ -402,10 +403,10 @@ export function printPaymentsReport(payments: Payment[], passengers: Passenger[]
       <tr class="tot-row" style="background:${primaryColor};color:#fff;font-weight:700"><td style="padding:5pt 8pt;font-size:11pt">الإجمالي العام</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${sorted.length}</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${fmtAmt(total)}</td></tr>
     </table>
   </div>` : "";
-  printInPage(makeFinanceHTML("سجل الدفعات التفصيلي", periodLine + pages.join("") + methodSummary, brand));
+  printInPage(makeFinanceHTML("سجل الدفعات التفصيلي", periodLine + pages.join("") + methodSummary, brand, chrome));
 }
 
-export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding) {
+export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding, chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
   const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
   const specialPassengers = passengers.filter(isSpecialPackage);
@@ -420,10 +421,10 @@ export function printPackagesReport(passengers: Passenger[], pricing: PricingMap
       .reduce((sum,pk)=>sum+passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length*(pricing[pk.key]?.amount||0),0)
     + specialPassengers.reduce((sum,p)=>sum+(Number(p.services.custom_price)||0),0);
   printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor,
-    ["الإجمالي", String(pkgCount), "—", fmtAmt(pkgTotal)]), brand));
+    ["الإجمالي", String(pkgCount), "—", fmtAmt(pkgTotal)]), brand, chrome));
 }
 
-export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding) {
+export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding, chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
   /* المصدر المشترك نفسه الذي يغذّي فلترَ الخدمات والشاشة — لا قائمةٌ ثالثة */
   const checks=SERVICE_FILTERS;
@@ -433,9 +434,9 @@ export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, 
   const addonNet=amounts.reduce((n,x)=>n+(x.isDis?-x.sum:x.sum),0);
   const addonCount=amounts.reduce((n,x)=>n+x.count,0);
   printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor,
-    ["الصافي", String(addonCount), "—", fmtAmt(addonNet)]), brand));
+    ["الصافي", String(addonCount), "—", fmtAmt(addonNet)]), brand, chrome));
 }
-export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBranding }) {
+export function printCashflowReport(params: { dates: string[]; byDate: CashflowByDate; total: number; from: string; to: string; brand: PrintBranding; chrome?: PrintChrome }) {
   const { dates: cfDates, byDate: cfByDate, total: cfTotal, from: cashflowFrom, to: cashflowTo, brand } = params;
   const { primaryColor } = safeBranding(brand);
   const fromLabel = esc(cashflowFrom || "البداية");
@@ -447,5 +448,5 @@ export function printCashflowReport(params: { dates: string[]; byDate: CashflowB
   }).join("");
   const totRow = `<tr class="tot-row" style="background:${primaryColor};color:#fff;font-weight:700"><td colspan="2">الإجمالي</td><td style="text-align:center">${fmtAmt(cfTotal)}</td><td></td></tr>`;
   const body = `<div style="margin-bottom:12pt;font-size:11pt;color:#555">الفترة: من <b>${fromLabel}</b> إلى <b>${toLabel}</b> · إجمالي التحصيل: <b style="color:${primaryColor}">${fmtAmt(cfTotal)} ر.ق</b></div><table><thead><tr><th>التاريخ</th><th style="text-align:center">عدد الدفعات</th><th style="text-align:center">الإجمالي</th><th>طرق الدفع</th></tr></thead><tbody>${rows}${totRow}</tbody></table>`;
-  printInPage(makeFinanceHTML("ملخص التحصيل اليومي", body, brand));
+  printInPage(makeFinanceHTML("ملخص التحصيل اليومي", body, brand, params.chrome ?? {}));
 }

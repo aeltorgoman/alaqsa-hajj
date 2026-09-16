@@ -5,6 +5,7 @@
    مُختبَرةٌ بمحاكاة A4 فعليّة، ولا تُعاد. */
 import type { PrintBranding } from "./print.brand";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor } from "./print.brand";
+import { pageStampHTML } from "./print.chrome";
 
 // ============================================================
 
@@ -81,23 +82,42 @@ export function renderNamesTable(items: NameItem[], nameLabel = "اسم الحا
 }
 
 // قسم بشعارين (يمين/شمال) وعنوان كبير في الوسط + جدول أسماء — مستخدم لكل باص/مخيم
-export function makeTwoLogoSectionHTML(title: string, subtitle: string, namesHTML: string, b: PrintBranding): string {
+/* ⚠️ الموسمُ ينتمي إلى العنوان لا إلى حافّة الورقة: المعاينةُ أظهرت أن
+   سطراً قائماً بذاته أقصى اليسار يُقرأ لكنّه منفصلٌ عن التقرير. فصار
+   سطراً ثانوياً تحت الاسم مباشرةً — واسمُ المخيّم ثم «موسم حج ١٤٤٨هـ •
+   رجال». والجنسُ ينضمّ إليه فلا يُفقَد ولا يُكرَّر، وتصير الكشوفُ
+   التشغيليّةُ الثلاثة على لسانٍ واحد. */
+export function makeTwoLogoSectionHTML(
+  title: string, subtitle: string, namesHTML: string, b: PrintBranding,
+  meta: (string | null | undefined)[] = [],
+): string {
   const logo = sectionLogoHtml(b);
   const safeTitle = escapeCompanyHtml(title);
-  const safeSubtitle = escapeCompanyHtml(subtitle);
+  /* العنوانُ الفرعيّ القديم (الجنس) ينضمّ إلى السطر الثانويّ إن وُجد،
+     فلا سطران يتنافسان تحت الاسم. */
+  const parts = [...meta, subtitle].filter((x): x is string => !!x && !!x.trim());
+  const metaHTML = parts.length
+    ? `<div class="camp-meta">${parts.map(escapeCompanyHtml).join(`<span class="camp-meta-sep">•</span>`)}</div>`
+    : "";
   return `<div class="camp-header">
     <div class="camp-logo">${logo}</div>
     <div class="camp-title-box">
       <div class="camp-title">${safeTitle}</div>
-      ${safeSubtitle ? `<div class="camp-subtitle">${safeSubtitle}</div>` : ""}
+      ${metaHTML}
     </div>
     <div class="camp-logo">${logo}</div>
   </div>${namesHTML}`;
 }
 
 // تجميع أقسام متعددة مع فاصل صفحة قبل كل قسم إلا الأول
-export function joinSections(sections: string[]): string {
-  return sections.map((s, idx) => `<div class="${idx > 0 ? "page-break-before" : ""}">${s}</div>`).join("");
+/* والقسمُ هنا صفحةٌ ببنائه — فمن طلب ترقيماً نالَه محسوباً لا مقاساً.
+   والافتراضُ بلا ترقيم: مطبوعٌ لم يطلبه يخرج كما كان بالحرف. */
+export function joinSections(sections: string[], options: { pageNumbers?: boolean } = {}): string {
+  const total = sections.length;
+  return sections.map((s, idx) => {
+    const stamp = options.pageNumbers ? pageStampHTML(idx + 1, total) : "";
+    return `<div class="${idx > 0 ? "page-break-before" : ""}">${s}${stamp}</div>`;
+  }).join("");
 }
 
 // قسم رحلة طيران واحدة (هيدر معلومات الرحلة + جدول الحجاج بالعربي)
@@ -111,15 +131,18 @@ export function makeFlightSectionHTML(flight: { name: string; type?: string; air
   }).join("");
   return `<div style="background:${primaryColor}10;border:1px solid ${primaryColor};border-radius:8px;padding:14px 18px;margin-bottom:16px;direction:rtl">
     <div style="font-size:20px;font-weight:700;color:${primaryColor};margin-bottom:10px">${flight.name}${flight.type ? ` — ${flight.type}` : ""}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+    <!-- ترتيبُ العرض وحده: التاريخُ ثم وقتُه، للمغادرة ثم للوصول.
+         كان الوقتُ يقع بعيداً عن تاريخه فتُقرأ الأربعةُ متفرّقة.
+         ولا بيانةَ زيدت ولا نقصت ولا تغيّر حسابٌ ولا ترتيبُ ركّاب. -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:13px">
       <div><span style="color:#888">الخط:</span> ${flight.airline || "—"}</div>
-      <div><span style="color:#888">تاريخ المغادرة:</span> ${flight.date || "—"}</div>
-      <div><span style="color:#888">وقت المغادرة:</span> ${flight.time || "—"}</div>
       <div><span style="color:#888">من:</span> ${flight.from_airport || "—"}</div>
       <div><span style="color:#888">إلى:</span> ${flight.to_airport || "—"}</div>
+      <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
+      <div><span style="color:#888">تاريخ المغادرة:</span> ${flight.date || "—"}</div>
+      <div><span style="color:#888">وقت المغادرة:</span> ${flight.time || "—"}</div>
       <div><span style="color:#888">تاريخ الوصول:</span> ${flight.arrival_date || "—"}</div>
       <div><span style="color:#888">وقت الوصول:</span> ${flight.arrival_time || "—"}</div>
-      <div><span style="color:#888">عدد الحجاج:</span> ${fp.length}</div>
     </div>
   </div>
   <table class="flight-table"><tr><th style="text-align:center;width:30px">م</th><th>اسم الحاج / الحاجة</th><th>الجنسية</th><th>رقم الجواز</th><th>التليفون</th><th>الجنس</th><th>الدرجة</th></tr>${rows}</table>`;

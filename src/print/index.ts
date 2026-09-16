@@ -12,6 +12,11 @@ export type { PageSize } from "./print.theme";
 export { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK,
          COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternSVG, patternDataURL } from "./print.theme";
 export { makeHTML, makeFinanceHTML } from "./print.shell";
+export type { PrintChrome, HeaderMode, PrintSeason } from "./print.chrome";
+export type { PrintOptionKey, PrintOptionsState, PrintOptionsSpec,
+              PrintReportKey, PrintOptionInputs } from "./print.options";
+export { PRINT_OPTION_LABEL, PRINT_SPECS, initialPrintOptions, chromeFromOptions } from "./print.options";
+export { seasonLabel, compactHeaderHTML, chromeMetaHTML, pageStampHTML, CHROME_CSS } from "./print.chrome";
 export type { NameItem } from "./print.blocks";
 export { sectionLogoHtml, renderNamesTable, makeTwoLogoSectionHTML, joinSections,
          makeFlightSectionHTML } from "./print.blocks";
@@ -27,7 +32,9 @@ export { busTitle, busRiders, busManifest,
          campsInOrder, flightsInOrder } from "./print.manifests";
 export { flightSection, flightReportDocument, flightsReportDocument,
          busSection, busReportDocument, busesReportDocument,
-         campSection, campReportDocument, campsReportDocument } from "./print.reports";
+         campSection, campReportDocument, campsReportDocument,
+         hotelReportDocument, hotelRoomCard, roomTypeBadge } from "./print.reports";
+export type { HotelReportOptions } from "./print.reports";
 export type { DocKind } from "./print.docs";
 export { docFileKind, docImageBody, docFailedBody } from "./print.docs";
 export type { PdfRenderOptions } from "./print.pdf";
