@@ -15,8 +15,10 @@
    يفترق مدخلان. وهيئةُ `FlightsPage` هي المرجع، ولا تُغيَّر. */
 import type { Passenger, Bus, Camp, Flight, Room } from "../types";
 import { roomCapacity } from "../utils/room";
-import { chromeMetaHTML, pageStampHTML, seasonLabel, type PrintChrome, type PrintSeason } from "./print.chrome";
+import { chromeMetaHTML, pageStampHTML, seasonLabel, compactHeaderHTML,
+         type PrintChrome, type PrintSeason } from "./print.chrome";
 import type { PrintBranding } from "./print.brand";
+import { safeBranding } from "./print.brand";
 import { makeHTML } from "./print.shell";
 import { makeFlightSectionHTML, makeTwoLogoSectionHTML, renderNamesTable, joinSections } from "./print.blocks";
 import { busManifest, campManifest, flightManifest, flightsInOrder, campsInOrder,
@@ -131,33 +133,28 @@ const FONT_BY_MAX_CAP: Record<number, number> = { 1: 22, 2: 22, 3: 21, 4: 17, 5:
 const roomFontSize = (maxCapInPage: number): number =>
   FONT_BY_MAX_CAP[Math.min(8, Math.max(1, maxCapInPage))] || 11;
 
-/* ═══ ارتفاعُ الورقة — الدواءُ الحقيقيّ لصفحةٍ زائدةٍ فارغة ═══
-   ⚠️ ما أظهرته الـPDF الحقيقيّة: `.hotel-page` كانت بلا ارتفاعٍ محدَّد،
-   و`grid-template-rows: repeat(N, 1fr)` بلا ارتفاعِ حاويةٍ يقيس الصفَّ
-   بأطولِ كرتٍ فيه. وبعد أن صارت صفوفُ الكرت تتبع **السعة** (لتظهر
-   الأَسِرّةُ الشاغرة) طال أطولُ كرتٍ — فبلغت الشبكةُ ٢٦٧مم والمساحةُ
-   المطبوعة ٢٦٩مم، ومعها ترويسةٌ ٢٨٫٦مم — ففاضت، وتبعها التذييلُ إلى
-   ورقةٍ ثانيةٍ ليس فيها إلا هو. وكذلك كان سطرُ الترقيم يقع **خارج**
-   الورقة التي يرقّمها فيُدفَع إلى التالية.
+/* ═══ الورقةُ الفيزيائيّة وحدةٌ واحدةٌ لا ثلاث ═══
+   ⚠️ الجذرُ الذي أخطأتُه مرّتين: كنتُ أعالج الارتفاعَ بالحساب، والعطبُ
+   لم يكن في الحساب بل في **البنية**. فالقشرةُ تُخرج ثلاثَ كتلٍ مستقلّة
+   — ترويسةٌ قبل الجسم، وأوراقُ الشبكة، وتذييلٌ بعد الجسم — وكلٌّ منها
+   شريكٌ قائمٌ بذاته في تقسيم المتصفّح. فإن لم يسع الورقةَ (ترويسةٌ +
+   شبكة) دُفعت الشبكةُ كلُّها إلى الثانية وبقيت الأولى ترويسةً وحدها؛
+   وإن وسعتها بالضبط خرج التذييلُ إلى ورقةٍ ثالثة. وكلُّ حسابٍ
+   بالمليمتر يبقى رهنَ كسرِ مليمتر وفرقِ خطٍّ بين جهازٍ وآخر.
 
-   فالورقةُ الآن ذاتُ ارتفاعٍ مصرَّحٍ به، والترقيمُ داخلها: الشبكةُ
-   تأخذ ما بقي بعد الترويسة والترقيم والتذييل لا أكثر. والخطُّ وحجمُ
-   الكرت كما هما — لم يُصغَّر شيءٌ لعلاج الترقيم. */
-const SHEET = {
-  /** المساحةُ المطبوعة: A4 ناقص هامشَي `PAGE_MARGIN_REPORT` (١٤مم × ٢). */
-  printableH: { portrait: 269, landscape: 182 },
-  /** الترويسةُ المضغوطة + شريطُ العنوان + سطرُ الموسم — مقيسةٌ لا مقدَّرة. */
-  chromeH: 30,
-  /** سطرُ «صفحة س من ص». */
-  stampH: 4,
-  /** تذييلُ القشرة بهامشه وحدّه. */
-  footerH: 10,
-  /* هامشُ أمانٍ لا يُستغنى عنه: القياسُ أظهر أنّ الجسم كان يبلغ
-     ٢٦٩٫٢مم في مساحةٍ سعتُها ٢٦٩ — فيفيض بعُشرَي مليمتر، ويولّد
-     ورقةً كاملة. والخطوطُ تُحمَّل من الشبكة فتختلف أطوالُ الأسطر
-     قليلاً بين جهازٍ وآخر، فلا يُبنى الصحّةُ على حدٍّ حرفيّ. */
-  safetyH: 4,
+   فالتصحيحُ بنيويّ: `@page` بهامشٍ صفر — أي أنّ الورقةَ كلَّها ملكُ
+   المحتوى — ثم كلُّ صفحةٍ مقصودةٍ **عنصرٌ واحد** مقاسُه مقاسُ الورقة
+   بالضبط (٢١٠×٢٩٧ أو ٢٩٧×٢١٠) بـ`box-sizing: border-box`، يحمل داخله
+   ترويستَه وعنوانَه وحواشيه وشبكتَه وترقيمَه وتذييلَه. فلا كتلةَ خارجَ
+   ورقةٍ أبداً، ولا حسابَ ارتفاعٍ يُخطئ: الصندوقُ **هو** الورقة،
+   و`overflow: hidden` يمنع أيَّ ابنٍ من أن يطوّله.
+   والفصلُ `break-after: page` **بين** الأوراق فقط، لا بعد آخرِها. */
+const SHEET_MM = {
+  portrait:  { w: 210, h: 297 },
+  landscape: { w: 297, h: 210 },
 } as const;
+/** حشوُ الورقة الداخليّ — بديلُ هامش `@page` الذي صار صفراً. */
+const SHEET_PAD = "12mm 10mm";
 
 /** وسمُ الغرفة: «رباعية — ٢/٤»، و«خاص — ٢/٦»، وبلا سعةٍ «مجلس — ٢ (سعة غير محدّدة)». */
 export function roomTypeBadge(room: Room, occupancy: number): string {
@@ -243,20 +240,43 @@ export function hotelReportDocument(
   for (let i = 0; i < rooms.length; i += PER_PAGE) pages.push(rooms.slice(i, i + PER_PAGE));
 
   const cairoFont = `@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');`;
+
+  const { w, h } = SHEET_MM[landscape ? "landscape" : "portrait"];
+  /* ترويسةُ الهويّة وحواشيها تتكرّران على كلّ ورقةٍ — فالورقةُ الثانية
+     تُقرأ وحدها، ولأنّهما داخلَ الورقة لا خارجَها فلا تُقسَّمان عنها. */
+  const headerHTML = compactHeaderHTML(branding, `تقرير الفندق${subtitle}`);
   const metaHTML = chromeMetaHTML(chrome);
+  const { companyName, tagline, footerText } = safeBranding(branding);
+  const footerLine = footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير الفندق${subtitle}`;
 
   const pagesHTML = `<style>
       ${cairoFont}
       * { font-family: 'Cairo', sans-serif !important; }
       ${showPattern ? "" : "html, body { background-image: none !important; background: #ffffff !important; }"}
-      /* الورقةُ وعاءٌ بارتفاعٍ مصرَّح، والشبكةُ تملأ ما بقي منه —
-         فتنضغط الصفوفُ داخل الورقة بدل أن تفيض عنها. */
-      .hotel-sheet { display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
-      .hotel-page { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 6px; box-sizing: border-box; ${showPattern ? "" : "background: #ffffff;"} }
+      /* الصندوقُ هو الورقة: مقاسُها بالضبط، وحشوُها بدل هامش @page،
+         وoverflow:hidden يمنع أيَّ ابنٍ من أن يطوّلها. ولا هامشَ
+         خارجيّ البتّة — الهامشُ يزيد الطولَ فيولّد ورقة. */
+      .hotel-print-page {
+        box-sizing: border-box; width: ${w}mm; height: ${h}mm;
+        margin: 0; padding: ${SHEET_PAD}; border: 0; overflow: hidden;
+        display: flex; flex-direction: column;
+        break-inside: avoid; page-break-inside: avoid;
+        ${showPattern ? "" : "background: #ffffff;"}
+      }
+      /* الفصلُ بين الأوراق فقط — ولا شيءَ بعد آخرها */
+      .hotel-print-page + .hotel-print-page { break-before: page; page-break-before: always; }
+      .hotel-print-page > * { flex-shrink: 0; }
+      /* الشبكةُ وحدها تتمدّد لتملأ ما بقي */
+      .hotel-print-page > .hotel-page { flex: 1 1 auto; min-height: 0; }
+      .hotel-page { display: grid; grid-template-columns: repeat(${COLS}, 1fr); grid-template-rows: repeat(${ROWS}, 1fr); gap: 6px; box-sizing: border-box; overflow: hidden; }
       .hotel-page table { margin: 0 !important; }
       .hotel-page td { border: none; white-space: normal !important; vertical-align: middle; }
       .hotel-page tr:nth-child(even) td { background: transparent !important; }
-    </style>${metaHTML}` +
+      .hotel-print-page .doc-header { margin-bottom: 2px; }
+      .hotel-print-page .page-stamp { margin-top: 3pt; }
+      .hotel-foot { text-align: center; color: #aaa; font-size: 7pt; margin-top: 2pt;
+                    border-top: 0.5pt solid #eee; padding-top: 3pt; }
+    </style>` +
     pages.map((pageRooms, pi) => {
       /* أكبرُ سعةٍ معتمَدةٍ في الصفحة تحدّد الخطّ — لا أكبرُ إشغال */
       const maxCapInPage = Math.max(1, ...pageRooms.map(r => rowCountFor(r, occupantsOf(r.id).length)));
@@ -267,18 +287,11 @@ export function hotelReportDocument(
         room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern, landscape ? "landscape" : "portrait")
              : `<div style="background:transparent"></div>`
       ).join("");
-      /* الترقيمُ **داخل** ورقته لا بعدها — وإلا رُقِّمت الورقةُ في التي تليها */
       const stamp = chrome.pageNumbers ? pageStampHTML(pi + 1, pages.length) : "";
-      const isLast = pi === pages.length - 1;
-      const avail = SHEET.printableH[landscape ? "landscape" : "portrait"]
-        - (pi === 0 ? SHEET.chromeH : 0)
-        - (chrome.pageNumbers ? SHEET.stampH : 0)
-        - (isLast ? SHEET.footerH : 0)
-        - SHEET.safetyH;
-      return `<div class="hotel-sheet" style="height:${avail}mm;page-break-after:${isLast ? "avoid" : "always"}">
-          <div class="hotel-page">${cells}</div>
-          ${stamp}
-        </div>`;
+      /* ورقةٌ واحدةٌ كاملة: هويّةٌ وعنوانٌ وحواشٍ وشبكةٌ وترقيمٌ وتذييل */
+      return `<div class="hotel-print-page">${headerHTML}${metaHTML}` +
+             `<div class="hotel-page">${cells}</div>${stamp}` +
+             `<div class="hotel-foot">${footerLine}</div></div>`;
     }).join("");
 
   /* ضبطُ حجم كلّ اسمٍ على حدة — منقولٌ بحرفه، ومعايرتُه مُختبَرة */
@@ -317,9 +330,14 @@ export function hotelReportDocument(
       })();
     </script>`;
 
+  /* ⚠️ القشرةُ هنا غلافٌ لا تُضيف كتلةً: لا ترويسةَ قبل الجسم ولا
+     تذييلَ بعده ولا هامشَ `@page` — فالأوراقُ الصريحةُ وحدها في الجسم.
+     وهذا شرطُ ألّا يقسّم المتصفّحُ ترويسةً عن شبكتها أبداً. */
   return makeHTML(`تقرير الفندق${subtitle}`, pagesHTML + autoFitScript, branding, {
     landscape,
     patternOpacity: showPattern ? 0.04 : 0,
-    chrome: { ...chrome, header: chrome.header ?? "compact" },
+    pageMargin: "0",
+    footer: false,
+    chrome: { header: "none" },
   });
 }

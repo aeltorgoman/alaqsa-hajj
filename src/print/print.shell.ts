@@ -17,7 +17,18 @@ export function makeHTML(
   title: string,
   body: string,
   branding: PrintBranding,
-  options: { landscape?: boolean; noHeader?: boolean; patternOpacity?: number; chrome?: PrintChrome } = {}
+  options: {
+    landscape?: boolean; noHeader?: boolean; patternOpacity?: number; chrome?: PrintChrome;
+    /* ⚠️ خياران يخدمان تقريراً يملك صفحاتِه الفيزيائيّة بنفسه (الفندق):
+       - `pageMargin`: هامشُ `@page`. صفراً يعني أنّ الورقةَ كلَّها ملكُ
+         المحتوى، فيضبط هو حشوَه — ولا حسابَ «المساحة المطبوعة ناقص
+         كذا» الذي يفيض بكسرِ مليمتر.
+       - `footer: false`: يمنع القشرةَ من إلحاق كتلةٍ بعد الجسم. فتلك
+         الكتلةُ شريكٌ مستقلٌّ في التقسيم، وهي التي كانت تولّد ورقةً
+         ليس فيها إلا تذييل.
+       وكلاهما بافتراضٍ يُبقي كلَّ مطبوعٍ آخرَ كما هو بالحرف. */
+    pageMargin?: string; footer?: boolean;
+  } = {}
 ) {
   const companyName = escapeCompanyHtml(branding.companyName);
   const tagline = escapeCompanyHtml(branding.tagline);
@@ -27,7 +38,8 @@ export function makeHTML(
   const logoUrl = normalizeCompanyAssetUrl(branding.logoUrl);
   const headerUrl = normalizeCompanyAssetUrl(branding.headerUrl);
   const safeTitle = escapeCompanyHtml(title);
-  const { landscape = false, noHeader = false, patternOpacity = 0.08, chrome = {} } = options;
+  const { landscape = false, noHeader = false, patternOpacity = 0.08, chrome = {},
+          pageMargin = PAGE_MARGIN_REPORT, footer = true } = options;
   /* `noHeader` القديمة اسمٌ ثانٍ لـ`header:"none"` — تبقى عاملةً كما
      كانت، فلا يتغيّر معنى نداءٍ قائم. والأولويّةُ للصريح. */
   const headerMode: HeaderMode = chrome.header ?? (noHeader ? "none" : "full");
@@ -66,7 +78,7 @@ export function makeHTML(
 <title>${safeTitle}</title>
 ${FONT_LINK}
 <style>
-  ${pageRule(PAGE_MARGIN_REPORT, landscape)}
+  ${pageRule(pageMargin, landscape)}
   * { box-sizing: border-box; }
   html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
   body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 9pt; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
@@ -106,7 +118,7 @@ ${FONT_LINK}
 </style></head><body>
 ${headerHTML}${metaHTML}
 ${body}
-<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>
+${footer ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}
 </body></html>`;
 }
 
