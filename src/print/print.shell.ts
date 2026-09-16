@@ -144,8 +144,18 @@ export function makeFinanceHTML(
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const { dateStr, timeStr } = issuedStamp();
   const logoHtml = logoOrInitial(logoUrl, companyName);
-  /* المالية تحمل ختمَ الإصدار في ترويستها أصلاً، فلا يُكرَّر في السطر —
-     وترويستُها هي راسمتُه، والخيارُ يتحكّم فيها كما في القشرة العامّة. */
+  /* ⚠️ قشرةُ المالية كانت تتجاهل `chrome.header` جملةً: تُخرج ترويستَها
+     في كلّ حال، فيبقى زرُّ «إظهار الترويسة» بلا أثر. والآن تحترمه.
+
+     والهويّةُ والتاريخُ مستقلّان وإن سكنا صندوقاً واحداً — لأنّ الواجهةَ
+     تعرضهما خيارَين منفصلَين، فلا يجوز أن يُخفي أحدُهما الآخر:
+       • كلاهما مُشعَل  → الصندوقُ كما قُبل: الهويّةُ يميناً والتاريخُ يساراً.
+       • الهويّةُ وحدها → الصندوقُ بلا تاريخ.
+       • التاريخُ وحده → الصندوقُ بحاجزٍ فارغٍ مكانَ الهويّة، فيبقى
+         التاريخُ في موضعه الأيسر المعتمَد ولا ينزلق.
+       • كلاهما مطفأ   → لا صندوقَ البتّة، ولا خطَّ سفليَّ معلَّق.
+     والافتراضُ (نداءٌ قديم لا يعرف الخيارات) يُظهرهما كما كانا. */
+  const showBrand = chrome.header !== "none";
   const showHeaderDate = chrome.issuedAt !== false;
   const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
   const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
@@ -173,15 +183,15 @@ export function makeFinanceHTML(
   .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
   ${COLOR_ADJUST_RULE_ALL}${chromeCSS}
 </style></head><body>
-<div class="doc-header">
-  <div style="display:flex;align-items:center;gap:12px">
+${(showBrand || showHeaderDate) ? `<div class="doc-header">
+  ${showBrand ? `<div style="display:flex;align-items:center;gap:12px">
     <div class="logo-box">${logoHtml}</div>
     <div><div class="company-name">${companyName}</div>${tagline?`<div class="tagline">${tagline}</div>`:""}</div>
-  </div>
+  </div>` : `<div></div>`}
   ${showHeaderDate ? `<div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
     <div>تاريخ الإصدار: ${dateStr}</div><div>الساعة: ${timeStr}</div>
   </div>` : ""}
-</div>
+</div>` : ""}
 <div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}
 <div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>
