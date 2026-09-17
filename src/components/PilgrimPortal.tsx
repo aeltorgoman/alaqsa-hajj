@@ -118,12 +118,66 @@ const STAR_PATTERN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 const MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 
-/* ─── نظام الألوان الصارم ─── */
-const INK = "#241318";          // العناوين والقيم على الفاتح
-const BODY = "#4A3540";         // النص العادي على الفاتح — غامق كامل
-const LABEL = "#7A6570";        // التسميات — مقروءة
+/* ═══ سُلّمُ النصّ — أربعُ درجاتٍ لا لونٌ لكلّ موضع ═══
+   الأولى أساسٌ، والثانية أهدأُ وتُقرأ، والثالثة حاشيةٌ تبقى مقروءة،
+   والرابعة معطَّلةٌ تُرى معطَّلةً ولا تُقرأ بعناء. والقياسُ لا الذوق:
+   كلُّ درجةٍ تتجاوز ٤٫٥:١ على الورقيّ والأبيض (والقيمُ الكبيرةُ ٣:١). */
+const INK = "#241318";          // أساسيّ — عناوينُ وقيم · ١٧٫٨:١ على الأبيض
+const BODY = "#3E2B34";         // ثانويّ — نصُّ الفقرات · ١٣٫٢:١
+const LABEL = "#6B5560";        // ثالثيّ — تسمياتٌ وحواشٍ · ٦٫٨:١
+const MUTED = "#8A7480";        // معطَّل/خامل — يُرى خاملاً ويبقى مقروءاً · ٤٫٠:١ (كبيرٌ فقط)
 const LINE = "#E8D5C4";
 const IVORY = "#F8F2E4";
+
+/* ═══ لونُ الهويّة لا يضمن القراءة — فيُضمَن اشتقاقاً ═══
+   لونُ التمييز `color_accent` **إعدادُ شركةٍ حُرّ**، وافتراضُه في
+   الشيفرة `#085041` أخضرُ غامق. وهو يلوّن نصّاً فوق ترويسةٍ مارونيّة
+   غامقة: «حياك الله يا حاج» وسطرَ العدّاد ووحداتِه واسمَ الموسم.
+   فإن كان الإعدادُ غامقاً صار النصُّ غامقاً على غامق — وقد قِيس:
+   **١٫٠٥:١** عند المارون مع الافتراض، أي نصٌّ لا يُرى أصلاً.
+
+   ولا يُعالَج هذا بلونٍ ثابتٍ نختاره (فيضيع لونُ الحملة)، ولا
+   بتغميقِ كلّ شيء. بل تُرفَع إضاءةُ لون الهويّة نفسِه — بصبغته
+   وتشبّعه كما هما — حتى يبلغ عتبةَ القراءة على تلك الخلفيّة
+   بالذات. فالهويّةُ محفوظةٌ والقراءةُ مضمونة، مهما أُعِدّ اللون. */
+const srgb = (h: string): [number, number, number] => {
+  const v = h.replace("#", "");
+  const f = v.length === 3 ? [...v].map(c => c + c).join("") : v;
+  return [0, 2, 4].map(i => parseInt(f.slice(i, i + 2), 16)) as [number, number, number];
+};
+const relLum = (rgb: [number, number, number]) => {
+  const c = rgb.map(x => { const n = x / 255; return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrast = (a: string, b: string) => {
+  const la = relLum(srgb(a)), lb = relLum(srgb(b));
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+/** يمزج اللون نحو الأبيض أو الأسود بنسبة t — الصبغةُ تبقى، الإضاءةُ تتغيّر. */
+const mix = (h: string, towards: string, t: number) => {
+  const a = srgb(h), b = srgb(towards);
+  return "#" + a.map((c, i) => Math.round(c + (b[i] - c) * t).toString(16).padStart(2, "0")).join("");
+};
+/** أقربُ نسخةٍ من اللون تبلغ العتبة على هذه الخلفيّة — أو أقصى ما أمكن. */
+function readableOn(color: string, bg: string, target = 4.5): string {
+  /* لونٌ غيرُ سداسيّ يُترَك كما هو: الإعدادُ ليس تحت سيطرتنا، ولا
+     نحسب على نصٍّ لا نفهمه. */
+  if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) return color;
+  if (contrast(color, bg) >= target) return color;
+  /* يُجرَّب الاتّجاهان معاً ويُؤخَذ الأقرب بلوغاً: خلفيّةٌ متوسّطة
+     الإضاءة قد يخدمها التغميقُ خيراً من التفتيح، والعكس. واختيارُ
+     الاتّجاه بإضاءة الخلفيّة وحدها يخطئ في المنتصف. */
+  let best = color, bestRatio = contrast(color, bg);
+  for (const towards of ["#ffffff", "#000000"] as const) {
+    for (let t = 0.05; t <= 1.0001; t += 0.05) {
+      const c = mix(color, towards, t);
+      const r = contrast(c, bg);
+      if (r > bestRatio) { best = c; bestRatio = r; }
+      if (r >= target) return c;
+    }
+  }
+  return best;
+}
 
 const mapsUrl = (q: string) => `https://maps.google.com/maps?q=${encodeURIComponent(q)}`;
 
@@ -347,8 +401,26 @@ function PilgrimPortal() {
     return `#${[0, 2, 4].map(i => Math.round(parseInt(value.slice(i, i + 2), 16) * factor).toString(16).padStart(2, "0")).join("")}`;
   };
   const brandDeep = darken(brand, 0.55);
-  const goldBright = gold;
-  const goldDark = darken(gold, 0.7);
+  /* ⚠️ `goldBright` يلوّن نصّاً فوق الترويسة المارونيّة، و`goldDark`
+     نصّاً فوق الأبيض. وكلاهما كان مشتقّاً من لون الإعداد حسابياً بلا
+     ضمانِ قراءة: قِيس «حياك الله يا حاج» بـ**١٫٠٥:١** حين يكون
+     `color_accent` غامقاً — نصٌّ لا يُرى. فصارا يُشتقّان بالعتبة:
+     الصبغةُ من الحملة، والإضاءةُ ممّا تتطلّبه الخلفيّة.
+     والترويسةُ تدرّجٌ من `brand` إلى `brandDeep`، فتُحلّ المسألةُ
+     عند **الطرف الأفتح** لأنّه الأصعب — فتصحّ على التدرّج كلّه. */
+  const goldBright = readableOn(gold, brand, 4.5);
+  /* و`goldDark` لا يقع على أبيضَ خالصٍ دائماً: «أنا تائه» ورقاقةُ
+     «عائلتك» وزرُّ الخريطة تجلس على أرضيّةٍ مصبوغةٍ بلون الحملة
+     (`${gold}1f` ونحوها). فتُحلّ المسألةُ على تلك الأرضيّة نفسِها
+     لا على الأبيض — وإلّا نجح القياسُ على الورق وسقط على الشاشة
+     بفارقٍ صغير (قِيس ٤٫٣١ مقابل ٤٫٥ المطلوبة). */
+  /* والأرضيّةُ الحقيقيّة `${gold}1f` فوق **الورقيّ** لا فوق الأبيض:
+     الصفحةُ عاجيّةٌ لا بيضاء، فحلُّها على الأبيض يُخطئ بفارقٍ صغير. */
+  const goldTint = mix(gold, IVORY, 1 - 0x1f / 255);
+  const goldDark = readableOn(darken(gold, 0.7), goldTint, 4.5);
+  /* والزخرفةُ تبقى على `gold` الخام: حدودٌ وخلفيّاتٌ وأيقوناتٌ
+     ممتلئة لا تُقرأ، فلا تُفرَض عليها عتبةُ نصّ — وبها تبقى هويّةُ
+     الحملة ظاهرةً حتى حين يتغيّر لونُ نصِّها للقراءة. */
   const portalLogo = cfg?.assets?.logo || cfg?.logo_url || null;
   const features = cfg?.features || {};
   const portalSettings = cfg?.portal_settings || {};
@@ -646,21 +718,21 @@ function PilgrimPortal() {
       </div>
     </div>
   );
-  /* ═══ وحدةُ المعلومة — التسمية وقيمتُها شيءٌ واحد ═══
-     كان الصفُّ يدفع التسمية إلى أقصى اليمين وقيمتَها إلى أقصى
-     اليسار بـ`space-between`، فيصير بينهما فراغٌ عريض تقرؤه العين
-     فصلاً لا اقتراناً — ويسوء مع الأسماء الطويلة فتلتحم بتسميتها.
-     فصارتا ملتصقتَين: «الغرفة ١٢٠٤» تُقرأ وحدةً واحدة، والقيمةُ
-     أثقلُ خطّاً ولوناً فتُلتقَط بنظرةٍ واحدة. */
+  /* ═══ وحدةُ المعلومة — التسميةُ فوق قيمتها ═══
+     جُرِّب الجنبُ إلى الجنب («الغرفة ١٢٠٤» في سطر) فانضغطت الثلاثةُ
+     في سطرٍ واحدٍ على الجوّال وصارت تُقرأ نصّاً متّصلاً لا ثلاثَ
+     معلومات. فصُفَّت رأسيّاً: تسميةٌ صغيرةٌ هادئة، وتحتها القيمةُ
+     ثقيلةً كبيرة. فتُلتقَط القيمةُ أوّلاً وتُفسَّر بتسميتها بعدها،
+     وتبقى الوحداتُ متجاورةً فلا يطول الكارت. */
   const unit = (k: string, v: string, big = false, full = false): React.ReactNode => (
     <div key={k} style={{
-      display: "flex", alignItems: "baseline", gap: 8, minWidth: 0,
-      flex: full ? "1 1 100%" : "0 1 auto",
+      display: "flex", flexDirection: "column", gap: 1, minWidth: 0,
+      flex: full ? "1 1 100%" : "1 1 auto",
     }}>
-      <span style={{ fontSize: 14.5, fontWeight: 700, color: LABEL, flexShrink: 0 }}>{k}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: LABEL, lineHeight: 1.6 }}>{k}</span>
       <span style={{
-        fontFamily: fontD, fontWeight: 900, fontSize: big ? 26 : 20,
-        color: big ? brand : INK, lineHeight: 1.45,
+        fontFamily: fontD, fontWeight: 900, fontSize: big ? 24 : 19,
+        color: big ? brand : INK, lineHeight: 1.35,
         minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word",
       }}>{v}</span>
     </div>
@@ -668,7 +740,7 @@ function PilgrimPortal() {
   /* الوحداتُ تتجاور ما اتّسع السطر ثم تنزل — لا شبكةَ ثابتة تكسر
      عند اسمٍ طويل، ولا عمودٌ يهدر عرض الشاشة عند اسمٍ قصير. */
   const units = (children: React.ReactNode) => (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "12px 22px", padding: "2px 0" }}>{children}</div>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "14px 20px", padding: "2px 0" }}>{children}</div>
   );
 
   const addressLink = (address: string, url?: string | null) => (
@@ -797,13 +869,46 @@ function PilgrimPortal() {
 
       <div style={{ padding: "0 15px", marginTop: -36, position: "relative" }}>
         {cfg?.portal_welcome_message && <div style={card}><div style={{ fontSize: 17, fontWeight: 700, color: INK, lineHeight: 2 }}>{cfg.portal_welcome_message}</div></div>}
-        {cfg?.portal_help_message && <div style={card}><div style={{ fontSize: 15, fontWeight: 600, color: LABEL, lineHeight: 2 }}>{cfg.portal_help_message}</div></div>}
+        {cfg?.portal_help_message && <div style={card}><div style={{ fontSize: 15, fontWeight: 600, color: BODY, lineHeight: 2 }}>{cfg.portal_help_message}</div></div>}
         {/* ══ تاب رحلتي ══ */}
         {tab === "trip" && <>
-          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-            {cfg?.admin_phone && <a href={`tel:${cfg.admin_phone}`} style={{ flex: 1, borderRadius: 17, padding: "15px 6px", background: brand, color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textDecoration: "none", boxShadow: "0 5px 16px rgba(125,31,60,.35)" }}><Icon d={ICONS.phone} size={23} />إداري الحملة</a>}
-            {cfg?.admin_whatsapp && <a href={`https://wa.me/${cfg.admin_whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" style={{ flex: 1, borderRadius: 17, padding: "15px 6px", background: "#1F7A4D", color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textDecoration: "none", boxShadow: "0 5px 16px rgba(31,122,77,.35)" }}><Icon d={ICONS.wa} size={23} />واتساب</a>}
-            {showLost && <button onClick={() => setLostOpen(true)} style={{ flex: 1, border: "none", borderRadius: 17, padding: "15px 6px", background: goldBright, color: brandDeep, fontFamily: fontD, fontWeight: 900, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", boxShadow: "0 5px 16px rgba(240,200,74,.4)" }}><Icon d={ICONS.help} size={23} />أنا تائه</button>}
+          {/* ═══ الأفعالُ الثلاثة — حاضرةٌ لا مُهيمنة ═══
+             كانت ثلاثَ كتلٍ مشبَعةٍ (أحمر · أخضر · ذهبيّ) بظلالٍ
+             ملوّنة، فتسبق العينُ إليها قبل الرحلة والسكن — وهي
+             وسائلُ اتّصالٍ لا محتوى الرحلة. فصارت **نبرةً لا كتلة**:
+             أرضيّةٌ فاتحةٌ من لون كلٍّ، وحدٌّ خفيف، والأيقونةُ
+             والنصُّ بلونه الغامق. ⚠️ والأرضيّةُ **عتيمةٌ لا شفّافة**:
+             الصفُّ يجلس على حدّ الترويسة والورقيّ معاً (الكتلةُ
+             مرفوعةٌ بـ`marginTop:-36`)، والشفّافُ يبهت على المارون. تبقى مميَّزةً بلونها ومعناها
+             (والواتساب أخضرُ واتساب)، ويبقى هدفُ اللمس ٤٤px فأكثر. */}
+          <div style={{ display: "flex", gap: 9, marginBottom: 14 }}>
+            {cfg?.admin_phone && (
+              <a href={`tel:${cfg.admin_phone}`} style={{
+                flex: 1, minHeight: 56, borderRadius: 15, padding: "9px 4px",
+                background: mix(brand, "#ffffff", 0.93), border: `1.5px solid ${brand}33`, color: brandDeep,
+                fontFamily: fontD, fontWeight: 800, fontSize: 13.5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 5, textDecoration: "none",
+              }}><Icon d={ICONS.phone} size={20} color={brand} />إداري الحملة</a>
+            )}
+            {cfg?.admin_whatsapp && (
+              <a href={`https://wa.me/${cfg.admin_whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" style={{
+                flex: 1, minHeight: 56, borderRadius: 15, padding: "9px 4px",
+                background: mix("#1F7A4D", "#ffffff", 0.93), border: "1.5px solid #1F7A4D33", color: "#145736",
+                fontFamily: fontD, fontWeight: 800, fontSize: 13.5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 5, textDecoration: "none",
+              }}><Icon d={ICONS.wa} size={20} color="#1F7A4D" />واتساب</a>
+            )}
+            {showLost && (
+              <button onClick={() => setLostOpen(true)} style={{
+                flex: 1, minHeight: 56, borderRadius: 15, padding: "9px 4px",
+                background: goldTint, border: `1.5px solid ${gold}66`, color: goldDark,
+                fontFamily: fontD, fontWeight: 800, fontSize: 13.5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 5, cursor: "pointer",
+              }}><Icon d={ICONS.help} size={20} color={goldDark} />أنا تائه</button>
+            )}
           </div>
 
           {showFlights && activeFlight && (() => {
@@ -974,13 +1079,19 @@ function PilgrimPortal() {
           )}
 
           {showRoommates && data.roommates?.length > 0 && (
-            <div style={card}>
+            /* الدائرةُ بحرفٍ واحدٍ لم تكن تميّز أحداً — كلُّ ما أضافته
+               ارتفاعٌ لكارتٍ محتواه أسماء. فحُذفت، وضاقت الأسطر،
+               وبقيت الأسماءُ والعددُ وسلوكُ الخصوصيّة كما هي. */
+            <div style={{ ...card, padding: "16px 17px" }}>
               {cardH(ICONS.users, "رفقاء الغرفة", `${data.roommates.length} معك في الغرفة`)}
               {data.roommates.map((m, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 2px", borderBottom: i < data.roommates.length - 1 ? `1px dashed ${LINE}` : "none" }}>
-                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: goldDark, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{m.name?.charAt(0)}</div>
-                  <div style={{ fontSize: 21, fontWeight: 700, color: INK, flex: 1 }}>{m.name}</div>
-                  {m.is_family && <span style={{ fontSize: 12.5, background: goldBright, color: brandDeep, padding: "4px 14px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>عائلتك</span>}
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 2px",
+                  borderTop: i === 0 ? "none" : `1px dashed ${LINE}`,
+                }}>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: INK, flex: 1, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.6 }}>{m.name}</span>
+                  {m.is_family && <span style={{ fontSize: 11.5, background: `${gold}26`, color: goldDark, border: `1px solid ${gold}66`, padding: "3px 10px", borderRadius: 99, fontWeight: 800, fontFamily: fontD, flexShrink: 0 }}>عائلتك</span>}
                 </div>
               ))}
             </div>
@@ -997,24 +1108,24 @@ function PilgrimPortal() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 17, fontWeight: 800, color: INK }}>التنبيهات مفعّلة</div>
-                <div style={{ fontSize: 14, color: LABEL, marginTop: 3 }}>سيصلك كل جديد عن رحلتك على هذا الجهاز.</div>
+                <div style={{ fontSize: 14, color: BODY, marginTop: 3 }}>سيصلك كل جديد عن رحلتك على هذا الجهاز.</div>
               </div>
               <button onClick={turnPushOff} disabled={pushBusy}
-                style={{ background: "none", border: `1.5px solid ${LINE}`, color: LABEL, borderRadius: 99, fontSize: 14, fontWeight: 700, padding: "8px 15px", cursor: "pointer", fontFamily: fontD, flexShrink: 0 }}>
+                style={{ background: "none", border: `1.5px solid ${LINE}`, color: BODY, borderRadius: 99, fontSize: 14, fontWeight: 700, padding: "0 16px", minHeight: 44, cursor: "pointer", fontFamily: fontD, flexShrink: 0 }}>
                 إيقاف
               </button>
             </div>
           ) : pushState === "denied" ? (
             <div style={{ ...card, padding: "17px 19px", borderRight: `5px solid ${gold}` }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: INK }}>التنبيهات موقوفة من إعدادات الجهاز</div>
-              <div style={{ fontSize: 15, color: LABEL, marginTop: 8, lineHeight: 2 }}>
+              <div style={{ fontSize: 15, color: BODY, marginTop: 8, lineHeight: 2 }}>
                 لإعادة تفعيلها: افتح إعدادات المتصفح، ثم إعدادات الموقع، ثم فعّل الإشعارات لهذه الصفحة.
               </div>
             </div>
           ) : pushState === "ios-needs-install" && !pushDismissed ? (
             <div style={{ ...card, padding: "19px 19px 17px", border: `2px solid ${gold}` }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: INK, marginBottom: 4 }}>فعّل تنبيهات الحملة</div>
-              <div style={{ fontSize: 15, color: LABEL, lineHeight: 2, marginBottom: 15 }}>
+              <div style={{ fontSize: 15, color: BODY, lineHeight: 2, marginBottom: 15 }}>
                 لتصلك التنبيهات على هذا الجهاز، اتبع الخطوات الثلاث مرة واحدة:
               </div>
               {[
@@ -1031,7 +1142,7 @@ function PilgrimPortal() {
                 يمكنك طلب المساعدة من موظف الحملة لإتمام هذه الخطوات.
               </div>
               <button onClick={dismissPush}
-                style={{ background: "none", border: "none", color: LABEL, fontSize: 14, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: 0 }}>
+                style={{ background: "none", border: "none", color: BODY, fontSize: 14, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: "8px 4px", minHeight: 44 }}>
                 إخفاء هذه الرسالة
               </button>
             </div>
@@ -1041,7 +1152,7 @@ function PilgrimPortal() {
                 <Icon d={ICONS.bell} size={32} color={goldBright} sw={1.8} />
               </div>
               <div style={{ fontSize: 21, fontWeight: 800, color: INK, marginBottom: 8 }}>تنبيهات الحملة</div>
-              <div style={{ fontSize: 15.5, color: LABEL, lineHeight: 2 }}>
+              <div style={{ fontSize: 15.5, color: BODY, lineHeight: 2 }}>
                 فعّل التنبيهات ليصلك كل جديد عن رحلتك أولاً بأول: موعد الطيران، رقم غرفتك، باصك، ومخيمك.
               </div>
               <button onClick={turnPushOn} disabled={pushBusy}
@@ -1049,7 +1160,7 @@ function PilgrimPortal() {
                 {pushBusy ? "جارٍ التفعيل..." : "تفعيل التنبيهات"}
               </button>
               <button onClick={dismissPush}
-                style={{ background: "none", border: "none", color: LABEL, fontSize: 14.5, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline" }}>
+                style={{ background: "none", border: "none", color: BODY, fontSize: 14.5, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: "8px 4px", minHeight: 44 }}>
                 ليس الآن
               </button>
               <div style={{ fontSize: 13.5, color: LABEL, marginTop: 14, lineHeight: 1.8 }}>
@@ -1064,8 +1175,8 @@ function PilgrimPortal() {
 
           {data.announcements.length === 0 && (
             <div style={{ ...card, textAlign: "center", padding: 34 }}>
-              <Icon d={ICONS.bell} size={40} color={LABEL} sw={1.5} />
-              <div style={{ fontSize: 16, fontWeight: 700, color: LABEL, marginTop: 12 }}>لا توجد تنبيهات حالياً</div>
+              <Icon d={ICONS.bell} size={40} color={MUTED} sw={1.5} />
+              <div style={{ fontSize: 16, fontWeight: 700, color: BODY, marginTop: 12 }}>لا توجد تنبيهات حالياً</div>
             </div>
           )}
           {data.announcements.map(a => (
@@ -1090,8 +1201,8 @@ function PilgrimPortal() {
           const on = tab === t.id;
           return (
             <button key={t.id} onClick={() => { setTab(t.id as typeof tab); if (t.id === "alerts") { const top = data.announcements.reduce((m, a) => Math.max(m, a.id), seenAlerts); setSeenAlerts(top); localStorage.setItem("portal_seen_alerts", String(top)); } }}
-              style={{ flex: 1, border: "none", background: on ? `${brand}15` : "none", borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: fontD, fontSize: 17, fontWeight: 900, color: on ? brand : LABEL, cursor: "pointer", padding: "11px 0 9px", position: "relative", margin: "0 3px", transition: "background .2s,color .2s" }}>
-              <Icon d={t.icon} size={28} color={on ? brand : LABEL} sw={on ? 2.3 : 2} />
+              style={{ flex: 1, border: "none", background: on ? `${brand}15` : "none", borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: fontD, fontSize: 16, fontWeight: on ? 900 : 700, color: on ? brand : LABEL, cursor: "pointer", padding: "11px 0 9px", position: "relative", margin: "0 3px", transition: "background .2s,color .2s" }}>
+              <Icon d={t.icon} size={26} color={on ? brand : LABEL} sw={on ? 2.4 : 1.9} />
               {t.label}
               {t.id === "alerts" && unread > 0 && <span style={{ position: "absolute", top: 7, left: "calc(50% - 24px)", width: 12, height: 12, borderRadius: "50%", background: "#C1121F", border: "2.5px solid #fff" }} />}
             </button>
