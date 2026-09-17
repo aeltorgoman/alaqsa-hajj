@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   portalDocUrl, usePortalDoc, clearPortalDocCache, PORTAL_SESSION_KEY,
   type PortalDocType, type PortalSession,
@@ -37,8 +37,15 @@ type Ann = { id: number; body: string; priority: string; show_at: string };
 type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
 type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; season_label: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; features: Record<string, boolean> | null; portal_settings?: Record<string, boolean> | null; portal_welcome_message?: string | null; portal_help_message?: string | null; assets?: Record<string, string> | null; country: string | null; city: string | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; camp_mina_address: string | null; camp_mina_url: string | null; camp_arafa_address: string | null; camp_arafa_url: string | null };
 
-/* أقرب يوم عرفة: القادم، أو الفائت خلال ٤٠ يوماً (فترة ما بعد الحج) */
-function getSeasonArafa(): Date {
+/* ═══ يومُ عرفة — يُعرَف أو لا يُعرَف، ولا يُختلَق ═══
+   يُبحَث عنه في تقويم الجهاز (٩ ذي الحجّة) ضمن نافذةٍ تبدأ قبل
+   أربعين يوماً. فإن لم يعرفه الجهاز رجعت `null`.
+
+   ⚠️ وكان الإخفاق يرجع `الآن + ٣٠ يوماً` — تاريخاً مخترعاً يُعرَض
+   على الحاجّ كأنّه حقيقة. وأسوأُ من ذلك أنّه كان يحكم **أيَّ رحلةٍ
+   تُعرض**، فيخفي رحلة العودة إلى الأبد على جهازٍ لا يعرف التقويم.
+   فصار الجهل يُعلَن لا يُملأ: لا عدّاد بدل عدّادٍ كاذب. */
+function getSeasonArafa(): Date | null {
   try {
     const fmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" });
     const start = new Date();
@@ -51,8 +58,36 @@ function getSeasonArafa(): Date {
       const dd = parseInt(parts.find(p => p.type === "day")!.value);
       if (m === 12 && dd === 9) { d.setHours(0, 0, 0, 0); return d; }
     }
-  } catch { /* متصفحات قديمة */ }
-  return new Date(Date.now() + 30 * 86400000);
+  } catch { /* متصفّحٌ لا يعرف أمّ القرى */ }
+  return null;
+}
+
+/* ═══ تواريخُ الرحلة ═══
+   القيمةُ المخزَّنة `YYYY-MM-DD` بلا منطقةٍ زمنيّة. فتُقرأ **يوماً
+   مدنيّاً** لا لحظةً: نبنيها بالأجزاء لا بـ`new Date(نصّ)` كي لا
+   يزحزحها المتصفّح يوماً إلى الوراء بحسب منطقة الجهاز. */
+function civilDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** تاريخٌ عربيٌّ مقروء: «١٨ مايو ٢٠٢٦» — وإن تعذّر رُدَّ كما هو. */
+function fmtDateAr(iso: string | null | undefined): string {
+  const d = civilDate(iso);
+  if (!d) return iso ? String(iso) : "";
+  try {
+    return new Intl.DateTimeFormat("ar-EG", { day: "numeric", month: "long", year: "numeric" }).format(d);
+  } catch { return String(iso); }
+}
+
+/** فرقُ الأيّام بين يومين مدنيّين — للوصول في اليوم التالي. */
+function dayGap(fromIso: string | null | undefined, toIso: string | null | undefined): number {
+  const a = civilDate(fromIso), b = civilDate(toIso);
+  if (!a || !b) return 0;
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
 const ICONS = {
@@ -83,12 +118,66 @@ const STAR_PATTERN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 const MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 
-/* ─── نظام الألوان الصارم ─── */
-const INK = "#241318";          // العناوين والقيم على الفاتح
-const BODY = "#4A3540";         // النص العادي على الفاتح — غامق كامل
-const LABEL = "#7A6570";        // التسميات — مقروءة
+/* ═══ سُلّمُ النصّ — أربعُ درجاتٍ لا لونٌ لكلّ موضع ═══
+   الأولى أساسٌ، والثانية أهدأُ وتُقرأ، والثالثة حاشيةٌ تبقى مقروءة،
+   والرابعة معطَّلةٌ تُرى معطَّلةً ولا تُقرأ بعناء. والقياسُ لا الذوق:
+   كلُّ درجةٍ تتجاوز ٤٫٥:١ على الورقيّ والأبيض (والقيمُ الكبيرةُ ٣:١). */
+const INK = "#241318";          // أساسيّ — عناوينُ وقيم · ١٧٫٨:١ على الأبيض
+const BODY = "#3E2B34";         // ثانويّ — نصُّ الفقرات · ١٣٫٢:١
+const LABEL = "#6B5560";        // ثالثيّ — تسمياتٌ وحواشٍ · ٦٫٨:١
+const MUTED = "#8A7480";        // معطَّل/خامل — يُرى خاملاً ويبقى مقروءاً · ٤٫٠:١ (كبيرٌ فقط)
 const LINE = "#E8D5C4";
 const IVORY = "#F8F2E4";
+
+/* ═══ لونُ الهويّة لا يضمن القراءة — فيُضمَن اشتقاقاً ═══
+   لونُ التمييز `color_accent` **إعدادُ شركةٍ حُرّ**، وافتراضُه في
+   الشيفرة `#085041` أخضرُ غامق. وهو يلوّن نصّاً فوق ترويسةٍ مارونيّة
+   غامقة: «حياك الله يا حاج» وسطرَ العدّاد ووحداتِه واسمَ الموسم.
+   فإن كان الإعدادُ غامقاً صار النصُّ غامقاً على غامق — وقد قِيس:
+   **١٫٠٥:١** عند المارون مع الافتراض، أي نصٌّ لا يُرى أصلاً.
+
+   ولا يُعالَج هذا بلونٍ ثابتٍ نختاره (فيضيع لونُ الحملة)، ولا
+   بتغميقِ كلّ شيء. بل تُرفَع إضاءةُ لون الهويّة نفسِه — بصبغته
+   وتشبّعه كما هما — حتى يبلغ عتبةَ القراءة على تلك الخلفيّة
+   بالذات. فالهويّةُ محفوظةٌ والقراءةُ مضمونة، مهما أُعِدّ اللون. */
+const srgb = (h: string): [number, number, number] => {
+  const v = h.replace("#", "");
+  const f = v.length === 3 ? [...v].map(c => c + c).join("") : v;
+  return [0, 2, 4].map(i => parseInt(f.slice(i, i + 2), 16)) as [number, number, number];
+};
+const relLum = (rgb: [number, number, number]) => {
+  const c = rgb.map(x => { const n = x / 255; return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+};
+const contrast = (a: string, b: string) => {
+  const la = relLum(srgb(a)), lb = relLum(srgb(b));
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+};
+/** يمزج اللون نحو الأبيض أو الأسود بنسبة t — الصبغةُ تبقى، الإضاءةُ تتغيّر. */
+const mix = (h: string, towards: string, t: number) => {
+  const a = srgb(h), b = srgb(towards);
+  return "#" + a.map((c, i) => Math.round(c + (b[i] - c) * t).toString(16).padStart(2, "0")).join("");
+};
+/** أقربُ نسخةٍ من اللون تبلغ العتبة على هذه الخلفيّة — أو أقصى ما أمكن. */
+function readableOn(color: string, bg: string, target = 4.5): string {
+  /* لونٌ غيرُ سداسيّ يُترَك كما هو: الإعدادُ ليس تحت سيطرتنا، ولا
+     نحسب على نصٍّ لا نفهمه. */
+  if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) return color;
+  if (contrast(color, bg) >= target) return color;
+  /* يُجرَّب الاتّجاهان معاً ويُؤخَذ الأقرب بلوغاً: خلفيّةٌ متوسّطة
+     الإضاءة قد يخدمها التغميقُ خيراً من التفتيح، والعكس. واختيارُ
+     الاتّجاه بإضاءة الخلفيّة وحدها يخطئ في المنتصف. */
+  let best = color, bestRatio = contrast(color, bg);
+  for (const towards of ["#ffffff", "#000000"] as const) {
+    for (let t = 0.05; t <= 1.0001; t += 0.05) {
+      const c = mix(color, towards, t);
+      const r = contrast(c, bg);
+      if (r > bestRatio) { best = c; bestRatio = r; }
+      if (r >= target) return c;
+    }
+  }
+  return best;
+}
 
 const mapsUrl = (q: string) => `https://maps.google.com/maps?q=${encodeURIComponent(q)}`;
 
@@ -150,6 +239,9 @@ function PilgrimPortal() {
   const [lostOpen, setLostOpen] = useState(false);
   const [docView, setDocView] = useState<{ title: string; url: string; isPdf: boolean } | null>(null);
   const [docBusy, setDocBusy] = useState<PortalDocType | null>(null);
+  /* الإخفاقُ يُعلَن: كان `portalDocUrl` يرجع null فلا يقع شيءٌ أصلاً
+     — ضغطةٌ بلا أثرٍ ولا سبب. */
+  const [docError, setDocError] = useState<PortalDocType | null>(null);
   const [seenAlerts, setSeenAlerts] = useState<number>(() => Number(localStorage.getItem("portal_seen_alerts") || 0));
   const [ackedUrgent, setAckedUrgent] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("portal_acked_urgent") || "[]"); } catch { return []; }
@@ -159,6 +251,25 @@ function PilgrimPortal() {
   const [pushBusy, setPushBusy] = useState(false);
   const [pushNote, setPushNote] = useState("");
   const [pushDismissed, setPushDismissed] = useState(() => localStorage.getItem("portal_push_dismissed") === "1");
+  /* ⚠️ ارتفاعُ بانر العاجل **يُقاس ولا يُقدَّر**. كان المحجوز رقماً
+     ثابتاً (١٣٠px) بينما البانر بنصٍّ من سطرين يبلغ ١٧٦px عند
+     ٣٦٠px — فيغطّي اسمَ الحملة بثلاثين بكسلاً. والنصّ من الإدارة،
+     فطولُه غيرُ معلومٍ سلفاً أصلاً: لا رقمَ ثابتٌ يصحّ هنا. */
+  const [bannerH, setBannerH] = useState(0);
+  const bannerRO = useRef<ResizeObserver | null>(null);
+  /* مرجعٌ بدالّة لا أثرٌ بلا تبعيّات: القياسُ يقع عند تعليق العنصر
+     وعند كلّ تغيّرِ مقاسٍ بعده (نصٌّ أطول، دورانُ الشاشة، تنبيهٌ
+     جديد) — و`ResizeObserver` يغطّي تغيّر عرض النافذة أصلاً. */
+  const bannerRef = useCallback((el: HTMLDivElement | null) => {
+    bannerRO.current?.disconnect();
+    bannerRO.current = null;
+    if (!el) { setBannerH(0); return; }
+    const measure = () => setBannerH(el.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    bannerRO.current = ro;
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -290,8 +401,26 @@ function PilgrimPortal() {
     return `#${[0, 2, 4].map(i => Math.round(parseInt(value.slice(i, i + 2), 16) * factor).toString(16).padStart(2, "0")).join("")}`;
   };
   const brandDeep = darken(brand, 0.55);
-  const goldBright = gold;
-  const goldDark = darken(gold, 0.7);
+  /* ⚠️ `goldBright` يلوّن نصّاً فوق الترويسة المارونيّة، و`goldDark`
+     نصّاً فوق الأبيض. وكلاهما كان مشتقّاً من لون الإعداد حسابياً بلا
+     ضمانِ قراءة: قِيس «حياك الله يا حاج» بـ**١٫٠٥:١** حين يكون
+     `color_accent` غامقاً — نصٌّ لا يُرى. فصارا يُشتقّان بالعتبة:
+     الصبغةُ من الحملة، والإضاءةُ ممّا تتطلّبه الخلفيّة.
+     والترويسةُ تدرّجٌ من `brand` إلى `brandDeep`، فتُحلّ المسألةُ
+     عند **الطرف الأفتح** لأنّه الأصعب — فتصحّ على التدرّج كلّه. */
+  const goldBright = readableOn(gold, brand, 4.5);
+  /* و`goldDark` لا يقع على أبيضَ خالصٍ دائماً: «أنا تائه» ورقاقةُ
+     «عائلتك» وزرُّ الخريطة تجلس على أرضيّةٍ مصبوغةٍ بلون الحملة
+     (`${gold}1f` ونحوها). فتُحلّ المسألةُ على تلك الأرضيّة نفسِها
+     لا على الأبيض — وإلّا نجح القياسُ على الورق وسقط على الشاشة
+     بفارقٍ صغير (قِيس ٤٫٣١ مقابل ٤٫٥ المطلوبة). */
+  /* والأرضيّةُ الحقيقيّة `${gold}1f` فوق **الورقيّ** لا فوق الأبيض:
+     الصفحةُ عاجيّةٌ لا بيضاء، فحلُّها على الأبيض يُخطئ بفارقٍ صغير. */
+  const goldTint = mix(gold, IVORY, 1 - 0x1f / 255);
+  const goldDark = readableOn(darken(gold, 0.7), goldTint, 4.5);
+  /* والزخرفةُ تبقى على `gold` الخام: حدودٌ وخلفيّاتٌ وأيقوناتٌ
+     ممتلئة لا تُقرأ، فلا تُفرَض عليها عتبةُ نصّ — وبها تبقى هويّةُ
+     الحملة ظاهرةً حتى حين يتغيّر لونُ نصِّها للقراءة. */
   const portalLogo = cfg?.assets?.logo || cfg?.logo_url || null;
   const features = cfg?.features || {};
   const portalSettings = cfg?.portal_settings || {};
@@ -312,16 +441,76 @@ function PilgrimPortal() {
      قبل أي عودة مبكّرة كي لا يتغيّر ترتيب الخطّافات بين عرض وآخر */
   const photoUrl = usePortalDoc(session, "photo", data?.pilgrim?.has_photo === true);
 
-  const arafa = useMemo(() => getSeasonArafa(), []);
-  const postHajj = now > arafa.getTime() + 86400000;
-  const activeFlight = postHajj && data?.flight_back ? data.flight_back : data?.flight_go;
-  const flightLabel = postHajj && data?.flight_back ? "رحلة العودة" : "رحلة الذهاب";
+  /* ═══ الرحلةُ المعروضة — واحدةٌ تخصّ المرحلة، لا رحلتان ═══
+     المفهومُ المعتمَد باقٍ بحرفه. المتغيّرُ هو **ما الذي يقلبه**:
+     كان يومَ عرفة (تاريخٌ من تقويم الجهاز لا علاقة له بالطيران)،
+     فصار **رحلةَ الذهاب نفسها**. والبيانةُ كانت في الحمولة أصلاً
+     ولا تُقرأ: `arrival_date` لم تكن تُستعمَل في قلبٍ ولا عرض.
 
-  const diff = Math.max(0, arafa.getTime() - now);
+     وثلاثةُ عيوبٍ تسقط بهذا التحويل:
+       • كان القلبُ يقع بعد عرفة بيومٍ لا بعد الوصول، فتبقى رحلةُ
+         ذهابٍ منتهيةٌ صدرَ الشاشة أسابيع.
+       • وكانت نافذةُ الأربعين يوماً تنزلق، فيعود بعد اليوم الحادي
+         والأربعين إلى **رحلة الذهاب** من جديد. والآن: ماضٍ يبقى ماضياً.
+       • ومن له رحلةُ عودةٍ وحدها كان يُقال له «لا رحلة». */
+  const todayCivil = useMemo(() => { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime(); }, [now]);
+  const go = data?.flight_go ?? null;
+  const back = data?.flight_back ?? null;
+  /* الوصولُ أدقُّ من المغادرة، والمغادرةُ أسلمُ من لا شيء */
+  const goEnd = civilDate(go?.arrival_date || go?.date || null);
+  const outboundDone = !!goEnd && todayCivil > goEnd.getTime();
+  const activeFlight = (outboundDone && back) ? back : (go ?? back);
+  const flightLabel = activeFlight && activeFlight === back ? "رحلة العودة" : "رحلة الذهاب";
+
+  /* ما الذي صار جاهزاً من ترتيبات الرحلة؟ — لا نسبةَ ولا قائمةَ
+     نواقص: مجرّد «هل بقي ما لم يُعتمَد بعد» لرسالةٍ واحدة هادئة. */
+  const anyDoc = !!(data?.pilgrim?.has_hajj_permit || data?.pilgrim?.has_flight_ticket);
+  const hasMina = !!(data?.pilgrim?.camp_mina_name || data?.pilgrim?.camp_mina);
+  const hasArafa = !!(data?.pilgrim?.camp_arafa_name || data?.pilgrim?.camp_arafa);
+  const readyCount = [!!data?.room, !!data?.bus, hasMina, hasArafa, !!activeFlight, anyDoc].filter(Boolean).length;
+  /* البطاقةُ تظهر ما دام شيءٌ جوهريّ لم يُعتمَد — وتختفي وحدها حين
+     يكتمل كلّ شيء، بلا تبديلِ أطوارٍ ولا محرّكِ مراحل. */
+  const prepping = !!data && readyCount < 6;
+
+  async function openDoc(type: PortalDocType, title: string) {
+    if (docBusy) return;
+    setDocBusy(type); setDocError(null);
+    const res = await portalDocUrl(session, type);
+    setDocBusy(null);
+    if (res) setDocView({ title, url: res.url, isPdf: res.is_pdf });
+    else setDocError(type);
+  }
+
+  /* ═══ العدّاد — زينةٌ لا حُكم ═══
+     لم يعد يختار رحلةً. فإن جهل الجهازُ يومَ عرفة اختفى العدّاد
+     وحدَه ولم يتعطّل شيءٌ غيره. */
+  const arafa = useMemo(() => getSeasonArafa(), []);
+  const postHajj = !!arafa && now > arafa.getTime() + 86400000;
+  const diff = arafa ? Math.max(0, arafa.getTime() - now) : 0;
+  const showCountdown = !!arafa && diff > 0;
   const cd = { d: Math.floor(diff / 86400000), h: Math.floor(diff / 3600000) % 24, m: Math.floor(diff / 60000) % 60, s: Math.floor(diff / 1000) % 60 };
 
-  const unread = (data?.announcements?.length || 0) - seenAlerts;
+  /* ⚠️ الشارةُ كانت `العدد − المقروء`. والعددُ يتناقص وحدَه حين
+     ينتهي تنبيه، فيصير الفرقُ سالباً أو يبتلع جديداً. فصارت على
+     **أكبر مُعرَّفٍ رآه الحاجّ**: المعرّفاتُ تتزايد ولا تُعاد، فما
+     جاوز آخرَ ما رُئي جديدٌ يقيناً — وكلّه من بيانات الواجهة. */
+  const unread = (data?.announcements || []).filter(a => a.id > seenAlerts).length;
   const urgentUnacked = (data?.announcements || []).filter(a => a.priority === "عاجل" && !ackedUrgent.includes(a.id));
+
+  /* ═══ اسمُ الفندق — لا تُكرَّر كلمةُ «فندق» ═══
+     المخزَّن يكتبه الموظّف كاملاً في الغالب («فندق دار الإيمان»)،
+     وكان العرضُ يسبقه بكلمةٍ ثابتة فيخرج «فندق فندق دار الإيمان».
+     فنسبق فقط إن لم يبدأ الاسمُ بها — ولا تُمسّ القيمةُ المخزَّنة. */
+  const hotelName = (cfg?.hotel_name || "").trim();
+  const hotelTitle = hotelName
+    /* ⚠️ ولا `\b` هنا: حدُّ الكلمة في JS مبنيٌّ على [A-Za-z0-9_]،
+       فالحرفُ العربيّ غيرُ كلمةٍ عنده ولا يقع بعده حدّ — فكان
+       الشرطُ يفشل دائماً وتُضاف «فندق» ولو كانت موجودة. فالفصلُ
+       بفراغٍ صريحٍ أو نهايةِ النصّ. */
+    ? (/^(فندق|نزل|برج|دار)(\s|$)/.test(hotelName) ? hotelName : `فندق ${hotelName}`)
+    : "سكني في مكة";
+  const minaName = (data?.pilgrim?.camp_mina_name || data?.pilgrim?.camp_mina || "").trim();
+  const arafaName = (data?.pilgrim?.camp_arafa_name || data?.pilgrim?.camp_arafa || "").trim();
 
   const font = "'IBM Plex Sans Arabic','Cairo',sans-serif";
   const fontD = "'Cairo',sans-serif";
@@ -397,14 +586,14 @@ function PilgrimPortal() {
   /* ═══ شريط هوية الحملة ═══ */
   const brandBar = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, padding: "16px 16px 14px" }}>
-      <div style={{ width: 100, height: 100, borderRadius: "50%", border: `3px solid ${goldBright}`, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 8px rgba(240,200,74,.07)" }}>
+      <div style={{ width: 74, height: 74, borderRadius: "50%", border: `3px solid ${goldBright}`, overflow: "hidden", flexShrink: 0, boxShadow: "0 0 0 8px rgba(240,200,74,.07)" }}>
         {portalLogo
           ? <img src={portalLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <div style={{ width: "100%", height: "100%", background: "rgba(240,200,74,.1)", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon d={ICONS.star} size={44} color={goldBright} sw={1.4} /></div>}
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontFamily: fontT, fontSize: 36, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
-        <div style={{ fontFamily: font, fontSize: 16, fontWeight: 700, color: goldBright, marginTop: 4 }}>
+        <div style={{ fontFamily: fontT, fontSize: 27, fontWeight: 700, color: "#fff", lineHeight: 1.25 }}>{cfg?.name_ar || "بوابة الحاج"}</div>
+        <div style={{ fontFamily: font, fontSize: 13.5, fontWeight: 700, color: goldBright, marginTop: 3 }}>
           بوابة الحاج{cfg?.season_label ? ` — ${cfg.season_label}` : ""}
         </div>
       </div>
@@ -416,7 +605,7 @@ function PilgrimPortal() {
     if (!urgentUnacked.length) return null;
     const a = urgentUnacked[0];
     return (
-      <div style={{ position: "fixed", top: 0, right: 0, left: 0, zIndex: 100, background: `linear-gradient(135deg,#A31212,#7A0D0D)`, color: "#fff", padding: "16px 16px calc(16px)", boxShadow: "0 8px 30px rgba(0,0,0,.4)", borderBottom: `3px solid ${goldBright}` }}>
+      <div ref={bannerRef} style={{ position: "fixed", top: 0, right: 0, left: 0, zIndex: 100, background: `linear-gradient(135deg,#A31212,#7A0D0D)`, color: "#fff", padding: "16px 16px calc(16px + env(safe-area-inset-top))", boxShadow: "0 8px 30px rgba(0,0,0,.4)", borderBottom: `3px solid ${goldBright}`, maxHeight: "72dvh", overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, maxWidth: 560, margin: "0 auto" }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Icon d={ICONS.warn} size={24} color={goldBright} />
@@ -529,12 +718,31 @@ function PilgrimPortal() {
       </div>
     </div>
   );
-  const row = (k: string, v: string, big = false) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 2px", borderBottom: `1px dashed ${LINE}` }}>
-      <span style={{ fontSize: 18, fontWeight: 700, color: LABEL }}>{k}</span>
-      <span style={{ fontFamily: big ? fontD : font, fontWeight: big ? 900 : 700, fontSize: big ? 28 : 20, color: big ? brand : INK }}>{v}</span>
+  /* ═══ وحدةُ المعلومة — التسميةُ فوق قيمتها ═══
+     جُرِّب الجنبُ إلى الجنب («الغرفة ١٢٠٤» في سطر) فانضغطت الثلاثةُ
+     في سطرٍ واحدٍ على الجوّال وصارت تُقرأ نصّاً متّصلاً لا ثلاثَ
+     معلومات. فصُفَّت رأسيّاً: تسميةٌ صغيرةٌ هادئة، وتحتها القيمةُ
+     ثقيلةً كبيرة. فتُلتقَط القيمةُ أوّلاً وتُفسَّر بتسميتها بعدها،
+     وتبقى الوحداتُ متجاورةً فلا يطول الكارت. */
+  const unit = (k: string, v: string, big = false, full = false): React.ReactNode => (
+    <div key={k} style={{
+      display: "flex", flexDirection: "column", gap: 1, minWidth: 0,
+      flex: full ? "1 1 100%" : "1 1 auto",
+    }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color: LABEL, lineHeight: 1.6 }}>{k}</span>
+      <span style={{
+        fontFamily: fontD, fontWeight: 900, fontSize: big ? 24 : 19,
+        color: big ? brand : INK, lineHeight: 1.35,
+        minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word",
+      }}>{v}</span>
     </div>
   );
+  /* الوحداتُ تتجاور ما اتّسع السطر ثم تنزل — لا شبكةَ ثابتة تكسر
+     عند اسمٍ طويل، ولا عمودٌ يهدر عرض الشاشة عند اسمٍ قصير. */
+  const units = (children: React.ReactNode) => (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "14px 20px", padding: "2px 0" }}>{children}</div>
+  );
+
   const addressLink = (address: string, url?: string | null) => (
     <a href={url || mapsUrl(address)} target="_blank" rel="noreferrer"
       style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 12, background: `${gold}18`, border: `1.5px solid ${gold}66`, borderRadius: 13, padding: "12px 14px", textDecoration: "none" }}>
@@ -551,7 +759,7 @@ function PilgrimPortal() {
     /* نوع العرض يأتي من الخادم: الرابط الموقّع لا يُقرأ منه امتداد */
     const isPdf = docView.isPdf;
     return (
-      <div dir="rtl" style={{ minHeight: "100dvh", background: "#1c0d12", fontFamily: font, display: "flex", flexDirection: "column" }}>
+      <div dir="rtl" style={{ minHeight: "100dvh", background: "#1c0d12", fontFamily: font, display: "flex", flexDirection: "column", paddingTop: bannerH }}>
         {urgentBanner}
         <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, color: "#fff" }}>
           <button onClick={() => setDocView(null)} style={{ background: "rgba(255,255,255,.13)", border: "none", borderRadius: 13, width: 46, height: 46, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Icon d={ICONS.back} size={22} /></button>
@@ -560,7 +768,17 @@ function PilgrimPortal() {
         </div>
         <div style={{ flex: 1, padding: "0 12px 12px" }}>
           {isPdf
-            ? <iframe src={docView.url} title={docView.title} style={{ width: "100%", height: "100%", minHeight: "82dvh", border: "none", borderRadius: 15, background: "#fff" }} />
+            ? <>
+                <iframe src={docView.url} title={docView.title} style={{ width: "100%", height: "100%", minHeight: "74dvh", border: "none", borderRadius: 15, background: "#fff" }} />
+                {/* بعضُ المتصفّحات — وiOS Safari أشهرُها — لا تعرض PDF
+                    داخل إطار، فتبقى مساحةٌ بيضاء بلا تفسير. فيُعرض
+                    مخرجٌ صريحٌ دائماً: الرابطُ الموقّع نفسه في صفحةٍ
+                    مستقلّة. ولا يُغيَّر التوقيعُ ولا مدّتُه ولا مصدرُه. */}
+                <a href={docView.url} target="_blank" rel="noreferrer"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 48, marginTop: 10, borderRadius: 13, background: "rgba(255,255,255,.14)", border: "1.5px solid rgba(255,255,255,.3)", color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 15.5, textDecoration: "none" }}>
+                  لا يظهر المستند؟ افتحه في صفحة مستقلة
+                </a>
+              </>
             : <img src={docView.url} alt={docView.title} style={{ width: "100%", borderRadius: 15 }} />}
         </div>
       </div>
@@ -608,7 +826,7 @@ function PilgrimPortal() {
 
   /* ═══════════ الواجهة الرئيسية ═══════════ */
   return (
-    <div dir="rtl" style={{ minHeight: "100dvh", background: IVORY, fontFamily: font, paddingBottom: 104, paddingTop: urgentUnacked.length ? 130 : 0 }}>
+    <div dir="rtl" style={{ minHeight: "100dvh", background: IVORY, fontFamily: font, paddingBottom: 104, paddingTop: bannerH }}>
       {urgentBanner}
       <div style={{ background: `linear-gradient(160deg,${brand},${brandDeep})`, color: "#fff", padding: "0 18px 56px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", inset: 0, opacity: .06, backgroundImage: STAR_PATTERN, pointerEvents: "none" }} />
@@ -621,9 +839,10 @@ function PilgrimPortal() {
               : <div style={{ width: 60, height: 60, borderRadius: "50%", background: goldBright, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 25, color: brandDeep, border: "3px solid rgba(255,255,255,.55)" }}>{(p.short_ar || p.name_ar)?.charAt(0)}</div>}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 18, color: goldBright, fontWeight: 800 }}>{p.gender === "أنثى" ? "حياك الله يا حاجة" : "حياك الله يا حاج"}</div>
-              <div style={{ fontFamily: fontD, fontSize: 28, fontWeight: 900, marginTop: 2, lineHeight: 1.4, color: "#fff" }}>{p.short_ar || p.name_ar}</div>
+              <div style={{ fontFamily: fontD, fontSize: 25, fontWeight: 900, marginTop: 2, lineHeight: 1.4, color: "#fff", overflowWrap: "anywhere" }}>{p.short_ar || p.name_ar}</div>
             </div>
-            <button onClick={logout} style={{ background: "rgba(255,255,255,.13)", border: "1.5px solid rgba(255,255,255,.35)", color: "#fff", borderRadius: 99, fontSize: 13.5, padding: "8px 17px", cursor: "pointer", fontFamily: fontD, fontWeight: 800 }}>خروج</button>
+            <button onClick={logout} aria-label="تسجيل الخروج" title="تسجيل الخروج"
+              style={{ background: "rgba(255,255,255,.10)", border: "1.5px solid rgba(255,255,255,.28)", color: "rgba(255,255,255,.85)", borderRadius: 99, fontSize: 13, minWidth: 44, minHeight: 44, padding: "0 14px", cursor: "pointer", fontFamily: fontD, fontWeight: 700, flexShrink: 0 }}>خروج</button>
           </div>
 
           {postHajj ? (
@@ -632,13 +851,13 @@ function PilgrimPortal() {
               <div style={{ fontFamily: fontT, fontSize: 24, fontWeight: 700, color: "#fff", marginTop: 9 }}>تقبل الله حجكم وسعيكم</div>
               <div style={{ fontSize: 15, fontWeight: 700, color: goldBright, marginTop: 5 }}>حجاً مبروراً وسعياً مشكوراً وذنباً مغفوراً</div>
             </div>
-          ) : diff > 0 && (
+          ) : showCountdown && (
             <div style={{ marginTop: 18, background: "rgba(0,0,0,.22)", border: `1.5px solid ${goldBright}44`, borderRadius: 20, padding: "16px 16px" }}>
               <div style={{ fontSize: 14.5, color: goldBright, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}><Icon d={ICONS.clock} size={17} />المتبقي على الوقوف بعرفات</div>
               <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
                 {[[cd.d, "يوم"], [cd.h, "ساعة"], [cd.m, "دقيقة"], [cd.s, "ثانية"]].map(([v, l], i) => (
                   <div key={i} style={{ flex: 1, textAlign: "center", background: "rgba(0,0,0,.38)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: "12px 0" }}>
-                    <div style={{ fontFamily: fontD, fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1.1 }}>{String(v).padStart(2, "0")}</div>
+                    <div style={{ fontFamily: fontD, fontSize: 27, fontWeight: 900, color: "#fff", lineHeight: 1.1 }}>{String(v).padStart(2, "0")}</div>
                     <div style={{ fontSize: 13, color: goldBright, fontWeight: 800, marginTop: 3 }}>{l}</div>
                   </div>
                 ))}
@@ -650,59 +869,105 @@ function PilgrimPortal() {
 
       <div style={{ padding: "0 15px", marginTop: -36, position: "relative" }}>
         {cfg?.portal_welcome_message && <div style={card}><div style={{ fontSize: 17, fontWeight: 700, color: INK, lineHeight: 2 }}>{cfg.portal_welcome_message}</div></div>}
-        {cfg?.portal_help_message && <div style={card}><div style={{ fontSize: 15, fontWeight: 600, color: LABEL, lineHeight: 2 }}>{cfg.portal_help_message}</div></div>}
+        {cfg?.portal_help_message && <div style={card}><div style={{ fontSize: 15, fontWeight: 600, color: BODY, lineHeight: 2 }}>{cfg.portal_help_message}</div></div>}
         {/* ══ تاب رحلتي ══ */}
         {tab === "trip" && <>
-          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-            {cfg?.admin_phone && <a href={`tel:${cfg.admin_phone}`} style={{ flex: 1, borderRadius: 17, padding: "15px 6px", background: brand, color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textDecoration: "none", boxShadow: "0 5px 16px rgba(125,31,60,.35)" }}><Icon d={ICONS.phone} size={23} />إداري الحملة</a>}
-            {cfg?.admin_whatsapp && <a href={`https://wa.me/${cfg.admin_whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" style={{ flex: 1, borderRadius: 17, padding: "15px 6px", background: "#1F7A4D", color: "#fff", fontFamily: fontD, fontWeight: 800, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textDecoration: "none", boxShadow: "0 5px 16px rgba(31,122,77,.35)" }}><Icon d={ICONS.wa} size={23} />واتساب</a>}
-            {showLost && <button onClick={() => setLostOpen(true)} style={{ flex: 1, border: "none", borderRadius: 17, padding: "15px 6px", background: goldBright, color: brandDeep, fontFamily: fontD, fontWeight: 900, fontSize: 14.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer", boxShadow: "0 5px 16px rgba(240,200,74,.4)" }}><Icon d={ICONS.help} size={23} />أنا تائه</button>}
+          {/* ═══ الأفعالُ الثلاثة — حاضرةٌ لا مُهيمنة ═══
+             كانت ثلاثَ كتلٍ مشبَعةٍ (أحمر · أخضر · ذهبيّ) بظلالٍ
+             ملوّنة، فتسبق العينُ إليها قبل الرحلة والسكن — وهي
+             وسائلُ اتّصالٍ لا محتوى الرحلة. فصارت **نبرةً لا كتلة**:
+             أرضيّةٌ فاتحةٌ من لون كلٍّ، وحدٌّ خفيف، والأيقونةُ
+             والنصُّ بلونه الغامق. ⚠️ والأرضيّةُ **عتيمةٌ لا شفّافة**:
+             الصفُّ يجلس على حدّ الترويسة والورقيّ معاً (الكتلةُ
+             مرفوعةٌ بـ`marginTop:-36`)، والشفّافُ يبهت على المارون. تبقى مميَّزةً بلونها ومعناها
+             (والواتساب أخضرُ واتساب)، ويبقى هدفُ اللمس ٤٤px فأكثر. */}
+          <div style={{ display: "flex", gap: 9, marginBottom: 14 }}>
+            {cfg?.admin_phone && (
+              <a href={`tel:${cfg.admin_phone}`} style={{
+                flex: 1, minHeight: 56, borderRadius: 15, padding: "9px 4px",
+                background: mix(brand, "#ffffff", 0.93), border: `1.5px solid ${brand}33`, color: brandDeep,
+                fontFamily: fontD, fontWeight: 800, fontSize: 13.5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 5, textDecoration: "none",
+              }}><Icon d={ICONS.phone} size={20} color={brand} />إداري الحملة</a>
+            )}
+            {cfg?.admin_whatsapp && (
+              <a href={`https://wa.me/${cfg.admin_whatsapp.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" style={{
+                flex: 1, minHeight: 56, borderRadius: 15, padding: "9px 4px",
+                background: mix("#1F7A4D", "#ffffff", 0.93), border: "1.5px solid #1F7A4D33", color: "#145736",
+                fontFamily: fontD, fontWeight: 800, fontSize: 13.5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 5, textDecoration: "none",
+              }}><Icon d={ICONS.wa} size={20} color="#1F7A4D" />واتساب</a>
+            )}
+            {showLost && (
+              <button onClick={() => setLostOpen(true)} style={{
+                flex: 1, minHeight: 56, borderRadius: 15, padding: "9px 4px",
+                background: goldTint, border: `1.5px solid ${gold}66`, color: goldDark,
+                fontFamily: fontD, fontWeight: 800, fontSize: 13.5,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                gap: 5, cursor: "pointer",
+              }}><Icon d={ICONS.help} size={20} color={goldDark} />أنا تائه</button>
+            )}
           </div>
 
-          {showFlights && (activeFlight ? (
+          {showFlights && activeFlight && (() => {
+            /* الوصولُ في اليوم التالي يُعلَن صراحةً: كان يُعرض وقتُ
+               وصولٍ بلا يومه، فتُقرأ ٠٢:٣٠ على أنّها اليوم نفسه. */
+            const overnight = dayGap(activeFlight.date, activeFlight.arrival_date);
+            return (
             <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 20, overflow: "hidden", marginBottom: 14, boxShadow: "0 5px 20px rgba(93,16,41,.08)" }}>
-              <div style={{ background: `linear-gradient(90deg,${brand},${brandDeep})`, color: "#fff", padding: "13px 17px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", gap: 9 }}><Icon d={ICONS.plane} size={19} />{flightLabel}{activeFlight.airline ? ` — ${activeFlight.airline}` : ""}</div>
-                {activeFlight.class && <div style={{ fontSize: 13, background: goldBright, color: brandDeep, padding: "5px 15px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>{activeFlight.class}</div>}
+              <div style={{ background: `linear-gradient(90deg,${brand},${brandDeep})`, color: "#fff", padding: "13px 17px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 16, display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}><Icon d={ICONS.plane} size={19} /><span style={{ overflowWrap: "anywhere" }}>{flightLabel}{activeFlight.airline ? ` — ${activeFlight.airline}` : ""}</span></div>
+                {activeFlight.class && <div style={{ fontSize: 13, background: goldBright, color: brandDeep, padding: "5px 15px", borderRadius: 99, fontWeight: 900, fontFamily: fontD, flexShrink: 0 }}>{activeFlight.class}</div>}
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 8px" }}>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontFamily: fontD, fontWeight: 900, fontSize: 33, color: brand, letterSpacing: 1 }}>{activeFlight.from_airport || "—"}</div>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "20px 20px 8px" }}>
+                <div style={{ textAlign: "center", minWidth: 0 }}>
+                  <div style={{ fontFamily: fontD, fontWeight: 900, fontSize: 31, color: brand, letterSpacing: 1 }}>{activeFlight.from_airport || "—"}</div>
                   <div style={{ fontFamily: fontD, fontSize: 18, color: INK, fontWeight: 900, marginTop: 3, direction: "ltr" }}>{activeFlight.time || ""}</div>
+                  <div style={{ fontSize: 12.5, color: LABEL, fontWeight: 700, marginTop: 3 }}>مغادرة</div>
                 </div>
-                <div style={{ flex: 1, display: "flex", alignItems: "center", margin: "0 12px" }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", margin: "14px 12px 0" }}>
                   <div style={{ flex: 1, borderTop: `2.5px dotted ${gold}88` }} />
                   <div style={{ margin: "0 8px", transform: "scaleX(-1)" }}><Icon d={ICONS.plane} size={22} color={goldDark} /></div>
                   <div style={{ flex: 1, borderTop: `2.5px dotted ${gold}88` }} />
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontFamily: fontD, fontWeight: 900, fontSize: 33, color: brand, letterSpacing: 1 }}>{activeFlight.to_airport || "—"}</div>
-                  <div style={{ fontFamily: fontD, fontSize: 18, color: INK, fontWeight: 900, marginTop: 3, direction: "ltr" }}>{activeFlight.arrival_time || ""}</div>
+                <div style={{ textAlign: "center", minWidth: 0 }}>
+                  <div style={{ fontFamily: fontD, fontWeight: 900, fontSize: 31, color: brand, letterSpacing: 1 }}>{activeFlight.to_airport || "—"}</div>
+                  <div style={{ fontFamily: fontD, fontSize: 18, color: INK, fontWeight: 900, marginTop: 3, direction: "ltr", display: "flex", alignItems: "baseline", justifyContent: "center", gap: 3 }}>
+                    {activeFlight.arrival_time || ""}
+                    {overnight > 0 && <sup style={{ fontSize: 12, fontWeight: 900, color: goldDark }}>+{overnight}</sup>}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: LABEL, fontWeight: 700, marginTop: 3 }}>وصول</div>
                 </div>
               </div>
+              {overnight > 0 && (
+                <div style={{ margin: "0 18px 4px", background: `${gold}1e`, border: `1px solid ${gold}55`, borderRadius: 11, padding: "8px 12px", fontSize: 13.5, fontWeight: 700, color: INK, textAlign: "center", lineHeight: 1.8 }}>
+                  الوصول في اليوم التالي — {fmtDateAr(activeFlight.arrival_date)}
+                </div>
+              )}
               <div style={{ borderTop: `2.5px dashed ${LINE}`, margin: "10px 0 0", position: "relative" }}>
                 <div style={{ position: "absolute", top: -11, right: -12, width: 22, height: 22, borderRadius: "50%", background: IVORY, border: `1px solid ${LINE}` }} />
                 <div style={{ position: "absolute", top: -11, left: -12, width: 22, height: 22, borderRadius: "50%", background: IVORY, border: `1px solid ${LINE}` }} />
               </div>
-              <div style={{ display: "flex", padding: "14px 18px 16px" }}>
-                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>الرحلة</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: goldDark, marginTop: 2, direction: "ltr" }}>{activeFlight.name || "—"}</div></div>
-                <div style={{ width: 1.5, background: LINE }} />
-                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>التاريخ</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: goldDark, marginTop: 2, direction: "ltr" }}>{activeFlight.date || "—"}</div></div>
+              <div style={{ display: "flex", padding: "14px 18px 16px", gap: 10 }}>
+                <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>الرحلة</div><div style={{ fontFamily: fontD, fontSize: 19, fontWeight: 900, color: goldDark, marginTop: 2, direction: "ltr" }}>{activeFlight.name || "—"}</div></div>
+                <div style={{ width: 1.5, background: LINE, flexShrink: 0 }} />
+                <div style={{ flex: 1.4, textAlign: "center", minWidth: 0 }}><div style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>تاريخ المغادرة</div><div style={{ fontFamily: fontD, fontSize: 16.5, fontWeight: 900, color: goldDark, marginTop: 2, lineHeight: 1.6 }}>{fmtDateAr(activeFlight.date) || "—"}</div></div>
               </div>
             </div>
-          ) : (
-            <div style={card}><div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 10 }}>لم يتم تسجيل رحلة طيران بعد</div></div>
-          ))}
+            );
+          })()}
 
-          {showBuses && <div style={card}>
+          {showBuses && data.bus && <div style={card}>
             {cardH(ICONS.bus, "أوتوبيسي", "التنقل بين المشاعر")}
-            {data.bus ? <>
-              {row("رقم الأوتوبيس", data.bus.name || "—", true)}
-              {data.bus.type ? row("النوع", data.bus.type) : null}
-            </> : <div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 6 }}>لم يتم تحديد الأوتوبيس بعد</div>}
+            {units([
+              unit("رقم الأوتوبيس", data.bus.name || "—", true),
+              data.bus.type ? unit("النوع", data.bus.type) : null,
+            ])}
           </div>}
 
-          {showDocs && (
+          {showDocs && (anyDoc || outboundDone || !!activeFlight) && (
             <div style={card}>
               {cardH(ICONS.doc, "مستنداتي", "للإبراز في المطار والمنافذ")}
               {/* الوجود من القاعدة، والرابط لا يُطلب إلا عند الضغط:
@@ -710,54 +975,78 @@ function PilgrimPortal() {
               {([
                 { t: "تصريح الحج", type: "hajj_permit" as PortalDocType, has: p.has_hajj_permit },
                 { t: "تذكرة الطيران", type: "flight_ticket" as PortalDocType, has: p.has_flight_ticket },
-              ]).map((d, i) => (
-                <div key={d.type} onClick={async () => {
-                  if (!d.has || docBusy) return;
-                  setDocBusy(d.type);
-                  const res = await portalDocUrl(session, d.type);
-                  setDocBusy(null);
-                  if (res) setDocView({ title: d.t, url: res.url, isPdf: res.is_pdf });
-                }}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 2px", borderBottom: i === 0 ? `1px dashed ${LINE}` : "none", cursor: d.has ? "pointer" : "default" }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: INK }}>{d.t}</span>
-                  {d.has
-                    ? <span style={{ fontSize: 17, background: brand, color: "#fff", padding: "9px 26px", borderRadius: 99, fontWeight: 800, fontFamily: fontD }}>{docBusy === d.type ? "جارٍ الفتح…" : "عرض"}</span>
-                    : <span style={{ fontSize: 17, color: LABEL, fontWeight: 600 }}>لم يُرفع بعد</span>}
+              ]).map((d, i) => {
+                const busy = docBusy === d.type;
+                const failed = docError === d.type;
+                return (
+                <div key={d.type} style={{ padding: "12px 2px", borderBottom: i === 0 ? `1px dashed ${LINE}` : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <span style={{ fontSize: 19, fontWeight: 700, color: INK, minWidth: 0, overflowWrap: "anywhere" }}>{d.t}</span>
+                    {d.has ? (
+                      <button type="button" onClick={() => openDoc(d.type, d.t)} disabled={busy}
+                        style={{ flexShrink: 0, minHeight: 44, border: "none", fontSize: 16.5, background: failed ? goldBright : brand, color: failed ? brandDeep : "#fff", padding: "0 24px", borderRadius: 99, fontWeight: 800, fontFamily: fontD, cursor: busy ? "default" : "pointer", opacity: busy ? .7 : 1 }}>
+                        {busy ? "جارٍ الفتح…" : failed ? "إعادة المحاولة" : "عرض"}
+                      </button>
+                    ) : (
+                      /* غيابٌ في وقت التجهيز ليس خطأً — ولهذا لغةٌ هادئة */
+                      <span style={{ flexShrink: 0, fontSize: 14.5, color: LABEL, fontWeight: 600 }}>سيظهر هنا فور جاهزيته</span>
+                    )}
+                  </div>
+                  {failed && (
+                    <div style={{ marginTop: 9, fontSize: 14, fontWeight: 700, color: INK, background: `${gold}1e`, border: `1px solid ${gold}55`, borderRadius: 11, padding: "9px 12px", lineHeight: 1.85 }}>
+                      تعذّر فتح المستند. تأكّد من الاتصال بالإنترنت ثم أعد المحاولة.
+                    </div>
+                  )}
                 </div>
-              ))}
+              );})}
+            </div>
+          )}
+
+          {/* ══ بطاقةُ التجهيز — واحدةٌ هادئة بدل جدارٍ من النفي ══ */}
+          {prepping && (
+            <div style={{ ...card, border: `1.5px solid ${gold}77`, background: "#fff" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: `${gold}1e`, border: `1.5px solid ${gold}55`, display: "flex", alignItems: "center", justifyContent: "center", color: goldDark, flexShrink: 0 }}>
+                  <Icon d={ICONS.kaaba} size={25} sw={1.7} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 21, color: INK }}>رحلتك قيد التجهيز</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 15.5, fontWeight: 600, color: BODY, lineHeight: 2.05, marginTop: 12 }}>
+                جاري استكمال ترتيبات رحلتك، وستظهر تفاصيل السكن والتنقل والطيران هنا فور اعتمادها.
+              </div>
             </div>
           )}
         </>}
 
         {/* ══ تاب سكني ══ */}
         {tab === "stay" && <>
-          {showRooms && <div style={card}>
-            {cardH(ICONS.home, cfg?.hotel_name ? `فندق ${cfg.hotel_name}` : "سكني في مكة", [p.hotel_type, p.hotel_view].filter(Boolean).join(" — ") || undefined)}
-            {data.room ? <>
-              {row("الغرفة", data.room.number || "—", true)}
-              {data.room.floor ? row("الدور", data.room.floor) : null}
-              {data.room.type ? row("النوع", data.room.type) : null}
-            </> : <div style={{ fontSize: 15, fontWeight: 700, color: LABEL, textAlign: "center", padding: 6 }}>لم يتم تسكينك بعد</div>}
+          {showRooms && (data.room || cfg?.hotel_name) && <div style={card}>
+            {cardH(ICONS.home, hotelTitle, [p.hotel_type, p.hotel_view].filter(Boolean).join(" — ") || undefined)}
+            {data.room && units([
+              unit("الغرفة", data.room.number || "—", true),
+              data.room.floor ? unit("الدور", data.room.floor) : null,
+              data.room.type ? unit("النوع", data.room.type) : null,
+            ])}
             {cfg?.hotel_address && addressLink(cfg.hotel_address, cfg.hotel_url)}
           </div>}
 
-          <div style={card}>
+          {(minaName || arafaName) && <div style={card}>
             {cardH(ICONS.tent, "مخيماتي", "منى وعرفات")}
-            <div style={{ padding: "11px 2px", borderBottom: `1px dashed ${LINE}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 18, fontWeight: 700, color: LABEL }}>مخيم منى</span>
-                <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 26, color: brand }}>{p.camp_mina_name || p.camp_mina || "لم يُحدد بعد"}</span>
+            {minaName && (
+              <div style={{ padding: "4px 0 12px", borderBottom: arafaName ? `1px dashed ${LINE}` : "none", marginBottom: arafaName ? 12 : 0 }}>
+                {units(unit("مخيم منى", minaName, true, minaName.length > 14))}
+                {cfg?.camp_mina_address && addressLink(cfg.camp_mina_address, cfg.camp_mina_url)}
               </div>
-              {cfg?.camp_mina_address && addressLink(cfg.camp_mina_address, cfg.camp_mina_url)}
-            </div>
-            <div style={{ padding: "11px 2px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 18, fontWeight: 700, color: LABEL }}>مخيم عرفات</span>
-                <span style={{ fontFamily: fontD, fontWeight: 900, fontSize: 26, color: brand }}>{p.camp_arafa_name || p.camp_arafa || "لم يُحدد بعد"}</span>
+            )}
+            {arafaName && (
+              <div style={{ padding: "2px 0 2px" }}>
+                {units(unit("مخيم عرفات", arafaName, true, arafaName.length > 14))}
+                {cfg?.camp_arafa_address && addressLink(cfg.camp_arafa_address, cfg.camp_arafa_url)}
               </div>
-              {cfg?.camp_arafa_address && addressLink(cfg.camp_arafa_address, cfg.camp_arafa_url)}
-            </div>
-          </div>
+            )}
+          </div>}
 
           {data.family?.length > 0 && (
             <div style={{ ...card, border: `2px solid ${gold}88` }}>
@@ -780,14 +1069,29 @@ function PilgrimPortal() {
             </div>
           )}
 
+          {!data.room && !minaName && !arafaName && !hotelName && (
+            <div style={{ ...card, border: `1.5px solid ${gold}77` }}>
+              <div style={{ fontFamily: fontD, fontWeight: 800, fontSize: 21, color: INK }}>سكنك قيد التجهيز</div>
+              <div style={{ fontSize: 15.5, fontWeight: 600, color: BODY, lineHeight: 2.05, marginTop: 10 }}>
+                ستظهر هنا تفاصيل الفندق والغرفة ومخيّمَي منى وعرفات فور اعتمادها.
+              </div>
+            </div>
+          )}
+
           {showRoommates && data.roommates?.length > 0 && (
-            <div style={card}>
+            /* الدائرةُ بحرفٍ واحدٍ لم تكن تميّز أحداً — كلُّ ما أضافته
+               ارتفاعٌ لكارتٍ محتواه أسماء. فحُذفت، وضاقت الأسطر،
+               وبقيت الأسماءُ والعددُ وسلوكُ الخصوصيّة كما هي. */
+            <div style={{ ...card, padding: "16px 17px" }}>
               {cardH(ICONS.users, "رفقاء الغرفة", `${data.roommates.length} معك في الغرفة`)}
               {data.roommates.map((m, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 2px", borderBottom: i < data.roommates.length - 1 ? `1px dashed ${LINE}` : "none" }}>
-                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${gold}22`, border: `1.5px solid ${gold}66`, color: goldDark, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontD, fontWeight: 900, fontSize: 17, flexShrink: 0 }}>{m.name?.charAt(0)}</div>
-                  <div style={{ fontSize: 21, fontWeight: 700, color: INK, flex: 1 }}>{m.name}</div>
-                  {m.is_family && <span style={{ fontSize: 12.5, background: goldBright, color: brandDeep, padding: "4px 14px", borderRadius: 99, fontWeight: 900, fontFamily: fontD }}>عائلتك</span>}
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 2px",
+                  borderTop: i === 0 ? "none" : `1px dashed ${LINE}`,
+                }}>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: INK, flex: 1, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.6 }}>{m.name}</span>
+                  {m.is_family && <span style={{ fontSize: 11.5, background: `${gold}26`, color: goldDark, border: `1px solid ${gold}66`, padding: "3px 10px", borderRadius: 99, fontWeight: 800, fontFamily: fontD, flexShrink: 0 }}>عائلتك</span>}
                 </div>
               ))}
             </div>
@@ -804,24 +1108,24 @@ function PilgrimPortal() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 17, fontWeight: 800, color: INK }}>التنبيهات مفعّلة</div>
-                <div style={{ fontSize: 14, color: LABEL, marginTop: 3 }}>سيصلك كل جديد عن رحلتك على هذا الجهاز.</div>
+                <div style={{ fontSize: 14, color: BODY, marginTop: 3 }}>سيصلك كل جديد عن رحلتك على هذا الجهاز.</div>
               </div>
               <button onClick={turnPushOff} disabled={pushBusy}
-                style={{ background: "none", border: `1.5px solid ${LINE}`, color: LABEL, borderRadius: 99, fontSize: 14, fontWeight: 700, padding: "8px 15px", cursor: "pointer", fontFamily: fontD, flexShrink: 0 }}>
+                style={{ background: "none", border: `1.5px solid ${LINE}`, color: BODY, borderRadius: 99, fontSize: 14, fontWeight: 700, padding: "0 16px", minHeight: 44, cursor: "pointer", fontFamily: fontD, flexShrink: 0 }}>
                 إيقاف
               </button>
             </div>
           ) : pushState === "denied" ? (
             <div style={{ ...card, padding: "17px 19px", borderRight: `5px solid ${gold}` }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: INK }}>التنبيهات موقوفة من إعدادات الجهاز</div>
-              <div style={{ fontSize: 15, color: LABEL, marginTop: 8, lineHeight: 2 }}>
+              <div style={{ fontSize: 15, color: BODY, marginTop: 8, lineHeight: 2 }}>
                 لإعادة تفعيلها: افتح إعدادات المتصفح، ثم إعدادات الموقع، ثم فعّل الإشعارات لهذه الصفحة.
               </div>
             </div>
           ) : pushState === "ios-needs-install" && !pushDismissed ? (
             <div style={{ ...card, padding: "19px 19px 17px", border: `2px solid ${gold}` }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: INK, marginBottom: 4 }}>فعّل تنبيهات الحملة</div>
-              <div style={{ fontSize: 15, color: LABEL, lineHeight: 2, marginBottom: 15 }}>
+              <div style={{ fontSize: 15, color: BODY, lineHeight: 2, marginBottom: 15 }}>
                 لتصلك التنبيهات على هذا الجهاز، اتبع الخطوات الثلاث مرة واحدة:
               </div>
               {[
@@ -838,7 +1142,7 @@ function PilgrimPortal() {
                 يمكنك طلب المساعدة من موظف الحملة لإتمام هذه الخطوات.
               </div>
               <button onClick={dismissPush}
-                style={{ background: "none", border: "none", color: LABEL, fontSize: 14, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: 0 }}>
+                style={{ background: "none", border: "none", color: BODY, fontSize: 14, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: "8px 4px", minHeight: 44 }}>
                 إخفاء هذه الرسالة
               </button>
             </div>
@@ -848,7 +1152,7 @@ function PilgrimPortal() {
                 <Icon d={ICONS.bell} size={32} color={goldBright} sw={1.8} />
               </div>
               <div style={{ fontSize: 21, fontWeight: 800, color: INK, marginBottom: 8 }}>تنبيهات الحملة</div>
-              <div style={{ fontSize: 15.5, color: LABEL, lineHeight: 2 }}>
+              <div style={{ fontSize: 15.5, color: BODY, lineHeight: 2 }}>
                 فعّل التنبيهات ليصلك كل جديد عن رحلتك أولاً بأول: موعد الطيران، رقم غرفتك، باصك، ومخيمك.
               </div>
               <button onClick={turnPushOn} disabled={pushBusy}
@@ -856,7 +1160,7 @@ function PilgrimPortal() {
                 {pushBusy ? "جارٍ التفعيل..." : "تفعيل التنبيهات"}
               </button>
               <button onClick={dismissPush}
-                style={{ background: "none", border: "none", color: LABEL, fontSize: 14.5, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline" }}>
+                style={{ background: "none", border: "none", color: BODY, fontSize: 14.5, fontWeight: 700, marginTop: 12, cursor: "pointer", fontFamily: fontD, textDecoration: "underline", padding: "8px 4px", minHeight: 44 }}>
                 ليس الآن
               </button>
               <div style={{ fontSize: 13.5, color: LABEL, marginTop: 14, lineHeight: 1.8 }}>
@@ -871,8 +1175,8 @@ function PilgrimPortal() {
 
           {data.announcements.length === 0 && (
             <div style={{ ...card, textAlign: "center", padding: 34 }}>
-              <Icon d={ICONS.bell} size={40} color={LABEL} sw={1.5} />
-              <div style={{ fontSize: 16, fontWeight: 700, color: LABEL, marginTop: 12 }}>لا توجد تنبيهات حالياً</div>
+              <Icon d={ICONS.bell} size={40} color={MUTED} sw={1.5} />
+              <div style={{ fontSize: 16, fontWeight: 700, color: BODY, marginTop: 12 }}>لا توجد تنبيهات حالياً</div>
             </div>
           )}
           {data.announcements.map(a => (
@@ -896,9 +1200,9 @@ function PilgrimPortal() {
         ].filter(t => t.id !== "alerts" || showNotifications).map(t => {
           const on = tab === t.id;
           return (
-            <button key={t.id} onClick={() => { setTab(t.id as typeof tab); if (t.id === "alerts") { setSeenAlerts(data.announcements.length); localStorage.setItem("portal_seen_alerts", String(data.announcements.length)); } }}
-              style={{ flex: 1, border: "none", background: on ? `${brand}15` : "none", borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: fontD, fontSize: 17, fontWeight: 900, color: on ? brand : LABEL, cursor: "pointer", padding: "11px 0 9px", position: "relative", margin: "0 3px", transition: "background .2s,color .2s" }}>
-              <Icon d={t.icon} size={28} color={on ? brand : LABEL} sw={on ? 2.3 : 2} />
+            <button key={t.id} onClick={() => { setTab(t.id as typeof tab); if (t.id === "alerts") { const top = data.announcements.reduce((m, a) => Math.max(m, a.id), seenAlerts); setSeenAlerts(top); localStorage.setItem("portal_seen_alerts", String(top)); } }}
+              style={{ flex: 1, border: "none", background: on ? `${brand}15` : "none", borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: fontD, fontSize: 16, fontWeight: on ? 900 : 700, color: on ? brand : LABEL, cursor: "pointer", padding: "11px 0 9px", position: "relative", margin: "0 3px", transition: "background .2s,color .2s" }}>
+              <Icon d={t.icon} size={26} color={on ? brand : LABEL} sw={on ? 2.4 : 1.9} />
               {t.label}
               {t.id === "alerts" && unread > 0 && <span style={{ position: "absolute", top: 7, left: "calc(50% - 24px)", width: 12, height: 12, borderRadius: "50%", background: "#C1121F", border: "2.5px solid #fff" }} />}
             </button>
