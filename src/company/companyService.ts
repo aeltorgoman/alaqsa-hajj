@@ -3,6 +3,7 @@ import type { Database, Json } from "../types/database";
 import type { CompanyAsset, CompanyAssetKey, CompanyProfile } from "./types";
 import { supabase } from "../supabase";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "./safety";
+import { classifyPostgrestError, type SaveResult } from "./saveResult";
 
 type ConfigRow = Database["public"]["Tables"]["company_config"]["Row"];
 type PublicConfigRow = Database["public"]["Views"]["company_profile_public"]["Row"];
@@ -98,5 +99,41 @@ export const companyService = {
   },
   async removeAsset(key: CompanyAssetKey) { return supabase.from("company_assets").delete().eq("asset_key", key); },
   async loadConfig() { return supabase.from("company_config").select("*").eq("id", 1).single(); },
-  async updateConfig(values: ConfigUpdate) { return supabase.from("company_config").update(values).eq("id", 1); },
+
+  /* ⚠️ `.select().single()` ليست زينة: بدونها يرسل PostgREST
+     PATCH بلا تمثيل، فيردّ 204 على نجاحٍ **وعلى صفرِ صفوفٍ رشّحتها
+     RLS سواء**. فكان غيابُ الخطأ يُقرأ حفظاً. والآن لا نجاحَ بلا
+     صفٍّ معاد. */
+  async updateConfig(values: ConfigUpdate): Promise<SaveResult<ConfigRow>> {
+    const { data, error } = await supabase
+      .from("company_config").update(values).eq("id", 1).select().single();
+    if (error) return classifyPostgrestError(error);
+    if (!data) return { status: "not_found", message: "تعذّر الوصول إلى صفّ إعدادات الحملة، لم يُحفظ شيء." };
+    return { status: "saved", data };
+  },
+
+  /* ═══ إعداداتُ البوابة — البابُ الضيّق ═══
+     ستّةُ حقولٍ فقط، وسياسةُ `company_config` لم تُوسَّع: الدالّة
+     وحدها تملك التفويض، فلا يستطيع `manage_portal` أن يصل إلى عمودٍ
+     آخر مهما صيغ الطلب. والصفُّ المعاد برهانُ الأثر. */
+  async updatePortalSettings(values: {
+    portal_settings: Record<string, boolean>;
+    portal_welcome_message: string | null;
+    portal_help_message: string | null;
+    admin_name: string | null;
+    admin_phone: string | null;
+    admin_whatsapp: string | null;
+  }): Promise<SaveResult<ConfigRow>> {
+    const { data, error } = await supabase.rpc("update_portal_settings", {
+      p_portal_settings: values.portal_settings as unknown as Json,
+      p_portal_welcome_message: values.portal_welcome_message,
+      p_portal_help_message: values.portal_help_message,
+      p_admin_name: values.admin_name,
+      p_admin_phone: values.admin_phone,
+      p_admin_whatsapp: values.admin_whatsapp,
+    });
+    if (error) return classifyPostgrestError(error);
+    if (!data) return { status: "not_found", message: "تعذّر الوصول إلى صفّ إعدادات الحملة، لم يُحفظ شيء." };
+    return { status: "saved", data: data as unknown as ConfigRow };
+  },
 };
