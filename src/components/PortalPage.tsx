@@ -315,7 +315,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   async function saveSettings() {
     if (cfgId == null) return;
     setSavingCfg(true);
-    const res = await companyService.updatePortalSettings({
+
+    /* ١) الحقولُ الستّةُ المملوكة للبوابة — بالدالّة الضيّقة وحدها. */
+    const portalRes = await companyService.updatePortalSettings({
       portal_settings: portalSettings,
       portal_welcome_message: welcomeMessage.trim() || null,
       portal_help_message: helpMessage.trim() || null,
@@ -323,10 +325,48 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       admin_phone: adminPhone.trim() || null,
       admin_whatsapp: adminWa.trim() || null,
     });
+    if (!isSaved(portalRes)) {
+      setSavingCfg(false);
+      showAlert("error", saveErrorText(portalRes));
+      return;
+    }
+
+    /* ٢) وحقولُ الحملة والأماكن — لمن يملك `manage_users` وحدَه،
+       بالمسار الصادق القائم لا بالدالّة الضيّقة.
+
+       ⚠️ وهذه الخطوةُ سقطت سهواً حين تحوّل الحفظُ إلى الدالّة
+       الضيّقة: بقيت الحقولُ **قابلةً للتحرير** لمن يملك الصلاحية
+       ولم تعد تُرسَل، فتُبتلَع تعديلاتُه وتقول الشاشةُ «تم الحفظ».
+       وذاك عينُ عيب النجاح الكاذب الذي جاءت هذه المرحلةُ تُزيله.
+
+       والحدُّ الأمنيّ لم يتغيّر: `manage_portal` لا يمرّ من هنا،
+       والأعمدةُ التسعةُ مذكورةٌ بأسمائها — لا `features` ولا
+       `season_label` ولا بنكَ ولا هويّةً بصريّة. */
+    if (canWriteCompany) {
+      const companyRes = await companyService.updateConfig({
+        country: country.trim() || null,
+        city: city.trim() || null,
+        hotel_name: hotelName.trim() || null,
+        hotel_address: hotelAddress.trim() || null,
+        hotel_url: hotelUrl.trim() || null,
+        camp_mina_address: minaAddress.trim() || null,
+        camp_mina_url: minaUrl.trim() || null,
+        camp_arafa_address: arafaAddress.trim() || null,
+        camp_arafa_url: arafaUrl.trim() || null,
+      });
+      setSavingCfg(false);
+      /* نجاحٌ كاملٌ لا يُعلَن إلا إذا نجحت كلُّ كتابةٍ تخصّ ما كان
+         الموظّفُ يستطيع تحريره. ونصفُ النجاح يُقال نصفاً. */
+      if (!isSaved(companyRes)) {
+        showAlert("error", "حُفظت إعدادات البوابة، وتعذّر حفظ بيانات الحملة والأماكن: " + saveErrorText(companyRes));
+        return;
+      }
+      showAlert("success", "تم حفظ إعدادات البوابة بنجاح.");
+      return;
+    }
+
     setSavingCfg(false);
-    /* النجاحُ يُقرأ من نتيجةٍ تحمل صفّاً، لا من غياب خطأ */
-    if (isSaved(res)) showAlert("success", "تم حفظ إعدادات البوابة بنجاح.");
-    else showAlert("error", saveErrorText(res));
+    showAlert("success", "تم حفظ إعدادات البوابة بنجاح.");
   }
 
   const portalUrl = `${window.location.origin}/hajj`;
