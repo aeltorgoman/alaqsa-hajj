@@ -514,7 +514,14 @@ grant execute on function public.get_pilgrim_portal_by_session(text) to anon;
 -- ولا `commercial_registration` ولا بنكَ هنا — ولا يُضافان.
 -- و`logo_url`/`banner_image_url` يبقيان لأنّ شاشةَ البدء تقرؤهما
 -- حتى ترحيلِ التنظيف.
-create or replace view public.company_profile_public as
+-- ⚠️ `create or replace view` **لا يستطيع إسقاط عمود** — تردّه
+-- القاعدةُ بـ42P16 «cannot drop columns from view». وهذا العرضُ
+-- يفقد تسعةَ عشرَ عموداً، فلا بدّ من الإسقاط ثمّ الإنشاء. و`drop`
+-- بلا `cascade` عمداً: لو تعلّق به شيءٌ لم نعلمه فليفشل الترحيلُ
+-- ويُقال، لا أن يُسقَط المعلَّقُ صامتاً.
+drop view if exists public.company_profile_public;
+
+create view public.company_profile_public as
   select id,
          name_ar, name_en, tagline,
          logo_url, banner_image_url,
