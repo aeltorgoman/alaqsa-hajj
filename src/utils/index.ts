@@ -690,6 +690,10 @@ export const ALL_PERMISSIONS = [
   { key: "view_reports", label: "التقارير (عرض، طباعة، تصدير)" },
   { key: "manage_users", label: "إدارة المستخدمين" },
   { key: "view_archive", label: "عرض الأرشيف" },
+  /* دورةُ حياة الموسم — إقفالُ النشط وحذفُ المقفل حذفاً دائماً.
+     مستقلّةٌ عن `view_archive` عمداً: كان عرضُ الأرشيف يفوّض
+     الحذفَ الدائم، فمن مُنح القراءةَ مُنح الهدمَ بلا قرار. */
+  { key: "manage_season_lifecycle", label: "إقفال المواسم وحذفها نهائياً" },
   { key: "manage_flights", label: "إدارة الطيران" },
   { key: "manage_payments", label: "إدارة الحسابات المالية" },
   { key: "manage_admins", label: "إدارة الإداريين" },

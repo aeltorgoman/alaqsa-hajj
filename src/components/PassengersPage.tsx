@@ -11,7 +11,7 @@ import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
-import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
+import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { DocImage } from "./DocImage";
 import { wantsService, type ServiceKey, itemsLabel, makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 import { hasIssue, isIssueKey, type IssueKey } from "../utils/readiness";
@@ -311,7 +311,6 @@ function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
 
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const reportBranding = useReportBranding();
-  const companyIdentity = useCompanyIdentity();
   const companyPortal = useCompanyPortal();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
@@ -2126,7 +2125,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير */
             printInPage(buildStickersHTML(
               [selected as any],
-              { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName, season_label: companyIdentity.seasonLabel, hotel_name: companyPortal.hotelName, hotel_address: companyPortal.hotelAddress, admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
+              { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName,
+                /* الموسمُ المعروض — لا الحملة. فاستيكرُ موسمٍ مؤرشفٍ يحمل اسمَه وفندقَه هو. */
+                season_name: viewedSeason.name, hotel_name: viewedSeason.hotel_name || "", hotel_address: viewedSeason.hotel_address || "",
+                admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
               { rooms: metaRooms as any, buses: metaBuses as any, camps: metaCamps as any },
               { sticker: true, hand_tag: true, long_tag: true }
             ));

@@ -15,7 +15,7 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
-import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
+import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight } from "../types";
 import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
@@ -177,7 +177,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   // اسم الرحلة المرتبط بالحاج (لرسائل الواتساب) — ذهاب أولاً ثم إياب
   const flightNameFor = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name || flights.find(f => f.id === p.return_flight_id)?.name || "—";
   const reportBranding = useReportBranding();
-  const companyIdentity = useCompanyIdentity();
   const companyPortal = useCompanyPortal();
   const { companyName, primaryColor } = reportBranding;
   // ألوان التقارير المطبوعة = لون الشركة الثابت من الإعدادات (مستقل عن ثيم الواجهة)
@@ -2018,7 +2017,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
               localStorage.setItem("stk_print_dates", JSON.stringify(newDates));
               printInPage(buildStickersHTML(
                 finalPassengers as any,
-                { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName, season_label: companyIdentity.seasonLabel, hotel_name: companyPortal.hotelName, hotel_address: companyPortal.hotelAddress, admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
+                { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName,
+                /* الموسمُ المعروض — لا الحملة. فاستيكرُ موسمٍ مؤرشفٍ يحمل اسمَه وفندقَه هو. */
+                season_name: viewedSeason.name, hotel_name: viewedSeason.hotel_name || "", hotel_address: viewedSeason.hotel_address || "",
+                admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
                 { rooms: rooms as any, buses: buses as any, camps: camps as any },
                 { sticker: stkTypes.sticker, hand_tag: stkTypes.hand_tag, long_tag: stkTypes.long_tag }
               ));

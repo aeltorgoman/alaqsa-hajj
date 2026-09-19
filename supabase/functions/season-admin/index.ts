@@ -21,9 +21,22 @@ import { authorize } from "../_shared/authorize.ts";
 import { cors, fail, json } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 
-/* الصلاحية التي تحرس صفحة إدارة المواسم في NAV — نفسها تحرس
-   العمليات، فلا تتفارق الواجهة عن الخادم */
-const REQUIRED_PERMISSION = "view_archive";
+/* ═══ الصلاحيةُ بحسب العملية ═══
+   كانت `view_archive` تحرس العمليات الثلاث. فمن مُنح **عرضَ
+   الأرشيف** مُنح معه إقفالَ الموسم الجاري و**حذفَ موسمٍ كاملٍ
+   حذفاً دائماً** — بحجّاجه وغرفه ومخيّماته ومدفوعاته. وهذا تفويضٌ
+   لم يقصده من منح القراءة.
+
+   و`verify` تشترط الصلاحيةَ نفسها عمداً: هي خطوةُ إثبات الهويّة
+   التي تسبق الإقفال مباشرةً، وتردّ اسمَ الفاعل. فحراستُها أضعفَ
+   من الإقفال كانت ستجعلها نافذةَ استطلاع.
+
+   وخريطةٌ لا ثابت: عمليةٌ تُضاف غداً لا ترث تفويضَ الهدم صامتةً. */
+const PERMISSION_BY_ACTION: Record<string, string> = {
+  verify: "manage_season_lifecycle",
+  close:  "manage_season_lifecycle",
+  delete: "manage_season_lifecycle",
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
@@ -32,6 +45,7 @@ Deno.serve(async (req: Request) => {
   let body: {
     action?: string;
     newSeasonName?: string;
+    newSeasonHijriYear?: number;
     seasonId?: number;
   };
   try {
@@ -46,7 +60,7 @@ Deno.serve(async (req: Request) => {
   }
 
   /* ١) الهوية والصلاحية — الطبقة المشتركة، النمط الثلاثي كاملاً */
-  const auth = await authorize(req, REQUIRED_PERMISSION);
+  const auth = await authorize(req, PERMISSION_BY_ACTION[action]);
   if (!auth.ok) return auth.response;
   const { admin, userId } = auth;
 
@@ -72,12 +86,23 @@ Deno.serve(async (req: Request) => {
     const name = (body.newSeasonName ?? "").trim();
     if (!name) return fail(req, 400, "اسم الموسم الجديد مطلوب.");
 
+    /* ═══ السنةُ هويّةٌ صريحة ═══
+       لا تُشتقّ من الاسم ولا تُخمَّن منه: «موسم 1449» و«حج 1449»
+       و«موسم الحج 1449 هـ» أسماءٌ لموسمٍ واحد، والاسمُ نصٌّ حرٌّ
+       يتغيّر. فالسنةُ تُرسَل عدداً، وتُفحَص عدداً. */
+    const hijriYear = body.newSeasonHijriYear;
+    if (typeof hijriYear !== "number" || !Number.isInteger(hijriYear)
+        || hijriYear <= 0 || hijriYear >= 10000) {
+      return fail(req, 400, "السنة الهجرية للموسم الجديد مطلوبة ويجب أن تكون عدداً صحيحاً صالحاً.");
+    }
+
     /* س٨: `p_actor` هو `userId` المُثبَت من JWT في `authorize()` —
        لا من جسد الطلب. والدالة تضبط الفاعل وتكتب صفّ التدقيق
        **في معاملتها نفسها**، لأن استدعاءين متتاليين لا يتشاركان
        معاملة. و`p_closed_by` يبقى للإيصال ولا يُستبدل به. */
     const { data, error } = await admin.rpc("close_season", {
       p_new_name: name,
+      p_new_hijri_year: hijriYear,
       p_closed_by: actor,
       p_actor: userId,
     });
