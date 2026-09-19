@@ -8,6 +8,7 @@ import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { companyService } from "../company/companyService";
+import { isSaved, saveErrorText } from "../company/saveResult";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -150,7 +151,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const saveCompanyConfig = async () => {
     setCompanySaving(true);
     setCompanyMsg("");
-    const { error } = await companyService.updateConfig({
+    const res = await companyService.updateConfig({
       name_ar: companyForm.name_ar, name_en: companyForm.name_en,
       tagline: companyForm.tagline, contact_phone: companyForm.contact_phone,
       contact_email: companyForm.contact_email, season_label: companyForm.season_label,
@@ -162,12 +163,20 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       bank_iban: companyForm.bank_iban || null,
       bank_swift: companyForm.bank_swift || null,
     });
-    setCompanySaving(false);
-    if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
-    await Promise.all([
-      companyForm.logo_url ? companyService.saveAsset({ key: "logo", url: companyForm.logo_url, altText: companyForm.name_ar }) : Promise.resolve(),
-      companyForm.banner_image_url ? companyService.saveAsset({ key: "dashboard_banner", url: companyForm.banner_image_url, altText: companyForm.name_ar }) : Promise.resolve(),
+    if (!isSaved(res)) { setCompanySaving(false); setCompanyMsg(saveErrorText(res)); return; }
+
+    /* ⚠️ نتيجتا الأصول كانتا تُهمَلان: `Promise.all` يُنتظَر ثمّ
+       يُرمى ناتجُه، فيُعلَن النجاحُ ولو لم يُحفظ الشعار. والآن
+       تُفحَصان — والكائنُ المرفوع قد يبقى يتيماً إن أخفق حفظُ
+       مؤشّره، وتنظيفُ اليتامى خارج نطاق هذه المرحلة صراحةً. */
+    const assetResults = await Promise.all([
+      companyForm.logo_url ? companyService.saveAsset({ key: "logo", url: companyForm.logo_url, altText: companyForm.name_ar }) : null,
+      companyForm.banner_image_url ? companyService.saveAsset({ key: "dashboard_banner", url: companyForm.banner_image_url, altText: companyForm.name_ar }) : null,
     ]);
+    const assetFailed = assetResults.some(r => r !== null && r.error);
+    setCompanySaving(false);
+    if (assetFailed) { setCompanyMsg("حُفظت بيانات الحملة، وتعذّر حفظ الشعار أو الغلاف — أعد المحاولة."); return; }
+
     setCompanyMsg("تم الحفظ بنجاح — سيتم تحديث الصفحة...");
     setTimeout(() => window.location.reload(), 1200);
   };

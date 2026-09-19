@@ -1230,6 +1230,20 @@ export type Database = {
         Args: { p_endpoint: string; p_token: string }
         Returns: boolean
       }
+      update_portal_settings: {
+        /* المولّدُ يكتب وسائطَ الدوالّ غيرَ قابلةٍ للعدم دائماً، ودالّتُنا
+           تقبل NULL في حقول النصّ فعلاً (وهي الطريقةُ التي يُفرَّغ بها
+           حقلٌ اختياريّ). فالتوقيعُ هنا مُصحَّحٌ ليطابق SQL. */
+        Args: {
+          p_admin_name: string | null
+          p_admin_phone: string | null
+          p_admin_whatsapp: string | null
+          p_portal_help_message: string | null
+          p_portal_settings: Json
+          p_portal_welcome_message: string | null
+        }
+        Returns: Database["public"]["Tables"]["company_config"]["Row"]
+      }
       verify_pilgrim_session: { Args: { p_token: string }; Returns: number }
     }
     Enums: {
