@@ -521,7 +521,14 @@ grant execute on function public.get_pilgrim_portal_by_session(text) to anon;
 -- ويُقال، لا أن يُسقَط المعلَّقُ صامتاً.
 drop view if exists public.company_profile_public;
 
-create view public.company_profile_public as
+-- ⚠️⚠️ و`security_invoker = false` **يُكتَب صراحةً** ولا يُترك
+-- للافتراض: عليه يقوم الإسقاط كلُّه. فالعرضُ يقرأ `company_config`
+-- بصلاحيّات مالكه (postgres) لا بصلاحيّات القارئ، وبه يرى غيرُ
+-- المصادَق أحدَ عشرَ عموداً ولا يرى الجدول. وهي خاصّيّةٌ أمنيّةٌ
+-- لا تُورَّث ضمناً.
+create view public.company_profile_public
+with (security_invoker = false)
+as
   select id,
          name_ar, name_en, tagline,
          logo_url, banner_image_url,
@@ -533,8 +540,24 @@ create view public.company_profile_public as
 comment on view public.company_profile_public is
   'إسقاطُ هويّة الحملة لغير المصادَق — شاشةُ الدخول وشاشةُ البدء وحدهما. لا تواصلَ ولا بنكَ ولا سجلّاً تجاريّاً ولا أماكنَ موسمٍ ولا إعداداتِ بوابة.';
 
-revoke all on public.company_profile_public from public;
-grant select on public.company_profile_public to anon, authenticated;
+-- ⚠️⚠️ الإسقاطُ والإنشاءُ يُعيدان العرضَ صفحةً بيضاء — و«البيضاءُ»
+-- هنا ليست فارغة: في هذه القاعدة `alter default privileges` لدور
+-- `postgres` على علاقات `public` يمنح **`arwdDxtm` كاملةً** لـ
+-- `authenticated` و`service_role` لكلّ علاقةٍ تُنشَأ. فالعرضُ
+-- الجديد يولد ومعه INSERT وUPDATE وDELETE لكلّ موظّفٍ مصادَق.
+--
+-- وهذا العرضُ **قابلٌ للتحديث تلقائياً** (جدولٌ واحد، أعمدةٌ بسيطة،
+-- بلا تجميعٍ ولا DISTINCT)، و`security_invoker = false` يجعل
+-- الكتابةَ تُنفَّذ بصلاحيّات المالك — وهو مالكُ `company_config`
+-- نفسِه، فتُتجاوَز RLS كلُّها. فموظّفٌ بلا أيّ صلاحيّةٍ كان
+-- سيكتب في هويّة الحملة من بابٍ خلفيّ، ويتجاوز
+-- `company_config_management_update` التي تشترط `manage_users`.
+--
+-- ولذلك يُسحَب صراحةً من `anon` و`authenticated` — لا من `public`
+-- وحده: الامتيازُ مُنح لهما بأسمائهما، فلا يرفعه سحبٌ من `public`.
+-- وهذا هو نمطُ 20260806110000 نفسُه، ولسببه نفسِه.
+revoke all on table public.company_profile_public from public, anon, authenticated;
+grant select on table public.company_profile_public to anon, authenticated, service_role;
 
 
 -- ------------------------------------------------------------
