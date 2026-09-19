@@ -12,8 +12,15 @@ export type PortalData = {
   flight_go: FlightInfo | null;
   flight_back: FlightInfo | null;
   config: PortalConfig | null;
+  /* موسمُ الحاجّ نفسُه — اسمُه وأماكنُه. مفتاحٌ مستقلٌّ عن `config`
+     عمداً: هذه بياناتُ موسمٍ لا بياناتُ حملة. */
+  season: PortalSeason | null;
   announcements: Ann[];
 };
 export type Ann = { id: number; body: string; priority: string; show_at: string };
 export type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
-export type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; season_label: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; features: Record<string, boolean> | null; portal_settings?: Record<string, boolean> | null; portal_welcome_message?: string | null; portal_help_message?: string | null; assets?: Record<string, string> | null; country: string | null; city: string | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; camp_mina_address: string | null; camp_mina_url: string | null; camp_arafa_address: string | null; camp_arafa_url: string | null };
+export type PortalSeason = { name: string; hijri_year: number | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; mina_address: string | null; mina_url: string | null; arafa_address: string | null; arafa_url: string | null };
+/* ⚠️ خرج من هذا العقد: `season_label` و`features` وأماكنُ الفندق
+   ومنى وعرفة. الأولُ والأخيرةُ صارت في `season`، و`features` لم
+   تعد تُقرَأ. و`logo_url` باقٍ عمودَ توافقٍ حتى ترحيل التنظيف. */
+export type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; portal_settings?: Record<string, boolean> | null; portal_welcome_message?: string | null; portal_help_message?: string | null; assets?: Record<string, string> | null; country: string | null; city: string | null };

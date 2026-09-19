@@ -211,18 +211,23 @@ function PilgrimPortal() {
   }
 
   const cfg = data?.config;
+  /* موسمُ الحاجّ — اسمُه وأماكنُه من صفّ موسمه هو، لا من إعدادات
+     الحملة العالميّة. فالحاجُّ يرى فندقَ موسمه دائماً. */
+  const season = data?.season;
   const t = buildTheme(cfg);
   const portalLogo = cfg?.assets?.logo || cfg?.logo_url || null;
-  const features = cfg?.features || {};
   const portalSettings = cfg?.portal_settings || {};
   const showFlights = portalSettings.flights !== false;
   const showRooms = portalSettings.rooms !== false;
   const showBuses = portalSettings.buses !== false;
   const showNotifications = portalSettings.notifications !== false;
   const showPdfDownloads = portalSettings.pdf_downloads !== false;
-  const showRoommates = portalSettings.roommates !== false && features.portal_roommates !== false;
-  const showLost = portalSettings.lost_card !== false && features.portal_lost_card !== false;
-  const showDocs = portalSettings.documents !== false && features.portal_documents !== false;
+  /* ⚠️ لا ناقضَ من `features` بعد اليوم: كانت ثلاثةُ مفاتيحَ فيها
+     تُبطل ما يُشعله المديرُ في صفحة البوابة، ولا واجهةَ تكتبها
+     ليُطفئ الناقض. فالمرجعُ `portal_settings` وحدها. */
+  const showRoommates = portalSettings.roommates !== false;
+  const showLost = portalSettings.lost_card !== false;
+  const showDocs = portalSettings.documents !== false;
 
   useEffect(() => {
     if (!showNotifications && tab === "alerts") setTab("trip");
@@ -292,7 +297,7 @@ function PilgrimPortal() {
      المخزَّن يكتبه الموظّف كاملاً في الغالب («فندق دار الإيمان»)،
      وكان العرضُ يسبقه بكلمةٍ ثابتة فيخرج «فندق فندق دار الإيمان».
      فنسبق فقط إن لم يبدأ الاسمُ بها — ولا تُمسّ القيمةُ المخزَّنة. */
-  const hotelName = (cfg?.hotel_name || "").trim();
+  const hotelName = (season?.hotel_name || "").trim();
   const hotelTitle = hotelName
     /* ⚠️ ولا `\b` هنا: حدُّ الكلمة في JS مبنيٌّ على [A-Za-z0-9_]،
        فالحرفُ العربيّ غيرُ كلمةٍ عنده ولا يقع بعده حدّ — فكان
@@ -382,7 +387,7 @@ function PilgrimPortal() {
         t={t}
         logoUrl={portalLogo}
         nameAr={cfg?.name_ar || "بوابة الحاج"}
-        seasonLabel={cfg?.season_label}
+        seasonName={season?.name}
         adminPhone={cfg?.admin_phone}
         doc={doc} setDoc={setDoc}
         dobMode={dobMode} setDobMode={setDobMode}
@@ -415,12 +420,12 @@ function PilgrimPortal() {
         country={cfg?.country}
         nameArPilgrim={p.name_ar}
         nameEn={p.name_en}
-        hotelName={cfg?.hotel_name}
+        hotelName={season?.hotel_name}
         room={data.room}
         minaName={minaName}
-        minaAddress={cfg?.camp_mina_address}
+        minaAddress={season?.mina_address}
         arafaName={arafaName}
-        arafaAddress={cfg?.camp_arafa_address}
+        arafaAddress={season?.arafa_address}
         adminPhone={cfg?.admin_phone}
         adminName={cfg?.admin_name}
         onClose={() => setLostOpen(false)}
@@ -435,7 +440,7 @@ function PilgrimPortal() {
         t={t}
         logoUrl={portalLogo}
         nameAr={cfg?.name_ar || "بوابة الحاج"}
-        seasonLabel={cfg?.season_label}
+        seasonName={season?.name}
         hasPhoto={p.has_photo}
         photoUrl={photoUrl}
         gender={p.gender}
@@ -470,9 +475,9 @@ function PilgrimPortal() {
             hotelTitle={hotelTitle} hotelName={hotelName}
             hotelType={p.hotel_type} hotelView={p.hotel_view}
             room={data.room}
-            hotel_address={cfg?.hotel_address} hotel_url={cfg?.hotel_url}
-            minaName={minaName} camp_mina_address={cfg?.camp_mina_address} camp_mina_url={cfg?.camp_mina_url}
-            arafaName={arafaName} camp_arafa_address={cfg?.camp_arafa_address} camp_arafa_url={cfg?.camp_arafa_url}
+            hotel_address={season?.hotel_address} hotel_url={season?.hotel_url}
+            minaName={minaName} camp_mina_address={season?.mina_address} camp_mina_url={season?.mina_url}
+            arafaName={arafaName} camp_arafa_address={season?.arafa_address} camp_arafa_url={season?.arafa_url}
             family={data.family} roommates={data.roommates}
           />
         )}

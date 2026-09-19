@@ -7,16 +7,24 @@
 // ============================================================
 // مولّد مطبوعات الشنط الموحّد — مصدر واحد لملف الحاج وصفحة التقارير
 // ============================================================
+/* ⚠️ `season_name` و`hotel_*` تأتي من **الموسم المعروض** لا من
+   إعدادات الحملة: استيكرُ موسمٍ مؤرشفٍ يحمل فندقَ ذلك الموسم
+   واسمَه، لا فندقَ الموسم الجاري. والمستدعي هو من يضمن ذلك. */
 export interface StickerConfig {
   color_primary?: string;
   color_accent?: string;
   name_ar?: string;
-  season_label?: string;
+  season_name?: string;
   hotel_name?: string;
   hotel_address?: string;
   admin_phone?: string;
   logo_url?: string;
 }
+
+/* غيابُ الفندق يُقال غياباً. و`|| companyName` كانت تطبع اسمَ
+   الحملة في خانة الفندق، فيقرأ الحاجُّ اسمَ حملته فندقاً — وهذا
+   أسوأُ من فراغ. والشرطةُ هي عُرفُ «لا قيمة» في مطبوعات النظام. */
+const NONE = "—";
 export interface StickerPassenger {
   short_ar?: string; name_ar?: string; name_en?: string; phone?: string;
   room_id?: number | null; bus_id?: number | null; camp_mina_id?: number | null;
@@ -58,7 +66,7 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
             <div style="font-size:34pt;font-weight:700;color:${primaryColor};line-height:1.05;font-family:'El Messiri',Cairo,sans-serif;white-space:nowrap;">${companyName}</div>
             ${cfg.admin_phone ? `<div style="font-size:15pt;font-weight:800;color:#241318;direction:ltr;text-align:right;font-family:Arial,sans-serif;line-height:1.3;letter-spacing:.5px;">${String(cfg.admin_phone).split(/[،,\/|]+/).map(t => t.trim()).filter(Boolean).join("<br>")}</div>` : ""}
-            ${cfg.season_label ? `<div style="font-size:13pt;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;line-height:1.2;">${cfg.season_label}</div>` : ""}
+            ${cfg.season_name ? `<div style="font-size:13pt;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;line-height:1.2;">${cfg.season_name}</div>` : ""}
           </div>
         </div>
 
@@ -74,7 +82,7 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
           </div>` : ""}
           <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;${p.phone ? "" : "padding-top:5pt;border-top:1pt dashed #E8D5C4;"}">
             <span style="font-size:9pt;font-weight:800;color:#8a6a10;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
-            <span style="font-size:11.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || companyName}</span>
+            <span style="font-size:11.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || NONE}</span>
             ${cfg.hotel_address ? `<span style="color:${accentColor};font-size:10pt;">•</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span>` : ""}
           </div>
         </div>
@@ -108,7 +116,7 @@ export function buildHandTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
   const busName   = bus?.name || "";
   const handShort = p.short_ar || p.name_ar || "";
-  const hotelName = cfg.hotel_name || companyName;
+  const hotelName = cfg.hotel_name || NONE;
   const hotelAddr = cfg.hotel_address || "";
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
   const NUMFONT_H = "'El Messiri',Cairo,serif";
@@ -144,11 +152,11 @@ export function buildHandTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;padding:12px 12px;flex-shrink:0;min-width:82mm;">
           ${logoEl}
           <div style="font-family:${NUMFONT_H};font-size:40px;font-weight:700;color:${primaryColor};text-align:center;line-height:1.1;white-space:nowrap;">${companyName}</div>
-          ${(phoneLines.length || cfg.season_label) ? `
+          ${(phoneLines.length || cfg.season_name) ? `
           <div style="display:flex;align-items:center;gap:10px;justify-content:center;white-space:nowrap;padding-top:3px;border-top:1.5px solid rgba(212,160,23,.35);width:82%;justify-content:center;margin-top:2px;">
             ${phoneLines.length ? `<span style="font-size:15px;font-weight:800;color:#241318;direction:ltr;font-family:Arial,sans-serif;">${phoneLines.join(" · ")}</span>` : ""}
-            ${phoneLines.length && cfg.season_label ? `<span style="color:${accentColor};font-size:13px;">•</span>` : ""}
-            ${cfg.season_label ? `<span style="font-size:14px;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;">${cfg.season_label}</span>` : ""}
+            ${phoneLines.length && cfg.season_name ? `<span style="color:${accentColor};font-size:13px;">•</span>` : ""}
+            ${cfg.season_name ? `<span style="font-size:14px;font-weight:700;color:#8a6a10;font-family:Cairo,sans-serif;">${cfg.season_name}</span>` : ""}
           </div>` : ""}
         </div>
       </div>
@@ -166,7 +174,7 @@ export function buildLongTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
   const busName   = bus?.name || "";
   const shortName = p.short_ar || p.name_ar || "";
-  const hotelName = cfg.hotel_name || companyName;
+  const hotelName = cfg.hotel_name || NONE;
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
   const logoEl = cfg.logo_url
     ? `<img src="${cfg.logo_url}" style="width:90pt;height:90pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`
@@ -178,7 +186,7 @@ export function buildLongTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
       <div style="background:linear-gradient(135deg,${primaryColor},#3d0f1f);color:#fff;padding:4pt 9pt 7pt;text-align:center;position:relative;flex-shrink:0;">
         <div style="display:flex;justify-content:center;margin-top:17pt;margin-bottom:2pt;">${logoEl}</div>
         <div style="font-family:'El Messiri',Cairo,sans-serif;font-size:17pt;font-weight:700;line-height:1;">${companyName}</div>
-        <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${cfg.season_label || ""}</div>
+        <div style="font-size:8pt;color:#F0C84A;font-weight:700;margin-top:0;">${cfg.season_name || ""}</div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;position:relative;">
         <div style="position:absolute;inset:0;opacity:.05;background-image:${patBg2};pointer-events:none;"></div>

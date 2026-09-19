@@ -43,8 +43,11 @@ export type PrintChrome = {
  *  ثانية في النظام: من احتاج اسمَ موسمٍ على ورقةٍ نادى هذه الدالّة. */
 export function seasonLabel(season: PrintSeason): string {
   if (!season || !season.name) return "";
-  const base = `موسم حج ${season.name}`;
-  return season.closed_at ? `${base} — موسم مؤرشف` : base;
+  /* ⚠️ الاسمُ يُعرَض كما خزّنه المدير، حرفاً بحرف. وكانت هنا بادئةُ
+     «موسم حج» تُركَّب فوقه، فيصير للموسم اسمٌ ثانٍ لم يكتبه أحد —
+     ويختلف عمّا تعرضه البوابةُ والإعدادات. ولاحقةُ «مؤرشف» بيانُ
+     حالةٍ يُلحَق، لا جزءٌ من الاسم. */
+  return season.closed_at ? `${season.name} — موسم مؤرشف` : season.name;
 }
 
 /* ═══ الترويسة ═══ */

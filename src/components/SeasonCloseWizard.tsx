@@ -75,8 +75,10 @@ interface Props {
   counts: Counts | undefined;
   currentUser: User;
   onGoToNewSeason: () => void;
-  /* أسماء المواسم القائمة — لفحص التكرار قبل الإرسال */
-  existingNames: string[];
+  /* السنواتُ الهجريّةُ القائمة — هويّةُ المواسم، وعليها فحصُ
+     التكرار قبل الإرسال. ولا فحصَ على الاسم: الأسماءُ نصٌّ حرّ،
+     وموسمان باسمين مختلفين لسنةٍ واحدةٍ هما الخطأُ لا التشابه. */
+  existingYears: number[];
 }
 
 /* الموسم التالي بالرقم إن كان الاسم رقماً محضاً، وإلا فارغ.
@@ -98,11 +100,15 @@ async function invokeAdmin(body: Record<string, unknown>): Promise<{ data: Admin
   return { data: null, message };
 }
 
-function suggestName(current: string): string {
-  return /^\d+$/.test(current.trim()) ? String(Number(current.trim()) + 1) : "";
+/* اقتراحُ اسمٍ من السنة — **راحةٌ لا مصدرَ حقيقة**. المديرُ يمسحه
+   ويكتب ما شاء، والمحفوظُ هو ما في الحقل. والسنةُ تبقى عدداً
+   مستقلّاً لا يُشتقّ من الاسم ولا يُشتقُّ منه الاسمُ إلزاماً. */
+function suggestNameFromYear(year: string): string {
+  const y = year.trim();
+  return /^\d{3,4}$/.test(y) ? `موسم الحج ${y} هـ` : "";
 }
 
-function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, onGoToNewSeason, existingNames }: Props) {
+function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, onGoToNewSeason, existingYears }: Props) {
   const [step, setStep] = useState<Step>(1);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -120,8 +126,13 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   const [dlFailed, setDlFailed] = useState(0);
   /* وعدد ما نجح فعلاً: الاكتمال يُقاس بمطابقة المتوقَّع، لا بغياب الفشل */
   const [dlSucceeded, setDlSucceeded] = useState(0);
-  /* الخطوة ٤ */
-  const [newName, setNewName] = useState(() => suggestName(activeSeason.name));
+  /* الخطوة ٤ — سنةٌ واسم، مفهومان لا مفهوم */
+  const [newYear, setNewYear] = useState(() =>
+    activeSeason.hijri_year ? String(activeSeason.hijri_year + 1) : "");
+  const [newName, setNewName] = useState(() =>
+    activeSeason.hijri_year ? suggestNameFromYear(String(activeSeason.hijri_year + 1)) : "");
+  /* هل لمس المديرُ الاسمَ بيده؟ فإن لمسه لم يَعُد الاقتراحُ يدهسه */
+  const [nameTouched, setNameTouched] = useState(false);
   /* ⚠️ الادّعاء الوحيد المسموح بأن نسخةً موجودة: نُزّلت **وبلا فشل**.
      خطوة التأكيد كانت تقرأ `downloaded` وحدها، فتُعلن «نُزّلت نسخة»
      ولو فشل كل مستند — وهي الخطوة التي يُحذف بعدها الأصل. */
@@ -139,7 +150,9 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   const reset = () => {
     setStep(1); setPassword(""); setError(""); setBusy(false);
     setWarnings(null); setDocItems([]); setFailures([]); setDownloaded(false); setDlProgress(0); setDlFailed(0); setDlSucceeded(0);
-    setNewName(suggestName(activeSeason.name)); setResult(null);
+    const nextYear = activeSeason.hijri_year ? String(activeSeason.hijri_year + 1) : "";
+    setNewYear(nextYear); setNewName(suggestNameFromYear(nextYear)); setNameTouched(false);
+    setResult(null);
   };
 
   const closeAndReset = () => { reset(); onClose(); };
@@ -299,7 +312,9 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
 
     /* الإقفال أولاً: هو الجوهر، ومعاملة واحدة في القاعدة */
     const { data, message } = await invokeAdmin({
-      action: "close", newSeasonName: newName.trim(),
+      action: "close",
+      newSeasonName: newName.trim(),
+      newSeasonHijriYear: Number(newYear.trim()),
     });
     if (!data?.newSeasonId) {
       setError(message || "تعذّر إقفال الموسم. لم يتغيّر شيء — يمكنك إعادة المحاولة.");
@@ -345,14 +360,17 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   };
 
   const locked = step === "executing";
-  const nameTaken = existingNames.some(n => n.trim() === newName.trim()) && newName.trim() !== "";
+  const yearNum = Number(newYear.trim());
+  const yearValid = /^\d{1,4}$/.test(newYear.trim()) && yearNum > 0;
+  const yearTaken = yearValid && existingYears.includes(yearNum);
+  const canProceed = yearValid && !yearTaken && newName.trim() !== "";
 
   return (
     <Modal
       show={show}
       /* أثناء التنفيذ: لا Escape ولا نقر خارجيّ ولا ✕ */
       onClose={locked ? () => {} : closeAndReset}
-      title={step === "done" ? "تم إقفال الموسم" : `إقفال موسم ${activeSeason.name}`}
+      title={step === "done" ? "تم إقفال الموسم" : `إقفال «${activeSeason.name}»`}
       maxWidth={720}
     >
       {/* مؤشّر الخطوات */}
@@ -479,13 +497,28 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       {step === 4 && (
         <>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
-            سيبدأ الموسم الجديد فارغاً: لا حجاج ولا باصات ولا مخيمات ولا غرف.
+            سيبدأ الموسم الجديد فارغاً: لا حجاج ولا باصات ولا مخيمات ولا غرف، ولا بيانات فندق أو منى أو عرفات — تُدخَل من «الإعدادات ← إعدادات الموسم».
           </div>
-          <input value={newName} autoFocus onChange={e => setNewName(e.target.value)}
-            placeholder="اسم الموسم الجديد" style={inp} />
-          {nameTaken && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>يوجد موسم بهذا الاسم.</div>}
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>السنة الهجرية</div>
+          <input value={newYear} autoFocus inputMode="numeric"
+            onChange={e => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 4);
+              setNewYear(v);
+              /* الاقتراحُ يتبع السنةَ ما لم يكتب المديرُ اسماً بيده */
+              if (!nameTouched) setNewName(suggestNameFromYear(v));
+            }}
+            placeholder="1449" style={{ ...inp, direction: "ltr", textAlign: "left" }} />
+          {newYear.trim() !== "" && !yearValid && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>السنة الهجرية يجب أن تكون عدداً صحيحاً.</div>}
+          {yearTaken && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>يوجد موسم لهذه السنة بالفعل.</div>}
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", margin: "12px 0 5px" }}>اسم الموسم كما يظهر في البوابة والتقارير</div>
+          <input value={newName} onChange={e => { setNameTouched(true); setNewName(e.target.value); }}
+            placeholder="موسم الحج 1449 هـ" style={inp} />
+          <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 5, lineHeight: 1.7 }}>
+            الاسم نصّ حرّ للعرض، ويمكن تعديله لاحقاً من «الإعدادات ← إعدادات الموسم». والسنة الهجرية هي هوية الموسم ولا تتغيّر.
+          </div>
           <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button onClick={() => setStep(5)} disabled={!newName.trim() || nameTaken} style={btnP({ flex: 1, opacity: newName.trim() && !nameTaken ? 1 : 0.6 })}>التالي</button>
+            <button onClick={() => setStep(5)} disabled={!canProceed} style={btnP({ flex: 1, opacity: canProceed ? 1 : 0.6 })}>التالي</button>
             <button onClick={() => setStep(docItems.length > 0 ? 3 : 2)} style={btnS()}>السابق</button>
             <button onClick={closeAndReset} style={btnS()}>إلغاء</button>
           </div>
@@ -497,9 +530,9 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
         <>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>سيتم تنفيذ الآن</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, marginBottom: 16 }}>
-            <div>✅ سيتم إغلاق موسم {activeSeason.name}.</div>
-            <div>✅ سيتم إنشاء موسم {newName.trim()}.</div>
-            <div>✅ سيتم حفظ جميع بيانات موسم {activeSeason.name} داخل الأرشيف.</div>
+            <div>✅ سيتم إغلاق «{activeSeason.name}».</div>
+            <div>✅ سيتم إنشاء «{newName.trim()}» للسنة {newYear.trim()} هـ.</div>
+            <div>✅ سيتم حفظ جميع بيانات «{activeSeason.name}» داخل الأرشيف.</div>
             {/* حالة الصفر تُقال صراحةً: لا تُحسب نجاحاً ولا فشلاً */}
             {docItems.length === 0 && <div>✅ لا مستندات مرفوعة في هذا الموسم — لا شيء يُحذف.</div>}
           </div>
@@ -547,9 +580,9 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
       {step === "done" && result && (
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, marginBottom: 16 }}>
-            <div>✅ تم إغلاق موسم {activeSeason.name} بنجاح.</div>
-            <div>✅ تم إنشاء موسم {newName.trim()}.</div>
-            <div>✅ أصبح موسم {newName.trim()} هو الموسم النشط.</div>
+            <div>✅ تم إغلاق «{activeSeason.name}» بنجاح.</div>
+            <div>✅ تم إنشاء «{newName.trim()}» للسنة {newYear.trim()} هـ.</div>
+            <div>✅ أصبح «{newName.trim()}» هو الموسم النشط.</div>
             <div style={{ color: result.docsOk ? "var(--success)" : "var(--warning)" }}>
               {result.docsOk && dlFailed === 0 ? "✅" : "⚠️"}{" "}
               {downloaded && dlFailed > 0
@@ -564,6 +597,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
             {[
               ["الموسم المقفل", activeSeason.name],
               ["الموسم الجديد", newName.trim()],
+              ["السنة الهجرية", newYear.trim()],
               ["الحجاج", String(counts?.passengers ?? "—")],
               ["الباصات", String(counts?.buses ?? "—")],
               ["المخيمات", String(counts?.camps ?? "—")],
@@ -582,7 +616,7 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
             {/* المزوّد يحمّل المواسم عند التركيب وحده، فالخروج من
                 الإيصال يعيد التحميل ليصير الموسم الجديد هو النشط */}
             <button onClick={onGoToNewSeason} style={btnP({ flex: 1 })}>
-              الانتقال إلى موسم {newName.trim()}
+              الانتقال إلى «{newName.trim()}»
             </button>
             <button onClick={() => window.location.reload()} style={btnS()}>العودة إلى إدارة المواسم</button>
           </div>

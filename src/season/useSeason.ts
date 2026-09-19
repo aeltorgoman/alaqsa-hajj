@@ -18,10 +18,23 @@ import { createContext, useContext } from "react";
 
 export interface Season {
   id: number;
+  /** اسمُ العرض كما كتبه المدير. نصٌّ حرٌّ — ولا يُشتقّ منه شيء. */
   name: string;
+  /** سنةُ الحجّ الهجريّة — هويّةُ الموسم وفريدتُه. */
+  hijri_year: number;
   created_at: string | null;
   closed_at: string | null;
   closed_by: string | null;
+  /* ═══ بياناتُ الموسم الرئيسة ═══
+     يملكها الموسمُ لا `company_config`. ولهذا يقرأ المؤرشفُ
+     فندقَه هو: القيمةُ لم تكن يوماً في مكانٍ مشترك. */
+  hotel_name: string | null;
+  hotel_address: string | null;
+  hotel_url: string | null;
+  mina_address: string | null;
+  mina_url: string | null;
+  arafa_address: string | null;
+  arafa_url: string | null;
 }
 
 export interface SeasonValue {

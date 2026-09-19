@@ -38,6 +38,12 @@ function fmtDate(iso: string | null): string {
 }
 
 function SeasonManagerPage({ currentUser }: { currentUser: User }) {
+  /* ═══ العرضُ شيءٌ والهدمُ شيءٌ آخر ═══
+     `view_archive` تفتح هذه الصفحة وتُظهر كلَّ ما فيها من بيان.
+     وإقفالُ الموسم وحذفُه يشترطان `manage_season_lifecycle`
+     وحدها — والخادمُ يفرضها في `season-admin`، وهذا الشرطُ هنا
+     يوافقه فلا يُعرَض زرٌّ ينتهي إلى ٤٠٣. */
+  const canManageLifecycle = currentUser.permissions?.manage_season_lifecycle === true;
   const { alert: alertState, showAlert } = useAlert();
   /* ⚠️ activeSeason لا viewedSeason — الصفحة تدير المواسم من فوقها
      لا من داخلها. لو تصفّح المستخدم موسماً مؤرشفاً ثم فتحها، يجب
@@ -107,7 +113,13 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
             ` · مستمرّ منذ ${durationDays(activeSeason.created_at, null)} يوماً`}
         </div>
         <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{countLine(activeSeason.id)}</div>
-        <button onClick={() => setShowClose(true)} style={btnP({ marginTop: 12 })}>إقفال الموسم</button>
+        {canManageLifecycle ? (
+          <button onClick={() => setShowClose(true)} style={btnP({ marginTop: 12 })}>إقفال الموسم</button>
+        ) : (
+          <div style={{ marginTop: 12, fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
+            إقفال الموسم يتطلّب صلاحية «إقفال المواسم وحذفها نهائياً».
+          </div>
+        )}
       </div>
 
       {/* ── المواسم السابقة ── */}
@@ -150,10 +162,12 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
               >
                 تصفّح هذا الموسم
               </button>
-              <button onClick={() => setToDelete(s)}
-                style={{ background: "var(--female-bg)", border: "none", color: "var(--danger)", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                حذف
-              </button>
+              {canManageLifecycle && (
+                <button onClick={() => setToDelete(s)}
+                  style={{ background: "var(--female-bg)", border: "none", color: "var(--danger)", padding: "7px 12px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                  حذف
+                </button>
+              )}
               </div>
             </div>
           ))}
@@ -166,7 +180,7 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
         activeSeason={activeSeason}
         counts={counts[activeSeason.id]}
         currentUser={currentUser}
-        existingNames={seasons.map(s => s.name)}
+        existingYears={seasons.map(s => s.hijri_year)}
         onGoToNewSeason={() => { sessionStorage.setItem("hajj_page", "passengers"); window.location.reload(); }}
       />
 
