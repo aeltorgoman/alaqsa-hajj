@@ -145,7 +145,7 @@ function PilgrimPortal() {
     (async () => {
       await setupPortalManifest({
         name: data.config?.name_ar || "بوابة الحاج",
-        logoUrl: data.config?.assets?.logo || data.config?.logo_url || null,
+        logoUrl: data.config?.assets?.logo || null,
         themeColor: data.config?.color_primary || "#1D9E75",
       });
       await registerServiceWorker();
@@ -215,7 +215,7 @@ function PilgrimPortal() {
      الحملة العالميّة. فالحاجُّ يرى فندقَ موسمه دائماً. */
   const season = data?.season;
   const t = buildTheme(cfg);
-  const portalLogo = cfg?.assets?.logo || cfg?.logo_url || null;
+  const portalLogo = cfg?.assets?.logo || null;
   const portalSettings = cfg?.portal_settings || {};
   const showFlights = portalSettings.flights !== false;
   const showRooms = portalSettings.rooms !== false;

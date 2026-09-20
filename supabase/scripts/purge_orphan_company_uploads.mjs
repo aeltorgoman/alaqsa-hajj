@@ -9,7 +9,7 @@
    ⚠️ **لا يحذف هذا السكربت شيئاً يثبت أنه مرجوع.** يعيد إثبات
    اليُتم بنفسه من القاعدة قبل كل حذف، ويرفض أي كائن:
      • يشير إليه عمود مستند لحاجّ
-     • أو يشير إليه `company_assets` أو `company_config`
+     • أو يشير إليه `company_assets` — وهي مرجعُ أصول الشركة وحدها
      • أو لا يطابق تسمية أصول الشركة `company_(logo|banner)_…`
      • أو يقع خارج `0/`
 
@@ -50,12 +50,17 @@ if (!url.startsWith("https://") || !serviceKey) { console.error("❌ مدخلا�
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
 
 /* ── ١) كل مرجع قائم في القاعدة ── */
-const [passengers, assets, config] = await Promise.all([
+/* ⚠️ `company_config.logo_url` و`banner_image_url` لم تعودا تُقرآن:
+   سقطتا من القاعدة في ترحيل تنظيف الإرث، و`company_assets` صارت
+   مرجعَ أصول الشركة وحدها. ولا يتّسع بذلك ما يُحذف: العمودان كانا
+   يحملان عينَ الروابط التي تحملها صفوفُ `company_assets`، وكلاهما
+   يشير إلى حاوية `company-assets` لا إلى `passengers-docs/0/` التي
+   يعمل فيها هذا السكربت. */
+const [passengers, assets] = await Promise.all([
   db.from("passengers").select("photo_url,passport_url,national_id_url,contract_url,hajj_permit_url,flight_ticket_url"),
   db.from("company_assets").select("asset_url"),
-  db.from("company_config").select("logo_url,banner_image_url"),
 ]);
-for (const r of [passengers, assets, config]) {
+for (const r of [passengers, assets]) {
   if (r.error) { console.error("❌ تعذّرت قراءة المراجع:", r.error.message); process.exit(1); }
 }
 
@@ -63,7 +68,6 @@ const referenced = new Set();
 const add = v => { if (typeof v === "string" && v.trim()) referenced.add(v.trim()); };
 for (const row of passengers.data ?? []) Object.values(row).forEach(add);
 for (const row of assets.data ?? []) add(row.asset_url);
-for (const row of config.data ?? []) { add(row.logo_url); add(row.banner_image_url); }
 
 const isReferenced = key => {
   const bare = key.replace(/^0\//, "");

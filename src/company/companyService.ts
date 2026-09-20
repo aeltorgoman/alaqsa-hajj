@@ -42,21 +42,23 @@ export function normalizeCompanyProfile(config: AppConfig | ConfigRow | PublicCo
      البوابة فلا يظهر شيء، ولا واجهةَ تكتب `features` أصلاً ليُطفئ
      الناقض. فصار لظهور أقسام البوابة مصدرٌ واحد. */
   const portal = (raw.portal_settings && typeof raw.portal_settings === "object" && !Array.isArray(raw.portal_settings) ? raw.portal_settings : {}) as Record<string, unknown>;
+  /* ⚠️ لا مرتدَّ إلى `company_config.logo_url` ولا إلى
+     `banner_image_url` بعد اليوم: `company_assets` هي مرجعُ الأصول
+     وحدها، والعمودان يسقطان في ترحيل التنظيف. وصفُّ `logo` مقروءٌ
+     لغير المصادَق أيضاً بسياسة `company_assets_public_read`، فشاشةُ
+     الدخول لا تفقد شعارَها بذهابهما. */
   const assets = normalizeAssets(rows);
-  const legacyLogoUrl = normalizeCompanyAssetUrl(raw.logo_url);
-  const legacyBannerUrl = normalizeCompanyAssetUrl(raw.banner_image_url);
-  if (legacyLogoUrl && !assets.logo) assets.logo = { key: "logo", url: legacyLogoUrl, altText: raw.name_ar, metadata: {}, updatedAt: null };
 
   const primaryColor = normalizeCompanyColor(raw.color_primary, "#1D9E75");
   const accentColor = normalizeCompanyColor(raw.color_accent, "#085041");
   const sidebarColor = normalizeCompanyColor(raw.color_sidebar, "#f9f9f9");
 
   return {
-    identity: { nameAr: raw.name_ar || "نظام الحج", nameEn: raw.name_en || "", tagline: raw.tagline || "", logoUrl: assets.logo?.url || legacyLogoUrl },
+    identity: { nameAr: raw.name_ar || "نظام الحج", nameEn: raw.name_en || "", tagline: raw.tagline || "", logoUrl: assets.logo?.url ?? null },
     contact: { phone: raw.contact_phone || "", email: raw.contact_email || "", country: raw.country || "", city: raw.city || "" },
     financial: { bankName: text(raw.bank_name), accountName: text(raw.bank_account_name), accountNumber: text(raw.bank_account_number), iban: text(raw.bank_iban), swift: text(raw.bank_swift), commercialRegistration: text(raw.commercial_registration), paymentQrUrl: assets.payment_qr?.url || null },
-    branding: { primaryColor, accentColor, sidebarColor, bannerUrl: assets.dashboard_banner?.url || legacyBannerUrl, bannerPosition: raw.banner_position || "center", bannerPositionX: raw.banner_position_x || "50" },
-    reportBranding: { logoUrl: assets.logo?.url || legacyLogoUrl || "", companyName: raw.name_ar || "نظام الحج", tagline: raw.tagline || "", primaryColor, accentColor, headerUrl: assets.report_header?.url || null, footerText: "" },
+    branding: { primaryColor, accentColor, sidebarColor, bannerUrl: assets.dashboard_banner?.url ?? null, bannerPosition: raw.banner_position || "center", bannerPositionX: raw.banner_position_x || "50" },
+    reportBranding: { logoUrl: assets.logo?.url || "", companyName: raw.name_ar || "نظام الحج", tagline: raw.tagline || "", primaryColor, accentColor, headerUrl: assets.report_header?.url || null, footerText: "" },
     portal: {
       welcomeMessage: text(raw.portal_welcome_message), helpMessage: text(raw.portal_help_message),
       supportPhone: raw.admin_phone || "",
@@ -91,14 +93,15 @@ export const companyService = {
     const configQuery = authData.session
       ? supabase.from("company_config").select("*").eq("id", 1).single()
       : supabase.from("company_profile_public")
-          .select("id,name_ar,name_en,tagline,logo_url,banner_image_url,color_primary,color_accent,color_sidebar,banner_position,banner_position_x")
+          .select("id,name_ar,name_en,tagline,color_primary,color_accent,color_sidebar")
           .eq("id", 1).single();
     const [configResult, assetsResult] = await Promise.all([
       configQuery,
       supabase.from("company_assets").select("*").order("asset_key"),
     ]);
-    // Missing assets remain a valid legacy deployment; company_config is the
-    // compatibility source until the additive migration is applied.
+    /* الأصولُ تُقرأ من `company_assets` في المسارين معاً: المصادَقُ
+       يراها كلَّها، وغيرُ المصادَق يرى قائمةَ السماح العلنيّة. ولم
+       يبقَ في `company_config` عمودُ أصلٍ يُرتَدّ إليه. */
     return { config: configResult.data, assets: assetsResult.data ?? [], error: configResult.error };
   },
   async saveAsset(asset: { key: CompanyAssetKey; url: string; altText?: string | null; metadata?: Json }) {

@@ -234,13 +234,8 @@ export type Database = {
           bank_iban: string | null
           bank_name: string | null
           bank_swift: string | null
-          banner_image_url: string | null
           banner_position: string | null
           banner_position_x: string | null
-          camp_arafa_address: string | null
-          camp_arafa_url: string | null
-          camp_mina_address: string | null
-          camp_mina_url: string | null
           city: string | null
           color_accent: string | null
           color_primary: string | null
@@ -249,18 +244,12 @@ export type Database = {
           contact_email: string | null
           contact_phone: string | null
           country: string | null
-          features: Json | null
-          hotel_address: string | null
-          hotel_name: string | null
-          hotel_url: string | null
           id: number
-          logo_url: string | null
           name_ar: string
           name_en: string | null
           portal_help_message: string | null
           portal_settings: Json
           portal_welcome_message: string | null
-          season_label: string | null
           tagline: string | null
         }
         Insert: {
@@ -272,13 +261,8 @@ export type Database = {
           bank_iban?: string | null
           bank_name?: string | null
           bank_swift?: string | null
-          banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
-          camp_arafa_address?: string | null
-          camp_arafa_url?: string | null
-          camp_mina_address?: string | null
-          camp_mina_url?: string | null
           city?: string | null
           color_accent?: string | null
           color_primary?: string | null
@@ -287,18 +271,12 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           country?: string | null
-          features?: Json | null
-          hotel_address?: string | null
-          hotel_name?: string | null
-          hotel_url?: string | null
           id?: number
-          logo_url?: string | null
           name_ar?: string
           name_en?: string | null
           portal_help_message?: string | null
           portal_settings?: Json
           portal_welcome_message?: string | null
-          season_label?: string | null
           tagline?: string | null
         }
         Update: {
@@ -310,13 +288,8 @@ export type Database = {
           bank_iban?: string | null
           bank_name?: string | null
           bank_swift?: string | null
-          banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
-          camp_arafa_address?: string | null
-          camp_arafa_url?: string | null
-          camp_mina_address?: string | null
-          camp_mina_url?: string | null
           city?: string | null
           color_accent?: string | null
           color_primary?: string | null
@@ -325,18 +298,12 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           country?: string | null
-          features?: Json | null
-          hotel_address?: string | null
-          hotel_name?: string | null
-          hotel_url?: string | null
           id?: number
-          logo_url?: string | null
           name_ar?: string
           name_en?: string | null
           portal_help_message?: string | null
           portal_settings?: Json
           portal_welcome_message?: string | null
-          season_label?: string | null
           tagline?: string | null
         }
         Relationships: []
@@ -1054,40 +1021,28 @@ export type Database = {
     Views: {
       company_profile_public: {
         Row: {
-          banner_image_url: string | null
-          banner_position: string | null
-          banner_position_x: string | null
           color_accent: string | null
           color_primary: string | null
           color_sidebar: string | null
           id: number | null
-          logo_url: string | null
           name_ar: string | null
           name_en: string | null
           tagline: string | null
         }
         Insert: {
-          banner_image_url?: string | null
-          banner_position?: string | null
-          banner_position_x?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
           id?: number | null
-          logo_url?: string | null
           name_ar?: string | null
           name_en?: string | null
           tagline?: string | null
         }
         Update: {
-          banner_image_url?: string | null
-          banner_position?: string | null
-          banner_position_x?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
           id?: number | null
-          logo_url?: string | null
           name_ar?: string | null
           name_en?: string | null
           tagline?: string | null
