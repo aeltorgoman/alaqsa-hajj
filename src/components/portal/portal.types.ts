@@ -21,6 +21,6 @@ export type Ann = { id: number; body: string; priority: string; show_at: string 
 export type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
 export type PortalSeason = { name: string; hijri_year: number | null; hotel_name: string | null; hotel_address: string | null; hotel_url: string | null; mina_address: string | null; mina_url: string | null; arafa_address: string | null; arafa_url: string | null };
 /* ⚠️ خرج من هذا العقد: `season_label` و`features` وأماكنُ الفندق
-   ومنى وعرفة. الأولُ والأخيرةُ صارت في `season`، و`features` لم
-   تعد تُقرَأ. و`logo_url` باقٍ عمودَ توافقٍ حتى ترحيل التنظيف. */
-export type PortalConfig = { name_ar: string; logo_url: string | null; tagline: string | null; color_primary: string | null; color_accent: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; portal_settings?: Record<string, boolean> | null; portal_welcome_message?: string | null; portal_help_message?: string | null; assets?: Record<string, string> | null; country: string | null; city: string | null };
+   ومنى وعرفة و`logo_url`. الأولُ والأماكنُ صارت في `season`،
+   و`features` لم تعد تُقرَأ، والشعارُ يأتي في `assets.logo` وحده. */
+export type PortalConfig = { name_ar: string; tagline: string | null; color_primary: string | null; color_accent: string | null; admin_name: string | null; admin_phone: string | null; admin_whatsapp: string | null; portal_settings?: Record<string, boolean> | null; portal_welcome_message?: string | null; portal_help_message?: string | null; assets?: Record<string, string> | null; country: string | null; city: string | null };
