@@ -183,8 +183,11 @@ begin
         'arafa_url',     s.arafa_url)
       from public.seasons s where s.id = v_p.season_id),
 
-    /* ⚠️ لا `logo_url` هنا. شعارُ البوابة يأتي في `assets.logo`
-       أدناه، ومصدرُه `company_assets` وحدها. */
+    /* ⚠️ لا مفتاحَ أصلٍ من `company_config` هنا. شعارُ البوابة يأتي
+       في `assets` أدناه، ومصدرُه `company_assets` وحدها.
+
+       ولا يُذكر في هذا الجسد اسمُ عمودٍ ساقطٍ ولو في تعليق:
+       `prosrc` يحفظ التعليقات، وحارسُ التوابع يقرؤه. */
     'config', (select json_build_object(
       'name_ar', c.name_ar, 'tagline', c.tagline,
       'color_primary', c.color_primary, 'color_accent', c.color_accent,
@@ -278,21 +281,35 @@ begin
   end if;
 
   /* ── د) لا دالّةَ في `public` ما زالت تذكر عموداً منها ──────
-     `pg_depend` لا يرى أجسادَ دوالّ plpgsql، فيُقرأ النصُّ نفسُه.
+     `pg_depend` لا يرى أجسادَ دوالّ plpgsql، فيُقرأ النصُّ نفسُه
+     بعد نزع تعليقاته.
      والفحصُ على `c.<عمود>` تحديداً — وهي الصيغةُ التي تُقرأ بها
      أعمدةُ الحملة في دوالّنا — فلا يخلط بينها وبين `s.hotel_name`
      في صفّ الموسم ولا بين مُعامِلات `p_hotel_name`. */
   select count(*), coalesce(string_agg(p.proname, '، '), '') into v_n, v_names
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
+  cross join lateral (
+    /* ⚠️ `prosrc` هو نصُّ الجسد كما كُتب: تعليقاتُه فيه. فتُنزَع
+       التعليقاتُ قبل الفحص، وإلّا وقف الترحيلُ على جملةٍ عربيّةٍ
+       تشرح أن العمودَ لم يعد يُقرأ — وهذا ما وقع فعلاً في أول
+       محاولةٍ لتطبيقه.
+
+       والنزعُ للتعليقات وحدها. النصوصُ الحرفيّة تبقى في الفحص
+       عمداً: دالّةٌ تبني SQL ديناميكيّاً تحمل اسمَ العمود في نصٍّ
+       حرفيّ، وذلك اعتمادٌ تنفيذيٌّ حقيقيّ لا يجوز أن يمرّ. */
+    select regexp_replace(
+             regexp_replace(p.prosrc, '/\*.*?\*/', ' ', 'g'),
+             '--[^\n]*', ' ', 'g') as body
+  ) src
   where n.nspname = 'public' and p.prokind = 'f'
     and (
       /* أسماءٌ لا تشترك مع جدولٍ آخر — تُفحص بحدّ الكلمة وحده */
-      p.prosrc ~ '\m(season_label|camp_mina_address|camp_mina_url|camp_arafa_address|camp_arafa_url|logo_url|banner_image_url)\M'
+      src.body ~ '\m(season_label|camp_mina_address|camp_mina_url|camp_arafa_address|camp_arafa_url|logo_url|banner_image_url)\M'
       /* وأسماءٌ يحملها `seasons` أيضاً — تُفحص بالمؤهِّل `c.` وحده،
          وهو ما تُقرأ به أعمدةُ الحملة في دوالّنا، فلا يُخلَط بينها
          وبين `s.hotel_name` ولا مُعامِلات `p_hotel_name`. */
-      or p.prosrc ~ 'c\.(hotel_name|hotel_address|hotel_url|features)\M'
+      or src.body ~ 'c\.(hotel_name|hotel_address|hotel_url|features)\M'
     );
 
   if v_n > 0 then
