@@ -12,7 +12,7 @@ type Props = {
   t: PortalTheme;
   logoUrl: string | null;
   nameAr: string;
-  seasonLabel: string | null | undefined;
+  seasonName: string | null | undefined;
   hasPhoto: boolean;
   photoUrl: string;
   gender: string;
@@ -24,7 +24,7 @@ type Props = {
 };
 
 export function PortalHeader({
-  t, logoUrl, nameAr, seasonLabel, hasPhoto, photoUrl, gender, displayName,
+  t, logoUrl, nameAr, seasonName, hasPhoto, photoUrl, gender, displayName,
   postHajj, showCountdown, cd, onLogout,
 }: Props) {
   return (
@@ -41,7 +41,7 @@ export function PortalHeader({
       <div style={{ textAlign: "right" }}>
         <div style={{ fontFamily: t.fontT, fontSize: 27, fontWeight: 700, color: "#fff", lineHeight: 1.25 }}>{nameAr}</div>
         <div style={{ fontFamily: t.font, fontSize: 13.5, fontWeight: 700, color: t.goldBright, marginTop: 3 }}>
-          بوابة الحاج{seasonLabel ? ` — ${seasonLabel}` : ""}
+          بوابة الحاج{seasonName ? ` — ${seasonName}` : ""}
         </div>
       </div>
     </div>

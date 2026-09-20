@@ -13,7 +13,7 @@ type Props = {
   t: PortalTheme;
   logoUrl: string | null;
   nameAr: string;
-  seasonLabel: string | null | undefined;
+  seasonName: string | null | undefined;
   adminPhone: string | null | undefined;
   doc: string; setDoc: (v: string) => void;
   dobMode: "select" | "type"; setDobMode: (v: "select" | "type") => void;
@@ -26,7 +26,7 @@ type Props = {
 };
 
 export function PortalLogin({
-  t, logoUrl, nameAr, seasonLabel, adminPhone,
+  t, logoUrl, nameAr, seasonName, adminPhone,
   doc, setDoc, dobMode, setDobMode, day, setDay, month, setMonth, year, setYear,
   loading, loginError, onSubmit,
 }: Props) {
@@ -44,7 +44,7 @@ export function PortalLogin({
                 : <Icon d={ICONS.star} size={54} color={t.goldBright} sw={1.3} />}
             </div>
             <div style={{ fontFamily: t.fontT, fontSize: 32, fontWeight: 700 }}>{nameAr}</div>
-            <div style={{ fontSize: 15.5, color: t.goldBright, marginTop: 8, fontWeight: 700 }}>بوابة الحاج {seasonLabel ? `— ${seasonLabel}` : ""}</div>
+            <div style={{ fontSize: 15.5, color: t.goldBright, marginTop: 8, fontWeight: 700 }}>بوابة الحاج {seasonName ? `— ${seasonName}` : ""}</div>
           </div>
 
           <label style={{ display: "block", fontSize: 15, color: t.goldBright, fontWeight: 800, marginBottom: 9 }}>رقم جواز السفر أو البطاقة الشخصية</label>

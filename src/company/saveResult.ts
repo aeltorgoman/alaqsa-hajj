@@ -46,5 +46,9 @@ export function classifyPostgrestError(
   const message = err?.message || "";
   if (code === "42501") return { status: "unauthorized", message: message || "ليست لديك صلاحية لحفظ هذه الإعدادات." };
   if (code === "P0002" || code === "PGRST116") return { status: "not_found", message: message || "تعذّر الوصول إلى صفّ الإعدادات، لم يُحفظ شيء." };
+  /* `P0001` هو ما ترفعه دوالُّنا حين تردّ قيمةً قبل كتابتها — اسمٌ
+     فارغٌ أو سنةٌ مكرّرة. وهو رفضُ إدخالٍ لا عطل، والرسالةُ عربيّةٌ
+     مكتوبةٌ للمستخدم فتُعرَض كما هي. */
+  if (code === "P0001") return { status: "invalid", field: "", message: message || "قيمةٌ غير صالحة." };
   return { status: "failed", message: message || "تعذّر الحفظ، يرجى المحاولة مرة أخرى." };
 }
