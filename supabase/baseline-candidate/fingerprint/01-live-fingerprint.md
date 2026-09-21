@@ -41,10 +41,10 @@
 | بلا مسار بحثٍ مثبَّت | **0** |
 | بـ`PUBLIC EXECUTE` | **0** |
 
-الدوالّ الستُّ التي يبلغها `anon`: `create_pilgrim_session` ·
+الدوالّ **السبعُ** التي يبلغها `anon`: `create_pilgrim_session` ·
 `get_pilgrim_portal_by_session` · `get_portal_announcements` ·
 `mark_pilgrim_notification_read` · `register_pilgrim_push` ·
-`revoke_pilgrim_session` · `unregister_pilgrim_push` — سبعٌ، وكلُّها
+`revoke_pilgrim_session` · `unregister_pilgrim_push` — **سبعٌ**، وكلُّها
 مسجّلةٌ في جرد الوصول المجهول بـ`supabase/README.md`.
 
 ⚠️ **ملاحظةُ مراجعة:** دالّتا محفّزٍ منتفختان بلا تناسب —

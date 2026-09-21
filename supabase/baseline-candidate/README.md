@@ -72,36 +72,80 @@ ERROR:  unrecognized privilege type "maintain"
 
 ## الإجراءُ حين تتوفّر البيئة
 
-```bash
-# ١) التقاطُ المخطَّط — قراءةٌ فقط، بلا بيانات
-npm run supabase -- link --project-ref <REF>      # السرُّ في البيئة لا في git
-npm run supabase -- db dump --linked -f supabase/baseline-candidate/v1_baseline.sql
-npm run supabase -- db dump --linked --role-only -f supabase/baseline-candidate/roles.sql
+▶ **المسارُ المعتمد الآن هو سيرُ عملٍ في GitHub Actions**:
+`.github/workflows/checkpoint4-baseline-proof.yml` — يدويُّ التشغيل
+(`workflow_dispatch`) لا غير. وما يلي شرحُ ما يفعله ولماذا، لا
+أمرٌ يُنسخ إلى صدفة.
 
-# ٢) البصمةُ المرجعية من الحيّ
-psql "$REMOTE_RO_URL" -f supabase/baseline-candidate/tools/fingerprint.sql > /tmp/live.txt
-psql "$REMOTE_RO_URL" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> /tmp/live.txt
+### الاتّصالُ بالبعيد — قراءةٌ يفرضها الخادم
 
-# ٣) بناءٌ من الصفر — المرّةُ الأولى
-npm run supabase -- start
-psql "$LOCAL_URL" -f supabase/baseline-candidate/v1_baseline.sql
-psql "$LOCAL_URL" -f supabase/seed.sql
-psql "$LOCAL_URL" -f supabase/baseline-candidate/tools/fingerprint.sql > /tmp/fresh1.txt
-psql "$LOCAL_URL" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> /tmp/fresh1.txt
+لا وجودَ لـ«رابطِ قراءةٍ فقط» في Supabase، ولا يُخترَع له اسم.
+فالقراءةُ **تُفرَض في الجلسة نفسها** على الخادم:
 
-# ٤) المقارنة — المستويان معاً
-diff -u /tmp/live.txt /tmp/fresh1.txt          # المستوى ٢: الأمن
-npm run supabase -- db diff --linked           # المستوى ١: الشكل
-
-# ٥) الحتميّة — بناءٌ ثانٍ من الصفر
-npm run supabase -- stop --no-backup && npm run supabase -- start
-# أعِد ٣، ثم:
-diff -u /tmp/fresh1.txt /tmp/fresh2.txt        # يجب أن يكون فارغاً
+```
+PGOPTIONS="-c default_transaction_read_only=on"
 ```
 
-⚠️ و**مفتاحُ المشروع وكلمةُ القاعدة يبقيان في البيئة**: `link`
-يكتب `supabase/.temp/` وهو متجاهَلٌ في git (تحقَّقنا منه في نقطة ٣
-بـ`git check-ignore`). ولا يدخل سرٌّ هذا المستودع.
+فأيُّ كتابةٍ — ولو بالخطأ — يردُّها الخادم بـ25006، ولا تعتمد
+السلامةُ على انضباطِ من يكتب الأمر.
+
+⚠️ **ولا يُخمَّن مضيفُ القاعدة.** عاملُ GitHub يعمل على IPv4،
+وقد يكون `db.<ref>.supabase.co` على IPv6 وحده ما لم يُشترَ ملحقُ
+IPv4 — فيلزم مضيفُ **المجمِّع (pooler)**. ومضيفُه ومنفذُه واسمُ
+مستخدمه **ليست أسراراً**، وتُؤخذ من نافذة *Connect* في لوحة
+التحكّم وتُمرَّر مُدخلاتٍ لسير العمل. وكلمةُ المرور وحدها سرّ.
+
+### التقاطُ المخطَّط
+
+```
+supabase db dump --linked --schema public --keep-comments -f <ملفّ>
+```
+
+`db dump` غلافٌ على `pg_dump` — **قارئٌ بطبعه**. و`--dry-run`
+يطبع نصَّ `pg_dump` الذي سيُنفَّذ، فيُسجَّل في السجلّ دليلاً.
+و`--keep-comments` ضروريّ: بدونه تُقتطع تعليقاتُ المستوى الأعلى.
+
+⚠️ **و`--role-only` ممنوع** — انظر `EXCLUSIONS.md`: يُخرج كتلةَ
+أدوارٍ قد تحمل بصمات كلمات المرور.
+
+### ⚠️ ما لا يلتقطه `db dump --schema public`
+
+**والاعتمادُ عليه وحده يُنتج خطَّ أساسٍ ناقصاً أمنياً:**
+
+1. **حاويتا التخزين** — `passengers-docs` (خاصّة) و
+   `company-assets` (عامّة)، بحدَّي الحجم وقوائم الأنواع.
+   صفّان في `storage.buckets`، ومخطَّطُ `storage` **خارج**
+   `--schema public`.
+2. **سياساتُ `storage.objects` الثماني** — للسبب نفسه.
+3. **الصلاحياتُ الافتراضية** (`ALTER DEFAULT PRIVILEGES`) التي
+   يملكها `postgres` على `public` — قد لا يُخرجها `pg_dump` مع
+   نطاقِ مخطَّطٍ واحد.
+
+فهذه الثلاثةُ **تُلتقَط صراحةً ويُتحقَّق منها**، ولا تُعاد بناءً
+على ذاكرة: سيرُ العمل يقرؤها من الحيّ، ويولّد منها SQL، ويُثبت
+بعد البناء المحلّيّ أنها حاضرةٌ ومطابقة. وأيُّ نقصٍ فيها **يُسقط
+البرهان**، ولا يُغتفر.
+
+### المقارنة — المستويان
+
+**المستوى ٢ (الأمن):** `tools/fingerprint.sql` على الطرفين، ثم
+`diff`. إلزاميٌّ دائماً.
+
+**المستوى ١ (الشكل):** `pg_dump` على الطرفين ثم `diff` بين
+الإخراجين — لا `supabase db diff --linked`.
+
+⚠️ **ولماذا استُبعد `db diff --linked`؟** سببان، والأول وحده كافٍ:
+
+1. **إنه يقيس الشيءَ الخطأ.** وصفُه في 2.117.0: «يقارن ظلّاً
+   مبنيّاً من `supabase/migrations` بقاعدةٍ حيّة». وظلُّه يُبنى من
+   الترحيلات السبعة والثلاثين التاريخية — وهي بعينها السلسلةُ
+   التي لم تُثبَت قطّ — لا من مرشَّحِ خطّ الأساس. فجوابُه لا يخصّ
+   سؤالنا.
+2. **ولم يثبت لنا أنه لا يكتب.** محرّكاتُ الفرق قد تُنشئ كائناتٍ
+   مؤقّتة. ولم نُثبت خلافَه، فلا يدخل البرهان. والسلامةُ لا
+   تُقايَض براحة.
+
+و`pg_dump` على الطرفين يُغني عنه ويُثبت أنه قارئٌ فقط.
 
 ## ما أُنجز فعلاً هنا
 

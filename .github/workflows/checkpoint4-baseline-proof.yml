@@ -1,0 +1,299 @@
+# ════════════════════════════════════════════════════════════
+# Checkpoint 4 — V1 baseline reproducibility proof
+# ════════════════════════════════════════════════════════════
+# READ-ONLY against the remote Supabase project. There is no
+# authorized remote-mutation command in this workflow, and none is
+# present: no db push, no migration up, no migration repair, no
+# db reset --linked, no remote DDL/DML.
+#
+# Remote read-only is enforced by the SERVER, not by discipline:
+# every remote psql session sets default_transaction_read_only=on,
+# so a mistaken write is rejected with SQLSTATE 25006.
+#
+# Manual trigger only. Never on push, pull_request or schedule.
+
+name: Checkpoint 4 - V1 Baseline Proof (read-only remote)
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: "Supabase project ref (NOT a secret - public identifier)"
+        required: true
+        default: "zkucwcnclbfvukhdqhgc"
+      db_host:
+        description: "DB host from dashboard > Connect. Use the IPv4-compatible Session pooler host if direct is IPv6-only. NOT a secret."
+        required: true
+      db_port:
+        description: "DB port (5432 direct, commonly 5432 for session pooler)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "DB user from dashboard > Connect (e.g. postgres, or postgres.<ref> for the pooler). NOT a secret."
+        required: true
+        default: "postgres"
+
+# Minimum permissions. Read only: this workflow never pushes a commit.
+# Proof artifacts leave via actions/upload-artifact, not via git.
+permissions:
+  contents: read
+
+concurrency:
+  group: checkpoint4-baseline-proof
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Never echoed. GitHub masks secret values in logs automatically.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+      # psql reads PGPASSWORD. Passing it by environment keeps it off
+      # the command line and out of the process table.
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # Server-enforced read-only for every psql session below.
+      PGOPTIONS: "-c default_transaction_read_only=on"
+      PROJECT_REF: ${{ inputs.project_ref }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: proof-output
+
+    steps:
+      # ── 0) Fail closed if either secret is missing ──────────
+      - name: Require secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; missing=1; }
+          [ -n "${PGPASSWORD:-}" ]            || { echo "::error::SUPABASE_DB_PASSWORD is not set"; missing=1; }
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Both required secrets are present (values not printed)."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          docker version --format '{{.Server.Version}}'
+          v="$(npm run --silent supabase -- --version)"
+          echo "supabase CLI: $v"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          psql --version
+          # 37 historical migrations must be present and untouched.
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq 37 ] || { echo "::error::expected 37 historical migrations, found $n"; exit 1; }
+          echo "$n historical migrations present."
+
+      # ── STAGE B) read-only remote capture ──────────────────
+      - name: Link project (read-only use)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No --skip-pooler: the CLI links through the POOLER by
+          # default, which is IPv4-compatible. That is what makes the
+          # CLI steps work on a GitHub-hosted runner, where a direct
+          # IPv6-only db.<ref>.supabase.co host would be unreachable.
+          npm run --silent supabase -- link --project-ref "$PROJECT_REF" >/dev/null
+          echo "Linked via pooler. supabase/.temp is gitignored and is never committed."
+
+      - name: Prove the remote session is read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          # Positive control: a write MUST be refused by the server.
+          if psql "$URL" -v ON_ERROR_STOP=1 -At -c "create temporary table _probe(i int)" 2>"$OUT/ro-probe.err"; then
+            echo "::error::remote session accepted a write - read-only enforcement is NOT active"; exit 1
+          fi
+          grep -q "read-only transaction" "$OUT/ro-probe.err" || {
+            echo "::error::write failed for an unexpected reason:"; cat "$OUT/ro-probe.err"; exit 1; }
+          echo "Confirmed: the server rejects writes on this session (25006)."
+
+      - name: Capture live fingerprint (Level 2 reference)
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          psql "$URL" -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/live-fingerprint.txt"
+          psql "$URL" -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/live-fingerprint.txt"
+          wc -l "$OUT/live-fingerprint.txt"
+
+      - name: Capture storage + default privileges as SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          # db dump --schema public does NOT emit these, and they are
+          # application-owned. Generated from the live catalog, never
+          # reconstructed from memory.
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          psql "$URL" -v ON_ERROR_STOP=1 -At \
+            -f supabase/baseline-candidate/tools/emit-storage-and-defacl.sql \
+            > "$OUT/storage-and-defacl.sql"
+          grep -c . "$OUT/storage-and-defacl.sql"
+
+      # ── STAGE C) candidate baseline ────────────────────────
+      - name: Show the exact pg_dump that will run
+        shell: bash
+        run: |
+          set -euo pipefail
+          # --dry-run prints the pg_dump script; evidence that this is a read.
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments --dry-run \
+            | tee "$OUT/pg_dump-command.txt"
+
+      - name: Dump remote public schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          # --role-only is deliberately NEVER used: it can emit role
+          # password hashes. See EXCLUSIONS.md.
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments \
+            -f "$OUT/v1_baseline_public.sql"
+          wc -c "$OUT/v1_baseline_public.sql"
+          cat "$OUT/v1_baseline_public.sql" "$OUT/storage-and-defacl.sql" > "$OUT/v1_baseline_candidate.sql"
+          echo "Candidate assembled. It stays OUTSIDE supabase/migrations/."
+
+      - name: Assert candidate carries no business data or secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="$OUT/v1_baseline_candidate.sql"
+          # Only storage.buckets inserts are allowed (application-owned).
+          if grep -inE "^\s*(insert|copy)\s" "$f" | grep -viq "storage.buckets"; then
+            echo "::error::candidate contains data statements outside storage.buckets"
+            grep -inE "^\s*(insert|copy)\s" "$f" | grep -vi "storage.buckets" | head; exit 1
+          fi
+          if grep -qiE "setval\(|PASSWORD '|ROLE .* PASSWORD" "$f"; then
+            echo "::error::candidate contains sequence values or role passwords"; exit 1
+          fi
+          echo "Candidate is schema/security only."
+
+      # ── STAGE D) fresh PostgreSQL 17 build #1 ──────────────
+      - name: Start local stack (without the historical chain)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The proof must build from the CANDIDATE, never from the 37
+          # unproven historical migrations. supabase start would apply
+          # them, so they are moved aside in this ephemeral runner
+          # workspace only. Nothing is committed; contents: read.
+          mv supabase/migrations supabase/_migrations_held_aside
+          mkdir -p supabase/migrations
+          npm run --silent supabase -- start
+
+      - name: Assert local server is PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          num="$(PGOPTIONS= psql "$L" -At -c "select current_setting('server_version_num')")"
+          echo "local server_version_num=$num"
+          [ "$num" -ge 170000 ] && [ "$num" -lt 180000 ] || {
+            echo "::error::local PostgreSQL is not major version 17 - proof aborted"; exit 1; }
+
+      - name: Fresh build #1
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f "$OUT/v1_baseline_candidate.sql" > "$OUT/build1.log" 2>&1 \
+            || { echo "::error::candidate failed to apply from empty"; tail -50 "$OUT/build1.log"; exit 1; }
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fresh1-fingerprint.txt"
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fresh1-fingerprint.txt"
+
+      # ── STAGE E) equivalence, both levels ──────────────────
+      - name: Level 1 - structural (pg_dump vs pg_dump)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # NOT supabase db diff --linked: it builds its shadow from
+          # supabase/migrations (the unproven chain), so it answers the
+          # wrong question, and it is not established to be write-free.
+          npm run --silent supabase -- db dump --local --schema public --keep-comments -f "$OUT/fresh1_public.sql"
+          diff -u "$OUT/v1_baseline_public.sql" "$OUT/fresh1_public.sql" > "$OUT/level1-structural.diff" || true
+          echo "Level 1 diff lines: $(wc -l < "$OUT/level1-structural.diff")"
+
+      - name: Level 2 - security fingerprint (mandatory)
+        shell: bash
+        run: |
+          set -euo pipefail
+          diff -u "$OUT/live-fingerprint.txt" "$OUT/fresh1-fingerprint.txt" > "$OUT/level2-security.diff" || true
+          echo "Level 2 diff lines: $(wc -l < "$OUT/level2-security.diff")"
+
+      # ── STAGE G) compatibility probes (local only) ─────────
+      - name: Compatibility probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          PGOPTIONS= psql "$L" -f supabase/baseline-candidate/tools/compat-probes.sql > "$OUT/compat-probes.txt" 2>&1
+          tail -40 "$OUT/compat-probes.txt"
+
+      # ── STAGE F) destroy, rebuild #2, determinism ──────────
+      - name: Fresh build #2 and determinism check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- stop --no-backup
+          npm run --silent supabase -- start
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          num="$(PGOPTIONS= psql "$L" -At -c "select current_setting('server_version_num')")"
+          [ "$num" -ge 170000 ] || { echo "::error::rebuild is not PostgreSQL 17"; exit 1; }
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f "$OUT/v1_baseline_candidate.sql" > "$OUT/build2.log" 2>&1 \
+            || { echo "::error::candidate failed to apply on rebuild"; tail -50 "$OUT/build2.log"; exit 1; }
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fresh2-fingerprint.txt"
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fresh2-fingerprint.txt"
+          if ! diff -u "$OUT/fresh1-fingerprint.txt" "$OUT/fresh2-fingerprint.txt" > "$OUT/determinism.diff"; then
+            echo "::error::build #1 and build #2 differ - the candidate is not deterministic"
+            head -60 "$OUT/determinism.diff"; exit 1
+          fi
+          echo "Deterministic: build #1 and build #2 are identical."
+
+      - name: Restore historical migrations and verify untouched
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d supabase/_migrations_held_aside ]; then
+            rmdir supabase/migrations 2>/dev/null || true
+            mv supabase/_migrations_held_aside supabase/migrations
+          fi
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq 37 ] || { echo "::error::historical migrations not intact: $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::historical migrations modified"; exit 1; }
+          echo "37 historical migrations intact and unmodified."
+
+      # ── STAGE H) artifact safety ───────────────────────────
+      - name: Scan artifacts for secret-like material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -d "$OUT" ] || exit 0
+          rm -f "$OUT/ro-probe.err"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|SCRAM-SHA-256\\\$|md5[0-9a-f]{32}|postgres(ql)?://[^ ]*:[^ ]*@|PASSWORD '" "$OUT"; then
+            echo "::error::secret-like material found in proof artifacts - upload blocked"
+            exit 1
+          fi
+          echo "Artifact secret scan clean."
+
+      - name: Upload proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkpoint4-proof
+          path: ${{ env.OUT }}
+          retention-days: 14
+          if-no-files-found: warn
