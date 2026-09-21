@@ -263,10 +263,20 @@ function PilgrimPortal() {
   const anyDoc = !!(data?.pilgrim?.has_hajj_permit || data?.pilgrim?.has_flight_ticket);
   const hasMina = !!(data?.pilgrim?.camp_mina_name || data?.pilgrim?.camp_mina);
   const hasArafa = !!(data?.pilgrim?.camp_arafa_name || data?.pilgrim?.camp_arafa);
-  const readyCount = [!!data?.room, !!data?.bus, hasMina, hasArafa, !!activeFlight, anyDoc].filter(Boolean).length;
-  /* البطاقةُ تظهر ما دام شيءٌ جوهريّ لم يُعتمَد — وتختفي وحدها حين
-     يكتمل كلّ شيء، بلا تبديلِ أطوارٍ ولا محرّكِ مراحل. */
-  const prepping = !!data && readyCount < 6;
+  /* ⚠️ الترتيباتُ وحدها، ولا مستندات. كانت `anyDoc` سادسةَ الخانات،
+     فيرى الحاجُّ رحلتَه وفندقَه وباصَه على الشاشة ثم يُقال له تحتها
+     «رحلتك قيد التجهيز… وستظهر تفاصيل السكن والتنقل والطيران فور
+     اعتمادها» — وهي ظاهرةٌ فوقها. والناقصُ الحقيقيُّ كان التصريحَ
+     والتذكرة، وهما لا يُذكران في الجملة أصلاً.
+     ولهما لغتُهما الصادقةُ في بطاقة المستندات: «سيظهر هنا فور
+     جاهزيته»، سطراً لكلّ مستند. فبقيت لهما، وخرجا من هذه.
+     وهذه الخمسُ ما تعتمده الحملةُ للحاجّ — وهي بعينها ما تَعِد به
+     الجملة، فصار النصُّ يصف شرطَه. */
+  const arrangements = [!!data?.room, !!data?.bus, hasMina, hasArafa, !!activeFlight];
+  /* البطاقةُ تظهر ما دام ترتيبٌ لم يُعتمَد — وتختفي وحدها حين تكتمل،
+     بلا تبديلِ أطوارٍ ولا محرّكِ مراحل. و`some` لا عدداً: العتبةُ
+     الرقميّةُ تنحرف عن القائمة متى زِيدت خانةٌ أو نقصت. */
+  const prepping = !!data && arrangements.some(ready => !ready);
 
   async function openDoc(type: PortalDocType, title: string) {
     if (docBusy) return;
