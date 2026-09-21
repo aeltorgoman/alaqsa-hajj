@@ -275,16 +275,20 @@ begin
     end if;
   end loop;
 
-  /* (ب) كنسةٌ مقصورةٌ على `public` — مخطّطُ هذا التطبيق وحده.
-     دوالُّ Supabase في `auth` و`storage` و`vault` و`extensions`
-     و`graphql` خارج نطاقنا ولا يجوز أن يسقط ترحيلُنا بسببها. */
+  /* (ب) تدقيقٌ **إخباريٌّ لا حاكم**: يعدّ دوالَّ SECURITY DEFINER
+     في `public` الباقيةَ بلا `pg_temp`، ويطبعها ملاحظةً فحسب.
+     ⚠️ ولا يرفع استثناءً: هذا الترحيل يملك الستَّ أعلاه وحدها،
+     فلو أُدخلت دالّةٌ غيرُها بين الكتابة والتطبيق لَأسقطته بلا
+     ذنب. فالحكمُ على ما نملك، والإخبارُ عمّا لا نملك. */
   select coalesce(string_agg(p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')', '، '), '')
     into v_bad
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prokind = 'f' and p.prosecdef
      and coalesce(array_to_string(p.proconfig, ','), '') !~ '\mpg_temp\M';
   if v_bad <> '' then
-    raise exception 'بقيت دوالُّ SECURITY DEFINER في public بلا pg_temp: %', v_bad using errcode = 'P0001';
+    raise notice 'تدقيقٌ إخباريّ (لا يُسقط الترحيل): دوالُّ SECURITY DEFINER في public بلا pg_temp خارج نطاق هذا الترحيل: %', v_bad;
+  else
+    raise notice 'تدقيقٌ إخباريّ: لا دالّةَ SECURITY DEFINER في public بلا pg_temp.';
   end if;
 
   -- (ج) الدالّةُ الميتة اختفت
