@@ -558,6 +558,112 @@ Schema history is part of the source code.
 
 ---
 
+# 35.1 Canonical Migration Workflow (Supabase CLI)
+
+**Status:** binding from the V1 cutover onward. This section makes §35 operational; §35 states the principles, this states the procedure.
+
+**The normal path, and the only normal path:**
+
+```
+repository migration
+  -> local rebuild / verification
+  -> PR review
+  -> merge
+  -> Supabase CLI `db push`
+  -> post-deploy drift verification
+```
+
+Dashboard SQL editor and MCP `apply_migration` are **not** the normal migration path. See *Break-glass* below for the one narrow exception.
+
+The CLI version this workflow assumes is pinned in `package.json`. Invoke it as `npm run supabase -- <command>` so every developer and agent runs the same binary.
+
+## CREATE
+
+- Create migrations with `npm run supabase -- migration new <name>`.
+- **The CLI-generated timestamp is authoritative.** After cutover, never hand-write, invent, renumber, or reuse a migration version. A version that the CLI did not generate is a defect.
+- One migration per logical change. Do not batch unrelated changes to save a file.
+
+## DEVELOP
+
+- Migration SQL is reviewed in Git like any other source. It is not a script that happens to live in the repo.
+- **Function DDL names exact signatures.** `ALTER`/`DROP FUNCTION` must carry the full argument list. Resolving a function by bare name is how a migration written against a drifted signature dies on `42883` — this project has already paid that cost once.
+- **`SECURITY DEFINER` functions require an explicit `search_path`.** Use `public, pg_temp` (with `pg_temp` **last**, so it cannot shadow `public`), or `''` when the body names no schema object at all. Never leave it unset.
+- **Privileges and grants are explicit.** PostgreSQL grants `EXECUTE` to `PUBLIC` by default, and `PUBLIC` includes `anon`. Every restriction therefore begins with `REVOKE EXECUTE ... FROM PUBLIC`, then grants the required roles by name. `REVOKE ... FROM anon` alone does nothing.
+- **Destructive DDL requires explicit preconditions.** Before a `DROP`, the migration itself must prove the object is unused — at apply time, not only at authoring time, because a caller can appear in between.
+- **No `DROP ... CASCADE` by default.** If a dependency exists, the migration should fail loudly rather than remove objects silently.
+- Prefer fail-loudly assertions over comments. A `RAISE EXCEPTION` that guards an assumption is worth more than a paragraph describing it.
+- **Scope assertions to what the migration owns.** A postcondition that sweeps every object in a schema will one day fail because of something the migration never touched. Assert on the exact signatures changed; audit anything wider with `RAISE NOTICE`.
+
+## LOCAL VERIFY
+
+- Rebuild from repository state alone: `npm run supabase -- db reset`.
+- The seed is **local bootstrap only** (`supabase/seed.sql`). It carries no production or demo rows, and `db push` never runs it.
+- Where the change is security-relevant, verify the outcome with independent queries after the reset — not only with the migration's own postconditions, which cannot be their own witness.
+- Exercise the real failure path, not just the happy one.
+
+## PR
+
+- **The migration is reviewed before it reaches any database.** Review first, apply second — never the reverse.
+- Application code and migration ordering must be safe in both directions: the deployed frontend must work against both the old and the new schema for the window in which they overlap. Additive schema change first, code second; removals only after no deployed code reads them.
+- A migration PR should contain the migration. Mixing schema and unrelated application changes makes both harder to review and impossible to revert cleanly.
+
+## PRE-DEPLOY
+
+- Review the exact set of migrations that will be applied — `npm run supabase -- migration list` against the target.
+- Verify the intended migration set matches expectation; investigate anything unexpected before pushing, never after.
+- `npm run build`.
+- `npm run lint`, and report the **delta** against the known baseline, not the absolute count.
+- A clean `db reset` from repository state.
+
+## DEPLOY
+
+- **After merge**, never before.
+- The normal mechanism is `npm run supabase -- db push`.
+- Dashboard and MCP `apply_migration` are **prohibited** for normal migrations.
+
+## POST-DEPLOY
+
+- Verify the **exact** migration version recorded in the remote ledger, and that it matches the repository filename.
+- Verify the intended schema and security state with independent catalog queries.
+- Run a drift check (see *Drift checking is not schema diffing* below).
+
+## ROLLBACK
+
+- Roll forward. Write a new migration that corrects the problem.
+- **Never edit a migration that has been merged or applied.** Its content is the record of what the database was told to do; changing it makes that record a lie and silently diverges every environment built from it.
+
+## BREAK-GLASS
+
+If a dashboard or MCP schema mutation is ever genuinely required in an emergency:
+
+1. **Explicit authorization** from the project owner, recorded.
+2. **The exact SQL executed is preserved**, byte for byte.
+3. A **same-day** repository migration reconciling the change, so the repository and the database agree again within the day.
+4. The **reason is documented** — what forced it, and why the normal path could not be used.
+5. **Version and content drift is never left silently in place.** Any divergence between the remote ledger and the repository is recorded and scheduled, not tolerated.
+
+Break-glass is an incident, not a shortcut. Each use should be rare enough to remember.
+
+## Drift checking is not schema diffing
+
+**`supabase db diff --linked` alone is NOT sufficient for security equivalence.** It compares schema shape. Most of this system's security lives in things it does not, or does not reliably, report.
+
+V1 baseline validation — and any later drift check that claims security equivalence — must additionally compare:
+
+- ACLs and grants on tables, views, sequences and functions
+- default privileges (`ALTER DEFAULT PRIVILEGES`)
+- RLS enabled/disabled per table
+- RLS policies, including `USING` and `WITH CHECK` expressions
+- function `SECURITY DEFINER` / `SECURITY INVOKER` mode
+- function `search_path` (`proconfig`)
+- `EXECUTE` privileges per role, **including `PUBLIC`** — check `aclexplode` grantee `0`, not the ACL string
+- storage buckets, including `public` flag and MIME/size limits
+- storage policies
+
+A schema diff that comes back empty while any of the above differs is a false negative, and it is exactly the kind of false negative that ships an anonymous read path to production.
+
+---
+
 # 36. Realtime Standards
 
 Realtime improves user experience.
