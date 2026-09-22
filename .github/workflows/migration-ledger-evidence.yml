@@ -1,0 +1,201 @@
+name: Migration Ledger Evidence Capture (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: "Supabase project ref (public identifier)"
+        required: true
+        default: "zkucwcnclbfvukhdqhgc"
+      db_host:
+        description: "Session pooler host"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-ledger-evidence
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROJECT_REF: ${{ inputs.project_ref }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: ledger-evidence
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require database secret
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Required secret is present (value not printed)."
+
+      - name: Prove remote session is read-only
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+
+          got="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO"             -c "select current_setting('default_transaction_read_only')")"
+          printf 'default_transaction_read_only=%s\n' "$got" | tee "$OUT/readonly.txt"
+          [ "$got" = "on" ] || { echo "::error::read-only mode is not active"; exit 1; }
+
+          set +e
+          err="$(psql "$URL" -X -v VERBOSITY=verbose -At -c "$RO"             -c "begin; create table _ledger_capture_readonly_probe(i int); rollback;" 2>&1 >/dev/null)"
+          rc=$?
+          set -e
+          printf '%s\n' "$err" >> "$OUT/readonly.txt"
+          [ "$rc" -ne 0 ] || { echo "::error::server accepted a persistent write"; exit 1; }
+          grep -q '25006' "$OUT/readonly.txt" || {
+            echo "::error::write was refused, but not with SQLSTATE 25006"; exit 1; }
+          echo "Read-only positive control PASS."
+
+      - name: Capture ledger metadata and byte-exact payloads
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+
+          # Metadata preserves NULL-vs-empty-array distinction explicitly.
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "
+            select json_build_object(
+              'version', version,
+              'name', name,
+              'created_by', created_by,
+              'idempotency_key', idempotency_key,
+              'rollback', rollback,
+              'statements_is_null', statements is null,
+              'statement_count', case when statements is null then null else cardinality(statements) end
+            )::text
+            from supabase_migrations.schema_migrations
+            order by version
+          " > "$OUT/ledger-metadata.jsonl"
+
+          # Each statement element is transported as base64 of its exact UTF-8 bytes.
+          # SHA-256 is computed by PostgreSQL from the same bytes.
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "
+            select json_build_object(
+              'version', m.version,
+              'ordinal', u.ordinality,
+              'sha256', encode(digest(convert_to(u.statement,'UTF8'),'sha256'),'hex'),
+              'byte_length', octet_length(convert_to(u.statement,'UTF8')),
+              'base64', replace(encode(convert_to(u.statement,'UTF8'),'base64'), E'\\n', '')
+            )::text
+            from supabase_migrations.schema_migrations m
+            cross join lateral unnest(m.statements) with ordinality as u(statement, ordinality)
+            order by m.version, u.ordinality
+          " > "$OUT/statement-payloads.jsonl"
+
+          # Independent before/after state for proof that the capture changed nothing.
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "
+            select count(*) || '|' || coalesce(max(version),'')
+            from supabase_migrations.schema_migrations
+          " > "$OUT/ledger-state.txt"
+
+      - name: Verify captured payload hashes and build manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, hashlib, json, pathlib
+          out = pathlib.Path("ledger-evidence")
+          meta = [json.loads(x) for x in out.joinpath("ledger-metadata.jsonl").read_text().splitlines() if x]
+          payloads = [json.loads(x) for x in out.joinpath("statement-payloads.jsonl").read_text().splitlines() if x]
+
+          for p in payloads:
+              raw = base64.b64decode(p["base64"], validate=True)
+              assert len(raw) == p["byte_length"], (p["version"], p["ordinal"])
+              assert hashlib.sha256(raw).hexdigest() == p["sha256"], (p["version"], p["ordinal"])
+
+          null_rows = sum(1 for r in meta if r["statements_is_null"])
+          rows_with_payloads = sum(1 for r in meta if (r["statement_count"] or 0) > 0)
+          empty_arrays = sum(1 for r in meta if r["statement_count"] == 0)
+          latest = max((r["version"] for r in meta), default=None)
+
+          manifest = {
+              "project_ref": "zkucwcnclbfvukhdqhgc",
+              "ledger_rows": len(meta),
+              "rows_with_statement_payloads": rows_with_payloads,
+              "null_statement_rows": null_rows,
+              "empty_statement_arrays": empty_arrays,
+              "statement_payload_elements": len(payloads),
+              "latest_version": latest,
+              "payload_hash_verification": "PASS",
+          }
+          out.joinpath("manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+          PY
+
+          sha256sum "$OUT/ledger-metadata.jsonl" "$OUT/statement-payloads.jsonl" "$OUT/manifest.json"             > "$OUT/SHA256SUMS"
+          sha256sum "$OUT/ledger-metadata.jsonl" "$OUT/statement-payloads.jsonl"             | sha256sum | awk '{print $1}' > "$OUT/overall-evidence.sha256"
+          cat "$OUT/manifest.json"
+
+      - name: Verify ledger unchanged after capture
+        shell: bash
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          before="$(cat "$OUT/ledger-state.txt")"
+          after="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c             "select count(*) || '|' || coalesce(max(version),'') from supabase_migrations.schema_migrations")"
+          printf 'before=%s\nafter=%s\n' "$before" "$after" > "$OUT/ledger-unchanged.txt"
+          [ "$before" = "$after" ] || { echo "::error::ledger state changed during capture"; exit 1; }
+          echo "Ledger count/latest version unchanged."
+
+      - name: Scan evidence for credential-like material
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Base64 payloads are migration SQL encoded as evidence; scan decoded SQL as well.
+          python3 - <<'PY'
+          import base64, json, pathlib, re
+          out=pathlib.Path("ledger-evidence")
+          patterns=[
+              re.compile(rb'sbp_[A-Za-z0-9]{20,}'),
+              re.compile(rb'sb_secret_[A-Za-z0-9_-]{20,}'),
+              re.compile(rb'postgres(?:ql)?://[^\s:]+:[^\s@]+@'),
+              re.compile(rb'SCRAM-SHA-256\$'),
+          ]
+          for line in out.joinpath("statement-payloads.jsonl").read_text().splitlines():
+              p=json.loads(line); raw=base64.b64decode(p["base64"])
+              for pat in patterns:
+                  if pat.search(raw):
+                      raise SystemExit(f"credential-like material in {p['version']}#{p['ordinal']}")
+          print("Decoded payload credential scan PASS.")
+          PY
+
+      - name: Upload ledger evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-ledger-evidence
+          path: ledger-evidence
+          retention-days: 14
+          if-no-files-found: error
