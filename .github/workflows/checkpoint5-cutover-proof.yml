@@ -337,6 +337,28 @@ jobs:
           [ "$unqualified" -eq 0 ] || exit 1
           echo "Every project-function reference in the emitted storage SQL is schema-qualified."
 
+      # ── Level 1 reference — the remote public schema ───────
+      # Run #2 failed Level 1 with FileNotFoundError on
+      # proof-output/v1_baseline_public.sql. Nothing was wrong with the
+      # schema: this workflow reuses the Checkpoint 4 header, which
+      # ends immediately BEFORE C4's "Dump remote public schema" step,
+      # so the Level 1 reference was never produced and the comparator
+      # had nothing to compare against. Read-only, --schema-only.
+      - name: Dump remote public schema (Level 1 reference)
+        shell: bash
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # --role-only is deliberately NEVER used: it can emit role
+          # password hashes. See EXCLUSIONS.md.
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments \
+            -f "$OUT/v1_baseline_public.sql"
+          wc -c "$OUT/v1_baseline_public.sql"
+          [ -s "$OUT/v1_baseline_public.sql" ] || {
+            echo "::error::the Level 1 reference dump is empty"; exit 1; }
+
       # ── STAGE C) assemble the proposed migration tree ──────
       # In the RUNNER ONLY. The repository's active supabase/migrations
       # is never modified on a branch or on main by this workflow; the
@@ -457,9 +479,29 @@ jobs:
           objs_before="$(psql "$SIM" -X -q -At -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast','supabase_migrations')")"
           rows_before="$(psql "$SIM" -X -q -At -c "select count(*) from supabase_migrations.schema_migrations")"
 
-          npm run --silent supabase -- db push --dry-run --db-url "$SIM" | tee "$OUT/sim-dryrun-before.txt"
-          npm run --silent supabase -- migration repair --status applied 20260922120000 --db-url "$SIM" 2>&1 | tee "$OUT/sim-repair.txt"
-          npm run --silent supabase -- db push --dry-run --db-url "$SIM" | tee "$OUT/sim-dryrun-after.txt"
+          # Run #2 asserted on substrings of the CLI's HUMAN output and
+          # both greps failed although the CLI did exactly the right
+          # thing. Two causes, both reproduced locally:
+          #   1. the human lines ("Would push these migrations", the
+          #      bullet list, "Local database is up to date.") go to
+          #      STDERR, and only stdout was captured;
+          #   2. the CLI's agent detection changes the format - in an
+          #      agent session stdout carries JSON, on a bare runner it
+          #      carries one prose line.
+          # --output-format json removes both variables, and the
+          # assertions are now exact JSON equality rather than
+          # substring matches: stricter than what they replace.
+          J="--output-format json"
+          npm run --silent supabase -- db push --dry-run --db-url "$SIM" $J \
+            > "$OUT/sim-dryrun-before.json" 2> "$OUT/sim-dryrun-before.err"
+          npm run --silent supabase -- migration repair --status applied 20260922120000 --db-url "$SIM" $J \
+            > "$OUT/sim-repair.json" 2> "$OUT/sim-repair.err"
+          npm run --silent supabase -- db push --dry-run --db-url "$SIM" $J \
+            > "$OUT/sim-dryrun-after.json" 2> "$OUT/sim-dryrun-after.err"
+          for f in sim-dryrun-before sim-repair sim-dryrun-after; do
+            echo "--- $f (stdout) ---"; cat "$OUT/$f.json"
+            echo "--- $f (stderr) ---"; cat "$OUT/$f.err"
+          done
 
           after="$(psql "$SIM" -X -q -At -c "select md5(string_agg(version||'|'||coalesce(name,'')||'|'||coalesce(md5(array_to_string(statements,E'\n')),'N'),E'\n' order by version)) from supabase_migrations.schema_migrations where version <> '20260922120000'")"
           objs_after="$(psql "$SIM" -X -q -At -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast','supabase_migrations')")"
@@ -469,8 +511,7 @@ jobs:
           [ "$before" = "$after" ] || { echo "::error::the 46 pre-existing ledger rows were modified"; ok=0; }
           [ "$objs_before" -eq "$objs_after" ] || { echo "::error::the repair created or dropped schema objects ($objs_before -> $objs_after)"; ok=0; }
           [ "$rows_before" -eq 46 ] && [ "$rows_after" -eq 47 ] || { echo "::error::ledger rows went $rows_before -> $rows_after, expected 46 -> 47"; ok=0; }
-          grep -q '"upToDate":true' "$OUT/sim-dryrun-after.txt" || { echo "::error::migrations still pending after the reconciliation"; ok=0; }
-          grep -q '20260922120000_v1_baseline.sql' "$OUT/sim-dryrun-before.txt" || { echo "::error::the baseline was not the single pending migration before the reconciliation"; ok=0; }
+          python3 supabase/cutover-candidate/tools/assert-reconciliation.py "$OUT" || ok=0
           if [ "$ok" -eq 1 ]; then echo PASS > "$OUT/status-reconcile.txt"; else echo FAIL > "$OUT/status-reconcile.txt"; fi
           echo "Reconciliation rehearsal verdict: $(cat "$OUT/status-reconcile.txt")"
           echo "  ledger rows $rows_before -> $rows_after | schema objects $objs_before -> $objs_after | pre-existing rows unchanged: $([ "$before" = "$after" ] && echo yes || echo NO)"
