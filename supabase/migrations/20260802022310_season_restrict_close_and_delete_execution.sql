@@ -1,21 +1,23 @@
--- ═══════════════════════════════════════════════════════════════
--- م١ / الجزء ٥ — حصر تنفيذ الدالتين الهدّامتين
--- بوستجرس يمنح execute لـ PUBLIC تلقائياً عند إنشاء أي دالة. وهذا
--- يعني أن close_season و delete_season صارتا — لحظة إنشائهما —
--- قابلتين للاستدعاء بمفتاح النشر العلني.
+-- ════════════════════════════════════════════════════════════
+-- مِرساةُ توافقٍ مع السجلّ — وليست هجرة
+-- LEDGER COMPATIBILITY ANCHOR — NOT a migration
+-- ════════════════════════════════════════════════════════════
+-- version : 20260802022310
+-- name    : season_restrict_close_and_delete_execution
 --
--- لا شيء في التطبيق يستدعيهما بعد (استدعاؤهما يبدأ في م٥). فسحب
--- الصلاحية الآن لا يكسر شيئاً، ويمنع شحن نقطة نهاية هدّامة مفتوحة.
--- كيف تستدعيهما صفحة المواسم في م٥ — قرار يُتخذ هناك، لا هنا.
+-- هذا الملفُّ **لا يفعل شيئاً** عن قصد، ولا يجوز أن يحوي SQL.
 --
--- هذا ليس إصلاحاً لدين أمني قائم، بل امتناع عن إنشاء دين جديد.
+-- This file deliberately does NOTHING, and no SQL may ever be added
+-- to it. It exists for one reason: the Supabase CLI matches local
+-- migrations to the remote ledger by VERSION STRING ALONE, so a
+-- version present remotely must also exist locally or every CLI
+-- history operation reports a conflict.
 --
--- active_season_id() تبقى متاحة للجميع عن قصد: إنها قيمة الـ
--- default على أربعة أعمدة، فبدون execute يفشل كل إدراج من التطبيق.
--- ═══════════════════════════════════════════════════════════════
-revoke execute on function public.close_season(text, text)  from public, anon, authenticated;
-revoke execute on function public.delete_season(bigint)     from public, anon, authenticated;
-
--- دوال المحفّزات لا تُستدعى مباشرة إطلاقاً — تنفّذها القاعدة وحدها
-revoke execute on function public.reject_write_closed_season()         from public, anon, authenticated;
-revoke execute on function public.reject_write_closed_season_derived() from public, anon, authenticated;
+-- The schema this version once created is reproduced in full by the
+-- proven V1 baseline, which runs after every anchor. The original SQL
+-- is preserved as evidence:
+--   · the applied remote payload  — docs/migration-recovery/2026-09-21/final/statement-payloads.jsonl
+--   · the repository file         — supabase/migrations-archive/ (created at cutover)
+--
+-- Adding SQL here would execute it on every fresh rebuild BEFORE the
+-- baseline, against an empty database, and would break the proof.
