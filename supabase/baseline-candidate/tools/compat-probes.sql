@@ -147,6 +147,7 @@ select pg_temp.assert('no_residue',
        and (select count(*) from public.buses) = 0
        and (select count(*) from public.camps) = 0
        and (select count(*) from public.flights) = 0
+       and (select count(*) from public.financial_groups) = 0
        and (select count(*) from public.payments) = 0
        and (select count(*) from public.announcements) = 0
        and (select count(*) from public.audit_log) = 0);
