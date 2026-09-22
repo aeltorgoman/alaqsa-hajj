@@ -77,6 +77,17 @@ select 'GRANT  '||c.relname||' '||coalesce(nullif(pg_get_userbyid(a.grantee),'')
    and (a.grantee=0 or pg_get_userbyid(a.grantee) in ('anon','authenticated','service_role'))
  order by 1;
 
+-- ⚠️ والتسلسلاتُ معها — وكانت منقطةً عمياء: القسمُ السابقُ
+-- يقتصر على `relkind in ('r','v')`، فمرّت في الجولة ٣٥ مِنحةً
+-- زائدةً لـ`anon` على التسلسلات دون أن يراها المستوى الثاني،
+-- ولم يكشفها إلا المستوى الأوّل. ومن ملك `USAGE` على تسلسلٍ
+-- ملك تحريكَه.
+select 'GRANTSEQ '||c.relname||' '||coalesce(nullif(pg_get_userbyid(a.grantee),''),'PUBLIC')||'='||a.privilege_type
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace, aclexplode(c.relacl) a
+ where n.nspname='public' and c.relkind='S'
+   and (a.grantee=0 or pg_get_userbyid(a.grantee) in ('anon','authenticated','service_role'))
+ order by 1;
+
 select 'SCHEMA '||nspname||' acl='||coalesce(nspacl::text,'-')
   from pg_namespace where nspname in ('public','extensions') order by 1;
 

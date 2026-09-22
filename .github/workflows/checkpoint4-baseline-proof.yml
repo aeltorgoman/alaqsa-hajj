@@ -365,7 +365,26 @@ jobs:
           npm run --silent supabase -- db dump --linked --schema public --keep-comments \
             -f "$OUT/v1_baseline_public.sql"
           wc -c "$OUT/v1_baseline_public.sql"
-          cat "$OUT/v1_baseline_public.sql" "$OUT/storage-and-defacl.sql" > "$OUT/v1_baseline_candidate.sql"
+          # ── Assembly order is load-bearing (Run #6) ───────────
+          # 1. the privilege prologue, BEFORE any object exists. A
+          #    clean Supabase instance ships postgres-owned default
+          #    privileges granting ALL on public to anon, authenticated
+          #    and service_role, so every CREATE inherits them and the
+          #    dump's narrower GRANTs cannot take them back. Proved on
+          #    a local cluster: pg_dump emits its own ALTER DEFAULT
+          #    PRIVILEGES *after* CREATE TABLE, so the dump alone
+          #    cannot fix this.
+          # 2. the live public schema dump - objects plus the complete
+          #    live ACL, since pg_dump writes whole privileges, not
+          #    deltas.
+          # 3. storage buckets, storage policies, and the live default
+          #    privileges, which apply to objects created LATER.
+          cat supabase/baseline-candidate/tools/00-privilege-prologue.sql \
+              "$OUT/v1_baseline_public.sql" \
+              "$OUT/storage-and-defacl.sql" > "$OUT/v1_baseline_candidate.sql"
+          head -1 "$OUT/v1_baseline_candidate.sql" > /dev/null
+          grep -q 'revoke all on tables' "$OUT/v1_baseline_candidate.sql" || {
+            echo "::error::the privilege prologue is missing from the candidate"; exit 1; }
           echo "Candidate assembled. It stays OUTSIDE supabase/migrations/."
 
       # ── Candidate data guard — rewritten after Run #2 ──────
@@ -535,6 +554,24 @@ jobs:
             echo "::error::the LOCAL database refused a write - reconstruction cannot proceed"; exit 1; }
           echo "Local database is PostgreSQL 17 and writable."
 
+      # ── The privilege environment the candidate lands in ───
+      # Matrix evidence, captured on every run rather than assumed:
+      # what a clean Supabase PG17 instance grants by default BEFORE
+      # the baseline creates anything. Run #6 failed because these
+      # defaults were inherited by every object.
+      - name: Capture local privilege environment before the candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          Q="select pg_get_userbyid(d.defaclrole)||' | '||coalesce(n.nspname,'(all)')||' | '||d.defaclobjtype::text||' | '||d.defaclacl::text
+               from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
+              where coalesce(n.nspname,'') = 'public' order by 1,3"
+          PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c "$Q" | tee "$OUT/local-defacl-before.txt"
+          n="$(PGOPTIONS= psql "$L" -X -q -At -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','v','S')")"
+          echo "public relations before the candidate: $n"
+          [ "$n" -eq 0 ] || { echo "::error::the local public schema is not empty - this is not a clean build"; exit 1; }
+
       - name: Fresh build #1
         shell: bash
         run: |
@@ -545,6 +582,58 @@ jobs:
           PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/seed.sql
           PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fresh1-fingerprint.txt"
           PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fresh1-fingerprint.txt"
+
+      # ── Did the prologue actually neutralise inheritance? ──
+      # Independent of both comparators and of the live reference: a
+      # direct catalog assertion that the rebuilt database grants anon
+      # nothing by default, and that no project object handed anon a
+      # privilege it never had on the live project. If this regresses,
+      # it fails here even if a comparator were weakened.
+      - name: Assert the privilege prologue took effect
+        # A failure here is recorded, not fatal on the spot: the
+        # equivalence surfaces below still run so one dispatch yields
+        # the whole diagnosis. The verdict step enforces it.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Records a verdict and lets the job continue, like the four
+          # equivalence surfaces, so one dispatch still produces the
+          # whole picture. The gate step below enforces it.
+          echo FAIL > "$OUT/status-prologue.txt"
+          set -e
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c \
+            "select pg_get_userbyid(d.defaclrole)||' | '||d.defaclobjtype::text||' | '||d.defaclacl::text
+               from pg_default_acl d join pg_namespace n on n.oid=d.defaclnamespace
+              where n.nspname='public' order by 1,2" | tee "$OUT/local-defacl-after.txt"
+
+          bad="$(PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c \
+            "select count(*) from pg_default_acl d
+               join pg_namespace n on n.oid = d.defaclnamespace, aclexplode(d.defaclacl) a
+              where n.nspname = 'public'
+                and pg_get_userbyid(d.defaclrole) = 'postgres'
+                and pg_get_userbyid(a.grantee) = 'anon'")"
+          echo "postgres-owned default privileges granting anon in public: $bad"
+          [ "$bad" -eq 0 ] || {
+            echo "::error::the privilege prologue did not take effect - anon still holds default privileges, so every object inherited them"
+            exit 1; }
+
+          # anon holds exactly two grants on the live project, both
+          # SELECT. Asserted as a shape, not a number copied forward:
+          # anything anon can write is a regression whatever the count.
+          w="$(PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c \
+            "select coalesce(string_agg(c.relname||':'||a.privilege_type, ' ' order by c.relname, a.privilege_type), '(none)')
+               from pg_class c join pg_namespace n on n.oid = c.relnamespace, aclexplode(c.relacl) a
+              where n.nspname = 'public' and c.relkind in ('r','v','S')
+                and pg_get_userbyid(a.grantee) = 'anon'
+                and a.privilege_type <> 'SELECT'")"
+          echo "non-SELECT privileges held by anon in public: $w"
+          [ "$w" = "(none)" ] || {
+            echo "::error::anon holds write privileges in the rebuilt database - inherited default privileges have leaked"
+            exit 1; }
+          echo PASS > "$OUT/status-prologue.txt"
+          echo "Privilege prologue confirmed effective."
 
       # ── STAGE E) equivalence, both levels ──────────────────
       - name: Level 1 - structural (pg_dump vs pg_dump)
@@ -654,7 +743,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          required="level1 level2 probes determinism"
+          required="prologue level1 level2 probes determinism"
           bad=0
           for k in $required; do
             f="$OUT/status-$k.txt"
@@ -670,7 +759,7 @@ jobs:
             echo "::error::Checkpoint 4 is NOT proven - see the classified reports above and in the artifact"
             exit 1
           fi
-          echo "All four proof surfaces PASS."
+          echo "All five proof surfaces PASS."
 
       - name: Restore historical migrations and verify untouched
         if: always()

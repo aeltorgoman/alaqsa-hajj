@@ -128,6 +128,33 @@ def classify(stmt):
     return "E"
 
 
+# Run #6 reported "D: 161" and nothing more, so the groups had to be
+# read out of an artifact that could not be downloaded. A D difference
+# is now attributed to the object class that generated it, and the
+# counts are printed, so the log alone answers "which privileges, on
+# what, in which direction".
+SUBCLASS_RES = [
+    ("default privileges", re.compile(r"^\s*ALTER\s+DEFAULT\s+PRIVILEGES", re.I)),
+    ("ownership",          re.compile(r"\bOWNER\s+TO\b", re.I)),
+    ("TABLE grant",        re.compile(r"^\s*(GRANT|REVOKE)\b.*\bON\s+TABLE\b", re.I | re.S)),
+    ("SEQUENCE grant",     re.compile(r"^\s*(GRANT|REVOKE)\b.*\bON\s+SEQUENCE\b", re.I | re.S)),
+    ("FUNCTION grant",     re.compile(r"^\s*(GRANT|REVOKE)\b.*\bON\s+(FUNCTION|PROCEDURE|ROUTINE)\b", re.I | re.S)),
+    ("SCHEMA grant",       re.compile(r"^\s*(GRANT|REVOKE)\b.*\bON\s+SCHEMA\b", re.I | re.S)),
+    ("TYPE grant",         re.compile(r"^\s*(GRANT|REVOKE)\b.*\bON\s+(TYPE|DOMAIN)\b", re.I | re.S)),
+]
+
+
+def subclass(stmt):
+    # search, not match: the ownership pattern is mid-statement
+    # ("ALTER TABLE x OWNER TO y"), while the rest anchor themselves
+    # with ^. Order matters - ownership is tested before the grant
+    # patterns so an ALTER ... OWNER TO is never read as a grant.
+    for name, rx in SUBCLASS_RES:
+        if rx.search(stmt):
+            return name
+    return "other privilege"
+
+
 def load(path):
     with open(path, encoding="utf-8") as fh:
         raw = fh.read()
@@ -149,7 +176,7 @@ def main(argv):
     if len(argv) < 3:
         sys.exit("usage: compare-structural.py REFERENCE CANDIDATE [--max-show N]")
     ref_path, cand_path = argv[1], argv[2]
-    max_show = 30
+    max_show = 200
     rest = argv[3:]
     while rest:
         flag = rest.pop(0)
@@ -185,15 +212,26 @@ def main(argv):
     diffs = ([("-", s) for s, n in sorted(only_ref.items()) for _ in range(n)] +
              [("+", s) for s, n in sorted(only_cand.items()) for _ in range(n)])
     by_class = Counter(classify(s) for _, s in diffs)
+    n_ref_only = sum(only_ref.values())
+    n_cand_only = sum(only_cand.values())
 
     print("D privilege/ownership differences: %d" % by_class.get("D", 0))
     print("E schema object differences:       %d" % by_class.get("E", 0))
     print("F unclassified:                    %d" % by_class.get("F", 0))
+    print("reference-only: %d   candidate-only: %d" % (n_ref_only, n_cand_only))
+    print("")
+    print("by object class (reference-only / candidate-only):")
+    groups = {}
+    for sign, stmt in diffs:
+        g = groups.setdefault((classify(stmt), subclass(stmt)), [0, 0])
+        g[0 if sign == "-" else 1] += 1
+    for (cls, sub), (a, b) in sorted(groups.items(), key=lambda kv: (-(kv[1][0] + kv[1][1]), kv[0])):
+        print("  [%s] %-20s %4d / %4d" % (cls, sub, a, b))
     print("")
     print("--- differing statements (- = reference only, + = candidate only) ---")
     for i, (sign, stmt) in enumerate(diffs):
         if i < max_show:
-            print("%s[%s] %s" % (sign, classify(stmt), stmt[:400]))
+            print("%s[%s|%s] %s" % (sign, classify(stmt), subclass(stmt), stmt[:400]))
         elif i == max_show:
             print("  ... %d further statements suppressed; full set is in the artifact"
                   % (len(diffs) - max_show))
