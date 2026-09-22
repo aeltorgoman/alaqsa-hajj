@@ -1,0 +1,375 @@
+# ════════════════════════════════════════════════════════════
+# Room cross-season guard — canonical production db push
+# ════════════════════════════════════════════════════════════
+# Applies the ONE merged room-guard migration through the normal
+# canonical path:
+#
+#   supabase db push --linked
+#
+# Exactly ONE production-mutating command may run, and only after every
+# gate passes. Deliberately absent, and audited for: migration repair ·
+# migration up · manual SQL mutation · rollback · baseline execution ·
+# any operation on a historical migration · any re-application of C6.
+#
+# ⚠️ This migration is EXPECTED to change the database, so "schema
+# unchanged" is the wrong gate. The post-write gate is stricter: the
+# database must have changed by EXACTLY the two functions and two
+# triggers and by nothing else. A dropped policy, a widened grant, an
+# altered column or any extra object fails the run.
+#
+# There is NO automatic rollback. On post-write failure the run fails
+# and preserves evidence; recovery is a human decision.
+#
+# Running it twice is safe: after success the ledger holds 49 rows and
+# nothing is pending, so the BEFORE gates fail and the second run stops
+# before the write.
+
+name: Room guard - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-ROOMGUARD-20260922195044 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-guard-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    env:
+      # Hard-targeted: not an input, so no dispatch can point this
+      # workflow at another project.
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      GUARD_VERSION: "20260922195044"
+      GUARD_FILE: 20260922195044_room_cross_season_guard.sql
+      GUARD_SHA256: 4e704d13adb4494b199dec8b79bc9e5e08443bdd18f63b34a0996bd54b90b397
+      C6_VERSION: "20260922192049"
+      EXPECT_MIGRATIONS: "49"
+      EXPECT_ROWS_BEFORE: "48"
+      EXPECT_LATEST_BEFORE: "20260922192049"
+      TRIGGERS: "trg_reject_cross_season_room,trg_rooms_reject_season_change"
+      FUNCTIONS: "reject_cross_season_room,rooms_reject_season_change_with_occupants"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: room-guard-evidence
+
+    steps:
+      - name: Require explicit confirmation and secrets
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-ROOMGUARD-20260922195044" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          missing=0
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; missing=1; }
+          [ -n "${SUPABASE_DB_PASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; missing=1; }
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Confirmation accepted. Both secrets are present."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          echo "supabase CLI: $v"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          echo "commit=${GITHUB_SHA}" | tee "$OUT/run-sha.txt"
+          echo "cli=$v" | tee -a "$OUT/run-sha.txt"
+
+      # ── GATES 1-3) the repository ──────────────────────────
+      - name: "GATE: repository holds exactly the approved room-guard migration"
+        run: |
+          set -euo pipefail
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_MIGRATIONS" ] || {
+            echo "::error::expected $EXPECT_MIGRATIONS active migrations, found $n"; exit 1; }
+          latest="$(ls supabase/migrations/*.sql | xargs -n1 basename | sort | tail -1)"
+          [ "$latest" = "$GUARD_FILE" ] || {
+            echo "::error::latest local migration is $latest, expected $GUARD_FILE"; exit 1; }
+          # Bind to the exact reviewed bytes of PR #144.
+          echo "${GUARD_SHA256}  supabase/migrations/${GUARD_FILE}" | sha256sum -c - || {
+            echo "::error::the migration file is not the reviewed and merged one"; exit 1; }
+          # This run may not touch C6 or any historical migration.
+          grep -ilE "migration[ _-]?repair|schema_migrations" "supabase/migrations/$GUARD_FILE" && {
+            echo "::error::the migration references the ledger - refusing"; exit 1; } || true
+          echo "49 migrations, latest is the room guard, bytes match the merged file."
+
+      - name: "GATE: hard-targeted project and connection"
+        run: |
+          set -euo pipefail
+          [ "$PROJECT_REF" = "zkucwcnclbfvukhdqhgc" ] || { echo "::error::not the authorized project"; exit 1; }
+          case "$DB_USER" in *"$PROJECT_REF"*) ;; *) echo "::error::db_user does not belong to $PROJECT_REF"; exit 1 ;; esac
+          case "$DB_HOST" in *.pooler.supabase.com) ;; *) echo "::error::db_host is not a Supabase session pooler host"; exit 1 ;; esac
+          getent hosts "$DB_HOST" >/dev/null || { echo "::error::cannot resolve $DB_HOST"; exit 1; }
+          echo "Target: ${DB_HOST}:${DB_PORT} as ${DB_USER} (project ${PROJECT_REF})."
+
+      - name: "GATE: prove the gate sessions are read-only"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          got="$(psql "$URL" -X -q -At -c "$RO" -c "select current_setting('default_transaction_read_only')")"
+          [ "$got" = "on" ] || { echo "::error::could not put the gate session into read-only mode"; exit 1; }
+          set +e
+          err="$(psql "$URL" -X -v VERBOSITY=verbose -At -c "$RO" \
+                   -c "begin; create table _room_guard_readonly_probe(i int); rollback;" 2>&1 >/dev/null)"
+          rc=$?
+          set -e
+          printf '%s\n' "$err" > "$OUT/readonly-control.txt"
+          [ "$rc" -ne 0 ] || { echo "::error::the server ACCEPTED a write in a gate session"; exit 1; }
+          grep -q '25006' "$OUT/readonly-control.txt" || {
+            echo "::error::the write was refused, but not with SQLSTATE 25006"; exit 1; }
+          echo "Gate sessions are read-only; writes refused with SQLSTATE 25006."
+
+      # ── GATE 4) the production ledger is the post-C6 state ─
+      - name: "GATE: production ledger is exactly the post-C6 state"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL') || E'\t'
+                  || coalesce(octet_length(convert_to(statements[1],'UTF8'))::text,'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          c6="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${C6_VERSION}'")"
+          guard="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${GUARD_VERSION}'")"
+          echo "rows=$rows latest=$latest c6=$c6 guard=$guard"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; bad=1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; bad=1; }
+          [ "$c6" -eq 1 ] || { echo "::error::C6 appears $c6 times, expected exactly 1 - C6 must NOT be reapplied"; bad=1; }
+          [ "$guard" -eq 0 ] || { echo "::error::${GUARD_VERSION} already exists - this run would be a repeat"; bad=1; }
+          [ "$bad" -eq 0 ] || exit 1
+          echo "Ledger is the authoritative post-C6 state: 48 rows, latest ${EXPECT_LATEST_BEFORE}."
+
+      # ── GATE 5) production data is clean before we guard it ─
+      - name: "GATE: production holds no cross-season room assignment"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          v="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+                -c "select count(*) from public.passengers p join public.rooms r on r.id = p.room_id where p.season_id <> r.season_id")"
+          d="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+                -c "select count(*) from public.passengers p where p.room_id is not null and not exists (select 1 from public.rooms r where r.id = p.room_id)")"
+          echo "cross_season=$v dangling=$d" | tee "$OUT/violations-before.txt"
+          [ "$v" -eq 0 ] || { echo "::error::$v cross-season assignments exist - the guard would be installed over bad data. Refusing."; exit 1; }
+          [ "$d" -eq 0 ] || { echo "::error::$d passengers reference a nonexistent room. Refusing."; exit 1; }
+          echo "No violations. The guard can be installed without repairing data."
+
+      # ── GATE 6) BEFORE fingerprints, C4/C5 tooling ─────────
+      - name: "GATE: capture BEFORE structural and security fingerprints"
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fingerprint-before.txt"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fingerprint-before.txt"
+          wc -l "$OUT/fingerprint-before.txt"
+          npm run --silent supabase -- link --project-ref "$PROJECT_REF" >/dev/null
+          # --role-only is NEVER used: it can emit role password hashes.
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments -f "$OUT/structural-before.sql"
+          [ -s "$OUT/structural-before.sql" ] || { echo "::error::BEFORE structural dump is empty"; exit 1; }
+
+      # ── GATE 7) exactly one pending, and it is the guard ───
+      - name: "GATE: exactly one pending migration and it is the room guard"
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- db push --dry-run --linked --output-format json \
+            > "$OUT/plan-before.json" 2> "$OUT/plan-before.err" || true
+          echo "--- stdout ---"; cat "$OUT/plan-before.json"
+          echo "--- stderr ---"; cat "$OUT/plan-before.err"
+          python3 supabase/cutover-candidate/tools/assert-push-plan.py plan "$OUT/plan-before.json" "$GUARD_FILE"
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- db push --linked --output-format json \
+            > "$OUT/push.json" 2> "$OUT/push.err"
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+
+      # ── POST-WRITE. No rollback, ever. ─────────────────────
+      - name: "POST: ledger 48 -> 49, the 48 originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL') || E'\t'
+                  || coalesce(octet_length(convert_to(statements[1],'UTF8'))::text,'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          dup="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${GUARD_VERSION}'")"
+          c6="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${C6_VERSION}'")"
+          echo "rows=$rows latest=$latest guard_rows=$dup c6_rows=$c6"
+          bad=0
+          [ "$rows" -eq 49 ] || { echo "::error::ledger holds $rows rows, expected 49"; bad=1; }
+          [ "$latest" = "$GUARD_VERSION" ] || { echo "::error::latest is $latest, expected $GUARD_VERSION"; bad=1; }
+          [ "$dup" -eq 1 ] || { echo "::error::the guard appears $dup times, expected exactly once"; bad=1; }
+          [ "$c6" -eq 1 ] || { echo "::error::C6 appears $c6 times, expected exactly once - it must not have been reapplied"; bad=1; }
+          grep -v "^${GUARD_VERSION}	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 48 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the database changed by the four approved objects and nothing else"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fingerprint-after.txt"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fingerprint-after.txt"
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments -f "$OUT/structural-after.sql"
+          rc1=0
+          python3 supabase/cutover-candidate/tools/assert-room-guard-delta.py fingerprint \
+            "$OUT/fingerprint-before.txt" "$OUT/fingerprint-after.txt" | tee "$OUT/delta-fingerprint.txt" || rc1=$?
+          rc2=0
+          python3 supabase/cutover-candidate/tools/assert-room-guard-delta.py structural \
+            "$OUT/structural-before.sql" "$OUT/structural-after.sql" | tee "$OUT/delta-structural.txt" || rc2=$?
+          # Kept for the record: the raw Level 1 report, which will
+          # legitimately report the four new objects as differences.
+          python3 supabase/baseline-candidate/tools/compare-structural.py \
+            "$OUT/structural-before.sql" "$OUT/structural-after.sql" > "$OUT/structural-report.txt" 2>&1 || true
+          if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ]; then echo PASS > "$OUT/status-delta.txt"; else echo FAIL > "$OUT/status-delta.txt"; fi
+          echo "Bounded-delta verdict: $(cat "$OUT/status-delta.txt")"
+
+      - name: "POST: targeted guard verification"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          trg="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and not t.tgisinternal and t.tgenabled::text = 'O' and t.tgname in ('trg_reject_cross_season_room','trg_rooms_reject_season_change')")"
+          fn="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef and p.proname in ('reject_cross_season_room','rooms_reject_season_change_with_occupants')")"
+          v="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select count(*) from public.passengers p join public.rooms r on r.id = p.room_id where p.season_id <> r.season_id")"
+          d="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select count(*) from public.passengers p where p.room_id is not null and not exists (select 1 from public.rooms r where r.id = p.room_id)")"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select t.tgname || ' on ' || c.relname || ' enabled=' || t.tgenabled::text from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and t.tgname in ('trg_reject_cross_season_room','trg_rooms_reject_season_change') order by 1" | tee "$OUT/guard-objects.txt"
+          echo "enabled_triggers=$trg secdef_functions=$fn cross_season=$v dangling=$d" | tee "$OUT/violations-after.txt"
+          bad=0
+          [ "$trg" -eq 2 ] || { echo "::error::$trg of 2 guard triggers exist and are enabled"; bad=1; }
+          [ "$fn" -eq 2 ] || { echo "::error::$fn of 2 SECURITY DEFINER guard functions exist"; bad=1; }
+          [ "$v" -eq 0 ] || { echo "::error::$v cross-season assignments exist after the push"; bad=1; }
+          [ "$d" -eq 0 ] || { echo "::error::$d dangling room references exist after the push"; bad=1; }
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-guard.txt"; else echo FAIL > "$OUT/status-guard.txt"; fi
+          echo "Guard verdict: $(cat "$OUT/status-guard.txt")"
+
+      - name: "POST: zero pending migrations"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- db push --dry-run --linked --output-format json \
+            > "$OUT/plan-after.json" 2> "$OUT/plan-after.err" || true
+          echo "--- stdout ---"; cat "$OUT/plan-after.json"
+          rc=0
+          python3 supabase/cutover-candidate/tools/assert-push-plan.py plan "$OUT/plan-after.json" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-pending.txt"; else echo FAIL > "$OUT/status-pending.txt"; fi
+          echo "Pending verdict: $(cat "$OUT/status-pending.txt")"
+
+      - name: "Room guard verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          bad=0
+          for k in ledger delta guard pending; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::error::no verdict recorded for $k"; bad=1; continue; fi
+            v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::post-write verification FAILED. Evidence is preserved in the artifact."
+            echo "::error::NO rollback has been attempted and none is authorized. Escalate to a human."
+            echo FAIL > "$OUT/verdict.txt"; exit 1
+          fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Room guard applied: ledger 48 -> 49, exactly four new objects, nothing pending."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          {
+            echo "run_id=${GITHUB_RUN_ID:-?} attempt=${GITHUB_RUN_ATTEMPT:-?}"
+            echo "commit=${GITHUB_SHA:-?}"
+            echo "project=${PROJECT_REF} endpoint=${DB_HOST}:${DB_PORT} user=${DB_USER}"
+            echo "migration=${GUARD_FILE}"
+            echo "files:"; ls -la "$OUT" || true
+          } > "$OUT/run-summary.txt"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|SCRAM-SHA-256\\\$|md5[0-9a-f]{32}|postgres(ql)?://[^ ]*:[^ ]*@|PASSWORD '" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload room guard evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-guard-canonical-push
+          path: room-guard-evidence
+          if-no-files-found: error
