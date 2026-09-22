@@ -39,7 +39,14 @@ _L1 = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "compare-structural.py")
 _spec = importlib.util.spec_from_file_location("compare_structural", _L1)
 _mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+# Load without leaving a __pycache__ beside the comparator: this
+# tool is read-only with respect to the repository it inspects.
+_prev = sys.dont_write_bytecode
+sys.dont_write_bytecode = True
+try:
+    _spec.loader.exec_module(_mod)
+finally:
+    sys.dont_write_bytecode = _prev
 load = _mod.load
 
 FUNCS = ("reject_cross_season_room",
