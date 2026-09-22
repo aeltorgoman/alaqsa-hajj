@@ -1,0 +1,23 @@
+-- ════════════════════════════════════════════════════════════
+-- مِرساةُ توافقٍ مع السجلّ — وليست هجرة
+-- LEDGER COMPATIBILITY ANCHOR — NOT a migration
+-- ════════════════════════════════════════════════════════════
+-- version : 20260818103237
+-- name    : s1_resource_ordering
+--
+-- هذا الملفُّ **لا يفعل شيئاً** عن قصد، ولا يجوز أن يحوي SQL.
+--
+-- This file deliberately does NOTHING, and no SQL may ever be added
+-- to it. It exists for one reason: the Supabase CLI matches local
+-- migrations to the remote ledger by VERSION STRING ALONE, so a
+-- version present remotely must also exist locally or every CLI
+-- history operation reports a conflict.
+--
+-- The schema this version once created is reproduced in full by the
+-- proven V1 baseline, which runs after every anchor. The original SQL
+-- is preserved as evidence:
+--   · the applied remote payload  — docs/migration-recovery/2026-09-21/final/statement-payloads.jsonl
+--   · the repository file         — supabase/migrations-archive/ (created at cutover)
+--
+-- Adding SQL here would execute it on every fresh rebuild BEFORE the
+-- baseline, against an empty database, and would break the proof.
