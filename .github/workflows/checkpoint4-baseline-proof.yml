@@ -113,8 +113,20 @@ jobs:
           [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
           psql --version
           # 37 historical migrations must be present and untouched.
+          # The count is read from the repository, not hardcoded. Before
+          # the Checkpoint 5 cutover this is the 37 historical
+          # migrations; after it, the 46 ledger anchors plus the V1
+          # baseline. Either way the working tree must match the index
+          # exactly, and the number is carried to the restore step so a
+          # lost or added file is still caught.
           n="$(ls supabase/migrations/*.sql | wc -l)"
-          [ "$n" -eq 37 ] || { echo "::error::expected 37 historical migrations, found $n"; exit 1; }
+          g="$(git ls-files -- 'supabase/migrations/*.sql' | wc -l)"
+          [ "$n" -gt 0 ] && [ "$n" -eq "$g" ] || {
+            echo "::error::supabase/migrations holds $n files but the index has $g"; exit 1; }
+          git diff --quiet -- supabase/migrations || {
+            echo "::error::supabase/migrations is dirty before the run"; exit 1; }
+          echo "$n" > /tmp/active-migrations-count
+          echo "$n active migrations present and matching the index."
           echo "$n historical migrations present."
 
       # ── Prove the comparators before trusting them ─────────
@@ -772,10 +784,12 @@ jobs:
             rmdir supabase/migrations 2>/dev/null || true
             mv supabase/_migrations_held_aside supabase/migrations
           fi
+          want="$(cat /tmp/active-migrations-count 2>/dev/null || echo 0)"
           n="$(ls supabase/migrations/*.sql | wc -l)"
-          [ "$n" -eq 37 ] || { echo "::error::historical migrations not intact: $n"; exit 1; }
-          git diff --quiet -- supabase/migrations || { echo "::error::historical migrations modified"; exit 1; }
-          echo "37 historical migrations intact and unmodified."
+          [ "$want" -gt 0 ] && [ "$n" -eq "$want" ] || {
+            echo "::error::active migrations not intact: expected $want, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::active migrations modified"; exit 1; }
+          echo "$n active migrations intact and unmodified."
 
       # ── STAGE H) artifact safety ───────────────────────────
       - name: Scan artifacts for secret-like material

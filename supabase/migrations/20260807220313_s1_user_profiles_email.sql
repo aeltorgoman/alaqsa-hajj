@@ -2,8 +2,8 @@
 -- مِرساةُ توافقٍ مع السجلّ — وليست هجرة
 -- LEDGER COMPATIBILITY ANCHOR — NOT a migration
 -- ════════════════════════════════════════════════════════════
--- version : 20260802022040
--- name    : portal_active_season_only
+-- version : 20260807220313
+-- name    : s1_user_profiles_email
 --
 -- هذا الملفُّ **لا يفعل شيئاً** عن قصد، ولا يجوز أن يحوي SQL.
 --

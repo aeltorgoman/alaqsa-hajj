@@ -2,8 +2,8 @@
 -- مِرساةُ توافقٍ مع السجلّ — وليست هجرة
 -- LEDGER COMPATIBILITY ANCHOR — NOT a migration
 -- ════════════════════════════════════════════════════════════
--- version : 20260802022040
--- name    : portal_active_season_only
+-- version : 20260730102529
+-- name    : unique_passenger_per_financial_group
 --
 -- هذا الملفُّ **لا يفعل شيئاً** عن قصد، ولا يجوز أن يحوي SQL.
 --
