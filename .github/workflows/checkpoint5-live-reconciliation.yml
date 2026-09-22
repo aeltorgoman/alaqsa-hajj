@@ -1,0 +1,374 @@
+# ════════════════════════════════════════════════════════════
+# Checkpoint 5 — THE live ledger reconciliation
+# ════════════════════════════════════════════════════════════
+# This is the ONLY workflow in this repository that is permitted to
+# write to the production Supabase project, and it may perform exactly
+# ONE mutation, hard-coded, with no dynamic version and no fallback:
+#
+#   supabase migration repair --status applied 20260922120000 --linked
+#
+# That command issues BEGIN, one
+#   INSERT ... ON CONFLICT (version) DO UPDATE SET name, statements
+# and COMMIT. It parses supabase/migrations/20260922120000_*.sql into a
+# text[] and STORES it. It executes no migration SQL. Proved from the
+# CLI source and by execution in Checkpoint 5.
+#
+# Everything else here is a read-only gate. If any gate fails the run
+# stops BEFORE the mutation.
+#
+# Deliberately absent, and audited for on every run:
+#   db push · migration up · repair-all · --status reverted ·
+#   repair of any historical version · manual SQL mutation ·
+#   baseline SQL execution · schema or data mutation · rollback
+#
+# There is NO automatic rollback. If post-verification fails the run
+# fails and preserves evidence; recovery is a human decision.
+#
+# Running it twice is safe: after a successful run the ledger holds 47
+# rows and version 20260922120000 exists, so the pre-write gates fail
+# and the second run stops before mutating anything.
+
+name: Checkpoint 5 - LIVE ledger reconciliation (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type RECONCILE-20260922120000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+# One at a time, and never cancel a run that may be mid-write.
+concurrency:
+  group: checkpoint5-live-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+
+    env:
+      # Hard-targeted. Not an input, so no dispatch can point this
+      # workflow at another project.
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      BASELINE_VERSION: "20260922120000"
+      BASELINE_FILE: 20260922120000_v1_baseline.sql
+      BASELINE_SHA256: 80fbdb11640b4695a184f62a50573e47efc2c2a0dcc69abacce3cccf3a4e6350
+      EXPECT_ROWS_BEFORE: "46"
+      EXPECT_LATEST_BEFORE: "20260921141422"
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: reconciliation-evidence
+
+    steps:
+      # ── 0) human confirmation and secrets ──────────────────
+      - name: Require explicit confirmation and secrets
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "RECONCILE-20260922120000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          missing=0
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; missing=1; }
+          [ -n "${SUPABASE_DB_PASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; missing=1; }
+          [ "$missing" -eq 0 ] || exit 1
+          # Values are never echoed; only their presence is reported.
+          echo "Confirmation accepted. Both secrets are present."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          echo "supabase CLI: $v"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          python3 --version
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+
+      # ── GATE 1-4) the repository must be in the cutover state ─
+      - name: "GATE: repository cutover state"
+        run: |
+          set -euo pipefail
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq 47 ] || { echo "::error::expected 47 active migrations, found $n"; exit 1; }
+          b="$(ls supabase/migrations/${BASELINE_FILE} 2>/dev/null | wc -l)"
+          [ "$b" -eq 1 ] || { echo "::error::${BASELINE_FILE} is not present in the active path"; exit 1; }
+          a="$(ls supabase/migrations/*.sql | grep -vc "${BASELINE_VERSION}_v1_baseline")"
+          [ "$a" -eq 46 ] || { echo "::error::expected 46 anchors, found $a"; exit 1; }
+          got="$(sha256sum "supabase/migrations/${BASELINE_FILE}" | cut -d' ' -f1)"
+          [ "$got" = "$BASELINE_SHA256" ] || {
+            echo "::error::active baseline sha256 mismatch: expected $BASELINE_SHA256, got $got"; exit 1; }
+          got2="$(sha256sum supabase/baseline/v1/v1_baseline.sql | cut -d' ' -f1)"
+          [ "$got2" = "$BASELINE_SHA256" ] || {
+            echo "::error::canonical baseline sha256 mismatch"; exit 1; }
+          python3 supabase/cutover-candidate/tools/verify-cutover.py .
+          echo "47 active migrations, 46 anchors, 1 baseline, hashes verified."
+
+      # ── GATE 5) hard-targeted project ───────────────────────
+      - name: "GATE: project ref and connection target"
+        run: |
+          set -euo pipefail
+          [ "$PROJECT_REF" = "zkucwcnclbfvukhdqhgc" ] || { echo "::error::project ref is not the authorized project"; exit 1; }
+          case "$DB_USER" in
+            *"$PROJECT_REF"*) ;;
+            *) echo "::error::db_user does not belong to $PROJECT_REF"; exit 1 ;;
+          esac
+          case "$DB_HOST" in
+            *.pooler.supabase.com) ;;
+            *) echo "::error::db_host is not a Supabase session pooler host"; exit 1 ;;
+          esac
+          getent hosts "$DB_HOST" >/dev/null || { echo "::error::cannot resolve $DB_HOST"; exit 1; }
+          echo "Target: ${DB_HOST}:${DB_PORT} as ${DB_USER} (project ${PROJECT_REF})."
+
+      # ── Remote read-only proof, for every gate query ────────
+      - name: "GATE: prove the gate sessions are read-only"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          got="$(psql "$URL" -X -q -At -c "$RO" -c "select current_setting('default_transaction_read_only')")"
+          [ "$got" = "on" ] || { echo "::error::could not put the gate session into read-only mode"; exit 1; }
+          set +e
+          err="$(psql "$URL" -X -v VERBOSITY=verbose -At -c "$RO" \
+                   -c "begin; create table _cp5_readonly_probe(i int); rollback;" 2>&1 >/dev/null)"
+          rc=$?
+          set -e
+          printf '%s\n' "$err" > "$OUT/readonly-control.txt"
+          [ "$rc" -ne 0 ] || { echo "::error::the server ACCEPTED a write in a gate session"; exit 1; }
+          grep -q '25006' "$OUT/readonly-control.txt" || {
+            echo "::error::the write was refused, but not with SQLSTATE 25006"; cat "$OUT/readonly-control.txt"; exit 1; }
+          echo "Gate sessions are read-only; the server refuses writes with SQLSTATE 25006."
+
+      # ── GATE 6-7) the live ledger, exactly as expected ──────
+      - name: "GATE: live ledger shape and evidence match (BEFORE)"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL') || E'\t'
+                  || coalesce(octet_length(convert_to(statements[1],'UTF8'))::text,'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          wc -l "$OUT/ledger-before.tsv"
+          python3 supabase/cutover-candidate/tools/assert-ledger-matches-evidence.py \
+            "$OUT/ledger-before.tsv" \
+            --expect-rows "$EXPECT_ROWS_BEFORE" \
+            --expect-latest "$EXPECT_LATEST_BEFORE" \
+            --expect-absent "$BASELINE_VERSION"
+
+      # ── GATE 8) BEFORE structural and security fingerprint ──
+      - name: "GATE: capture BEFORE fingerprints"
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fingerprint-before.txt"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fingerprint-before.txt"
+          wc -l "$OUT/fingerprint-before.txt"
+          # --role-only is NEVER used: it can emit role password hashes.
+          npm run --silent supabase -- link --project-ref "$PROJECT_REF" >/dev/null
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments -f "$OUT/structural-before.sql"
+          [ -s "$OUT/structural-before.sql" ] || { echo "::error::BEFORE structural dump is empty"; exit 1; }
+          wc -c "$OUT/structural-before.sql"
+
+      # ── GATE 9) exactly one pending migration, the baseline ─
+      - name: "GATE: exactly one pending migration"
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # --dry-run prints the plan and applies nothing.
+          npm run --silent supabase -- db push --dry-run --linked --output-format json \
+            > "$OUT/plan-before.json" 2> "$OUT/plan-before.err" || true
+          echo "--- stdout ---"; cat "$OUT/plan-before.json"
+          echo "--- stderr ---"; cat "$OUT/plan-before.err"
+          python3 supabase/cutover-candidate/tools/assert-live-reconciliation.py plan-before "$OUT/plan-before.json"
+          echo "Exactly one migration is pending, and it is the baseline."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # Hard-coded version. No fallback. No retry by another means.
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: register the baseline as applied"
+        id: live_write
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- migration repair --status applied 20260922120000 --linked --output-format json \
+            > "$OUT/repair.json" 2> "$OUT/repair.err"
+          echo "--- stdout ---"; cat "$OUT/repair.json"
+          echo "--- stderr ---"; cat "$OUT/repair.err"
+          python3 supabase/cutover-candidate/tools/assert-live-reconciliation.py repair "$OUT/repair.json"
+
+      # ── POST-WRITE verification. No rollback, ever. ─────────
+      - name: "POST: ledger 46 -> 47, the 46 originals untouched"
+        if: always() && steps.live_write.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL') || E'\t'
+                  || coalesce(octet_length(convert_to(statements[1],'UTF8'))::text,'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          dup="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${BASELINE_VERSION}'")"
+          echo "rows=$rows latest=$latest baseline_rows=$dup"
+          bad=0
+          [ "$rows" -eq 47 ] || { echo "::error::ledger holds $rows rows, expected 47"; bad=1; }
+          [ "$latest" = "$BASELINE_VERSION" ] || { echo "::error::latest is $latest, expected $BASELINE_VERSION"; bad=1; }
+          [ "$dup" -eq 1 ] || { echo "::error::baseline appears $dup times, expected exactly once"; bad=1; }
+          # The 46 originals must be byte-for-byte what they were.
+          grep -v "^${BASELINE_VERSION}	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 46 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          python3 supabase/cutover-candidate/tools/assert-ledger-matches-evidence.py \
+            "$OUT/ledger-after-originals.tsv" --expect-rows 46 --expect-latest "$EXPECT_LATEST_BEFORE" \
+            --expect-absent "$BASELINE_VERSION" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: structural and security state unchanged"
+        if: always() && steps.live_write.outcome != 'skipped'
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fingerprint-after.txt"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fingerprint-after.txt"
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments -f "$OUT/structural-after.sql"
+
+          rc1=0
+          python3 supabase/baseline-candidate/tools/compare-fingerprints.py \
+            "$OUT/fingerprint-before.txt" "$OUT/fingerprint-after.txt" \
+            --label "Security fingerprint BEFORE vs AFTER" \
+            | tee "$OUT/security-report.txt" || rc1=$?
+          rc2=0
+          python3 supabase/baseline-candidate/tools/compare-structural.py \
+            "$OUT/structural-before.sql" "$OUT/structural-after.sql" \
+            | tee "$OUT/structural-report.txt" || rc2=$?
+          if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ]; then echo PASS > "$OUT/status-schema.txt"; else echo FAIL > "$OUT/status-schema.txt"; fi
+          echo "Schema/security verdict: $(cat "$OUT/status-schema.txt")"
+
+      - name: "POST: the baseline SQL did not execute"
+        if: always() && steps.live_write.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          # The baseline creates schema objects. If it had run, the
+          # stored statements would be accompanied by NEW objects and the
+          # fingerprints above would differ. Recorded here explicitly.
+          n="$(psql "$URL" -X -q -At -c "$RO" -c \
+            "select count(*) from pg_class c join pg_namespace s on s.oid=c.relnamespace where s.nspname='public'")"
+          st="$(psql "$URL" -X -q -At -c "$RO" -c \
+            "select coalesce(array_length(statements,1),0) from supabase_migrations.schema_migrations where version='${BASELINE_VERSION}'")"
+          echo "public relations: $n | statements stored on the baseline row: $st"
+          bad=0
+          [ "$st" -gt 0 ] || { echo "::error::the baseline row carries no statements - the repair did not record it"; bad=1; }
+          if [ "$(cat "$OUT/status-schema.txt" 2>/dev/null)" = "PASS" ]; then
+            echo "The baseline SQL did NOT execute: its statements are stored as data, and the"
+            echo "structural and security fingerprints are unchanged."
+          else
+            echo "::error::schema/security comparison did not pass - cannot certify that the baseline SQL did not execute"
+            bad=1
+          fi
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-notexecuted.txt"; else echo FAIL > "$OUT/status-notexecuted.txt"; fi
+
+      - name: "POST: zero pending migrations"
+        if: always() && steps.live_write.outcome != 'skipped'
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- db push --dry-run --linked --output-format json \
+            > "$OUT/plan-after.json" 2> "$OUT/plan-after.err" || true
+          echo "--- stdout ---"; cat "$OUT/plan-after.json"
+          rc=0
+          python3 supabase/cutover-candidate/tools/assert-live-reconciliation.py plan-after "$OUT/plan-after.json" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-pending.txt"; else echo FAIL > "$OUT/status-pending.txt"; fi
+          echo "Pending verdict: $(cat "$OUT/status-pending.txt")"
+
+      - name: "Reconciliation verdict (fails the run)"
+        if: always() && steps.live_write.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          bad=0
+          for k in ledger schema notexecuted pending; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::error::no verdict recorded for $k"; bad=1; continue; fi
+            v="$(cat "$f")"; printf '%-14s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::post-write verification FAILED. Evidence is preserved in the artifact."
+            echo "::error::NO rollback has been attempted and none is authorized. Escalate to a human."
+            exit 1
+          fi
+          echo "Checkpoint 5 live reconciliation verified: ledger 46 -> 47, schema and security unchanged."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          {
+            echo "run_id=${GITHUB_RUN_ID:-?} attempt=${GITHUB_RUN_ATTEMPT:-?}"
+            echo "commit=${GITHUB_SHA:-?}"
+            echo "project=${PROJECT_REF} endpoint=${DB_HOST}:${DB_PORT} user=${DB_USER}"
+            echo "baseline=${BASELINE_VERSION} sha256=${BASELINE_SHA256}"
+            echo "files:"; ls -la "$OUT" || true
+          } > "$OUT/run-summary.txt"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|SCRAM-SHA-256\\\$|md5[0-9a-f]{32}|postgres(ql)?://[^ ]*:[^ ]*@|PASSWORD '" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload reconciliation evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkpoint5-live-reconciliation
+          path: reconciliation-evidence
+          if-no-files-found: error
