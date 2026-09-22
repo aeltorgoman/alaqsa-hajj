@@ -14,6 +14,20 @@
 \pset tuples_only on
 \pset format unaligned
 
+-- ⚠️ **يُصيَّر النصُّ في سياق الأسماء الذي سيُنفَّذ فيه.**
+-- `pg_get_expr` (ومن ورائه العرض `pg_policies`) يكتب التعبيرَ وفقَ
+-- `search_path` الجاري: فإن كان `public` في المسار خرجت الدالّةُ
+-- **غيرَ مؤهَّلة** — `has_permission('…')`. وخطُّ الأساس يُطبَّق تحت
+-- `search_path = ''` الذي يضعه `pg_dump`، فلا يُحَلّ الاسمُ ويسقط
+-- التطبيق بـ«function has_permission(text) does not exist».
+-- وهذا بعينه ما أسقط الجولة ٤.
+--
+-- فالتصييرُ هنا تحت المسار الفارغ نفسه، فيخرج كلُّ اسمٍ مؤهَّلاً
+-- (`public.has_permission(...)`) ويطابق بيئةَ التنفيذ بالبناء لا
+-- بالمصادفة. وكلُّ ما يستعمله هذا الملفّ من `pg_catalog` يبقى
+-- متاحاً ضمناً، و`storage.*` مؤهَّلٌ صراحةً أصلاً.
+set search_path = '';
+
 select '-- ═══ storage buckets (application-owned) ═══';
 
 select format(
