@@ -1,0 +1,3 @@
+default_transaction_read_only=on
+ERROR:  25006: cannot execute CREATE TABLE in a read-only transaction
+LOCATION:  PreventCommandIfReadOnly, utility.c:407
