@@ -52,6 +52,7 @@ TRIGGER rooms trg_rooms_apply_capacity md5=cccccccccccccccccccccccccccccccc
 RLS    passengers enabled=true forced=false
 POLICY passengers passengers_read SELECT PERMISSIVE roles=authenticated qual=dddddddddddddddddddddddddddddddd chk=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 GRANT  passengers authenticated=SELECT
+GRANTSEQ passengers_id_seq authenticated=USAGE
 SCHEMA public acl={postgres=UC/postgres,anon=U/postgres}
 DEFACL role=postgres schema=public objtype=r acl={authenticated=arwdDxtm/postgres}
 EXT    pgcrypto schema=extensions
@@ -86,7 +87,31 @@ mutate "default privileges changed"        's/acl={authenticated=arwdDxtm\/postg
 mutate "storage bucket made public"        's/BUCKET docs public=false/BUCKET docs public=true/'
 mutate "storage policy expression changed" 's/qual=ffffffffffffffffffffffffffffffff/qual=11111111111111111111111111111111/'
 mutate "view security_invoker removed"     's/opts=security_invoker=true/opts=-/'
+mutate "sequence USAGE granted to anon"    's/GRANTSEQ passengers_id_seq authenticated=USAGE/GRANTSEQ passengers_id_seq anon=USAGE/'
+mutate "default privileges widened to anon" 's|DEFACL role=postgres schema=public objtype=r acl={authenticated=arwdDxtm/postgres}|DEFACL role=postgres schema=public objtype=r acl={anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres}|'
 mutate "schema ACL widened"                's|SCHEMA public acl={postgres=UC/postgres,anon=U/postgres}|SCHEMA public acl={postgres=UC/postgres,anon=UC/postgres}|'
+
+# ── 2b. the Run #6 shape: inherited default privileges leak ALL to
+#        anon onto every object. Purely ADDITIVE - the reference lines
+#        all survive - so a comparator that only looked for missing
+#        records would have called this equal.
+{ cat "$tmp/ref.txt"
+  echo 'GRANT  passengers anon=SELECT'
+  echo 'GRANT  passengers anon=DELETE'
+  echo 'GRANTSEQ passengers_id_seq anon=USAGE'
+} > "$tmp/inherited.txt"
+expect 1 "L2: purely additive inherited-privilege leak fails closed" \
+  python3 "$FP" "$tmp/ref.txt" "$tmp/inherited.txt" --label "selftest"
+
+# ── 2c. a sequence-grant surplus alone must fail. Before Run #6 the
+#        fingerprint carried no sequence records at all, so 45 surplus
+#        anon sequence grants were invisible to Level 2.
+{ cat "$tmp/ref.txt"; echo 'GRANTSEQ passengers_id_seq anon=UPDATE'; } > "$tmp/seqleak.txt"
+expect 1 "L2: sequence-grant surplus alone fails closed" \
+  python3 "$FP" "$tmp/ref.txt" "$tmp/seqleak.txt" --label "selftest"
+grep -v '^GRANTSEQ' "$tmp/ref.txt" > "$tmp/noseq.txt"
+expect 1 "L2: reference with no GRANTSEQ records fails closed" \
+  python3 "$FP" "$tmp/noseq.txt" "$tmp/noseq.txt" --label "selftest"
 
 # ── 3. a DELETED policy line: MUST FAIL ──
 grep -v '^POLICY' "$tmp/ref.txt" > "$tmp/nopolicy.txt"
@@ -179,6 +204,15 @@ expect 1 "L1: a relaxed NOT NULL fails closed"  python3 "$ST" "$tmp/dump-a.sql" 
 
 sed "s/SET search_path TO 'public', 'pg_temp'/SET search_path TO 'public'/" "$tmp/dump-b.sql" > "$tmp/dump-e.sql"
 expect 1 "L1: a changed function search_path fails closed" python3 "$ST" "$tmp/dump-a.sql" "$tmp/dump-e.sql"
+
+# The Run #6 Level 1 shape: the rebuilt dump carries ALTER DEFAULT
+# PRIVILEGES and GRANT ALL that the live reference does not.
+{ cat "$tmp/dump-b.sql"
+  echo 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon;'
+  echo 'GRANT ALL ON TABLE public.seasons TO anon;'
+  echo 'GRANT ALL ON SEQUENCE public.seasons_id_seq TO anon;'
+} > "$tmp/dump-f.sql"
+expect 1 "L1: inherited default-privilege surplus fails closed" python3 "$ST" "$tmp/dump-a.sql" "$tmp/dump-f.sql"
 
 : > "$tmp/dump-empty.sql"
 expect 1 "L1: empty reference dump fails closed" python3 "$ST" "$tmp/dump-empty.sql" "$tmp/dump-empty.sql"

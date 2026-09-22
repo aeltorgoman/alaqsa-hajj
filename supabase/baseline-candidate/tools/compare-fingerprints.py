@@ -35,12 +35,14 @@ from collections import Counter
 
 KNOWN_KINDS = {
     "COUNT", "COLUMN", "CONSTRAINT", "INDEX", "VIEW", "FUNC", "TRIGGER",
-    "RLS", "POLICY", "GRANT", "SCHEMA", "DEFACL", "EXT", "BUCKET", "STPOL",
+    "RLS", "POLICY", "GRANT", "GRANTSEQ", "SCHEMA", "DEFACL", "EXT", "BUCKET",
+    "STPOL",
 }
 
 # Kinds whose absence would silently gut the proof. If the reference
 # side has zero of these, the capture was broken, not equal.
-REQUIRED_KINDS = {"COLUMN", "FUNC", "RLS", "POLICY", "GRANT", "DEFACL"}
+REQUIRED_KINDS = {"COLUMN", "FUNC", "RLS", "POLICY", "GRANT", "GRANTSEQ",
+                  "DEFACL"}
 
 
 def canon(line):
@@ -106,7 +108,7 @@ def main(argv):
         sys.exit("usage: compare-fingerprints.py REFERENCE CANDIDATE "
                  "[--label L] [--allowlist FILE] [--max-show N]")
     ref_path, cand_path = argv[1], argv[2]
-    label, allow_path, max_show = "Level 2", None, 40
+    label, allow_path, max_show = "Level 2", None, 200
     rest = argv[3:]
     while rest:
         flag = rest.pop(0)
@@ -157,11 +159,18 @@ def main(argv):
     unresolved = [d for d in diffs if d not in allow]
 
     by_kind = Counter(kind_of(line) for _, line in unresolved)
+    # Direction matters more than the total: records present only in the
+    # candidate are privileges the rebuilt database has and the live
+    # reference does not, which is a widening, not a loss.
+    ref_only = Counter(kind_of(l) for sign, l in unresolved if sign == "-")
+    cand_only = Counter(kind_of(l) for sign, l in unresolved if sign == "+")
     print("records compared: %d kinds, %d reference records" % (len(ref_kinds), len(ref)))
     print("adjudicated differences: %d" % len(adjudicated))
-    print("unresolved differences: %d" % len(unresolved))
+    print("unresolved differences: %d  (reference-only %d, candidate-only %d)"
+          % (len(unresolved), sum(ref_only.values()), sum(cand_only.values())))
+    print("  %-10s %8s %8s %8s" % ("kind", "total", "ref-only", "cand-only"))
     for kind, n in sorted(by_kind.items(), key=lambda kv: (-kv[1], kv[0])):
-        print("  %-10s %d" % (kind, n))
+        print("  %-10s %8d %8d %8d" % (kind, n, ref_only.get(kind, 0), cand_only.get(kind, 0)))
 
     for sign, line in adjudicated:
         print("ADJUDICATED %s%s" % (sign, line))
