@@ -117,6 +117,18 @@ jobs:
           [ "$n" -eq 37 ] || { echo "::error::expected 37 historical migrations, found $n"; exit 1; }
           echo "$n historical migrations present."
 
+      # ── Prove the comparators before trusting them ─────────
+      # Runs before anything touches a database, costs seconds, and
+      # needs no credentials. A comparator that cannot fail is not a
+      # control, and Run #5 shipped exactly that: `diff ... || true`,
+      # which recorded 780 and 624 differing lines and reported
+      # success. These fixtures assert both directions - identical
+      # content in a different order must PASS, and each way the
+      # security model can be broken must FAIL.
+      - name: Self-test the Level 1 and Level 2 comparators
+        shell: bash
+        run: bash supabase/baseline-candidate/tools/selftest-comparators.sh
+
       # ── STAGE B) read-only remote capture ──────────────────
       - name: Link project (read-only use)
         shell: bash
@@ -544,14 +556,43 @@ jobs:
           # wrong question, and it is not established to be write-free.
           npm run --silent supabase -- db dump --local --schema public --keep-comments -f "$OUT/fresh1_public.sql"
           diff -u "$OUT/v1_baseline_public.sql" "$OUT/fresh1_public.sql" > "$OUT/level1-structural.diff" || true
-          echo "Level 1 diff lines: $(wc -l < "$OUT/level1-structural.diff")"
+
+          # Run #5 recorded "Level 1 diff lines: 780" and reported
+          # success, because the raw diff was taken with `|| true`. A
+          # line count is not a verdict, and a raw diff between two
+          # pg_dump outputs is dominated by dump metadata and emission
+          # order. The comparator classifies every statement and its
+          # verdict is enforced by the final gate step.
+          rc=0
+          python3 supabase/baseline-candidate/tools/compare-structural.py \
+            "$OUT/v1_baseline_public.sql" "$OUT/fresh1_public.sql" \
+            | tee "$OUT/level1-report.txt" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-level1.txt"; else echo FAIL > "$OUT/status-level1.txt"; fi
+          echo "Level 1 verdict: $(cat "$OUT/status-level1.txt") (raw diff lines: $(wc -l < "$OUT/level1-structural.diff"))"
 
       - name: Level 2 - security fingerprint (mandatory)
         shell: bash
         run: |
           set -euo pipefail
           diff -u "$OUT/live-fingerprint.txt" "$OUT/fresh1-fingerprint.txt" > "$OUT/level2-security.diff" || true
-          echo "Level 2 diff lines: $(wc -l < "$OUT/level2-security.diff")"
+
+          # Run #5 recorded "Level 2 diff lines: 624" out of a ~757 line
+          # fingerprint and reported success. Nearly every line differing
+          # is the signature of an ORDERING difference, not 624 security
+          # regressions: the live database sorts with the ICU
+          # en_US.UTF-8 collation, a local container may sort with libc
+          # C.UTF-8, and the fingerprint is full of Arabic identifiers.
+          # The comparator compares the multiset of records, so ordering
+          # cannot mask or manufacture a difference, and it fails closed
+          # on every record that is genuinely present on one side only.
+          rc=0
+          python3 supabase/baseline-candidate/tools/compare-fingerprints.py \
+            "$OUT/live-fingerprint.txt" "$OUT/fresh1-fingerprint.txt" \
+            --label "Level 2" \
+            --allowlist supabase/baseline-candidate/tools/level2-allowlist.txt \
+            | tee "$OUT/level2-report.txt" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-level2.txt"; else echo FAIL > "$OUT/status-level2.txt"; fi
+          echo "Level 2 verdict: $(cat "$OUT/status-level2.txt") (raw diff lines: $(wc -l < "$OUT/level2-security.diff"))"
 
       # ── STAGE G) compatibility probes (local only) ─────────
       - name: Compatibility probes
@@ -559,8 +600,22 @@ jobs:
         run: |
           set -euo pipefail
           L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-          PGOPTIONS= psql "$L" -f supabase/baseline-candidate/tools/compat-probes.sql > "$OUT/compat-probes.txt" 2>&1
-          tail -40 "$OUT/compat-probes.txt"
+          # Run #5: psql exited 3 and `set -e` killed the step BEFORE the
+          # `tail` that would have shown why, so the only copy of the
+          # diagnosis was inside an artifact. The output is now printed
+          # in full either way, so a run diagnoses itself from its log.
+          rc=0
+          PGOPTIONS= psql "$L" -f supabase/baseline-candidate/tools/compat-probes.sql \
+            > "$OUT/compat-probes.txt" 2>&1 || rc=$?
+          echo "--- compat-probes.txt (psql exit $rc) ---"
+          cat "$OUT/compat-probes.txt"
+          echo "--- end compat-probes.txt ---"
+          if [ "$rc" -eq 0 ] && grep -q 'ALL COMPATIBILITY PROBES PASSED' "$OUT/compat-probes.txt"; then
+            echo PASS > "$OUT/status-probes.txt"
+          else
+            echo FAIL > "$OUT/status-probes.txt"
+          fi
+          echo "Compatibility probes verdict: $(cat "$OUT/status-probes.txt")"
 
       # ── STAGE F) destroy, rebuild #2, determinism ──────────
       - name: Fresh build #2 and determinism check
@@ -577,11 +632,45 @@ jobs:
           PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/seed.sql
           PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fresh2-fingerprint.txt"
           PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fresh2-fingerprint.txt"
-          if ! diff -u "$OUT/fresh1-fingerprint.txt" "$OUT/fresh2-fingerprint.txt" > "$OUT/determinism.diff"; then
-            echo "::error::build #1 and build #2 differ - the candidate is not deterministic"
-            head -60 "$OUT/determinism.diff"; exit 1
+          diff -u "$OUT/fresh1-fingerprint.txt" "$OUT/fresh2-fingerprint.txt" > "$OUT/determinism.diff" || true
+          # Same comparator, no allowlist: two builds of the same
+          # candidate on the same server have nothing to adjudicate.
+          rc=0
+          python3 supabase/baseline-candidate/tools/compare-fingerprints.py \
+            "$OUT/fresh1-fingerprint.txt" "$OUT/fresh2-fingerprint.txt" \
+            --label "Determinism (build #1 vs build #2)" \
+            | tee "$OUT/determinism-report.txt" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-determinism.txt"; else echo FAIL > "$OUT/status-determinism.txt"; fi
+          echo "Determinism verdict: $(cat "$OUT/status-determinism.txt")"
+
+      # ── STAGE E/G verdict — the single enforcement point ───
+      # Level 1, Level 2 and the probes each RECORD a verdict and let
+      # the job continue, so one dispatch exercises every proof
+      # surface instead of stopping at the first. That is only safe
+      # because this step is what decides the run, and it fails if a
+      # verdict is missing as readily as if a verdict is FAIL - a
+      # deleted recording cannot read as success.
+      - name: Equivalence verdict (fails the run)
+        shell: bash
+        run: |
+          set -euo pipefail
+          required="level1 level2 probes determinism"
+          bad=0
+          for k in $required; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then
+              echo "::error::no verdict was recorded for $k - the proof is incomplete"
+              bad=1; continue
+            fi
+            v="$(cat "$f")"
+            printf '%-14s %s\n' "$k" "$v"
+            [ "$v" = "PASS" ] || bad=1
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::Checkpoint 4 is NOT proven - see the classified reports above and in the artifact"
+            exit 1
           fi
-          echo "Deterministic: build #1 and build #2 are identical."
+          echo "All four proof surfaces PASS."
 
       - name: Restore historical migrations and verify untouched
         if: always()
