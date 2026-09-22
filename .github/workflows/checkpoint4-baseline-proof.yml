@@ -759,7 +759,7 @@ jobs:
             echo "::error::Checkpoint 4 is NOT proven - see the classified reports above and in the artifact"
             exit 1
           fi
-          echo "All four proof surfaces PASS."
+          echo "All five proof surfaces PASS."
 
       - name: Restore historical migrations and verify untouched
         if: always()
