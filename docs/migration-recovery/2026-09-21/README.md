@@ -28,7 +28,15 @@ SHA-256 computed **by the database** before being written to disk. Hashes are re
 `02-ledger-export.json` and `03-remote-only-sql.md`, so any file here can be re-verified at any
 time against the live ledger while it still exists.
 
-## Known limitation — full ledger SQL export is PARTIAL
+## CLOSED — the full ledger SQL export is now complete
+
+> **Superseded 2026-09-22.** The limitation described below was real when this directory was
+> written. It is closed. `final/` holds the complete capture: **46 ledger rows, 45 byte-exact
+> statement payloads, 1 explained NULL row, 0 unexplained missing payloads**, every payload
+> SHA-256 verified. See `final/RECONCILIATION.md`. The text below is kept as the historical
+> record of what was outstanding, not as current status.
+
+### Historical note — the export was PARTIAL when first captured
 
 `statements[1]` is preserved **byte-exactly for 3 of the 44** rows that carry SQL:
 
