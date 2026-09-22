@@ -300,6 +300,31 @@ jobs:
             > "$OUT/storage-and-defacl.sql"
           grep -c . "$OUT/storage-and-defacl.sql"
 
+          # ── Qualification guard ────────────────────────────
+          # Run #4 died here in effect, not in pg_dump: the emitter
+          # rendered a storage policy as has_permission('...') because
+          # `public` was on its search_path, while the candidate is
+          # applied under the empty search_path pg_dump sets. The
+          # emitter now renders under search_path = '' so every name
+          # comes out qualified. This proves that held, by listing the
+          # project's own function names and rejecting any call to one
+          # of them that is not preceded by a schema.
+          psql "$URL" -X -q -At -c "$RO" \
+            -c "select proname from pg_catalog.pg_proc
+                 where pronamespace = 'public'::regnamespace and prokind = 'f'" \
+            > /tmp/public-function-names.txt
+          unqualified=0
+          while IFS= read -r fn; do
+            [ -n "$fn" ] || continue
+            if grep -Pn "(?<!\.)\b${fn}\s*\(" "$OUT/storage-and-defacl.sql" >/dev/null 2>&1; then
+              echo "::error::emitted storage SQL calls ${fn}() without a schema - it will not resolve under search_path = ''"
+              grep -Pn "(?<!\.)\b${fn}\s*\(" "$OUT/storage-and-defacl.sql" | head -3
+              unqualified=1
+            fi
+          done < /tmp/public-function-names.txt
+          [ "$unqualified" -eq 0 ] || exit 1
+          echo "Every project-function reference in the emitted storage SQL is schema-qualified."
+
       # ── STAGE C) candidate baseline ────────────────────────
       - name: Show the exact pg_dump that will run
         shell: bash
