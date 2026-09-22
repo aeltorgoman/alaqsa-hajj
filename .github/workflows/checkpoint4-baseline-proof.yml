@@ -47,15 +47,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      # Never echoed. GitHub masks secret values in logs automatically.
+      # ⚠️ PGOPTIONS is deliberately ABSENT from this block.
+      #
+      # Run #3 failed because "-c default_transaction_read_only=on" lived
+      # here, so every step inherited it - including `supabase start`,
+      # whose own connection to the LOCAL database then could not create
+      # its seed table:
+      #
+      #   failed to create seed table: ERROR: cannot execute CREATE SCHEMA
+      #   in a read-only transaction (SQLSTATE 25006)
+      #
+      # The local psql calls were already guarded with `PGOPTIONS=`, but
+      # the CLI invocation was not. The setting was also useless where it
+      # was aimed: the pooler drops the "options" startup parameter, which
+      # is why PR #130 moved remote read-only in band. So it protected
+      # nothing remotely and broke everything locally. It is gone, and
+      # remote read-only is enforced solely by the in-band SET plus the
+      # SQLSTATE 25006 positive control - unchanged and still fail-closed.
+      #
+      # The database password is NOT here either. It is granted per step,
+      # to remote steps only, so no local reconstruction step can reach
+      # the remote database even by accident.
+      #
+      # SUPABASE_ACCESS_TOKEN stays job-level: several CLI subcommands
+      # expect it, and it is a management API token that cannot execute
+      # SQL against the database.
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
-      # psql reads PGPASSWORD. Passing it by environment keeps it off
-      # the command line and out of the process table.
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      # Server-enforced read-only for every psql session below.
-      PGOPTIONS: "-c default_transaction_read_only=on"
       PROJECT_REF: ${{ inputs.project_ref }}
       DB_HOST: ${{ inputs.db_host }}
       DB_PORT: ${{ inputs.db_port }}
@@ -66,6 +83,11 @@ jobs:
       # ── 0) Fail closed if either secret is missing ──────────
       - name: Require secrets
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           missing=0
@@ -98,6 +120,11 @@ jobs:
       # ── STAGE B) read-only remote capture ──────────────────
       - name: Link project (read-only use)
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           # No --skip-pooler: the CLI links through the POOLER by
@@ -190,6 +217,11 @@ jobs:
       # either way - and rc == 0 makes the workflow fail closed.
       - name: Prove the remote session is read-only
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
@@ -228,6 +260,11 @@ jobs:
 
       - name: Capture live fingerprint (Level 2 reference)
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
@@ -242,6 +279,11 @@ jobs:
 
       - name: Capture storage + default privileges as SQL
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           # db dump --schema public does NOT emit these, and they are
@@ -261,6 +303,11 @@ jobs:
       # ── STAGE C) candidate baseline ────────────────────────
       - name: Show the exact pg_dump that will run
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           # --dry-run prints the pg_dump script; evidence that this is a read.
@@ -269,6 +316,11 @@ jobs:
 
       - name: Dump remote public schema
         shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           # --role-only is deliberately NEVER used: it can emit role
@@ -422,15 +474,29 @@ jobs:
           mkdir -p supabase/migrations
           npm run --silent supabase -- start
 
-      - name: Assert local server is PostgreSQL 17
+      - name: Assert local server is PostgreSQL 17 and writable
         shell: bash
         run: |
           set -euo pipefail
           L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-          num="$(PGOPTIONS= psql "$L" -At -c "select current_setting('server_version_num')")"
+          num="$(psql "$L" -X -At -c "select current_setting('server_version_num')")"
           echo "local server_version_num=$num"
           [ "$num" -ge 170000 ] && [ "$num" -lt 180000 ] || {
             echo "::error::local PostgreSQL is not major version 17 - proof aborted"; exit 1; }
+
+          # Mirror image of the remote control, and a regression test for
+          # Run #3: the LOCAL database must be writable, or the baseline
+          # cannot be applied. Asserted two ways - the setting, and a real
+          # DDL write that is rolled back so nothing survives.
+          ro="$(psql "$L" -X -At -c "select current_setting('default_transaction_read_only')")"
+          echo "local default_transaction_read_only=$ro"
+          [ "$ro" = "off" ] || {
+            echo "::error::the LOCAL database is read-only ($ro) - remote read-only state has leaked into local reconstruction"
+            exit 1; }
+          psql "$L" -X -q -v ON_ERROR_STOP=1 \
+            -c "begin; create table _cp4_local_writable(i int); rollback;" || {
+            echo "::error::the LOCAL database refused a write - reconstruction cannot proceed"; exit 1; }
+          echo "Local database is PostgreSQL 17 and writable."
 
       - name: Fresh build #1
         shell: bash
