@@ -279,20 +279,135 @@ jobs:
           cat "$OUT/v1_baseline_public.sql" "$OUT/storage-and-defacl.sql" > "$OUT/v1_baseline_candidate.sql"
           echo "Candidate assembled. It stays OUTSIDE supabase/migrations/."
 
+      # ── Candidate data guard — rewritten after Run #2 ──────
+      # Run #2 failed here on ten hits. Every one was inside a
+      # function body, and one was Arabic prose in a /* */ comment in
+      # record_audit(). None was dumped data: the CLI runs pg_dump
+      # with --schema-only, which emits no table rows at all.
+      #
+      # The guard was not removed - a raw grep simply cannot tell a
+      # data row from an INSERT inside a function body. It is replaced
+      # with a scanner that strips dollar-quoted bodies, line and block
+      # comments, string literals and quoted identifiers, and only then
+      # looks at what is left, which is genuinely top-level SQL.
       - name: Assert candidate carries no business data or secrets
         shell: bash
         run: |
           set -euo pipefail
-          f="$OUT/v1_baseline_candidate.sql"
-          # Only storage.buckets inserts are allowed (application-owned).
-          if grep -inE "^\s*(insert|copy)\s" "$f" | grep -viq "storage.buckets"; then
-            echo "::error::candidate contains data statements outside storage.buckets"
-            grep -inE "^\s*(insert|copy)\s" "$f" | grep -vi "storage.buckets" | head; exit 1
-          fi
-          if grep -qiE "setval\(|PASSWORD '|ROLE .* PASSWORD" "$f"; then
-            echo "::error::candidate contains sequence values or role passwords"; exit 1
-          fi
-          echo "Candidate is schema/security only."
+
+          # Belt and braces: the dump must have been schema-only. If the
+          # CLI ever starts emitting data, this catches it at the source
+          # rather than relying on the scanner alone.
+          grep -q -- "--schema-only" "$OUT/pg_dump-command.txt" || {
+            echo "::error::pg_dump was not invoked with --schema-only"; exit 1; }
+
+          cat > /tmp/candidate_guard.py <<'GUARD_EOF'
+          #!/usr/bin/env python3
+          """Candidate baseline data guard.
+
+          Raw grep over SQL text cannot tell a dumped data row from an INSERT that
+          lives inside a function body or a comment. Run #2 proved that: all ten
+          hits were inside function bodies, one of them Arabic prose in a block
+          comment.
+
+          So this strips what is not top-level SQL - dollar-quoted bodies, line
+          and block comments, string literals and quoted identifiers - and only
+          then looks for data statements. What survives the strip is genuinely
+          top level.
+          """
+          import re, sys
+
+          ALLOWED_INSERT_TARGET = re.compile(r'^\s*insert\s+into\s+"?storage"?\s*\.\s*"?buckets"?', re.I)
+
+          def strip_to_top_level(src: str) -> list[tuple[int, str]]:
+              """Return [(line_no, top_level_text)], blanking everything nested."""
+              out, line_no, i, n = [], 1, 0, len(src)
+              cur = []
+              state = 'code'      # code | line_comment | block_comment | squote | dquote | dollar
+              depth = 0           # block comment nesting (PostgreSQL nests)
+              tag = ''
+              while i < n:
+                  ch = src[i]
+                  if ch == '\n':
+                      out.append((line_no, ''.join(cur)))
+                      cur = []; line_no += 1; i += 1
+                      if state == 'line_comment':
+                          state = 'code'
+                      continue
+                  if state == 'code':
+                      if src.startswith('--', i):
+                          state = 'line_comment'; i += 2; continue
+                      if src.startswith('/*', i):
+                          state = 'block_comment'; depth = 1; i += 2; continue
+                      if ch == "'":
+                          state = 'squote'; i += 1; continue
+                      if ch == '"':
+                          state = 'dquote'; cur.append('"'); i += 1; continue
+                      m = re.match(r'\$([A-Za-z_][A-Za-z0-9_]*)?\$', src[i:])
+                      if m:
+                          state = 'dollar'; tag = m.group(0); i += len(tag); continue
+                      cur.append(ch); i += 1; continue
+                  if state == 'line_comment':
+                      i += 1; continue
+                  if state == 'block_comment':
+                      if src.startswith('/*', i): depth += 1; i += 2; continue
+                      if src.startswith('*/', i):
+                          depth -= 1; i += 2
+                          if depth == 0: state = 'code'
+                          continue
+                      i += 1; continue
+                  if state == 'squote':
+                      if ch == "'":
+                          if src.startswith("''", i): i += 2; continue
+                          state = 'code'; i += 1; continue
+                      i += 1; continue
+                  if state == 'dquote':
+                      if ch == '"':
+                          if src.startswith('""', i): i += 2; continue
+                          state = 'code'; cur.append('"'); i += 1; continue
+                      cur.append(ch); i += 1; continue
+                  if state == 'dollar':
+                      if src.startswith(tag, i):
+                          state = 'code'; i += len(tag); continue
+                      i += 1; continue
+              out.append((line_no, ''.join(cur)))
+              return out
+
+          def main(path: str) -> int:
+              src = open(path, encoding='utf-8', errors='replace').read()
+              stripped = strip_to_top_level(src)
+              findings = []
+              for ln, text in stripped:
+                  t = text.strip()
+                  if not t:
+                      continue
+                  if re.match(r'^copy\b.*\bfrom\s+stdin', t, re.I):
+                      findings.append((ln, 'COPY ... FROM stdin (table data)', text))
+                  elif re.match(r'^insert\s+into\b', t, re.I) and not ALLOWED_INSERT_TARGET.match(t):
+                      findings.append((ln, 'top-level INSERT outside storage.buckets', text))
+                  elif re.search(r'\bsetval\s*\(', t, re.I):
+                      findings.append((ln, 'sequence state (setval)', text))
+                  elif re.search(r'\bpassword\b', t, re.I):
+                      # Strict on purpose: a schema-only baseline of this project has
+                      # no legitimate top-level use of the word. Verified against the
+                      # live catalog - no column in public or storage is named
+                      # anything like "password". String literals are already
+                      # stripped, so a hash can never be printed by this message.
+                      findings.append((ln, 'role password / credential keyword', text))
+              if findings:
+                  print('::error::candidate contains top-level data or secret statements')
+                  for ln, why, text in findings[:40]:
+                      print(f'  line {ln}: {why}: {text.strip()[:140]}')
+                  return 1
+              print('Candidate is schema/security only: no top-level data statements, '
+                    'no sequence state, no role passwords.')
+              return 0
+
+          if __name__ == '__main__':
+              sys.exit(main(sys.argv[1]))
+          GUARD_EOF
+          python3 /tmp/candidate_guard.py "$OUT/v1_baseline_candidate.sql" \
+            | tee "$OUT/candidate-guard.txt"
 
       # ── STAGE D) fresh PostgreSQL 17 build #1 ──────────────
       - name: Start local stack (without the historical chain)
