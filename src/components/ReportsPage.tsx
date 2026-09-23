@@ -308,9 +308,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
   });
 
   // ===== WhatsApp State =====
-  /* ⚠️ مؤقّت — مسار الهجرة الاحتياطيّ فقط.
-     الرمز انتقل إلى أسرار Supabase، وهذان الحقلان يبقيان حتى يُثبت
-     المسار الخادميّ نفسه ميدانياً، ثم يُحذفان مع مسح localStorage. */
   const [waTemplate, setWaTemplate] = useState(() => localStorage.getItem("wa_template") ||
 `السلام عليكم {الاسم}،
 تفاصيل رحلتك:
