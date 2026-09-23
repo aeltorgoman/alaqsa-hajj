@@ -17,7 +17,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
-import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
+import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 import { REPORTS_RESPONSIVE_CSS } from "./reports.responsive";
 
@@ -311,8 +311,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
   /* ⚠️ مؤقّت — مسار الهجرة الاحتياطيّ فقط.
      الرمز انتقل إلى أسرار Supabase، وهذان الحقلان يبقيان حتى يُثبت
      المسار الخادميّ نفسه ميدانياً، ثم يُحذفان مع مسح localStorage. */
-  const [waToken, setWaToken] = useState(() => localStorage.getItem("wa_token") || "");
-  const [waPhoneId, setWaPhoneId] = useState(() => localStorage.getItem("wa_phone_id") || "");
   const [waTemplate, setWaTemplate] = useState(() => localStorage.getItem("wa_template") ||
 `السلام عليكم {الاسم}،
 تفاصيل رحلتك:
@@ -325,62 +323,54 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
   const [waSendDocs, setWaSendDocs] = useState({ permit: true, ticket: true });
   const [waSending, setWaSending] = useState(false);
   const [waResults, setWaResults] = useState<{ name: string; phone: string; status: "success" | "error" | "pending" }[]>([]);
-  const [waShowSettings, setWaShowSettings] = useState(false);
   const [waSelectedIds, setWaSelectedIds] = useState<Set<number>>(new Set());
   const [waSelectMode, setWaSelectMode] = useState<"all" | "select">("all");
 
-  /* ═══ إرسال واتساب — الخادم أولاً، والمتصفّح احتياطاً مؤقّتاً ═══
-     الدالّة الحافّية `whatsapp-send` تحقن رمز Meta من أسرار البنية،
-     فلا يعود الرمز يعيش في المتصفّح. **رسالة واحدة لكل استدعاء**
+  /* ═══ محوُ نسخِ الرمز القديمة من الأجهزة ═══
+     كان الرمز يُحفظ في `localStorage` على كل جهازٍ أُرسل منه، وهو
+     يبقى هناك بعد أن تزول الشيفرةُ التي كتبته. فالحذفُ يقع عند كل
+     فتحٍ للصفحة: تنظيفٌ لا قراءة — القيمةُ القديمة لا تُقرأ ولا
+     تُرسَل ولا تُهاجَر إلى مكانٍ آخر.
+     ويبقى السطران ما بقيت أجهزةٌ لم تفتح الصفحة بعد. */
+  useEffect(() => {
+    try {
+      localStorage.removeItem("wa_token");
+      localStorage.removeItem("wa_phone_id");
+    } catch { /* التخزين غير متاح — لا شيء يُمحى ولا شيء يُعطَّل */ }
+  }, []);
+
+  /* ═══ إرسال واتساب — الخادم وحده ═══
+     `whatsapp-send` تحقن رمز Meta من أسرار البنية، فلا رمزَ في
+     المتصفّح ولا نداءَ إلى Meta منه. **رسالة واحدة لكل استدعاء**
      عمداً: الحلقة والتقدّم يبقيان هنا، فلا سقف زمنيّ على الخادم
      ولا تضيع حالة الصفوف الحيّة.
 
-     والاحتياطيّ يعمل فقط ما دام الموظّف يحمل رمزاً محلّياً — وهو
-     شبكة أمان الهجرة، تُحذف بعد التحقّق الميدانيّ. */
+     ولا مسارَ احتياطيّ: احتياطيٌّ في المتصفّح يعني رمزاً في
+     المتصفّح، وهو بعينه ما جاء هذا العمل ليُنهيه. فإخفاقُ الخادم
+     إخفاقٌ يُعلَن، لا بابٌ خلفيٌّ يُسلَك. */
   const waSendServer = async (payload: Record<string, unknown>): Promise<boolean> => {
     const { data, error } = await supabase.functions.invoke("whatsapp-send", { body: payload });
     if (error) return false;
     return (data as { ok?: boolean } | null)?.ok === true;
   };
 
-  /* المسار القديم — يُستعمل فقط إن فشل الخادم ووُجد رمز محلّي */
-  const waSendLegacy = async (payload: Record<string, unknown>): Promise<boolean> => {
-    if (!waToken || !waPhoneId) return false;
-    try {
-      const res = await fetch(`https://graph.facebook.com/v18.0/${waPhoneId}/messages`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${waToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      return res.ok;
-    } catch { return false; }
-  };
-
-  /** نصّ إلى حاجّ — الخادم يتحقّق من الحاجّ ورقمه وموسمه، ثم الاحتياطيّ.
+  /** نصّ إلى حاجّ — الخادم يتحقّق من الحاجّ ورقمه وموسمه.
       والرقمُ من سجلّ الحاجّ لا من حقلٍ حرّ: الدالّة لا تقبل غيره. */
   const waSendText = async (p: Passenger, text: string): Promise<boolean> => {
     const phone = (p.phone || "").replace(/\D/g, "");
     if (!phone) return false;
-    if (await waSendServer({ kind: "text", to: phone, passengerId: p.id, text })) return true;
-    return waSendLegacy({ messaging_product: "whatsapp", to: phone, type: "text", text: { body: text } });
+    return waSendServer({ kind: "text", to: phone, passengerId: p.id, text });
   };
 
-  /** مستند حاجّ — الخادم يوقّع الرابط بنفسه بعد التحقّق من الموسم.
-      والاحتياطيّ وحده هو الذي يوقّع من المتصفّح كما كان. */
+  /** مستند حاجّ — الخادم يقرأ مفتاحه من السجلّ ويوقّعه بنفسه بعد
+      التحقّق من الموسم ومن أن الرقم رقمُ صاحبه. فلا يُوقَّع رابطٌ
+      في المتصفّح ولا يمرّ مفتاحُ مستندٍ فيه. */
   const waSendDoc = async (
-    p: Passenger, docType: "hajj_permit" | "flight_ticket", caption: string, stored: string | null,
+    p: Passenger, docType: "hajj_permit" | "flight_ticket",
   ): Promise<boolean> => {
     const phone = (p.phone || "").replace(/\D/g, "");
     if (!phone) return false;
-    if (await waSendServer({ kind: "document", to: phone, passengerId: p.id, docType })) return true;
-    const path = docKey(stored);
-    if (!path) return false;
-    const { data } = await supabase.storage.from("passengers-docs").createSignedUrl(path, DOC_TTL.whatsapp);
-    if (!data?.signedUrl) return false;
-    return waSendLegacy({
-      messaging_product: "whatsapp", to: phone, type: "document",
-      document: { link: data.signedUrl, caption },
-    });
+    return waSendServer({ kind: "document", to: phone, passengerId: p.id, docType });
   };
 
   // الأعمدة لتقرير الحجاج
@@ -2209,32 +2199,19 @@ const getReportAirlineLogo = (airline: string): string | null => {
           {/* ===== WhatsApp ===== */}
           {activeReport === "whatsapp" && (
             <>
-              {/* إعدادات API */}
+              {/* حالةُ الإرسال — وصفٌ لا ادّعاء.
+                  لا تعرف الواجهةُ أَضُبطت أسرارُ واتساب على الخادم
+                  أم لا، ولا ينبغي أن تعرف: كشفُ حالة إعداد الخادم
+                  للمتصفّح لإضاءة نقطةٍ خضراء إفشاءٌ بلا مقابل.
+                  فتقول أين يجري الإرسال، ولا تزعم أنه جاهز. */}
               <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#25D366" }} />
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>الإرسال عبر الخادم ✔</span>
-                  </div>
-                  <button onClick={() => setWaShowSettings(p => !p)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--line)", background: "var(--bg-2)", cursor: "pointer" }}>
-                    {waShowSettings ? "إخفاء" : "إعدادات API"}
-                  </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--text-muted)", flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>إرسال واتساب مُدار عبر الخادم</span>
                 </div>
-                {waShowSettings && (
-                  <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--warning)", marginBottom: 4, lineHeight: 1.5 }}>
-                        ⚠️ رمز احتياطيّ مؤقّت — لم يعد مطلوباً للإرسال.
-                        <br />الرمز الآن على الخادم، وهذا الحقل يُحذف بعد التحقّق.
-                      </div>
-                      <input value={waToken} onChange={e => { setWaToken(e.target.value); localStorage.setItem("wa_token", e.target.value); }} placeholder="EAAxxxxx..." style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 11, fontFamily: "monospace", boxSizing: "border-box" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Phone Number ID</div>
-                      <input value={waPhoneId} onChange={e => { setWaPhoneId(e.target.value); localStorage.setItem("wa_phone_id", e.target.value); }} placeholder="1234567890" style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 11, fontFamily: "monospace", boxSizing: "border-box" }} />
-                    </div>
-                  </div>
-                )}
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.8 }}>
+                  لا تُضبَط بيانات واتساب من هنا. إعدادُها على الخادم، ولا يُحفَظ منها شيءٌ في المتصفّح.
+                </div>
               </div>
 
               {/* نص الرسالة */}
@@ -2359,11 +2336,11 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     if (ok) {
                       // بعت التصريح لو مختار
                       if (waSendDocs.permit && p.hajj_permit_url) {
-                        await waSendDoc(p, "hajj_permit", "تصريح السفر", p.hajj_permit_url);
+                        await waSendDoc(p, "hajj_permit");
                       }
                       // بعت التذكرة لو مختارة
                       if (waSendDocs.ticket && p.flight_ticket_url) {
-                        await waSendDoc(p, "flight_ticket", "تذكرة الطيران", p.flight_ticket_url);
+                        await waSendDoc(p, "flight_ticket");
                       }
                       setWaResults(prev => prev.map((r, idx) => idx === i ? { ...r, status: "success" as const } : r));
                     } else {
