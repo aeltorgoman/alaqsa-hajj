@@ -45,7 +45,8 @@ supabase/
     ├── user-admin/                                   إنشاء المستخدمين وتعديلهم وحذفهم
     ├── Scan-passport/                                استخراج بيانات المستندات
     ├── pilgrim-doc/                                  رابط موقّع لمستند الحاجّ (مجهول)
-    └── send-pilgrim-push/                            دفع التنبيهات إلى أجهزة الحجاج
+    ├── send-pilgrim-push/                            دفع التنبيهات إلى أجهزة الحجاج
+    └── whatsapp-send/                                رسالة واتساب واحدة إلى حاجّ في الموسم النشط
 ```
 
 ## جرد الوصول المجهول — Anonymous Access Inventory

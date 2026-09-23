@@ -16,7 +16,7 @@ import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
-import type { Passenger, Bus, Camp, Room, Flight } from "../types";
+import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
 import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, docKey, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 import { REPORTS_RESPONSIVE_CSS } from "./reports.responsive";
@@ -71,11 +71,28 @@ function natCode(nat: string | undefined | null): string {
 // ثابتة ولا تُبطل الاشتقاقات المذكَّرة التي تستعملها
 const floorKey = (r: Room) => r.floor ? String(r.floor) : "بدون طابق";
 
-function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Passenger[]; resetKey?: number }) {
+function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { passengers: Passenger[]; resetKey?: number; currentUser: User }) {
   const { alert: alertState, showAlert } = useAlert();
   /* صفحة قراءة بحتة: تحترم الموسم المعروض في بياناتها، ولا تعرف
      readOnly ولا تُعطَّل فيها طباعة ولا تصدير ولا بحث */
-  const { viewedSeason } = useSeason();
+  /* ...إلا فعلاً واحداً: **إرسال واتساب ليس قراءة**. وهو الفعلُ
+     الصادرُ الوحيد في هذه الصفحة، فيأخذ حارسَيه — الصلاحيةَ
+     والموسمَ — ولا يمتدّ الحارسان إلى شيءٍ آخر فيها. */
+  const { viewedSeason, canWrite } = useSeason();
+
+  /* `view_reports` تفتح الصفحة، و`manage_portal` وحدها تأذن
+     بالإرسال — وهي الصلاحية نفسها التي تحرس `send-pilgrim-push`.
+     والخادمُ يفرضها في `whatsapp-send`؛ هذا الشرطُ هنا يوافقه فلا
+     يُعرَض زرٌّ ينتهي إلى ٤٠٣. */
+  const canSendWhatsapp = currentUser.permissions?.manage_portal === true;
+  /* وموسمٌ مؤرشَف لا يُراسَل: الخادمُ يرفضه بـ٤٠٤ لكلّ حاجّ، فلا
+     يُترك الموظّف يكتشفه صفّاً صفّاً. */
+  const waBlockReason = !canSendWhatsapp
+    ? "الإرسال يحتاج صلاحية «بوابة الحاج (التنبيهات والإعدادات)»."
+    : !canWrite
+      ? `موسم ${viewedSeason.name} للعرض فقط — لا تُرسَل رسائل لحجّاج موسمٍ مؤرشَف.`
+      : null;
+  const waBlocked = waBlockReason !== null;
   const passengers = useMemo(() => [...rawPassengers].sort((a, b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0))), [rawPassengers]);
   /* ترتيب كشف طلب الحجز — ثلاثة أوضاع ولا رابع، ولا «حسب الرحلة» */
   const [bookingSort, setBookingSort] = useState<"manual" | "alpha" | "gender">("manual");
@@ -311,7 +328,6 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
   const [waShowSettings, setWaShowSettings] = useState(false);
   const [waSelectedIds, setWaSelectedIds] = useState<Set<number>>(new Set());
   const [waSelectMode, setWaSelectMode] = useState<"all" | "select">("all");
-  const [waTestPhone, setWaTestPhone] = useState("");
 
   /* ═══ إرسال واتساب — الخادم أولاً، والمتصفّح احتياطاً مؤقّتاً ═══
      الدالّة الحافّية `whatsapp-send` تحقن رمز Meta من أسرار البنية،
@@ -340,10 +356,12 @@ function ReportsPage({ passengers: rawPassengers, resetKey }: { passengers: Pass
     } catch { return false; }
   };
 
-  /** نصّ إلى رقم — الخادم ثم الاحتياطيّ */
-  const waSendText = async (to: string, text: string): Promise<boolean> => {
-    const phone = to.replace(/\D/g, "");
-    if (await waSendServer({ kind: "text", to: phone, text })) return true;
+  /** نصّ إلى حاجّ — الخادم يتحقّق من الحاجّ ورقمه وموسمه، ثم الاحتياطيّ.
+      والرقمُ من سجلّ الحاجّ لا من حقلٍ حرّ: الدالّة لا تقبل غيره. */
+  const waSendText = async (p: Passenger, text: string): Promise<boolean> => {
+    const phone = (p.phone || "").replace(/\D/g, "");
+    if (!phone) return false;
+    if (await waSendServer({ kind: "text", to: phone, passengerId: p.id, text })) return true;
     return waSendLegacy({ messaging_product: "whatsapp", to: phone, type: "text", text: { body: text } });
   };
 
@@ -2298,32 +2316,28 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 </div>
               )}
 
-              {/* Test Send */}
-              <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>🧪 Test Send</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input value={waTestPhone} onChange={e => setWaTestPhone(e.target.value)} placeholder="رقم الموبايل مع كود الدولة (مثال: 97450000000)" style={{ flex: 1, padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 12, fontFamily: "var(--font-body)" }} />
-                  <button onClick={async () => {
-                    if (!waTestPhone) { showAlert("warning", "يرجى إدخال رقم الهاتف"); return; }
-                    if (!passengers[0]) { showAlert("warning", "لا يوجد حجاج في القائمة"); return; }
-                    const p = passengers[0];
-                    const text = waTemplate
-                      .replace("{الاسم}", p.short_ar || p.name_ar)
-                      .replace("{الباص}", buses.find(b => b.id === p.bus_id)?.name || "—")
-                      .replace("{الرحلة}", flightNameFor(p))
-                      .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
-                      .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
-                      .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
-                    const ok = await waSendText(waTestPhone, text);
-                    showAlert(ok ? "success" : "error", ok ? "تم الإرسال التجريبي بنجاح" : "فشل الإرسال — تحقّق من صلاحية إدارة البوابة أو إعدادات واتساب على الخادم");
-                  }} style={{ padding: "7px 14px", borderRadius: 8, background: "var(--info-bg)", color: "var(--info)", border: "1px solid var(--info)", fontSize: 12, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
-                    إرسال تجريبي
-                  </button>
+              {/* الإرسالُ التجريبيُّ حُذف — ولم يُستبدَل ببديل.
+                  كان يرسل بياناتِ أوّلِ حاجّ إلى **رقمٍ حرّ** يكتبه
+                  الموظّف. وإبقاؤه يعني فتحَ استثناءٍ في الخادم يقبل
+                  رقماً لا يخصّ حاجّاً، وهو بعينه الالتفافُ الذي
+                  تمنعه هذه المراجعة. والبديلُ الآخر — إرسالُ
+                  «تجربة» إلى حاجٍّ حقيقيّ — ليس تجربة.
+                  والتحقّقُ من الإعداد يقع في اختبار التكامل الحيّ
+                  حين تتوفّر بيانات واتساب. */}
+
+              {/* سببُ المنع يُقال مرّةً في مكانه، لا صفّاً صفّاً بعد
+                  الضغط: الزرُّ معطَّل وفوقه سببُه. */}
+              {waBlocked && (
+                <div style={{ background: "var(--warning-bg, rgba(255,180,60,.12))", border: "1px solid var(--warning, #d79a2b)", color: "var(--warning, #8a5d00)", borderRadius: 12, padding: "11px 15px", marginBottom: 12, fontSize: 12, fontWeight: 700, lineHeight: 1.8 }}>
+                  {waBlockReason}
                 </div>
-              </div>
+              )}
 
               {/* Send To All */}
-              <button disabled={waSending} onClick={async () => {
+              <button disabled={waSending || waBlocked} onClick={async () => {
+                /* الحارسُ مكرَّرٌ عمداً: التعطيل تجربةُ مستخدم، وهذا
+                   يمنع الفعلَ نفسه. والخادمُ يبقى الحَكَم. */
+                if (waBlocked) { showAlert("warning", waBlockReason!); return; }
                 const sendList = waSelectMode === "all"
                   ? passengers.filter(p => p.phone)
                   : passengers.filter(p => p.phone && waSelectedIds.has(p.id));
@@ -2341,7 +2355,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
                       .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
-                    const ok = await waSendText(p.phone, text);
+                    const ok = await waSendText(p, text);
                     if (ok) {
                       // بعت التصريح لو مختار
                       if (waSendDocs.permit && p.hajj_permit_url) {
@@ -2361,7 +2375,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   await new Promise(r => setTimeout(r, 400));
                 }
                 setWaSending(false);
-              }} style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: waSending ? "var(--bg-2)" : "#25D366", color: waSending ? "var(--text-muted)" : "white", border: "none", fontSize: 13, fontWeight: 700, cursor: waSending ? "not-allowed" : "pointer", fontFamily: "var(--font-body)", marginBottom: 12 }}>
+              }} style={{ width: "100%", padding: "12px 0", borderRadius: 10, background: (waSending || waBlocked) ? "var(--bg-2)" : "#25D366", color: (waSending || waBlocked) ? "var(--text-muted)" : "white", border: "none", fontSize: 13, fontWeight: 700, cursor: (waSending || waBlocked) ? "not-allowed" : "pointer", fontFamily: "var(--font-body)", marginBottom: 12 }}>
                 {waSending ? "جاري الإرسال..." : `📤 Send To All — ${(waSelectMode === "all" ? passengers.filter(p => p.phone) : passengers.filter(p => p.phone && waSelectedIds.has(p.id))).length} حاج`}
               </button>
 

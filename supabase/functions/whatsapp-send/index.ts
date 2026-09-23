@@ -22,6 +22,13 @@
 // وإرسال رسائل إلى كل الحجّاج فعلٌ صادر لا قراءة. و`manage_portal`
 // هي التي تحرس المراسلة الصادرة النظيرة في `send-pilgrim-push`.
 // (قرار صاحب المشروع، وصفحة التقارير نفسها تبقى على `view_reports`.)
+//
+// ⚠️ **كلُّ رسالة تخصّ حاجّاً بعينه — نصّاً كانت أو مستنداً.**
+// لا تقبل هذه الدالّة رقماً حرّاً بحال: `passengerId` مطلوبٌ دائماً،
+// والرقمُ يُطابَق بسجلّ الحاجّ، والحاجُّ يجب أن يكون في الموسم
+// النشط. فلا تصير الدالّة قناةَ إرسالٍ عامّة على حساب رقم الحملة،
+// ولا تُراسَل مواسمُ مؤرشَفة. والواجهةُ تحرس الشيءَ نفسه، لكن
+// الحارسَ المعتمَد هنا.
 import { authorize } from "../_shared/authorize.ts";
 import { cors, fail, json } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
@@ -101,13 +108,61 @@ Deno.serve(async (req: Request) => {
   );
   if (limited) return limited;
 
-  /* ٣) الاعتماد — من أسرار البنية وحدها. لا يُقرأ من الجسم ولا
-     يُعاد في أي استجابة ولا يُسجَّل في أي سطر. */
-  const token = Deno.env.get("WHATSAPP_TOKEN");
-  const phoneId = Deno.env.get("WHATSAPP_PHONE_ID");
-  if (!token || !phoneId) {
-    console.error("سرّا واتساب غير مضبوطين على المشروع");
-    return fail(req, 503, "إعداد واتساب غير مكتمل على الخادم.");
+  /* ٣) المستلِم — حاجٌّ بعينه، في الموسم النشط، وبرقمه هو
+     ═══════════════════════════════════════════════════════════
+     الفحصُ صار **قبل** تفرّع النوع، ويشمل النصَّ كما يشمل المستند.
+
+     كان النصُّ يمرّ برقمٍ يرسله العميل بلا أيّ سؤال، فكانت الدالّة
+     قناةَ إرسالٍ إلى أيّ رقم على حساب رقم الحملة — ولو بنصٍّ يحمل
+     بيانات رحلةِ حاجٍّ من موسمٍ مؤرشَف. والواجهةُ وحدها كانت تختار
+     القائمة، وواجهةٌ ليست حارساً.
+
+     ولا استثناءَ «للإرسال التجريبيّ»: استثناءٌ برقمٍ حرّ هو بالضبط
+     الالتفافُ الذي يُبطل هذه القاعدة، فحُذف من الواجهة بدل أن
+     يُفتَح له بابٌ هنا. */
+  const passengerId = Number(body.passengerId);
+  if (!Number.isInteger(passengerId) || passengerId <= 0) {
+    return fail(req, 400, "معرّف الحاجّ مطلوب.");
+  }
+
+  const docType = kind === "document" ? (body.docType as DocType | undefined) : undefined;
+  if (kind === "document" && (!docType || !(docType in DOC_COLUMNS))) {
+    return fail(req, 400, "نوع المستند غير معروف.");
+  }
+
+  /* عمودُ المستند يدخل الاستعلامَ من قائمة السماح وحدها — لا نصَّ
+     عميلٍ يصل إلى `select` ولا إلى مسار تخزين. */
+  const column = docType ? DOC_COLUMNS[docType] : null;
+  const columns = column ? `id, season_id, phone, ${column}` : "id, season_id, phone";
+
+  const { data: rows, error: rowErr } = await admin
+    .from("passengers")
+    .select(columns)
+    .eq("id", passengerId)
+    .limit(1);
+  if (rowErr) {
+    console.error("تعذّر قراءة سجل الحاجّ", { passengerId, kind, docType, rowErr });
+    return fail(req, 500, "تعذّر إتمام الطلب.");
+  }
+
+  const { data: activeSeason, error: seasonErr } = await admin.rpc("active_season_id");
+  if (seasonErr) {
+    console.error("تعذّر قراءة الموسم النشط", seasonErr);
+    return fail(req, 500, "تعذّر إتمام الطلب.");
+  }
+
+  const row = rows?.[0] as Record<string, unknown> | undefined;
+
+  /* الموسم النشط شرط — لا يُراسَل حاجُّ موسمٍ مؤرشَف بنصٍّ ولا
+     بمستند. ورمزُ ٤٠٤ واحدٌ لا يفرّق بين «لا حاجّ» و«موسمٌ آخر»،
+     فلا يصير الردُّ أداةَ استطلاع. */
+  if (!row || row.season_id !== activeSeason) {
+    return fail(req, 404, "الحاجّ غير متاح للمراسلة.");
+  }
+
+  /* والمستلِم هو صاحبُ السجلّ — لا رقمٌ يرسله العميل */
+  if (normalizePhone(row.phone) !== to) {
+    return fail(req, 403, "رقم المستلم لا يطابق الحاجّ المحدَّد.");
   }
 
   /* ٤) بناء الحمولة */
@@ -120,47 +175,9 @@ Deno.serve(async (req: Request) => {
   } else {
     /* ── مستند ──────────────────────────────────────────────
        الرابط الموقَّع **يُولَّد هنا** بمفتاح الخدمة، ومفتاح الخدمة
-       يتجاوز RLS. فلولا الفحص التالي لأمكن طلبُ مستند أي حاجّ
-       برقمه وحده. والفحص هو فحص `pilgrim-doc` نفسه:
-       سجلّ الحاجّ + الموسم النشط، ثم المفتاح من السجلّ لا من العميل. */
-    const docType = body.docType as DocType | undefined;
-    if (!docType || !(docType in DOC_COLUMNS)) {
-      return fail(req, 400, "نوع المستند غير معروف.");
-    }
-    const passengerId = Number(body.passengerId);
-    if (!Number.isInteger(passengerId) || passengerId <= 0) {
-      return fail(req, 400, "معرّف الحاجّ مطلوب.");
-    }
-
-    const column = DOC_COLUMNS[docType];
-    const { data: rows, error: rowErr } = await admin
-      .from("passengers")
-      .select(`id, season_id, phone, ${column}`)
-      .eq("id", passengerId)
-      .limit(1);
-    if (rowErr) {
-      console.error("تعذّر قراءة سجل الحاجّ", { passengerId, docType, rowErr });
-      return fail(req, 500, "تعذّر إتمام الطلب.");
-    }
-
-    const { data: activeSeason, error: seasonErr } = await admin.rpc("active_season_id");
-    if (seasonErr) {
-      console.error("تعذّر قراءة الموسم النشط", seasonErr);
-      return fail(req, 500, "تعذّر إتمام الطلب.");
-    }
-
-    const row = rows?.[0] as Record<string, unknown> | undefined;
-    /* الموسم النشط شرط: لا تُرسَل مستندات موسم مؤرشَف */
-    if (!row || row.season_id !== activeSeason) {
-      return fail(req, 404, "المستند غير متاح.");
-    }
-    /* والمستلم هو صاحب المستند — لا رقم يرسله العميل. وإلا صارت
-       الدالّة قناةً لتسريب مستند حاجّ إلى رقم أجنبيّ. */
-    if (normalizePhone(row.phone) !== to) {
-      return fail(req, 403, "رقم المستلم لا يطابق صاحب المستند.");
-    }
-
-    const key = docKey(row[column] as string | null);
+       يتجاوز RLS — فحُرّاسُ المستلِم والموسم أعلاه هم ما يمنع أن
+       يكفي رقمُ حاجٍّ لطلب مستنده. والمفتاحُ من السجلّ لا من العميل. */
+    const key = docKey(row[column as string] as string | null);
     if (!key) return fail(req, 404, "المستند غير متاح.");
 
     const { data: signed, error: signErr } = await admin
@@ -174,11 +191,25 @@ Deno.serve(async (req: Request) => {
       messaging_product: "whatsapp",
       to,
       type: "document",
-      document: { link: signed.signedUrl, caption: DOC_CAPTIONS[docType] },
+      document: { link: signed.signedUrl, caption: DOC_CAPTIONS[docType as DocType] },
     };
   }
 
-  /* ٥) النداء — الرمز يدخل هنا ولا يخرج */
+  /* ٥) الاعتماد — من أسرار البنية وحدها. لا يُقرأ من الجسم ولا
+     يُعاد في أي استجابة ولا يُسجَّل في أي سطر.
+     ⚠️ ويُقرأ **بعد** كلّ فحصٍ سابق عمداً: لو سبقها لَحجب ٥٠٣ كلَّ
+     أخطاء التحقّق، فلا يمكن إثباتُ حارسٍ واحد قبل توفّر بيانات
+     واتساب. وبهذا الترتيب تُردّ الطلباتُ الفاسدة بأخطائها
+     الحقيقية، ولا يبلغ ٥٠٣ إلا طلبٌ اجتاز كلَّ شيء — فيصير ٥٠٣
+     نفسُه دليلَ أن الحُرّاس تعمل. ولا يُستعمل سرٌّ قبل هذه النقطة. */
+  const token = Deno.env.get("WHATSAPP_TOKEN");
+  const phoneId = Deno.env.get("WHATSAPP_PHONE_ID");
+  if (!token || !phoneId) {
+    console.error("سرّا واتساب غير مضبوطين على المشروع");
+    return fail(req, 503, "إعداد واتساب غير مكتمل على الخادم.");
+  }
+
+  /* ٦) النداء — الرمز يدخل هنا ولا يخرج */
   let metaStatus: number;
   try {
     const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${phoneId}/messages`, {
@@ -199,7 +230,7 @@ Deno.serve(async (req: Request) => {
     return fail(req, 502, "تعذّر الوصول إلى واتساب.");
   }
 
-  /* ٦) الاستجابة — نجاحٌ ورمز حالة فقط. لا رمز ولا phoneId ولا
+  /* ٧) الاستجابة — نجاحٌ ورمز حالة فقط. لا رمز ولا phoneId ولا
      رابط موقَّع: الرابط سرّ مؤقّت لا سبب لعودته إلى المتصفّح. */
   return json(req, 200, { ok: true, status: metaStatus });
 });
