@@ -22,7 +22,8 @@
 وما يُكتب غيرُ سرّيٍّ بالبناء لا بالنيّة:
   · `http`  — رمزُ الحالة وحده، عددٌ صحيح.
   · `code`  — سليقةُ خطأ Supabase (مثل `invalid_credentials`)،
-              وتُمرَّر عبر قائمة سماحٍ نمطيّة `^[a-z0-9_]{1,64}$`،
+              وتُمرَّر عبر قائمة سماحٍ نمطيّة `[a-z0-9_]{1,64}`
+              بمطابقةٍ كاملة (`fullmatch`)،
               فلا يُسرَّب نصٌّ حرٌّ من الخادم إلى السجلّ ولا يُحقَن.
   · `class` — تصنيفٌ خشن من رمز الحالة لا من جسم الاستجابة.
 
@@ -37,8 +38,16 @@ import sys
 import urllib.error
 import urllib.request
 
-# سليقةُ الخطأ وحدها تُنقل، وبقائمةِ سماحٍ نمطيّة لا بثقةٍ في الخادم
-CODE = re.compile(r"^[a-z0-9_]{1,64}$")
+# سليقةُ الخطأ وحدها تُنقل، وبقائمةِ سماحٍ نمطيّة لا بثقةٍ في الخادم.
+#
+# ⚠️ `fullmatch` لا `match`، وبلا مرساتَي `^` و`$`: مرساةُ `$` في
+# بايثون تُطابق **قبل سطرٍ جديدٍ أخير** أيضاً، فكان `"user_banned\n"`
+# يجتاز القائمة ويشقُّ سطرَ التشخيص شطرين في سجلّ Actions. ولم يكن
+# ذلك حقناً لأمرِ سير عمل — إذ لا يُسمح بحرفٍ بعد السطر الجديد،
+# ويَلحق `diagnose` بعده ` class=...` فيبدأ الشطرُ الثاني بفراغٍ لا
+# بـ`::` — لكنه نصٌّ من الخادم يُغيّر بنيةَ السجلّ، وهذا وحده كافٍ.
+# و`fullmatch` تُلزم المطابقةَ بكامل النصّ فلا تُستثنى نهايةٌ.
+CODE = re.compile(r"[a-z0-9_]{1,64}")
 
 
 def classify(status):
@@ -94,7 +103,7 @@ def main(argv):
         try:
             body = json.loads(err.read().decode("utf-8", "replace"))
             raw = body.get("error_code") or body.get("error") or ""
-            if isinstance(raw, str) and CODE.match(raw):
+            if isinstance(raw, str) and CODE.fullmatch(raw):
                 code = raw
         except Exception:                 # noqa: BLE001 — جسمٌ غيرُ مفهوم لا يُنقل
             code = None
