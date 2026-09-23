@@ -123,7 +123,7 @@ export type Database = {
       }
       buses: {
         Row: {
-          capacity: number | null
+          capacity: number
           created_at: string | null
           id: number
           name: string | null
@@ -131,7 +131,7 @@ export type Database = {
           type: string | null
         }
         Insert: {
-          capacity?: number | null
+          capacity?: number
           created_at?: string | null
           id?: never
           name?: string | null
@@ -139,7 +139,7 @@ export type Database = {
           type?: string | null
         }
         Update: {
-          capacity?: number | null
+          capacity?: number
           created_at?: string | null
           id?: never
           name?: string | null
@@ -158,30 +158,36 @@ export type Database = {
       }
       camps: {
         Row: {
+          capacity: number | null
           created_at: string | null
-          gender: string | null
+          gender: string
           id: number
           name: string | null
-          page_type: string | null
+          page_type: string
           season_id: number
+          sort_order: number | null
           type: string | null
         }
         Insert: {
+          capacity?: number | null
           created_at?: string | null
-          gender?: string | null
+          gender: string
           id?: never
           name?: string | null
-          page_type?: string | null
+          page_type: string
           season_id?: number
+          sort_order?: number | null
           type?: string | null
         }
         Update: {
+          capacity?: number | null
           created_at?: string | null
-          gender?: string | null
+          gender?: string
           id?: never
           name?: string | null
-          page_type?: string | null
+          page_type?: string
           season_id?: number
+          sort_order?: number | null
           type?: string | null
         }
         Relationships: [
@@ -228,32 +234,22 @@ export type Database = {
           bank_iban: string | null
           bank_name: string | null
           bank_swift: string | null
-          banner_image_url: string | null
           banner_position: string | null
           banner_position_x: string | null
-          camp_arafa_address: string | null
-          camp_arafa_url: string | null
-          camp_mina_address: string | null
-          camp_mina_url: string | null
           city: string | null
           color_accent: string | null
           color_primary: string | null
           color_sidebar: string | null
+          commercial_registration: string | null
           contact_email: string | null
           contact_phone: string | null
           country: string | null
-          features: Json | null
-          hotel_address: string | null
-          hotel_name: string | null
-          hotel_url: string | null
           id: number
-          logo_url: string | null
           name_ar: string
           name_en: string | null
           portal_help_message: string | null
           portal_settings: Json
           portal_welcome_message: string | null
-          season_label: string | null
           tagline: string | null
         }
         Insert: {
@@ -265,32 +261,22 @@ export type Database = {
           bank_iban?: string | null
           bank_name?: string | null
           bank_swift?: string | null
-          banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
-          camp_arafa_address?: string | null
-          camp_arafa_url?: string | null
-          camp_mina_address?: string | null
-          camp_mina_url?: string | null
           city?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
+          commercial_registration?: string | null
           contact_email?: string | null
           contact_phone?: string | null
           country?: string | null
-          features?: Json | null
-          hotel_address?: string | null
-          hotel_name?: string | null
-          hotel_url?: string | null
           id?: number
-          logo_url?: string | null
           name_ar?: string
           name_en?: string | null
           portal_help_message?: string | null
           portal_settings?: Json
           portal_welcome_message?: string | null
-          season_label?: string | null
           tagline?: string | null
         }
         Update: {
@@ -302,32 +288,22 @@ export type Database = {
           bank_iban?: string | null
           bank_name?: string | null
           bank_swift?: string | null
-          banner_image_url?: string | null
           banner_position?: string | null
           banner_position_x?: string | null
-          camp_arafa_address?: string | null
-          camp_arafa_url?: string | null
-          camp_mina_address?: string | null
-          camp_mina_url?: string | null
           city?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
+          commercial_registration?: string | null
           contact_email?: string | null
           contact_phone?: string | null
           country?: string | null
-          features?: Json | null
-          hotel_address?: string | null
-          hotel_name?: string | null
-          hotel_url?: string | null
           id?: number
-          logo_url?: string | null
           name_ar?: string
           name_en?: string | null
           portal_help_message?: string | null
           portal_settings?: Json
           portal_welcome_message?: string | null
-          season_label?: string | null
           tagline?: string | null
         }
         Relationships: []
@@ -456,6 +432,7 @@ export type Database = {
           airline: string | null
           arrival_date: string | null
           arrival_time: string | null
+          capacity: number | null
           created_at: string | null
           date: string | null
           from_airport: string | null
@@ -464,12 +441,13 @@ export type Database = {
           season_id: number
           time: string | null
           to_airport: string | null
-          type: string | null
+          type: string
         }
         Insert: {
           airline?: string | null
           arrival_date?: string | null
           arrival_time?: string | null
+          capacity?: number | null
           created_at?: string | null
           date?: string | null
           from_airport?: string | null
@@ -478,12 +456,13 @@ export type Database = {
           season_id?: number
           time?: string | null
           to_airport?: string | null
-          type?: string | null
+          type: string
         }
         Update: {
           airline?: string | null
           arrival_date?: string | null
           arrival_time?: string | null
+          capacity?: number | null
           created_at?: string | null
           date?: string | null
           from_airport?: string | null
@@ -492,7 +471,7 @@ export type Database = {
           season_id?: number
           time?: string | null
           to_airport?: string | null
-          type?: string | null
+          type?: string
         }
         Relationships: [
           {
@@ -696,6 +675,41 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "passengers_bus_id_fkey"
+            columns: ["bus_id"]
+            isOneToOne: false
+            referencedRelation: "buses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_camp_arafa_id_fkey"
+            columns: ["camp_arafa_id"]
+            isOneToOne: false
+            referencedRelation: "camps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_camp_mina_id_fkey"
+            columns: ["camp_mina_id"]
+            isOneToOne: false
+            referencedRelation: "camps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passengers_return_flight_id_fkey"
+            columns: ["return_flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "passengers_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
@@ -859,6 +873,7 @@ export type Database = {
       }
       rooms: {
         Row: {
+          capacity: number | null
           created_at: string | null
           floor: string | null
           id: number
@@ -868,6 +883,7 @@ export type Database = {
           type: string | null
         }
         Insert: {
+          capacity?: number | null
           created_at?: string | null
           floor?: string | null
           id?: never
@@ -877,6 +893,7 @@ export type Database = {
           type?: string | null
         }
         Update: {
+          capacity?: number | null
           created_at?: string | null
           floor?: string | null
           id?: never
@@ -924,24 +941,48 @@ export type Database = {
       }
       seasons: {
         Row: {
+          arafa_address: string | null
+          arafa_url: string | null
           closed_at: string | null
           closed_by: string | null
           created_at: string | null
+          hijri_year: number
+          hotel_address: string | null
+          hotel_name: string | null
+          hotel_url: string | null
           id: number
+          mina_address: string | null
+          mina_url: string | null
           name: string
         }
         Insert: {
+          arafa_address?: string | null
+          arafa_url?: string | null
           closed_at?: string | null
           closed_by?: string | null
           created_at?: string | null
+          hijri_year: number
+          hotel_address?: string | null
+          hotel_name?: string | null
+          hotel_url?: string | null
           id?: never
+          mina_address?: string | null
+          mina_url?: string | null
           name: string
         }
         Update: {
+          arafa_address?: string | null
+          arafa_url?: string | null
           closed_at?: string | null
           closed_by?: string | null
           created_at?: string | null
+          hijri_year?: number
+          hotel_address?: string | null
+          hotel_name?: string | null
+          hotel_url?: string | null
           id?: never
+          mina_address?: string | null
+          mina_url?: string | null
           name?: string
         }
         Relationships: []
@@ -980,99 +1021,30 @@ export type Database = {
     Views: {
       company_profile_public: {
         Row: {
-          admin_name: string | null
-          admin_phone: string | null
-          admin_whatsapp: string | null
-          banner_image_url: string | null
-          banner_position: string | null
-          banner_position_x: string | null
-          camp_arafa_address: string | null
-          camp_arafa_url: string | null
-          camp_mina_address: string | null
-          camp_mina_url: string | null
-          city: string | null
           color_accent: string | null
           color_primary: string | null
           color_sidebar: string | null
-          contact_email: string | null
-          contact_phone: string | null
-          country: string | null
-          features: Json | null
-          hotel_address: string | null
-          hotel_name: string | null
-          hotel_url: string | null
           id: number | null
-          logo_url: string | null
           name_ar: string | null
           name_en: string | null
-          portal_help_message: string | null
-          portal_settings: Json | null
-          portal_welcome_message: string | null
-          season_label: string | null
           tagline: string | null
         }
         Insert: {
-          admin_name?: string | null
-          admin_phone?: string | null
-          admin_whatsapp?: string | null
-          banner_image_url?: string | null
-          banner_position?: string | null
-          banner_position_x?: string | null
-          camp_arafa_address?: string | null
-          camp_arafa_url?: string | null
-          camp_mina_address?: string | null
-          camp_mina_url?: string | null
-          city?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          country?: string | null
-          features?: Json | null
-          hotel_address?: string | null
-          hotel_name?: string | null
-          hotel_url?: string | null
           id?: number | null
-          logo_url?: string | null
           name_ar?: string | null
           name_en?: string | null
-          portal_help_message?: string | null
-          portal_settings?: Json | null
-          portal_welcome_message?: string | null
-          season_label?: string | null
           tagline?: string | null
         }
         Update: {
-          admin_name?: string | null
-          admin_phone?: string | null
-          admin_whatsapp?: string | null
-          banner_image_url?: string | null
-          banner_position?: string | null
-          banner_position_x?: string | null
-          camp_arafa_address?: string | null
-          camp_arafa_url?: string | null
-          camp_mina_address?: string | null
-          camp_mina_url?: string | null
-          city?: string | null
           color_accent?: string | null
           color_primary?: string | null
           color_sidebar?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          country?: string | null
-          features?: Json | null
-          hotel_address?: string | null
-          hotel_name?: string | null
-          hotel_url?: string | null
           id?: number | null
-          logo_url?: string | null
           name_ar?: string | null
           name_en?: string | null
-          portal_help_message?: string | null
-          portal_settings?: Json | null
-          portal_welcome_message?: string | null
-          season_label?: string | null
           tagline?: string | null
         }
         Relationships: []
@@ -1104,7 +1076,12 @@ export type Database = {
         }[]
       }
       close_season: {
-        Args: { p_actor: string; p_closed_by: string; p_new_name: string }
+        Args: {
+          p_actor: string
+          p_closed_by: string
+          p_new_hijri_year: number
+          p_new_name: string
+        }
         Returns: number
       }
       consume_rate_limit: {
@@ -1177,10 +1154,41 @@ export type Database = {
         Returns: number
       }
       revoke_pilgrim_session: { Args: { p_token: string }; Returns: boolean }
+      room_type_capacity: { Args: { p_type: string }; Returns: number }
       set_audit_actor: { Args: { p_actor: string }; Returns: undefined }
       unregister_pilgrim_push: {
         Args: { p_endpoint: string; p_token: string }
         Returns: boolean
+      }
+      update_active_season: {
+        /* كما في `update_portal_settings`: المولّدُ يكتب الوسائطَ غيرَ
+           قابلةٍ للعدم، والدالّةُ تقبل NULL في حقول الأماكن فعلاً —
+           وهي الطريقةُ التي يُفرَّغ بها حقلٌ اختياريّ. */
+        Args: {
+          p_arafa_address: string | null
+          p_arafa_url: string | null
+          p_hotel_address: string | null
+          p_hotel_name: string | null
+          p_hotel_url: string | null
+          p_mina_address: string | null
+          p_mina_url: string | null
+          p_name: string
+        }
+        Returns: Database["public"]["Tables"]["seasons"]["Row"]
+      }
+      update_portal_settings: {
+        /* المولّدُ يكتب وسائطَ الدوالّ غيرَ قابلةٍ للعدم دائماً، ودالّتُنا
+           تقبل NULL في حقول النصّ فعلاً (وهي الطريقةُ التي يُفرَّغ بها
+           حقلٌ اختياريّ). فالتوقيعُ هنا مُصحَّحٌ ليطابق SQL. */
+        Args: {
+          p_admin_name: string | null
+          p_admin_phone: string | null
+          p_admin_whatsapp: string | null
+          p_portal_help_message: string | null
+          p_portal_settings: Json
+          p_portal_welcome_message: string | null
+        }
+        Returns: Database["public"]["Tables"]["company_config"]["Row"]
       }
       verify_pilgrim_session: { Args: { p_token: string }; Returns: number }
     }

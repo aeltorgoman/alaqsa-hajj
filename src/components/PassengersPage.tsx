@@ -11,9 +11,11 @@ import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
-import { useCompanyIdentity, useCompanyPortal, useReportBranding } from "../company/CompanyContext";
+import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { DocImage } from "./DocImage";
-import { isMissingService, makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { wantsService, type ServiceKey, itemsLabel, makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { hasIssue, isIssueKey, type IssueKey } from "../utils/readiness";
+import { useSeasonPhases } from "./Seasontimeline";
 /* المقارنة بالاسم تسكن مع المودال: كلاهما يخدم نفس السؤال، ونسخة
    واحدة منها تكفي المسارين */
 import { PermitConfirmModal } from "./PermitConfirmModal";
@@ -116,9 +118,199 @@ function PassengersStats({ passengers }: { passengers: Passenger[] }) {
   );
 }
 
+/* عبارات البحث الطبيعيّ → مفتاح النقص. الجدول تسمياتٌ لا منطق:
+   لا شرط هنا، فقط أيّ عبارةٍ تعني أيّ مفتاح. */
+const SEARCH_ISSUE_PHRASES: Record<string, IssueKey> = {
+  "بدون صورة": "missing_photo", "ناقص صورة": "missing_photo",
+  "بدون تليفون": "missing_phone", "بدون هاتف": "missing_phone",
+  "جواز منتهي": "expired_passport", "جواز منتهي الصلاحية": "expired_passport",
+  "جواز قريب": "expiring_passport", "ينتهي قريبا": "expiring_passport", "ينتهي قريباً": "expiring_passport",
+  "بدون رحلة": "missing_flight", "بدون طيران": "missing_flight", "بدون ذهاب": "missing_flight",
+  "بدون عودة": "missing_return_flight", "بدون اياب": "missing_return_flight", "بدون إياب": "missing_return_flight",
+  "بدون باص": "missing_bus", "بدون حافلة": "missing_bus",
+  "بدون فندق": "missing_hotel", "بدون غرفة": "missing_hotel",
+  "بدون تذكرة": "missing_ticket",
+  "بدون تصريح": "missing_permit",
+  "بدون جواز": "missing_passport", "جواز غير مرفوع": "missing_passport",
+  "بدون بطاقة": "missing_id", "بدون هوية": "missing_id",
+};
+
+/* ═══ بطاقةُ عرضِ كل نقص — عرضٌ وفعل، لا شرط ═══
+   الشرط في `readiness.ts` وحده. هنا: بأيّ تبويبٍ يسكن، وبأيّ اسم
+   يُعرَض، و**أين يُحَلّ** — وهذا الأخير هو الفرق الذي كان غائباً:
+   «بدون باص» لا يُحَلّ في ملفّ الحاجّ مهما فتحته، بل في صفحة
+   الباصات. فكان الموظّف يفتح اثنين وعشرين ملفّاً ليكتشف ذلك. */
+type Resolve =
+  | { kind: "profile"; profileTab: "data" | "docs" }
+  | { kind: "page"; page: string; perm: string; action: string };
+
+interface IssueUI {
+  label: string;
+  icon: string;
+  tab: "reg" | "dist" | "travel";
+  /* «حرج» للعطب القائم وحده. كان كل شيء تقريباً كهرمانيّاً، فلم
+     يعد اللون يميّز شيئاً — عشرة تنبيهاتٍ بلونٍ واحد لا أولويّة
+     فيها. */
+  severity: "critical" | "warning" | "normal";
+  resolve: Resolve;
+}
+
+const ISSUE_UI: Record<IssueKey, IssueUI> = {
+  expired_passport: {
+    label: "جوازات منتهية الصلاحية", tab: "reg", severity: "critical",
+    icon: `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`,
+    resolve: { kind: "profile", profileTab: "data" },
+  },
+  expiring_passport: {
+    label: "جوازات تنتهي خلال ٦ أشهر", tab: "reg", severity: "warning",
+    icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+    resolve: { kind: "profile", profileTab: "data" },
+  },
+  expired_id: {
+    label: "بطاقات منتهية الصلاحية", tab: "reg", severity: "critical",
+    icon: `<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="16" y1="9" x2="8" y2="15"/><line x1="8" y1="9" x2="16" y2="15"/>`,
+    resolve: { kind: "profile", profileTab: "data" },
+  },
+  expiring_id: {
+    label: "بطاقات تنتهي خلال ٦ أشهر", tab: "reg", severity: "warning",
+    icon: `<rect x="2" y="5" width="20" height="14" rx="2"/><polyline points="12 9 12 12 14 13.5"/>`,
+    resolve: { kind: "profile", profileTab: "data" },
+  },
+  missing_phone: {
+    label: "حجاج بدون رقم هاتف", tab: "reg", severity: "normal",
+    icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`,
+    resolve: { kind: "profile", profileTab: "data" },
+  },
+  missing_passport: {
+    label: "جوازات لم تُرفع", tab: "reg", severity: "normal",
+    icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`,
+    resolve: { kind: "profile", profileTab: "docs" },
+  },
+  missing_id: {
+    label: "بطاقات هوية لم تُرفع", tab: "reg", severity: "normal",
+    icon: `<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M14 10h5"/><path d="M14 14h3"/>`,
+    resolve: { kind: "profile", profileTab: "docs" },
+  },
+  missing_photo: {
+    label: "صور شخصية ناقصة", tab: "reg", severity: "normal",
+    icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`,
+    resolve: { kind: "profile", profileTab: "docs" },
+  },
+  missing_hotel: {
+    label: "حجاج بدون غرفة فندق", tab: "dist", severity: "normal",
+    icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
+    resolve: { kind: "page", page: "hotel", perm: "manage_hotel", action: "الذهاب لتوزيع الغرف" },
+  },
+  missing_bus: {
+    label: "حجاج بدون باص", tab: "dist", severity: "normal",
+    icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`,
+    resolve: { kind: "page", page: "buses", perm: "manage_buses", action: "الذهاب لتوزيع الباصات" },
+  },
+  missing_mina: {
+    label: "حجاج بدون مخيم منى", tab: "dist", severity: "normal",
+    icon: `<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`,
+    resolve: { kind: "page", page: "mina", perm: "manage_camps", action: "الذهاب لتوزيع منى" },
+  },
+  missing_arafah: {
+    label: "حجاج بدون مخيم عرفة", tab: "dist", severity: "normal",
+    icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>`,
+    resolve: { kind: "page", page: "arafa", perm: "manage_camps", action: "الذهاب لتوزيع عرفة" },
+  },
+  /* الطيران بندان: الذهاب والعودة. فمن حُجزت له رحلة الذهاب بلا
+     عودة يظهر في «رحلة العودة غير موزعة» — وكان يُعدّ مكتملاً. */
+  missing_flight: {
+    label: "رحلة الذهاب غير موزعة", tab: "dist", severity: "normal",
+    icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,
+    resolve: { kind: "page", page: "flights", perm: "manage_flights", action: "الذهاب للرحلات" },
+  },
+  missing_return_flight: {
+    label: "رحلة العودة غير موزعة", tab: "dist", severity: "normal",
+    icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`,
+    resolve: { kind: "page", page: "flights", perm: "manage_flights", action: "الذهاب للرحلات" },
+  },
+  missing_ticket: {
+    label: "حجاج بدون تذكرة طيران", tab: "travel", severity: "normal",
+    icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`,
+    resolve: { kind: "profile", profileTab: "docs" },
+  },
+  missing_permit: {
+    label: "حجاج بدون تصريح حج", tab: "travel", severity: "normal",
+    icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`,
+    resolve: { kind: "profile", profileTab: "docs" },
+  },
+};
+
+/* «أرقام مكرّرة» بندُ غرفة العمليات وحده — شرطٌ بين الحجّاج لا
+   شرطُ حاجٍّ واحد، فلا مكان له في وحدة الجاهزية. */
+const DUP_PHONES_UI = {
+  label: "أرقام هواتف مكررة",
+  icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>`,
+  tab: "reg" as const,
+  severity: "normal" as const,
+};
+
+/* لافتةُ الصلاحية: أيّ وثيقةٍ منتهية أو مقتربة، بتسميتها الصحيحة.
+   كانت الشيفرة تقرأ `id_expiry` مباشرةً وتكتب «الجواز منتهي» متى
+   انتهى أيّهما — فيرى الموظّف حمرةً لا يجدها في أي تنبيه، وباسمٍ
+   قد لا يكون اسمها. الآن الشرط من `hasIssue` والاسمُ من الواقع. */
+function expiryNotice(p: Passenger): { tone: "expired" | "soon"; text: string } | null {
+  const pExp = hasIssue("expired_passport", p), iExp = hasIssue("expired_id", p);
+  if (pExp || iExp) {
+    return { tone: "expired", text: pExp && iExp ? "الجواز والبطاقة منتهيان" : pExp ? "الجواز منتهي" : "البطاقة منتهية" };
+  }
+  const pSoon = hasIssue("expiring_passport", p), iSoon = hasIssue("expiring_id", p);
+  if (pSoon || iSoon) {
+    const what = pSoon && iSoon ? "الجواز والبطاقة" : pSoon ? "الجواز" : "البطاقة";
+    return { tone: "soon", text: `صلاحية ${what} تنتهي خلال أقل من ٦ شهور` };
+  }
+  return null;
+}
+
+/* وجهةُ إدارة كل خدمة. غرفة العمليات تسلك هذا الطريق نفسه منذ
+   #110 — الحدث `hajj_goto_page` والصلاحية القائمة — فلا طريق ثانٍ.
+   الملفّ يبقى **عرضاً**: الضغط ينقل إلى مكان الإسناد، ولا يُسنِد. */
+const SERVICE_DEST: Record<ServiceKey, { page: string; perm: string; label: string }> = {
+  bus:        { page: "buses",   perm: "manage_buses",   label: "الباصات" },
+  hotel_type: { page: "hotel",   perm: "manage_hotel",   label: "الفندق" },
+  camp_mina:  { page: "mina",    perm: "manage_camps",   label: "مخيمات منى" },
+  camp_arafa: { page: "arafa",   perm: "manage_camps",   label: "مخيمات عرفة" },
+  flight:     { page: "flights", perm: "manage_flights", label: "الرحلات" },
+};
+
+const opsFilterLabel = (f: Exclude<OpsFilter, null>) =>
+  f === "dup_phones" ? DUP_PHONES_UI.label : ISSUE_UI[f].label;
+
+/* التبويب الذي يقابل مرحلة الموسم الجارية — «التجهيز» و«السفر»
+   يقعان معاً في تبويب «السفر». إشارةُ اتّجاه لا حجب: كل التبويبات
+   تبقى مفتوحة، فالموظّف قد يجهّز عمل مرحلةٍ قادمة أو يعود لسابقة. */
+const PHASE_TAB: Record<string, "reg" | "dist" | "travel"> = {
+  reg: "reg", dist: "dist", prep: "travel", travel: "travel",
+};
+
+/* فلتر غرفة العمليات: مفتاح نقصٍ مشترك، أو «أرقام مكرّرة» — وهذا
+   الأخير شرطٌ بين الحجّاج لا شرطُ حاجٍّ واحد، فلا مكان له في وحدة
+   الجاهزية ويبقى محليّاً. */
+type OpsFilter = IssueKey | "dup_phones" | null;
+
+/* الأرقام المكرّرة: **مجموعة معرّفات** لا عدّاد أرقام. كان الشارة
+   تعدّ الأرقامَ المكرّرة والفلترُ يعرض الحجّاجَ حاملي تلك الأرقام،
+   فثلاثةُ حجّاج على رقمٍ واحد كانت تُقرأ «١» ثم تفتح على ثلاثة.
+   والمجموعة الواحدة تخدم العدّ والقائمة معاً فلا يفترقان. */
+function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
+  const byPhone = new Map<string, number[]>();
+  for (const p of hajj) {
+    const phone = (p.phone || "").trim();
+    if (!phone) continue;
+    const list = byPhone.get(phone);
+    if (list) list.push(p.id); else byPhone.set(phone, [p.id]);
+  }
+  const ids = new Set<number>();
+  for (const list of byPhone.values()) if (list.length > 1) list.forEach(id => ids.add(id));
+  return ids;
+}
+
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const reportBranding = useReportBranding();
-  const companyIdentity = useCompanyIdentity();
   const companyPortal = useCompanyPortal();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
@@ -138,8 +330,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
-  const [opsTab, setOpsTab] = useState<"reg" | "dist" | "travel">("reg");
-  const [opsFilter, setOpsFilter] = useState<string | null>(null);
+  /* `null` = لم يختر الموظّف بعد، فيُشتقّ من المرحلة. اشتقاقٌ لا
+     أثرٌ جانبيّ: لا setState داخل effect ولا وميضُ تبويبٍ خاطئ. */
+  const [opsTabPick, setOpsTabPick] = useState<"reg" | "dist" | "travel" | null>(null);
+  const [opsFilter, setOpsFilter] = useState<OpsFilter>(null);
   const [profileTab, setProfileTab] = useState<"data" | "svc" | "docs" | "family">("data");
   const [metaBuses, setMetaBuses] = useState<any[]>([]);
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
@@ -147,9 +341,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaFlights, setMetaFlights] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from("buses").select("id,name").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
-    supabase.from("rooms").select("id,number").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
-    supabase.from("camps").select("id,name,page_type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
+    /* `type` عمودٌ مطلوب لا زينة: سطرُ الإسناد يعرض **تصنيف الكيان
+       المُسنَد** (باص ٤ · عادي · غرفة ١٢٠١ · ثنائية)، وهو الذي
+       يُظهر التفاوت بين ما طُلب وما أُسنِد. وبغيره يصل `undefined`
+       فيسكت السطر عن التصنيف بلا خطأ يُرى. */
+    supabase.from("buses").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
+    supabase.from("rooms").select("id,number,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
+    supabase.from("camps").select("id,name,page_type,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
     supabase.from("flights").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
   }, [viewedSeason.id]);
 
@@ -162,12 +360,15 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
   }, []);
 
-  // استقبال فلتر البحث من الكارت الذكي في الداشبورد
+  /* استقبال التنقّل من كارت «يحتاج انتباهك»: يصل **مفتاح النقص**
+     لا نصّه العربيّ، فيدخل فلتر غرفة العمليات نفسه — تعريفٌ واحد
+     للشرط بدل استنباطه من تسمية مترجَمة. */
   useEffect(() => {
-    const term = (window as any).__hajj_pending_search__;
-    if (term) {
-      (window as any).__hajj_pending_search__ = null;
-      setSearch(term);
+    const w = window as { __hajj_pending_issue__?: IssueKey };
+    const issue = w.__hajj_pending_issue__;
+    if (issue && isIssueKey(issue)) {
+      w.__hajj_pending_issue__ = undefined;
+      setOpsFilter(issue);
     }
   }, []);
 
@@ -190,9 +391,53 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     { key: "bus", label: "الباص", get: (p: Passenger) => p.services?.bus },
     { key: "flight", label: "الطيران", get: (p: Passenger) => p.services?.flight },
     { key: "hotel_type", label: "نوع الغرفة", get: (p: Passenger) => p.services?.hotel_type },
-    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
     { key: "camp_mina", label: "منى", get: (p: Passenger) => p.services?.camp_mina },
     { key: "camp_arafa", label: "عرفة", get: (p: Passenger) => p.services?.camp_arafa },
+  ] as { key: string; label: string; get?: (p: Passenger) => string }[];
+
+  /* الإسناد الفعليّ كسطرٍ ثانويّ داخل خليّة الخدمة المطلوبة —
+     لا أعمدةٌ خمسة جديدة. الخدمة المطلوبة تبقى القيمة الأولى
+     (وهي ما يهمّ في التسجيل)، والإسناد يظهر تحتها في التوزيع.
+     ولا شيء يُخترع: إن لم يوجد إسناد فلا سطر — والنقص شأنُ غرفة
+     العمليات لا شأنُ كل خليّةٍ في الجدول.
+
+     ويحمل السطر **تصنيف الكيان المُسنَد نفسه** حين يخزّنه الكيان:
+     `Bus.type` و`Room.type` و`Camp.type` أعمدةٌ قائمة مستقلّة عن
+     `services`. فيُقرأ «VIP ← باص ٤ · عادي» فيُرى التفاوت بين ما
+     طُلب وما أُسنِد بلا محرّك مطابقةٍ ولا تنبيه. والتصنيف **لا
+     يُشتقّ من طلب الحاجّ أبداً**: لو اشتُقّ لصار السطران يقولان
+     الشيء نفسه مرّتين، ولاستحال أن يظهر تفاوتٌ أصلاً. */
+  const allocationOf = (p: Passenger, key: string): string => {
+    const one = (list: any[], id: number | null | undefined, get: (m: any) => string) => {
+      if (id == null) return "";
+      const m = list.find((x: any) => x.id === id);
+      return m ? get(m) : "";
+    };
+    /* التصنيف يُضاف إن وُجد على الكيان، ويُسكَت عنه إن غاب */
+    const withType = (label: string, type: unknown) => {
+      const t = String(type ?? "").trim();
+      return t ? `${label} · ${t}` : label;
+    };
+    switch (key) {
+      case "bus":        return one(metaBuses, p.bus_id, m => withType(`باص ${m.name}`, m.type));
+      case "hotel_type": return one(metaRooms, p.room_id, m => withType(`غرفة ${m.number}`, m.type));
+      case "camp_mina":  return one(metaCamps, p.camp_mina_id, m => withType(m.name, m.type));
+      case "camp_arafa": return one(metaCamps, p.camp_arafa_id, m => withType(m.name, m.type));
+      /* الرحلة لا تحمل تصنيفاً يقابل «عادي/درجة أولى»: `Flight.type`
+         اتّجاهٌ (ذهاب/إياب) لا درجة. فالاسم وحده — ولا يُخترع. */
+      case "flight": {
+        const out = one(metaFlights, p.flight_id, m => m.name);
+        const ret = one(metaFlights, p.return_flight_id, m => m.name);
+        return out && ret ? (out === ret ? out : `${out} · ${ret}`) : out || ret;
+      }
+      default: return "";
+    }
+  };
+
+  const EXPORT_COLS = [
+    ...COLS.slice(0, COLS.findIndex(c => c.key === "hotel_type") + 1),
+    { key: "hotel_view", label: "إطلالة الغرفة", get: (p: Passenger) => p.services?.hotel_view },
+    ...COLS.slice(COLS.findIndex(c => c.key === "hotel_type") + 1),
   ] as { key: string; label: string; get?: (p: Passenger) => string }[];
 
   const getVal = (p: Passenger, key: string, getter?: (p: Passenger) => string) => {
@@ -213,20 +458,54 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const vals = [...new Set(passengers.filter(p => isHajj(p)).map(get).map(v => (v || "").trim()).filter(Boolean))].filter(v => v !== "بدون") as string[];
     return withNone ? [...vals, "بدون"] : vals;
   };
+  /* «بدون» تُعرض للطيران وحده — كانت تُضاف إلى الباص ومنى وعرفة
+     أيضاً، فتَعِد بفلترٍ لا يقابله خيارٌ في أي شاشة إدخال. */
   const QUICK_FILTERS = [
     { key: "gender", label: "الجنس", opts: optsFrom(p => p.gender) },
-    { key: "bus", label: "الباص", opts: optsFrom(p => p.services?.bus, true) },
+    { key: "bus", label: "الباص", opts: optsFrom(p => p.services?.bus) },
     { key: "flight", label: "الطيران", opts: optsFrom(p => p.services?.flight, true) },
     { key: "hotel_type", label: "نوع الغرفة", opts: optsFrom(p => p.services?.hotel_type) },
     { key: "hotel_view", label: "الإطلالة", opts: optsFrom(p => p.services?.hotel_view) },
-    { key: "camp_mina", label: "منى", opts: optsFrom(p => p.services?.camp_mina, true) },
-    { key: "camp_arafa", label: "عرفة", opts: optsFrom(p => p.services?.camp_arafa, true) },
+    { key: "camp_mina", label: "منى", opts: optsFrom(p => p.services?.camp_mina) },
+    { key: "camp_arafa", label: "عرفة", opts: optsFrom(p => p.services?.camp_arafa) },
     { key: "nat", label: "الجنسية", opts: optsFrom(p => p.nat) },
   ];
 
+  /* مصدرٌ واحد للأرقام المكرّرة: منه تُحسب الشارة ومنه تُبنى
+     القائمة، على نطاق الحجّاج وحدهم في الحالتين. */
+  /* فرقٌ يهمّ الموظّف: موسمٌ لم يبدأ تسجيله، أو فلترٌ لم يطابق
+     أحداً — والثاني له مخرج. */
+  const anyFilterActive = !!search || !!opsFilter || Object.keys(filters).length > 0;
+  const clearAllFilters = () => { setSearch(""); setOpsFilter(null); setFilters({}); };
+
+  const dupPhoneIds = useMemo(() => duplicatePhoneIds(passengers.filter(p => isHajj(p))), [passengers]);
+
+  /* مرحلة الموسم من مصدرها القائم — إشارةُ اتّجاه لغرفة العمليات
+     لا حجب. (الداشبورد وحده يُخفي المستقبل.) */
+  const { phases, currentIdx } = useSeasonPhases(passengers);
+  const phaseTab = PHASE_TAB[phases[currentIdx].id];
+  const opsTab = opsTabPick ?? phaseTab;
+
+  /* طابور العمل: البند المفلتَر إن كان يُحَلّ داخل الملفّ. أما
+     التوزيعات فتُحَلّ في صفحاتها، فلا «التالي/السابق» لها. */
+  const queueIssue: Exclude<OpsFilter, null> | null =
+    opsFilter && (opsFilter === "dup_phones" || ISSUE_UI[opsFilter].resolve.kind === "profile") ? opsFilter : null;
+
+  /* يفتح الملفّ على التبويب الذي يُحَلّ فيه النقص: بيانات للهاتف
+     وصلاحية الجواز، ومستندات للمرفوعات. */
+  const openPilgrim = (p: Passenger) => {
+    setSelected(p);
+    if (queueIssue) {
+      const r = queueIssue === "dup_phones"
+        ? ({ kind: "profile", profileTab: "data" } as const)
+        : ISSUE_UI[queueIssue].resolve;
+      if (r.kind === "profile") setProfileTab(r.profileTab);
+    }
+  };
+
   const filtered = useMemo(() => passengers
     .filter(p => {
-      if (p.passenger_type && p.passenger_type !== "حاج") return false;
+      if (!isHajj(p)) return false;
       if (search) {
         const q = search.trim().toLowerCase();
 
@@ -272,17 +551,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         if (!nameMatch && !docMatch && !natMatch && !genderMatch && !vipMatch && !firstMatch && !busMatch && !flightMatch && !campMatch && !hotelMatch && !roomMatch) {
           // Smart Search — كلمات طبيعية
           const smartMatch = (() => {
-            if (["بدون صورة", "ناقص صورة"].includes(q)) return !p.photo_url;
-            if (["بدون تليفون", "بدون هاتف"].includes(q)) return !p.phone;
-            if (["جواز منتهي", "جواز منتهي الصلاحية"].includes(q)) return !!(p.expiry && isExpired(p.expiry));
-            if (["جواز قريب", "ينتهي قريبا", "ينتهي قريباً"].includes(q)) return !!(p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry));
-            if (["بدون رحلة", "بدون طيران"].includes(q)) return !(p as any).flight_id;
-            if (["بدون باص", "بدون حافلة"].includes(q)) return !(p as any).bus_id;
-            if (["بدون فندق", "بدون غرفة"].includes(q)) return !(p as any).room_id;
-            if (["بدون تذكرة"].includes(q)) return !p.flight_ticket_url;
-            if (["بدون تصريح"].includes(q)) return !p.hajj_permit_url;
-            if (["بدون جواز", "جواز غير مرفوع"].includes(q)) return !p.passport_url;
-            return false;
+            /* العبارات وظيفةُ بحثٍ للمستخدم فتبقى — لكنها لم تعد
+               تحمل تعريف الشرط: كل عبارة تُترجَم إلى `IssueKey`
+               والحكمُ من `hasIssue` وحدها. لهذا صار «بدون باص»
+               يحترم استثناء «بدون» كما تفعل بقيّة الشاشات. */
+            const issue = SEARCH_ISSUE_PHRASES[q];
+            return issue ? hasIssue(issue, p) : false;
           })();
           if (!smartMatch) return false;
         }
@@ -302,51 +576,52 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     })
     .filter(p => {
       if (!opsFilter) return true;
-      if (opsFilter === "no_photo") return !p.photo_url;
-      if (opsFilter === "no_passport_file") return !p.passport_url;
-      if (opsFilter === "expired_passport") return !!(p.expiry && isExpired(p.expiry));
-      if (opsFilter === "expiring_soon") return !!(p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry));
-      if (opsFilter === "no_phone") return !p.phone;
-      if (opsFilter === "dup_phones") {
-        const phoneCounts: Record<string, number> = {};
-        passengers.forEach(x => { if (x.phone) phoneCounts[x.phone] = (phoneCounts[x.phone] || 0) + 1; });
-        return !!(p.phone && phoneCounts[p.phone] > 1);
-      }
-      if (opsFilter === "no_flight") return isMissingService(p, "flight");
-      if (opsFilter === "no_bus") return isMissingService(p, "bus");
-      if (opsFilter === "no_room") return isMissingService(p, "hotel_type");
-      if (opsFilter === "no_mina") return isMissingService(p, "camp_mina");
-      if (opsFilter === "no_arafa") return isMissingService(p, "camp_arafa");
-      if (opsFilter === "no_ticket") return !p.flight_ticket_url;
-      if (opsFilter === "no_permit") return !p.hajj_permit_url;
-      return true;
+      if (opsFilter === "dup_phones") return dupPhoneIds.has(p.id);
+      /* بندٌ إخباريّ («تم تسجيل N اليوم») ليس نقصاً ولا يفلتر —
+         كما كان قبل التوحيد. */
+      if (!isIssueKey(opsFilter)) return true;
+      return hasIssue(opsFilter, p);
     })
     .sort(byOrder("sort_order")),
-  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter]);
+  [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter, dupPhoneIds]);
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
   const printList = () => {
-    const headers = COLS.map(c => `<th style="padding:4pt 6pt;background:${reportBranding.primaryColor};color:#fff;text-align:right;font-size:8pt">${c.label}</th>`).join("");
+    const headers = EXPORT_COLS.map(c => `<th style="padding:4pt 6pt;background:${reportBranding.primaryColor};color:#fff;text-align:right;font-size:8pt">${c.label}</th>`).join("");
     const rows = filtered.map((p, i) =>
       `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f6f2"}">
         <td style="text-align:center;padding:4pt 5pt;border:0.5pt solid #ddd;font-size:8pt">${i + 1}</td>
-        ${COLS.map(col => `<td style="padding:4pt 5pt;border:0.5pt solid #ddd;font-size:8pt;white-space:normal">${getVal(p, col.key, col.get)}</td>`).join("")}
+        ${EXPORT_COLS.map(col => `<td style="padding:4pt 5pt;border:0.5pt solid #ddd;font-size:8pt;white-space:normal">${getVal(p, col.key, col.get)}</td>`).join("")}
       </tr>`
     ).join("");
     const body = `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
       <thead><tr><th style="text-align:center;padding:4pt 5pt;background:${reportBranding.primaryColor};color:#fff;width:20pt;font-size:8pt">م</th>${headers}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-    const html = makeHTML("كشف الحجاج", body, reportBranding, { landscape: true });
+    /* الأعمدةُ ثابتةٌ هنا عن قصد — كشفٌ تشغيليّ، لا كشفُ التقارير
+       القابلُ للتهيئة. والمستندان يبقيان مختلفَين، ويشتركان في
+       القشرة وحدها: الموسمُ وعدُّ النتائج ونطاقُ الفرز. */
+    const scope: string[] = [];
+    if (search.trim()) scope.push(`بحث: ${search.trim()}`);
+    Object.entries(filters).forEach(([k, v]) => { if (v) scope.push(`${k}: ${v}`); });
+    if (opsFilter) scope.push(opsFilterLabel(opsFilter));
+    const html = makeHTML("كشف الحجاج", body, reportBranding, {
+      landscape: true,
+      chrome: {
+        season: viewedSeason,
+        resultCount: { label: "عدد النتائج", value: filtered.length },
+        scope: scope.length ? scope.join(" · ") : null,
+      },
+    });
     printInPage(html);
   };
 
   // ===== تصدير كشف الحجاج الحالي إكسيل (بعد البحث/الفلاتر) =====
   const exportExcel = () => {
-    const headers = ["م", ...COLS.map(c => c.label)];
-    const rows = filtered.map((p, i) => [i + 1, ...COLS.map(col => getVal(p, col.key, col.get) || "—")]);
+    const headers = ["م", ...EXPORT_COLS.map(c => c.label)];
+    const rows = filtered.map((p, i) => [i + 1, ...EXPORT_COLS.map(col => getVal(p, col.key, col.get) || "—")]);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws["!cols"] = [{ wch: 4 }, ...COLS.map(() => ({ wch: 18 }))];
+    ws["!cols"] = [{ wch: 4 }, ...EXPORT_COLS.map(() => ({ wch: 18 }))];
     freezeHeaderRow(ws);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "الحجاج");
@@ -1160,6 +1435,15 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 {opts.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             ))}
+            {/* غرفة العمليات تختفي عند فتح ملفّ حاجّ، فيبقى الجدول
+                مفلتراً بلا تفسير. الشريحة هنا تقول السبب وتلغيه —
+                وتلغيه وحده، فلا تمسّ البحث ولا القوائم. */}
+            {opsFilter && (
+              <button onClick={() => setOpsFilter(null)}
+                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1.5px solid var(--em7)", background: "rgba(125,31,60,0.06)", color: "var(--em7)", cursor: "pointer", fontFamily: "var(--font-body)", fontWeight: 700 }}>
+                {opsFilterLabel(opsFilter)} ✕
+              </button>
+            )}
             {Object.keys(filters).length > 0 && (
               <button onClick={() => setFilters({})} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 99, border: "1px solid var(--danger)", background: "var(--fb)", color: "var(--ff)", cursor: "pointer", fontFamily: "var(--font-body)" }}>مسح الفلاتر ✕</button>
             )}
@@ -1171,7 +1455,20 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           {viewMode === "list" ? (
             <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, margin: "12px 14px", overflow: "hidden" }}>
               {filtered.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "2rem", color: "var(--muted)", fontSize: 12 }}>لا توجد نتائج</div>
+                <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--muted)", fontSize: 12.5 }}>
+                  {anyFilterActive ? (
+                    <>
+                      <div style={{ fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>لا توجد نتائج مطابقة</div>
+                      <div style={{ fontSize: 11, marginBottom: 10 }}>لا حاجّ يطابق البحث والفلاتر الحالية</div>
+                      <button onClick={clearAllFilters} style={{ padding: "6px 14px", borderRadius: 99, border: "1px solid var(--em7)", background: "var(--paper)", color: "var(--em7)", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 800 }}>مسح البحث والفلاتر</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>لا حجّاج في هذا الموسم بعد</div>
+                      <div style={{ fontSize: 11 }}>ابدأ بمسح جواز أو بالإضافة اليدوية</div>
+                    </>
+                  )}
+                </div>
               ) : filtered.map((p, idx) => (
                 <div key={p.id}
                   draggable
@@ -1179,7 +1476,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   onDragOver={e => handleDragOver(e, p.id)}
                   onDrop={handleDrop}
                   onDragEnd={handleDragEnd}
-                  onClick={() => setSelected(p)}
+                  onClick={() => openPilgrim(p)}
                   style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 18px", borderBottom: "1px solid var(--line)", cursor: "grab", transition: "background .14s", background: draggingId === p.id ? "rgba(125,31,60,0.06)" : dragOverId === p.id ? "rgba(125,31,60,0.03)" : selected?.id === p.id ? "var(--ivory)" : "transparent", border: dragOverId === p.id ? "1px solid var(--em7)" : "none", opacity: draggingId === p.id ? 0.5 : 1 }}
                   onMouseEnter={e => { if (selected?.id !== p.id && draggingId !== p.id) e.currentTarget.style.background = "var(--ivory)"; }}
                   onMouseLeave={e => { if (selected?.id !== p.id && draggingId !== p.id) e.currentTarget.style.background = "transparent"; }}>
@@ -1216,12 +1513,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", display: "flex", alignItems: "center", gap: 5 }}>
                       {p.short_ar || p.name_ar}
-                      {(isExpired(p.expiry) || isExpired((p as any).id_expiry)) && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "var(--danger-bg)", color: "var(--danger)" }}>منتهي</span>
-                      )}
-                      {!isExpired(p.expiry) && (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "var(--warning-bg)", color: "var(--warning)" }}>قريب</span>
-                      )}
+                      {(() => {
+                        /* الشارة تسمّي الوثيقة: «منتهي» وحدها كانت
+                           تُقرأ جوازاً دائماً وقد تكون البطاقة. */
+                        const n = expiryNotice(p);
+                        if (!n) return null;
+                        const exp = n.tone === "expired";
+                        return <span title={n.text} style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: exp ? "var(--danger-bg)" : "var(--warning-bg)", color: exp ? "var(--danger)" : "var(--warning)" }}>{n.text}</span>;
+                      })()}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{p.nat} · {p.passport}{p.phone ? ` · ${p.phone}` : ""}</div>
                   </div>
@@ -1256,7 +1555,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </div>
-                    <div onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                    <div onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`سيُحذف «${p.name_ar || p.name_en}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" }); if (ok) deleteP(p.id); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--fb)"; e.currentTarget.style.color = "var(--ff)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
@@ -1276,6 +1575,26 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 </tr>
               </thead>
               <tbody>
+                {/* الجدول كان يعرض جسماً فارغاً بلا كلمة: لا يعرف
+                    الموظّف أفلترٌ ضيّق أم موسمٌ خالٍ. */}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={COLS.length + 3} style={{ padding: 0, border: "0.5px solid var(--border)" }}>
+                    <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--muted)", fontSize: 12.5 }}>
+                      {anyFilterActive ? (
+                        <>
+                          <div style={{ fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>لا توجد نتائج مطابقة</div>
+                          <div style={{ fontSize: 11, marginBottom: 10 }}>لا حاجّ يطابق البحث والفلاتر الحالية</div>
+                          <button onClick={clearAllFilters} style={{ padding: "6px 14px", borderRadius: 99, border: "1px solid var(--em7)", background: "var(--paper)", color: "var(--em7)", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 800 }}>مسح البحث والفلاتر</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontWeight: 800, color: "var(--ink)", marginBottom: 4 }}>لا حجّاج في هذا الموسم بعد</div>
+                          <div style={{ fontSize: 11 }}>ابدأ بمسح جواز أو بالإضافة اليدوية</div>
+                        </>
+                      )}
+                    </div>
+                  </td></tr>
+                )}
                 {filtered.map((p, i) => (
                   <tr key={p.id}
                     draggable
@@ -1291,7 +1610,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       if (fromId === toId) return;
                       await reorderHajj(ordered => moveWithin(ordered, fromId, ordered.findIndex(x => x.id === toId)));
                     }}
-                    onClick={() => setSelected(p)}
+                    onClick={() => openPilgrim(p)}
                     style={{ cursor: "grab", background: selected?.id === p.id ? "var(--success-bg)" : i % 2 === 0 ? "var(--paper)" : "var(--ivory)", borderBottom: "1px solid var(--line)", transition: "background .12s" }}
                     onMouseEnter={e => { if (selected?.id !== p.id) (e.currentTarget as HTMLTableRowElement).style.background = "color-mix(in srgb, var(--accent) 8%, var(--paper))"; }}
                     onMouseLeave={e => { if (selected?.id !== p.id) (e.currentTarget as HTMLTableRowElement).style.background = i % 2 === 0 ? "var(--paper)" : "var(--ivory)"; }}>
@@ -1331,15 +1650,17 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     </td>
                     {/* ══ مؤشر الحالة ══ */}
                     {(() => {
+                      /* الشروط من `readiness` كغرفة العمليات — التسميةُ
+                         هنا مختصرةٌ لأنها تسكن في تلميحِ صفٍّ لا في قائمة. */
                       const issues: string[] = [];
-                      if (isExpired(p.expiry)) issues.push("جواز منتهي الصلاحية");
-                      if (isExpiringSoon(p.expiry) && !isExpired(p.expiry)) issues.push("جواز يقترب من الانتهاء");
-                      if (!p.photo_url) issues.push("بدون صورة شخصية");
-                      if (!p.passport_url) issues.push("جواز لم يُرفع");
-                      if (!p.phone) issues.push("بدون رقم هاتف");
+                      if (hasIssue("expired_passport", p)) issues.push("جواز منتهي الصلاحية");
+                      if (hasIssue("expiring_passport", p)) issues.push("جواز يقترب من الانتهاء");
+                      if (hasIssue("missing_photo", p)) issues.push("بدون صورة شخصية");
+                      if (hasIssue("missing_passport", p)) issues.push("جواز لم يُرفع");
+                      if (hasIssue("missing_phone", p)) issues.push("بدون رقم هاتف");
 
-                      const color = isExpired(p.expiry) ? "#DC2626" :
-                                    isExpiringSoon(p.expiry) ? "#D97706" :
+                      const color = hasIssue("expired_passport", p) ? "#DC2626" :
+                                    hasIssue("expiring_passport", p) ? "#D97706" :
                                     issues.length > 0 ? "#EAB308" : "#22C55E";
                       const title = issues.length > 0 ? issues.join(" · ") : "جاهز";
 
@@ -1347,7 +1668,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                         <td style={{ padding: "5px 8px", border: "0.5px solid var(--line)", textAlign: "center", width: 36 }}>
                           <div
                             title={title}
-                            onClick={e => { e.stopPropagation(); setSelected(p); }}
+                            onClick={e => { e.stopPropagation(); openPilgrim(p); }}
                             style={{ width: 12, height: 12, borderRadius: "50%", background: color, margin: "0 auto", cursor: "pointer", boxShadow: `0 0 0 2px ${color}30`, transition: "transform .15s" }}
                             onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1.3)"}
                             onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"}
@@ -1372,10 +1693,23 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                           const color = isExpired(val) ? "var(--danger)" : isExpiringSoon(val) ? "var(--warning)" : "var(--success)";
                           return <span style={{ color, fontWeight: 600 }}>{val}</span>;
                         })() : getVal(p, col.key, col.get)}
+                        {(() => {
+                          const alloc = allocationOf(p, col.key);
+                          return alloc
+                            ? <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, marginTop: 1 }}>{alloc}</div>
+                            : null;
+                        })()}
                         {col.key === "name_ar" && p.name_en && (
                           <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400, marginTop: 1, direction: "ltr", textAlign: "right" }}>{p.short_en || p.name_en}</div>
                         )}
-                        {col.key === "name_ar" && ((isExpired(p.expiry) || isExpired((p as any).id_expiry)) ? <span style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span> : (isExpiringSoon(p.expiry) || isExpiringSoon((p as any).id_expiry)) && <span style={{ marginRight: 4, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>)}
+                        {col.key === "name_ar" && (() => {
+                          /* الأيقونة نفسها، لكن `title` يقول أيّ وثيقة */
+                          const n = expiryNotice(p);
+                          if (!n) return null;
+                          return n.tone === "expired"
+                            ? <span title={n.text} style={{ marginRight: 4, color: "var(--danger)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>
+                            : <span title={n.text} style={{ marginRight: 4, color: "var(--warning)" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>;
+                        })()}
                       </td>
                     ))}
                     <td style={{ padding: "5px 10px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", textAlign: "center" }}>
@@ -1388,7 +1722,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                             <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                           </svg>
                         </button>
-                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف"
+                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`سيُحذف «${p.name_ar || p.name_en}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف"
                           style={{ ...roOff, width: 30, height: 30, borderRadius: 9, border: "none", background: "#FFCDD2", cursor: "pointer", color: "#B71C1C", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#B71C1C"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#FFCDD2"; b.style.color = "#B71C1C"; b.style.transform = "scale(1)"; }}>
@@ -1409,62 +1743,20 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         {/* ══ مركز العمليات — جانبي بالطول ══ */}
         {(() => {
           const hajj = passengers.filter(p => isHajj(p));
-          const noPhoto = hajj.filter(p => !p.photo_url).length;
-          const noPassportFile = hajj.filter(p => !p.passport_url).length;
-          const expiredPassport = hajj.filter(p => p.expiry && isExpired(p.expiry)).length;
-          const expiringSoon = hajj.filter(p => p.expiry && !isExpired(p.expiry) && isExpiringSoon(p.expiry)).length;
-          const noPhone = hajj.filter(p => !p.phone).length;
-          const phoneCounts: Record<string, number> = {};
-          hajj.forEach(p => { if (p.phone) phoneCounts[p.phone] = (phoneCounts[p.phone] || 0) + 1; });
-          const dupPhones = Object.values(phoneCounts).filter(c => c > 1).length;
-          const noFlight = hajj.filter(p => isMissingService(p, "flight")).length;
-          const noBus = hajj.filter(p => isMissingService(p, "bus")).length;
-          const noRoom = hajj.filter(p => isMissingService(p, "hotel_type")).length;
-          const noMina = hajj.filter(p => isMissingService(p, "camp_mina")).length;
-          const noArafa = hajj.filter(p => isMissingService(p, "camp_arafa")).length;
-          const noTicket = hajj.filter(p => !p.flight_ticket_url).length;
-          const noPermit = hajj.filter(p => !p.hajj_permit_url).length;
-
-          // نظام الأولويات
-          const criticalItems = [
-            expiredPassport > 0 && { key: "expired_passport", label: "جوازات منتهية الصلاحية", desc: "يحتاج تجديد فوري", count: expiredPassport, icon: `<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>`, priority: "critical" as const },
-            expiringSoon > 0 && { key: "expiring_soon", label: "جوازات تنتهي خلال ٦ أشهر", desc: "تحتاج متابعة عاجلة", count: expiringSoon, icon: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`, priority: "critical" as const },
-          ].filter(Boolean) as any[];
-
-          const importantItems = [
-            noPhoto > 0 && { key: "no_photo", label: "صور شخصية ناقصة", desc: "مستند مطلوب للتسجيل", count: noPhoto, icon: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>`, priority: "important" as const },
-            noPassportFile > 0 && { key: "no_passport_file", label: "جوازات لم يتم رفعها", desc: "مستندات مفقودة", count: noPassportFile, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`, priority: "important" as const },
-            noPhone > 0 && { key: "no_phone", label: "حجاج بدون رقم هاتف", desc: "بيانات التواصل مفقودة", count: noPhone, icon: `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.4 2 2 0 0 1 3.04 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.14a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.03z"/>`, priority: "important" as const },
-            dupPhones > 0 && { key: "dup_phones", label: "أرقام هواتف مكررة", desc: "يحتاج مراجعة ومطابقة", count: dupPhones, icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>`, priority: "important" as const },
-            noFlight > 0 && { key: "no_flight", label: "حجاج بدون رحلة طيران", desc: "لم يتم التوزيع بعد", count: noFlight, icon: `<path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>`, priority: "important" as const },
-            noBus > 0 && { key: "no_bus", label: "حجاج بدون باص", desc: "لم يتم التوزيع بعد", count: noBus, icon: `<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>`, priority: "important" as const },
-            noRoom > 0 && { key: "no_room", label: "حجاج بدون غرفة فندق", desc: "لم يتم التوزيع بعد", count: noRoom, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
-            noMina > 0 && { key: "no_mina", label: "حجاج بدون مخيم منى", desc: "لم يتم التوزيع بعد", count: noMina, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
-            noArafa > 0 && { key: "no_arafa", label: "حجاج بدون مخيم عرفة", desc: "لم يتم التوزيع بعد", count: noArafa, icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`, priority: "important" as const },
-            noTicket > 0 && { key: "no_ticket", label: "حجاج بدون تذكرة طيران", desc: "مستند السفر مفقود", count: noTicket, icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>`, priority: "important" as const },
-            noPermit > 0 && { key: "no_permit", label: "حجاج بدون تصريح حج", desc: "تصريح الحج مفقود", count: noPermit, icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>`, priority: "important" as const },
-          ].filter(Boolean) as any[];
-
-          // حجاج اليوم
-          const today = new Date().toDateString();
-          const addedToday = hajj.filter(p => (p as any).created_at && new Date((p as any).created_at).toDateString() === today).length;
-          const infoItems = [
-            addedToday > 0 && { key: "added_today", label: `تم تسجيل ${addedToday} حاج اليوم`, desc: "إضافة حديثة", count: addedToday, icon: `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>`, priority: "info" as const },
-          ].filter(Boolean) as any[];
-
-          const allItems = [...criticalItems, ...importantItems, ...infoItems];
-          const regKeys = ["no_photo", "no_passport_file", "expired_passport", "expiring_soon", "no_phone", "dup_phones"];
-          const distKeys = ["no_flight", "no_bus", "no_room", "no_mina", "no_arafa"];
-          const travelKeys = ["no_ticket", "no_permit", "added_today"];
-          const items = opsTab === "reg" ? allItems.filter(i => regKeys.includes(i.key)) :
-                        opsTab === "dist" ? allItems.filter(i => distKeys.includes(i.key)) :
-                        allItems.filter(i => travelKeys.includes(i.key));
-          const totalAlerts = criticalItems.length + importantItems.length;
-
-          const priorityConfig = {
-            critical: { color: "#DC2626", bg: "rgba(220,38,38,.08)", label: "حرج", dot: "#DC2626" },
-            important: { color: "#D97706", bg: "rgba(217,119,6,.08)", label: "مهم", dot: "#D97706" },
-            info: { color: "#2563EB", bg: "rgba(37,99,235,.08)", label: "معلومة", dot: "#2563EB" },
+          /* العدُّ من `hasIssue` — وهي نفسها التي يفلتر بها
+             `opsFilter`. فما تقوله الشارة هو ما تفتح عليه. */
+          const rows = (Object.keys(ISSUE_UI) as IssueKey[])
+            .map(issue => ({ key: issue as Exclude<OpsFilter, null>, ui: ISSUE_UI[issue], count: hajj.filter(p => hasIssue(issue, p)).length }))
+            .filter(r => r.count > 0);
+          if (dupPhoneIds.size > 0) {
+            rows.push({ key: "dup_phones", ui: { ...DUP_PHONES_UI, resolve: { kind: "profile", profileTab: "data" } }, count: dupPhoneIds.size });
+          }
+          const byTab = (t: "reg" | "dist" | "travel") => rows.filter(r => r.ui.tab === t);
+          const items = byTab(opsTab);
+          const SEVERITY = {
+            critical: { color: "var(--danger)",  bg: "var(--danger-bg)" },
+            warning:  { color: "var(--warning)", bg: "var(--warning-bg)" },
+            normal:   { color: "var(--primary)", bg: "var(--ivory2)" },
           };
 
           return (
@@ -1472,19 +1764,31 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-light))", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: totalAlerts > 0 ? "#fca5a5" : "#86efac", animation: "blink 2s infinite" }} />
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: rows.length > 0 ? "#fca5a5" : "#86efac", animation: "blink 2s infinite" }} />
                   <span style={{ fontSize: 13, fontWeight: 900, color: "var(--text-inverse)", flex: 1 }}>غرفة العمليات</span>
-                  {totalAlerts > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "rgba(255,255,255,.2)", color: "var(--text-inverse)", padding: "2px 8px", borderRadius: 99 }}>{totalAlerts}</span>}
                 </div>
+                {/* الجملة تصف التبويب المعروض وحده. كانت تجمع كل
+                    التبويبات فتَعِد بعملٍ لا يراه الموظّف أمامه. */}
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,.65)", marginBottom: 8 }}>
-                  {totalAlerts > 0 ? `اليوم لديك ${totalAlerts} ${totalAlerts >= 3 && totalAlerts <= 10 ? "مهمات" : totalAlerts === 2 ? "مهمتان" : "مهمة"} تحتاج إلى متابعة` : "كل شيء على ما يرام ✓"}
+                  {items.length > 0 ? `${itemsLabel(items.length)} في هذا التبويب` : "لا مهام في هذا التبويب ✓"}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  {([["reg", "التسجيل"], ["dist", "التوزيع"], ["travel", "السفر"]] as const).map(([tab, label]) => (
-                    <button key={tab} onClick={() => { setOpsTab(tab); setOpsFilter(null); }} style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${opsTab === tab ? "transparent" : "rgba(255,255,255,.2)"}`, background: opsTab === tab ? "rgba(255,255,255,.9)" : "transparent", color: opsTab === tab ? "var(--primary)" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s" }}>
-                      {label}
-                    </button>
-                  ))}
+                  {([["reg", "التسجيل"], ["dist", "التوزيع"], ["travel", "السفر"]] as const).map(([tab, label]) => {
+                    const on = opsTab === tab;
+                    const n = byTab(tab).length;
+                    /* نقطةٌ ذهبية على تبويب المرحلة الجارية — توجيهٌ
+                       لا حجب: التبويبات الثلاثة تبقى مفتوحة. */
+                    const isPhase = tab === phaseTab;
+                    return (
+                      <button key={tab} onClick={() => { setOpsTabPick(tab); setOpsFilter(null); }}
+                        title={isPhase ? "مرحلة الموسم الحالية" : undefined}
+                        style={{ flex: 1, padding: "5px 0", borderRadius: 7, border: `1px solid ${on ? "transparent" : "rgba(255,255,255,.2)"}`, background: on ? "rgba(255,255,255,.9)" : "transparent", color: on ? "var(--primary)" : "rgba(255,255,255,.7)", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "all .15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                        {isPhase && <span style={{ width: 5, height: 5, borderRadius: "50%", background: on ? "var(--accent-dark)" : "var(--accent)", flexShrink: 0 }} />}
+                        {label}
+                        {n > 0 && <span style={{ fontSize: 9, fontWeight: 900, opacity: on ? .75 : .6 }}>{n}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               {/* القائمة */}
@@ -1492,26 +1796,58 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 {items.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "24px 16px", color: "var(--muted)", fontSize: 11 }}>
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: 8 }}><polyline points="20 6 9 17 4 12"/></svg>
-                    <div>لا توجد مهام اليوم</div>
+                    <div>لا توجد مهام في هذا التبويب</div>
                   </div>
-                ) : items.map((item: any, i: number) => {
-                  const cfg = priorityConfig[item.priority as keyof typeof priorityConfig];
+                ) : items.map(item => {
+                  const cfg = SEVERITY[item.ui.severity];
+                  const on = opsFilter === item.key;
+                  const page = item.ui.resolve.kind === "page" ? item.ui.resolve : null;
+                  /* لا نُرسل الموظّف إلى صفحةٍ لا يملكها */
+                  const mayGo = page ? !!currentUser?.permissions?.[page.perm] : false;
                   return (
-                    <div key={i} onClick={() => setOpsFilter(opsFilter === item.key ? null : item.key)}
-                      style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "9px 10px", borderRadius: 9, cursor: "pointer", marginBottom: 3, border: `1px solid ${opsFilter === item.key ? cfg.color + "40" : "transparent"}`, background: opsFilter === item.key ? cfg.bg : "transparent", transition: "all .15s" }}
-                      onMouseEnter={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"; }}
-                      onMouseLeave={e => { if (opsFilter !== item.key) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.dot, flexShrink: 0, marginTop: 4 }} />
-                        <div style={{ width: 30, height: 30, borderRadius: 8, background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
+                    <div key={item.key}
+                      style={{ borderRadius: 9, marginBottom: 3, border: `1px solid ${on ? cfg.color + "40" : "transparent"}`, background: on ? cfg.bg : "transparent", transition: "all .15s" }}>
+                      <div onClick={() => setOpsFilter(on ? null : item.key)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, cursor: "pointer" }}
+                        onMouseEnter={e => { if (!on) (e.currentTarget.parentElement as HTMLDivElement).style.background = "var(--ivory)"; }}
+                        onMouseLeave={e => { if (!on) (e.currentTarget.parentElement as HTMLDivElement).style.background = "transparent"; }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: cfg.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.ui.icon }} />
                         </div>
+                        {/* العنوان والعدد وحدهما: «لم يتم التوزيع بعد»
+                            تحت «حجاج بدون باص» تكرارٌ يطيل الكارت. */}
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3 }}>{item.ui.label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: cfg.color, flexShrink: 0, lineHeight: 1 }}>{item.count}</div>
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3, marginBottom: 2 }}>{item.label}</div>
-                        <div style={{ fontSize: 9, color: "var(--muted)" }}>{item.desc}</div>
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: cfg.color, flexShrink: 0, lineHeight: 1, marginTop: 4 }}>{item.count}</div>
+                      {/* التوزيعات لا تُحَلّ في ملفّ الحاجّ: زرٌّ صريح
+                          إلى مكان الحلّ، يظهر عند اختيار البند. */}
+                      {/* مملوءٌ لا مفرَّغ: الحدُّ الشفيف على أرضيّة البند
+                          المختار كان يذوب فيها فلا يُقرأ زرّاً. واللون
+                          لونُ البند نفسه فلا يزاحمه. */}
+                      {on && page && (
+                        <button
+                          onClick={() => { if (mayGo) window.dispatchEvent(new CustomEvent("hajj_goto_page", { detail: page.page })); }}
+                          disabled={!mayGo}
+                          title={mayGo ? undefined : "لا تملك صلاحية هذه الصفحة"}
+                          onMouseEnter={e => { if (mayGo) e.currentTarget.style.filter = "brightness(1.12)"; }}
+                          onMouseLeave={e => { e.currentTarget.style.filter = "none"; }}
+                          style={{
+                            width: "calc(100% - 20px)", margin: "0 10px 8px", padding: "7px 10px",
+                            borderRadius: 8, border: "none",
+                            background: mayGo ? cfg.color : "var(--ivory2)",
+                            color: mayGo ? "var(--text-inverse)" : "var(--muted)",
+                            boxShadow: mayGo ? "0 1px 3px rgba(0,0,0,.18)" : "none",
+                            cursor: mayGo ? "pointer" : "not-allowed",
+                            fontFamily: "var(--font-body)", fontSize: 10.5, fontWeight: 900,
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                            transition: "filter .14s",
+                          }}>
+                          {page.action}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -1528,11 +1864,48 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       </div>
       {selected && !editing && (
         <div style={{ width: 280, overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
+          {/* ═══ شريط طابور العمل ═══
+              غرفة العمليات تنطوي عند فتح الملفّ (والمساحة مقصودة)،
+              فيبقى من المهمّة سطرٌ واحد: أيّ بندٍ نعالج، وأين نحن
+              منه، وكيف ننتقل. والعضوية **حيّة**: `filtered` تُشتقّ
+              من حالة الحجّاج بمسند `readiness` نفسه، فمن رُفعت صورته
+              يخرج من الطابور فوراً بلا لقطةٍ محفوظة ولا جدول. */}
+          {queueIssue && (() => {
+            const queue = filtered;
+            const idx = queue.findIndex(x => x.id === selected.id);
+            const order = byOrder("sort_order");
+            /* حين يخرج الحاجّ الحاليّ من الطابور (حُلّ نقصه) يبقى
+               ملفّه مفتوحاً — لا يُنتزع من تحت يد الموظّف — و«التالي»
+               يقصد أوّل من يليه في ترتيب القائمة بين الباقين. */
+            const nextP = idx >= 0 ? queue[idx + 1] : queue.find(x => order(x, selected) > 0);
+            const prevList = idx >= 0 ? queue.slice(0, idx) : queue.filter(x => order(x, selected) < 0);
+            const prevP = prevList[prevList.length - 1];
+            const stillHas = queueIssue === "dup_phones" ? dupPhoneIds.has(selected.id) : hasIssue(queueIssue, selected);
+            const btn = (on: boolean) => ({
+              padding: "3px 9px", borderRadius: 7, border: "1px solid var(--line)",
+              background: on ? "var(--paper)" : "transparent", color: on ? "var(--primary)" : "var(--muted)",
+              cursor: on ? "pointer" : "not-allowed", opacity: on ? 1 : .45,
+              fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 800,
+            });
+            return (
+              <div style={{ margin: "-12px -12px 10px", padding: "7px 12px", background: "var(--ivory)", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: "var(--ink)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opsFilterLabel(queueIssue)}</span>
+                {/* «تم» تُقال حين يُحَلّ النقص فعلاً. أما الخروج من
+                    القائمة ببحثٍ أو فلترٍ آخر فليس حلّاً — ولا يُقال
+                    عنه إنه تمّ. */}
+                <span style={{ fontSize: 10, fontWeight: 800, color: idx >= 0 ? "var(--muted)" : stillHas ? "var(--warning)" : "var(--success)", whiteSpace: "nowrap" }}>
+                  {idx >= 0 ? `${idx + 1} من ${queue.length}` : stillHas ? `خارج الفلتر · بقي ${queue.length}` : `✔ تم · بقي ${queue.length}`}
+                </span>
+                <button disabled={!prevP} onClick={() => prevP && openPilgrim(prevP)} style={btn(!!prevP)}>السابق</button>
+                <button disabled={!nextP} onClick={() => nextP && openPilgrim(nextP)} style={btn(!!nextP)}>التالي</button>
+                <button onClick={() => { setOpsFilter(null); setSelected(null); }} style={{ ...btn(true), border: "1px solid var(--em7)", color: "var(--em7)" }}>إنهاء</button>
+              </div>
+            );
+          })()}
           {(() => {
             const docsArr = [(selected as any).photo_url, (selected as any).passport_url, (selected as any).national_id_url, (selected as any).contract_url, (selected as any).flight_ticket_url, (selected as any).hajj_permit_url];
             const docsDone = docsArr.filter(Boolean).length;
             const docsPct = Math.round(docsDone / docsArr.length * 100);
-            const missing = docsArr.length - docsDone;
             return (
               <div style={{ margin: "-12px -12px 10px", background: "linear-gradient(160deg, #3D0F1E 0%, #7D1F3C 60%, #9A2F4E 100%)", padding: "16px 14px 0", color: "var(--text-inverse)", position: "relative" }}>
                 <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 10, left: 10, width: 26, height: 26, borderRadius: 8, background: "rgba(255,255,255,.12)", border: "none", cursor: "pointer", color: "var(--text-inverse)", fontSize: 14 }}>✕</button>
@@ -1550,8 +1923,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 </div>
                 <div style={{ background: "rgba(0,0,0,.3)", margin: "9px -14px 0", padding: "8px 14px 10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 800, marginBottom: 5 }}>
-                    <span style={{ color: "rgba(255,255,255,.8)" }}>اكتمال الملف</span>
-                    <span style={{ color: "#F3D98B" }}>{docsPct}٪{missing > 0 ? ` · ${missing === 1 ? "مستند ناقص" : missing === 2 ? "مستندان ناقصان" : `${missing} مستندات ناقصة`}` : " · مكتمل"}</span>
+                    {/* كان يقول «اكتمال الملف ٦٧٪» وهو يعدّ المرفوعات
+                        وحدها — ومنها التذكرة والتصريح، وهما وثيقتا
+                        مرحلةٍ متأخّرة. فحاجٌّ مكتمل التسجيل يُقرأ
+                        نصفَ ملفّ. الجاهزية التشغيلية لها مكانها:
+                        الداشبورد وغرفة العمليات. هنا تغطيةُ مستندات
+                        تقول اسمها وعددها. */}
+                    <span style={{ color: "rgba(255,255,255,.8)" }}>المستندات</span>
+                    <span style={{ color: "#F3D98B" }} dir="ltr">{docsDone} / {docsArr.length}</span>
                   </div>
                   <div style={{ height: 6, background: "rgba(255,255,255,.15)", borderRadius: 99, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${docsPct}%`, borderRadius: 99, background: "linear-gradient(to left, #F3D98B, #D4A017)" }} />
@@ -1565,41 +1944,109 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               </div>
             );
           })()}
-          {(isExpired(selected.expiry) || isExpired((selected as any).id_expiry)) ? (
-            <div style={{ background: "var(--female-bg)", border: "1.5px solid #c0392b", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--danger)", fontWeight: 700, textAlign: "center" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> {isExpired(selected.expiry) ? "الجواز منتهي" : "البطاقة منتهية"}
-            </div>
-          ) : (isExpiringSoon(selected.expiry) || isExpiringSoon((selected as any).id_expiry)) && (
-            <div style={{ background: "var(--warning-bg)", border: "1px solid #e67e22", borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: "var(--warning)", fontWeight: 600, textAlign: "center" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> صلاحية {isExpiringSoon(selected.expiry) ? "الجواز" : "البطاقة"} ستنتهي خلال أقل من 6 شهور
-            </div>
-          )}
+          {(() => {
+            /* لافتةٌ واحدة تسمّي الوثيقة المنتهية بعينها، وتجمعهما
+               حين ينتهيان معاً بدل لافتتين. */
+            const n = expiryNotice(selected);
+            if (!n) return null;
+            const exp = n.tone === "expired";
+            return (
+              <div style={{ background: exp ? "var(--female-bg)" : "var(--warning-bg)", border: `1.5px solid ${exp ? "#c0392b" : "var(--warning)"}`, borderRadius: 8, padding: "8px 10px", marginBottom: 10, fontSize: 11, color: exp ? "var(--danger)" : "var(--warning)", fontWeight: 700, textAlign: "center" }}>
+                {exp
+                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
+                {" "}{n.text}
+              </div>
+            );
+          })()}
           {profileTab === "data" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
-              {([[" الجواز", selected.passport, false], ["البطاقة", selected.national_id, false], ["الجنسية", selected.nat, false], ["الجنس", selected.gender, false], ["الميلاد", selected.dob, false], ["انتهاء الجواز", selected.expiry, isExpired(selected.expiry)], ["التليفون", selected.phone, false]] as [string, string | undefined, boolean][]).filter(([, v]) => v !== undefined && v !== "").map(([lbl, val, isDanger]) => (
-                <div key={lbl} style={{ background: isDanger ? "#FFEBEE" : "var(--ivory)", border: isDanger ? "1.5px solid #FFCDD2" : "1px solid var(--line)", borderRadius: 10, padding: "8px 11px", gridColumn: lbl.trim() === "التليفون" ? "span 2" : undefined }}>
-                  <div style={{ fontSize: 9.5, color: isDanger ? "#B71C1C" : "var(--muted)", fontWeight: 800, marginBottom: 2 }}>{lbl.trim()}</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 900, color: isDanger ? "#B71C1C" : "var(--ink)" }} dir={lbl.trim() === "التليفون" ? "ltr" : undefined}>{val}</div>
-                </div>
-              ))}
+              {/* كان الفارغ يُحذف من الشبكة، فلا يفرّق الموظّف بين
+                  «لا هاتف له» و«الحقل غير معروض» — وغرفة العمليات
+                  تسوقه إلى هنا تحديداً ليملأ هاتفاً لا يراه. الحقول
+                  الأساسية تظهر دائماً، والفارغ يقول إنه فارغ. */}
+              {([
+                ["الجواز", selected.passport, false],
+                ["انتهاء الجواز", selected.expiry, hasIssue("expired_passport", selected)],
+                ["البطاقة", selected.national_id, false],
+                ["انتهاء البطاقة", (selected as any).id_expiry, hasIssue("expired_id", selected)],
+                ["الجنسية", selected.nat, false],
+                ["الجنس", selected.gender, false],
+                ["الميلاد", selected.dob, false],
+                ["التليفون", selected.phone, false],
+              ] as [string, string | undefined, boolean][]).map(([lbl, val, isDanger]) => {
+                const empty = val === undefined || val === null || String(val).trim() === "";
+                return (
+                  <div key={lbl} style={{ background: isDanger ? "#FFEBEE" : "var(--ivory)", border: isDanger ? "1.5px solid #FFCDD2" : "1px solid var(--line)", borderRadius: 10, padding: "8px 11px", gridColumn: lbl === "التليفون" ? "span 2" : undefined }}>
+                    <div style={{ fontSize: 9.5, color: isDanger ? "#B71C1C" : "var(--muted)", fontWeight: 800, marginBottom: 2 }}>{lbl}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: empty ? 700 : 900, color: empty ? "var(--muted)" : isDanger ? "#B71C1C" : "var(--ink)", fontStyle: empty ? "italic" : undefined }}
+                      dir={lbl === "التليفون" && !empty ? "ltr" : undefined}>
+                      {empty ? "غير مُدخل" : val}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           {profileTab === "svc" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {/* قيمة الإسناد من `allocationOf` نفسها التي يعرضها
+                الجدول — بتصنيف الكيان المُسنَد، لا بتصنيف ما طُلب.
+                وبطاقتا الطيران تُبقيان على اتّجاهيهما المنفصلين. */}
             {([
-              ["الباص",   selected.services?.bus,       (selected as any).bus_id != null ? (metaBuses.find((b: any) => b.id === (selected as any).bus_id)?.name || `باص #${(selected as any).bus_id}`) : null, "#E3F2FD", "#1.5px solid #90CAF9", "#0D47A1", "#1565C0", false],
-              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), (selected as any).room_id != null ? (metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number ? `غرفة ${metaRooms.find((r: any) => r.id === (selected as any).room_id)?.number}` : `غرفة #${(selected as any).room_id}`) : null, "#FFF8E1", "1.5px solid #FFD54F", "#8B6700", "#B8880F", false],
-              ["منى",     selected.services?.camp_mina, (selected as any).camp_mina_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_mina_id)?.name || `خيمة #${(selected as any).camp_mina_id}`) : null, "#E8F5E9", "1.5px solid #A5D6A7", "#1B5E20", "#2E7D32", false],
-              ["عرفة",    selected.services?.camp_arafa,(selected as any).camp_arafa_id != null ? (metaCamps.find((c: any) => c.id === (selected as any).camp_arafa_id)?.name || `خيمة #${(selected as any).camp_arafa_id}`) : null, "#F3E5F5", "1.5px solid #CE93D8", "#6A1B9A", "#7B1FA2", false],
+              ["الباص",   selected.services?.bus,       selected.bus_id != null ? (allocationOf(selected, "bus") || `باص #${selected.bus_id}`) : null, "#E3F2FD", "#1.5px solid #90CAF9", "#0D47A1", "#1565C0", false],
+              ["الفندق",  `${selected.services?.hotel_type || ""} ${selected.services?.hotel_view || ""}`.trim(), selected.room_id != null ? (allocationOf(selected, "hotel_type") || `غرفة #${selected.room_id}`) : null, "#FFF8E1", "1.5px solid #FFD54F", "#8B6700", "#B8880F", false],
+              ["منى",     selected.services?.camp_mina, selected.camp_mina_id != null ? (allocationOf(selected, "camp_mina") || `خيمة #${selected.camp_mina_id}`) : null, "#E8F5E9", "1.5px solid #A5D6A7", "#1B5E20", "#2E7D32", false],
+              ["عرفة",    selected.services?.camp_arafa,selected.camp_arafa_id != null ? (allocationOf(selected, "camp_arafa") || `خيمة #${selected.camp_arafa_id}`) : null, "#F3E5F5", "1.5px solid #CE93D8", "#6A1B9A", "#7B1FA2", false],
               ["طيران الذهاب", selected.services?.flight,    (selected as any).flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).flight_id)?.name || `رحلة #${(selected as any).flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", false],
               ["طيران العودة", selected.services?.flight,    (selected as any).return_flight_id != null ? (metaFlights.find((f: any) => f.id === (selected as any).return_flight_id)?.name || `رحلة #${(selected as any).return_flight_id}`) : null, "linear-gradient(135deg,#1a1a2e,#2d1b4e)", "1.5px solid #4a3575", "#fff", "#c4a8ff", false],
-            ] as [string, string | undefined, string | null, string, string, string, string, boolean][]).map(([lbl, cls, assign, bg, border, valColor, lblColor, full]) => (
+            ] as [string, string | undefined, string | null, string, string, string, string, boolean][]).map(([lbl, cls, assign, bg, border, valColor, lblColor, full]) => {
+              /* بطاقتا الطيران تشتركان في مفتاح الخدمة نفسه */
+              const svcKey: ServiceKey | null =
+                lbl === "الباص" ? "bus" : lbl === "الفندق" ? "hotel_type" :
+                lbl === "منى" ? "camp_mina" : lbl === "عرفة" ? "camp_arafa" :
+                lbl.startsWith("طيران") ? "flight" : null;
+              const optedOut = svcKey ? !wantsService(selected, svcKey) : false;
+              /* «معلَّق» = طلبها ولم تُسنَد. لا تُقاس بـ`isMissingService`
+                 هنا لأن بطاقة العودة تسأل عن `return_flight_id`،
+                 وتلك تسأل عن الذهاب — والشرط المشترك هو الاستثناء
+                 وحده، وهو `wantsService`. */
+              const pending = !optedOut && !assign;
+              const dest = svcKey ? SERVICE_DEST[svcKey] : null;
+              /* الصلاحية نفسها التي تحرس زرّ غرفة العمليات */
+              const mayGo = dest ? !!currentUser?.permissions?.[dest.perm] : false;
+              return (
               <div key={lbl} style={{ background: bg, border, borderRadius: 12, padding: "11px 12px", gridColumn: full ? "span 2" : undefined }}>
                 <div style={{ fontSize: 9.5, fontWeight: 800, color: lblColor, marginBottom: 4 }}>{lbl}{cls ? ` · ${cls}` : ""}</div>
-                <div style={{ fontSize: 14, fontWeight: 900, color: valColor, lineHeight: 1.2 }}>{assign || "لم يُوزع بعد"}</div>
-                {!assign && <div style={{ fontSize: 9.5, fontWeight: 800, color: "#B71C1C", marginTop: 3 }}>بانتظار التوزيع</div>}
+                {/* «بانتظار التوزيع» كانت تُكتب حمراءَ لكل خانةٍ خالية
+                    — حتى لمن اعتذر عن الطيران، وهو وحده ما يجوز
+                    الاعتذار عنه. الحكم من `isMissingService` نفسها
+                    التي تعدّ بها غرفة العمليات، فلا يشكو الملفّ ممّا
+                    لا تشكو منه، ولا العكس. */}
+                {(() => {
+                  const text = assign || (optedOut ? "لم يطلب هذه الخدمة" : "لم يُوزع بعد");
+                  /* المعتذر عن الطيران ليس أمامه عملٌ يُقصد، فلا سهم له */
+                  const canGo = !!dest && !optedOut;
+                  const style = { fontSize: 14, fontWeight: 900, color: valColor, lineHeight: 1.2 } as const;
+                  if (!canGo) return <div style={style}>{text}</div>;
+                  return (
+                    <div
+                      onClick={() => { if (mayGo) window.dispatchEvent(new CustomEvent("hajj_goto_page", { detail: dest!.page })); }}
+                      title={mayGo ? `الانتقال إلى ${dest!.label}` : "لا تملك صلاحية هذه الصفحة"}
+                      style={{ ...style, display: "inline-flex", alignItems: "center", gap: 5, cursor: mayGo ? "pointer" : "not-allowed", opacity: mayGo ? 1 : .55, borderBottom: `1px dashed ${valColor}`, paddingBottom: 1, transition: "opacity .14s" }}
+                      onMouseEnter={e => { if (mayGo) e.currentTarget.style.opacity = ".72"; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = mayGo ? "1" : ".55"; }}>
+                      {text}
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                      </svg>
+                    </div>
+                  );
+                })()}
+                {!assign && !optedOut && pending && <div style={{ fontSize: 9.5, fontWeight: 800, color: "#B71C1C", marginTop: 3 }}>بانتظار التوزيع</div>}
               </div>
-            ))}
+              );
+            })}
           </div>
           )}
           {profileTab === "docs" && (
@@ -1651,7 +2098,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             ) : (
               getFamilyMembers(selected).map(fm => (
                 <div key={fm.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: "1px solid var(--line)", marginBottom: 6 }}>
-                  <div onClick={() => setSelected(fm)} style={{ flex: 1, cursor: "pointer", minWidth: 0 }}>
+                  <div onClick={() => openPilgrim(fm)} style={{ flex: 1, cursor: "pointer", minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fm.short_ar || fm.name_ar}</div>
                     <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginTop: 1 }}>{fm.gender}</div>
                   </div>
@@ -1672,13 +2119,16 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           )}
           <div style={{ display: "flex", gap: 6 }}>
             <button disabled={readOnly} onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), ...roOff, flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
-            <button onClick={async () => { const ok = await confirmAction("هتمسح الحاج ده؟", { title: "حذف حاج" }); if (ok) deleteP(selected.id); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+            <button onClick={async () => { const ok = await confirmAction(`سيُحذف «${selected.name_ar || selected.name_en}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" }); if (ok) deleteP(selected.id); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
           </div>
           <button onClick={() => {
             /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير */
             printInPage(buildStickersHTML(
               [selected as any],
-              { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName, season_label: companyIdentity.seasonLabel, hotel_name: companyPortal.hotelName, hotel_address: companyPortal.hotelAddress, admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
+              { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName,
+                /* الموسمُ المعروض — لا الحملة. فاستيكرُ موسمٍ مؤرشفٍ يحمل اسمَه وفندقَه هو. */
+                season_name: viewedSeason.name, hotel_name: viewedSeason.hotel_name || "", hotel_address: viewedSeason.hotel_address || "",
+                admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
               { rooms: metaRooms as any, buses: metaBuses as any, camps: metaCamps as any },
               { sticker: true, hand_tag: true, long_tag: true }
             ));

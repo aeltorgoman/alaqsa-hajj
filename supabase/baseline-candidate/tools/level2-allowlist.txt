@@ -1,0 +1,17 @@
+# ════════════════════════════════════════════════════════════
+# فروقُ البصمة المُجازة — Level 2 adjudicated differences
+# ════════════════════════════════════════════════════════════
+# Empty by design. Every line the live database and the database
+# rebuilt from the baseline candidate do not share is a security
+# difference until the Product Owner rules otherwise.
+#
+# Format — a reason, then the exact fingerprint line it excuses:
+#
+#   # WHY: <who decided, when, and on what grounds>
+#   -FUNC   ...        (expected in the reference only)
+#   +GRANT  ...        (expected in the candidate only)
+#
+# An entry with no `# WHY:` line above it is rejected by
+# compare-fingerprints.py, so nothing can be waved through in
+# silence. Adding an entry here is a Checkpoint decision, not a
+# workflow fix.

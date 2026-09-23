@@ -1,18 +1,20 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
-import { isHajj } from "../utils/passenger";
+import { isHajj, byOrder } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
 import { useReportBranding } from "../company/CompanyContext";
 import type { Passenger, User } from "../types";
 
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
-import { PRICING_KEYS, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance/finance.utils";
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
+import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, isSpecialPackage, matchesPackageFilter, matchesServiceFilter, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
 import { FinancialGroupView } from "./finance/FinancialGroupView";
+import { initialPrintOptions, chromeFromOptions } from "../print";
+import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStatementHTML, printFullReport, printPaymentsReport, printPackagesReport, printAddonsReport, printCashflowReport } from "./finance/finance.print";
 
 // ============================================================
@@ -33,6 +35,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
        error           تعذّر جلب اللقطة — وهي **ليست** كغيابها: الغياب
                        حقيقةٌ عن الماضي، والفشل عطلٌ في هذه اللحظة. ولو
                        خُلطا لقال الشريط للمستخدم سبباً غير صحيح. */
+  /* خياراتُ عرض المطبوع — محليّةٌ للجلسة، وافتراضُها المظهرُ المقبول */
+  const [printOpts, setPrintOpts] = useState(() => initialPrintOptions("finance"));
   const [pricingSource, setPricingSource] = useState<"live"|"snapshot"|"missing"|"error">("live");
 
   /* مداخل الكتابة هنا خصائص تُمرَّر إلى مكوّنات فرعية، فلا يُعطَّل
@@ -55,11 +59,22 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const [loading, setLoading]               = useState(true);
   const [refreshing, setRefreshing]         = useState(false);
   const [lastUpdated, setLastUpdated]       = useState<Date | null>(null);
+  /* خطأُ التحميل حالةٌ باقية لا تنبيهٌ يُغلَق: أرقامٌ ناقصة لا تُعرض
+     صامتةً، ويبقى للموظّف زرُّ إعادة محاولة. */
+  const [loadError, setLoadError]           = useState<string | null>(null);
+  /* تصنيفُ الكيان المُسنَد — `id,type` وحدهما، للسياق الإخباريّ فقط */
+  const [allocTypes, setAllocTypes]         = useState<AllocTypeMaps>({ bus:new Map(), camp:new Map(), room:new Map() });
 
   // بحث وفلتر
   const [searchTerm, setSearchTerm]       = useState("");
   const [filterStatus, setFilterStatus]   = useState<FinanceFilterStatus>("all");
   const [filterPackage, setFilterPackage] = useState("all");
+  /* فلترُ الخدمة المطلوبة — مفاتيحُ `pricing_settings` نفسها */
+  const [filterService, setFilterService] = useState("all");
+  /* `manual` هو الترتيب المعتمَد (sort_order ثم id) وهو الافتراضيّ؛
+     وبقيّة المفاتيح عرضٌ للتحصيل لا تغيّر ترتيباً محفوظاً. */
+  const [sortKey, setSortKey] = useState<FinanceSortKey>("manual");
+  const [sortDir, setSortDir] = useState<FinanceSortDir>("asc");
 
   // مودال دفعة
   const [showPayModal, setShowPayModal] = useState(false);
@@ -170,6 +185,24 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         : Promise.resolve({ data: null, error: null }),
     ]);
 
+    /* تصنيفُ الكيانات المُسنَدة — خارج حسابِ الفشل الجزئيّ لأنه سياقٌ
+       إخباريّ لا رقمٌ ماليّ: غيابه يُسكت السطر ولا يُفسد مبلغاً. */
+    const [busRes, campRes, roomRes] = await Promise.all([
+      supabase.from("buses").select("id,type"),
+      supabase.from("camps").select("id,type"),
+      supabase.from("rooms").select("id,type"),
+    ]);
+    const toTypeMap = (rows: { id:number; type:string|null }[] | null) => {
+      const m = new Map<number, string>();
+      (rows ?? []).forEach(r => { if (r.type) m.set(r.id, r.type); });
+      return m;
+    };
+    setAllocTypes({
+      bus:  toTypeMap(busRes.data  as { id:number; type:string|null }[] | null),
+      camp: toTypeMap(campRes.data as { id:number; type:string|null }[] | null),
+      room: toTypeMap(roomRes.data as { id:number; type:string|null }[] | null),
+    });
+
     /* أي جزء يفشل يُبلَّغ عنه صراحةً ولا يُكتب في الحالة، حتى لا تُعرض
        بيانات ناقصة كأنها كاملة (مثلاً دفعات بلا بنود خاصة = رصيد مضلِّل) */
     const parts: { res: { error: unknown }; label: string }[] = [
@@ -215,8 +248,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
     if (failed.length === 0) {
       setLastUpdated(new Date());
+      setLoadError(null);
     } else {
-      showAlert("error", `تعذر تحميل: ${failed.join("، ")}. البيانات المعروضة قد تكون غير مكتملة، يرجى تحديث الصفحة.`);
+      const msg = `تعذر تحميل: ${failed.join("، ")}. الأرقام المعروضة غير مكتملة ولا يُعتمد عليها.`;
+      setLoadError(msg);
+      showAlert("error", `${msg} أعد المحاولة.`);
     }
 
     setLoading(false);
@@ -358,7 +394,12 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   async function deletePayment(id: number) {
     if (!assertWritable()) return;
     if (!requireManage()) return;
-    if (!await showConfirm("هل تريد حذف هذه الدفعة؟")) return;
+    /* الحذفُ الماليّ يسمّي ما يُحذَف: مبلغٌ وتاريخٌ وطريقة — لا «هذه الدفعة» */
+    const target = payments.find(p => p.id === id);
+    const what = target
+      ? `دفعة بمبلغ ${fmtAmt(Number(target.amount))} ر.ق بتاريخ ${target.payment_date} (${target.method})`
+      : "هذه الدفعة";
+    if (!await showConfirm(`هل تريد حذف ${what}؟ لا يمكن التراجع.`, { title: "حذف دفعة" })) return;
     const { error } = await supabase.from("payments").delete().eq("id",id);
     if (error) { showAlert("error", "تعذر حذف الدفعة، لم يتم تنفيذ الحذف"); return; }
     setPayments(prev => prev.filter(p => p.id !== id));
@@ -388,7 +429,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   async function deleteCustomCharge(id: number) {
     if (!assertWritable()) return;
     if (!requireManage()) return;
-    if (!await showConfirm("هل تريد حذف هذا البند؟")) return;
+    const target = customCharges.find(c => c.id === id);
+    const what = target
+      ? `${target.type === "إضافة" ? "بند خاص" : "خصم خاص"} «${target.description}» بمبلغ ${fmtAmt(Number(target.amount))} ر.ق`
+      : "هذا البند";
+    if (!await showConfirm(`هل تريد حذف ${what}؟ لا يمكن التراجع.`, { title: "حذف بند" })) return;
     const { error } = await supabase.from("custom_charges").delete().eq("id",id);
     if (error) { showAlert("error", "تعذر حذف البند، لم يتم تنفيذ الحذف"); return; }
     setCustomCharges(prev => prev.filter(c => c.id !== id));
@@ -569,23 +614,64 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   }
 
   // مساعدات التصميم
-  const sortedPassengers = [...passengers].filter(p => isHajj(p)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  /* الترتيب المعتمَد للمشروع: `sort_order` ثم `id` يحسم التعادل —
+     بالمساعد المشترك نفسه، فلا فرزَ ثانٍ ينحرف عنه. */
+  const sortedPassengers = useMemo(
+    () => passengers.filter(isHajj).sort(byOrder("sort_order")),
+    [passengers],
+  );
+
+  /* المطلوب والمدفوع والمتبقّي مرّةً واحدة لكل حاجّ — كانت `calcTotalDue`
+     تُنادى أربع مرّاتٍ لكل صفّ في كل رسمة. الحساب نفسه لم يتغيّر:
+     `totalsFor` تستدعي `calcTotalDue` وهي المصدر الوحيد كما هي. */
+  const totalsByPassenger = useMemo(() => {
+    const m = new Map<number, FinanceTotals>();
+    for (const p of sortedPassengers) m.set(p.id, totalsFor(p, pricing, chargesByPassenger, paymentsByPassenger));
+    return m;
+  }, [sortedPassengers, pricing, chargesByPassenger, paymentsByPassenger]);
+
+  const summary = useMemo(() => {
+    let due = 0, paid = 0, lateCount = 0;
+    for (const t of totalsByPassenger.values()) {
+      due += t.due; paid += t.paid;
+      if (t.balance > 0) lateCount += 1;
+    }
+    return { due, paid, balance: due - paid, lateCount };
+  }, [totalsByPassenger]);
   const inputStyle = { width:"100%", padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, boxSizing:"border-box" as const };
   const thStyle    = { padding:"10px 12px", background:"var(--em8)", color:"#fff", textAlign:"right" as const, fontSize:12, fontWeight:600 };
   const tdStyle    = { padding:"8px 12px", border:"1px solid var(--border)", fontSize:13 };
 
-  const filteredPassengers = sortedPassengers.filter(p => {
-    const name = (p.short_ar||p.name_ar||"").toLowerCase();
-    if (searchTerm && !name.includes(searchTerm.toLowerCase())) return false;
-    if (filterPackage !== "all" && getPackageKey(p.services.hotel_type) !== filterPackage) return false;
-    if (filterStatus !== "all") {
-      const due=calcTotalDue(p,pricing,chargesByPassenger), paid=calcTotalPaid(p.id,paymentsByPassenger);
-      const label = financeStatus(due, paid).label;
-      const wanted: Record<string,string> = { paid:"مسدد", partial:"جزئي", unpaid:"لم يدفع", unpriced:"غير مسعّر", credit:"رصيد دائن" };
-      if (label !== wanted[filterStatus]) return false;
-    }
-    return true;
-  });
+  const filteredPassengers = useMemo(() => {
+    const wanted: Record<string,string> = { paid:"مسدد", partial:"جزئي", unpaid:"لم يدفع", unpriced:"غير مسعّر", credit:"رصيد دائن" };
+    const rows = sortedPassengers.filter(p => {
+      if (!matchesFinanceSearch(p, searchTerm)) return false;
+      if (!matchesPackageFilter(p, filterPackage)) return false;
+      if (!matchesServiceFilter(p, filterService)) return false;
+      if (filterStatus !== "all") {
+        const t = totalsByPassenger.get(p.id);
+        if (!t) return false;
+        if (financeStatus(t.due, t.paid).label !== wanted[filterStatus]) return false;
+      }
+      return true;
+    });
+    return sortFinanceRows(rows, totalsByPassenger, sortKey, sortDir);
+  }, [sortedPassengers, totalsByPassenger, searchTerm, filterPackage, filterService, filterStatus, sortKey, sortDir]);
+
+  /* «سعر خاص» — عددُهم ومجموعُ أسعارهم اليدويّة. مصدرٌ واحد تقرأه
+     الشاشة، ونسخةُ الطباعة تحسبه بالمنطق نفسه في `finance.print.ts`. */
+  const specialPkg = useMemo(() => {
+    const rows = sortedPassengers.filter(isSpecialPackage);
+    return { count: rows.length, total: rows.reduce((sum, p) => sum + (Number(p.services.custom_price) || 0), 0) };
+  }, [sortedPassengers]);
+
+  /* ضغطةٌ على العمود نفسه تقلب الاتّجاه، وعلى عمودٍ آخر تبدأ تنازلياً
+     للمبالغ (الأكبر أوّلاً هو المطلوب في التحصيل) وتصاعدياً للاسم. */
+  function changeSort(key: FinanceSortKey) {
+    if (key === sortKey) { setSortDir(d => d === "asc" ? "desc" : "asc"); return; }
+    setSortKey(key);
+    setSortDir(key === "name" ? "asc" : "desc");
+  }
 
   // ══════════════════════════════════════════════
   // RECEIPT MODAL
@@ -601,13 +687,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ fontSize:15, fontWeight:700, color:"var(--text)", marginBottom:4 }}>تم تسجيل الدفعة</div>
           <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:4 }}>{passengerName}</div>
           <div style={{ fontSize:24, fontWeight:900, color:"var(--success)", marginBottom:16 }}>{fmtAmt(Number(payment.amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
-          <div style={{ display:"flex", gap:10, marginBottom:10 }}>
-            <button onClick={() => printInPage(receiptHtml)}
-              style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
-              🖨️ طباعة
-            </button>
-
-          </div>
+          <button onClick={() => printInPage(receiptHtml)}
+            style={{ width:"100%", padding:10, marginBottom:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+            🖨️ طباعة
+          </button>
           <button onClick={() => setReceiptPayment(null)}
             style={{ width:"100%", padding:8, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
             إغلاق
@@ -789,6 +872,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           passengerPayments={paymentsFor(selectedP.id, paymentsByPassenger)}
           passengerCharges={chargesFor(selectedP.id, chargesByPassenger)}
           group={passengerGroup}
+          allocTypes={allocTypes}
           groups={groups}
           editingCustomPrice={editingCustomPrice}
           customPriceInput={customPriceInput}
@@ -934,7 +1018,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     });
     const cfDates = Object.keys(cfByDate).sort();
     const cfTotal = cfPayments.reduce((s, p) => s + Number(p.amount), 0);
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين"), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand }) };
+    /* الموسمُ قدرةٌ مشتركة — والحسابُ والجداولُ كما هي بالحرف.
+       والخياراتُ عرضٌ لا حساب: لا صفَّ ولا إجماليَّ ولا باقةَ تمسّها. */
+    const finChrome = chromeFromOptions("finance", printOpts, { season: viewedSeason });
+    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
@@ -948,6 +1035,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           {excelActions[reportType] && (
             <button onClick={excelActions[reportType]} style={{ marginRight:"auto", padding:"7px 18px", background:"#1D6F42", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Excel</button>
           )}
+          <PrintOptionsMenu report="finance" value={printOpts} onChange={setPrintOpts} />
           <button onClick={printActions[reportType]} style={{ padding:"7px 18px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
         </div>
         <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
@@ -1004,7 +1092,20 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الباقة</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي المستحق</th></tr></thead>
-              <tbody>{PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>
+                {PRICING_KEYS.filter(k=>k.type==="package").map((pk,i)=>{const count=sortedPassengers.filter(p=>getPackageKey(p.services.hotel_type)===pk.key).length,price=pricing[pk.key]?.amount||0;return(<tr key={pk.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pk.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(count*price)}</td></tr>);})}
+                {/* «خاص» سعرُها يدويّ لكل حاجّ فلا سعرَ واحد لها — ومجموعُها
+                    مجموعُ أسعارهم، كما في نسخة الطباعة القائمة. وكانت تسقط من
+                    الشاشة فيقرأ الموظّف مجموعاً أقلّ من الحقيقة. */}
+                {specialPkg.count > 0 && (
+                  <tr style={{ background:"var(--warning-bg)" }}>
+                    <td style={tdStyle}>{SPECIAL_PACKAGE_LABEL}</td>
+                    <td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{specialPkg.count}</td>
+                    <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)" }}>—</td>
+                    <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(specialPkg.total)}</td>
+                  </tr>
+                )}
+              </tbody>
             </table>
           </div>
         )}
@@ -1012,7 +1113,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الإضافة / الخصم</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي</th></tr></thead>
-              <tbody>{[{key:"addon_view",check:(p:Passenger)=>p.services.hotel_view==="مطلة"},{key:"addon_mina",check:(p:Passenger)=>p.services.camp_mina==="خاص"},{key:"addon_arafa",check:(p:Passenger)=>p.services.camp_arafa==="خاص"},{key:"addon_bus_vip",check:(p:Passenger)=>p.services.bus==="VIP"},{key:"addon_first_class",check:(p:Passenger)=>p.flight_class==="درجة أولى"},{key:"discount_no_ticket",check:(p:Passenger)=>p.flight_class==="بدون"}].map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{pricing[a.key]?.label||a.key}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>{SERVICE_FILTERS.map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{serviceLabel(a.key, pricing)}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
             </table>
           </div>
         )}
@@ -1091,19 +1192,25 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         sortedPassengers={sortedPassengers}
         filteredPassengers={filteredPassengers}
         pricing={pricing}
-        chargesByPassenger={chargesByPassenger}
-        paymentsByPassenger={paymentsByPassenger}
+        totalsByPassenger={totalsByPassenger}
+        summary={summary}
         getPassengerGroup={getPassengerGroup}
         loading={loading}
         refreshing={refreshing}
         lastUpdated={lastUpdated}
+        loadError={loadError}
         searchTerm={searchTerm}
         filterStatus={filterStatus}
         filterPackage={filterPackage}
+        filterService={filterService}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSortChange={changeSort}
         onSearchTermChange={setSearchTerm}
         onFilterStatusChange={setFilterStatus}
         onFilterPackageChange={setFilterPackage}
-        onClearFilters={()=>{setSearchTerm("");setFilterStatus("all");setFilterPackage("all");}}
+        onFilterServiceChange={setFilterService}
+        onClearFilters={()=>{setSearchTerm("");setFilterStatus("all");setFilterPackage("all");setFilterService("all");}}
         onRefresh={()=>loadFinanceData(true)}
         onOpenReports={()=>setSubView("reports")}
         onOpenSettings={()=>setSubView("settings")}

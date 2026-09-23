@@ -1,0 +1,200 @@
+// ============================================================
+// قشرةُ المستند — `<!DOCTYPE>` و`@page` والترويسةُ والتذييل
+// ============================================================
+/* القشرةُ الوحيدة لكلّ مطبوعٍ في النظام. و`makeHTML` هي القائمةُ نفسها
+   منقولةً بحرفها — لا محرّكَ جديد ولا شكلَ جديد — و`makeFinanceHTML`
+   انتقلت إليها من قشرتها الموازية بأنماطها كما هي.
+   ⚠️ R1 ينقل المعماريّة ولا يُعيد تصميم مطبوعٍ قائم: النمطان معلَنان
+   في `print.theme.ts`، وتوحيدُهما بصرياً قرارُ مرحلةٍ تالية. */
+import type { PrintBranding } from "./print.brand";
+import type { PrintChrome, HeaderMode } from "./print.chrome";
+import { compactHeaderHTML, chromeMetaHTML, CHROME_CSS } from "./print.chrome";
+import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
+import { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK, COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternDataURL } from "./print.theme";
+
+/* ═══ نمطُ التقرير العامّ ═══ */
+export function makeHTML(
+  title: string,
+  body: string,
+  branding: PrintBranding,
+  options: {
+    landscape?: boolean; noHeader?: boolean; patternOpacity?: number; chrome?: PrintChrome;
+    /* ⚠️ خياران يخدمان تقريراً يملك صفحاتِه الفيزيائيّة بنفسه (الفندق):
+       - `pageMargin`: هامشُ `@page`. صفراً يعني أنّ الورقةَ كلَّها ملكُ
+         المحتوى، فيضبط هو حشوَه — ولا حسابَ «المساحة المطبوعة ناقص
+         كذا» الذي يفيض بكسرِ مليمتر.
+       - `footer: false`: يمنع القشرةَ من إلحاق كتلةٍ بعد الجسم. فتلك
+         الكتلةُ شريكٌ مستقلٌّ في التقسيم، وهي التي كانت تولّد ورقةً
+         ليس فيها إلا تذييل.
+       وكلاهما بافتراضٍ يُبقي كلَّ مطبوعٍ آخرَ كما هو بالحرف. */
+    pageMargin?: string; footer?: boolean;
+  } = {}
+) {
+  const companyName = escapeCompanyHtml(branding.companyName);
+  const tagline = escapeCompanyHtml(branding.tagline);
+  const footerText = escapeCompanyHtml(branding.footerText);
+  const primaryColor = normalizeCompanyColor(branding.primaryColor, "#1D9E75");
+  const accentColor = normalizeCompanyColor(branding.accentColor, "#085041");
+  const logoUrl = normalizeCompanyAssetUrl(branding.logoUrl);
+  const headerUrl = normalizeCompanyAssetUrl(branding.headerUrl);
+  const safeTitle = escapeCompanyHtml(title);
+  const { landscape = false, noHeader = false, patternOpacity = 0.08, chrome = {},
+          pageMargin = PAGE_MARGIN_REPORT, footer = true } = options;
+  /* `noHeader` القديمة اسمٌ ثانٍ لـ`header:"none"` — تبقى عاملةً كما
+     كانت، فلا يتغيّر معنى نداءٍ قائم. والأولويّةُ للصريح. */
+  const headerMode: HeaderMode = chrome.header ?? (noHeader ? "none" : "full");
+  /* ⚠️ تاريخُ الطباعة يُرسَم مرّةً واحدةً لا مرّتين، وفي موضعه المعتمَد.
+     فالترويسةُ الكاملةُ تحمل تاريخَها منذ ما قبل R2 — وهو الموضعُ
+     المقبول — فتبقى هي راسمتَه، ويكفُّ سطرُ الحواشي عن رسم ثانٍ.
+     و«إظهار تاريخ الطباعة» صار يتحكّم في **ذاك** التاريخِ نفسِه:
+       • غيرُ محدَّد (نداءٌ قديم لا يعرف الخيارات) → يظهر كما كان.
+       • `true`  → يظهر في موضعه المعتمَد.
+       • `false` → يختفي، فلا يبقى تاريخٌ في الورقة البتّة.
+     وما لا ترويسةَ كاملةَ له (الباص والمخيّم والمستندات) يرسمه سطرُ
+     الحواشي — فلكلّ تقريرٍ راسمٌ واحد، ولا يُنقَل تاريخٌ من موضعه
+     المقبول طلباً لتماثلٍ معماريّ. */
+  const showHeaderDate = headerMode === "full" && chrome.issuedAt !== false;
+  const metaHTML = chromeMetaHTML(
+    headerMode === "full" ? { ...chrome, issuedAt: false } : chrome);
+  const initial = (companyName || "ح").trim().charAt(0);
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="logo" />`
+    : `<span>${initial}</span>`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" });
+  const timeStr = now.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+  // نقشة إسلامية (Girih) متشابكة بخطوط ذهبية أوضح (حوالي 5 نقشات في الصف)
+  // النقشة وإعدادُ الصفحة من `print.theme.ts` — مقياسٌ معلَنٌ لا نصٌّ مبعثر
+  const patternURL = patternDataURL(patternOpacity);
+  const fullHeaderHTML = `${headerUrl ? `<img src="${headerUrl}" alt="" style="display:block;width:100%;max-height:28mm;object-fit:contain;margin-bottom:4mm" />` : ""}<div class="doc-header">
+  <div class="brand">
+    <div class="logo-box">${logoHtml}</div>
+    <div>
+      <div class="company-name">${companyName}</div>
+      ${tagline ? `<div class="tagline">${tagline}</div>` : ""}
+    </div>
+  </div>
+  ${showHeaderDate ? `<div class="meta">
+    <div>تاريخ الإصدار: ${dateStr}</div>
+    <div>الساعة: ${timeStr}</div>
+  </div>` : ""}
+</div>
+  <div class="doc-title-bar">${safeTitle}</div>`;
+  /* أنماطُ القشرة لا تُحقَن إلا إن استُعملت — فالمطبوعُ الذي لم يطلب
+     شيئاً يخرج بالبايتات نفسها التي كان يخرج بها قبل R2. */
+  const chromeCSS = (metaHTML || headerMode === "compact" || chrome.pageNumbers) ? `\n  ${CHROME_CSS}` : "";
+  const headerHTML = headerMode === "none" ? ""
+    : headerMode === "compact" ? compactHeaderHTML(branding, title)
+    : fullHeaderHTML;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${safeTitle}</title>
+${FONT_LINK}
+<style>
+  ${pageRule(pageMargin, landscape)}
+  * { box-sizing: border-box; }
+  html { background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
+  body { font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl; margin: 0; padding: 0; font-size: 9pt; color: #1c1c1c; background-color: #ffffff; background-image: url("${patternURL}"); background-repeat: repeat; background-size: 140px 140px; }
+  .doc-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; border-bottom: 2pt solid ${primaryColor}; margin-bottom: 4px; }
+  .doc-header .brand { display: flex; align-items: center; gap: 10px; }
+  .doc-header .logo-box { width: 22mm; height: 22mm; border-radius: 4mm; overflow: hidden; display: flex; align-items: center; justify-content: center; background: ${primaryColor}; color: #fff; font-size: 16pt; font-weight: 700; flex-shrink: 0; }
+  .doc-header .logo-box img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .doc-header .company-name { font-size: 13pt; font-weight: 700; color: ${primaryColor}; }
+  .doc-header .tagline { font-size: 8pt; color: #888; margin-top: 2px; }
+  .doc-header .meta { text-align: left; font-size: 7pt; color: #999; line-height: 1.7; }
+  .doc-title-bar { background: linear-gradient(135deg, ${primaryColor}, ${accentColor}); color: #fff; text-align: center; padding: 5pt 0; border-radius: 8pt; font-size: 14pt; font-weight: 700; margin: 8pt 0 10pt; }
+  .camp-header { display: flex; align-items: center; justify-content: space-between; gap: 10pt; margin-bottom: 10pt; }
+  .camp-header .camp-logo { width: 30mm; height: 30mm; border-radius: 50%; border: 3pt solid ${primaryColor}; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #fff; flex-shrink: 0; }
+  .camp-header .camp-logo img { width: 100%; height: 100%; object-fit: cover; }
+  .camp-header .camp-logo span { font-size: 18pt; font-weight: 800; color: ${primaryColor}; }
+  .camp-header .camp-title-box { flex: 1; text-align: center; }
+  .camp-header .camp-title { display: inline-block; background: ${primaryColor}; color: #fff; padding: 6pt 20pt; border-radius: 5pt; font-size: 18pt; font-weight: 700; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-subtitle { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  /* السطرُ الثانويّ تحت اسم الكشف: الموسمُ والجنس — تابعٌ للعنوان لا
+     حاشيةٌ على حافّة الورقة. وهو وريثُ camp-subtitle وبمقاسه.
+     ولا علامةَ اقتباسٍ مائلة هنا: النصّ داخل قالبٍ نصّيّ. */
+  .camp-header .camp-meta { font-size: 13pt; font-weight: 600; color: #a8852f; margin-top: 6pt; font-family: 'El Messiri', 'Tajawal', sans-serif; }
+  .camp-header .camp-meta-sep { margin: 0 6pt; opacity: 0.55; }
+  .camp-table th { background: ${primaryColor}; color: #fff; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 8pt; border-radius: 6pt; overflow: hidden; }
+  th { background: ${primaryColor}; color: #fff; padding: 5pt 7pt; text-align: right; font-size: 9pt; font-weight: 600; }
+  td { border: 0.5pt solid rgba(0,0,0,0.12); padding: 5pt 7pt; text-align: right; background: transparent; font-size: 9pt; white-space: nowrap; }
+  tr:nth-child(even) td { background: rgba(212,160,23,0.05); }
+  .section-title { font-size: 10pt; font-weight: 700; color: ${primaryColor}; margin: 8pt 0 4pt; text-align: center; padding: 4pt; background: ${primaryColor}14; border-radius: 3pt; }
+  .wide-table th, .wide-table td { font-size: 8pt; padding: 4pt 6pt; }
+  .flight-table th, .flight-table td { font-size: 8pt; padding: 4pt 6pt; white-space: nowrap; }
+  .ltr-table th, .ltr-table td { text-align: left; }
+  .page-break { page-break-after: always; }
+  .page-break-before { page-break-before: always; }
+  .footer { text-align: center; color: #aaa; font-size: 7pt; margin-top: 10pt; border-top: 0.5pt solid #eee; padding-top: 5pt; }
+  ${COLOR_ADJUST_RULE}${chromeCSS}
+</style></head><body>
+${headerHTML}${metaHTML}
+${body}
+${footer ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}
+</body></html>`;
+}
+
+/* ═══ نمطُ المالية ═══
+   كانت قشرةً موازيةً كاملة في `finance.print.ts` بـ`<!DOCTYPE>` و`@page`
+   و`printInPage` خاصّةٍ بها. المُخرَج هو المُخرَج نفسه حرفياً. */
+export function makeFinanceHTML(
+  title: string, body: string, brand: PrintBranding, chrome: PrintChrome = {}
+): string {
+  const safeTitle = escapeCompanyHtml(title);
+  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
+  const { dateStr, timeStr } = issuedStamp();
+  const logoHtml = logoOrInitial(logoUrl, companyName);
+  /* ⚠️ قشرةُ المالية كانت تتجاهل `chrome.header` جملةً: تُخرج ترويستَها
+     في كلّ حال، فيبقى زرُّ «إظهار الترويسة» بلا أثر. والآن تحترمه.
+
+     والهويّةُ والتاريخُ مستقلّان وإن سكنا صندوقاً واحداً — لأنّ الواجهةَ
+     تعرضهما خيارَين منفصلَين، فلا يجوز أن يُخفي أحدُهما الآخر:
+       • كلاهما مُشعَل  → الصندوقُ كما قُبل: الهويّةُ يميناً والتاريخُ يساراً.
+       • الهويّةُ وحدها → الصندوقُ بلا تاريخ.
+       • التاريخُ وحده → الصندوقُ بحاجزٍ فارغٍ مكانَ الهويّة، فيبقى
+         التاريخُ في موضعه الأيسر المعتمَد ولا ينزلق.
+       • كلاهما مطفأ   → لا صندوقَ البتّة، ولا خطَّ سفليَّ معلَّق.
+     والافتراضُ (نداءٌ قديم لا يعرف الخيارات) يُظهرهما كما كانا. */
+  const showBrand = chrome.header !== "none";
+  const showHeaderDate = chrome.issuedAt !== false;
+  const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
+  const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+<style>
+  ${pageRule(PAGE_MARGIN_FINANCE)}
+  * { box-sizing: border-box; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; font-size:10pt; color:#1c1c1c; background:#fff; }
+  .doc-header { display:flex; align-items:center; justify-content:space-between; padding-bottom:8pt; border-bottom:2pt solid ${primaryColor}; margin-bottom:6pt; }
+  .logo-box { width:18mm; height:18mm; border-radius:3mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:${primaryColor}; color:#fff; font-size:14pt; font-weight:800; flex-shrink:0; }
+  .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
+  .company-name { font-size:13pt; font-weight:800; color:${primaryColor}; }
+  .tagline { font-size:8pt; color:#888; margin-top:2pt; }
+  .doc-title-bar { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; text-align:center; padding:7pt; border-radius:5pt; font-size:13pt; font-weight:800; margin:8pt 0 10pt; }
+  table { width:100%; border-collapse:collapse; margin-bottom:10pt; }
+  th { background:${primaryColor}; color:#fff; padding:6pt 8pt; text-align:right; font-size:10pt; font-weight:700; }
+  td { border:0.5pt solid #e0e0e0; padding:5pt 8pt; text-align:right; font-size:10pt; }
+  tr:nth-child(even) td { background:#f9f7f4; }
+  /* صفُّ الإجمالي: الخلفيّةُ على الخليّة لا على الصفّ.
+     خلفيّةُ الخليّة تُرسَم فوق خلفيّة الصفّ، وقاعدةُ الصفوف الزوجيّة
+     أعلى تخصيصاً من نمطٍ مكتوبٍ على الصفّ — فكان صفُّ الإجمالي يقع
+     في موضعٍ زوجيّ فيُلوَّن فاتحاً ويبقى نصُّه أبيض: تباينٌ ١٫٠٧،
+     أي أبيضُ على أبيض. موجودٌ في HTML وغيرُ مرئيّ على الورق. */
+  tr.tot-row td { background: ${primaryColor} !important; color: #fff; font-weight: 700; }
+  .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
+  ${COLOR_ADJUST_RULE_ALL}${chromeCSS}
+</style></head><body>
+${(showBrand || showHeaderDate) ? `<div class="doc-header">
+  ${showBrand ? `<div style="display:flex;align-items:center;gap:12px">
+    <div class="logo-box">${logoHtml}</div>
+    <div><div class="company-name">${companyName}</div>${tagline?`<div class="tagline">${tagline}</div>`:""}</div>
+  </div>` : `<div></div>`}
+  ${showHeaderDate ? `<div style="text-align:left;font-size:10px;color:#999;line-height:1.8">
+    <div>تاريخ الإصدار: ${dateStr}</div><div>الساعة: ${timeStr}</div>
+  </div>` : ""}
+</div>` : ""}
+<div class="doc-title-bar">${safeTitle}</div>${metaHTML}
+${body}
+<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>
+</body></html>`;
+}
+

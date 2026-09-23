@@ -1,0 +1,452 @@
+[
+  {
+    "version": "20260101000000",
+    "name": "baseline_schema",
+    "created_by": null,
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 0,
+    "statements_1_bytes": 0,
+    "statements_1_sha256": ""
+  },
+  {
+    "version": "20260702073456",
+    "name": "add_capacity_to_buses",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 71,
+    "statements_1_sha256": "43304786aa6e15e3c1f1d612b02adbec17806f0b3a59d51f90e217b7c4a87ee2"
+  },
+  {
+    "version": "20260703210244",
+    "name": "add_arrival_time_and_date_to_flights",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 109,
+    "statements_1_sha256": "4ad46363eb9bb697f624dd20e79be91492ddffcd469918f13ef66fbc8cf31af4"
+  },
+  {
+    "version": "20260710075811",
+    "name": "add_custom_price_to_passengers",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 79,
+    "statements_1_sha256": "7ac62663515c5788eb40b19a9b19ed35d9e84b921b94a477d13aa002bed39ecb"
+  },
+  {
+    "version": "20260710080114",
+    "name": "add_missing_passenger_columns",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 175,
+    "statements_1_sha256": "eb00e898a4e6006c15549269aafba3d2658463d0b891ca1a59e52729547fb6b0"
+  },
+  {
+    "version": "20260710224827",
+    "name": "pilgrim_portal_foundation",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5093,
+    "statements_1_sha256": "15c69f7c88a41b0183c81a8e20bcf3f3eeb85da94c7f47eaa06fffbabbf40212"
+  },
+  {
+    "version": "20260711104414",
+    "name": "portal_campaign_location_fields",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 4205,
+    "statements_1_sha256": "8bf36010d62033887a41e4fee4f218de13c7716391493733d5fa14789b4daefa"
+  },
+  {
+    "version": "20260714203342",
+    "name": "portal_add_short_ar_and_camp_names",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 3876,
+    "statements_1_sha256": "f1ab7b433ab044889e0e6806778683598502c529f3c575bfe829c7ad41709f89"
+  },
+  {
+    "version": "20260715084806",
+    "name": "add_map_urls_to_company_config",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 166,
+    "statements_1_sha256": "6474ccb9a9c1d8bdfb5bae754b8d19b2335c30b29e3489113d5883ed50cf0823"
+  },
+  {
+    "version": "20260715084831",
+    "name": "update_portal_function_with_urls",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 4947,
+    "statements_1_sha256": "dc73f7a4456f56e3b065bcaf10b338c92e0a70a6bad55707445acd86dbe30820"
+  },
+  {
+    "version": "20260722095952",
+    "name": "add_wants_flight_to_passengers",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 83,
+    "statements_1_sha256": "340371a72d60c0ee16fcd055ef02e78805609efa0cc9345b1b54954345cec31e"
+  },
+  {
+    "version": "20260729133636",
+    "name": "pilgrim_push_notifications_foundation",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 11090,
+    "statements_1_sha256": "bb507b1fe61438269ec7f56239e6936726c3b4f497a0b5f884c4648a43720506"
+  },
+  {
+    "version": "20260729133707",
+    "name": "fix_announcement_audience_null_season",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 1047,
+    "statements_1_sha256": "72c709c6dd633b30667f60d59ae32972c2ddd97a5da11fcd7d6541bfe33923f0"
+  },
+  {
+    "version": "20260730102529",
+    "name": "unique_passenger_per_financial_group",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 123,
+    "statements_1_sha256": "8396210da9036e60bf0fcd0aeddac284df0c8bd999215925328c254c1c8059f4"
+  },
+  {
+    "version": "20260730190755",
+    "name": "delete_empty_financial_groups",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 917,
+    "statements_1_sha256": "a3298bc97600d766aa00b57c27853f46bbc8ecb6a17d8e5c7ca0c6398678c66f"
+  },
+  {
+    "version": "20260731022245",
+    "name": "create_financial_group_with_member",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 1097,
+    "statements_1_sha256": "4bf252f36422d1d5bb608311f0e787482f88ef2d47ddddc9d8291c6242ce4719"
+  },
+  {
+    "version": "20260802021913",
+    "name": "season_integrity_backfill_constraints_indexes",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 4116,
+    "statements_1_sha256": "794c5603600b707f129e3ff60ccdbcd77ecc2defdc622ffa7f18089ddd9aefbc"
+  },
+  {
+    "version": "20260802021944",
+    "name": "season_reject_writes_to_closed_season",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5612,
+    "statements_1_sha256": "0aa55e3b5f6ac964cd9234989eed57b739e816285300bdcd69da83455ea36e7f"
+  },
+  {
+    "version": "20260802022009",
+    "name": "season_close_and_delete_transactions",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 4061,
+    "statements_1_sha256": "9568cea5e804fe022d868a951edd109149c4ba54cc31559d6ac088728e552421"
+  },
+  {
+    "version": "20260802022040",
+    "name": "portal_active_season_only",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5764,
+    "statements_1_sha256": "16337fbe38635f9c4a58132dfdedacdd70ee627a32f01bacb3a05c007eb56a58"
+  },
+  {
+    "version": "20260802022310",
+    "name": "season_restrict_close_and_delete_execution",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 1728,
+    "statements_1_sha256": "564ce6b6cb368fbb1b9992f50c44afc0d3d485b21d614ecbfc062616a977574d"
+  },
+  {
+    "version": "20260807220302",
+    "name": "s1_identity_foundation",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 2736,
+    "statements_1_sha256": "84a8890990a8a0516a4fb74b635a11c97f18e60836c9be039c2937d12f250288"
+  },
+  {
+    "version": "20260807220313",
+    "name": "s1_user_profiles_email",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 890,
+    "statements_1_sha256": "00dbe3e4d2ec733f3ac27662e485be38298fb46b84d0c611dbd4865ac3da26aa"
+  },
+  {
+    "version": "20260808145406",
+    "name": "company_profile_phase1_schema",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5487,
+    "statements_1_sha256": "fd02c186b9c6aaea51aded3baa998706dacbb89193dbe9caee73d68a11cd8452"
+  },
+  {
+    "version": "20260808145435",
+    "name": "company_profile_phase1_portal_function",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5700,
+    "statements_1_sha256": "7f0b40e2be799297e6a1d33cddd254294dcb808cc2f25548d9e7a0cdd4821bce"
+  },
+  {
+    "version": "20260808152323",
+    "name": "s4_portal_announcements",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 922,
+    "statements_1_sha256": "b5fad96c180f08e18405e866aa399ce1f627841a777f39312305117290c204d3"
+  },
+  {
+    "version": "20260810090027",
+    "name": "s9_edge_rate_limit",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 2060,
+    "statements_1_sha256": "8fead2626976169558db4f26716ea56536769b46ec1fa12be6678d71f9174a9b"
+  },
+  {
+    "version": "20260811073723",
+    "name": "s4_rls_and_anon_revocation",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5689,
+    "statements_1_sha256": "a658e00f64344a5f30455a91fde9b9ce2b8938a95b3f4e7a3eb6c44261c07539"
+  },
+  {
+    "version": "20260811075138",
+    "name": "s5_drop_legacy_auth",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 238,
+    "statements_1_sha256": "43d98aaf6498a05d170de8756363fe91c543e62c4dd46c6228293a77d2060db2"
+  },
+  {
+    "version": "20260811081632",
+    "name": "s6_close_public_storage_writes",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 654,
+    "statements_1_sha256": "51b3b189a6fde8077d45f85561ecf85c74d22c825796b0a9f0c1eaa5a58ca435"
+  },
+  {
+    "version": "20260811130619",
+    "name": "s6_backfill_object_keys",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 515,
+    "statements_1_sha256": "1a66e075791d18cf80753ef992d2cb73e3752d600a604acfaebfd67aeac3e626"
+  },
+  {
+    "version": "20260811133553",
+    "name": "s6_company_assets_bucket",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 845,
+    "statements_1_sha256": "c57e48a1fac78cec54e43d9e2c6417474b74a1e1fc066d0fac10264c3bc659e0"
+  },
+  {
+    "version": "20260811140657",
+    "name": "s6_repoint_company_asset_refs",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 1030,
+    "statements_1_sha256": "9775213566cb965e0a75b0eb04ce1106aa8def6c1e4d2034cea339f7bf24fd21"
+  },
+  {
+    "version": "20260812074032",
+    "name": "s6_portal_hardening",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 6828,
+    "statements_1_sha256": "a2242136789941f33dc6c78e47b3642223bd8de26e484c6355f8a58de4c0af05"
+  },
+  {
+    "version": "20260815133103",
+    "name": "s6_privatize_passengers_docs",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 2392,
+    "statements_1_sha256": "440cd68761098f08ca3f38eea31e9c479c5090c8c4462a54f758dc329f56d92c"
+  },
+  {
+    "version": "20260818103237",
+    "name": "s1_resource_ordering",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 3361,
+    "statements_1_sha256": "a11cfce5b78c3c029e7a8df24a29eb3a22084dc1661a7f6c63644fee7fc6297f"
+  },
+  {
+    "version": "20260818103356",
+    "name": "s1_revoke_trigger_fn_execute",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 419,
+    "statements_1_sha256": "ee3fb7a86281bbb5468fa295b287a1f68d02dfd98c682932b9541ff6a0d1f6ba"
+  },
+  {
+    "version": "20260819112558",
+    "name": "b_permission_separation",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 1278,
+    "statements_1_sha256": "17a1256382589fda36c340b7ae03e4a7e64e36a78da3737c29cd0a8d010c10e3"
+  },
+  {
+    "version": "20260820140021",
+    "name": "s7_portal_session",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 16593,
+    "statements_1_sha256": "5fa22e0495cce4e88dafd834256568930a48fffe8f038664e397fbd50c2453dd"
+  },
+  {
+    "version": "20260822144243",
+    "name": "s7_close_credential_path",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 1669,
+    "statements_1_sha256": "292c03b17ca269569b374b0e5e89ace91eea399ff07cee8c5b4d1ab0e66f8af3"
+  },
+  {
+    "version": "20260822224739",
+    "name": "s8_audit_log",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 19573,
+    "statements_1_sha256": "97d0cf24b5df12920994c9ad9d5a03ce7a4d4588a71ecbc02582cdfd9daf45e1"
+  },
+  {
+    "version": "20260822224856",
+    "name": "s8_audit_log_delete_season_comment_fidelity",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 5179,
+    "statements_1_sha256": "3ff23d8a144e661c0477ec3bdf9daa026071668ec048ca06b1a52b972a606655"
+  },
+  {
+    "version": "20260918023358",
+    "name": "settings_security_remediation",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 2665,
+    "statements_1_sha256": "a48ba5809e773c6dd03b7ca9ff780e045bbb2f3cb0ddbc9379359191e203fa46"
+  },
+  {
+    "version": "20260919120000",
+    "name": "season_master_data_and_settings_ia",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 21576,
+    "statements_1_sha256": "a848ae5ff2815b77de9744a13149264b5d4d00e3051ef7766bd352bd374fe2e4"
+  },
+  {
+    "version": "20260920115407",
+    "name": "drop_company_config_legacy_columns",
+    "created_by": "abdelaziz.moh84@gmail.com",
+    "idempotency_key": null,
+    "rollback": null,
+    "statement_count": 1,
+    "statements_1_bytes": 23424,
+    "statements_1_sha256": "ce219c282fcc5d401383f1dca2da42ff6e9d55cf2260ca11b186794197aa10b5"
+  }
+]

@@ -1,0 +1,825 @@
+# ════════════════════════════════════════════════════════════
+# Checkpoint 4 — V1 baseline reproducibility proof
+# ════════════════════════════════════════════════════════════
+# READ-ONLY against the remote Supabase project. There is no
+# authorized remote-mutation command in this workflow, and none is
+# present: no db push, no migration up, no migration repair, no
+# db reset --linked, no remote DDL/DML.
+#
+# Remote read-only is enforced by the SERVER, not by discipline:
+# every remote psql session sets default_transaction_read_only=on,
+# so a mistaken write is rejected with SQLSTATE 25006.
+#
+# Manual trigger only. Never on push, pull_request or schedule.
+
+name: Checkpoint 4 - V1 Baseline Proof (read-only remote)
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: "Supabase project ref (NOT a secret - public identifier)"
+        required: true
+        default: "zkucwcnclbfvukhdqhgc"
+      db_host:
+        description: "DB host from dashboard > Connect. Use the IPv4-compatible Session pooler host if direct is IPv6-only. NOT a secret."
+        required: true
+      db_port:
+        description: "DB port (5432 direct, commonly 5432 for session pooler)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "DB user from dashboard > Connect (e.g. postgres, or postgres.<ref> for the pooler). NOT a secret."
+        required: true
+        default: "postgres"
+
+# Minimum permissions. Read only: this workflow never pushes a commit.
+# Proof artifacts leave via actions/upload-artifact, not via git.
+permissions:
+  contents: read
+
+concurrency:
+  group: checkpoint4-baseline-proof
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # ⚠️ PGOPTIONS is deliberately ABSENT from this block.
+      #
+      # Run #3 failed because "-c default_transaction_read_only=on" lived
+      # here, so every step inherited it - including `supabase start`,
+      # whose own connection to the LOCAL database then could not create
+      # its seed table:
+      #
+      #   failed to create seed table: ERROR: cannot execute CREATE SCHEMA
+      #   in a read-only transaction (SQLSTATE 25006)
+      #
+      # The local psql calls were already guarded with `PGOPTIONS=`, but
+      # the CLI invocation was not. The setting was also useless where it
+      # was aimed: the pooler drops the "options" startup parameter, which
+      # is why PR #130 moved remote read-only in band. So it protected
+      # nothing remotely and broke everything locally. It is gone, and
+      # remote read-only is enforced solely by the in-band SET plus the
+      # SQLSTATE 25006 positive control - unchanged and still fail-closed.
+      #
+      # The database password is NOT here either. It is granted per step,
+      # to remote steps only, so no local reconstruction step can reach
+      # the remote database even by accident.
+      #
+      # SUPABASE_ACCESS_TOKEN stays job-level: several CLI subcommands
+      # expect it, and it is a management API token that cannot execute
+      # SQL against the database.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ inputs.project_ref }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: proof-output
+
+    steps:
+      # ── 0) Fail closed if either secret is missing ──────────
+      - name: Require secrets
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; missing=1; }
+          [ -n "${PGPASSWORD:-}" ]            || { echo "::error::SUPABASE_DB_PASSWORD is not set"; missing=1; }
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Both required secrets are present (values not printed)."
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          docker version --format '{{.Server.Version}}'
+          v="$(npm run --silent supabase -- --version)"
+          echo "supabase CLI: $v"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          psql --version
+          # 37 historical migrations must be present and untouched.
+          # The count is read from the repository, not hardcoded. Before
+          # the Checkpoint 5 cutover this is the 37 historical
+          # migrations; after it, the 46 ledger anchors plus the V1
+          # baseline. Either way the working tree must match the index
+          # exactly, and the number is carried to the restore step so a
+          # lost or added file is still caught.
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          g="$(git ls-files -- 'supabase/migrations/*.sql' | wc -l)"
+          [ "$n" -gt 0 ] && [ "$n" -eq "$g" ] || {
+            echo "::error::supabase/migrations holds $n files but the index has $g"; exit 1; }
+          git diff --quiet -- supabase/migrations || {
+            echo "::error::supabase/migrations is dirty before the run"; exit 1; }
+          echo "$n" > /tmp/active-migrations-count
+          echo "$n active migrations present and matching the index."
+          echo "$n historical migrations present."
+
+      # ── Prove the comparators before trusting them ─────────
+      # Runs before anything touches a database, costs seconds, and
+      # needs no credentials. A comparator that cannot fail is not a
+      # control, and Run #5 shipped exactly that: `diff ... || true`,
+      # which recorded 780 and 624 differing lines and reported
+      # success. These fixtures assert both directions - identical
+      # content in a different order must PASS, and each way the
+      # security model can be broken must FAIL.
+      - name: Self-test the Level 1 and Level 2 comparators
+        shell: bash
+        run: bash supabase/baseline-candidate/tools/selftest-comparators.sh
+
+      # ── STAGE B) read-only remote capture ──────────────────
+      - name: Link project (read-only use)
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # No --skip-pooler: the CLI links through the POOLER by
+          # default, which is IPv4-compatible. That is what makes the
+          # CLI steps work on a GitHub-hosted runner, where a direct
+          # IPv6-only db.<ref>.supabase.co host would be unreachable.
+          npm run --silent supabase -- link --project-ref "$PROJECT_REF" >/dev/null
+          echo "Linked via pooler. supabase/.temp is gitignored and is never committed."
+
+      # ── Connectivity preflight — fail closed, never guess ──
+      # Runs BEFORE the read-only positive control and before any
+      # capture. It opens a TCP socket and nothing more: no
+      # authentication, no query, no mutation. Its only job is to tell
+      # "the endpoint is unreachable" apart from "read-only
+      # enforcement is broken", which are very different findings.
+      #
+      # Supabase direct hosts are IPv6-only unless the project holds
+      # the IPv4 add-on, and GitHub-hosted runners egress over IPv4.
+      # So this WILL fail on a direct host from a runner, and it must
+      # fail loudly rather than be worked around.
+      - name: Connectivity preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Endpoint under test: ${DB_HOST}:${DB_PORT}"
+
+          # Both failure modes - unresolvable and unreachable - are
+          # "the endpoint does not work", so both must give the same
+          # actionable guidance. Emitting it from one place keeps them
+          # from drifting apart.
+          hint_and_die() {
+            cat <<'HINT'
+          The proof cannot continue, and this workflow will NOT fall back
+          to another endpoint on its own.
+
+          If the resolved address is IPv6-only, a GitHub-hosted runner
+          cannot reach it. Re-dispatch with the SESSION POOLER values,
+          copied verbatim from:
+
+              Supabase Dashboard -> Connect -> Session pooler
+
+          Supply them as the db_host, db_port and db_user inputs. Use the
+          SESSION pooler, not the Transaction pooler: this proof relies on
+          a session-level setting (default_transaction_read_only) and on
+          pg_dump holding a stable session, and transaction-mode pooling
+          does not reliably preserve either.
+
+          These three values are NOT secrets. Do not put them in a secret,
+          and do not paste the database password anywhere.
+          HINT
+            exit 1
+          }
+
+          if ! getent ahosts "$DB_HOST" > /tmp/preflight-dns.txt 2>/dev/null \
+               || [ ! -s /tmp/preflight-dns.txt ]; then
+            echo "::error::DNS resolution failed for ${DB_HOST}"
+            hint_and_die
+          fi
+          v4="$(awk '{print $1}' /tmp/preflight-dns.txt | grep -c '\.' || true)"
+          v6="$(awk '{print $1}' /tmp/preflight-dns.txt | grep -c ':'  || true)"
+          echo "Resolved address families: IPv4=${v4} IPv6=${v6}"
+
+          # Pure-bash TCP open/close. No credentials are involved: the
+          # password is never referenced in this step at all.
+          if timeout 15 bash -c "exec 3<>/dev/tcp/${DB_HOST}/${DB_PORT}" 2>/dev/null; then
+            echo "TCP connect to ${DB_HOST}:${DB_PORT} succeeded."
+            exit 0
+          fi
+
+          echo "::error::Cannot reach ${DB_HOST}:${DB_PORT} from this runner (IPv4=${v4} IPv6=${v6})."
+          hint_and_die
+
+      # ── Positive control — rewritten after Run #1 ──────────
+      # Run #1 used CREATE TEMPORARY TABLE and the server accepted it.
+      # That was NOT a temp-table exemption: PostgreSQL rejects CREATE
+      # TEMPORARY TABLE in a read-only transaction just like any other
+      # CREATE (the documented exemption is writing to an ALREADY
+      # EXISTING temp table). So the acceptance meant the session was
+      # genuinely writable - PGOPTIONS does not survive the pooler,
+      # which does not forward the "options" startup parameter.
+      #
+      # The fix does not argue with the pooler: read-only is now set
+      # IN BAND with ordinary SQL, which always reaches the server.
+      #
+      # The control is safe even in the case it exists to detect. The
+      # write runs inside a plain BEGIN, which inherits the session
+      # default, and ends in ROLLBACK. If read-only is active the
+      # statement is refused with SQLSTATE 25006; if it is not, the
+      # statement succeeds and is then discarded, so nothing persists
+      # either way - and rc == 0 makes the workflow fail closed.
+      - name: Prove the remote session is read-only
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+
+          # (a) Observe what the session arrives with, for diagnosis.
+          psql "$URL" -X -q -At \
+            -c "select 'arrived: default_transaction_read_only=' || current_setting('default_transaction_read_only')" \
+            | tee "$OUT/readonly-session.txt"
+
+          # (b) Force read-only in band, then read it back.
+          got="$(psql "$URL" -X -q -At -c "$RO" \
+                   -c "select current_setting('default_transaction_read_only')")"
+          echo "after in-band SET: default_transaction_read_only=${got}" | tee -a "$OUT/readonly-session.txt"
+          [ "$got" = "on" ] || {
+            echo "::error::could not put the session into read-only mode (got '${got}')"; exit 1; }
+
+          # (c) Attempt a PERSISTENT write that read-only must refuse.
+          set +e
+          err="$(psql "$URL" -X -v VERBOSITY=verbose -At \
+                   -c "$RO" \
+                   -c "begin; create table _cp4_readonly_probe(i int); rollback;" 2>&1 >/dev/null)"
+          rc=$?
+          set -e
+          printf '%s\n' "$err" > "$OUT/readonly-control.txt"
+
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::the server ACCEPTED a persistent write - read-only enforcement is NOT active"
+            exit 1
+          fi
+          grep -q '25006' "$OUT/readonly-control.txt" || {
+            echo "::error::the write was refused, but not with SQLSTATE 25006 (read_only_sql_transaction):"
+            cat "$OUT/readonly-control.txt"
+            exit 1; }
+          echo "Confirmed: a persistent write is refused with SQLSTATE 25006."
+
+      - name: Capture live fingerprint (Level 2 reference)
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          # -c "$RO" puts the session in read-only IN BAND, because
+          # PGOPTIONS does not survive the pooler. -q suppresses the
+          # SET tag and the \pset notices, which would otherwise land
+          # in the fingerprint and break the comparison.
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/live-fingerprint.txt"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "$RO" -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/live-fingerprint.txt"
+          wc -l "$OUT/live-fingerprint.txt"
+
+      - name: Capture storage + default privileges as SQL
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # db dump --schema public does NOT emit these, and they are
+          # application-owned. Generated from the live catalog, never
+          # reconstructed from memory.
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          # -q matters doubly here: without it psql writes "Output
+          # format is unaligned." into this file, and the file is
+          # concatenated into the candidate baseline, where such a line
+          # is not valid SQL.
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -At -c "$RO" \
+            -f supabase/baseline-candidate/tools/emit-storage-and-defacl.sql \
+            > "$OUT/storage-and-defacl.sql"
+          grep -c . "$OUT/storage-and-defacl.sql"
+
+          # ── Qualification guard ────────────────────────────
+          # Run #4 died here in effect, not in pg_dump: the emitter
+          # rendered a storage policy as has_permission('...') because
+          # `public` was on its search_path, while the candidate is
+          # applied under the empty search_path pg_dump sets. The
+          # emitter now renders under search_path = '' so every name
+          # comes out qualified. This proves that held, by listing the
+          # project's own function names and rejecting any call to one
+          # of them that is not preceded by a schema.
+          psql "$URL" -X -q -At -c "$RO" \
+            -c "select proname from pg_catalog.pg_proc
+                 where pronamespace = 'public'::regnamespace and prokind = 'f'" \
+            > /tmp/public-function-names.txt
+          unqualified=0
+          while IFS= read -r fn; do
+            [ -n "$fn" ] || continue
+            if grep -Pn "(?<!\.)\b${fn}\s*\(" "$OUT/storage-and-defacl.sql" >/dev/null 2>&1; then
+              echo "::error::emitted storage SQL calls ${fn}() without a schema - it will not resolve under search_path = ''"
+              grep -Pn "(?<!\.)\b${fn}\s*\(" "$OUT/storage-and-defacl.sql" | head -3
+              unqualified=1
+            fi
+          done < /tmp/public-function-names.txt
+          [ "$unqualified" -eq 0 ] || exit 1
+          echo "Every project-function reference in the emitted storage SQL is schema-qualified."
+
+      # ── STAGE C) candidate baseline ────────────────────────
+      - name: Show the exact pg_dump that will run
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # --dry-run prints the pg_dump script; evidence that this is a read.
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments --dry-run \
+            | tee "$OUT/pg_dump-command.txt"
+
+      - name: Dump remote public schema
+        shell: bash
+        env:
+          # Same secret, two consumers: the CLI reads SUPABASE_DB_PASSWORD,
+          # psql reads PGPASSWORD. By environment, never on a command line.
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # --role-only is deliberately NEVER used: it can emit role
+          # password hashes. See EXCLUSIONS.md.
+          npm run --silent supabase -- db dump --linked --schema public --keep-comments \
+            -f "$OUT/v1_baseline_public.sql"
+          wc -c "$OUT/v1_baseline_public.sql"
+          # ── Assembly order is load-bearing (Run #6) ───────────
+          # 1. the privilege prologue, BEFORE any object exists. A
+          #    clean Supabase instance ships postgres-owned default
+          #    privileges granting ALL on public to anon, authenticated
+          #    and service_role, so every CREATE inherits them and the
+          #    dump's narrower GRANTs cannot take them back. Proved on
+          #    a local cluster: pg_dump emits its own ALTER DEFAULT
+          #    PRIVILEGES *after* CREATE TABLE, so the dump alone
+          #    cannot fix this.
+          # 2. the live public schema dump - objects plus the complete
+          #    live ACL, since pg_dump writes whole privileges, not
+          #    deltas.
+          # 3. storage buckets, storage policies, and the live default
+          #    privileges, which apply to objects created LATER.
+          cat supabase/baseline-candidate/tools/00-privilege-prologue.sql \
+              "$OUT/v1_baseline_public.sql" \
+              "$OUT/storage-and-defacl.sql" > "$OUT/v1_baseline_candidate.sql"
+          head -1 "$OUT/v1_baseline_candidate.sql" > /dev/null
+          grep -q 'revoke all on tables' "$OUT/v1_baseline_candidate.sql" || {
+            echo "::error::the privilege prologue is missing from the candidate"; exit 1; }
+          echo "Candidate assembled. It stays OUTSIDE supabase/migrations/."
+
+      # ── Candidate data guard — rewritten after Run #2 ──────
+      # Run #2 failed here on ten hits. Every one was inside a
+      # function body, and one was Arabic prose in a /* */ comment in
+      # record_audit(). None was dumped data: the CLI runs pg_dump
+      # with --schema-only, which emits no table rows at all.
+      #
+      # The guard was not removed - a raw grep simply cannot tell a
+      # data row from an INSERT inside a function body. It is replaced
+      # with a scanner that strips dollar-quoted bodies, line and block
+      # comments, string literals and quoted identifiers, and only then
+      # looks at what is left, which is genuinely top-level SQL.
+      - name: Assert candidate carries no business data or secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Belt and braces: the dump must have been schema-only. If the
+          # CLI ever starts emitting data, this catches it at the source
+          # rather than relying on the scanner alone.
+          grep -q -- "--schema-only" "$OUT/pg_dump-command.txt" || {
+            echo "::error::pg_dump was not invoked with --schema-only"; exit 1; }
+
+          cat > /tmp/candidate_guard.py <<'GUARD_EOF'
+          #!/usr/bin/env python3
+          """Candidate baseline data guard.
+
+          Raw grep over SQL text cannot tell a dumped data row from an INSERT that
+          lives inside a function body or a comment. Run #2 proved that: all ten
+          hits were inside function bodies, one of them Arabic prose in a block
+          comment.
+
+          So this strips what is not top-level SQL - dollar-quoted bodies, line
+          and block comments, string literals and quoted identifiers - and only
+          then looks for data statements. What survives the strip is genuinely
+          top level.
+          """
+          import re, sys
+
+          ALLOWED_INSERT_TARGET = re.compile(r'^\s*insert\s+into\s+"?storage"?\s*\.\s*"?buckets"?', re.I)
+
+          def strip_to_top_level(src: str) -> list[tuple[int, str]]:
+              """Return [(line_no, top_level_text)], blanking everything nested."""
+              out, line_no, i, n = [], 1, 0, len(src)
+              cur = []
+              state = 'code'      # code | line_comment | block_comment | squote | dquote | dollar
+              depth = 0           # block comment nesting (PostgreSQL nests)
+              tag = ''
+              while i < n:
+                  ch = src[i]
+                  if ch == '\n':
+                      out.append((line_no, ''.join(cur)))
+                      cur = []; line_no += 1; i += 1
+                      if state == 'line_comment':
+                          state = 'code'
+                      continue
+                  if state == 'code':
+                      if src.startswith('--', i):
+                          state = 'line_comment'; i += 2; continue
+                      if src.startswith('/*', i):
+                          state = 'block_comment'; depth = 1; i += 2; continue
+                      if ch == "'":
+                          state = 'squote'; i += 1; continue
+                      if ch == '"':
+                          state = 'dquote'; cur.append('"'); i += 1; continue
+                      m = re.match(r'\$([A-Za-z_][A-Za-z0-9_]*)?\$', src[i:])
+                      if m:
+                          state = 'dollar'; tag = m.group(0); i += len(tag); continue
+                      cur.append(ch); i += 1; continue
+                  if state == 'line_comment':
+                      i += 1; continue
+                  if state == 'block_comment':
+                      if src.startswith('/*', i): depth += 1; i += 2; continue
+                      if src.startswith('*/', i):
+                          depth -= 1; i += 2
+                          if depth == 0: state = 'code'
+                          continue
+                      i += 1; continue
+                  if state == 'squote':
+                      if ch == "'":
+                          if src.startswith("''", i): i += 2; continue
+                          state = 'code'; i += 1; continue
+                      i += 1; continue
+                  if state == 'dquote':
+                      if ch == '"':
+                          if src.startswith('""', i): i += 2; continue
+                          state = 'code'; cur.append('"'); i += 1; continue
+                      cur.append(ch); i += 1; continue
+                  if state == 'dollar':
+                      if src.startswith(tag, i):
+                          state = 'code'; i += len(tag); continue
+                      i += 1; continue
+              out.append((line_no, ''.join(cur)))
+              return out
+
+          def main(path: str) -> int:
+              src = open(path, encoding='utf-8', errors='replace').read()
+              stripped = strip_to_top_level(src)
+              findings = []
+              for ln, text in stripped:
+                  t = text.strip()
+                  if not t:
+                      continue
+                  if re.match(r'^copy\b.*\bfrom\s+stdin', t, re.I):
+                      findings.append((ln, 'COPY ... FROM stdin (table data)', text))
+                  elif re.match(r'^insert\s+into\b', t, re.I) and not ALLOWED_INSERT_TARGET.match(t):
+                      findings.append((ln, 'top-level INSERT outside storage.buckets', text))
+                  elif re.search(r'\bsetval\s*\(', t, re.I):
+                      findings.append((ln, 'sequence state (setval)', text))
+                  elif re.search(r'\bpassword\b', t, re.I):
+                      # Strict on purpose: a schema-only baseline of this project has
+                      # no legitimate top-level use of the word. Verified against the
+                      # live catalog - no column in public or storage is named
+                      # anything like "password". String literals are already
+                      # stripped, so a hash can never be printed by this message.
+                      findings.append((ln, 'role password / credential keyword', text))
+              if findings:
+                  print('::error::candidate contains top-level data or secret statements')
+                  for ln, why, text in findings[:40]:
+                      print(f'  line {ln}: {why}: {text.strip()[:140]}')
+                  return 1
+              print('Candidate is schema/security only: no top-level data statements, '
+                    'no sequence state, no role passwords.')
+              return 0
+
+          if __name__ == '__main__':
+              sys.exit(main(sys.argv[1]))
+          GUARD_EOF
+          python3 /tmp/candidate_guard.py "$OUT/v1_baseline_candidate.sql" \
+            | tee "$OUT/candidate-guard.txt"
+
+      # ── STAGE D) fresh PostgreSQL 17 build #1 ──────────────
+      - name: Start local stack (without the historical chain)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The proof must build from the CANDIDATE, never from the 37
+          # unproven historical migrations. supabase start would apply
+          # them, so they are moved aside in this ephemeral runner
+          # workspace only. Nothing is committed; contents: read.
+          mv supabase/migrations supabase/_migrations_held_aside
+          mkdir -p supabase/migrations
+          npm run --silent supabase -- start
+
+      - name: Assert local server is PostgreSQL 17 and writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          num="$(psql "$L" -X -At -c "select current_setting('server_version_num')")"
+          echo "local server_version_num=$num"
+          [ "$num" -ge 170000 ] && [ "$num" -lt 180000 ] || {
+            echo "::error::local PostgreSQL is not major version 17 - proof aborted"; exit 1; }
+
+          # Mirror image of the remote control, and a regression test for
+          # Run #3: the LOCAL database must be writable, or the baseline
+          # cannot be applied. Asserted two ways - the setting, and a real
+          # DDL write that is rolled back so nothing survives.
+          ro="$(psql "$L" -X -At -c "select current_setting('default_transaction_read_only')")"
+          echo "local default_transaction_read_only=$ro"
+          [ "$ro" = "off" ] || {
+            echo "::error::the LOCAL database is read-only ($ro) - remote read-only state has leaked into local reconstruction"
+            exit 1; }
+          psql "$L" -X -q -v ON_ERROR_STOP=1 \
+            -c "begin; create table _cp4_local_writable(i int); rollback;" || {
+            echo "::error::the LOCAL database refused a write - reconstruction cannot proceed"; exit 1; }
+          echo "Local database is PostgreSQL 17 and writable."
+
+      # ── The privilege environment the candidate lands in ───
+      # Matrix evidence, captured on every run rather than assumed:
+      # what a clean Supabase PG17 instance grants by default BEFORE
+      # the baseline creates anything. Run #6 failed because these
+      # defaults were inherited by every object.
+      - name: Capture local privilege environment before the candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          Q="select pg_get_userbyid(d.defaclrole)||' | '||coalesce(n.nspname,'(all)')||' | '||d.defaclobjtype::text||' | '||d.defaclacl::text
+               from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
+              where coalesce(n.nspname,'') = 'public'
+              order by pg_get_userbyid(d.defaclrole), coalesce(n.nspname,''), d.defaclobjtype::text"
+          PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c "$Q" | tee "$OUT/local-defacl-before.txt"
+          n="$(PGOPTIONS= psql "$L" -X -q -At -c "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','v','S')")"
+          echo "public relations before the candidate: $n"
+          [ "$n" -eq 0 ] || { echo "::error::the local public schema is not empty - this is not a clean build"; exit 1; }
+
+      - name: Fresh build #1
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f "$OUT/v1_baseline_candidate.sql" > "$OUT/build1.log" 2>&1 \
+            || { echo "::error::candidate failed to apply from empty"; tail -50 "$OUT/build1.log"; exit 1; }
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fresh1-fingerprint.txt"
+          PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fresh1-fingerprint.txt"
+
+      # ── Did the prologue actually neutralise inheritance? ──
+      # Independent of both comparators and of the live reference: a
+      # direct catalog assertion that the rebuilt database grants anon
+      # nothing by default, and that no project object handed anon a
+      # privilege it never had on the live project. If this regresses,
+      # it fails here even if a comparator were weakened.
+      - name: Assert the privilege prologue took effect
+        # A failure here is recorded, not fatal on the spot: the
+        # equivalence surfaces below still run so one dispatch yields
+        # the whole diagnosis. The verdict step enforces it.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Records a verdict and lets the job continue, like the four
+          # equivalence surfaces, so one dispatch still produces the
+          # whole picture. The gate step below enforces it.
+          echo FAIL > "$OUT/status-prologue.txt"
+          set -e
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c \
+            "select pg_get_userbyid(d.defaclrole)||' | '||d.defaclobjtype::text||' | '||d.defaclacl::text
+               from pg_default_acl d join pg_namespace n on n.oid=d.defaclnamespace
+              where n.nspname='public'
+              order by pg_get_userbyid(d.defaclrole), d.defaclobjtype::text" | tee "$OUT/local-defacl-after.txt"
+
+          bad="$(PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c \
+            "select count(*) from pg_default_acl d
+               join pg_namespace n on n.oid = d.defaclnamespace, aclexplode(d.defaclacl) a
+              where n.nspname = 'public'
+                and pg_get_userbyid(d.defaclrole) = 'postgres'
+                and pg_get_userbyid(a.grantee) = 'anon'")"
+          echo "postgres-owned default privileges granting anon in public: $bad"
+          [ "$bad" -eq 0 ] || {
+            echo "::error::the privilege prologue did not take effect - anon still holds default privileges, so every object inherited them"
+            exit 1; }
+
+          # anon holds exactly two grants on the live project, both
+          # SELECT. Asserted as a shape, not a number copied forward:
+          # anything anon can write is a regression whatever the count.
+          w="$(PGOPTIONS= psql "$L" -X -q -At -v ON_ERROR_STOP=1 -c \
+            "select coalesce(string_agg(c.relname||':'||a.privilege_type, ' ' order by c.relname, a.privilege_type), '(none)')
+               from pg_class c join pg_namespace n on n.oid = c.relnamespace, aclexplode(c.relacl) a
+              where n.nspname = 'public' and c.relkind in ('r','v','S')
+                and pg_get_userbyid(a.grantee) = 'anon'
+                and a.privilege_type <> 'SELECT'")"
+          echo "non-SELECT privileges held by anon in public: $w"
+          [ "$w" = "(none)" ] || {
+            echo "::error::anon holds write privileges in the rebuilt database - inherited default privileges have leaked"
+            exit 1; }
+          echo PASS > "$OUT/status-prologue.txt"
+          echo "Privilege prologue confirmed effective."
+
+      # ── STAGE E) equivalence, both levels ──────────────────
+      - name: Level 1 - structural (pg_dump vs pg_dump)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # NOT supabase db diff --linked: it builds its shadow from
+          # supabase/migrations (the unproven chain), so it answers the
+          # wrong question, and it is not established to be write-free.
+          npm run --silent supabase -- db dump --local --schema public --keep-comments -f "$OUT/fresh1_public.sql"
+          diff -u "$OUT/v1_baseline_public.sql" "$OUT/fresh1_public.sql" > "$OUT/level1-structural.diff" || true
+
+          # Run #5 recorded "Level 1 diff lines: 780" and reported
+          # success, because the raw diff was taken with `|| true`. A
+          # line count is not a verdict, and a raw diff between two
+          # pg_dump outputs is dominated by dump metadata and emission
+          # order. The comparator classifies every statement and its
+          # verdict is enforced by the final gate step.
+          rc=0
+          python3 supabase/baseline-candidate/tools/compare-structural.py \
+            "$OUT/v1_baseline_public.sql" "$OUT/fresh1_public.sql" \
+            | tee "$OUT/level1-report.txt" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-level1.txt"; else echo FAIL > "$OUT/status-level1.txt"; fi
+          echo "Level 1 verdict: $(cat "$OUT/status-level1.txt") (raw diff lines: $(wc -l < "$OUT/level1-structural.diff"))"
+
+      - name: Level 2 - security fingerprint (mandatory)
+        shell: bash
+        run: |
+          set -euo pipefail
+          diff -u "$OUT/live-fingerprint.txt" "$OUT/fresh1-fingerprint.txt" > "$OUT/level2-security.diff" || true
+
+          # Run #5 recorded "Level 2 diff lines: 624" out of a ~757 line
+          # fingerprint and reported success. Nearly every line differing
+          # is the signature of an ORDERING difference, not 624 security
+          # regressions: the live database sorts with the ICU
+          # en_US.UTF-8 collation, a local container may sort with libc
+          # C.UTF-8, and the fingerprint is full of Arabic identifiers.
+          # The comparator compares the multiset of records, so ordering
+          # cannot mask or manufacture a difference, and it fails closed
+          # on every record that is genuinely present on one side only.
+          rc=0
+          python3 supabase/baseline-candidate/tools/compare-fingerprints.py \
+            "$OUT/live-fingerprint.txt" "$OUT/fresh1-fingerprint.txt" \
+            --label "Level 2" \
+            --allowlist supabase/baseline-candidate/tools/level2-allowlist.txt \
+            | tee "$OUT/level2-report.txt" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-level2.txt"; else echo FAIL > "$OUT/status-level2.txt"; fi
+          echo "Level 2 verdict: $(cat "$OUT/status-level2.txt") (raw diff lines: $(wc -l < "$OUT/level2-security.diff"))"
+
+      # ── STAGE G) compatibility probes (local only) ─────────
+      - name: Compatibility probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          # Run #5: psql exited 3 and `set -e` killed the step BEFORE the
+          # `tail` that would have shown why, so the only copy of the
+          # diagnosis was inside an artifact. The output is now printed
+          # in full either way, so a run diagnoses itself from its log.
+          rc=0
+          PGOPTIONS= psql "$L" -f supabase/baseline-candidate/tools/compat-probes.sql \
+            > "$OUT/compat-probes.txt" 2>&1 || rc=$?
+          echo "--- compat-probes.txt (psql exit $rc) ---"
+          cat "$OUT/compat-probes.txt"
+          echo "--- end compat-probes.txt ---"
+          if [ "$rc" -eq 0 ] && grep -q 'ALL COMPATIBILITY PROBES PASSED' "$OUT/compat-probes.txt"; then
+            echo PASS > "$OUT/status-probes.txt"
+          else
+            echo FAIL > "$OUT/status-probes.txt"
+          fi
+          echo "Compatibility probes verdict: $(cat "$OUT/status-probes.txt")"
+
+      # ── STAGE F) destroy, rebuild #2, determinism ──────────
+      - name: Fresh build #2 and determinism check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- stop --no-backup
+          npm run --silent supabase -- start
+          L="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          num="$(PGOPTIONS= psql "$L" -At -c "select current_setting('server_version_num')")"
+          [ "$num" -ge 170000 ] || { echo "::error::rebuild is not PostgreSQL 17"; exit 1; }
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f "$OUT/v1_baseline_candidate.sql" > "$OUT/build2.log" 2>&1 \
+            || { echo "::error::candidate failed to apply on rebuild"; tail -50 "$OUT/build2.log"; exit 1; }
+          PGOPTIONS= psql "$L" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint.sql  > "$OUT/fresh2-fingerprint.txt"
+          PGOPTIONS= psql "$L" -X -q -v ON_ERROR_STOP=1 -f supabase/baseline-candidate/tools/fingerprint-storage.sql >> "$OUT/fresh2-fingerprint.txt"
+          diff -u "$OUT/fresh1-fingerprint.txt" "$OUT/fresh2-fingerprint.txt" > "$OUT/determinism.diff" || true
+          # Same comparator, no allowlist: two builds of the same
+          # candidate on the same server have nothing to adjudicate.
+          rc=0
+          python3 supabase/baseline-candidate/tools/compare-fingerprints.py \
+            "$OUT/fresh1-fingerprint.txt" "$OUT/fresh2-fingerprint.txt" \
+            --label "Determinism (build #1 vs build #2)" \
+            | tee "$OUT/determinism-report.txt" || rc=$?
+          if [ "$rc" -eq 0 ]; then echo PASS > "$OUT/status-determinism.txt"; else echo FAIL > "$OUT/status-determinism.txt"; fi
+          echo "Determinism verdict: $(cat "$OUT/status-determinism.txt")"
+
+      # ── STAGE E/G verdict — the single enforcement point ───
+      # Level 1, Level 2 and the probes each RECORD a verdict and let
+      # the job continue, so one dispatch exercises every proof
+      # surface instead of stopping at the first. That is only safe
+      # because this step is what decides the run, and it fails if a
+      # verdict is missing as readily as if a verdict is FAIL - a
+      # deleted recording cannot read as success.
+      - name: Equivalence verdict (fails the run)
+        shell: bash
+        run: |
+          set -euo pipefail
+          required="prologue level1 level2 probes determinism"
+          bad=0
+          for k in $required; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then
+              echo "::error::no verdict was recorded for $k - the proof is incomplete"
+              bad=1; continue
+            fi
+            v="$(cat "$f")"
+            printf '%-14s %s\n' "$k" "$v"
+            [ "$v" = "PASS" ] || bad=1
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::Checkpoint 4 is NOT proven - see the classified reports above and in the artifact"
+            exit 1
+          fi
+          echo "All five proof surfaces PASS."
+
+      - name: Restore historical migrations and verify untouched
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d supabase/_migrations_held_aside ]; then
+            rmdir supabase/migrations 2>/dev/null || true
+            mv supabase/_migrations_held_aside supabase/migrations
+          fi
+          want="$(cat /tmp/active-migrations-count 2>/dev/null || echo 0)"
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$want" -gt 0 ] && [ "$n" -eq "$want" ] || {
+            echo "::error::active migrations not intact: expected $want, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::active migrations modified"; exit 1; }
+          echo "$n active migrations intact and unmodified."
+
+      # ── STAGE H) artifact safety ───────────────────────────
+      - name: Scan artifacts for secret-like material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          # Run #1 deleted the only file present on an early failure, so
+          # the upload found an empty directory and the diagnosis had to
+          # come from the job log instead of an artifact. Evidence is now
+          # kept and scanned rather than deleted, and a summary is always
+          # written so a failed run still produces a downloadable trail.
+          {
+            echo "run_id=${GITHUB_RUN_ID:-?} attempt=${GITHUB_RUN_ATTEMPT:-?}"
+            echo "commit=${GITHUB_SHA:-?}"
+            echo "endpoint=${DB_HOST}:${DB_PORT} user=${DB_USER}"
+            echo "files:"; ls -la "$OUT" || true
+          } > "$OUT/run-summary.txt"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|SCRAM-SHA-256\\\$|md5[0-9a-f]{32}|postgres(ql)?://[^ ]*:[^ ]*@|PASSWORD '" "$OUT"; then
+            echo "::error::secret-like material found in proof artifacts - upload blocked"
+            exit 1
+          fi
+          echo "Artifact secret scan clean."
+
+      - name: Upload proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkpoint4-proof
+          path: ${{ env.OUT }}
+          retention-days: 14
+          if-no-files-found: error

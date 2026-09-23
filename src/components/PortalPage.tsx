@@ -7,6 +7,7 @@ import { btnP, btnS, inp } from "../utils";
 import { createWriteHelpers } from "../utils/write";
 import { useSeason } from "../season/useSeason";
 import { companyService } from "../company/companyService";
+import { isSaved, saveErrorText } from "../company/saveResult";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -258,16 +259,6 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [adminName, setAdminName] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
   const [adminWa, setAdminWa] = useState("");
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
-  const [hotelName, setHotelName] = useState("");
-  const [hotelAddress, setHotelAddress] = useState("");
-  const [hotelUrl, setHotelUrl] = useState("");
-  const [minaAddress, setMinaAddress] = useState("");
-  const [minaUrl, setMinaUrl] = useState("");
-  const [arafaAddress, setArafaAddress] = useState("");
-  const [arafaUrl, setArafaUrl] = useState("");
-  const [features, setFeatures] = useState<Record<string, boolean>>({});
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({});
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [helpMessage, setHelpMessage] = useState("");
@@ -288,16 +279,6 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         setAdminName(data.admin_name || "");
         setAdminPhone(data.admin_phone || "");
         setAdminWa(data.admin_whatsapp || "");
-        setCountry(data.country || "");
-        setCity(data.city || "");
-        setHotelName(data.hotel_name || "");
-        setHotelAddress(data.hotel_address || "");
-        setHotelUrl(data.hotel_url || "");
-        setMinaAddress(data.camp_mina_address || "");
-        setMinaUrl(data.camp_mina_url || "");
-        setArafaAddress(data.camp_arafa_address || "");
-        setArafaUrl(data.camp_arafa_url || "");
-        setFeatures((data.features as Record<string, boolean>) || {});
         setPortalSettings((data.portal_settings as Record<string, boolean>) || {});
         setWelcomeMessage(data.portal_welcome_message || "");
         setHelpMessage(data.portal_help_message || "");
@@ -306,30 +287,31 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     })();
   }, []);
 
+  /* ═══ الحدُّ الضيّق ═══
+     ستّةُ حقولٍ مملوكةٍ للبوابة تمرّ بالدالّة، والقاعدةُ تحرسها
+     بـ`manage_portal`. ولم يَعُد هنا حقلٌ لا تملكه البوابة:
+
+       · الفندقُ ومنى وعرفةُ صارت **بياناتِ موسم** يملكها صفُّ
+         الموسم، وتُحرَّر من «الإعدادات ← إعدادات الموسم».
+       · والدولةُ والمدينةُ بيانا **شركة**، مكانُهما «إعدادات
+         الحملة».
+
+     فسقط `updateConfig` من هذه الشاشة كلّه — لا لأنّه مُنع، بل
+     لأنّه لم يبقَ له ما يكتبه. */
   async function saveSettings() {
     if (cfgId == null) return;
     setSavingCfg(true);
-    const { error } = await companyService.updateConfig({
-      admin_name: adminName.trim() || null,
-      admin_phone: adminPhone.trim() || null,
-      admin_whatsapp: adminWa.trim() || null,
-      country: country.trim() || null,
-      city: city.trim() || null,
-      hotel_name: hotelName.trim() || null,
-      hotel_address: hotelAddress.trim() || null,
-      hotel_url: hotelUrl.trim() || null,
-      camp_mina_address: minaAddress.trim() || null,
-      camp_mina_url: minaUrl.trim() || null,
-      camp_arafa_address: arafaAddress.trim() || null,
-      camp_arafa_url: arafaUrl.trim() || null,
-      features,
+    const res = await companyService.updatePortalSettings({
       portal_settings: portalSettings,
       portal_welcome_message: welcomeMessage.trim() || null,
       portal_help_message: helpMessage.trim() || null,
+      admin_name: adminName.trim() || null,
+      admin_phone: adminPhone.trim() || null,
+      admin_whatsapp: adminWa.trim() || null,
     });
     setSavingCfg(false);
-    if (error) showAlert("error", "تعذر حفظ الإعدادات، يرجى المحاولة مرة أخرى.");
-    else showAlert("success", "تم حفظ إعدادات البوابة بنجاح.");
+    if (!isSaved(res)) { showAlert("error", saveErrorText(res)); return; }
+    showAlert("success", "تم حفظ إعدادات البوابة بنجاح.");
   }
 
   const portalUrl = `${window.location.origin}/hajj`;
@@ -554,22 +536,11 @@ function PortalPage({ currentUser }: { currentUser: User }) {
           </div>
         </div>
 
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 14, maxWidth: 640 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text-main)", marginBottom: 4 }}>بيانات الحملة والأماكن</div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 14 }}>تظهر في البوابة وبطاقة الطوارئ، وتُستخدم في أي مطبوعات مستقبلية</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-            <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>الدولة</div><input value={country} onChange={e => setCountry(e.target.value)} placeholder="قطر" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
-            <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>المدينة</div><input value={city} onChange={e => setCity(e.target.value)} placeholder="الدوحة" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
-            <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>اسم الفندق</div><input value={hotelName} onChange={e => setHotelName(e.target.value)} placeholder="أبراج الصفوة" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>عنوان الفندق</div><input value={hotelAddress} onChange={e => setHotelAddress(e.target.value)} placeholder="شارع أجياد، أمام الحرم المكي" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رابط الفندق على الخريطة</div><input value={hotelUrl} onChange={e => setHotelUrl(e.target.value)} placeholder="https://maps.google.com/..." style={{ ...inp, width: "100%", boxSizing: "border-box", direction: "ltr" }} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>عنوان مخيم منى</div><input value={minaAddress} onChange={e => setMinaAddress(e.target.value)} placeholder="شارع الملك فهد، مخيمات مؤسسة حجاج الدول العربية" style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رابط مخيم منى على الخريطة</div><input value={minaUrl} onChange={e => setMinaUrl(e.target.value)} placeholder="https://maps.google.com/..." style={{ ...inp, width: "100%", boxSizing: "border-box", direction: "ltr" }} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>عنوان مخيم عرفات</div><input value={arafaAddress} onChange={e => setArafaAddress(e.target.value)} placeholder="طريق نمرة، القطعة رقم..." style={{ ...inp, width: "100%", boxSizing: "border-box" }} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رابط مخيم عرفات على الخريطة</div><input value={arafaUrl} onChange={e => setArafaUrl(e.target.value)} placeholder="https://maps.google.com/..." style={{ ...inp, width: "100%", boxSizing: "border-box", direction: "ltr" }} /></div>
-          </div>
-        </div>
-
+        {/* بطاقةُ «بيانات الحملة والأماكن» رُفعت من هنا: الفندقُ ومنى
+            وعرفةُ بياناتُ موسمٍ تُحرَّر من «إعدادات الموسم»، والدولةُ
+            والمدينةُ بيانا شركةٍ في «إعدادات الحملة». ولا تُعرَض هنا
+            للقراءة أيضاً: شاشةٌ واحدةٌ تعرض قيمةً لا تملكها هي أوّلُ
+            الطريق إلى مصدرَين. */}
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 14, maxWidth: 640 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text-main)", marginBottom: 12 }}>ما يراه الحاج في البوابة</div>
           <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>

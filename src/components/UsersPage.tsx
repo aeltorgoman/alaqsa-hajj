@@ -4,10 +4,12 @@ import { supabase } from "../supabase";
 import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset } from "../utils";
 import { useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
+import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
-import { companyService } from "../company/companyService";
+import { companyService, seasonMasterData } from "../company/companyService";
+import { isSaved, saveErrorText } from "../company/saveResult";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -95,7 +97,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
-  const [activeTab, setActiveTab] = useState<"identity" | "system" | "users">("identity");
+  const { activeSeason, viewedSeason, canWrite, returnToActive } = useSeason();
+  const [activeTab, setActiveTab] = useState<"company" | "identity" | "season" | "users">("company");
 
   /* users */
   const [users, setUsers] = useState<User[]>([]);
@@ -110,13 +113,54 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const [companyForm, setCompanyForm] = useState(() => ({
     name_ar: identity.nameAr, name_en: identity.nameEn, tagline: identity.tagline,
     contact_phone: contact.phone, contact_email: contact.email,
-    season_label: identity.seasonLabel,
+    country: contact.country, city: contact.city,
     color_primary: branding.primaryColor, color_accent: branding.accentColor,
     logo_url: identity.logoUrl || "", banner_image_url: branding.bannerUrl || "",
     bank_name: financial.bankName, bank_account_name: financial.accountName,
     bank_account_number: financial.accountNumber, bank_iban: financial.iban,
-    bank_swift: financial.swift,
+    bank_swift: financial.swift, commercial_registration: financial.commercialRegistration,
   }));
+
+  /* ═══ إعداداتُ الموسم ═══
+     تُحمَّل من **الموسم المعروض** ليرى المديرُ بياناتِ ما يتصفّحه،
+     ولا تُحفَظ إلا حين يكون المعروضُ هو النشط — و`canWrite` من
+     `useSeason` هو نفسُه الشرطُ الذي تفرضه الدالّة في القاعدة. */
+  const [seasonForm, setSeasonForm] = useState(() => seasonMasterData(viewedSeason));
+  const [seasonSaving, setSeasonSaving] = useState(false);
+  const [seasonMsg, setSeasonMsg] = useState("");
+  /* تبدّل الموسمُ المعروضُ من شريط المواسم والصفحةُ مفتوحة؟ يُعاد
+     ملءُ النموذج من الموسم الجديد. وهذا ضبطٌ أثناء العرض لا في
+     `useEffect`: الأثرُ كان يعرض قيمَ الموسم القديم إطاراً كاملاً
+     ثمّ يستبدلها، ويُطلق تصييراً متتالياً. */
+  const [seasonSrcId, setSeasonSrcId] = useState(viewedSeason.id);
+  if (seasonSrcId !== viewedSeason.id) {
+    setSeasonSrcId(viewedSeason.id);
+    setSeasonForm(seasonMasterData(viewedSeason));
+    setSeasonMsg("");
+  }
+
+  const saveSeason = async () => {
+    if (!canWrite) return;
+    setSeasonSaving(true);
+    setSeasonMsg("");
+    const res = await companyService.updateActiveSeason({
+      name: seasonForm.name.trim(),
+      hotel_name: seasonForm.hotelName.trim() || null,
+      hotel_address: seasonForm.hotelAddress.trim() || null,
+      hotel_url: seasonForm.hotelUrl.trim() || null,
+      mina_address: seasonForm.minaAddress.trim() || null,
+      mina_url: seasonForm.minaUrl.trim() || null,
+      arafa_address: seasonForm.arafaAddress.trim() || null,
+      arafa_url: seasonForm.arafaUrl.trim() || null,
+    });
+    setSeasonSaving(false);
+    if (!isSaved(res)) { setSeasonMsg(saveErrorText(res)); return; }
+    setSeasonMsg("تم الحفظ بنجاح — سيتم تحديث الصفحة...");
+    /* اسمُ الموسم يظهر في الترويسة والمطبوعات، ومزوّدُ المواسم
+       يُحمّل مرّةً عند التركيب. فالتحديثُ هو ما يجعل الاسمَ الجديد
+       يسري على الشاشات كلّها. */
+    setTimeout(() => window.location.reload(), 1200);
+  };
   const [companySaving, setCompanySaving] = useState(false);
   const [companyUploading, setCompanyUploading] = useState(false);
   const [companyMsg, setCompanyMsg] = useState("");
@@ -150,24 +194,37 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const saveCompanyConfig = async () => {
     setCompanySaving(true);
     setCompanyMsg("");
-    const { error } = await companyService.updateConfig({
+    const res = await companyService.updateConfig({
       name_ar: companyForm.name_ar, name_en: companyForm.name_en,
       tagline: companyForm.tagline, contact_phone: companyForm.contact_phone,
-      contact_email: companyForm.contact_email, season_label: companyForm.season_label,
+      contact_email: companyForm.contact_email,
+      country: companyForm.country || null, city: companyForm.city || null,
       color_primary: companyForm.color_primary, color_accent: companyForm.color_accent,
-      logo_url: companyForm.logo_url, banner_image_url: companyForm.banner_image_url,
+      /* ⚠️ لا `logo_url` ولا `banner_image_url` هنا. `company_assets`
+         صارت المرجع، والعمودان يبقيان في القاعدة عمودَي توافقٍ
+         مجمَّدين حتى ترحيل التنظيف. والكتابةُ المزدوجةُ كانت تُبقي
+         لمصدرين حياةً — فمن كتب أحدَهما وحده صنع خلافاً. */
       bank_name: companyForm.bank_name || null,
       bank_account_name: companyForm.bank_account_name || null,
       bank_account_number: companyForm.bank_account_number || null,
       bank_iban: companyForm.bank_iban || null,
       bank_swift: companyForm.bank_swift || null,
+      commercial_registration: companyForm.commercial_registration || null,
     });
-    setCompanySaving(false);
-    if (error) { setCompanyMsg("حصل خطأ أثناء الحفظ"); return; }
-    await Promise.all([
-      companyForm.logo_url ? companyService.saveAsset({ key: "logo", url: companyForm.logo_url, altText: companyForm.name_ar }) : Promise.resolve(),
-      companyForm.banner_image_url ? companyService.saveAsset({ key: "dashboard_banner", url: companyForm.banner_image_url, altText: companyForm.name_ar }) : Promise.resolve(),
+    if (!isSaved(res)) { setCompanySaving(false); setCompanyMsg(saveErrorText(res)); return; }
+
+    /* ⚠️ نتيجتا الأصول كانتا تُهمَلان: `Promise.all` يُنتظَر ثمّ
+       يُرمى ناتجُه، فيُعلَن النجاحُ ولو لم يُحفظ الشعار. والآن
+       تُفحَصان — والكائنُ المرفوع قد يبقى يتيماً إن أخفق حفظُ
+       مؤشّره، وتنظيفُ اليتامى خارج نطاق هذه المرحلة صراحةً. */
+    const assetResults = await Promise.all([
+      companyForm.logo_url ? companyService.saveAsset({ key: "logo", url: companyForm.logo_url, altText: companyForm.name_ar }) : null,
+      companyForm.banner_image_url ? companyService.saveAsset({ key: "dashboard_banner", url: companyForm.banner_image_url, altText: companyForm.name_ar }) : null,
     ]);
+    const assetFailed = assetResults.some(r => r !== null && r.error);
+    setCompanySaving(false);
+    if (assetFailed) { setCompanyMsg("حُفظت بيانات الحملة، وتعذّر حفظ الشعار أو الغلاف — أعد المحاولة."); return; }
+
     setCompanyMsg("تم الحفظ بنجاح — سيتم تحديث الصفحة...");
     setTimeout(() => window.location.reload(), 1200);
   };
@@ -289,19 +346,23 @@ function UsersPage({ currentUser }: { currentUser: User }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,var(--em8),var(--em7))", color: "var(--accent-light)", fontSize: 11, fontWeight: 700, padding: "7px 14px", borderRadius: 99, boxShadow: "0 2px 8px rgba(92,24,48,.25)" }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          {companyForm.season_label || "موسم الحج"}
+          {viewedSeason.name}{canWrite ? "" : " — مؤرشف"}
         </div>
       </div>
 
       {/* ── TABS BAR ── */}
       <div style={{ display: "flex", gap: 2, padding: "14px 20px 0", borderBottom: "1.5px solid var(--line)", flexShrink: 0 }}>
+        <button style={tabBtn("company")} onClick={() => setActiveTab("company")}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg>
+          بيانات الحملة
+        </button>
         <button style={tabBtn("identity")} onClick={() => setActiveTab("identity")}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-          بيانات الهوية
+          الهوية والمظهر
         </button>
-        <button style={tabBtn("system")} onClick={() => setActiveTab("system")}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          إعدادات النظام
+        <button style={tabBtn("season")} onClick={() => setActiveTab("season")}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          إعدادات الموسم
         </button>
         <button style={tabBtn("users")} onClick={() => setActiveTab("users")}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -312,7 +373,92 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       {/* ── TAB CONTENT ── */}
       <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px 0" }}>
 
-        {/* ══════════ TAB 1: IDENTITY ══════════ */}
+        {/* ══════════ TAB 1: COMPANY ══════════ */}
+        {activeTab === "company" && (
+          <div>
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M10 21v-6h4v6"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>بيانات الحملة</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>بيانات عامّة لا تتغيّر بتغيّر الموسم</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                  <div>
+                    <label style={fieldLabel}>اسم الحملة (عربي)</label>
+                    <input style={{ ...inp, fontSize: 12 }} value={companyForm.name_ar} onChange={e => setCompanyForm(p => ({ ...p, name_ar: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>اسم الحملة (إنجليزي)</label>
+                    <input style={{ ...inp, fontSize: 12 }} dir="ltr" value={companyForm.name_en} onChange={e => setCompanyForm(p => ({ ...p, name_en: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label style={fieldLabel}>الشعار النصي (Tagline)</label>
+                  <input style={inp} value={companyForm.tagline} onChange={e => setCompanyForm(p => ({ ...p, tagline: e.target.value }))} />
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>يظهر في الشاشة الرئيسية وصفحة تسجيل الدخول</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>بيانات التواصل</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>بيانات التواصل العامّة للحملة</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={fieldLabel}>رقم التواصل</label>
+                    <input style={inp} dir="ltr" value={companyForm.contact_phone} onChange={e => setCompanyForm(p => ({ ...p, contact_phone: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>البريد الإلكتروني</label>
+                    <input style={inp} dir="ltr" value={companyForm.contact_email} onChange={e => setCompanyForm(p => ({ ...p, contact_email: e.target.value }))} />
+                  </div>
+                  {/* الدولةُ والمدينةُ بيانا شركةٍ لا موسم. وكانتا تُحرَّران
+                      من صفحة البوابة وحدها، فلم يكن لهما موضعٌ هنا أصلاً. */}
+                  <div>
+                    <label style={fieldLabel}>الدولة</label>
+                    <input style={inp} value={companyForm.country} onChange={e => setCompanyForm(p => ({ ...p, country: e.target.value }))} placeholder="قطر" />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>المدينة</label>
+                    <input style={inp} value={companyForm.city} onChange={e => setCompanyForm(p => ({ ...p, city: e.target.value }))} placeholder="الدوحة" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHead}><div style={cardIcon}>ر.ق</div><div><div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>بيانات البنك والسداد</div><div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>بيانات التحويل والسجلّ التجاريّ</div></div></div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                  <div><label style={fieldLabel}>اسم البنك</label><input style={inp} value={companyForm.bank_name} onChange={e => setCompanyForm(p => ({ ...p, bank_name: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>اسم الحساب</label><input style={inp} value={companyForm.bank_account_name} onChange={e => setCompanyForm(p => ({ ...p, bank_account_name: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>رقم الحساب</label><input style={inp} dir="ltr" value={companyForm.bank_account_number} onChange={e => setCompanyForm(p => ({ ...p, bank_account_number: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>IBAN</label><input style={inp} dir="ltr" value={companyForm.bank_iban} onChange={e => setCompanyForm(p => ({ ...p, bank_iban: e.target.value }))} /></div>
+                  <div><label style={fieldLabel}>SWIFT</label><input style={inp} dir="ltr" value={companyForm.bank_swift} onChange={e => setCompanyForm(p => ({ ...p, bank_swift: e.target.value }))} /></div>
+                  {/* رقمُ السجلّ التجاريّ — بيانُ شركةٍ، وموضعُه هنا
+                      لأنّ استعمالَه المقصود مع بيانات التحويل والسداد. */}
+                  <div><label style={fieldLabel}>رقم السجل التجاري</label><input style={inp} dir="ltr" value={companyForm.commercial_registration} onChange={e => setCompanyForm(p => ({ ...p, commercial_registration: e.target.value }))} /></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ══════════ TAB 2: IDENTITY / APPEARANCE ══════════ */}
         {activeTab === "identity" && (
           <div>
             <div style={card}>
@@ -322,7 +468,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>الهوية البصرية</div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>البانر الرئيسي، الشعار، والأسماء</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>البانر الرئيسي والشعار</div>
                 </div>
               </div>
               <div style={cardBody}>
@@ -376,57 +522,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   </div>
                 </div>
 
-                <div style={divider} />
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                  <div>
-                    <label style={fieldLabel}>اسم الحملة (عربي)</label>
-                    <input style={{ ...inp, fontSize: 12 }} value={companyForm.name_ar} onChange={e => setCompanyForm(p => ({ ...p, name_ar: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={fieldLabel}>اسم الحملة (إنجليزي)</label>
-                    <input style={{ ...inp, fontSize: 12 }} dir="ltr" value={companyForm.name_en} onChange={e => setCompanyForm(p => ({ ...p, name_en: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={fieldLabel}>اسم الموسم</label>
-                    <input style={{ ...inp, fontSize: 12 }} value={companyForm.season_label} onChange={e => setCompanyForm(p => ({ ...p, season_label: e.target.value }))} />
-                  </div>
-                </div>
-                <div>
-                  <label style={fieldLabel}>الشعار النصي (Tagline)</label>
-                  <input style={inp} value={companyForm.tagline} onChange={e => setCompanyForm(p => ({ ...p, tagline: e.target.value }))} />
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>يظهر في الشاشة الرئيسية وصفحة تسجيل الدخول</div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══════════ TAB 2: SYSTEM ══════════ */}
-        {activeTab === "system" && (
-          <div>
-            <div style={card}>
-              <div style={cardHead}>
-                <div style={cardIcon}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>بيانات التواصل</div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>تظهر في التقارير وصفحة تسجيل الدخول</div>
-                </div>
-              </div>
-              <div style={cardBody}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={fieldLabel}>رقم التواصل</label>
-                    <input style={inp} dir="ltr" value={companyForm.contact_phone} onChange={e => setCompanyForm(p => ({ ...p, contact_phone: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={fieldLabel}>البريد الإلكتروني</label>
-                    <input style={inp} dir="ltr" value={companyForm.contact_email} onChange={e => setCompanyForm(p => ({ ...p, contact_email: e.target.value }))} />
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -479,18 +574,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
-            <div style={card}>
-              <div style={cardHead}><div style={cardIcon}>ر.ق</div><div><div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>البيانات البنكية</div><div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>بيانات التحويل الخاصة بالحملة</div></div></div>
-              <div style={cardBody}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-                  <div><label style={fieldLabel}>اسم البنك</label><input style={inp} value={companyForm.bank_name} onChange={e => setCompanyForm(p => ({ ...p, bank_name: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>اسم الحساب</label><input style={inp} value={companyForm.bank_account_name} onChange={e => setCompanyForm(p => ({ ...p, bank_account_name: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>رقم الحساب</label><input style={inp} dir="ltr" value={companyForm.bank_account_number} onChange={e => setCompanyForm(p => ({ ...p, bank_account_number: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>IBAN</label><input style={inp} dir="ltr" value={companyForm.bank_iban} onChange={e => setCompanyForm(p => ({ ...p, bank_iban: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>SWIFT</label><input style={inp} dir="ltr" value={companyForm.bank_swift} onChange={e => setCompanyForm(p => ({ ...p, bank_swift: e.target.value }))} /></div>
-                </div>
-              </div>
-            </div>
 
             {/* ── [FIX #6] المظهر — نفس الـ ThemeSwitcher الموجود في الداشبورد ── */}
             <div style={card}>
@@ -509,6 +592,138 @@ function UsersPage({ currentUser }: { currentUser: User }) {
             </div>
           </div>
         )}
+
+        {/* ══════════ TAB 3: SEASON ══════════ */}
+        {activeTab === "season" && (
+          <div>
+            {/* ⚠️ المؤرشفُ يُعرَض ولا يُحرَّر. والشرطُ هنا مرآةٌ لشرطِ
+                `closed_at is null` في الدالّة — الواجهةُ لا تحرس،
+                لكنّها لا تَعِد بما سيُرفَض. */}
+            {!canWrite && (
+              <div style={{ ...card, padding: "12px 14px", fontSize: 11.5, fontWeight: 700, color: "var(--text-muted)", lineHeight: 1.9 }}>
+                أنت تتصفّح موسماً مؤرشفاً — بياناته للعرض فقط.{" "}
+                <button onClick={returnToActive} style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 800, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                  العودة إلى الموسم النشط ({activeSeason.name})
+                </button>
+              </div>
+            )}
+
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>الموسم</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>اسم العرض المعتمد في البوابة والتقارير والمطبوعات</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 10 }}>
+                  <div>
+                    <label style={fieldLabel}>اسم الموسم</label>
+                    <input style={inp} value={seasonForm.name} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="موسم الحج 1449 هـ" />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>السنة الهجرية</label>
+                    {/* هويّةُ الموسم لا تُحرَّر: تُحدَّد مرّةً عند إنشائه. */}
+                    <input style={{ ...inp, direction: "ltr", textAlign: "left", opacity: 0.6, cursor: "not-allowed" }}
+                      value={viewedSeason.hijri_year ?? ""} disabled readOnly />
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.8 }}>
+                  الاسم نصّ حرّ يظهر كما تكتبه. والسنة الهجرية هي هوية الموسم — تُحدَّد عند إنشائه ولا تتغيّر.
+                </div>
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-5h6v5"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>الفندق</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>فندق هذا الموسم — يظهر في البوابة والمطبوعات وبطاقة الطوارئ</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div>
+                    <label style={fieldLabel}>اسم الفندق</label>
+                    <input style={inp} value={seasonForm.hotelName} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, hotelName: e.target.value }))} placeholder="أبراج الصفوة" />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>عنوان الفندق</label>
+                    <input style={inp} value={seasonForm.hotelAddress} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, hotelAddress: e.target.value }))} placeholder="شارع أجياد، أمام الحرم المكي" />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>رابط الفندق على الخريطة</label>
+                    <input style={{ ...inp, direction: "ltr" }} value={seasonForm.hotelUrl} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, hotelUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 20h18"/><path d="M6 20V9l6-5 6 5v11"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>منى وعرفات</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>الموقع العامّ لكلٍّ منهما — والمخيمات داخله تُدار من صفحتها</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div>
+                    <label style={fieldLabel}>عنوان منى العام</label>
+                    <input style={inp} value={seasonForm.minaAddress} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, minaAddress: e.target.value }))} placeholder="شارع الملك فهد، مخيمات مؤسسة حجاج الدول العربية" />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>رابط منى على الخريطة</label>
+                    <input style={{ ...inp, direction: "ltr" }} value={seasonForm.minaUrl} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, minaUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
+                  </div>
+                  <div style={divider} />
+                  <div>
+                    <label style={fieldLabel}>عنوان عرفات العام</label>
+                    <input style={inp} value={seasonForm.arafaAddress} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, arafaAddress: e.target.value }))} placeholder="طريق نمرة، القطعة رقم..." />
+                  </div>
+                  <div>
+                    <label style={fieldLabel}>رابط عرفات على الخريطة</label>
+                    <input style={{ ...inp, direction: "ltr" }} value={seasonForm.arafaUrl} disabled={!canWrite}
+                      onChange={e => setSeasonForm(f => ({ ...f, arafaUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {canWrite && currentUser.permissions.manage_users && (
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, paddingBottom: 18 }}>
+                {seasonMsg && (
+                  <span style={{ fontSize: 12, color: seasonMsg.includes("تم الحفظ") ? "var(--em7)" : "var(--danger)", marginLeft: "auto" }}>
+                    {seasonMsg}
+                  </span>
+                )}
+                <button onClick={saveSeason} disabled={seasonSaving || !seasonForm.name.trim()}
+                  style={{ ...btnP(), display: "flex", alignItems: "center", gap: 7, opacity: seasonSaving || !seasonForm.name.trim() ? 0.6 : 1 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  {seasonSaving ? "جاري الحفظ..." : "حفظ إعدادات الموسم"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "users" && (
           <div>
             <div style={card}>
@@ -618,7 +833,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
       </div>
 
       {/* ── STICKY SAVE BAR ── */}
-      {activeTab !== "users" && currentUser.permissions.manage_users && (
+      {(activeTab === "company" || activeTab === "identity") && currentUser.permissions.manage_users && (
         <div style={{ flexShrink: 0, padding: "12px 20px 16px", background: "linear-gradient(to top, var(--bg) 80%, transparent)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
           {companyMsg && (
             <span style={{ fontSize: 12, color: companyMsg.includes("خطأ") ? "var(--danger)" : "var(--em7)", display: "flex", alignItems: "center", marginLeft: "auto" }}>

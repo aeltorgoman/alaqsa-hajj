@@ -12,6 +12,10 @@ export type FinancialGroupMember = { id: number; group_id: number; passenger_id:
 // حالات فلتر القائمة الرئيسية
 export type FinanceFilterStatus = "all" | "paid" | "partial" | "unpaid" | "unpriced" | "credit";
 
+// ترتيب القائمة الرئيسية — العمود واتّجاهه
+export type FinanceSortKey = "manual" | "name" | "due" | "paid" | "balance";
+export type FinanceSortDir = "asc" | "desc";
+
 // نموذج الدفعة المشتركة على أعضاء المجموعة
 export type GroupPayForm = { amount: string; payment_date: string; method: string; notes: string };
 
@@ -46,3 +50,14 @@ export type FinanceRow = { p: Passenger; due: number; paid: number; balance: num
 
 // تجميع التدفق النقدي حسب التاريخ
 export type CashflowByDate = Record<string, { total: number; count: number; methods: Record<string, number> }>;
+
+// المطلوب والمدفوع والمتبقّي لحاجٍّ واحد (يحسبها `totalsFor`)
+export type FinanceTotals = { due: number; paid: number; balance: number };
+
+/* تصنيفُ الكيان المُسنَد (id → type) للباص والمخيّم والغرفة — يُجلب
+   `id,type` وحدهما، ولا يدخل أيّ حساب. */
+export type AllocTypeMaps = {
+  bus:  Map<number, string>;
+  camp: Map<number, string>;
+  room: Map<number, string>;
+};

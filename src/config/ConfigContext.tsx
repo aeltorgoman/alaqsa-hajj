@@ -16,20 +16,25 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     companyService.load().then(({ config: data, assets: assetRows, error }) => {
         if (data && !error) {
-          const featureValues = data.features && typeof data.features === "object" && !Array.isArray(data.features)
-            ? data.features : {};
-          setConfig({
-            ...DEFAULT_CONFIG, ...data,
-            features: { ...DEFAULT_CONFIG.features, ...featureValues },
-          } as unknown as AppConfig);
-          /* حفظ نسخة محلية تُستخدم في شاشة البدء بالزيارات القادمة */
+          setConfig({ ...DEFAULT_CONFIG, ...data } as unknown as AppConfig);
+          /* حفظ نسخة محلية تُستخدم في شاشة البدء بالزيارات القادمة.
+
+             ⚠️ والشعارُ يُحسَب من الملفّ المُطبَّع لا من العمود الخام:
+             `company_assets` هي المرجع، وعمودُ التوافق `logo_url`
+             سقط من القاعدة في ترحيل التنظيف. وكتابةُ الخام هنا كانت
+             تجعل شاشةَ البدء آخرَ قارئٍ للمصدر القديم — فتعرض
+             شعاراً بينما يعرض النظامُ كلُّه غيرَه.
+
+             و`logo_url` أدناه مفتاحُ مخزنٍ محلّيٍّ لا عمودُ قاعدة:
+             اسمُه باقٍ كي لا تفقد المتصفّحاتُ نسختَها المحفوظة. */
+          const bootProfile = normalizeCompanyProfile(data, assetRows);
           try {
             localStorage.setItem("hajj_company_boot", JSON.stringify({
-              name_ar: data.name_ar || "",
-              tagline: data.tagline || "",
-              logo_url: data.logo_url || "",
-              color_primary: data.color_primary || "",
-              color_accent: data.color_accent || "",
+              name_ar: bootProfile.identity.nameAr || "",
+              tagline: bootProfile.identity.tagline || "",
+              logo_url: bootProfile.identity.logoUrl || "",
+              color_primary: bootProfile.branding.primaryColor || "",
+              color_accent: bootProfile.branding.accentColor || "",
             }));
           } catch { /* التخزين المحلي غير متاح */ }
         }

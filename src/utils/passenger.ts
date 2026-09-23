@@ -112,3 +112,21 @@ export function applyReorder(list: Passenger[], column: OrderColumn, ordered: { 
   const pos = new Map(ordered.map((item, i) => [item.id, (i + 1) * 10]));
   return list.map(p => pos.has(p.id) ? { ...p, [column]: pos.get(p.id)! } : p);
 }
+
+/* ═══ ترتيب الكشوف التشغيليّة ═══
+   الترتيب اليدويّ المعتمَد للحجّاج هو `passengers.sort_order` —
+   يكتبه السحب وتعديلُ الموضع في صفحة الحجاج (مقصوراً على الحجّاج)،
+   وتكتبه صفحة الإداريين في التسلسل المستقلّ للإداريين. و`id` يحسم
+   التساوي فالنتيجة محدَّدة لا عشوائية.
+
+   ⚠️ العمودُ واحد والتسلسلان مستقلّان — فـ«الحجّاج أولاً ثم
+   الإداريون» لا يتحقّق بفرزٍ واحد على `sort_order`: يحتاج وصلَ
+   مجموعتين مرتَّبتين. وهذا ما تفعله هذه الدالّة، وهي المصدر الوحيد
+   لترتيب الكشوف — لا ترتيبَ ثانٍ يُبتكر للطيران. */
+export function orderHajjThenAdmins(list: Passenger[]): Passenger[] {
+  const cmp = byOrder("sort_order");
+  return [
+    ...list.filter(p => isHajj(p)).sort(cmp),
+    ...list.filter(p => !isHajj(p)).sort(cmp),
+  ];
+}

@@ -66,8 +66,9 @@ export interface Bus {
   id: number;
   name: string;
   type: string;
-  /* عمود قائم في القاعدة بافتراضي 50 — كان غيابه يفرض (bus as any).capacity */
-  capacity?: number | null;
+  /* عمود قائم في القاعدة بافتراضي ٥٠، وصار `not null` مع حارس
+     السقف — فلا يعود `bus.capacity || 50` تفسيراً في الواجهة. */
+  capacity: number;
   season_id?: number | null;
   created_at?: string;
 }
@@ -78,6 +79,16 @@ export interface Camp {
   gender: string;
   type: string;
   page_type: string;
+  /* السعة الحقيقية — يُدخِلها الموظّف، لا تُستنبط من نوع.
+     `null` تعني «غير محدّدة»: مخيّمٌ أُنشئ قبل عمود السعة، لا يقبل
+     إسناداً حتى تُحدَّد سعته. */
+  capacity?: number | null;
+  /* ترتيب المخيّم داخل مجموعته (الموسم · نوع الصفحة · الجنس) —
+     قرارٌ تشغيليّ يملكه الموظّف بالسحب. ليس فريداً، والفجوات
+     مقبولة، و`id` يحسم التساوي.
+     ⚠️ ليس `passengers.camp_mina_sort_order`: ذاك ترتيب النازلين
+     داخل مخيّم، وهذا ترتيب المخيّمات نفسها. */
+  sort_order?: number | null;
   season_id?: number | null;
   created_at?: string;
 }
@@ -86,7 +97,13 @@ export interface Room {
   id: number;
   number: string;
   floor: string;
-  type: "فردية" | "ثنائية" | "ثلاثية" | "رباعية" | "مجلس" | "أخرى";
+  /* «خاص» تصنيفٌ تجاريّ لا عدّةَ أَسِرّة: سعتها تُدخَل صراحةً.
+     و«أخرى» خرجت من المفردات المعتمَدة — لم تكن لها سعة أصلاً. */
+  type: "فردية" | "ثنائية" | "ثلاثية" | "رباعية" | "خاص" | "مجلس";
+  /* السعة الحقيقية — محفوظة في القاعدة لا مشتقّة في المتصفّح.
+     `null` تعني «غير محدّدة»: صفٌّ قديم بنوعٍ خارج المعتمَد،
+     لا يقبل إسناداً حتى تُحدَّد سعته. */
+  capacity?: number | null;
   notes?: string | null;
   season_id?: number | null;
 }
@@ -103,6 +120,11 @@ export interface Flight {
   /* عمودان قائمان في القاعدة — كان غيابهما يفرض (flight as any).arrival_* */
   arrival_time?: string | null;
   arrival_date?: string | null;
+  /* المقاعد المخصَّصة للحملة على هذه الرحلة — لا سعة الطائرة.
+     طائرةٌ بثلاث مئة مقعد قد تكون حصّة الحملة فيها أربعين.
+     `null` تعني «غير محدَّدة»: رحلةٌ أُنشئت قبل العمود، لا تقبل
+     إسناداً حتى يُدخِل الموظّف العدد. */
+  capacity?: number | null;
   created_at?: string;
   /* م٧ — الموسم المالك للرحلة. تختمه القاعدة بافتراض
      `active_season_id()`، فلا يُرسله العميل عند الإنشاء. */

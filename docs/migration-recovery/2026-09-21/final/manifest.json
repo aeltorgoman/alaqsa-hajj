@@ -1,0 +1,10 @@
+{
+  "empty_statement_arrays": 0,
+  "latest_version": "20260921141422",
+  "ledger_rows": 46,
+  "null_statement_rows": 1,
+  "payload_hash_verification": "PASS",
+  "project_ref": "zkucwcnclbfvukhdqhgc",
+  "rows_with_statement_payloads": 45,
+  "statement_payload_elements": 45
+}
