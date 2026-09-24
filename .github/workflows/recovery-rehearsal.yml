@@ -296,8 +296,18 @@ jobs:
           "$GUARD" "$TMP_REF" "$SUPABASE_URL"
           # لا تُنقل صفوفُ `auth.users` من الإنتاج — يُنشأ الحسابُ
           # بالمسار المعتمد، وهو بالضبط ما تعثّر عليه التمرينُ السابق.
-          printf 'نعم\n' | node supabase/scripts/seed_first_admin.mjs > "$OUT/admin.log" 2>&1 || {
-            echo "::error::first-admin bootstrap failed"; sed -E 's/eyJ[A-Za-z0-9_.-]{20,}/***/g' "$OUT/admin.log" | tail -30; exit 1; }
+          # ⚠️ `printf` يُغلق المجرى بعد سطره، وواجهةُ readline تُنشأ
+          #    عند تحميل السكربت فتُغلق مع النهاية — ثمّ يُسأل التأكيدُ
+          #    بعد ذلك فيُرمى `ERR_USE_AFTER_CLOSE`. و`yes` تُبقي المجرى
+          #    مفتوحاً حتى يخرج node. و`pipefail` كانت ستقرأ خروجَ `yes`
+          #    بـ SIGPIPE إخفاقاً، فيُؤخَذ رمزُ node نفسِه من PIPESTATUS.
+          set +o pipefail
+          yes 'نعم' 2>/dev/null | node supabase/scripts/seed_first_admin.mjs > "$OUT/admin.log" 2>&1
+          rc=${PIPESTATUS[1]}
+          set -o pipefail
+          [ "$rc" -eq 0 ] || {
+            echo "::error::first-admin bootstrap failed (rc=$rc)"
+            sed -E 's/eyJ[A-Za-z0-9_.-]{20,}/***/g' "$OUT/admin.log" | tail -30; exit 1; }
           sed -E -i 's/eyJ[A-Za-z0-9_.-]{20,}/***/g' "$OUT/admin.log"
           grep -E "permissions|user_profiles" "$OUT/admin.log" | tail -5 || true
           echo "first admin created via seed_first_admin.mjs (no auth.users transplant)" | tee "$OUT/phase-a-admin.txt"
