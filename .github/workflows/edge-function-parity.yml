@@ -1,0 +1,125 @@
+# ════════════════════════════════════════════════════════════
+# #32/٣ — is the deployed Edge Function source the one in the repo?
+# ════════════════════════════════════════════════════════════
+# READ ONLY. It downloads and compares. It never deploys, never
+# writes to the project, and never touches the database. There is
+# deliberately no `functions deploy` anywhere in this file: creating
+# parity by overwriting production would prove nothing.
+#
+# `--use-api` unbundles server-side, so no Docker is needed.
+#
+# The repository copy is moved aside first, because `functions
+# download` writes into `supabase/functions/<slug>/` — the very path
+# being compared. Diffing a directory against itself would pass
+# trivially, which is the one failure mode this check must not have.
+
+name: Edge function parity (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-function-parity
+  cancel-in-progress: false
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      OUT: parity-evidence
+      SLUGS: "Scan-passport send-pilgrim-push season-admin user-admin pilgrim-doc whatsapp-send"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and a snapshot of the repository copy"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          cp -r supabase/functions "$RUNNER_TEMP/repo-functions"
+          find "$RUNNER_TEMP/repo-functions" -type f | sort | while read -r f; do
+            printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#"$RUNNER_TEMP/repo-functions/"}"
+          done | tee "$OUT/repo-files.sha256"
+          echo "repository files: $(wc -l < "$OUT/repo-files.sha256")"
+
+      - name: "Download the deployed source for every function"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          rm -rf supabase/functions
+          mkdir -p supabase/functions
+          for s in $SLUGS; do
+            echo "── $s"
+            if ! npm run --silent supabase -- functions download "$s" \
+                 --project-ref "$PROJECT_REF" --use-api > "$OUT/download-$s.log" 2>&1; then
+              echo "::error::download failed for $s"
+              sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g' "$OUT/download-$s.log"
+              exit 1
+            fi
+          done
+          find supabase/functions -type f | sort | while read -r f; do
+            printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#supabase/functions/}"
+          done | tee "$OUT/deployed-files.sha256"
+
+      - name: "Compare, file by file"
+        run: |
+          set -euo pipefail
+          bad=0
+          : > "$OUT/parity.tsv"
+          for s in $SLUGS; do
+            a="$RUNNER_TEMP/repo-functions/$s"
+            b="supabase/functions/$s"
+            if [ ! -d "$b" ]; then printf '%s\tMISSING_DEPLOYED\n' "$s" >> "$OUT/parity.tsv"; bad=1; continue; fi
+            if [ ! -d "$a" ]; then printf '%s\tMISSING_IN_REPO\n' "$s" >> "$OUT/parity.tsv"; bad=1; continue; fi
+            if diff -ru "$a" "$b" > "$OUT/diff-$s.txt" 2>&1; then
+              printf '%s\tIDENTICAL\n' "$s" >> "$OUT/parity.tsv"; rm -f "$OUT/diff-$s.txt"
+            else
+              printf '%s\tDRIFT\n' "$s" >> "$OUT/parity.tsv"; bad=1
+              echo "::error::drift in $s"; head -60 "$OUT/diff-$s.txt"
+            fi
+          done
+          # `_shared/` تُرفع مع كلّ دالّة، فتنزل نسخةٌ منها تحت كلّ
+          # واحدة. تُقارَن كلُّ نسخةٍ بالأصل في المستودع.
+          if [ -d "supabase/functions/_shared" ]; then
+            if diff -ru "$RUNNER_TEMP/repo-functions/_shared" "supabase/functions/_shared" > "$OUT/diff-_shared.txt" 2>&1; then
+              printf '_shared\tIDENTICAL\n' >> "$OUT/parity.tsv"; rm -f "$OUT/diff-_shared.txt"
+            else
+              printf '_shared\tDRIFT\n' >> "$OUT/parity.tsv"; bad=1
+              echo "::error::drift in _shared"; head -60 "$OUT/diff-_shared.txt"
+            fi
+          fi
+          echo "--- parity ---"; cat "$OUT/parity.tsv"
+          diff -u "$OUT/repo-files.sha256" "$OUT/deployed-files.sha256" > "$OUT/fileset.diff" || {
+            echo "::warning::the deployed file set is not identical to the repository file set (see fileset.diff)"; }
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; echo "::error::parity FAILED"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Every deployed function matches the repository source, byte for byte."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-function-parity
+          path: parity-evidence
+          if-no-files-found: error

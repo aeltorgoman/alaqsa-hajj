@@ -284,12 +284,22 @@ jobs:
             echo "::error::AFTER structural dump failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/dump-after.err"; exit 1; }
           rm -f "$OUT/dump-after.err"
           sha256sum "$OUT/structural-after.sql" | tee "$OUT/structural-after.sha256"
-          if diff -q "$OUT/structural-before.sql" "$OUT/structural-after.sql" >/dev/null; then
-            echo "  ok   public schema byte-identical before and after"
+          # ⚠️ pg_dump 17 يكتب في أوّل الملفّ وآخره سطرَي
+          #    `\restrict` / `\unrestrict` بمِلحٍ **عشوائيّ في كلّ
+          #    استدعاء**. فمقارنةُ البايتات على خامِ المخرَج لا تنجح
+          #    أبداً ولو لم يتغيّر المخطّطُ حرفاً — شرطٌ غيرُ قابل
+          #    للتحقّق بحكم بنائه. يُحيَّد السطران ثمّ يُقارَن الباقي.
+          norm() { sed -E 's/^-- \\(un)?restrict .*/-- \\\\restrict <nonce>/' "$1"; }
+          norm "$OUT/structural-before.sql" > "$OUT/before.norm"
+          norm "$OUT/structural-after.sql"  > "$OUT/after.norm"
+          # و`diff` يُرجع 1 عند الاختلاف، و`set -e` يقتل الخطوة قبل
+          # كتابة الحكم — فيُقرأ الإخفاقُ «لم تُنفَّذ». `|| true` تمنع ذلك.
+          if diff -q "$OUT/before.norm" "$OUT/after.norm" >/dev/null; then
+            echo "  ok   public schema identical before and after (dump nonce normalised)"
             echo PASS > "$OUT/status-schema.txt"
           else
             echo "::error::the public schema CHANGED - a data-only migration must not do this"
-            diff -u "$OUT/structural-before.sql" "$OUT/structural-after.sql" | head -80
+            diff -u "$OUT/before.norm" "$OUT/after.norm" | head -80 || true
             echo FAIL > "$OUT/status-schema.txt"
           fi
           echo "Schema verdict: $(cat "$OUT/status-schema.txt")"
