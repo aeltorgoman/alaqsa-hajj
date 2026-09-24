@@ -177,6 +177,27 @@ jobs:
 
           # والمخطّطُ يُهدم صراحةً ثمّ يُبنى بالترحيلات — لا ترقيةَ فوق
           # بقايا. وهذا ما يُثبِت أن المستودعَ وحده يُنتج النظام.
+          # ⚠️ سياساتُ التخزين تعيش في schema `storage` لا في `public`،
+          #    فلا يُسقطها هدمُ `public`. وترحيلةُ الأساس تُنشئها بـ
+          #    `create policy` بلا `if not exists`، فتصطدم بما خلّفه
+          #    تمرينٌ سابق وتتوقّف الدفعةُ عند الترحيلة ٤٧ من ٥١.
+          #    وهذا أثرٌ حقيقيّ: المجموعةُ تُعاد على مشروعٍ جديدٍ بلا
+          #    عناء، لكنها لا تُعاد على مشروعٍ يحمل هذه السياسات سلفاً.
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -c "
+            do \$\$
+            declare r record;
+            begin
+              for r in select policyname, schemaname, tablename
+                         from pg_policies where schemaname = 'storage'
+              loop
+                execute format('drop policy if exists %I on %I.%I',
+                               r.policyname, r.schemaname, r.tablename);
+              end loop;
+            end \$\$;"
+          sp="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_policies where schemaname='storage'")"
+          [ "$sp" -eq 0 ] || { echo "::error::$sp storage policies survived the teardown"; exit 1; }
+          echo "  storage policies cleared: 0 remain"
+
           psql "$URL" -X -q -v ON_ERROR_STOP=1 \
             -c "drop schema if exists public cascade" \
             -c "create schema public" \
