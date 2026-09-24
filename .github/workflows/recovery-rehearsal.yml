@@ -84,6 +84,28 @@ jobs:
             echo "target_ref=$TMP_REF"; echo "target_is_production=false"; } | tee "$OUT/identity.txt"
 
       # ── PREFLIGHT — قراءةٌ فقط قبل أيّ إتلاف ──────────────────
+      - name: "GATE: resolve the pooler host that actually serves this project"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF"
+          # مضيفُ المجمِّع ليس واحداً لكلّ المشاريع ولو اتّحد الإقليم،
+          # ولا تُرجعه واجهةُ الإدارة. فيُجرَّب المرشّحون بالترتيب
+          # ويُثبَّت أوّلُ من يردّ — بدل تخمينٍ يُخفق بعد الكتابة.
+          found=""
+          for h in "$DB_HOST" aws-0-eu-central-1.pooler.supabase.com aws-1-eu-central-1.pooler.supabase.com; do
+            U="postgresql://postgres.${TMP_REF}@${h}:${DB_PORT}/postgres"
+            "$GUARD" "$TMP_REF" "$U" >/dev/null
+            if psql "$U" -X -q -At -v ON_ERROR_STOP=1 -c "select 1" >/dev/null 2>&1; then
+              found="$h"; echo "  pooler host resolved: $h"; break
+            fi
+            echo "  not served by: $h"
+          done
+          [ -n "$found" ] || { echo "::error::no candidate pooler host serves this project"; exit 1; }
+          echo "DB_HOST=$found" >> "$GITHUB_ENV"
+          echo "pooler_host=$found" | tee -a "$OUT/identity.txt"
+
       - name: "PREFLIGHT: inspect the temp project read-only"
         env:
           PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
@@ -92,16 +114,31 @@ jobs:
           URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$TMP_REF" "$URL"
           RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
-          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          # ⚠️ لا تُكتب القيمةُ داخل `echo` مباشرةً: إخفاقُ psql في
+          #    استبدالِ أمرٍ لا يُوقف الخطوة تحت `set -e`، فتُطبع قيمةٌ
+          #    فارغةٌ وتُقرأ الخطوةُ ناجحةً وقاعدةٌ لم تُبلَغ أصلاً.
+          #    تُسنَد أوّلاً، فيسري الإخفاق.
+          q() { local v; v="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1")"; printf '%s' "$v"; }
+          a="$(q "select count(*) from information_schema.schemata where schema_name='supabase_migrations'")"
+          b="$(q "select count(*) from information_schema.tables where table_schema='public'")"
+          c="$(q "select coalesce((select count(*) from public.seasons),-1)")"
+          d="$(q "select coalesce((select count(*) from public.passengers),-1)")"
+          e="$(q "select count(*) from auth.users")"
+          f="$(q "select count(*) from storage.buckets")"
+          g="$(q "select count(*) from storage.objects")"
+          h="$(q "select count(*) from information_schema.columns where table_schema='public' and table_name='financial_groups' and column_name='season_id'")"
+          for v in "$a" "$b" "$c" "$d" "$e" "$f" "$g" "$h"; do
+            [ -n "$v" ] || { echo "::error::preflight read returned nothing - the database was not reached"; exit 1; }
+          done
           {
-            echo "ledger_schema_present=$(p "select count(*) from information_schema.schemata where schema_name='supabase_migrations'")"
-            echo "public_tables=$(p "select count(*) from information_schema.tables where table_schema='public'")"
-            echo "seasons=$(p "select coalesce((select count(*) from public.seasons),-1)")"
-            echo "passengers=$(p "select coalesce((select count(*) from public.passengers),-1)")"
-            echo "auth_users=$(p "select count(*) from auth.users")"
-            echo "storage_buckets=$(p "select count(*) from storage.buckets")"
-            echo "storage_objects=$(p "select count(*) from storage.objects")"
-            echo "financial_groups_has_season_id=$(p "select count(*) from information_schema.columns where table_schema='public' and table_name='financial_groups' and column_name='season_id'")"
+            echo "ledger_schema_present=$a"
+            echo "public_tables=$b"
+            echo "seasons=$c"
+            echo "passengers=$d"
+            echo "auth_users=$e"
+            echo "storage_buckets=$f"
+            echo "storage_objects=$g"
+            echo "financial_groups_has_season_id=$h"
           } | tee "$OUT/preflight-temp.txt"
 
       # ── BASELINE — الحالةُ النظيفة ────────────────────────────
