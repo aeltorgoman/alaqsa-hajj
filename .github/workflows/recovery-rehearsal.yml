@@ -121,8 +121,17 @@ jobs:
           q() { local v; v="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1")"; printf '%s' "$v"; }
           a="$(q "select count(*) from information_schema.schemata where schema_name='supabase_migrations'")"
           b="$(q "select count(*) from information_schema.tables where table_schema='public'")"
-          c="$(q "select coalesce((select count(*) from public.seasons),-1)")"
-          d="$(q "select coalesce((select count(*) from public.passengers),-1)")"
+          # ⚠️ جدولٌ غيرُ موجودٍ يُخفق عند **التحليل** لا عند التنفيذ،
+          #    فلا يعصمه `coalesce`. والمشروعُ قد يكون فارغاً تماماً —
+          #    وهي حالةٌ مشروعةٌ يجب وصفُها لا الإخفاقُ عندها.
+          cnt() {
+            local t="$1" e
+            e="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+                 -c "select count(*) from information_schema.tables where table_schema='public' and table_name='$t'")"
+            if [ "$e" = "1" ]; then q "select count(*) from public.$t"; else printf '%s' "-1"; fi
+          }
+          c="$(cnt seasons)"
+          d="$(cnt passengers)"
           e="$(q "select count(*) from auth.users")"
           f="$(q "select count(*) from storage.buckets")"
           g="$(q "select count(*) from storage.objects")"
