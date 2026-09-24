@@ -1,0 +1,520 @@
+# ════════════════════════════════════════════════════════════
+# التمرينُ التشغيليّ — إعادةُ البناء من الصفر ثمّ إقفالُ موسم
+# ════════════════════════════════════════════════════════════
+# يعمل على مشروعٍ **مُخصَّصٍ للإتلاف** وحده. الإنتاجُ لا يُلمَس.
+#
+# ⚠️ الحارس: `supabase/verification/assert-not-production.sh`
+# يُستدعى في **كلّ** خطوةٍ تفتح اتصالاً أو تكتب — لا مرّةً واحدةً
+# في الأعلى. ترتيبُ الخطوات ليس ضماناً، ونيّةُ المُشغِّل ليست
+# ضماناً. ويرفض الحارسُ ثلاثةَ أشياء لا واحداً: مرجعَ الإنتاج،
+# وأيَّ مرجعٍ غيرِ مرجعِ التمرين المتوقَّع، وأيَّ رابطِ اتصالٍ لا
+# يحمل مرجعَ الهدف أو يحمل مرجعَ الإنتاج.
+#
+# هذا التمرينُ **هدّام على هدفه**: يمسح المخطّطَ والمستخدمين
+# والتخزين ثمّ يعيد البناء من `main`. وهو عينُ الهدف — إثباتُ أن
+# المستودعَ وحده يُنتج نظاماً صالحاً للتشغيل، لا ترقيةُ قاعدةٍ قديمة.
+
+name: Operational rehearsal - rebuild from main, then close a season
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type REHEARSE-ON-DISPOSABLE-PROJECT to authorize destructive work on the temp project"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-rehearsal
+  cancel-in-progress: false
+
+jobs:
+  rehearsal:
+    runs-on: ubuntu-latest
+    env:
+      TMP_REF: ${{ secrets.TMP_PROJECT_REF }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      OUT: rehearsal-evidence
+      GUARD: supabase/verification/assert-not-production.sh
+
+    steps:
+      - name: "GATE: confirmation and secrets present"
+        env:
+          PW: ${{ secrets.TMP_DB_PASSWORD }}
+          SK: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
+          AE: ${{ secrets.TMP_ADMIN_EMAIL }}
+          AP: ${{ secrets.TMP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "REHEARSE-ON-DISPOSABLE-PROJECT" ] || {
+            echo "::error::confirmation string does not match"; exit 1; }
+          for n in TMP_REF PW SK AE AP; do
+            [ -n "${!n:-}" ] || { echo "::error::$n is not set"; exit 1; }
+          done
+          echo "Authorized. All five temp secrets present (values not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: the target is the disposable project, not production"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          chmod +x "$GUARD"
+          "$GUARD" "$TMP_REF"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq 51 ] || { echo "::error::expected 51 repository migrations, found $n"; exit 1; }
+          { echo "main_commit=${GITHUB_SHA}"; echo "cli=$v"; echo "repo_migrations=$n";
+            echo "target_ref=$TMP_REF"; echo "target_is_production=false"; } | tee "$OUT/identity.txt"
+
+      # ── PREFLIGHT — قراءةٌ فقط قبل أيّ إتلاف ──────────────────
+      - name: "PREFLIGHT: inspect the temp project read-only"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          {
+            echo "ledger_schema_present=$(p "select count(*) from information_schema.schemata where schema_name='supabase_migrations'")"
+            echo "public_tables=$(p "select count(*) from information_schema.tables where table_schema='public'")"
+            echo "seasons=$(p "select coalesce((select count(*) from public.seasons),-1)")"
+            echo "passengers=$(p "select coalesce((select count(*) from public.passengers),-1)")"
+            echo "auth_users=$(p "select count(*) from auth.users")"
+            echo "storage_buckets=$(p "select count(*) from storage.buckets")"
+            echo "storage_objects=$(p "select count(*) from storage.objects")"
+            echo "financial_groups_has_season_id=$(p "select count(*) from information_schema.columns where table_schema='public' and table_name='financial_groups' and column_name='season_id'")"
+          } | tee "$OUT/preflight-temp.txt"
+
+      # ── BASELINE — الحالةُ النظيفة ────────────────────────────
+      - name: "BASELINE: wipe auth and storage, then rebuild the schema from main"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          # `db reset` يعيد بناء المخطّط ويُعيد تشغيل الترحيلات، لكنّه
+          # لا يمسّ `auth.users` ولا التخزين. فيُمسحان صراحةً أوّلاً كي
+          # تكون القاعدةُ نظيفةً فعلاً لا مخطَّطاً نظيفاً فوق بقايا.
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 \
+            -c "delete from storage.objects" \
+            -c "delete from storage.buckets" \
+            -c "delete from auth.users"
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote('postgres.'+os.environ['TMP_REF'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          "$GUARD" "$TMP_REF" "$DB_URL"
+          npm run --silent supabase -- db reset --db-url "$DB_URL" --no-seed 2> "$OUT/reset.err" || {
+            echo "::error::db reset failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/reset.err"; exit 1; }
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/reset.err" || true
+          echo "clean baseline: auth.users + storage emptied, then schema rebuilt by replaying all 51 migrations" | tee "$OUT/baseline-method.txt"
+
+      # ── PHASE A ───────────────────────────────────────────────
+      - name: "A2/A3: ledger 51, correspondence, and company_config seeded"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          rows="$(p "select count(*) from supabase_migrations.schema_migrations")"
+          latest="$(p "select max(version) from supabase_migrations.schema_migrations")"
+          cc="$(p "select count(*) from public.company_config")"
+          cc1="$(p "select count(*) from public.company_config where id = 1")"
+          echo "ledger_rows=$rows latest=$latest company_config_rows=$cc company_config_id1=$cc1" | tee "$OUT/phase-a-ledger.txt"
+          bad=0
+          [ "$rows" -eq 51 ] || { echo "::error::ledger holds $rows rows, expected 51"; bad=1; }
+          [ "$latest" = "20260924140000" ] || { echo "::error::latest is $latest, expected 20260924140000"; bad=1; }
+          [ "$cc" -eq 1 ]  || { echo "::error::company_config holds $cc rows, expected exactly 1 (#17)"; bad=1; }
+          [ "$cc1" -eq 1 ] || { echo "::error::company_config has no id = 1 (#17)"; bad=1; }
+          p "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions.txt" 51 "20260924140000" \
+            | tee "$OUT/correspondence.txt" || bad=1
+          [ "$bad" -eq 0 ] && echo PASS > "$OUT/status-a-ledger.txt" || echo FAIL > "$OUT/status-a-ledger.txt"
+          echo "A2/A3 verdict: $(cat "$OUT/status-a-ledger.txt")"
+          [ "$bad" -eq 0 ]
+
+      - name: "A4: synthetic test seasons"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -f supabase/scripts/seed_test_seasons.sql > "$OUT/seed.log" 2>&1
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 \
+            -c "select 'seasons='||count(*) from public.seasons" \
+            -c "select 'passengers='||count(*) from public.passengers" \
+            -c "select 'open_seasons='||count(*) from public.seasons where closed_at is null" \
+            | tee "$OUT/phase-a-seed.txt"
+
+      - name: "A5: first admin through the approved bootstrap"
+        env:
+          SUPABASE_URL: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
+          ADMIN_EMAIL: ${{ secrets.TMP_ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.TMP_ADMIN_PASSWORD }}
+          ADMIN_NAME: "مدير التمرين"
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF" "$SUPABASE_URL"
+          # لا تُنقل صفوفُ `auth.users` من الإنتاج — يُنشأ الحسابُ
+          # بالمسار المعتمد، وهو بالضبط ما تعثّر عليه التمرينُ السابق.
+          printf 'نعم\n' | node supabase/scripts/seed_first_admin.mjs > "$OUT/admin.log" 2>&1 || {
+            echo "::error::first-admin bootstrap failed"; sed -E 's/eyJ[A-Za-z0-9_.-]{20,}/***/g' "$OUT/admin.log" | tail -30; exit 1; }
+          sed -E -i 's/eyJ[A-Za-z0-9_.-]{20,}/***/g' "$OUT/admin.log"
+          grep -E "permissions|user_profiles" "$OUT/admin.log" | tail -5 || true
+          echo "first admin created via seed_first_admin.mjs (no auth.users transplant)" | tee "$OUT/phase-a-admin.txt"
+
+      - name: "Deploy the two functions the rehearsal exercises"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF"
+          for s in season-admin pilgrim-doc; do
+            npm run --silent supabase -- functions deploy "$s" --project-ref "$TMP_REF" 2>&1 \
+              | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
+          done
+
+      - name: "A6/A7/A8/A9/A10: storage, relationships, document, staff auth, portal auth"
+        env:
+          API: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          SK: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
+          AE: ${{ secrets.TMP_ADMIN_EMAIL }}
+          AP: ${{ secrets.TMP_ADMIN_PASSWORD }}
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF" "$API"
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
+          bad=0
+          say() { printf '  %-46s %s\n' "$1" "$2"; }
+
+          # ── A6 — تخزينٌ بملفٍّ اصطناعيّ
+          PID="$(p "select id from public.passengers where season_id = public.active_season_id() order by id limit 1")"
+          printf 'synthetic rehearsal document %s\n' "$(date -u +%FT%TZ)" > /tmp/synthetic.txt
+          KEY="${PID}/rehearsal-permit.txt"
+          code=$(curl -s -o /tmp/up.json -w '%{http_code}' -X POST \
+            "$API/storage/v1/object/passengers-docs/$KEY" \
+            -H "Authorization: Bearer $SK" -H "Content-Type: text/plain" \
+            --data-binary @/tmp/synthetic.txt)
+          [ "$code" = "200" ] && say "A6 upload synthetic object" "ok" || { say "A6 upload" "HTTP $code"; bad=1; }
+          p "update public.passengers set hajj_permit_url = '$KEY' where id = $PID" >/dev/null
+          say "A6 objects in bucket" "$(p "select count(*) from storage.objects where bucket_id='passengers-docs'")"
+
+          # ── A7 — علاقاتٌ وأيتام
+          for c in bus_id:buses room_id:rooms camp_mina_id:camps camp_arafa_id:camps flight_id:flights return_flight_id:flights; do
+            col="${c%%:*}"; tbl="${c##*:}"
+            n="$(p "select count(*) from public.passengers p where p.$col is not null and not exists (select 1 from public.$tbl t where t.id = p.$col)")"
+            [ "$n" -eq 0 ] && say "A7 orphan $col" "0" || { say "A7 orphan $col" "$n"; bad=1; }
+          done
+          n="$(p "select count(*) from public.financial_group_members m where not exists (select 1 from public.passengers p where p.id = m.passenger_id)")"
+          [ "$n" -eq 0 ] && say "A7 orphan group members" "0" || { say "A7 orphan group members" "$n"; bad=1; }
+
+          # ── A10 — جلسةُ بوابةٍ عبر المسار المجهول المعتمد
+          DOC="$(p "select passport from public.passengers where id = $PID")"
+          DOB="$(p "select to_char(dob::date,'YYYY-MM-DD') from public.passengers where id = $PID")"
+          Y="${DOB%%-*}"; M="$(echo "$DOB" | cut -d- -f2)"; D="$(echo "$DOB" | cut -d- -f3)"
+          TOKEN="$(curl -s -X POST "$API/rest/v1/rpc/create_pilgrim_session" \
+            -H "apikey: $SK" -H "Authorization: Bearer $SK" -H "Content-Type: application/json" \
+            -d "{\"p_doc\":\"$DOC\",\"p_day\":${D#0},\"p_month\":${M#0},\"p_year\":$Y}" | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("token",""))')"
+          [ -n "$TOKEN" ] && say "A10 valid portal session issued" "ok" || { say "A10 session" "no token"; bad=1; }
+          echo "::add-mask::$TOKEN"
+          ok="$(curl -s -X POST "$API/rest/v1/rpc/get_pilgrim_portal_by_session" \
+            -H "apikey: $SK" -H "Authorization: Bearer $SK" -H "Content-Type: application/json" \
+            -d "{\"p_token\":\"$TOKEN\"}" | python3 -c 'import sys,json;d=json.load(sys.stdin);print("yes" if d else "no")')"
+          [ "$ok" = "yes" ] && say "A10 valid session reads portal" "yes" || { say "A10 valid session reads portal" "$ok"; bad=1; }
+          bogus="$(curl -s -X POST "$API/rest/v1/rpc/get_pilgrim_portal_by_session" \
+            -H "apikey: $SK" -H "Authorization: Bearer $SK" -H "Content-Type: application/json" \
+            -d '{"p_token":"not-a-real-token"}' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("yes" if d else "no")')"
+          [ "$bogus" = "no" ] && say "A10 invalid session refused" "yes" || { say "A10 invalid session refused" "NO"; bad=1; }
+
+          # ── A8 — المستند من طرفٍ إلى طرف عبر pilgrim-doc
+          SIGNED="$(curl -s -X POST "$API/functions/v1/pilgrim-doc" \
+            -H "Content-Type: application/json" -H "apikey: $SK" \
+            -d "{\"token\":\"$TOKEN\",\"doc_type\":\"hajj_permit\"}" \
+            | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("url",""))')"
+          if [ -n "$SIGNED" ]; then
+            echo "::add-mask::$SIGNED"
+            dc=$(curl -s -o /dev/null -w '%{http_code}' "$SIGNED")
+            [ "$dc" = "200" ] && say "A8 document fetched end-to-end" "HTTP 200" || { say "A8 document fetch" "HTTP $dc"; bad=1; }
+          else
+            say "A8 pilgrim-doc signed url" "MISSING"; bad=1
+          fi
+
+          # ── A9 — دخولُ موظّفٍ وصلاحيّته
+          JWT="$(curl -s -X POST "$API/auth/v1/token?grant_type=password" \
+            -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$AE\",\"password\":\"$AP\"}" \
+            | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("access_token",""))')"
+          [ -n "$JWT" ] && say "A9 staff sign-in" "ok" || { say "A9 staff sign-in" "FAILED"; bad=1; }
+          echo "::add-mask::$JWT"
+          echo "$JWT" > /tmp/jwt
+          has="$(curl -s -X POST "$API/rest/v1/rpc/has_permission" \
+            -H "apikey: $SK" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+            -d '{"p_key":"manage_season_lifecycle"}')"
+          [ "$has" = "true" ] && say "A9 has_permission(manage_season_lifecycle)" "true" || { say "A9 permission" "$has"; bad=1; }
+          nop="$(curl -s -X POST "$API/rest/v1/rpc/has_permission" \
+            -H "apikey: $SK" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+            -d '{"p_key":"a_permission_that_does_not_exist"}')"
+          [ "$nop" = "false" ] && say "A9 unknown permission denied" "false" || { say "A9 unknown permission" "$nop"; bad=1; }
+
+          [ "$bad" -eq 0 ] && echo PASS > "$OUT/status-a.txt" || echo FAIL > "$OUT/status-a.txt"
+          echo "Phase A verdict: $(cat "$OUT/status-a.txt")"
+          [ "$bad" -eq 0 ]
+
+      # ── PHASE B ───────────────────────────────────────────────
+      - name: "B1/B2: top up the active season and fingerprint it"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -f supabase/verification/rehearsal/topup.sql | tee "$OUT/phase-b-topup.txt"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "
+            select 'pre_close'||E'\t'||
+              (select count(*) from public.seasons)||E'\t'||
+              (select count(*) from public.seasons where closed_at is null)||E'\t'||
+              (select count(*) from public.passengers where season_id = public.active_season_id())||E'\t'||
+              (select count(*) from public.financial_groups where season_id = public.active_season_id())||E'\t'||
+              (select count(*) from public.pilgrim_sessions where season_id = public.active_season_id() and revoked_at is null)||E'\t'||
+              (select count(*) from public.pricing_settings)" | tee "$OUT/phase-b-preclose.txt"
+
+      - name: "B3: close the season THROUGH season-admin"
+        env:
+          API: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          SK: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
+          AE: ${{ secrets.TMP_ADMIN_EMAIL }}
+          AP: ${{ secrets.TMP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF" "$API"
+          # ⚠️ لا يُستدعى `close_season()` مباشرةً. الإقفالُ يمرّ بالدالّة
+          # كما يمرّ في التطبيق: JWT موظّفٍ حقيقيّ، والنمطُ الثلاثيّ كاملاً.
+          JWT="$(curl -s -X POST "$API/auth/v1/token?grant_type=password" \
+            -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$AE\",\"password\":\"$AP\"}" \
+            | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("access_token",""))')"
+          [ -n "$JWT" ] || { echo "::error::could not sign in for the close"; exit 1; }
+          echo "::add-mask::$JWT"
+          vr=$(curl -s -o /tmp/verify.json -w '%{http_code}' -X POST "$API/functions/v1/season-admin" \
+            -H "Authorization: Bearer $JWT" -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d '{"action":"verify"}')
+          echo "season-admin verify -> HTTP $vr"
+          [ "$vr" = "200" ] || { echo "::error::season-admin verify refused"; cat /tmp/verify.json; exit 1; }
+          cr=$(curl -s -o /tmp/close.json -w '%{http_code}' -X POST "$API/functions/v1/season-admin" \
+            -H "Authorization: Bearer $JWT" -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d '{"action":"close","newSeasonName":"موسم تمرين 1450","newSeasonHijriYear":1450}')
+          echo "season-admin close -> HTTP $cr" | tee "$OUT/phase-b-close.txt"
+          cat /tmp/close.json | tee -a "$OUT/phase-b-close.txt"
+          [ "$cr" = "200" ] || { echo "::error::season-admin close failed"; exit 1; }
+
+      - name: "B4-B15: assertions after the close"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -f supabase/verification/rehearsal/assert-after-close.sql > "$OUT/phase-b-assertions.tsv"
+          bad=0
+          while IFS=$'\t' read -r name expected actual; do
+            if [ "$expected" = "(observed)" ]; then
+              printf '  %-52s %s\n' "$name" "OBSERVED=$actual"
+            elif [ "$expected" = "$actual" ]; then
+              printf '  %-52s ok   %s\n' "$name" "$actual"
+            else
+              printf '  %-52s FAIL expected=%s actual=%s\n' "$name" "$expected" "$actual"; bad=1
+            fi
+          done < "$OUT/phase-b-assertions.tsv"
+          [ "$bad" -eq 0 ] && echo PASS > "$OUT/status-b.txt" || echo FAIL > "$OUT/status-b.txt"
+          echo "Phase B verdict: $(cat "$OUT/status-b.txt")"
+          [ "$bad" -eq 0 ]
+
+      - name: "B8: all 12 closed-season guards refuse a write"
+        env:
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          # ⚠️ كلُّ جدولٍ يُختبَر **مرّتين**، ولا يمرّ إلا باجتياز
+          # الاثنتين معاً:
+          #   موجبٌ على الموسم النشط  → يجب أن **ينجح**
+          #   سالبٌ على الموسم المقفل → يجب أن **يُرفَض**
+          # ولولا الموجب لكان خطأٌ مطبعيٌّ في اسم عمودٍ يُقرأ رفضاً،
+          # فيُعلَن الحارسُ عاملاً وهو لم يُستدعَ أصلاً. والموجبُ يُلغى
+          # بـ rollback فلا يبقى أثر، والسالبُ تُجهضه المعاملة.
+          CLOSED="(select id from public.seasons where closed_at is not null order by closed_at desc limit 1)"
+          CP="(select id from public.passengers where season_id = $CLOSED order by id limit 1)"
+          : > "$OUT/guards.tsv"
+          run_sql() { set +e; psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1" >/dev/null 2>&1; local rc=$?; set -e; return $rc; }
+          probe() {
+            local t="$1" pos="$2" neg="$3" pok negrefused
+            if run_sql "$pos"; then pok=yes; else pok=NO; fi
+            if run_sql "$neg"; then negrefused=NO; else negrefused=yes; fi
+            if [ "$pok" = yes ] && [ "$negrefused" = yes ]; then
+              printf '%s\tPASS\n' "$t" >> "$OUT/guards.tsv"; printf '  %-28s positive ok · closed-season write refused\n' "$t"
+            else
+              printf '%s\tFAIL(pos=%s,refused=%s)\n' "$t" "$pok" "$negrefused" >> "$OUT/guards.tsv"
+              printf '  %-28s FAIL  positive=%s refused=%s\n' "$t" "$pok" "$negrefused"
+            fi
+          }
+
+          # سبعةٌ تحمل season_id مباشرةً
+          probe passengers \
+            "begin; insert into public.passengers (name_ar) values ('probe'); rollback;" \
+            "delete from public.passengers where id = $CP"
+          probe buses \
+            "begin; insert into public.buses (name, type) values ('probe bus','عادي'); rollback;" \
+            "delete from public.buses where season_id = $CLOSED"
+          probe camps \
+            "begin; insert into public.camps (name, page_type, gender, type) values ('probe camp','منى','رجال','عادي'); rollback;" \
+            "delete from public.camps where season_id = $CLOSED"
+          probe rooms \
+            "begin; insert into public.rooms (number, floor, type) values ('9001','بروفة','ثنائية'); rollback;" \
+            "delete from public.rooms where season_id = $CLOSED"
+          probe flights \
+            "begin; insert into public.flights (name, type) values ('probe flight','ذهاب'); rollback;" \
+            "delete from public.flights where season_id = $CLOSED"
+          probe announcements \
+            "begin; insert into public.announcements (body) values ('probe'); rollback;" \
+            "delete from public.announcements where season_id = $CLOSED"
+          probe financial_groups \
+            "begin; insert into public.financial_groups (name) values ('probe group'); rollback;" \
+            "delete from public.financial_groups where season_id = $CLOSED"
+
+          # وخمسةٌ مشتقّةٌ عبر passenger_id — الموجبُ ينشئ حاجَّه في الموسم النشط
+          probe payments \
+            "begin; with p as (insert into public.passengers (name_ar) values ('probe') returning id)
+             insert into public.payments (passenger_id, amount) select id, 1 from p; rollback;" \
+            "insert into public.payments (passenger_id, amount) values ($CP, 1)"
+          probe custom_charges \
+            "begin; with p as (insert into public.passengers (name_ar) values ('probe') returning id)
+             insert into public.custom_charges (passenger_id, description, amount, type) select id,'probe',1,'رسم' from p; rollback;" \
+            "insert into public.custom_charges (passenger_id, description, amount, type) values ($CP,'probe',1,'رسم')"
+          probe financial_group_members \
+            "begin; with g as (insert into public.financial_groups (name) values ('probe group') returning id),
+                         p as (insert into public.passengers (name_ar) values ('probe') returning id)
+             insert into public.financial_group_members (group_id, passenger_id) select g.id, p.id from g, p; rollback;" \
+            "insert into public.financial_group_members (group_id, passenger_id) values ((select id from public.financial_groups where season_id = $CLOSED order by id limit 1), $CP)"
+          probe notification_deliveries \
+            "begin; with a as (insert into public.announcements (body) values ('probe') returning id),
+                         p as (insert into public.passengers (name_ar) values ('probe') returning id)
+             insert into public.notification_deliveries (announcement_id, passenger_id) select a.id, p.id from a, p; rollback;" \
+            "insert into public.notification_deliveries (announcement_id, passenger_id) values ((select id from public.announcements where season_id = $CLOSED order by id limit 1), $CP)"
+          probe pilgrim_push_subscriptions \
+            "begin; with p as (insert into public.passengers (name_ar) values ('probe') returning id)
+             insert into public.pilgrim_push_subscriptions (passenger_id, endpoint, p256dh, auth) select id,'https://example.invalid/probe','x','y' from p; rollback;" \
+            "insert into public.pilgrim_push_subscriptions (passenger_id, endpoint, p256dh, auth) values ($CP,'https://example.invalid/probe','x','y')"
+
+          total=$(wc -l < "$OUT/guards.tsv"); passed=$(grep -c 'PASS' "$OUT/guards.tsv" || true)
+          echo "guards: $passed of $total tables passed both controls" | tee "$OUT/phase-b-guards.txt"
+          if [ "$passed" -eq 12 ] && [ "$total" -eq 12 ]; then echo PASS > "$OUT/status-guards.txt"
+          else echo FAIL > "$OUT/status-guards.txt"; echo "::error::expected 12/12, got $passed of $total"; fi
+          # ولا أثرَ باقٍ: كلُّ موجبٍ أُلغي، وكلُّ سالبٍ أُجهض
+          leak=$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select (select count(*) from public.passengers where name_ar='probe') + (select count(*) from public.financial_groups where name='probe group')")
+          echo "probe residue: $leak" | tee -a "$OUT/phase-b-guards.txt"
+          [ "$leak" -eq 0 ] || { echo "::error::probe rows survived"; echo FAIL > "$OUT/status-guards.txt"; }
+          [ "$(cat "$OUT/status-guards.txt")" = "PASS" ]
+
+      - name: "B16: delete_season through season-admin, on throwaway data"
+        env:
+          API: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          SK: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
+          AE: ${{ secrets.TMP_ADMIN_EMAIL }}
+          AP: ${{ secrets.TMP_ADMIN_PASSWORD }}
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF" "$API"
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
+          TARGET="$(p "select id from public.seasons where closed_at is not null order by closed_at desc limit 1")"
+          before="$(p "select count(*) from public.passengers where season_id = $TARGET")"
+          others="$(p "select count(*) from public.passengers where season_id <> $TARGET")"
+          JWT="$(curl -s -X POST "$API/auth/v1/token?grant_type=password" \
+            -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$AE\",\"password\":\"$AP\"}" \
+            | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("access_token",""))')"
+          echo "::add-mask::$JWT"
+          dr=$(curl -s -o /tmp/del.json -w '%{http_code}' -X POST "$API/functions/v1/season-admin" \
+            -H "Authorization: Bearer $JWT" -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d "{\"action\":\"delete\",\"seasonId\":$TARGET}")
+          echo "season-admin delete -> HTTP $dr"
+          bad=0
+          [ "$dr" = "200" ] || { echo "::error::delete refused: $(cat /tmp/del.json)"; bad=1; }
+          after="$(p "select count(*) from public.passengers where season_id = $TARGET")"
+          others_after="$(p "select count(*) from public.passengers where season_id <> $TARGET")"
+          gone="$(p "select count(*) from public.seasons where id = $TARGET")"
+          keys="$(p "select count(*) from jsonb_object_keys((select new_value from public.audit_log where table_name='seasons' and new_value ? 'passengers' order by id desc limit 1))")"
+          echo "target_before=$before target_after=$after others_before=$others others_after=$others_after season_row=$gone audit_keys=$keys" | tee "$OUT/phase-b-delete.txt"
+          [ "$after" -eq 0 ]  || { echo "::error::target season still holds $after passengers"; bad=1; }
+          [ "$gone" -eq 0 ]   || { echo "::error::season row survived"; bad=1; }
+          [ "$others_after" -eq "$others" ] || { echo "::error::an unrelated season changed: $others -> $others_after"; bad=1; }
+          [ "$keys" -eq 13 ]  || { echo "::error::delete audit carries $keys keys, expected 13"; bad=1; }
+          [ "$bad" -eq 0 ] && echo PASS > "$OUT/status-delete.txt" || echo FAIL > "$OUT/status-delete.txt"
+          echo "delete_season verdict: $(cat "$OUT/status-delete.txt")"
+          [ "$bad" -eq 0 ]
+
+      - name: "Verdict"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in a-ledger a b guards delete; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          [ "$bad" -eq 0 ] && echo PASS > "$OUT/verdict.txt" || echo FAIL > "$OUT/verdict.txt"
+          echo "REHEARSAL: $(cat "$OUT/verdict.txt")"
+          [ "$bad" -eq 0 ]
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@|service_role" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-rehearsal
+          path: rehearsal-evidence
+          if-no-files-found: error
