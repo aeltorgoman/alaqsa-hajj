@@ -70,6 +70,15 @@ jobs:
         with:
           node-version: "20"
 
+      - name: "Install dependencies (the admin bootstrap imports supabase-js)"
+        run: |
+          set -euo pipefail
+          # `npm run supabase` يمرّ بـ npx فلا يحتاج تثبيتاً، لكن
+          # `seed_first_admin.mjs` يستورد `@supabase/supabase-js`
+          # استيراداً حقيقياً. وبلا تثبيتٍ يسقط عند أول سطر.
+          npm ci --omit=dev --no-audit --no-fund
+          node -e "import('@supabase/supabase-js').then(()=>console.log('  supabase-js importable')).catch(e=>{console.error(e.message);process.exit(1)})"
+
       - name: "GATE: the target is the disposable project, not production"
         run: |
           set -euo pipefail
