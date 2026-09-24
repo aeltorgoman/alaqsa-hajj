@@ -105,8 +105,8 @@ begin
   -- ── 1446 ──────────────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1446 أ', 'عادي') returning id into v_bus;
   insert into public.buses (name, type)  values ('باص 1446 ب', 'VIP');
-  insert into public.camps (name, page_type, type) values ('مخيم منى 1446', 'منى', 'عادي') returning id into v_camp;
-  insert into public.camps (name, page_type, type) values ('مخيم عرفة 1446', 'عرفة', 'عادي');
+  insert into public.camps (name, page_type, gender, type) values ('مخيم منى 1446', 'منى', 'ذكر', 'عادي') returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type) values ('مخيم عرفة 1446', 'عرفة', 'ذكر', 'عادي');
   insert into public.rooms (number, floor, type) values ('101', 'الأول', 'ثنائية') returning id into v_room;
   insert into public.rooms (number, floor, type) values ('102', 'الأول', 'ثلاثية');
   insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, sort_order)
@@ -143,7 +143,7 @@ begin
 
   -- ── 1447 ──────────────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1447', 'عادي') returning id into v_bus;
-  insert into public.camps (name, page_type, type) values ('مخيم منى 1447', 'منى', 'خاص') returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type) values ('مخيم منى 1447', 'منى', 'ذكر', 'خاص') returning id into v_camp;
   insert into public.rooms (number, floor, type) values ('201', 'الثاني', 'رباعية') returning id into v_room;
   insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, sort_order)
   values
@@ -173,8 +173,8 @@ begin
   /* باصٌ ثانٍ فارغ — هدف التخصيص الجماعي في ت١٠. ولو زُرع الحجاج
      عليه ابتداءً لما بقي للاختبار ما يفعله. */
   insert into public.buses (name, type)  values ('باص 1448 ب — هدف ت١٠', 'عادي');
-  insert into public.camps (name, page_type, type) values ('مخيم منى 1448', 'منى', 'عادي') returning id into v_camp;
-  insert into public.camps (name, page_type, type) values ('مخيم عرفة 1448', 'عرفة', 'عادي');
+  insert into public.camps (name, page_type, gender, type) values ('مخيم منى 1448', 'منى', 'ذكر', 'عادي') returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type) values ('مخيم عرفة 1448', 'عرفة', 'ذكر', 'عادي');
   insert into public.rooms (number, floor, type) values ('301', 'الثالث', 'ثنائية') returning id into v_room;
   insert into public.rooms (number, floor, type) values ('302', 'الثالث', 'ثلاثية');
   insert into public.rooms (number, floor, type) values ('303', 'الثالث', 'رباعية');

@@ -499,7 +499,7 @@ jobs:
             "begin; insert into public.buses (name, type) values ('probe bus','عادي'); rollback;" \
             "delete from public.buses where season_id = $CLOSED"
           probe camps \
-            "begin; insert into public.camps (name, page_type, gender, type) values ('probe camp','منى','رجال','عادي'); rollback;" \
+            "begin; insert into public.camps (name, page_type, gender, type) values ('probe camp','منى','ذكر','عادي'); rollback;" \
             "delete from public.camps where season_id = $CLOSED"
           probe rooms \
             "begin; insert into public.rooms (number, floor, type) values ('9001','بروفة','ثنائية'); rollback;" \
