@@ -49,7 +49,14 @@ with
            (select (actor_id is not null)::text from public.audit_log
              where new_value ? 'new_season_id' order by id desc limit 1)
     union all
-    select 'audit_close_actor_source_is_session', 'session',
+    -- مفرداتُ actor_source كما يُعرّفها تعليقُ العمود في الـbaseline:
+    --   session   = الفاعلُ مأخوذٌ مباشرةً من auth.uid()
+    --   delegated = الفاعلُ مُثبَتٌ من الـJWT ثُمّ مُرِّر داخل الخادم
+    --   system    = لا إسنادَ إلى شخص
+    -- إغلاقُ الموسم في البروفة يجري عبر دالّةِ season-admin الحقيقيّة بـJWT موظّفٍ
+    -- مُثبَت، فالقيمةُ الصحيحةُ المتوقَّعة هي delegated. قيمةُ session تعني استدعاءَ
+    -- close_season() مباشرةً تحت auth.uid() — وهو مسارٌ غيرُ مسارِ التطبيق.
+    select 'audit_close_actor_source_is_delegated', 'delegated',
            (select actor_source from public.audit_log
              where new_value ? 'new_season_id' order by id desc limit 1)
     union all

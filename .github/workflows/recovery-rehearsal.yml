@@ -569,6 +569,20 @@ jobs:
           # بـ rollback فلا يبقى أثر، والسالبُ تُجهضه المعاملة.
           CLOSED="(select id from public.seasons where closed_at is not null order by closed_at desc limit 1)"
           CP="(select id from public.passengers where season_id = $CLOSED order by id limit 1)"
+
+          # شرطٌ سابقٌ للسوالب المباشرة: لو لم يكن في الموسم المقفل صفٌّ
+          # واحدٌ على الأقلّ في الجدول، لأصابت جملةُ الحذف صفراً من الصفوف
+          # فلا يُستدعى المحفّزُ أصلاً، وتُقرأ «النجاة» رفضاً زائفاً. نتحقّق
+          # صراحةً بدل أن نأتمن الصمت.
+          pre_bad=0
+          for t in passengers buses camps rooms flights announcements financial_groups; do
+            n="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 \
+                 -c "select count(*) from public.$t where season_id = $CLOSED")"
+            printf '  precondition %-22s rows_in_closed_season=%s\n' "$t" "$n"
+            [ -n "$n" ] && [ "$n" -gt 0 ] || { echo "::error::$t has no row in the closed season - its negative control would be vacuous"; pre_bad=1; }
+          done
+          [ "$pre_bad" -eq 0 ] || { echo FAIL > "$OUT/status-guards.txt"; exit 1; }
+
           : > "$OUT/guards.tsv"
           run_sql() { set +e; psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1" >/dev/null 2>&1; local rc=$?; set -e; return $rc; }
           probe() {
@@ -635,7 +649,15 @@ jobs:
           if [ "$passed" -eq 12 ] && [ "$total" -eq 12 ]; then echo PASS > "$OUT/status-guards.txt"
           else echo FAIL > "$OUT/status-guards.txt"; echo "::error::expected 12/12, got $passed of $total"; fi
           # ولا أثرَ باقٍ: كلُّ موجبٍ أُلغي، وكلُّ سالبٍ أُجهض
-          leak=$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select (select count(*) from public.passengers where name_ar='probe') + (select count(*) from public.financial_groups where name='probe group')")
+          leak=$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select
+              (select count(*) from public.passengers        where name_ar = 'probe')
+            + (select count(*) from public.financial_groups  where name    = 'probe group')
+            + (select count(*) from public.buses             where name    = 'probe bus')
+            + (select count(*) from public.camps             where name    = 'probe camp')
+            + (select count(*) from public.rooms             where number  = '9001')
+            + (select count(*) from public.flights           where name    = 'probe flight')
+            + (select count(*) from public.announcements     where body    = 'probe')
+            + (select count(*) from public.pilgrim_push_subscriptions where endpoint = 'https://example.invalid/probe')")
           echo "probe residue: $leak" | tee -a "$OUT/phase-b-guards.txt"
           [ "$leak" -eq 0 ] || { echo "::error::probe rows survived"; echo FAIL > "$OUT/status-guards.txt"; }
           [ "$(cat "$OUT/status-guards.txt")" = "PASS" ]
@@ -653,31 +675,153 @@ jobs:
           URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$TMP_REF" "$URL"
           p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
+          bad=0
+          : > "$OUT/phase-b-delete.txt"
+          say() { echo "$1" | tee -a "$OUT/phase-b-delete.txt"; }
+
           TARGET="$(p "select id from public.seasons where closed_at is not null order by closed_at desc limit 1")"
-          before="$(p "select count(*) from public.passengers where season_id = $TARGET")"
-          others="$(p "select count(*) from public.passengers where season_id <> $TARGET")"
+          OPENS="$(p  "select id from public.seasons where closed_at is null order by id desc limit 1")"
+          [ -n "$TARGET" ] && [ -n "$OPENS" ] || { echo "::error::could not resolve the closed and open seasons"; exit 1; }
+          say "target_closed_season=$TARGET open_season=$OPENS"
+
+          # الأعدادُ الاثنا عشر **قبل** الحذف، بنفسِ محاسبةِ delete_season
+          # حرفاً بحرف: التوابعُ تُعدّ من جهةِ الحاجّ لأنها تسقط بـcascade.
+          COUNTS_SQL="jsonb_build_object(
+              'passengers',                 (select count(*) from public.passengers    where season_id = $TARGET),
+              'rooms',                      (select count(*) from public.rooms         where season_id = $TARGET),
+              'camps',                      (select count(*) from public.camps         where season_id = $TARGET),
+              'buses',                      (select count(*) from public.buses         where season_id = $TARGET),
+              'flights',                    (select count(*) from public.flights       where season_id = $TARGET),
+              'announcements',              (select count(*) from public.announcements where season_id = $TARGET),
+              'payments',                   (select count(*) from public.payments x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
+              'custom_charges',             (select count(*) from public.custom_charges x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
+              'financial_group_members',    (select count(*) from public.financial_group_members x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
+              'notification_deliveries',    (select count(*) from public.notification_deliveries x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
+              'pilgrim_push_subscriptions', (select count(*) from public.pilgrim_push_subscriptions x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
+              'pilgrim_sessions',           (select count(*) from public.pilgrim_sessions x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET))"
+          BEFORE="$(p "select ($COUNTS_SQL)::text")"
+          say "before_counts=$BEFORE"
+          [ "$(p "select ('$BEFORE'::jsonb->>'passengers')::int > 0")" = "t" ] \
+            || { echo "::error::the target season is already empty - the drain assertion would be vacuous"; bad=1; }
+
+          # بصمةُ المواسمِ الأخرى: يجب ألّا يتحرّك منها شيء
+          OTHERS_SQL="jsonb_build_object(
+              'passengers',    (select count(*) from public.passengers    where season_id <> $TARGET),
+              'rooms',         (select count(*) from public.rooms         where season_id <> $TARGET),
+              'camps',         (select count(*) from public.camps         where season_id <> $TARGET),
+              'buses',         (select count(*) from public.buses         where season_id <> $TARGET),
+              'flights',       (select count(*) from public.flights       where season_id <> $TARGET),
+              'announcements', (select count(*) from public.announcements where season_id <> $TARGET),
+              'seasons',       (select count(*) from public.seasons       where id        <> $TARGET))"
+          OTHERS_BEFORE="$(p "select ($OTHERS_SQL)::text")"
+          say "others_before=$OTHERS_BEFORE"
+
           JWT="$(curl -s -X POST "$API/auth/v1/token?grant_type=password" \
             -H "apikey: $SK" -H "Content-Type: application/json" \
             -d "{\"email\":\"$AE\",\"password\":\"$AP\"}" \
             | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("access_token",""))')"
           echo "::add-mask::$JWT"
-          dr=$(curl -s -o /tmp/del.json -w '%{http_code}' -X POST "$API/functions/v1/season-admin" \
-            -H "Authorization: Bearer $JWT" -H "apikey: $SK" -H "Content-Type: application/json" \
-            -d "{\"action\":\"delete\",\"seasonId\":$TARGET}")
-          echo "season-admin delete -> HTTP $dr"
-          bad=0
-          [ "$dr" = "200" ] || { echo "::error::delete refused: $(cat /tmp/del.json)"; bad=1; }
-          after="$(p "select count(*) from public.passengers where season_id = $TARGET")"
-          others_after="$(p "select count(*) from public.passengers where season_id <> $TARGET")"
+          [ -n "$JWT" ] || { echo "::error::staff sign-in produced no token"; exit 1; }
+
+          del() {  # del <seasonId> [auth-header-or-empty] -> prints the status code
+            local sid="$1" hdr="${2-}"
+            if [ -n "$hdr" ]; then
+              curl -s -o /tmp/del.json -w '%{http_code}' -X POST "$API/functions/v1/season-admin" \
+                -H "Authorization: Bearer $hdr" -H "apikey: $SK" -H "Content-Type: application/json" \
+                -d "{\"action\":\"delete\",\"seasonId\":$sid}"
+            else
+              curl -s -o /tmp/del.json -w '%{http_code}' -X POST "$API/functions/v1/season-admin" \
+                -H "apikey: $SK" -H "Content-Type: application/json" \
+                -d "{\"action\":\"delete\",\"seasonId\":$sid}"
+            fi
+          }
+          expect() {  # expect <label> <actual> <wanted>
+            if [ "$2" = "$3" ]; then say "  $1: HTTP $2 (expected $3) ok"
+            else say "  $1: HTTP $2 (expected $3) FAIL"; bad=1; fi
+          }
+
+          # ── سوالبُ التفويض: الحذفُ الهدّام لا يُفتح إلا لمن يملك ───────
+          ADMIN_UID="$(p "select id from public.user_profiles order by created_at limit 1")"
+          grant_lifecycle() {  # grant_lifecycle true|false
+            local perms
+            perms="$(p "select (permissions || '{\"manage_season_lifecycle\": $1}'::jsonb)::text from public.user_profiles where id = '$ADMIN_UID'")"
+            curl -s -o /dev/null -X POST "$API/functions/v1/user-admin" \
+              -H "Authorization: Bearer $JWT" -H "apikey: $SK" -H "Content-Type: application/json" \
+              -d "{\"action\":\"update\",\"id\":\"$ADMIN_UID\",\"permissions\":$perms}"
+            p "select (permissions->>'manage_season_lifecycle') from public.user_profiles where id = '$ADMIN_UID'"
+          }
+
+          say "authorization negative controls:"
+          expect "no token at all" "$(del "$TARGET" "")" "401"
+
+          revoked="$(grant_lifecycle false)"
+          [ "$revoked" = "false" ] || { echo "::error::could not revoke manage_season_lifecycle through user-admin"; bad=1; }
+          expect "permission revoked" "$(del "$TARGET" "$JWT")" "403"
+          restored="$(grant_lifecycle true)"
+          [ "$restored" = "true" ] || { echo "::error::could not restore manage_season_lifecycle through user-admin"; bad=1; }
+
+          # وسالبُ منطقِ العمل: الموسمُ المفتوح لا يُحذف
+          expect "open season refused" "$(del "$OPENS" "$JWT")" "400"
+          still_open="$(p "select count(*) from public.seasons where id = $OPENS")"
+          [ "$still_open" -eq 1 ] || { echo "::error::the open season was damaged by its refused delete"; bad=1; }
+
+          # ── الموجب: الحذفُ المأذون للموسمِ المقفل ─────────────────────
+          say "positive control:"
+          expect "authorized delete" "$(del "$TARGET" "$JWT")" "200"
+
+          # ── التصريف: لا صفَّ باقياً للموسمِ المحذوف في أيٍّ من الاثني عشر ─
+          AFTER="$(p "select ($COUNTS_SQL)::text")"
+          say "after_counts=$AFTER"
+          [ "$(p "select ('$AFTER'::jsonb = jsonb_build_object(
+                'passengers',0,'rooms',0,'camps',0,'buses',0,'flights',0,'announcements',0,
+                'payments',0,'custom_charges',0,'financial_group_members',0,
+                'notification_deliveries',0,'pilgrim_push_subscriptions',0,'pilgrim_sessions',0))::text")" = "t" ] \
+            || { echo "::error::the target season did not drain completely"; bad=1; }
           gone="$(p "select count(*) from public.seasons where id = $TARGET")"
-          keys="$(p "select count(*) from jsonb_object_keys((select new_value from public.audit_log where table_name='seasons' and new_value ? 'passengers' order by id desc limit 1))")"
-          echo "target_before=$before target_after=$after others_before=$others others_after=$others_after season_row=$gone audit_keys=$keys" | tee "$OUT/phase-b-delete.txt"
-          [ "$after" -eq 0 ]  || { echo "::error::target season still holds $after passengers"; bad=1; }
-          [ "$gone" -eq 0 ]   || { echo "::error::season row survived"; bad=1; }
-          [ "$others_after" -eq "$others" ] || { echo "::error::an unrelated season changed: $others -> $others_after"; bad=1; }
-          [ "$keys" -eq 13 ]  || { echo "::error::delete audit carries $keys keys, expected 13"; bad=1; }
+          [ "$gone" -eq 0 ] || { echo "::error::season row survived"; bad=1; }
+
+          # ── لا ضررَ على موسمٍ آخر ────────────────────────────────────
+          OTHERS_AFTER="$(p "select ($OTHERS_SQL)::text")"
+          say "others_after=$OTHERS_AFTER"
+          [ "$(p "select ('$OTHERS_BEFORE'::jsonb = '$OTHERS_AFTER'::jsonb)::text")" = "t" ] \
+            || { echo "::error::an unrelated season changed"; bad=1; }
+
+          # ── التدقيق: صفٌّ ملخّصٌ واحدٌ بالفاعلِ وبالأعدادِ الاثني عشر ──
+          AUD="select * from public.audit_log where table_name = 'seasons' and action = 'delete'
+                 and new_value ? 'deleted_counts' order by id desc limit 1"
+          n_rows="$(p "select count(*) from public.audit_log where table_name='seasons' and action='delete' and new_value ? 'deleted_counts'")"
+          say "delete_audit_rows=$n_rows"
+          [ "$n_rows" -eq 1 ] || { echo "::error::expected exactly one summary audit row, found $n_rows"; bad=1; }
+          keys="$(p "select count(*) from jsonb_object_keys((select new_value->'deleted_counts' from ($AUD) a))")"
+          say "audit_deleted_counts_keys=$keys"
+          [ "$keys" -eq 12 ] || { echo "::error::delete audit carries $keys category counts, expected 12"; bad=1; }
+          [ "$(p "select ((select new_value->'deleted_counts' from ($AUD) a) = '$BEFORE'::jsonb)::text")" = "t" ] \
+            || { say "audit_counts=$(p "select (new_value->'deleted_counts')::text from ($AUD) a")"; echo "::error::the audited counts do not match what the season actually held"; bad=1; }
+          [ "$(p "select (actor_id is not null)::text from ($AUD) a")" = "t" ] \
+            || { echo "::error::the destructive audit row carries no actor"; bad=1; }
+          [ "$(p "select (actor_id = '$ADMIN_UID')::text from ($AUD) a")" = "t" ] \
+            || { echo "::error::the audited actor is not the staff member who invoked the delete"; bad=1; }
+          [ "$(p "select (row_id = '$TARGET')::text from ($AUD) a")" = "t" ] \
+            || { echo "::error::the audit row points at the wrong season"; bad=1; }
+          [ "$(p "select (old_value ? 'name')::text from ($AUD) a")" = "t" ] \
+            || { echo "::error::the audit row did not preserve the deleted season row"; bad=1; }
+
+          # ── لا أثرَ زائد: رايةُ الإيقافِ ماتت مع معاملتها، ولا يتيم ─────
+          supp="$(p "select count(*) from public.audit_suppression")"
+          say "audit_suppression_rows=$supp"
+          [ "$supp" -eq 0 ] || { echo "::error::the maintenance suppression flag outlived its transaction"; bad=1; }
+          orphans="$(p "select
+              (select count(*) from public.payments                   x where not exists (select 1 from public.passengers pa where pa.id = x.passenger_id))
+            + (select count(*) from public.custom_charges             x where not exists (select 1 from public.passengers pa where pa.id = x.passenger_id))
+            + (select count(*) from public.financial_group_members    x where not exists (select 1 from public.passengers pa where pa.id = x.passenger_id))
+            + (select count(*) from public.notification_deliveries    x where not exists (select 1 from public.passengers pa where pa.id = x.passenger_id))
+            + (select count(*) from public.pilgrim_push_subscriptions x where not exists (select 1 from public.passengers pa where pa.id = x.passenger_id))
+            + (select count(*) from public.pilgrim_sessions           x where not exists (select 1 from public.passengers pa where pa.id = x.passenger_id))")"
+          say "orphaned_derived_rows=$orphans"
+          [ "$orphans" -eq 0 ] || { echo "::error::$orphans derived rows were orphaned by the delete"; bad=1; }
+
           [ "$bad" -eq 0 ] && echo PASS > "$OUT/status-delete.txt" || echo FAIL > "$OUT/status-delete.txt"
-          echo "delete_season verdict: $(cat "$OUT/status-delete.txt")"
+          say "delete_season verdict: $(cat "$OUT/status-delete.txt")"
           [ "$bad" -eq 0 ]
 
       - name: "Verdict"
