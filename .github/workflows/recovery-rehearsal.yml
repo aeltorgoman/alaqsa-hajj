@@ -68,7 +68,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # ⚠️ 22 لا 20: `@supabase/supabase-js` يبني عميلَ Realtime عند
+          #    `createClient`، وهو يتطلّب WebSocket أصليّاً لا يوجد قبل
+          #    Node 22. و`seed_first_admin.mjs` يسقط عند أوّل سطرٍ منه.
+          node-version: "22"
 
       - name: "Install dependencies (the admin bootstrap imports supabase-js)"
         run: |
