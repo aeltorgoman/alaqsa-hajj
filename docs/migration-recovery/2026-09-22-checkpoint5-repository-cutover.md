@@ -79,6 +79,12 @@ database that already has that schema. The reconciliation is what closes the win
 
 ## The live reconciliation workflow
 
+> **Retired 2026-09-24.** The workflow file described below was a **one-shot**: its
+> preconditions name a ledger state (46 rows / `20260921141422`) that production has
+> since moved past, so it can never run again and was deleted from
+> `.github/workflows/` along with the three other spent one-shot push workflows.
+> The description is kept verbatim as the record of what was actually executed here.
+
 `.github/workflows/checkpoint5-live-reconciliation.yml` is the **only** workflow in this
 repository permitted to write to the production project, and it may perform exactly **one**
 mutation, hard-coded with no dynamic version and no fallback:
