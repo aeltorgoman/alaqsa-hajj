@@ -1,0 +1,371 @@
+# ════════════════════════════════════════════════════════════
+# #23 — canonical production db push for passengers.room_id FK
+# ════════════════════════════════════════════════════════════
+# Applies the ONE merged migration 20260924210000 through the
+# canonical CLI path, on the pattern established by
+# company-config-seed-canonical-push.yml.
+#
+# ⚠️ `--db-url`, not `--linked`. PR #148 established that
+# `supabase link` resolves the project's SECRET service-role key,
+# which no scoped personal access token can satisfy.
+#
+# Exactly ONE production-mutating command may run, and only after
+# every gate passes. Deliberately absent, and audited for: migration
+# repair · migration up · `--include-all` · manual SQL mutation ·
+# rollback · baseline execution · any operation on a historical
+# migration.
+#
+# This migration is SCHEMA ONLY — the mirror image of the seed push.
+# So the gates invert:
+#   · BEFORE: the file must carry NO data-mutating verb. It adds a
+#     constraint and an index and asserts; it must never clean up,
+#     delete or rewrite a customer row.
+#   · AFTER: the structural delta must be EXACTLY the new constraint
+#     plus the new index — proved by catalog reads, not by diffing a
+#     pg_dump whose `\restrict` nonce is random per invocation.
+#   · AND the data must be provably untouched: row counts and a
+#     fingerprint of every (id, room_id) pair, before and after.
+#
+# The migration refuses by itself on orphaned rows, but this workflow
+# checks first anyway, so a refusal is reported as a gate rather than
+# as a failed push.
+#
+# There is NO automatic rollback. On post-write failure the run fails
+# and preserves evidence; recovery is a human decision. Reverting is
+# `alter table public.passengers drop constraint passengers_room_id_fkey`
+# — non-destructive, and it restores the exact prior state.
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+#
+# No pilgrim PII ever leaves the database: counts, ids and md5 only.
+
+name: Room FK - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-ROOMFK-20260924210000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-fk-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      MIG_VERSION: "20260924210000"
+      MIG_FILE: supabase/migrations/20260924210000_passengers_room_id_fk.sql
+      MIG_SHA256: "da953f2d47ed50f67263255e6819059fa29bba0d5420c582fcfc580ff5c9cadd"
+      EXPECT_REPO_MIGRATIONS: "52"
+      EXPECT_ROWS_BEFORE: "51"
+      EXPECT_LATEST_BEFORE: "20260924140000"
+      EXPECT_ROWS_AFTER: "52"
+      EXPECT_FK_DEF: "FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE RESTRICT"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: room-fk-push-evidence
+
+    steps:
+      - name: "GATE: confirmation and secrets"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-ROOMFK-20260924210000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          [ -f "$MIG_FILE" ] || { echo "::error::$MIG_FILE missing"; exit 1; }
+          got="$(sha256sum "$MIG_FILE" | cut -d' ' -f1)"
+          [ "$got" = "$MIG_SHA256" ] || { echo "::error::migration sha256 mismatch: $got"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          # الترحيلةُ مخطَّطٌ فقط — لا تنظيفَ بياناتٍ ولا كتابةَ صفّ.
+          # (الأفعالُ داخلَ نصوصِ الرسائلِ لا تُحسَب: الفحصُ على بدايةِ السطر.)
+          if grep -inE "^[[:space:]]*(insert|update|delete|truncate)[[:space:]]" "$MIG_FILE"; then
+            echo "::error::the authorized migration must not mutate data; a mutating verb appears above"; exit 1; fi
+          grep -q "on delete restrict" "$MIG_FILE" || {
+            echo "::error::the migration does not carry the reviewed ON DELETE RESTRICT behaviour"; exit 1; }
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "cli=$v"; echo "migration_sha256=$got"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 51 / 20260924140000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: exactly one pending, and it is this migration"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${MIG_VERSION}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$MIG_VERSION]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+          echo "Exactly one pending migration, and it is $MIG_VERSION."
+
+      - name: "GATE: zero orphans, and the constraint is genuinely absent"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          orph="$(p "select count(*) from public.passengers p where p.room_id is not null
+                       and not exists (select 1 from public.rooms r where r.id = p.room_id)")"
+          cross="$(p "select count(*) from public.passengers p join public.rooms r on r.id = p.room_id
+                        where r.season_id <> p.season_id")"
+          have="$(p "select count(*) from pg_constraint where conname = 'passengers_room_id_fkey'")"
+          fks="$(p "select count(*) from pg_constraint c join pg_class t on t.oid = c.conrelid
+                      where c.contype = 'f' and t.relname = 'passengers'")"
+          echo "orphans=$orph cross_season=$cross room_id_fk_present=$have passengers_fks=$fks" | tee "$OUT/preflight.txt"
+          [ "$orph" -eq 0 ]  || { echo "::error::$orph passengers reference a room that does not exist."
+                                  echo "::error::STOPPING. These rows are customer data and are never cleaned up automatically."; exit 1; }
+          [ "$cross" -eq 0 ] || { echo "::error::$cross passengers sit in a room from another season - resolve before adding the constraint"; exit 1; }
+          [ "$have" -eq 0 ]  || { echo "::error::passengers_room_id_fkey already exists - nothing to apply"; exit 1; }
+          [ "$fks" -eq 6 ]   || { echo "::error::expected the 6 existing foreign keys, found $fks"; exit 1; }
+
+      - name: "GATE: capture BEFORE data fingerprint and constraint inventory"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          # بصمةُ كلِّ إسنادٍ (المعرّف ← الغرفة) — لا اسمَ حاجٍّ ولا بيانَ شخصيّ.
+          p "select md5(coalesce(string_agg(p.id::text || ':' || coalesce(p.room_id::text,'-'), ',' order by p.id), ''))
+               from public.passengers p" > "$OUT/assign-fp-before.txt"
+          p "select count(*) from public.passengers"  > "$OUT/n-passengers-before.txt"
+          p "select count(*) from public.rooms"       > "$OUT/n-rooms-before.txt"
+          # جردُ القيودِ والمحفِّزاتِ قبلُ — للدلتا لا للعين
+          p "select conname from pg_constraint c join pg_class t on t.oid=c.conrelid
+              join pg_namespace n on n.oid=t.relnamespace
+             where n.nspname='public' and t.relname in ('passengers','rooms') order by conname" > "$OUT/constraints-before.txt"
+          p "select t.tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid
+              join pg_namespace n on n.oid=c.relnamespace
+             where n.nspname='public' and not t.tgisinternal order by t.tgname" > "$OUT/triggers-before.txt"
+          p "select indexname from pg_indexes where schemaname='public'
+              and tablename in ('passengers','rooms') order by indexname" > "$OUT/indexes-before.txt"
+          echo "passengers=$(cat "$OUT/n-passengers-before.txt") rooms=$(cat "$OUT/n-rooms-before.txt")"
+          echo "assignment_fingerprint=$(cat "$OUT/assign-fp-before.txt")"
+          echo "constraints=$(wc -l < "$OUT/constraints-before.txt") triggers=$(wc -l < "$OUT/triggers-before.txt")"
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 51 -> 52, the 51 originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          dup="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${MIG_VERSION}'")"
+          echo "rows=$rows latest=$latest new_rows=$dup" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$MIG_VERSION" ] || { echo "::error::latest is $latest, expected $MIG_VERSION"; bad=1; }
+          [ "$dup" -eq 1 ] || { echo "::error::the migration appears $dup times, expected exactly once"; bad=1; }
+          grep -v "^${MIG_VERSION}	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 51 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$MIG_VERSION" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the constraint exists with the exact reviewed definition"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          def="$(p "select pg_get_constraintdef(c.oid) from pg_constraint c
+                      join pg_class t on t.oid = c.conrelid
+                      join pg_namespace n on n.oid = t.relnamespace
+                     where n.nspname='public' and t.relname='passengers'
+                       and c.conname='passengers_room_id_fkey'")"
+          val="$(p "select convalidated::text from pg_constraint where conname='passengers_room_id_fkey'")"
+          fks="$(p "select count(*) from pg_constraint c join pg_class t on t.oid=c.conrelid
+                      where c.contype='f' and t.relname='passengers'")"
+          orph="$(p "select count(*) from public.passengers p where p.room_id is not null
+                       and not exists (select 1 from public.rooms r where r.id = p.room_id)")"
+          idx="$(p "select count(*) from pg_indexes where schemaname='public' and indexname='passengers_room_id_idx'")"
+          echo "definition=$def validated=$val passengers_fks=$fks orphans=$orph index=$idx" | tee "$OUT/fk-after.txt"
+          [ "$def" = "$EXPECT_FK_DEF" ] || { echo "::error::definition is '$def', expected '$EXPECT_FK_DEF'"; bad=1; }
+          [ "$val" = "true" ] || { echo "::error::the constraint is NOT VALID - existing rows were not checked"; bad=1; }
+          [ "$fks" -eq 7 ] || { echo "::error::passengers carries $fks foreign keys, expected 7"; bad=1; }
+          [ "$orph" -eq 0 ] || { echo "::error::$orph orphaned room references remain"; bad=1; }
+          [ "$idx" -eq 1 ] || { echo "::error::passengers_room_id_idx is missing"; bad=1; }
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-fk.txt"; else echo FAIL > "$OUT/status-fk.txt"; fi
+          echo "FK verdict: $(cat "$OUT/status-fk.txt")"
+
+      - name: "POST: not one row of customer data moved, and the delta is exactly the constraint + index"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          fp="$(p "select md5(coalesce(string_agg(p.id::text || ':' || coalesce(p.room_id::text,'-'), ',' order by p.id), ''))
+                     from public.passengers p")"
+          np="$(p "select count(*) from public.passengers")"
+          nr="$(p "select count(*) from public.rooms")"
+          echo "passengers=$np rooms=$nr assignment_fingerprint=$fp" | tee "$OUT/data-after.txt"
+          [ "$fp" = "$(cat "$OUT/assign-fp-before.txt")" ] || { echo "::error::a room assignment CHANGED"; bad=1; }
+          [ "$np" = "$(cat "$OUT/n-passengers-before.txt")" ] || { echo "::error::the passenger count changed"; bad=1; }
+          [ "$nr" = "$(cat "$OUT/n-rooms-before.txt")" ] || { echo "::error::the room count changed"; bad=1; }
+
+          # الدلتا البنيويّة: قيدٌ واحدٌ وفهرسٌ واحد، ولا محفِّزَ تغيّر.
+          p "select conname from pg_constraint c join pg_class t on t.oid=c.conrelid
+              join pg_namespace n on n.oid=t.relnamespace
+             where n.nspname='public' and t.relname in ('passengers','rooms') order by conname" > "$OUT/constraints-after.txt"
+          p "select t.tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid
+              join pg_namespace n on n.oid=c.relnamespace
+             where n.nspname='public' and not t.tgisinternal order by t.tgname" > "$OUT/triggers-after.txt"
+          p "select indexname from pg_indexes where schemaname='public'
+              and tablename in ('passengers','rooms') order by indexname" > "$OUT/indexes-after.txt"
+
+          cdelta="$(comm -13 "$OUT/constraints-before.txt" "$OUT/constraints-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          cgone="$(comm -23 "$OUT/constraints-before.txt" "$OUT/constraints-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          idelta="$(comm -13 "$OUT/indexes-before.txt" "$OUT/indexes-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          igone="$(comm -23 "$OUT/indexes-before.txt" "$OUT/indexes-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          echo "constraints_added='$cdelta' constraints_removed='$cgone'" | tee -a "$OUT/data-after.txt"
+          echo "indexes_added='$idelta' indexes_removed='$igone'" | tee -a "$OUT/data-after.txt"
+          [ "$cdelta" = "passengers_room_id_fkey" ] || { echo "::error::constraints added = '$cdelta', expected exactly passengers_room_id_fkey"; bad=1; }
+          [ -z "$cgone" ] || { echo "::error::constraints were REMOVED: $cgone"; bad=1; }
+          [ "$idelta" = "passengers_room_id_idx" ] || { echo "::error::indexes added = '$idelta', expected exactly passengers_room_id_idx"; bad=1; }
+          [ -z "$igone" ] || { echo "::error::indexes were REMOVED: $igone"; bad=1; }
+          if diff -q "$OUT/triggers-before.txt" "$OUT/triggers-after.txt" >/dev/null; then
+            echo "  ok   every trigger survived - season and closed-season guards intact"
+          else
+            echo "::error::the trigger inventory changed"; diff -u "$OUT/triggers-before.txt" "$OUT/triggers-after.txt" | head -20 || true; bad=1
+          fi
+          # والحُرّاسُ المعنيّون بالاسم، لا بالعدد وحده
+          for t in trg_reject_cross_season_room trg_rooms_reject_season_change trg_reject_closed_season; do
+            grep -qx "$t" "$OUT/triggers-after.txt" || { echo "::error::guard $t is missing"; bad=1; }
+          done
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-data.txt"; else echo FAIL > "$OUT/status-data.txt"; fi
+          echo "Data/delta verdict: $(cat "$OUT/status-data.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger fk data; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::warning::$k did not run"; printf '%-8s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-8s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $MIG_VERSION applied; passengers.room_id is now referentially guarded; no customer row moved."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-fk-push
+          path: room-fk-push-evidence
+          if-no-files-found: error
