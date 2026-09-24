@@ -279,7 +279,7 @@ Constants أ١–أ١٢ are defined in `SECURITY_ARCHITECTURE.md`. The one most 
 
 ## 8. Season architecture
 
-✅ **VERIFIED** — **GitHub Issue #42 is the single authoritative reference** and is marked 🔒 **frozen and approved**. It supersedes issues #38, #39, #40. It is currently **open** (it is a living master reference, not a task).
+✅ **VERIFIED** — **GitHub Issue #42 is the single authoritative reference** and is marked 🔒 **frozen and approved**. It supersedes issues #38, #39, #40. It is **CLOSED** as of 2026-09-24, once M7 completed — see the delivery history below. It remains the authoritative season reference to read; closure records that its work is done, not that the document is superseded.
 
 ### The vision
 
@@ -427,7 +427,7 @@ src/season/useSeasonWrite.ts  the ONLY file that knows both
 | **WhatsApp** | 🚫 **BLOCKED** | PR #108 open and intentionally blocked — see §12 |
 | **Backup** | ✅ **COMPLETE** | Roles + schema + data dumps done; Auth data and sequence state (16 `setval`) present; 31 Storage files / 3,193,704 bytes. Season-close document backup verified in PR #99 — §11.1 |
 | **Recovery** | ⚠️ **PARTIAL / NOT PROVEN END-TO-END** | Restore test **stopped** — Supabase-managed Auth/Storage restore collided with managed project state. **The backup is not the problem** — §11.2 |
-| **Season Management** | ✅ **CLOSED** | Issue #42 architecture frozen; M7 delivered in #105 |
+| **Season Management** | ✅ **CLOSED** | Issue #42 architecture frozen and now closed; M7 delivered in two stages — **#105** delivered it **partially** (season flights and announcements), and **#150** completed **items 3–4** (`financial_groups.season_id` with DB-level membership/season consistency and closed-season protection, and removal of the temporary FinancePage compatibility logic). Migration `20260924093000` carries item 3 |
 | **Security** | ✅ **CLOSED** | S0–S9 complete and deployed. Residual debt in `BACKLOG.md` §4 |
 | **Push notifications** | ✅ **CLOSED (core)** | `send-pilgrim-push` + `pushClient.ts` + service worker live. Follow-ups deferred |
 | **Company Profile** | ✅ **CLOSED** | `CompanyService` boundary; see `docs/COMPANY_PROFILE_*.md` |
