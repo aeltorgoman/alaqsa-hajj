@@ -307,11 +307,19 @@ jobs:
                    rollback;"
 
           echo "--- probes ---"; cat "$R"
+          # Self-test the exact TSV assertion grammar before judging production probes.
+          ASSERT_FIXTURE="$OUT/probe-assertion-selftest.tsv"
+          printf 'A\tREFUSED\nH\tALLOWED\n' > "$ASSERT_FIXTURE"
+          grep -q $'^A\tREFUSED$' "$ASSERT_FIXTURE" || { echo "::error::probe assertion self-test: real tab did not match"; exit 1; }
+          grep -q $'^H\tALLOWED$' "$ASSERT_FIXTURE" || { echo "::error::probe assertion self-test: allowed verdict did not match"; exit 1; }
+          ! printf 'A\\tREFUSED\n' | grep -q $'^A\tREFUSED$' || { echo "::error::probe assertion self-test: literal backslash-t was accepted"; exit 1; }
+          ! printf 'A\tALLOWED\n' | grep -q $'^A\tREFUSED$' || { echo "::error::probe assertion self-test: wrong verdict was accepted"; exit 1; }
+
           bad=0
           for k in A B C D E F G; do
-            grep -q "^${k}\tREFUSED$" "$R" || { echo "::error::probe $k did not refuse"; bad=1; }
+            grep -q "^${k}"$'\t'"REFUSED$" "$R" || { echo "::error::probe $k did not refuse"; bad=1; }
           done
-          grep -q "^H\tALLOWED$" "$R" || { echo "::error::probe H (valid active-season operation) did not succeed"; bad=1; }
+          grep -q $'^H\tALLOWED$' "$R" || { echo "::error::probe H (valid active-season operation) did not succeed"; bad=1; }
           if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-probes.txt"; else echo FAIL > "$OUT/status-probes.txt"; fi
           echo "Probe verdict: $(cat "$OUT/status-probes.txt")"
 
