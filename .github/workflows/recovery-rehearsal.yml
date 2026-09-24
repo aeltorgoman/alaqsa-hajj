@@ -142,30 +142,64 @@ jobs:
           } | tee "$OUT/preflight-temp.txt"
 
       # ── BASELINE — الحالةُ النظيفة ────────────────────────────
-      - name: "BASELINE: wipe auth and storage, then rebuild the schema from main"
+      - name: "BASELINE: wipe auth and storage through their APIs, then rebuild the schema"
         env:
           PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
           SUPABASE_DB_PASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+          API: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          SK: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
+          "$GUARD" "$TMP_REF" "$API"
           URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$TMP_REF" "$URL"
-          # `db reset` يعيد بناء المخطّط ويُعيد تشغيل الترحيلات، لكنّه
-          # لا يمسّ `auth.users` ولا التخزين. فيُمسحان صراحةً أوّلاً كي
-          # تكون القاعدةُ نظيفةً فعلاً لا مخطَّطاً نظيفاً فوق بقايا.
+
+          # ⚠️ التخزينُ لا يُمسح بـ SQL: `storage.protect_delete()` ترفض
+          #    الحذفَ المباشر وتُحيل إلى واجهة التخزين — وهي محقّة، فحذفُ
+          #    الصفّ دون الكائن يترك يتيماً. فتُستعمل الواجهةُ المدعومة.
+          buckets="$(curl -s "$API/storage/v1/bucket" -H "Authorization: Bearer $SK" -H "apikey: $SK" \
+                     | python3 -c 'import sys,json;print(" ".join(b["id"] for b in (json.load(sys.stdin) or [])))')"
+          for b in $buckets; do
+            curl -s -o /dev/null -X POST "$API/storage/v1/bucket/$b/empty" -H "Authorization: Bearer $SK" -H "apikey: $SK"
+            curl -s -o /dev/null -X DELETE "$API/storage/v1/bucket/$b"      -H "Authorization: Bearer $SK" -H "apikey: $SK"
+            echo "  emptied and removed bucket: $b"
+          done
+
+          # وحساباتُ الهوية تُحذف بواجهة الإدارة لا بـ SQL، للسبب نفسه:
+          # `auth.users` يملكها دورٌ آخر، وللحذف آثارٌ تتولّاها الخدمة.
+          ids="$(curl -s "$API/auth/v1/admin/users?per_page=1000" -H "Authorization: Bearer $SK" -H "apikey: $SK" \
+                 | python3 -c 'import sys,json;print(" ".join(u["id"] for u in (json.load(sys.stdin) or {}).get("users",[])))')"
+          n=0; for u in $ids; do
+            curl -s -o /dev/null -X DELETE "$API/auth/v1/admin/users/$u" -H "Authorization: Bearer $SK" -H "apikey: $SK"
+            n=$((n+1))
+          done
+          echo "  removed $n auth user(s)"
+
+          # والمخطّطُ يُهدم صراحةً ثمّ يُبنى بالترحيلات — لا ترقيةَ فوق
+          # بقايا. وهذا ما يُثبِت أن المستودعَ وحده يُنتج النظام.
           psql "$URL" -X -q -v ON_ERROR_STOP=1 \
-            -c "delete from storage.objects" \
-            -c "delete from storage.buckets" \
-            -c "delete from auth.users"
+            -c "drop schema if exists public cascade" \
+            -c "create schema public" \
+            -c "alter schema public owner to postgres" \
+            -c "grant usage on schema public to anon, authenticated, service_role" \
+            -c "grant all on schema public to postgres, service_role" \
+            -c "drop schema if exists supabase_migrations cascade"
+          left="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from information_schema.tables where table_schema='public'")"
+          [ "$left" -eq 0 ] || { echo "::error::public schema still holds $left tables after teardown"; exit 1; }
+          echo "  public schema torn down: 0 tables"
+
           DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote('postgres.'+os.environ['TMP_REF'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
           echo "::add-mask::$DB_URL"
           "$GUARD" "$TMP_REF" "$DB_URL"
-          npm run --silent supabase -- db reset --db-url "$DB_URL" --no-seed 2> "$OUT/reset.err" || {
-            echo "::error::db reset failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/reset.err"; exit 1; }
-          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/reset.err" || true
-          echo "clean baseline: auth.users + storage emptied, then schema rebuilt by replaying all 51 migrations" | tee "$OUT/baseline-method.txt"
+          npm run --silent supabase -- db push --db-url "$DB_URL" --include-all --output-format json > "$OUT/push.json" 2> "$OUT/push.err" || {
+            echo "::error::db push failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.err"; exit 1; }
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" || true
+          {
+            echo "method=explicit teardown of public + supabase_migrations, then canonical db push of all 51 migrations"
+            echo "storage=emptied and buckets removed via the Storage API (SQL deletion is refused by storage.protect_delete)"
+            echo "auth=users removed via the Auth Admin API (no auth.users transplant, no SQL delete)"
+          } | tee "$OUT/baseline-method.txt"
 
-      # ── PHASE A ───────────────────────────────────────────────
       - name: "A2/A3: ledger 51, correspondence, and company_config seeded"
         env:
           PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
