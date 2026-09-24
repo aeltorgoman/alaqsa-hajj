@@ -1,0 +1,90 @@
+# ════════════════════════════════════════════════════════════
+# #32 — redeploy send-pilgrim-push, and nothing else
+# ════════════════════════════════════════════════════════════
+# The parity run 35997912393 found one divergence in the whole
+# project: `send-pilgrim-push` lines 1 and 19 — the rules of its
+# header comment — carry 62 `═` in the repository and 61 on the
+# platform. 217 lines, and no executable difference at all: the
+# deployed copy was built from a revision predating a one-character
+# edit to a banner.
+#
+# The fix is to make the platform carry the reviewed source, not to
+# edit the source to match the platform. The file is NOT touched by
+# this workflow.
+#
+# ⚠️ ONE function. The slug is hard-coded, not an input: a
+# `workflow_dispatch` field would let a typo redeploy something else.
+# `functions deploy` with no slug deploys ALL of them, so the argument
+# is mandatory here and asserted before the call.
+#
+# `verify_jwt` is NOT set here. It comes from `supabase/config.toml`
+# (`send-pilgrim-push = true`) and stays a reviewed repository change.
+# Secrets are not touched: deploying code neither reads nor rewrites
+# them.
+#
+# Nothing about the database, the migrations, WhatsApp or any other
+# function is in scope. Deliberately absent and audited for:
+# `db push` · `secrets set` · `config push` · any second slug.
+
+name: Redeploy send-pilgrim-push (ONE function)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type REDEPLOY-SEND-PILGRIM-PUSH to authorize"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: send-pilgrim-push-redeploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      SLUG: send-pilgrim-push
+      SRC_SHA256: "7d04e4d0cfcc8e57b6e29cbbdfa18431845e0f11916e74fd48bc13bf6db78ca4"
+
+    steps:
+      - name: "GATE: confirmation"
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "REDEPLOY-SEND-PILGRIM-PUSH" ] || {
+            echo "::error::confirmation string does not match"; exit 1; }
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: the exact source under review, unmodified"
+        run: |
+          set -euo pipefail
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          f="supabase/functions/$SLUG/index.ts"
+          [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
+          got="$(sha256sum "$f" | cut -d' ' -f1)"
+          [ "$got" = "$SRC_SHA256" ] || { echo "::error::source sha256 mismatch: $got"; exit 1; }
+          git diff --quiet || { echo "::error::working tree is dirty"; exit 1; }
+          # الإعدادُ يُقرأ ولا يُكتب: الساقُ الأولى من النمط الثلاثيّ
+          # تبقى من المستودع، ولا يضبطها أمرُ النشر.
+          grep -A1 "^\[functions\.$SLUG\]" supabase/config.toml | grep -q "verify_jwt = true" || {
+            echo "::error::config.toml no longer declares verify_jwt = true for $SLUG"; exit 1; }
+          echo "commit=${GITHUB_SHA} sha256=$got"
+
+      - name: "DEPLOY: exactly one function"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          [ -n "$SLUG" ] || { echo "::error::empty slug would deploy EVERY function"; exit 1; }
+          npm run --silent supabase -- functions deploy "$SLUG" --project-ref "$PROJECT_REF" 2>&1 \
+            | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
