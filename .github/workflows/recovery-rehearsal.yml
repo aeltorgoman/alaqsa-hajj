@@ -675,6 +675,9 @@ jobs:
           URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$TMP_REF" "$URL"
           p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
+          # ‼️ boolean::text في psql تُطبَع true/false لا t/f — والمقارنةُ
+          # بـ t كانت تفشل دائماً مهما صحّت البيانات. الفحصُ يمرّ من هنا وحده.
+          istrue() { [ "$(p "select ($1)::text")" = "true" ]; }
           bad=0
           : > "$OUT/phase-b-delete.txt"
           say() { echo "$1" | tee -a "$OUT/phase-b-delete.txt"; }
@@ -693,6 +696,7 @@ jobs:
               'buses',                      (select count(*) from public.buses         where season_id = $TARGET),
               'flights',                    (select count(*) from public.flights       where season_id = $TARGET),
               'announcements',              (select count(*) from public.announcements where season_id = $TARGET),
+              'financial_groups',           (select count(*) from public.financial_groups where season_id = $TARGET),
               'payments',                   (select count(*) from public.payments x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
               'custom_charges',             (select count(*) from public.custom_charges x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
               'financial_group_members',    (select count(*) from public.financial_group_members x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET),
@@ -701,8 +705,10 @@ jobs:
               'pilgrim_sessions',           (select count(*) from public.pilgrim_sessions x join public.passengers pa on pa.id = x.passenger_id where pa.season_id = $TARGET))"
           BEFORE="$(p "select ($COUNTS_SQL)::text")"
           say "before_counts=$BEFORE"
-          [ "$(p "select ('$BEFORE'::jsonb->>'passengers')::int > 0")" = "t" ] \
+          istrue "('$BEFORE'::jsonb->>'passengers')::int > 0" \
             || { echo "::error::the target season is already empty - the drain assertion would be vacuous"; bad=1; }
+          istrue "('$BEFORE'::jsonb->>'financial_groups')::int > 0" \
+            || { echo "::error::the target season holds no financial group - the emptiness-cascade assertion would be vacuous"; bad=1; }
 
           # بصمةُ المواسمِ الأخرى: يجب ألّا يتحرّك منها شيء
           OTHERS_SQL="jsonb_build_object(
@@ -772,10 +778,10 @@ jobs:
           # ── التصريف: لا صفَّ باقياً للموسمِ المحذوف في أيٍّ من الاثني عشر ─
           AFTER="$(p "select ($COUNTS_SQL)::text")"
           say "after_counts=$AFTER"
-          [ "$(p "select ('$AFTER'::jsonb = jsonb_build_object(
+          istrue "'$AFTER'::jsonb = jsonb_build_object(
                 'passengers',0,'rooms',0,'camps',0,'buses',0,'flights',0,'announcements',0,
-                'payments',0,'custom_charges',0,'financial_group_members',0,
-                'notification_deliveries',0,'pilgrim_push_subscriptions',0,'pilgrim_sessions',0))::text")" = "t" ] \
+                'financial_groups',0,'payments',0,'custom_charges',0,'financial_group_members',0,
+                'notification_deliveries',0,'pilgrim_push_subscriptions',0,'pilgrim_sessions',0)" \
             || { echo "::error::the target season did not drain completely"; bad=1; }
           gone="$(p "select count(*) from public.seasons where id = $TARGET")"
           [ "$gone" -eq 0 ] || { echo "::error::season row survived"; bad=1; }
@@ -783,7 +789,7 @@ jobs:
           # ── لا ضررَ على موسمٍ آخر ────────────────────────────────────
           OTHERS_AFTER="$(p "select ($OTHERS_SQL)::text")"
           say "others_after=$OTHERS_AFTER"
-          [ "$(p "select ('$OTHERS_BEFORE'::jsonb = '$OTHERS_AFTER'::jsonb)::text")" = "t" ] \
+          istrue "'$OTHERS_BEFORE'::jsonb = '$OTHERS_AFTER'::jsonb" \
             || { echo "::error::an unrelated season changed"; bad=1; }
 
           # ── التدقيق: صفٌّ ملخّصٌ واحدٌ بالفاعلِ وبالأعدادِ الاثني عشر ──
@@ -793,17 +799,31 @@ jobs:
           say "delete_audit_rows=$n_rows"
           [ "$n_rows" -eq 1 ] || { echo "::error::expected exactly one summary audit row, found $n_rows"; bad=1; }
           keys="$(p "select count(*) from jsonb_object_keys((select new_value->'deleted_counts' from ($AUD) a))")"
+          say "audit_counts=$(p "select (new_value->'deleted_counts')::text from ($AUD) a")"
           say "audit_deleted_counts_keys=$keys"
-          [ "$keys" -eq 12 ] || { echo "::error::delete audit carries $keys category counts, expected 12"; bad=1; }
-          [ "$(p "select ((select new_value->'deleted_counts' from ($AUD) a) = '$BEFORE'::jsonb)::text")" = "t" ] \
-            || { say "audit_counts=$(p "select (new_value->'deleted_counts')::text from ($AUD) a")"; echo "::error::the audited counts do not match what the season actually held"; bad=1; }
-          [ "$(p "select (actor_id is not null)::text from ($AUD) a")" = "t" ] \
+          # ثلاثةَ عشرَ صنفاً بعد ترحيلةِ 20260924093000 التي أضافت
+          # `financial_groups` إلى الدالّة — لا اثنا عشر كما في الـbaseline.
+          [ "$keys" -eq 13 ] || { echo "::error::delete audit carries $keys category counts, expected 13"; bad=1; }
+
+          # والأعدادُ المُدقَّقةُ تُطابق ما كان الموسمُ يحويه فعلاً، إلا
+          # `financial_groups`: عضوياتُ الحجّاجِ تسقط معهم، فتخلو المجموعاتُ
+          # ويحذفها محفّزُ الخلوّ قبل أن يبلغها سطرُ الحذف — فيُدقَّق صفراً
+          # بحكمِ التصميم، وسطرُ الدالّةِ شبكةُ أمانٍ لا أكثر. ولا نقبل هذا
+          # الصفرَ تسليماً: نُثبت أنّ المجموعاتِ كانت موجودةً ثُمّ زالت فعلاً.
+          EXPECTED="$(p "select ('$BEFORE'::jsonb || '{\"financial_groups\": 0}'::jsonb)::text")"
+          istrue "(select new_value->'deleted_counts' from ($AUD) a) = '$EXPECTED'::jsonb" \
+            || { echo "::error::the audited counts do not match what the season actually held"; bad=1; }
+          fg_left="$(p "select count(*) from public.financial_groups where season_id = $TARGET")"
+          say "financial_groups_before=$(p "select '$BEFORE'::jsonb->>'financial_groups'") audited=0 remaining=$fg_left"
+          [ "$fg_left" -eq 0 ] || { echo "::error::$fg_left financial groups survived the delete"; bad=1; }
+
+          istrue "(select actor_id is not null from ($AUD) a)" \
             || { echo "::error::the destructive audit row carries no actor"; bad=1; }
-          [ "$(p "select (actor_id = '$ADMIN_UID')::text from ($AUD) a")" = "t" ] \
+          istrue "(select actor_id = '$ADMIN_UID' from ($AUD) a)" \
             || { echo "::error::the audited actor is not the staff member who invoked the delete"; bad=1; }
-          [ "$(p "select (row_id = '$TARGET')::text from ($AUD) a")" = "t" ] \
+          istrue "(select row_id = '$TARGET' from ($AUD) a)" \
             || { echo "::error::the audit row points at the wrong season"; bad=1; }
-          [ "$(p "select (old_value ? 'name')::text from ($AUD) a")" = "t" ] \
+          istrue "(select old_value ? 'name' from ($AUD) a)" \
             || { echo "::error::the audit row did not preserve the deleted season row"; bad=1; }
 
           # ── لا أثرَ زائد: رايةُ الإيقافِ ماتت مع معاملتها، ولا يتيم ─────
