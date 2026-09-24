@@ -410,6 +410,7 @@ export type Database = {
           id: number
           name: string
           notes: string | null
+          season_id: number
         }
         Insert: {
           created_at?: string | null
@@ -417,6 +418,7 @@ export type Database = {
           id?: number
           name: string
           notes?: string | null
+          season_id?: number
         }
         Update: {
           created_at?: string | null
@@ -424,8 +426,17 @@ export type Database = {
           id?: number
           name?: string
           notes?: string | null
+          season_id?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financial_groups_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       flights: {
         Row: {
