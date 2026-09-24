@@ -1,0 +1,370 @@
+# ════════════════════════════════════════════════════════════
+# م٧/٣ — canonical production db push for the seasonal group
+# ════════════════════════════════════════════════════════════
+# Applies the ONE merged migration 20260924093000 through the
+# canonical CLI path.
+#
+# ⚠️ `--db-url`, not `--linked`. PR #148 established that
+# `supabase link` resolves the project's SECRET service-role key via
+# `GET /v1/projects/{ref}/api-keys?reveal=true`, which no scoped
+# personal access token can satisfy. The push itself never needed that
+# key — it needs a database connection, which is what `--db-url` takes.
+#
+# Exactly ONE production-mutating command may run, and only after every
+# gate passes. Deliberately absent, and audited for: migration repair ·
+# migration up · manual SQL mutation · rollback · baseline execution ·
+# any operation on a historical migration.
+#
+# This migration is EXPECTED to change the database, so "schema
+# unchanged" is the wrong gate. The post-write gate is stricter: the
+# ledger's 49 original rows must be byte-identical, the new row must
+# appear exactly once, and the intended objects must all exist.
+#
+# There is NO automatic rollback. On post-write failure the run fails
+# and preserves evidence; recovery is a human decision.
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+
+name: Financial groups - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-FGSEASON-20260924093000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: financial-groups-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      MIG_VERSION: "20260924093000"
+      MIG_FILE: supabase/migrations/20260924093000_financial_groups_seasonal.sql
+      MIG_SHA256: "643a52f7e1bf3389255d78f12d6b00181993a2970bb3a14741aa3b017454b20a"
+      EXPECT_ROWS_BEFORE: "49"
+      EXPECT_LATEST_BEFORE: "20260922195044"
+      EXPECT_ROWS_AFTER: "50"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: fg-push-evidence
+
+    steps:
+      - name: "GATE: confirmation and secrets"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-FGSEASON-20260924093000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq 50 ] || { echo "::error::expected 50 repository migrations, found $n"; exit 1; }
+          [ -f "$MIG_FILE" ] || { echo "::error::$MIG_FILE missing"; exit 1; }
+          got="$(sha256sum "$MIG_FILE" | cut -d' ' -f1)"
+          [ "$got" = "$MIG_SHA256" ] || { echo "::error::migration sha256 mismatch: $got"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "cli=$v"; echo "migration_sha256=$got"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 49 / 20260922195044"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: exactly one pending, and it is this migration"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${MIG_VERSION}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$MIG_VERSION]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+          echo "Exactly one pending migration, and it is $MIG_VERSION."
+
+      - name: "GATE: production data is backfillable without guessing"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          g="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select count(*) from public.financial_groups")"
+          e="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from public.financial_groups g where not exists (select 1 from public.financial_group_members m where m.group_id=g.id)")"
+          m="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from (select m.group_id from public.financial_group_members m join public.passengers p on p.id=m.passenger_id group by m.group_id having count(distinct p.season_id)>1) x")"
+          c="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from information_schema.columns where table_schema='public' and table_name='financial_groups' and column_name='season_id'")"
+          echo "groups=$g empty=$e mixed=$m season_id_col=$c" | tee "$OUT/data-before.txt"
+          [ "$e" -eq 0 ] || { echo "::error::$e financial group(s) have no members - season cannot be derived. Refusing."; exit 1; }
+          [ "$m" -eq 0 ] || { echo "::error::$m financial group(s) span more than one season. Refusing."; exit 1; }
+          [ "$c" -eq 0 ] || { echo "::error::financial_groups.season_id already exists - the migration may already be applied. Refusing."; exit 1; }
+
+      - name: "GATE: capture BEFORE structural fingerprint"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # كلمةُ المرور تدخل الرابطَ هنا وحدَه، مُرمَّزةً، ولا تُطبع
+          # ولا تُكتب في أيّ أثر. والماسحُ في آخر المهمّة يرفض أيَّ
+          # رابطٍ يحمل كلمةَ مرور لو تسرّب إلى دليل.
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          npm run --silent supabase -- db dump --db-url "$DB_URL" --schema public --keep-comments -f "$OUT/structural-before.sql" 2> "$OUT/dump-before.err" || {
+            echo "::error::BEFORE structural dump failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/dump-before.err"; exit 1; }
+          [ -s "$OUT/structural-before.sql" ] || { echo "::error::BEFORE structural dump is empty"; exit 1; }
+          wc -l "$OUT/structural-before.sql"
+          rm -f "$OUT/dump-before.err"
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 49 -> 50, the 49 originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          dup="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${MIG_VERSION}'")"
+          echo "rows=$rows latest=$latest new_rows=$dup" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$MIG_VERSION" ] || { echo "::error::latest is $latest, expected $MIG_VERSION"; bad=1; }
+          [ "$dup" -eq 1 ] || { echo "::error::the migration appears $dup times, expected exactly once"; bad=1; }
+          grep -v "^${MIG_VERSION}	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 49 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$MIG_VERSION" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: schema, backfill and guards are exactly as designed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          chk() { if [ "$2" = "$3" ]; then echo "  ok   $1 = $2"; else echo "::error::$1 is $2, expected $3"; bad=1; fi; }
+          chk "season_id NOT NULL"  "$(p "select is_nullable from information_schema.columns where table_schema='public' and table_name='financial_groups' and column_name='season_id'")" "NO"
+          chk "season_id default"   "$(p "select column_default from information_schema.columns where table_schema='public' and table_name='financial_groups' and column_name='season_id'")" "active_season_id()"
+          chk "FK"                  "$(p "select pg_get_constraintdef(oid) from pg_constraint where conname='financial_groups_season_id_fkey'")" "FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE RESTRICT"
+          chk "index"               "$(p "select count(*) from pg_indexes where schemaname='public' and indexname='financial_groups_season_id_idx'")" "1"
+          chk "groups still 3"      "$(p "select count(*) from public.financial_groups")" "3"
+          chk "all backfilled to 9" "$(p "select count(*) from public.financial_groups where season_id=9")" "3"
+          chk "members still 6"     "$(p "select count(*) from public.financial_group_members")" "6"
+          chk "no null season"      "$(p "select count(*) from public.financial_groups where season_id is null")" "0"
+          chk "fg guarded by ث٣"    "$(p "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='financial_groups' and t.tgname='trg_reject_closed_season' and not t.tgisinternal")" "1"
+          chk "4 new guards"        "$(p "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and not t.tgisinternal and ((c.relname='financial_groups' and t.tgname in ('trg_reject_closed_season','trg_financial_groups_reject_season_change')) or (c.relname='financial_group_members' and t.tgname='trg_reject_cross_season_group_member') or (c.relname='passengers' and t.tgname='trg_passengers_reject_season_change_in_group'))")" "4"
+          chk "delete_season drains fg" "$(p "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='delete_season' and pg_get_functiondef(p.oid) like '%delete from public.financial_groups where season_id%'")" "1"
+          chk "guarded tables = 12" "$(p "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and not t.tgisinternal and t.tgname='trg_reject_closed_season'")" "12"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-schema.txt"; else echo FAIL > "$OUT/status-schema.txt"; fi
+          echo "Schema verdict: $(cat "$OUT/status-schema.txt")"
+
+      - name: "POST: runtime integrity probes (rollback-safe, zero residue)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          R="$OUT/probes.tsv"; : > "$R"
+
+          # المسبارُ السالبُ يُخفق فتُجهَض معاملتُه ولا يُكتب شيء.
+          # والموجبُ يُكتب ثم يُلغى صراحةً. وكلُّ مسبارٍ يحتاج عضويةً
+          # نشطةً يبنيها داخل معاملته، لأن الإنتاج لا يملك واحدة —
+          # الموسم النشط فيه حاجٌّ واحد بلا مجموعة. ولولا ذلك لَحدّث
+          # الاستعلامُ صفرَ صفوفٍ ونجح، فقُرئ الرفضُ سماحاً.
+          ACTIVE_P="(select p.id from public.passengers p
+                      where p.season_id = public.active_season_id()
+                        and not exists (select 1 from public.financial_group_members m where m.passenger_id = p.id)
+                      order by p.id limit 1)"
+
+          # الرفضُ يُثبَت برمزِ الخروج لا بنصّ الرسالة: رسائلُ الحرّاس
+          # تحمل أسماءَ المجموعات، وهي أسماءُ عائلاتٍ في الغالب — فلا
+          # تُطبع في سجلٍّ ولا أثر.
+          probe() {
+            local name="$1" sql="$2" rc
+            set +e; psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$sql" >/dev/null 2>&1; rc=$?; set -e
+            if [ "$rc" -ne 0 ]; then printf '%s\tREFUSED\n' "$name" >> "$R"; echo "  ok   $name refused"
+            else printf '%s\tALLOWED\n' "$name" >> "$R"; echo "  --   $name allowed"; fi
+          }
+
+          # A/B/G — الموسم المقفل: تعديلٌ وحذفٌ وإدخال
+          probe A "update public.financial_groups set name = name || 'X' where id = 4"
+          probe B "delete from public.financial_groups where id = 4"
+          probe G "insert into public.financial_groups (name, season_id) values ('__FG_PROBE__', 9)"
+          # E — تحويل موسم مجموعةٍ ذاتِ أعضاء
+          probe E "update public.financial_groups set season_id = public.active_season_id() where id = 5"
+          # C — ضمُّ حاجٍّ نشطٍ إلى مجموعةِ موسمٍ مقفل
+          probe C "insert into public.financial_group_members (group_id, passenger_id) values (4, ${ACTIVE_P})"
+          # D — نقلُ عضويةٍ قائمةٍ إلى مجموعةِ موسمٍ آخر
+          probe D "begin;
+                   insert into public.financial_groups (name) values ('__FG_PROBE_D__');
+                   insert into public.financial_group_members (group_id, passenger_id)
+                     values ((select id from public.financial_groups where name='__FG_PROBE_D__'), ${ACTIVE_P});
+                   update public.financial_group_members set group_id = 4
+                     where group_id = (select id from public.financial_groups where name='__FG_PROBE_D__');
+                   rollback;"
+          # F — تحويلُ موسمِ حاجٍّ وهو في مجموعة
+          probe F "begin;
+                   insert into public.financial_groups (name) values ('__FG_PROBE_F__');
+                   insert into public.financial_group_members (group_id, passenger_id)
+                     values ((select id from public.financial_groups where name='__FG_PROBE_F__'), ${ACTIVE_P});
+                   update public.passengers set season_id = 9
+                     where id = (select passenger_id from public.financial_group_members
+                                  where group_id = (select id from public.financial_groups where name='__FG_PROBE_F__'));
+                   rollback;"
+          # H — عمليةٌ صحيحةٌ في الموسم النشط تنجح ثم تُلغى
+          probe H "begin;
+                   insert into public.financial_groups (name) values ('__FG_PROBE_OK__');
+                   insert into public.financial_group_members (group_id, passenger_id)
+                     values ((select id from public.financial_groups where name='__FG_PROBE_OK__'), ${ACTIVE_P});
+                   rollback;"
+
+          echo "--- probes ---"; cat "$R"
+          bad=0
+          for k in A B C D E F G; do
+            grep -q "^${k}\tREFUSED$" "$R" || { echo "::error::probe $k did not refuse"; bad=1; }
+          done
+          grep -q "^H\tALLOWED$" "$R" || { echo "::error::probe H (valid active-season operation) did not succeed"; bad=1; }
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-probes.txt"; else echo FAIL > "$OUT/status-probes.txt"; fi
+          echo "Probe verdict: $(cat "$OUT/status-probes.txt")"
+
+      - name: "POST: zero residue and groups 4,5,6 unchanged"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          res="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select count(*) from public.financial_groups where name like '__FG_PROBE%'")"
+          n="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from public.financial_groups")"
+          ids="$(psql "$URL" -X -q -At -c "$RO" -c "select string_agg(id||':'||season_id, ',' order by id) from public.financial_groups")"
+          mem="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from public.financial_group_members")"
+          echo "residue=$res groups=$n ids_seasons=$ids members=$mem" | tee "$OUT/residue.txt"
+          bad=0
+          [ "$res" -eq 0 ] || { echo "::error::$res probe row(s) remain"; bad=1; }
+          [ "$n" -eq 3 ] || { echo "::error::financial_groups holds $n rows, expected 3"; bad=1; }
+          [ "$ids" = "4:9,5:9,6:9" ] || { echo "::error::groups/seasons are $ids, expected 4:9,5:9,6:9"; bad=1; }
+          [ "$mem" -eq 6 ] || { echo "::error::members = $mem, expected 6"; bad=1; }
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-residue.txt"; else echo FAIL > "$OUT/status-residue.txt"; fi
+          echo "Residue verdict: $(cat "$OUT/status-residue.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger schema probes residue; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::warning::$k did not run"; printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $MIG_VERSION applied; ث٣ now covers financial_groups; zero residue."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@|token=[A-Za-z0-9_-]{20,}" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-groups-canonical-push
+          path: fg-push-evidence
+          if-no-files-found: error
