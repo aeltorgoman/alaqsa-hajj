@@ -13,9 +13,14 @@
 -- الأسماء تحمل اسم موسمها، فأي تسرّب بين المواسم يُرى بالعين بلا
 -- مقارنة معرّفات.
 --
--- ═══ توقيع close_season بعد س٨ ═══
--- س٨ أسقطت `close_season(text, text)` وأحلّت محلّها
--- `close_season(text, text, uuid)` — الوسيط الثالث هو الفاعل. وهذا
+-- ═══ توقيع close_season ═══
+-- التوقيعُ اليوم `close_season(text, integer, text, uuid)`: الاسمُ ثمّ
+-- **السنةُ الهجرية** ثمّ المُقفِل ثمّ الفاعل. وكان هذا الملفُّ يناديها
+-- بثلاثة وسائط — توقيعٍ سقط — فيُخفق على أيّ قاعدةٍ مبنيّةٍ من
+-- الترحيلات الحالية. ورصده تمرينُ إعادة البناء، لا الاستعمالُ اليوميّ:
+-- لا أحدَ يزرع بيئةَ اختبارٍ من الصفر إلا حين يُعيد البناء فعلاً.
+-- و`seasons.hijri_year` صارت `not null` بلا افتراض، فيُمرَّر صراحةً.
+-- وهذا
 -- السكربت يمرّر `null` عن قصد: البذر ليس فعل شخص، فيُسجَّل الصفّ
 -- الملخّص بـ`actor_source='system'` وهو الوصف الصادق لما جرى. ولا
 -- يُختلق فاعلٌ بشريّ لعمليةٍ نفّذتها أداة.
@@ -75,7 +80,7 @@ begin
   end if;
 
   -- الموسم الأول يوجد أصلاً من ترحيل م١؛ يُسمّى هنا فقط
-  if v_seas = 0 then insert into public.seasons (name) values ('1446');
+  if v_seas = 0 then insert into public.seasons (name, hijri_year) values ('1446', 1446);
   else update public.seasons set name = '1446' where closed_at is null;
   end if;
 
@@ -130,7 +135,7 @@ begin
   insert into public.announcements (title, body, priority, created_by)
   values ('تنبيه موسم 1446', 'رسالة إلى حجّاج 1446 — بلا انتهاء صلاحية عمداً', 'عام', 'بذرة الاختبار');
 
-  perform public.close_season('1447', 'بذرة الاختبار', null::uuid);
+  perform public.close_season('1447', 1447, 'بذرة الاختبار', null::uuid);
 
   /* رفعُ سعرٍ بعد الإقفال: موسم 1446 يجب أن يبقى على ١٠٬٠٠٠ مهما
      تغيّر الحيّ بعده. وهذا هو الفارق الذي يقيسه الاختبار. */
@@ -156,7 +161,7 @@ begin
   insert into public.announcements (title, body, priority, created_by)
   values ('تنبيه موسم 1447', 'رسالة إلى حجّاج 1447 — بلا انتهاء صلاحية عمداً', 'مهم', 'بذرة الاختبار');
 
-  perform public.close_season('1448', 'بذرة الاختبار', null::uuid);
+  perform public.close_season('1448', 1448, 'بذرة الاختبار', null::uuid);
 
   /* رفعٌ ثانٍ: فتصير الأسعار الثلاثة متمايزة —
      1446 = ١٠٬٠٠٠ (لقطة) · 1447 = ١١٬٠٠٠ (لقطة) · 1448 = ١٢٬٠٠٠ (حيّ).

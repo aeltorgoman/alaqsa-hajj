@@ -234,7 +234,8 @@ jobs:
           set -euo pipefail
           URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$TMP_REF" "$URL"
-          psql "$URL" -X -q -v ON_ERROR_STOP=1 -f supabase/scripts/seed_test_seasons.sql > "$OUT/seed.log" 2>&1
+          psql "$URL" -X -q -v ON_ERROR_STOP=1 -f supabase/scripts/seed_test_seasons.sql > "$OUT/seed.log" 2>&1 || {
+            echo "::error::seeding failed"; tail -40 "$OUT/seed.log"; exit 1; }
           psql "$URL" -X -q -At -v ON_ERROR_STOP=1 \
             -c "select 'seasons='||count(*) from public.seasons" \
             -c "select 'passengers='||count(*) from public.passengers" \
