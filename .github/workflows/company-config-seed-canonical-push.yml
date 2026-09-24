@@ -1,0 +1,328 @@
+# ════════════════════════════════════════════════════════════
+# #17 — canonical production db push for the company_config seed
+# ════════════════════════════════════════════════════════════
+# Applies the ONE merged migration 20260924140000 through the
+# canonical CLI path.
+#
+# ⚠️ `--db-url`, not `--linked`. PR #148 established that
+# `supabase link` resolves the project's SECRET service-role key via
+# `GET /v1/projects/{ref}/api-keys?reveal=true`, which no scoped
+# personal access token can satisfy. The push needs a database
+# connection, which is what `--db-url` takes.
+#
+# Exactly ONE production-mutating command may run, and only after every
+# gate passes. Deliberately absent, and audited for: migration repair ·
+# migration up · `--include-all` · manual SQL mutation · rollback ·
+# baseline execution · any operation on a historical migration.
+#
+# This migration is DATA ONLY. So unlike the seasonal-group push, the
+# schema gate here is the strict one: the structural dump must be
+# **byte-identical** before and after. And the row it targets must come
+# through untouched — proved by a full-row fingerprint, not by eye.
+#
+# On the production database this migration is expected to insert
+# NOTHING: its `where not exists` sees a populated table. The proof of
+# correctness is therefore "the ledger advanced and nothing else moved",
+# which is exactly what the POST gates assert.
+#
+# No value from `company_config` is ever printed. Only counts, the id
+# list, and an md5 fingerprint leave the database.
+#
+# There is NO automatic rollback. On post-write failure the run fails
+# and preserves evidence; recovery is a human decision.
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+
+name: Company config seed - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-CCSEED-20260924140000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: company-config-seed-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      MIG_VERSION: "20260924140000"
+      MIG_FILE: supabase/migrations/20260924140000_company_config_seed_row.sql
+      MIG_SHA256: "58203fd2634e92442d1a1639fde58b76dd1bd41bbc26d89ebf63699715bd5c44"
+      EXPECT_REPO_MIGRATIONS: "51"
+      EXPECT_ROWS_BEFORE: "50"
+      EXPECT_LATEST_BEFORE: "20260924093000"
+      EXPECT_ROWS_AFTER: "51"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: cc-push-evidence
+
+    steps:
+      - name: "GATE: confirmation and secrets"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-CCSEED-20260924140000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          [ -f "$MIG_FILE" ] || { echo "::error::$MIG_FILE missing"; exit 1; }
+          got="$(sha256sum "$MIG_FILE" | cut -d' ' -f1)"
+          [ "$got" = "$MIG_SHA256" ] || { echo "::error::migration sha256 mismatch: $got"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          # الترحيلةُ بياناتٌ فقط — لا DDL. يُتحقَّق من ذلك قبل الدفع لا بعده.
+          if grep -inE "^[[:space:]]*(create|alter|drop|grant|revoke|truncate|update|delete)[[:space:]]" "$MIG_FILE"; then
+            echo "::error::the authorized migration must be data-only; a schema or mutating verb appears above"; exit 1; fi
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "cli=$v"; echo "migration_sha256=$got"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 50 / 20260924093000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: exactly one pending, and it is this migration"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${MIG_VERSION}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$MIG_VERSION]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+          echo "Exactly one pending migration, and it is $MIG_VERSION."
+
+      - name: "GATE: company_config is in a state this migration may touch"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          # لا تُقرأ قيمةٌ واحدة من الجدول: عددٌ ومعرّفاتٌ وبصمةٌ فقط.
+          n="$(p "select count(*) from public.company_config")"
+          one="$(p "select count(*) from public.company_config where id = 1")"
+          ids="$(p "select coalesce(string_agg(id::text, ',' order by id), '(none)') from public.company_config")"
+          fp="$(p "select coalesce(md5(to_jsonb(c.*)::text), '(absent)') from public.company_config c where c.id = 1")"
+          echo "rows=$n id1=$one ids=$ids fingerprint=$fp" | tee "$OUT/company-config-before.txt"
+          echo "$fp" > "$OUT/cc-fingerprint-before.txt"
+
+          if [ "$n" -eq 0 ]; then
+            echo "::warning::company_config is EMPTY - the migration will insert the seed row. This is valid but unexpected on production."
+          elif [ "$one" -ne 1 ]; then
+            echo "::error::company_config holds $n row(s) and NO id = 1 (ids: $ids)."
+            echo "::error::The application reads eq(\"id\", 1) exclusively, so this database is broken BEFORE this migration."
+            echo "::error::Refusing to push: inserting id = 1 beside those rows would displace the campaign identity."
+            exit 1
+          elif [ "$n" -gt 1 ]; then
+            echo "::error::company_config holds $n rows (ids: $ids), expected exactly 1. Refusing."
+            exit 1
+          else
+            echo "Expected safe state: exactly one row, id = 1. The migration will insert nothing."
+          fi
+
+      - name: "GATE: capture BEFORE structural fingerprint"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # كلمةُ المرور تدخل الرابطَ هنا وحدَه، مُرمَّزةً، ولا تُطبع.
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          npm run --silent supabase -- db dump --db-url "$DB_URL" --schema public --keep-comments -f "$OUT/structural-before.sql" 2> "$OUT/dump-before.err" || {
+            echo "::error::BEFORE structural dump failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/dump-before.err"; exit 1; }
+          [ -s "$OUT/structural-before.sql" ] || { echo "::error::BEFORE structural dump is empty"; exit 1; }
+          sha256sum "$OUT/structural-before.sql" | tee "$OUT/structural-before.sha256"
+          rm -f "$OUT/dump-before.err"
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 50 -> 51, the 50 originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          dup="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${MIG_VERSION}'")"
+          echo "rows=$rows latest=$latest new_rows=$dup" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$MIG_VERSION" ] || { echo "::error::latest is $latest, expected $MIG_VERSION"; bad=1; }
+          [ "$dup" -eq 1 ] || { echo "::error::the migration appears $dup times, expected exactly once"; bad=1; }
+          grep -v "^${MIG_VERSION}	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 50 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$MIG_VERSION" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the company_config row came through untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          n="$(p "select count(*) from public.company_config")"
+          one="$(p "select count(*) from public.company_config where id = 1")"
+          ids="$(p "select coalesce(string_agg(id::text, ',' order by id), '(none)') from public.company_config")"
+          fp="$(p "select coalesce(md5(to_jsonb(c.*)::text), '(absent)') from public.company_config c where c.id = 1")"
+          before="$(cat "$OUT/cc-fingerprint-before.txt")"
+          echo "rows=$n id1=$one ids=$ids fingerprint=$fp" | tee "$OUT/company-config-after.txt"
+          bad=0
+          [ "$n" -eq 1 ]   || { echo "::error::company_config holds $n rows, expected exactly 1"; bad=1; }
+          [ "$one" -eq 1 ] || { echo "::error::no row with id = 1"; bad=1; }
+          if [ "$before" = "(absent)" ]; then
+            echo "  note: the row did not exist before; the migration created it. No preservation claim is made."
+            [ "$fp" != "(absent)" ] || { echo "::error::the row still does not exist"; bad=1; }
+          else
+            [ "$fp" = "$before" ] || { echo "::error::company_config id = 1 CHANGED: $before -> $fp"; bad=1; }
+            [ "$fp" = "$before" ] && echo "  ok   full-row fingerprint identical - zero existing values modified"
+          fi
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-config.txt"; else echo FAIL > "$OUT/status-config.txt"; fi
+          echo "company_config verdict: $(cat "$OUT/status-config.txt")"
+
+      - name: "POST: the schema did not move at all (data-only migration)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          npm run --silent supabase -- db dump --db-url "$DB_URL" --schema public --keep-comments -f "$OUT/structural-after.sql" 2> "$OUT/dump-after.err" || {
+            echo "::error::AFTER structural dump failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/dump-after.err"; exit 1; }
+          rm -f "$OUT/dump-after.err"
+          sha256sum "$OUT/structural-after.sql" | tee "$OUT/structural-after.sha256"
+          if diff -q "$OUT/structural-before.sql" "$OUT/structural-after.sql" >/dev/null; then
+            echo "  ok   public schema byte-identical before and after"
+            echo PASS > "$OUT/status-schema.txt"
+          else
+            echo "::error::the public schema CHANGED - a data-only migration must not do this"
+            diff -u "$OUT/structural-before.sql" "$OUT/structural-after.sql" | head -80
+            echo FAIL > "$OUT/status-schema.txt"
+          fi
+          echo "Schema verdict: $(cat "$OUT/status-schema.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger config schema; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::warning::$k did not run"; printf '%-8s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-8s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $MIG_VERSION applied; a fresh database now seeds company_config; production unchanged."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@|token=[A-Za-z0-9_-]{20,}" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-config-seed-canonical-push
+          path: cc-push-evidence
+          if-no-files-found: error
