@@ -314,7 +314,9 @@ jobs:
 
       - name: "Deploy the two functions the rehearsal exercises"
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # ⚠️ رمزُ الإنتاج مقصورٌ عليه، فيردّ ٤٠٣ هنا. ويُفضَّل
+          #    `TMP_ACCESS_TOKEN` إن وُجد — وهو ما يفتح أ٨ و ب٣.
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.TMP_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           "$GUARD" "$TMP_REF"
