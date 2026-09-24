@@ -29,17 +29,23 @@ with p as (
 insert into public.financial_group_members (group_id, passenger_id)
 select g.id, p.id from g cross join p;
 
--- ٢) إسناداتٌ حقيقية: باصٌ وغرفةٌ ومخيّما منى وعرفة ورحلتان
+-- ٢) إسناداتٌ حقيقية: باصٌ وغرفةٌ ومخيّما منى وعرفة ورحلتان.
+--    والمخيّمُ يُختار **بجنس الحاجّ**: الفصلُ بالجنس حارسٌ في القاعدة
+--    (`assert_camp_admits`) لا عُرفٌ في الواجهة، فإسنادُ حاجّةٍ إلى
+--    مخيّم ذكورٍ يُرفض — وهو الصواب.
 update public.passengers p
-   set bus_id          = (select id from public.buses  where season_id = public.active_season_id() order by id limit 1),
-       room_id         = (select id from public.rooms  where season_id = public.active_season_id() order by id limit 1),
-       camp_mina_id    = (select id from public.camps  where season_id = public.active_season_id() and page_type = 'منى'  order by id limit 1),
-       camp_arafa_id   = (select id from public.camps  where season_id = public.active_season_id() and page_type = 'عرفة' order by id limit 1),
-       flight_id       = (select id from public.flights where season_id = public.active_season_id() and type = 'ذهاب' order by id limit 1),
-       return_flight_id= (select id from public.flights where season_id = public.active_season_id() and type = 'إياب' order by id limit 1)
- where p.season_id = public.active_season_id()
-   and p.id in (select id from public.passengers
-                 where season_id = public.active_season_id() order by id limit 3);
+   set bus_id           = (select id from public.buses  where season_id = public.active_season_id() order by id limit 1),
+       room_id          = (select id from public.rooms  where season_id = public.active_season_id()
+                            and coalesce(capacity, 0) > (select count(*) from public.passengers q where q.room_id = rooms.id)
+                            order by id limit 1),
+       camp_mina_id     = (select id from public.camps  where season_id = public.active_season_id()
+                            and page_type = 'منى'  and gender = p.gender order by id limit 1),
+       camp_arafa_id    = (select id from public.camps  where season_id = public.active_season_id()
+                            and page_type = 'عرفة' and gender = p.gender order by id limit 1),
+       flight_id        = (select id from public.flights where season_id = public.active_season_id() and type = 'ذهاب' order by id limit 1),
+       return_flight_id = (select id from public.flights where season_id = public.active_season_id() and type = 'إياب' order by id limit 1)
+ where p.id in (select id from public.passengers
+                 where season_id = public.active_season_id() order by id limit 2);
 
 commit;
 
