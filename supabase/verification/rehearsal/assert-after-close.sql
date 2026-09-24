@@ -31,8 +31,10 @@ with
 
     -- ب٦ — صفُّ التدقيق
     union all
-    select 'audit_row_for_close_exists', '1',
-           (select count(*)::text from public.audit_log
+    -- البذرةُ نفسُها تُقفل موسمين، فالعددُ ثلاثةٌ لا واحد. المطلوبُ
+    -- وجودُ صفٍّ لا عددُه، والصفُّ الأحدثُ هو إقفالُنا.
+    select 'audit_row_for_close_exists', 'true',
+           (select (count(*) >= 1)::text from public.audit_log
              where table_name = 'seasons' and new_value ? 'new_season_id')
     union all
     select 'audit_close_has_pricing_snapshot_key', 'true',

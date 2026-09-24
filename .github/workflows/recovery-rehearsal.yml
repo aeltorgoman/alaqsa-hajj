@@ -505,7 +505,7 @@ jobs:
             "begin; insert into public.rooms (number, floor, type) values ('9001','بروفة','ثنائية'); rollback;" \
             "delete from public.rooms where season_id = $CLOSED"
           probe flights \
-            "begin; insert into public.flights (name, type) values ('probe flight','ذهاب'); rollback;" \
+            "begin; insert into public.flights (name, type, date, time) values ('probe flight','ذهاب','2030-01-01','08:00'); rollback;" \
             "delete from public.flights where season_id = $CLOSED"
           probe announcements \
             "begin; insert into public.announcements (body) values ('probe'); rollback;" \
@@ -521,8 +521,8 @@ jobs:
             "insert into public.payments (passenger_id, amount) values ($CP, 1)"
           probe custom_charges \
             "begin; with p as (insert into public.passengers (name_ar) values ('probe') returning id)
-             insert into public.custom_charges (passenger_id, description, amount, type) select id,'probe',1,'رسم' from p; rollback;" \
-            "insert into public.custom_charges (passenger_id, description, amount, type) values ($CP,'probe',1,'رسم')"
+             insert into public.custom_charges (passenger_id, description, amount, type) select id,'probe',1,'إضافة' from p; rollback;" \
+            "insert into public.custom_charges (passenger_id, description, amount, type) values ($CP,'probe',1,'إضافة')"
           probe financial_group_members \
             "begin; with g as (insert into public.financial_groups (name) values ('probe group') returning id),
                          p as (insert into public.passengers (name_ar) values ('probe') returning id)

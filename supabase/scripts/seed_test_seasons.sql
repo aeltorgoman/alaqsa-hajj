@@ -66,6 +66,7 @@ declare
   v_seas  int;
   v_bus   bigint;
   v_camp  bigint;
+  v_camp_f bigint;   -- مخيّم النساء: الفصلُ بالجنس حارسٌ في القاعدة
   v_room  bigint;
   v_fgo   bigint;
   v_fret  bigint;
@@ -105,14 +106,15 @@ begin
   -- ── 1446 ──────────────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1446 أ', 'عادي') returning id into v_bus;
   insert into public.buses (name, type)  values ('باص 1446 ب', 'VIP');
-  insert into public.camps (name, page_type, gender, type) values ('مخيم منى 1446', 'منى', 'ذكر', 'عادي') returning id into v_camp;
-  insert into public.camps (name, page_type, gender, type) values ('مخيم عرفة 1446', 'عرفة', 'ذكر', 'عادي');
-  insert into public.rooms (number, floor, type) values ('101', 'الأول', 'ثنائية') returning id into v_room;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم منى 1446', 'منى', 'ذكر', 'عادي', 50) returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم منى 1446 نساء', 'منى', 'أنثى', 'عادي', 50) returning id into v_camp_f;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم عرفة 1446', 'عرفة', 'ذكر', 'عادي', 50);
+  insert into public.rooms (number, floor, type) values ('101', 'الأول', 'ثلاثية') returning id into v_room;
   insert into public.rooms (number, floor, type) values ('102', 'الأول', 'ثلاثية');
   insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, sort_order)
   values
     ('حاج موسم 1446 الأول',  'A1446001', 'مصري', '01/01/1970', 'ذكر',  'حاج',   v_bus, v_camp, v_room, 1),
-    ('حاج موسم 1446 الثاني', 'A1446002', 'مصري', '02/02/1971', 'أنثى', 'حاج',   v_bus, v_camp, v_room, 2),
+    ('حاج موسم 1446 الثاني', 'A1446002', 'مصري', '02/02/1971', 'أنثى', 'حاج',   v_bus, v_camp_f, v_room, 2),
     ('مشرف موسم 1446',       'A1446003', 'مصري', '03/03/1972', 'ذكر',  'مشرف',  v_bus, v_camp, v_room, 3);
 
   /* ═══ م٧ — رحلات الموسم وتنبيهاته تُنشأ والموسم مفتوح ═══
@@ -121,10 +123,10 @@ begin
      هو المسار الوحيد الممكن، وهو نفسه المسار الحقيقيّ في التشغيل.
      ولذلك لا يُمرَّر `season_id` صراحةً هنا — الافتراض يختمه، فتُختبر
      الآلية نفسها بدل الالتفاف عليها. */
-  insert into public.flights (name, type, airline, date, from_airport, to_airport)
-  values ('MS1446', 'ذهاب', 'مصر للطيران', '2026-05-01', 'القاهرة', 'جدة') returning id into v_fgo;
-  insert into public.flights (name, type, airline, date, from_airport, to_airport)
-  values ('MS1446R', 'إياب', 'مصر للطيران', '2026-05-20', 'جدة', 'القاهرة') returning id into v_fret;
+  insert into public.flights (name, type, airline, date, time, from_airport, to_airport, capacity)
+  values ('MS1446', 'ذهاب', 'مصر للطيران', '2026-05-01', '08:00', 'القاهرة', 'جدة', 50) returning id into v_fgo;
+  insert into public.flights (name, type, airline, date, time, from_airport, to_airport, capacity)
+  values ('MS1446R', 'إياب', 'مصر للطيران', '2026-05-20', '20:00', 'جدة', 'القاهرة', 50) returning id into v_fret;
 
   update public.passengers set flight_id = v_fgo, return_flight_id = v_fret
    where passport in ('A1446001', 'A1446002');
@@ -143,18 +145,19 @@ begin
 
   -- ── 1447 ──────────────────────────────────────────────────
   insert into public.buses (name, type)  values ('باص 1447', 'عادي') returning id into v_bus;
-  insert into public.camps (name, page_type, gender, type) values ('مخيم منى 1447', 'منى', 'ذكر', 'خاص') returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم منى 1447', 'منى', 'ذكر', 'خاص', 50) returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم منى 1447 نساء', 'منى', 'أنثى', 'خاص', 50) returning id into v_camp_f;
   insert into public.rooms (number, floor, type) values ('201', 'الثاني', 'رباعية') returning id into v_room;
   insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, sort_order)
   values
     ('حاج موسم 1447 الأول',  'B1447001', 'أردني', '04/04/1973', 'ذكر',  'حاج',    v_bus, v_camp, v_room, 1),
-    ('مرافق موسم 1447',      'B1447002', 'أردني', '05/05/1974', 'أنثى', 'مرافق',  v_bus, v_camp, v_room, 2);
+    ('مرافق موسم 1447',      'B1447002', 'أردني', '05/05/1974', 'أنثى', 'مرافق',  v_bus, v_camp_f, v_room, 2);
 
   /* م٧ — رحلة 1447 تحمل **الاسم نفسه** الذي حملته رحلة 1446 عمداً:
      تشابه الأسماء بين المواسم هو الواقع التشغيليّ، وهو ما يكشف
      خلطَ المواسم إن وقع — رقمان مختلفان باسم واحد. */
-  insert into public.flights (name, type, airline, date, from_airport, to_airport)
-  values ('MS1446', 'ذهاب', 'الملكية الأردنية', '2027-05-01', 'عمّان', 'جدة') returning id into v_fgo;
+  insert into public.flights (name, type, airline, date, time, from_airport, to_airport, capacity)
+  values ('MS1446', 'ذهاب', 'الملكية الأردنية', '2027-05-01', '08:00', 'عمّان', 'جدة', 50) returning id into v_fgo;
 
   update public.passengers set flight_id = v_fgo where passport = 'B1447001';
 
@@ -173,8 +176,9 @@ begin
   /* باصٌ ثانٍ فارغ — هدف التخصيص الجماعي في ت١٠. ولو زُرع الحجاج
      عليه ابتداءً لما بقي للاختبار ما يفعله. */
   insert into public.buses (name, type)  values ('باص 1448 ب — هدف ت١٠', 'عادي');
-  insert into public.camps (name, page_type, gender, type) values ('مخيم منى 1448', 'منى', 'ذكر', 'عادي') returning id into v_camp;
-  insert into public.camps (name, page_type, gender, type) values ('مخيم عرفة 1448', 'عرفة', 'ذكر', 'عادي');
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم منى 1448', 'منى', 'ذكر', 'عادي', 50) returning id into v_camp;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم منى 1448 نساء', 'منى', 'أنثى', 'عادي', 50) returning id into v_camp_f;
+  insert into public.camps (name, page_type, gender, type, capacity) values ('مخيم عرفة 1448', 'عرفة', 'ذكر', 'عادي', 50);
   insert into public.rooms (number, floor, type) values ('301', 'الثالث', 'ثنائية') returning id into v_room;
   insert into public.rooms (number, floor, type) values ('302', 'الثالث', 'ثلاثية');
   insert into public.rooms (number, floor, type) values ('303', 'الثالث', 'رباعية');
@@ -182,10 +186,10 @@ begin
 
   /* م٧ — رحلتا الموسم النشط: عليهما تجري اختبارات الإسناد، ورحلات
      1446/1447 هي الأهداف «من موسم آخر» التي يجب أن تُرفض. */
-  insert into public.flights (name, type, airline, date, from_airport, to_airport)
-  values ('SV1448', 'ذهاب', 'السعودية', '2028-05-01', 'الرياض', 'جدة') returning id into v_fgo;
-  insert into public.flights (name, type, airline, date, from_airport, to_airport)
-  values ('SV1448R', 'إياب', 'السعودية', '2028-05-20', 'جدة', 'الرياض') returning id into v_fret;
+  insert into public.flights (name, type, airline, date, time, from_airport, to_airport, capacity)
+  values ('SV1448', 'ذهاب', 'السعودية', '2028-05-01', '08:00', 'الرياض', 'جدة', 50) returning id into v_fgo;
+  insert into public.flights (name, type, airline, date, time, from_airport, to_airport, capacity)
+  values ('SV1448R', 'إياب', 'السعودية', '2028-05-20', '20:00', 'جدة', 'الرياض', 50) returning id into v_fret;
 
   insert into public.announcements (title, body, priority, created_by)
   values ('تنبيه موسم 1448', 'رسالة إلى حجّاج الموسم النشط', 'عاجل', 'بذرة الاختبار');
@@ -193,13 +197,15 @@ begin
   insert into public.passengers (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, flight_id, return_flight_id, sort_order)
   values
     ('حاج موسم 1448 الأول',  'C1448001', 'سعودي', '06/06/1975', 'ذكر',  'حاج', v_bus, v_camp, v_room, v_fgo, v_fret, 1),
-    ('حاج موسم 1448 الثاني', 'C1448002', 'سعودي', '07/07/1976', 'أنثى', 'حاج', v_bus, v_camp, v_room, v_fgo, v_fret, 2);
+    ('حاج موسم 1448 الثاني', 'C1448002', 'سعودي', '07/07/1976', 'أنثى', 'حاج', v_bus, v_camp_f, v_room, v_fgo, v_fret, 2);
 
   /* ٢٨ حاجّاً مولَّدين بمجموعة لا بثمانيةٍ وعشرين كتلةً منسوخة:
      أقصر، وأسهل تدقيقاً، وحتميّ — الرقم يشتقّ منه كل حقل.
      · الوثائق `C1448101`…`C1448128` — لا تتقاطع مع المسمَّيين
      · الميلاد بصيغة `DD/MM/YYYY` وهي ما يقبله محلّل البوابة
-     · `bus_id` فارغ عمداً (ت١٠)، والغرف تدور على الأربع الموجودة */
+     · `bus_id` و`room_id` فارغان عمداً (ت١٠): حارسُ سعة الغرفة
+       يرفض سبعةَ نزلاء في غرفةٍ سعتُها أربعة، والتوزيعُ نفسُه هو
+       ما يُختبَر لاحقاً */
   insert into public.passengers
     (name_ar, passport, nat, dob, gender, passenger_type, bus_id, camp_mina_id, room_id, sort_order)
   select
@@ -210,10 +216,8 @@ begin
     case when i % 2 = 0 then 'ذكر' else 'أنثى' end,
     'حاج',
     null,
-    v_camp,
-    (select r.id from public.rooms r
-      where r.season_id = public.active_season_id()
-      order by r.id offset (i - 1) % 4 limit 1),
+    case when i % 2 = 0 then v_camp else v_camp_f end,
+    null,   -- كالباص: يُتركون بلا غرفة عمداً (ت١٠)، والسعاتُ لا تتّسع لسبعةٍ في غرفة
     10 + i
   from generate_series(1, 28) as g(i);
 
