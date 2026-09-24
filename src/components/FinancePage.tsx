@@ -178,7 +178,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       supabase.from("pricing_settings").select("*"),
       supabase.from("payments").select("*").order("payment_date", { ascending:false }),
       supabase.from("custom_charges").select("*"),
-      supabase.from("financial_groups").select("*").order("created_at", { ascending:false }),
+      supabase.from("financial_groups").select("*").eq("season_id", viewedSeason.id).order("created_at", { ascending:false }),
       supabase.from("financial_group_members").select("*"),
       isArchived
         ? supabase.from("season_pricing_snapshot").select("key,label,type,amount").eq("season_id", viewedSeason.id)
@@ -293,8 +293,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   const groupPassengerIds = useMemo(() => new Set(groupMembers.map(m => m.passenger_id)), [groupMembers]);
 
-  /* §٤ من #42: الجداول المالية لا تخزّن season_id، فيُشتقّ الموسم
-     من الحاج. هذه المجموعة هي أداة الاشتقاق الوحيدة في الصفحة. */
+  /* §٤ من #42: الدفعاتُ والرسومُ تُشتقّ موسمَها من الحاجّ — وهو
+     الصواب، إذ لا تُتصوَّر دفعةٌ بموسمٍ يخالف صاحبَها. وهذه
+     المجموعة أداةُ ذلك الاشتقاق. أمّا المجموعةُ المالية فصارت
+     موسميةً بالتخزين في م٧/٣، وتُجلب بموسمها أعلاه. */
   const viewedPassengerIds = useMemo(() => new Set(passengers.map(p => p.id)), [passengers]);
 
   async function savePricing() {
@@ -968,13 +970,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
               ):(
                 <>
                   <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--text)" }}>إضافة إلى مجموعة موجودة</div>
-                  {/* المجموعة المالية كيان موسميّ: موسم جديد يبدأ
-                      بمجموعات جديدة، ولا تُعاد مجموعة موسم مضى.
-                      لكن الجدول لا يحمل season_id، ولم يُضفه م٧ (نطاقه
-                      الرحلات والتنبيهات وحدهما) — فيقوم هذا الترشيح
-                      مقامه باشتقاق الموسم من الأعضاء. بندٌ مرصود لا
-                      سهو، ويُستبدل بشرط في الاستعلام متى صار موسمياً. */}
-                  {groups.filter(g=>getGroupPassengers(g.id).length>0).map(g=>(
+                  {/* المجموعةُ المالية كيانٌ موسميّ: موسمٌ جديد يبدأ
+                      بمجموعاتٍ جديدة، ولا تُعاد مجموعةُ موسمٍ مضى.
+                      وقد صار الجدولُ يحمل `season_id` في م٧/٣،
+                      فالقائمةُ مُرشَّحةٌ بالموسم في الجلب نفسِه. */}
+                  {groups.map(g=>(
                     <div key={g.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid var(--border)" }}>
                       <div><div style={{ fontSize:13, fontWeight:600 }}>{g.name}</div><div style={{ fontSize:11, color:"var(--text-muted)" }}>{getGroupPassengers(g.id).length} أعضاء</div></div>
                       <button
