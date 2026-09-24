@@ -332,7 +332,7 @@ jobs:
           grep -E "permissions|user_profiles" "$OUT/admin.log" | tail -5 || true
           echo "first admin created via seed_first_admin.mjs (no auth.users transplant)" | tee "$OUT/phase-a-admin.txt"
 
-      - name: "Deploy the two functions the rehearsal exercises"
+      - name: "Deploy the three functions the rehearsal exercises"
         env:
           # ⚠️ رمزُ الإنتاج مقصورٌ عليه، فيردّ ٤٠٣ هنا. ويُفضَّل
           #    `TMP_ACCESS_TOKEN` إن وُجد — وهو ما يفتح أ٨ و ب٣.
@@ -340,7 +340,7 @@ jobs:
         run: |
           set -euo pipefail
           "$GUARD" "$TMP_REF"
-          for s in season-admin pilgrim-doc; do
+          for s in season-admin pilgrim-doc user-admin; do
             npm run --silent supabase -- functions deploy "$s" --project-ref "$TMP_REF" 2>&1 \
               | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
           done
@@ -363,12 +363,15 @@ jobs:
 
           # ── A6 — تخزينٌ بملفٍّ اصطناعيّ
           PID="$(p "select id from public.passengers where season_id = public.active_season_id() order by id limit 1")"
-          printf 'synthetic rehearsal document %s\n' "$(date -u +%FT%TZ)" > /tmp/synthetic.txt
-          KEY="${PID}/rehearsal-permit.txt"
+          # ⚠️ الحاوية تقبل `{image/jpeg,image/png,image/webp,application/pdf}`
+          #    وحدها. وكان المسبار يرفع `text/plain` فيُردّ ٤٠٠ — والحارسُ
+          #    مُحقّ، والبيانةُ هي الخاطئة. فيُرفع PDF صغيرٌ صحيح.
+          printf '%%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%%%EOF\n' > /tmp/synthetic.pdf
+          KEY="${PID}/rehearsal-permit.pdf"
           code=$(curl -s -o /tmp/up.json -w '%{http_code}' -X POST \
             "$API/storage/v1/object/passengers-docs/$KEY" \
-            -H "Authorization: Bearer $SK" -H "Content-Type: text/plain" \
-            --data-binary @/tmp/synthetic.txt)
+            -H "Authorization: Bearer $SK" -H "Content-Type: application/pdf" \
+            --data-binary @/tmp/synthetic.pdf)
           [ "$code" = "200" ] && say "A6 upload synthetic object" "ok" || { say "A6 upload" "HTTP $code"; bad=1; }
           p "update public.passengers set hajj_permit_url = '$KEY' where id = $PID" >/dev/null
           say "A6 objects in bucket" "$(p "select count(*) from storage.objects where bucket_id='passengers-docs'")"
@@ -421,10 +424,18 @@ jobs:
           [ -n "$JWT" ] && say "A9 staff sign-in" "ok" || { say "A9 staff sign-in" "FAILED"; bad=1; }
           echo "::add-mask::$JWT"
           echo "$JWT" > /tmp/jwt
+          # ⚠️ `manage_season_lifecycle` **مستثناةٌ عمداً** من حساب
+          #    الإقلاع: تحذف موسماً بأكمله حذفاً دائماً، فلا تُسنَد إلى
+          #    أداةٍ تعمل بلا قرارٍ بشريّ. فغيابُها هنا **إثباتُ** أن
+          #    القرار نافذ، لا إخفاق. وتُمنح لاحقاً عبر `user-admin`.
           has="$(curl -s -X POST "$API/rest/v1/rpc/has_permission" \
             -H "apikey: $SK" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+            -d '{"p_key":"manage_users"}')"
+          [ "$has" = "true" ] && say "A9 has_permission(manage_users)" "true" || { say "A9 manage_users" "$has"; bad=1; }
+          life="$(curl -s -X POST "$API/rest/v1/rpc/has_permission" \
+            -H "apikey: $SK" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
             -d '{"p_key":"manage_season_lifecycle"}')"
-          [ "$has" = "true" ] && say "A9 has_permission(manage_season_lifecycle)" "true" || { say "A9 permission" "$has"; bad=1; }
+          [ "$life" = "false" ] && say "A9 season-lifecycle withheld by design" "false" || { say "A9 season-lifecycle NOT withheld" "$life"; bad=1; }
           nop="$(curl -s -X POST "$API/rest/v1/rpc/has_permission" \
             -H "apikey: $SK" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
             -d '{"p_key":"a_permission_that_does_not_exist"}')"
@@ -451,6 +462,43 @@ jobs:
               (select count(*) from public.financial_groups where season_id = public.active_season_id())||E'\t'||
               (select count(*) from public.pilgrim_sessions where season_id = public.active_season_id() and revoked_at is null)||E'\t'||
               (select count(*) from public.pricing_settings)" | tee "$OUT/phase-b-preclose.txt"
+
+      - name: "B0: grant season-lifecycle through user-admin, as a human would"
+        env:
+          API: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          SK: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
+          AE: ${{ secrets.TMP_ADMIN_EMAIL }}
+          AP: ${{ secrets.TMP_ADMIN_PASSWORD }}
+          PGPASSWORD: ${{ secrets.TMP_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          "$GUARD" "$TMP_REF" "$API"
+          URL="postgresql://postgres.${TMP_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$TMP_REF" "$URL"
+          # حسابُ الإقلاع لا يملك `manage_season_lifecycle` عمداً، فلا
+          # يستطيع إقفالَ موسم. وهذه هي الحالةُ الصحيحة. والمنحُ يجري
+          # من حيث يجري في التطبيق: «الإعدادات ← المستخدمون» عبر
+          # `user-admin`، بصلاحية `manage_users` التي يملكها. فيُختبَر
+          # مسارُ المنح نفسُه بدل الالتفاف عليه بكتابةٍ مباشرة.
+          JWT="$(curl -s -X POST "$API/auth/v1/token?grant_type=password" \
+            -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$AE\",\"password\":\"$AP\"}" \
+            | python3 -c 'import sys,json;print((json.load(sys.stdin) or {}).get("access_token",""))')"
+          [ -n "$JWT" ] || { echo "::error::could not sign in to grant the permission"; exit 1; }
+          echo "::add-mask::$JWT"
+          UID_="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select id from public.user_profiles order by created_at limit 1")"
+          PERMS="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 \
+            -c "select (permissions || '{\"manage_season_lifecycle\": true}'::jsonb)::text from public.user_profiles where id = '$UID_'")"
+          code=$(curl -s -o /tmp/grant.json -w '%{http_code}' -X POST "$API/functions/v1/user-admin" \
+            -H "Authorization: Bearer $JWT" -H "apikey: $SK" -H "Content-Type: application/json" \
+            -d "{\"action\":\"update\",\"id\":\"$UID_\",\"permissions\":$PERMS}")
+          echo "  user-admin update -> HTTP $code"
+          [ "$code" = "200" ] || { echo "::error::grant refused"; cat /tmp/grant.json; exit 1; }
+          now="$(curl -s -X POST "$API/rest/v1/rpc/has_permission" \
+            -H "apikey: $SK" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+            -d '{"p_key":"manage_season_lifecycle"}')"
+          [ "$now" = "true" ] || { echo "::error::permission still not effective: $now"; exit 1; }
+          echo "  season-lifecycle granted through the supported path and effective" | tee "$OUT/phase-b-grant.txt"
 
       - name: "B3: close the season THROUGH season-admin"
         env:
