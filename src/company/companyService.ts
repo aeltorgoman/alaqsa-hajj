@@ -104,13 +104,23 @@ export const companyService = {
        يبقَ في `company_config` عمودُ أصلٍ يُرتَدّ إليه. */
     return { config: configResult.data, assets: assetsResult.data ?? [], error: configResult.error };
   },
+  /* ⚠️ `.select().single()` هنا لنفس سببها في `updateConfig`: بدونها
+     يرسل PostgREST الطلبَ بلا تمثيل، فيردّ 204 على النجاح **وعلى
+     صفرِ صفوفٍ رشّحتها RLS سواء**. والمسارُ الخطر هو فرعُ التحديث من
+     الـupsert: الإدراجُ الممنوعُ يردّ 42501 صريحاً، أمّا تحديثُ صفٍّ
+     قائمٍ رشّحته `USING` فيمضي صامتاً. والآن يعود PGRST116 فيُقرأ
+     خطأً — وشكلُ النتيجةِ لم يتغيّر، فالمستدعي القائمُ يفحص `error`
+     كما كان. */
   async saveAsset(asset: { key: CompanyAssetKey; url: string; altText?: string | null; metadata?: Json }) {
     return supabase.from("company_assets").upsert({
       asset_key: asset.key, asset_url: asset.url, alt_text: asset.altText ?? null,
       metadata: asset.metadata ?? {}, updated_at: new Date().toISOString(),
-    });
+    }).select().single();
   },
-  async removeAsset(key: CompanyAssetKey) { return supabase.from("company_assets").delete().eq("asset_key", key); },
+  /* والحذفُ مثلُها: `delete` بلا تمثيل يردّ 204 سواءٌ حُذف صفٌّ أم
+     رشّحت RLS كلَّ شيء. و`.select()` تُعيد المحذوفَ فعلاً، فالمصفوفةُ
+     الفارغةُ تعني «لم يُحذف شيء» لا «تمّ». */
+  async removeAsset(key: CompanyAssetKey) { return supabase.from("company_assets").delete().eq("asset_key", key).select(); },
   async loadConfig() { return supabase.from("company_config").select("*").eq("id", 1).single(); },
 
   /* ⚠️ `.select().single()` ليست زينة: بدونها يرسل PostgREST

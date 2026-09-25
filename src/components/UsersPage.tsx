@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { supabase } from "../supabase";
 import type { User } from "../types";
-import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset } from "../utils";
-import { useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
+import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset, deleteCompanyAssetObject } from "../utils";
+import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
 import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { companyService, seasonMasterData } from "../company/companyService";
+import type { CompanyAssetKey } from "../company/types";
 import { isSaved, saveErrorText } from "../company/saveResult";
 
 /* ─── helpers ─── */
@@ -77,6 +78,159 @@ const fieldLabel: React.CSSProperties = {
 
 const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", margin: "14px 0" };
 
+/* ═══════════════════════════════════════════════════════════════
+   الخِتم وتوقيع المسؤول — صفُّ أصلٍ واحدٍ يُدار بنفسه
+
+   يحفظ لحظةَ الرفع لا مع «حفظ بيانات الحملة»: كلُّ أصلٍ مستقلٌّ عن
+   الآخر، فلا يُعلَّق خِتمٌ نجح رفعُه على حفظِ نموذجٍ لم يُلمس.
+
+   ومرجعُه `company_assets` وحدَها — لا عمودَ في `company_config`،
+   ولا نسخةَ ثانيةً في أيّ مكان.
+
+   ⚠️ ولا يُوسَم هذان المفتاحان في قائمةِ السماحِ العلنيّة
+   (`company_assets_public_read`): توقيعُ المسؤولِ ليس شعارَ شاشةِ
+   دخول، فيبقى خلف المصادقة كما هو اليوم.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* الحاويةُ تقبل هذه الأنواعَ وحدَها من بين ما يُفيد هنا. و`image/*`
+   وحدَها في `accept` كانت تسمح بـSVG وGIF: الأولى يُرسّمها الضغطُ
+   إلى JPEG بامتدادٍ كاذب، والثانيةُ ترفضها الحاويةُ برسالةٍ غامضة. */
+const STAMP_MIME = ["image/png", "image/webp", "image/jpeg"] as const;
+const STAMP_ACCEPT = STAMP_MIME.join(",");
+const STAMP_MAX_BYTES = 5 * 1024 * 1024;   // حدُّ الحاوية نفسُه
+
+type AssetRowState = { busy: "" | "upload" | "remove"; msg: string; ok: boolean };
+
+function CompanyAssetRow({
+  label, hint, assetKey, uploadKind, url, disabled, onChange, confirmRemove,
+}: {
+  label: string;
+  hint: string;
+  assetKey: CompanyAssetKey;
+  uploadKind: string;
+  url: string;
+  disabled: boolean;
+  onChange: (next: string) => void;
+  confirmRemove: (message: string, opts: { title: string; confirmLabel: string }) => Promise<boolean>;
+}) {
+  const [state, setState] = useState<AssetRowState>({ busy: "", msg: "", ok: false });
+  const busy = state.busy !== "";
+
+  const upload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";           // ليعمل onChange لو أُعيد اختيارُ الملفِّ نفسِه
+    if (!file) return;
+
+    if (!(STAMP_MIME as readonly string[]).includes(file.type)) {
+      setState({ busy: "", msg: "الملف يجب أن يكون صورة PNG أو WebP أو JPG.", ok: false });
+      return;
+    }
+    if (file.size > STAMP_MAX_BYTES) {
+      setState({ busy: "", msg: "حجم الملف يتجاوز ٥ ميجابايت.", ok: false });
+      return;
+    }
+
+    const previous = url;
+    setState({ busy: "upload", msg: "", ok: false });
+
+    /* الشفافيةُ مطلوبةٌ هنا بالذات: خِتمٌ بخلفيةٍ بيضاء يُغطّي ما تحته */
+    const uploaded = await uploadCompanyAsset(file, uploadKind, { preserveTransparency: true });
+    if (!uploaded) {
+      setState({ busy: "", msg: "تعذّر رفع الصورة، حاول مرة أخرى.", ok: false });
+      return;
+    }
+
+    const { error } = await companyService.saveAsset({ key: assetKey, url: uploaded, altText: label });
+    if (error) {
+      /* الكائنُ رُفع ثمّ أخفق حفظُ مؤشّره: يُنظَّف فوراً فلا يتراكم،
+         والحالةُ القديمةُ تبقى كما هي — لم يتبدّل شيء. */
+      await deleteCompanyAssetObject(uploaded);
+      setState({ busy: "", msg: "تعذّر حفظ الصورة، لم يتغيّر شيء.", ok: false });
+      return;
+    }
+
+    onChange(uploaded);
+    /* وبعد نجاحِ الكتابةِ وحدَه يُحذف السابق — لا قبلَه */
+    if (previous && previous !== uploaded) await deleteCompanyAssetObject(previous);
+    setState({ busy: "", msg: "تم الحفظ.", ok: true });
+  };
+
+  const remove = async () => {
+    if (!url) return;
+    const yes = await confirmRemove(`سيُحذف ${label} نهائياً من إعدادات الحملة.`, {
+      title: `حذف ${label}؟`, confirmLabel: "نعم، احذف",
+    });
+    if (!yes) return;
+
+    const target = url;
+    setState({ busy: "remove", msg: "", ok: false });
+    const { data, error } = await companyService.removeAsset(assetKey);
+    if (error || !data || data.length === 0) {
+      setState({ busy: "", msg: "تعذّر الحذف، لم يتغيّر شيء.", ok: false });
+      return;
+    }
+    onChange("");
+    await deleteCompanyAssetObject(target);
+    setState({ busy: "", msg: "تم الحذف.", ok: true });
+  };
+
+  return (
+    <div>
+      <span style={fieldLabel}>{label}</span>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 12, padding: 12,
+        border: "1.5px dashed var(--accent)", borderRadius: 10, background: "var(--bg-2)",
+      }}>
+        {/* المعاينة — رقعةُ شطرنجٍ خفيفةٌ تُظهر الشفافيةَ بدل أن تُخفيها */}
+        <div style={{
+          width: 96, height: 72, flexShrink: 0, borderRadius: 8, overflow: "hidden",
+          border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center",
+          backgroundColor: "var(--paper)",
+          backgroundImage: url
+            ? "linear-gradient(45deg,var(--bg-2) 25%,transparent 25%,transparent 75%,var(--bg-2) 75%),linear-gradient(45deg,var(--bg-2) 25%,transparent 25%,transparent 75%,var(--bg-2) 75%)"
+            : undefined,
+          backgroundSize: "12px 12px", backgroundPosition: "0 0,6px 6px",
+        }}>
+          {url
+            ? <img src={url} alt={label} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            : <span style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: 4 }}>لم تُضف بعد</span>}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>{hint}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <label style={btnS({
+              fontSize: 11, padding: "6px 12px", margin: 0,
+              display: "inline-flex", alignItems: "center",
+              cursor: busy || disabled ? "not-allowed" : "pointer",
+              opacity: busy || disabled ? 0.6 : 1,
+            })}>
+              {state.busy === "upload" ? "جاري الحفظ..." : url ? "استبدال الصورة" : "رفع صورة"}
+              <input type="file" accept={STAMP_ACCEPT} style={{ display: "none" }}
+                disabled={busy || disabled} onChange={upload} />
+            </label>
+            {url && (
+              <button type="button" onClick={remove} disabled={busy || disabled}
+                style={btnS({
+                  fontSize: 11, padding: "6px 12px", color: "#C62828",
+                  borderColor: "#C62828", cursor: busy || disabled ? "not-allowed" : "pointer",
+                  opacity: busy || disabled ? 0.6 : 1,
+                })}>
+                {state.busy === "remove" ? "جاري الحذف..." : "حذف"}
+              </button>
+            )}
+          </div>
+          {state.msg && (
+            <div style={{ fontSize: 10, marginTop: 7, fontWeight: 700, color: state.ok ? "var(--primary)" : "#C62828" }}>
+              {state.msg}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── component ─── */
 /* رسالة الخادم تُستخرج من جسم الاستجابة: functions.invoke يضع
    الاستجابة غير الناجحة في error ويترك data فارغاً */
@@ -120,6 +274,14 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     bank_account_number: financial.accountNumber, bank_iban: financial.iban,
     bank_swift: financial.swift, commercial_registration: financial.commercialRegistration,
   }));
+
+  /* الخِتمُ والتوقيعُ خارجَ `companyForm` عمداً: يُحفظان لحظةَ الرفع
+     لا مع زرّ «حفظ بيانات الحملة»، فلا يُخلطان بنموذجٍ يُحفظ دفعةً.
+     والقيمةُ الأولى من `company_assets` — فإعادةُ التحميل تُظهر
+     المحفوظَ من مرجعه لا من ذاكرةٍ محلّيّة. */
+  const companyAssets = useCompanyAssets();
+  const [stampUrl, setStampUrl] = useState(companyAssets.company_stamp?.url ?? "");
+  const [signatureUrl, setSignatureUrl] = useState(companyAssets.manager_signature?.url ?? "");
 
   /* ═══ إعداداتُ الموسم ═══
      تُحمَّل من **الموسم المعروض** ليرى المديرُ بياناتِ ما يتصفّحه،
@@ -522,6 +684,43 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   </div>
                 </div>
 
+              </div>
+            </div>
+
+            {/* ── الخِتم وتوقيع المسؤول ── */}
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11.5V7a3 3 0 0 1 6 0v4.5"/><path d="M5 16h14v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 16c0-1.5 1-2.5 1.5-3.5"/><path d="M16 16c0-1.5-1-2.5-1.5-3.5"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>الختم والتوقيع</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>يُحفظ كلٌّ منهما فور رفعه</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gap: 14 }}>
+                  <CompanyAssetRow
+                    label="ختم الشركة"
+                    hint="يُفضَّل PNG بخلفية شفافة · حتى ٥ ميجابايت"
+                    assetKey="company_stamp"
+                    uploadKind="company_stamp"
+                    url={stampUrl}
+                    disabled={!currentUser.permissions.manage_users}
+                    onChange={setStampUrl}
+                    confirmRemove={confirmAction}
+                  />
+                  <CompanyAssetRow
+                    label="توقيع المسؤول"
+                    hint="يُفضَّل PNG بخلفية شفافة · حتى ٥ ميجابايت"
+                    assetKey="manager_signature"
+                    uploadKind="manager_signature"
+                    url={signatureUrl}
+                    disabled={!currentUser.permissions.manage_users}
+                    onChange={setSignatureUrl}
+                    confirmRemove={confirmAction}
+                  />
+                </div>
               </div>
             </div>
 

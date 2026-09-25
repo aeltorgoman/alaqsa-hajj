@@ -520,12 +520,20 @@ export async function downloadFile(value: string) {
 /** الاسم القديم — يبقى للمستدعين، وصار واجهةً لـ docKey. */
 export const getStoragePath = docKey;
 
-export function compressImage(file: File): Promise<Blob> {
+/* `preserveTransparency` تُبقي WebP على حالها بدل أن تُسطَّح إلى JPEG.
+   ولولاها لخرج الخِتم والتوقيعُ بخلفيةٍ بيضاء صمّاء تُغطّي ما تحتها في
+   أيّ مستند. وهي **اختياريّةٌ ومغلقةٌ افتراضاً**: مسارُ مستندات الحجّاج
+   يشتقّ امتدادَه ونوعَه من `file.type` بافتراض JPEG لغير الـPNG، فتغييرُ
+   السلوكِ عليه كان سيُنتج بايتات WebP موسومةً `image/jpeg`. */
+export function compressImage(file: File, opts?: { preserveTransparency?: boolean }): Promise<Blob> {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) { resolve(file); return; }
     const isPng = file.type === "image/png";
-    const outputType = isPng ? "image/png" : "image/jpeg";
-    const outputQuality = isPng ? 1 : 0.8;
+    const keepWebp = opts?.preserveTransparency === true && file.type === "image/webp";
+    /* قناةُ الشفافيةِ تبقى حين يبقى النوعُ حاملاً لها */
+    const lossless = isPng || keepWebp;
+    const outputType = isPng ? "image/png" : keepWebp ? "image/webp" : "image/jpeg";
+    const outputQuality = lossless ? 1 : 0.8;
     const img = new Image();
     img.onload = () => {
       const maxDim = 1400;
@@ -537,7 +545,7 @@ export function compressImage(file: File): Promise<Blob> {
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (ctx && !isPng) {
+      if (ctx && !lossless) {
         /* لون صريح لا متغيّر CSS: canvas لا يفسّر var() ويتجاهل القيمة
            غير الصالحة صامتاً، فتبقى #000000 الافتراضية وتخرج الخلفية
            سوداء. ولو فُسِّر المتغيّر لتبع مظهر الواجهة — و‑‑text-inverse
@@ -598,11 +606,17 @@ export async function removeDoc(key: string): Promise<boolean> {
 
 const COMPANY_BUCKET = "company-assets";
 
-export async function uploadCompanyAsset(file: File, kind: string): Promise<string | null> {
-  const compressed = await compressImage(file);
+export async function uploadCompanyAsset(
+  file: File, kind: string, opts?: { preserveTransparency?: boolean },
+): Promise<string | null> {
+  const compressed = await compressImage(file, opts);
   const isPng = file.type === "image/png";
-  const ext = isPng ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const contentType = isPng ? "image/png" : file.type === "image/webp" ? "image/webp" : "image/jpeg";
+  /* الامتدادُ والنوعُ يتبعان ما خرج فعلاً من الضغط لا ما دخل: بغير
+     `preserveTransparency` تُسطَّح WebP إلى JPEG، فوسمُها `image/webp`
+     كان يُخزّن بايتات JPEG باسمٍ كاذب. */
+  const keepWebp = opts?.preserveTransparency === true && file.type === "image/webp";
+  const ext = isPng ? "png" : keepWebp ? "webp" : "jpg";
+  const contentType = isPng ? "image/png" : keepWebp ? "image/webp" : "image/jpeg";
   const path = `${kind}_${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage.from(COMPANY_BUCKET).upload(path, compressed, { upsert: true, contentType });
@@ -610,6 +624,26 @@ export async function uploadCompanyAsset(file: File, kind: string): Promise<stri
 
   const { data } = supabase.storage.from(COMPANY_BUCKET).getPublicUrl(path);
   return data?.publicUrl || null;
+}
+
+/* ═══ حذفُ الكائنِ المرفوع ═══
+   للحاوية سياسةُ DELETE قائمةٌ خلف `manage_users`، فالتنظيفُ داخلُ
+   المعمارِ القائم لا إضافةٌ عليه.
+
+   ⚠️ ولا يُستدعى إلا **بعد** نجاحِ كتابةِ `company_assets`: الكائنُ
+   الباقي بلا مؤشّرٍ يتيمٌ لا يؤذي، أمّا المؤشّرُ الباقي بلا كائنٍ
+   فصورةٌ مكسورةٌ في كلّ مكان. والترتيبُ هو الفرق.
+
+   ويُرجع `false` بلا رمي: فشلُ التنظيفِ لا يُبطل عمليةً نجحت. */
+export async function deleteCompanyAssetObject(publicUrl: string): Promise<boolean> {
+  const marker = `/${COMPANY_BUCKET}/`;
+  const at = publicUrl.lastIndexOf(marker);
+  if (at === -1) return false;
+  const path = publicUrl.slice(at + marker.length).split("?")[0];
+  if (!path) return false;
+  const { error } = await supabase.storage.from(COMPANY_BUCKET).remove([decodeURIComponent(path)]);
+  if (error) { console.error("تعذّر حذف كائن أصل الشركة", error); return false; }
+  return true;
 }
 /* ═══ طبقةُ الطباعة انتقلت إلى `src/print/` ═══
    القشرةُ والسمةُ والهويّةُ والكتلُ والإخراجُ ومطبوعاتُ الشنط صارت
