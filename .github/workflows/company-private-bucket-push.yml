@@ -1,0 +1,344 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — company-private storage bucket
+# ════════════════════════════════════════════════════════════
+# Applies the ONE migration 20260925090000 through the canonical CLI
+# path, on the pattern of company-config-seed-canonical-push.yml and
+# room-fk-canonical-push.yml.
+#
+# ⚠️ `--db-url`, not `--linked`. PR #148 established that
+# `supabase link` resolves the project's SECRET service-role key,
+# which no scoped personal access token can satisfy.
+#
+# Exactly ONE production-mutating command may run, and only after
+# every gate passes. Deliberately absent, and audited for: migration
+# repair · migration up · `--include-all` · manual SQL mutation ·
+# rollback · baseline execution · any operation on a historical
+# migration · any Dashboard action.
+#
+# This migration touches ONLY `storage.buckets` and `storage.objects`
+# policies. It creates NOTHING in `public` and writes NO application
+# row. So the gates are shaped for that:
+#   · BEFORE: the file must carry no `public.` DDL and no data verb.
+#   · AFTER:  the new bucket exists and is PRIVATE with the expected
+#     MIME/size, its four policies are present and every one of them
+#     is gated on `manage_users`, and NOT ONE opens it to anon.
+#   · AND the existing public branding path is untouched:
+#     `company-assets` still public, its read policy still there, and
+#     its own four policies unchanged in count.
+#   · AND no application data moved: a fingerprint of every
+#     `company_assets` row before and after.
+#
+# ⚠️ This is dispatched against the PR branch on purpose. The bucket
+#    must exist BEFORE the code that uses it ships, and the migration
+#    is additive and inert for the code running in production today.
+#
+# There is NO automatic rollback. Reverting is dropping the four
+# policies and the bucket — non-destructive while the bucket is empty,
+# and a human decision either way.
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+
+name: Company private bucket - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-PRIVBUCKET-20260925090000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: company-private-bucket-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      MIG_VERSION: "20260925090000"
+      MIG_FILE: supabase/migrations/20260925090000_company_private_assets_bucket.sql
+      MIG_SHA256: "4411f49042e21244b6794398f5c631e1e9bd6570a4ac6232a8d13d12228a5f5d"
+      EXPECT_REPO_MIGRATIONS: "53"
+      EXPECT_ROWS_BEFORE: "52"
+      EXPECT_LATEST_BEFORE: "20260924210000"
+      EXPECT_ROWS_AFTER: "53"
+      BUCKET: company-private
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: privbucket-push-evidence
+
+    steps:
+      - name: "GATE: confirmation and secrets"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-PRIVBUCKET-20260925090000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          [ -f "$MIG_FILE" ] || { echo "::error::$MIG_FILE missing"; exit 1; }
+          got="$(sha256sum "$MIG_FILE" | cut -d' ' -f1)"
+          [ "$got" = "$MIG_SHA256" ] || { echo "::error::migration sha256 mismatch: $got"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          # لا تمسّ بياناتِ التطبيق ولا مخطَّطَ public
+          if grep -inE "^[[:space:]]*(insert|update|delete|truncate)[[:space:]]+(into[[:space:]]+)?public\." "$MIG_FILE"; then
+            echo "::error::the authorized migration must not touch application data"; exit 1; fi
+          if grep -inE "^[[:space:]]*(create|alter|drop)[[:space:]]+(table|view|function|index)[[:space:]]" "$MIG_FILE"; then
+            echo "::error::the authorized migration must not carry public schema DDL"; exit 1; fi
+          grep -q "'company-private', 'company-private', 'f'" "$MIG_FILE" || {
+            echo "::error::the migration no longer creates the bucket as PRIVATE"; exit 1; }
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; echo "migration_sha256=$got"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 52 / 20260924210000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: exactly one pending, and it is this migration"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${MIG_VERSION}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$MIG_VERSION]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+          echo "Exactly one pending migration, and it is $MIG_VERSION."
+
+      - name: "GATE: capture BEFORE storage and asset fingerprint"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          have="$(p "select count(*) from storage.buckets where id = '$BUCKET'")"
+          [ "$have" -eq 0 ] || { echo "::error::bucket $BUCKET already exists - nothing to apply"; exit 1; }
+          p "select id || ':' || public::text from storage.buckets order by id" > "$OUT/buckets-before.txt"
+          p "select policyname from pg_policies where schemaname='storage' and tablename='objects' order by policyname" > "$OUT/storage-policies-before.txt"
+          # بصمةُ صفوفِ الأصول — لا قيمةَ تُطبع، md5 فقط
+          p "select coalesce(md5(string_agg(asset_key || '|' || asset_url, ',' order by asset_key)), '(none)')
+               from public.company_assets" > "$OUT/assets-fp-before.txt"
+          p "select count(*) from public.company_assets" > "$OUT/assets-n-before.txt"
+          p "select count(*) from storage.objects" > "$OUT/objects-n-before.txt"
+          echo "buckets=$(wc -l < "$OUT/buckets-before.txt") storage_policies=$(wc -l < "$OUT/storage-policies-before.txt")"
+          echo "company_assets_rows=$(cat "$OUT/assets-n-before.txt") storage_objects=$(cat "$OUT/objects-n-before.txt")"
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 52 -> 53, the 52 originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          dup="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='${MIG_VERSION}'")"
+          echo "rows=$rows latest=$latest new_rows=$dup" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$MIG_VERSION" ] || { echo "::error::latest is $latest, expected $MIG_VERSION"; bad=1; }
+          [ "$dup" -eq 1 ] || { echo "::error::the migration appears $dup times, expected exactly once"; bad=1; }
+          grep -v "^${MIG_VERSION}	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 52 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$MIG_VERSION" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the bucket is private, and every policy is gated"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          pub="$(p "select public::text from storage.buckets where id = '$BUCKET'")"
+          lim="$(p "select file_size_limit::text from storage.buckets where id = '$BUCKET'")"
+          mime="$(p "select array_to_string(allowed_mime_types, ',') from storage.buckets where id = '$BUCKET'")"
+          echo "bucket public=$pub size_limit=$lim mime=$mime" | tee "$OUT/bucket-after.txt"
+          [ "$pub" = "false" ] || { echo "::error::bucket is PUBLIC - the whole point is defeated"; bad=1; }
+          [ "$lim" = "5242880" ] || { echo "::error::size limit is $lim, expected 5242880"; bad=1; }
+          [ "$mime" = "image/jpeg,image/png,image/webp" ] || { echo "::error::mime list is '$mime'"; bad=1; }
+
+          n="$(p "select count(*) from pg_policies where schemaname='storage' and tablename='objects'
+                    and policyname like 'Managers%company private%'")"
+          # ⚠️ coalesce على الطرفين: qual تكون NULL في سياسة INSERT
+          gated="$(p "select count(*) from pg_policies where schemaname='storage' and tablename='objects'
+                        and coalesce(qual,'') || coalesce(with_check,'') like '%$BUCKET%'
+                        and coalesce(qual,'') || coalesce(with_check,'') like '%has_permission%'")"
+          anon="$(p "select count(*) from pg_policies where schemaname='storage' and tablename='objects'
+                       and coalesce(qual,'') || coalesce(with_check,'') like '%$BUCKET%'
+                       and ('anon' = any(roles) or 'public' = any(roles))")"
+          echo "private_policies=$n gated_on_manage_users=$gated open_to_anon=$anon" | tee -a "$OUT/bucket-after.txt"
+          [ "$n" -eq 4 ]     || { echo "::error::expected 4 policies, found $n"; bad=1; }
+          [ "$gated" -eq 4 ] || { echo "::error::only $gated of 4 policies require manage_users"; bad=1; }
+          [ "$anon" -eq 0 ]  || { echo "::error::$anon policies open $BUCKET to anon/public"; bad=1; }
+          p "select policyname || ' [' || cmd || ']' from pg_policies where schemaname='storage' and tablename='objects'
+               and policyname like 'Managers%company private%' order by policyname" | tee -a "$OUT/bucket-after.txt"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-bucket.txt"; else echo FAIL > "$OUT/status-bucket.txt"; fi
+          echo "Bucket verdict: $(cat "$OUT/status-bucket.txt")"
+
+      - name: "POST: public branding untouched, and no application row moved"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          capub="$(p "select public::text from storage.buckets where id='company-assets'")"
+          caread="$(p "select count(*) from pg_policies where schemaname='storage' and tablename='objects'
+                         and policyname='Anyone reads company assets'")"
+          echo "company_assets_bucket_public=$capub public_read_policy=$caread" | tee "$OUT/branding-after.txt"
+          [ "$capub" = "true" ] || { echo "::error::company-assets is no longer public - the login screen loses its logo"; bad=1; }
+          [ "$caread" -eq 1 ]   || { echo "::error::the public read policy for branding is gone"; bad=1; }
+
+          # الحاوياتُ السابقةُ بحالها، والجديدةُ وحدَها أُضيفت
+          p "select id || ':' || public::text from storage.buckets order by id" > "$OUT/buckets-after.txt"
+          added="$(comm -13 "$OUT/buckets-before.txt" "$OUT/buckets-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          gone="$(comm -23 "$OUT/buckets-before.txt" "$OUT/buckets-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          echo "buckets_added='$added' buckets_removed='$gone'" | tee -a "$OUT/branding-after.txt"
+          [ "$added" = "company-private:false" ] || { echo "::error::buckets added = '$added'"; bad=1; }
+          [ -z "$gone" ] || { echo "::error::buckets were REMOVED: $gone"; bad=1; }
+
+          # سياساتُ التخزين: الأربعُ الجديدةُ فقط، ولا واحدةَ حُذفت
+          p "select policyname from pg_policies where schemaname='storage' and tablename='objects' order by policyname" > "$OUT/storage-policies-after.txt"
+          padd="$(comm -13 "$OUT/storage-policies-before.txt" "$OUT/storage-policies-after.txt" | wc -l)"
+          pgone="$(comm -23 "$OUT/storage-policies-before.txt" "$OUT/storage-policies-after.txt" | tr '\n' ' ' | sed 's/ $//')"
+          echo "storage_policies_added=$padd removed='$pgone'" | tee -a "$OUT/branding-after.txt"
+          [ "$padd" -eq 4 ] || { echo "::error::$padd storage policies added, expected exactly 4"; bad=1; }
+          [ -z "$pgone" ]   || { echo "::error::storage policies were REMOVED: $pgone"; bad=1; }
+
+          # ولا صفَّ تطبيقٍ تحرّك
+          fp="$(p "select coalesce(md5(string_agg(asset_key || '|' || asset_url, ',' order by asset_key)), '(none)')
+                     from public.company_assets")"
+          na="$(p "select count(*) from public.company_assets")"
+          no="$(p "select count(*) from storage.objects")"
+          echo "company_assets_rows=$na storage_objects=$no fingerprint_match=$([ "$fp" = "$(cat "$OUT/assets-fp-before.txt")" ] && echo yes || echo NO)" | tee -a "$OUT/branding-after.txt"
+          [ "$fp" = "$(cat "$OUT/assets-fp-before.txt")" ] || { echo "::error::a company_assets row CHANGED"; bad=1; }
+          [ "$na" = "$(cat "$OUT/assets-n-before.txt")" ] || { echo "::error::the company_assets row count changed"; bad=1; }
+          [ "$no" = "$(cat "$OUT/objects-n-before.txt")" ] || { echo "::error::the stored object count changed"; bad=1; }
+
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-branding.txt"; else echo FAIL > "$OUT/status-branding.txt"; fi
+          echo "Branding/data verdict: $(cat "$OUT/status-branding.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger bucket branding; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::warning::$k did not run"; printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $MIG_VERSION applied; company-private exists and is private; public branding untouched."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-private-bucket-push
+          path: privbucket-push-evidence
+          if-no-files-found: error
