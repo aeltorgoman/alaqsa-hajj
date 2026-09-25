@@ -2,14 +2,17 @@ import { useState, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { supabase } from "../supabase";
 import type { User } from "../types";
-import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset, deleteCompanyAssetObject } from "../utils";
+import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset,
+  normalizeStampImage, uploadPrivateCompanyAsset, deletePrivateCompanyAsset,
+  useSignedPrivateCompanyAsset, type NormalizedImage } from "../utils";
 import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
 import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { companyService, seasonMasterData } from "../company/companyService";
-import type { CompanyAssetKey } from "../company/types";
+import type { CompanyAssetKey, CompanyAssetImageMeta } from "../company/types";
+import type { Json } from "../types/database";
 import { isSaved, saveErrorText } from "../company/saveResult";
 
 /* ─── helpers ─── */
@@ -79,154 +82,244 @@ const fieldLabel: React.CSSProperties = {
 const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", margin: "14px 0" };
 
 /* ═══════════════════════════════════════════════════════════════
-   الخِتم وتوقيع المسؤول — صفُّ أصلٍ واحدٍ يُدار بنفسه
+   الخِتم وتوقيع المسؤول — أصلٌ خاصٌّ يُدار بنفسه
 
-   يحفظ لحظةَ الرفع لا مع «حفظ بيانات الحملة»: كلُّ أصلٍ مستقلٌّ عن
-   الآخر، فلا يُعلَّق خِتمٌ نجح رفعُه على حفظِ نموذجٍ لم يُلمس.
+   ليسا هويّةً بصريّةً علنيّة: يعيشان في حاوية `company-private`
+   الخاصّة، ويُخزَّن منهما **مفتاحُ الكائن** لا رابطٌ عامّ، ويُوقَّع
+   عند العرض بعمرٍ قصير (ترحيلة `20260925090000`).
 
-   ومرجعُه `company_assets` وحدَها — لا عمودَ في `company_config`،
-   ولا نسخةَ ثانيةً في أيّ مكان.
+   والمسارُ: اختيارٌ → تطبيعٌ في المتصفّح → **معاينةٌ قبل الاعتماد** →
+   رفعٌ وحفظٌ عند الاعتماد وحدَه. فما رُفض لا يُرفع أصلاً، والمعروضُ
+   بعد الحفظِ هو الكائنُ المخزَّنُ نفسُه لا مشتقٌّ خفيّ.
 
-   ⚠️ ولا يُوسَم هذان المفتاحان في قائمةِ السماحِ العلنيّة
-   (`company_assets_public_read`): توقيعُ المسؤولِ ليس شعارَ شاشةِ
-   دخول، فيبقى خلف المصادقة كما هو اليوم.
+   ومرجعُه `company_assets` وحدَها — لا عمودَ في `company_config`.
    ═══════════════════════════════════════════════════════════════ */
 
-/* الحاويةُ تقبل هذه الأنواعَ وحدَها من بين ما يُفيد هنا. و`image/*`
-   وحدَها في `accept` كانت تسمح بـSVG وGIF: الأولى يُرسّمها الضغطُ
-   إلى JPEG بامتدادٍ كاذب، والثانيةُ ترفضها الحاويةُ برسالةٍ غامضة. */
 const STAMP_MIME = ["image/png", "image/webp", "image/jpeg"] as const;
 const STAMP_ACCEPT = STAMP_MIME.join(",");
 const STAMP_MAX_BYTES = 5 * 1024 * 1024;   // حدُّ الحاوية نفسُه
+const NORMALIZED_VERSION = 1;
 
-type AssetRowState = { busy: "" | "upload" | "remove"; msg: string; ok: boolean };
+/* رقعةُ الشطرنج تُظهر الشفافيةَ وحدودَ الإطار؛ والورقةُ البيضاء تُقارب
+   ما سيظهر على الإيصال. السياقان معاً يجعلان الخللَ ظاهراً: صورةٌ
+   بخلفيةٍ بيضاء مُصمتة تبدو سليمةً على الورقةِ وتفضحها الرقعة. */
+const checkerBg: React.CSSProperties = {
+  backgroundImage:
+    "linear-gradient(45deg,#d8d8d8 25%,transparent 25%,transparent 75%,#d8d8d8 75%)," +
+    "linear-gradient(45deg,#d8d8d8 25%,transparent 25%,transparent 75%,#d8d8d8 75%)",
+  backgroundSize: "16px 16px", backgroundPosition: "0 0,8px 8px",
+  backgroundColor: "#f4f4f4",
+};
+
+const previewPane: React.CSSProperties = {
+  height: 150, borderRadius: 8, border: "1px solid var(--line)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  overflow: "hidden", padding: 8,
+};
+
+/* المعاينةُ في سياقيها — بالحجمِ الذي يُحكَم به لا بإبهامٍ صغير */
+function AssetPreviewPair({ src, label }: { src: string; label: string }) {
+  const imgStyle: React.CSSProperties = { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" };
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>خلفية شفافة</div>
+        <div style={{ ...previewPane, ...checkerBg }}>
+          <img src={src} alt={`${label} — شفاف`} style={imgStyle} />
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>على ورق المستند</div>
+        <div style={{ ...previewPane, background: "#ffffff" }}>
+          <img src={src} alt={`${label} — ورق`} style={imgStyle} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type PendingImage = { image: NormalizedImage; objectUrl: string };
 
 function CompanyAssetRow({
-  label, hint, assetKey, uploadKind, url, disabled, onChange, confirmRemove,
+  label, hint, assetKey, uploadKind, storageKey, disabled, onChange, confirmRemove,
 }: {
   label: string;
   hint: string;
   assetKey: CompanyAssetKey;
   uploadKind: string;
-  url: string;
+  storageKey: string;
   disabled: boolean;
-  onChange: (next: string) => void;
+  onChange: (nextKey: string) => void;
   confirmRemove: (message: string, opts: { title: string; confirmLabel: string }) => Promise<boolean>;
 }) {
-  const [state, setState] = useState<AssetRowState>({ busy: "", msg: "", ok: false });
-  const busy = state.busy !== "";
+  const [pending, setPending] = useState<PendingImage | null>(null);
+  const [busy, setBusy] = useState<"" | "read" | "save" | "remove">("");
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const savedUrl = useSignedPrivateCompanyAsset(storageKey || null);
+  const working = busy !== "";
 
-  const upload = async (e: ChangeEvent<HTMLInputElement>) => {
+  /* الرابطُ المحلّيُّ للمعاينةِ يُحرَّر دائماً — ولو خرج المكوّن وسط
+     المراجعة، فلا يتسرّب. */
+  useEffect(() => () => { if (pending) URL.revokeObjectURL(pending.objectUrl); }, [pending]);
+
+  const discardPending = () => {
+    if (pending) URL.revokeObjectURL(pending.objectUrl);
+    setPending(null);
+  };
+
+  const choose = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = "";           // ليعمل onChange لو أُعيد اختيارُ الملفِّ نفسِه
+    e.target.value = "";              // ليعمل onChange لو أُعيد اختيارُ الملفِّ نفسِه
     if (!file) return;
-
     if (!(STAMP_MIME as readonly string[]).includes(file.type)) {
-      setState({ busy: "", msg: "الملف يجب أن يكون صورة PNG أو WebP أو JPG.", ok: false });
-      return;
+      setMsg({ text: "الملف يجب أن يكون صورة PNG أو WebP أو JPG.", ok: false }); return;
     }
     if (file.size > STAMP_MAX_BYTES) {
-      setState({ busy: "", msg: "حجم الملف يتجاوز ٥ ميجابايت.", ok: false });
-      return;
+      setMsg({ text: "حجم الملف يتجاوز ٥ ميجابايت.", ok: false }); return;
     }
 
-    const previous = url;
-    setState({ busy: "upload", msg: "", ok: false });
+    discardPending();
+    setMsg(null);
+    setBusy("read");
+    const image = await normalizeStampImage(file);
+    setBusy("");
+    if (!image) { setMsg({ text: "تعذّرت قراءة الصورة، جرّب ملفاً آخر.", ok: false }); return; }
+    setPending({ image, objectUrl: URL.createObjectURL(image.blob) });
+  };
 
-    /* الشفافيةُ مطلوبةٌ هنا بالذات: خِتمٌ بخلفيةٍ بيضاء يُغطّي ما تحته */
-    const uploaded = await uploadCompanyAsset(file, uploadKind, { preserveTransparency: true });
-    if (!uploaded) {
-      setState({ busy: "", msg: "تعذّر رفع الصورة، حاول مرة أخرى.", ok: false });
-      return;
-    }
+  /* الاعتمادُ وحدَه يرفع ويحفظ. والترتيبُ محسوب:
+       رفعٌ → حفظُ المؤشّر → **ثُمّ** حذفُ السابق.
+     وإن أخفق الحفظُ بعد الرفع، يُنظَّف الجديدُ وتبقى الحالةُ القديمة
+     كما هي — فلا مؤشّرَ يشير إلى كائنٍ معدومٍ بحال. */
+  const confirmSave = async () => {
+    if (!pending) return;
+    const previous = storageKey;
+    setBusy("save");
+    setMsg(null);
 
-    const { error } = await companyService.saveAsset({ key: assetKey, url: uploaded, altText: label });
+    const key = await uploadPrivateCompanyAsset(pending.image, uploadKind);
+    if (!key) { setBusy(""); setMsg({ text: "تعذّر رفع الصورة، لم يتغيّر شيء.", ok: false }); return; }
+
+    const meta: CompanyAssetImageMeta = {
+      width: pending.image.width, height: pending.image.height,
+      originalWidth: pending.image.originalWidth, originalHeight: pending.image.originalHeight,
+      mimeType: pending.image.mimeType, bytes: pending.image.blob.size,
+      hasAlpha: pending.image.hasAlpha, trimmed: pending.image.trimmed,
+      normalizedVersion: NORMALIZED_VERSION,
+    };
+    const { error } = await companyService.saveAsset({
+      key: assetKey, url: key, altText: label, metadata: meta as unknown as Json,
+    });
     if (error) {
-      /* الكائنُ رُفع ثمّ أخفق حفظُ مؤشّره: يُنظَّف فوراً فلا يتراكم،
-         والحالةُ القديمةُ تبقى كما هي — لم يتبدّل شيء. */
-      await deleteCompanyAssetObject(uploaded);
-      setState({ busy: "", msg: "تعذّر حفظ الصورة، لم يتغيّر شيء.", ok: false });
+      await deletePrivateCompanyAsset(key);
+      setBusy("");
+      setMsg({ text: "تعذّر حفظ الصورة، لم يتغيّر شيء.", ok: false });
       return;
     }
 
-    onChange(uploaded);
-    /* وبعد نجاحِ الكتابةِ وحدَه يُحذف السابق — لا قبلَه */
-    if (previous && previous !== uploaded) await deleteCompanyAssetObject(previous);
-    setState({ busy: "", msg: "تم الحفظ.", ok: true });
+    onChange(key);
+    discardPending();
+    if (previous && previous !== key) await deletePrivateCompanyAsset(previous);
+    setBusy("");
+    setMsg({ text: "تم الحفظ.", ok: true });
   };
 
   const remove = async () => {
-    if (!url) return;
+    if (!storageKey) return;
     const yes = await confirmRemove(`سيُحذف ${label} نهائياً من إعدادات الحملة.`, {
       title: `حذف ${label}؟`, confirmLabel: "نعم، احذف",
     });
     if (!yes) return;
-
-    const target = url;
-    setState({ busy: "remove", msg: "", ok: false });
+    const target = storageKey;
+    setBusy("remove");
+    setMsg(null);
     const { data, error } = await companyService.removeAsset(assetKey);
     if (error || !data || data.length === 0) {
-      setState({ busy: "", msg: "تعذّر الحذف، لم يتغيّر شيء.", ok: false });
-      return;
+      setBusy(""); setMsg({ text: "تعذّر الحذف، لم يتغيّر شيء.", ok: false }); return;
     }
     onChange("");
-    await deleteCompanyAssetObject(target);
-    setState({ busy: "", msg: "تم الحذف.", ok: true });
+    await deletePrivateCompanyAsset(target);
+    setBusy("");
+    setMsg({ text: "تم الحذف.", ok: true });
   };
 
-  return (
-    <div>
-      <span style={fieldLabel}>{label}</span>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 12, padding: 12,
-        border: "1.5px dashed var(--accent)", borderRadius: 10, background: "var(--bg-2)",
-      }}>
-        {/* المعاينة — رقعةُ شطرنجٍ خفيفةٌ تُظهر الشفافيةَ بدل أن تُخفيها */}
-        <div style={{
-          width: 96, height: 72, flexShrink: 0, borderRadius: 8, overflow: "hidden",
-          border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center",
-          backgroundColor: "var(--paper)",
-          backgroundImage: url
-            ? "linear-gradient(45deg,var(--bg-2) 25%,transparent 25%,transparent 75%,var(--bg-2) 75%),linear-gradient(45deg,var(--bg-2) 25%,transparent 25%,transparent 75%,var(--bg-2) 75%)"
-            : undefined,
-          backgroundSize: "12px 12px", backgroundPosition: "0 0,6px 6px",
-        }}>
-          {url
-            ? <img src={url} alt={label} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
-            : <span style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: 4 }}>لم تُضف بعد</span>}
-        </div>
+  const dims = pending
+    ? `${pending.image.width}×${pending.image.height}px · ${pending.image.mimeType.replace("image/", "").toUpperCase()}`
+      + (pending.image.trimmed ? " · قُصّت الهوامش الشفافة" : "")
+      + (pending.image.hasAlpha ? " · بشفافية" : " · خلفية مُصمتة")
+    : "";
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>{hint}</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <label style={btnS({
-              fontSize: 11, padding: "6px 12px", margin: 0,
-              display: "inline-flex", alignItems: "center",
-              cursor: busy || disabled ? "not-allowed" : "pointer",
-              opacity: busy || disabled ? 0.6 : 1,
-            })}>
-              {state.busy === "upload" ? "جاري الحفظ..." : url ? "استبدال الصورة" : "رفع صورة"}
-              <input type="file" accept={STAMP_ACCEPT} style={{ display: "none" }}
-                disabled={busy || disabled} onChange={upload} />
-            </label>
-            {url && (
-              <button type="button" onClick={remove} disabled={busy || disabled}
-                style={btnS({
-                  fontSize: 11, padding: "6px 12px", color: "#C62828",
-                  borderColor: "#C62828", cursor: busy || disabled ? "not-allowed" : "pointer",
-                  opacity: busy || disabled ? 0.6 : 1,
-                })}>
-                {state.busy === "remove" ? "جاري الحذف..." : "حذف"}
-              </button>
-            )}
-          </div>
-          {state.msg && (
-            <div style={{ fontSize: 10, marginTop: 7, fontWeight: 700, color: state.ok ? "var(--primary)" : "#C62828" }}>
-              {state.msg}
-            </div>
-          )}
-        </div>
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14, background: "var(--bg-2)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+        <span style={{ ...fieldLabel, marginBottom: 0 }}>{label}</span>
+        <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{hint}</span>
       </div>
+
+      {pending ? (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--primary)", margin: "8px 0 6px" }}>
+            راجِع النتيجة قبل الاعتماد — {dims}
+          </div>
+          <AssetPreviewPair src={pending.objectUrl} label={label} />
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button type="button" onClick={confirmSave} disabled={working}
+              style={btnP({ fontSize: 11, padding: "6px 14px", opacity: working ? 0.6 : 1 })}>
+              {busy === "save" ? "جاري الحفظ..." : "اعتماد وحفظ"}
+            </button>
+            <button type="button" onClick={discardPending} disabled={working}
+              style={btnS({ fontSize: 11, padding: "6px 12px", opacity: working ? 0.6 : 1 })}>
+              إلغاء
+            </button>
+          </div>
+        </>
+      ) : storageKey ? (
+        <>
+          {savedUrl
+            ? <AssetPreviewPair src={savedUrl} label={label} />
+            : <div style={{ ...previewPane, ...checkerBg }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري تحميل المعاينة...</span>
+              </div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <label style={btnS({
+              fontSize: 11, padding: "6px 12px", margin: 0, display: "inline-flex", alignItems: "center",
+              cursor: working || disabled ? "not-allowed" : "pointer", opacity: working || disabled ? 0.6 : 1,
+            })}>
+              {busy === "read" ? "جاري المعالجة..." : "استبدال الصورة"}
+              <input type="file" accept={STAMP_ACCEPT} style={{ display: "none" }}
+                disabled={working || disabled} onChange={choose} />
+            </label>
+            <button type="button" onClick={remove} disabled={working || disabled}
+              style={btnS({
+                fontSize: 11, padding: "6px 12px", color: "#C62828", borderColor: "#C62828",
+                cursor: working || disabled ? "not-allowed" : "pointer", opacity: working || disabled ? 0.6 : 1,
+              })}>
+              {busy === "remove" ? "جاري الحذف..." : "حذف"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{
+          ...previewPane, marginTop: 8, flexDirection: "column", gap: 8,
+          border: "1.5px dashed var(--accent)", background: "var(--paper)",
+        }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>لم تُضف بعد</span>
+          <label style={btnS({
+            fontSize: 11, padding: "6px 12px", margin: 0, display: "inline-flex", alignItems: "center",
+            cursor: working || disabled ? "not-allowed" : "pointer", opacity: working || disabled ? 0.6 : 1,
+          })}>
+            {busy === "read" ? "جاري المعالجة..." : "رفع صورة"}
+            <input type="file" accept={STAMP_ACCEPT} style={{ display: "none" }}
+              disabled={working || disabled} onChange={choose} />
+          </label>
+        </div>
+      )}
+
+      {msg && (
+        <div style={{ fontSize: 10, marginTop: 8, fontWeight: 700, color: msg.ok ? "var(--primary)" : "#C62828" }}>
+          {msg.text}
+        </div>
+      )}
     </div>
   );
 }
@@ -280,8 +373,8 @@ function UsersPage({ currentUser }: { currentUser: User }) {
      والقيمةُ الأولى من `company_assets` — فإعادةُ التحميل تُظهر
      المحفوظَ من مرجعه لا من ذاكرةٍ محلّيّة. */
   const companyAssets = useCompanyAssets();
-  const [stampUrl, setStampUrl] = useState(companyAssets.company_stamp?.url ?? "");
-  const [signatureUrl, setSignatureUrl] = useState(companyAssets.manager_signature?.url ?? "");
+  const [stampKey, setStampKey] = useState(companyAssets.company_stamp?.url ?? "");
+  const [signatureKey, setSignatureKey] = useState(companyAssets.manager_signature?.url ?? "");
 
   /* ═══ إعداداتُ الموسم ═══
      تُحمَّل من **الموسم المعروض** ليرى المديرُ بياناتِ ما يتصفّحه،
@@ -705,9 +798,9 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     hint="يُفضَّل PNG بخلفية شفافة · حتى ٥ ميجابايت"
                     assetKey="company_stamp"
                     uploadKind="company_stamp"
-                    url={stampUrl}
+                    storageKey={stampKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={setStampUrl}
+                    onChange={setStampKey}
                     confirmRemove={confirmAction}
                   />
                   <CompanyAssetRow
@@ -715,9 +808,9 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     hint="يُفضَّل PNG بخلفية شفافة · حتى ٥ ميجابايت"
                     assetKey="manager_signature"
                     uploadKind="manager_signature"
-                    url={signatureUrl}
+                    storageKey={signatureKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={setSignatureUrl}
+                    onChange={setSignatureKey}
                     confirmRemove={confirmAction}
                   />
                 </div>

@@ -520,20 +520,12 @@ export async function downloadFile(value: string) {
 /** الاسم القديم — يبقى للمستدعين، وصار واجهةً لـ docKey. */
 export const getStoragePath = docKey;
 
-/* `preserveTransparency` تُبقي WebP على حالها بدل أن تُسطَّح إلى JPEG.
-   ولولاها لخرج الخِتم والتوقيعُ بخلفيةٍ بيضاء صمّاء تُغطّي ما تحتها في
-   أيّ مستند. وهي **اختياريّةٌ ومغلقةٌ افتراضاً**: مسارُ مستندات الحجّاج
-   يشتقّ امتدادَه ونوعَه من `file.type` بافتراض JPEG لغير الـPNG، فتغييرُ
-   السلوكِ عليه كان سيُنتج بايتات WebP موسومةً `image/jpeg`. */
-export function compressImage(file: File, opts?: { preserveTransparency?: boolean }): Promise<Blob> {
+export function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) { resolve(file); return; }
     const isPng = file.type === "image/png";
-    const keepWebp = opts?.preserveTransparency === true && file.type === "image/webp";
-    /* قناةُ الشفافيةِ تبقى حين يبقى النوعُ حاملاً لها */
-    const lossless = isPng || keepWebp;
-    const outputType = isPng ? "image/png" : keepWebp ? "image/webp" : "image/jpeg";
-    const outputQuality = lossless ? 1 : 0.8;
+    const outputType = isPng ? "image/png" : "image/jpeg";
+    const outputQuality = isPng ? 1 : 0.8;
     const img = new Image();
     img.onload = () => {
       const maxDim = 1400;
@@ -545,7 +537,7 @@ export function compressImage(file: File, opts?: { preserveTransparency?: boolea
       const canvas = document.createElement("canvas");
       canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (ctx && !lossless) {
+      if (ctx && !isPng) {
         /* لون صريح لا متغيّر CSS: canvas لا يفسّر var() ويتجاهل القيمة
            غير الصالحة صامتاً، فتبقى #000000 الافتراضية وتخرج الخلفية
            سوداء. ولو فُسِّر المتغيّر لتبع مظهر الواجهة — و‑‑text-inverse
@@ -606,17 +598,14 @@ export async function removeDoc(key: string): Promise<boolean> {
 
 const COMPANY_BUCKET = "company-assets";
 
-export async function uploadCompanyAsset(
-  file: File, kind: string, opts?: { preserveTransparency?: boolean },
-): Promise<string | null> {
-  const compressed = await compressImage(file, opts);
+export async function uploadCompanyAsset(file: File, kind: string): Promise<string | null> {
+  const compressed = await compressImage(file);
   const isPng = file.type === "image/png";
-  /* الامتدادُ والنوعُ يتبعان ما خرج فعلاً من الضغط لا ما دخل: بغير
-     `preserveTransparency` تُسطَّح WebP إلى JPEG، فوسمُها `image/webp`
-     كان يُخزّن بايتات JPEG باسمٍ كاذب. */
-  const keepWebp = opts?.preserveTransparency === true && file.type === "image/webp";
-  const ext = isPng ? "png" : keepWebp ? "webp" : "jpg";
-  const contentType = isPng ? "image/png" : keepWebp ? "image/webp" : "image/jpeg";
+  /* ⚠️ الامتدادُ والنوعُ يتبعان ما خرج فعلاً من `compressImage` لا ما
+     دخل: هي تُخرج PNG أو JPEG لا ثالثَ لهما، فالفرعُ القديمُ الذي كان
+     يسم WebP بـ`image/webp` كان يُخزّن بايتات JPEG باسمٍ كاذب. */
+  const ext = isPng ? "png" : "jpg";
+  const contentType = isPng ? "image/png" : "image/jpeg";
   const path = `${kind}_${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage.from(COMPANY_BUCKET).upload(path, compressed, { upsert: true, contentType });
@@ -626,25 +615,79 @@ export async function uploadCompanyAsset(
   return data?.publicUrl || null;
 }
 
-/* ═══ حذفُ الكائنِ المرفوع ═══
-   للحاوية سياسةُ DELETE قائمةٌ خلف `manage_users`، فالتنظيفُ داخلُ
-   المعمارِ القائم لا إضافةٌ عليه.
+/* ═══════════════════════════════════════════════════════════════
+   الأصولُ الخاصّة — الخِتم وتوقيع المسؤول
 
-   ⚠️ ولا يُستدعى إلا **بعد** نجاحِ كتابةِ `company_assets`: الكائنُ
-   الباقي بلا مؤشّرٍ يتيمٌ لا يؤذي، أمّا المؤشّرُ الباقي بلا كائنٍ
-   فصورةٌ مكسورةٌ في كلّ مكان. والترتيبُ هو الفرق.
+   حاويةٌ **خاصّة** لا عامّة، ويُخزَّن منها **مفتاحُ الكائن** لا رابط،
+   ويُوقَّع عند العرض بعمرٍ قصير. وهو منوالُ `passengers-docs` نفسُه لا
+   معمارٌ جديد — راجع ترحيلة `20260925090000`.
 
-   ويُرجع `false` بلا رمي: فشلُ التنظيفِ لا يُبطل عمليةً نجحت. */
-export async function deleteCompanyAssetObject(publicUrl: string): Promise<boolean> {
-  const marker = `/${COMPANY_BUCKET}/`;
-  const at = publicUrl.lastIndexOf(marker);
-  if (at === -1) return false;
-  const path = publicUrl.slice(at + marker.length).split("?")[0];
-  if (!path) return false;
-  const { error } = await supabase.storage.from(COMPANY_BUCKET).remove([decodeURIComponent(path)]);
-  if (error) { console.error("تعذّر حذف كائن أصل الشركة", error); return false; }
+   ⚠️ ولا يُخزَّن الرابطُ الموقَّع في القاعدة أبداً: عمرُه دقائق،
+   وتخزينُه يعني صورةً تموت بعد ساعة بلا سببٍ ظاهر.
+   ═══════════════════════════════════════════════════════════════ */
+
+import { type NormalizedImage } from "./stampImage";
+export { normalizeStampImage, type NormalizedImage } from "./stampImage";
+
+const PRIVATE_COMPANY_BUCKET = "company-private";
+
+/** عمرُ رابطِ معاينةِ الخِتم/التوقيع — دقائقُ تكفي للمراجعة. */
+export const COMPANY_PRIVATE_TTL = 300;
+
+/** يرفع الصورةَ المُطبَّعة ويُعيد **مفتاحَ الكائن** — لا رابطاً. */
+export async function uploadPrivateCompanyAsset(image: NormalizedImage, kind: string): Promise<string | null> {
+  const ext = image.mimeType === "image/png" ? "png" : "jpg";
+  const key = `${kind}_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(PRIVATE_COMPANY_BUCKET)
+    .upload(key, image.blob, { upsert: false, contentType: image.mimeType });
+  if (error) { console.error("تعذّر رفع الأصل الخاصّ", error); return null; }
+  return key;
+}
+
+export async function deletePrivateCompanyAsset(key: string): Promise<boolean> {
+  if (!key) return false;
+  const { error } = await supabase.storage.from(PRIVATE_COMPANY_BUCKET).remove([key]);
+  if (error) { console.error("تعذّر حذف الأصل الخاصّ", error); return false; }
   return true;
 }
+
+/** رابطٌ موقّعٌ قصيرُ العمر للأصل الخاصّ — المسارُ الوحيدُ لقراءته. */
+export async function signedPrivateCompanyUrl(
+  key: string | null | undefined, ttlSeconds: number = COMPANY_PRIVATE_TTL,
+): Promise<string> {
+  if (!key) return "";
+  const cacheKey = `${PRIVATE_COMPANY_BUCKET}|${key}|${ttlSeconds}`;
+  const cached = signedCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+
+  const { data, error } = await supabase.storage
+    .from(PRIVATE_COMPANY_BUCKET).createSignedUrl(key, ttlSeconds);
+  if (error || !data?.signedUrl) {
+    console.error("تعذّر توقيع رابط الأصل الخاصّ", { key, error });
+    return "";
+  }
+  signedCache.set(cacheKey, {
+    url: data.signedUrl,
+    expiresAt: Date.now() + ttlSeconds * 1000 - SIGN_MARGIN_MS,
+  });
+  return data.signedUrl;
+}
+
+/** خطّاف عرض: يوقّع المفتاحَ المخزّن ويعيد رابطاً جاهزاً للـ`src`. */
+export function useSignedPrivateCompanyAsset(key: string | null | undefined): string {
+  const [url, setUrl] = useState("");
+  /* لا ضبطَ متزامنٌ داخل الأثر: `signedPrivateCompanyUrl` تُرجع ""
+     للمفتاح الفارغ أصلاً، فالمسارُ واحدٌ في الحالتين ولا تصييرَ
+     متتالياً. */
+  useEffect(() => {
+    let alive = true;
+    void signedPrivateCompanyUrl(key).then(u => { if (alive) setUrl(u); });
+    return () => { alive = false; };
+  }, [key]);
+  return url;
+}
+
 /* ═══ طبقةُ الطباعة انتقلت إلى `src/print/` ═══
    القشرةُ والسمةُ والهويّةُ والكتلُ والإخراجُ ومطبوعاتُ الشنط صارت
    وحدةً مشتركةً واحدة. وإعاداتُ التصدير أدناه توافقيّةٌ فلا يتغيّر

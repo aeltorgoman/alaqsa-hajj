@@ -26,7 +26,29 @@ export type CompanyAssetKey =
   | "company_stamp"
   | "manager_signature"
   | "payment_qr";
-export interface CompanyAsset { key: CompanyAssetKey; url: string; altText: string | null; metadata: Json; updatedAt: string | null }
+/* ═══ الأصولُ الخاصّة ═══
+   الخِتمُ وتوقيعُ المسؤولِ **ليسا** هويّةً بصريّةً علنيّة: يعيشان في
+   حاويةٍ خاصّة، ويُخزَّن منهما **مفتاحُ الكائن** لا رابطٌ عامّ، ويُوقَّع
+   عند العرض. وما عداهما يبقى رابطاً عامّاً كما كان. */
+export const PRIVATE_COMPANY_ASSET_KEYS = ["company_stamp", "manager_signature"] as const;
+export type PrivateCompanyAssetKey = typeof PRIVATE_COMPANY_ASSET_KEYS[number];
+export function isPrivateCompanyAssetKey(key: CompanyAssetKey): key is PrivateCompanyAssetKey {
+  return (PRIVATE_COMPANY_ASSET_KEYS as readonly string[]).includes(key);
+}
+
+/* `url` للأصلِ العامّ رابطٌ كامل، وللخاصِّ **مفتاحُ كائنٍ** يُوقَّع عند
+   العرض. و`isPrivate` تُميّزهما فلا يُمرَّر مفتاحٌ إلى `src` مباشرةً. */
+export interface CompanyAsset { key: CompanyAssetKey; url: string; isPrivate: boolean; altText: string | null; metadata: Json; updatedAt: string | null }
+
+/* ما يُسجَّل في `company_assets.metadata` بعد التطبيع — أبعادٌ ونوعٌ
+   وعلاماتُ معالجة، لا شيءَ حسّاس. */
+export interface CompanyAssetImageMeta {
+  width?: number; height?: number;
+  originalWidth?: number; originalHeight?: number;
+  mimeType?: string; bytes?: number;
+  hasAlpha?: boolean; trimmed?: boolean;
+  normalizedVersion?: number;
+}
 export interface CompanyProfile {
   identity: CompanyIdentity; contact: CompanyContact; financial: CompanyFinancial;
   branding: CompanyBranding; reportBranding: ReportBranding; portal: CompanyPortal; assets: Readonly<Partial<Record<CompanyAssetKey, CompanyAsset>>>;

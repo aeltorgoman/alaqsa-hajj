@@ -1,6 +1,7 @@
 import type { AppConfig } from "../config/AppConfig";
 import type { Database, Json } from "../types/database";
 import type { CompanyAsset, CompanyAssetKey, CompanyProfile, SeasonMasterData } from "./types";
+import { isPrivateCompanyAssetKey } from "./types";
 import { supabase } from "../supabase";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "./safety";
 import { classifyPostgrestError, type SaveResult } from "./saveResult";
@@ -25,10 +26,23 @@ function isCompanyAssetKey(value: string): value is CompanyAssetKey {
 function normalizeAssets(rows: AssetRow[]): Partial<Record<CompanyAssetKey, CompanyAsset>> {
   const assets: Partial<Record<CompanyAssetKey, CompanyAsset>> = {};
   rows.forEach(row => {
+    if (!isCompanyAssetKey(row.asset_key)) return;
+    /* الأصلُ الخاصُّ يحمل **مفتاحَ كائنٍ** لا رابطاً، فلا يمرّ على
+       مُطبِّعِ الروابط — كان يردّه `null` فيختفي الأصل. ويُتحقَّق منه
+       بشرطه: مسارٌ نسبيٌّ بلا بروتوكول ولا صعودٍ إلى أعلى. */
+    if (isPrivateCompanyAssetKey(row.asset_key)) {
+      const key = typeof row.asset_url === "string" ? row.asset_url.trim() : "";
+      if (!key || /^[a-z]+:/i.test(key) || key.startsWith("/") || key.includes("..")) return;
+      assets[row.asset_key] = {
+        key: row.asset_key, url: key, isPrivate: true, altText: row.alt_text,
+        metadata: row.metadata ?? ({} as Json), updatedAt: row.updated_at,
+      };
+      return;
+    }
     const url = normalizeCompanyAssetUrl(row.asset_url);
-    if (!url || !isCompanyAssetKey(row.asset_key)) return;
+    if (!url) return;
     assets[row.asset_key] = {
-      key: row.asset_key, url, altText: row.alt_text,
+      key: row.asset_key, url, isPrivate: false, altText: row.alt_text,
       metadata: row.metadata ?? ({} as Json), updatedAt: row.updated_at,
     };
   });
