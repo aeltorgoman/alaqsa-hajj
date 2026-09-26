@@ -5,7 +5,8 @@ import { isHajj, byOrder } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
-import { useReportBranding } from "../company/CompanyContext";
+import { useReportBranding, useCompanyAssets } from "../company/CompanyContext";
+import { signedPrivateCompanyUrl } from "../utils";
 import type { Passenger, User } from "../types";
 
 import type { PricingMap, Payment, PaymentReceipt, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
@@ -22,6 +23,7 @@ import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStat
 // ============================================================
 export function FinancePage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers?: (updater: (prev: Passenger[]) => Passenger[]) => void; currentUser: User }) {
   const reportBranding = useReportBranding();
+  const companyAssets = useCompanyAssets();
   const { alert: alertState, showAlert } = useAlert();
   const { assertWritable } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
@@ -734,6 +736,21 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         return { name: p ? (p.short_ar || p.name_ar) : "—", amount: Number(py.amount) };
       });
 
+  /* ═══ حدُّ التكاملِ مع الختمِ والتوقيع (PR #177) — أصغرُ ما يكفي ═══
+     الأصلانِ خاصّان: المخزَّنُ في `company_assets.asset_url` **مفتاحُ
+     كائنٍ** لا رابط. فيُوقَّع هنا لحظةَ الطباعةِ بعمرٍ قصير، ويُمرَّر
+     إلى القشرةِ `src` جاهزاً — ولا يُخزَّن الرابطُ الموقَّعُ بحال،
+     ولا يُعلَن مفتاحُ الكائن، ولا تُمَسُّ حاويةٌ ولا سياسةٌ من #177.
+     ومَن لا يملك `manage_users` لا يُوقَّع له شيءٌ فترجع "" ويُطبَع
+     الإطارُ فارغاً كما اليوم — لا انكسار. */
+  const printReceipt = async (rc: PaymentReceipt) => {
+    const [stampUrl, signatureUrl] = await Promise.all([
+      signedPrivateCompanyUrl(companyAssets.company_stamp?.url),
+      signedPrivateCompanyUrl(companyAssets.manager_signature?.url),
+    ]);
+    printInPage(makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc)));
+  };
+
 
   // ══════════════════════════════════════════════
   // RECEIPT VIEW — إعادةُ طباعةٍ أو إلغاء
@@ -772,7 +789,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             </div>
           ))}
           <div style={{ display:"flex", gap:10, marginTop:16 }}>
-            <button onClick={() => printInPage(makeReceiptHTML(rc, reportBranding, allocationsOf(rc)))}
+            <button onClick={() => { void printReceipt(rc); }}
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
               🖨️ طباعة
             </button>
@@ -831,7 +848,6 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   // ══════════════════════════════════════════════
   const ReceiptModal = () => {
     if (!issuedReceipt) return null;
-    const receiptHtml = makeReceiptHTML(issuedReceipt, reportBranding, allocationsOf(issuedReceipt));
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
@@ -840,7 +856,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:2 }}>{issuedReceipt.payer_name}</div>
           <div style={{ fontSize:12, color:"var(--em8)", fontWeight:700, marginBottom:4 }}>إيصال رقم {issuedReceipt.receipt_number}</div>
           <div style={{ fontSize:24, fontWeight:900, color:"var(--success)", marginBottom:16 }}>{fmtAmt(Number(issuedReceipt.total_amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
-          <button onClick={() => printInPage(receiptHtml)}
+          <button onClick={() => { void printReceipt(issuedReceipt); }}
             style={{ width:"100%", padding:10, marginBottom:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
             🖨️ طباعة
           </button>
@@ -887,7 +903,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           ))}
           <div style={{ display:"flex", gap:10, marginTop:16 }}>
             <button disabled={!selectedPayment.receipt}
-              onClick={() => { const rc = selectedPayment.receipt; if (rc) printInPage(makeReceiptHTML(rc, reportBranding, allocationsOf(rc))); }}
+              onClick={() => { const rc = selectedPayment.receipt; if (rc) void printReceipt(rc); }}
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor: selectedPayment.receipt ? "pointer" : "not-allowed", fontWeight:600, opacity: selectedPayment.receipt ? 1 : 0.5 }}>
               🖨️ طباعة إيصال
             </button>
@@ -1269,7 +1285,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={{ ...thStyle, textAlign:"center", width:70 }}>الإيصال</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
               <tbody>
-                {cfRows.map((r,i)=>{const p=r.payment?passengers.find(x=>x.id===r.payment!.passenger_id):null;return(<tr key={r.key} onClick={()=>{ if(p) setSelectedP(p); if(r.payment) setSelectedPayment(r.payment); else if(r.receipt) setViewReceipt(r.receipt); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s", opacity:r.cancelled?0.65:1 }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700, color:"var(--em8)" }}>{r.receiptNo}</td><td style={tdStyle}>{r.name}{r.cancelled&&<span style={{ marginInlineStart:6, fontSize:10, fontWeight:800, color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:5, padding:"1px 5px" }}>ملغي</span>}</td><td style={{ ...tdStyle, textAlign:"center" }}>{r.date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{r.method}</td><td style={{ ...tdStyle, textAlign:"center", color:r.cancelled?"var(--text-muted)":"var(--success)", fontWeight:600, textDecoration:r.cancelled?"line-through":"none" }}>{fmtAmt(r.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{r.cancelled&&r.receipt?.cancel_reason?`سبب الإلغاء: ${r.receipt.cancel_reason}`:(r.notes||"—")}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}>{r.receipt&&<span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(r.receipt!, reportBranding, allocationsOf(r.receipt!)));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>}</td></tr>);})}
+                {cfRows.map((r,i)=>{const p=r.payment?passengers.find(x=>x.id===r.payment!.passenger_id):null;return(<tr key={r.key} onClick={()=>{ if(p) setSelectedP(p); if(r.payment) setSelectedPayment(r.payment); else if(r.receipt) setViewReceipt(r.receipt); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s", opacity:r.cancelled?0.65:1 }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700, color:"var(--em8)" }}>{r.receiptNo}</td><td style={tdStyle}>{r.name}{r.cancelled&&<span style={{ marginInlineStart:6, fontSize:10, fontWeight:800, color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:5, padding:"1px 5px" }}>ملغي</span>}</td><td style={{ ...tdStyle, textAlign:"center" }}>{r.date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{r.method}</td><td style={{ ...tdStyle, textAlign:"center", color:r.cancelled?"var(--text-muted)":"var(--success)", fontWeight:600, textDecoration:r.cancelled?"line-through":"none" }}>{fmtAmt(r.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{r.cancelled&&r.receipt?.cancel_reason?`سبب الإلغاء: ${r.receipt.cancel_reason}`:(r.notes||"—")}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}>{r.receipt&&<span onClick={e=>{e.stopPropagation();void printReceipt(r.receipt!);}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>}</td></tr>);})}
                 <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={5}>الإجمالي (بلا الملغى)</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(cfTotal)}</td><td style={{ padding:"10px 12px" }} colSpan={2}></td></tr>
               </tbody>
             </table>
