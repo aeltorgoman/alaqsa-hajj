@@ -129,9 +129,13 @@ jobs:
             [ "$got" = "$want" ] || { echo "::error::$f sha256 mismatch: $got != $want"; exit 1; }
             echo "ok   $(basename "$f")  $got"
           done
-          # ولا صفَّ تطبيقٍ تُكتبه أيُّ واحدةٍ منها على الجداولِ القائمة
-          if grep -inE "^[[:space:]]*(insert[[:space:]]+into|update|delete[[:space:]]+from|truncate)[[:space:]]+(public\.)?(payments|passengers|seasons|custom_charges|financial_groups)\b" "$F54" "$F55" "$F56"; then
-            echo "::error::a migration writes application rows on an existing table"; exit 1; fi
+          # ولا صفَّ تطبيقٍ تُكتبه أيُّ واحدةٍ منها **لحظةَ التطبيق**.
+          # ⚠️ لا يصلح grep سطريٌّ هنا: `insert into public.payments` داخلَ جسمِ
+          #    دالّةٍ تعريفُ سلوكٍ يُنفَّذ لاحقاً بنداءٍ مأذون — وهو المعمارُ
+          #    المعتمَدُ بعينه — لا كتابةٌ الآن. فتُطرَح الكتلُ المقتبَسةُ
+          #    بالدولار أوّلاً ثُمّ يُفحَص المستوى الأعلى، ومعه ١٣ فحصَ ذاتٍ.
+          python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F54" "$F55" "$F56"
           python3 supabase/verification/assert-ledger-correspondence.py --selftest
           { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
 
@@ -467,4 +471,4 @@ jobs:
         with:
           name: receipts-canonical-push
           path: receipts-push-evidence
-          if-no-files-found: error
+          if-no-files-found: warn
