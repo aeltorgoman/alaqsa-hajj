@@ -5,10 +5,11 @@ import { isHajj, byOrder } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
-import { useReportBranding } from "../company/CompanyContext";
+import { useReportBranding, useCompanyAssets } from "../company/CompanyContext";
+import { signedPrivateCompanyUrl } from "../utils";
 import type { Passenger, User } from "../types";
 
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
+import type { PricingMap, Payment, PaymentReceipt, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
 import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, isSpecialPackage, matchesPackageFilter, matchesServiceFilter, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
@@ -22,6 +23,7 @@ import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStat
 // ============================================================
 export function FinancePage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers?: (updater: (prev: Passenger[]) => Passenger[]) => void; currentUser: User }) {
   const reportBranding = useReportBranding();
+  const companyAssets = useCompanyAssets();
   const { alert: alertState, showAlert } = useAlert();
   const { assertWritable } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
@@ -53,6 +55,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   const [pricing, setPricing]               = useState<PricingMap>({});
   const [payments, setPayments]             = useState<Payment[]>([]);
+  const [receipts, setReceipts]             = useState<PaymentReceipt[]>([]);
   const [customCharges, setCustomCharges]   = useState<CustomCharge[]>([]);
   const [groups, setGroups]                 = useState<FinancialGroup[]>([]);
   const [groupMembers, setGroupMembers]     = useState<FinancialGroupMember[]>([]);
@@ -82,7 +85,12 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const [savingPay, setSavingPay]       = useState(false);
 
   // إيصال
-  const [receiptPayment, setReceiptPayment] = useState<{ payment: Payment; passengerName: string } | null>(null);
+  /* الإيصالُ هو ما يُعرَض ويُطبَع — لا سطرُ الدفع */
+  const [issuedReceipt, setIssuedReceipt]   = useState<PaymentReceipt | null>(null);
+  const [cancelTarget, setCancelTarget]     = useState<PaymentReceipt | null>(null);
+  const [viewReceipt, setViewReceipt]       = useState<PaymentReceipt | null>(null);
+  const [cancelReason, setCancelReason]     = useState("");
+  const [cancelling, setCancelling]         = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   // مودال بند خاص
@@ -174,15 +182,20 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
        للشركة دائماً، لا سعراً تاريخياً لا يُعدَّل. */
     const isArchived = viewedSeason.closed_at !== null;
 
-    const [pRes, pyRes, ccRes, gRes, gmRes, snapRes] = await Promise.all([
+    const [pRes, pyRes, ccRes, gRes, gmRes, snapRes, rcRes] = await Promise.all([
       supabase.from("pricing_settings").select("*"),
-      supabase.from("payments").select("*").order("payment_date", { ascending:false }),
+      /* حالةُ الإيصالِ الأبِ تأتي مُضمَّنةً في نفسِ الاستعلام، فلا ربطَ
+         يدويٌّ ولا خريطةٌ تُمرَّر إلى دالّاتِ الحساب. */
+      supabase.from("payments").select("*, receipt:payment_receipts(*)").order("payment_date", { ascending:false }),
       supabase.from("custom_charges").select("*"),
       supabase.from("financial_groups").select("*").eq("season_id", viewedSeason.id).order("created_at", { ascending:false }),
       supabase.from("financial_group_members").select("*"),
       isArchived
         ? supabase.from("season_pricing_snapshot").select("key,label,type,amount").eq("season_id", viewedSeason.id)
         : Promise.resolve({ data: null, error: null }),
+      /* الإيصالاتُ تُجلب مستقلّةً لا مشتقّةً من الدفعات: إيصالٌ زالت
+         سطورُه كلُّها (أُزيل حاجُّه) يبقى في التقرير — المالُ استُلم. */
+      supabase.from("payment_receipts").select("*").eq("season_id", viewedSeason.id).order("receipt_number", { ascending:false }),
     ]);
 
     /* تصنيفُ الكيانات المُسنَدة — خارج حسابِ الفشل الجزئيّ لأنه سياقٌ
@@ -212,6 +225,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       { res: gRes,  label: "المجموعات المالية" },
       { res: gmRes, label: "أعضاء المجموعات" },
       { res: snapRes as { error: unknown }, label: "لقطة تسعير الموسم" },
+      { res: rcRes, label: "الإيصالات" },
     ];
     const failed = parts.filter(p => p.res.error).map(p => p.label);
 
@@ -241,7 +255,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
          لا تصحّ حين يكون السبب عطلاً الآن. */
       setPricingSource(!isArchived ? "live" : (snapRes.error ? "error" : "missing"));
     }
-    if (pyRes.data && !pyRes.error) setPayments(pyRes.data as Payment[]);
+    if (pyRes.data && !pyRes.error) setPayments(pyRes.data as unknown as Payment[]);
+    if (rcRes.data && !rcRes.error) setReceipts(rcRes.data as PaymentReceipt[]);
     if (ccRes.data && !ccRes.error) setCustomCharges(ccRes.data as CustomCharge[]);
     if (gRes.data  && !gRes.error)  setGroups(gRes.data as FinancialGroup[]);
     if (gmRes.data && !gmRes.error) setGroupMembers(gmRes.data as FinancialGroupMember[]);
@@ -376,36 +391,62 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       if (!ok) return;
     }
     setSavingPay(true);
-    const rec = { passenger_id:selectedP.id, amount, payment_date:payForm.payment_date, method:payForm.method, notes:payForm.notes, created_by:currentUser.email||"" };
-    const { data, error } = await supabase.from("payments").insert(rec).select().single();
+    /* ⚠️ الرقمُ يُخصَّص في القاعدةِ داخلَ نفسِ معاملةِ الإدراج: لا
+       MAX()+1 ولا قراءةٌ ثُمّ كتابة. والدالّةُ تبني سطورَ التوزيعِ
+       وتضبط `created_by` من الرمزِ لا من جسمِ الطلب. */
+    const { data, error } = await supabase.rpc("issue_payment_receipt", {
+      p_allocations: [{ passenger_id: selectedP.id, amount }],
+      p_payment_date: payForm.payment_date,
+      p_method: payForm.method,
+      p_notes: payForm.notes || null,
+      p_group_name: null,
+    });
+    setSavingPay(false);
     if (error || !data) {
-      setSavingPay(false);
-      showAlert("error", "تعذر تسجيل الدفعة، يرجى المحاولة مرة أخرى");
+      showAlert("error", error?.message || "تعذر تسجيل الدفعة، يرجى المحاولة مرة أخرى");
       return;
     }
-    if (data) {
-      setPayments(prev => [data as Payment, ...prev]);
-      setShowPayModal(false);
-      const pName = selectedP.short_ar || selectedP.name_ar;
-      setReceiptPayment({ payment: data as Payment, passengerName: pName });
-      setPayForm({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
-    }
-    setSavingPay(false);
+    setShowPayModal(false);
+    setIssuedReceipt(data as PaymentReceipt);
+    setPayForm({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+    /* إعادةُ الجلبِ لا دفعٌ محلّيّ: السطورُ أُنشئت في القاعدةِ ولها
+       حالةُ أبٍ مُضمَّنةٌ لا تُخمَّن هنا. */
+    void loadFinanceData(true);
   }
 
-  async function deletePayment(id: number) {
+  /* ═══ لا حذفَ لدفعةٍ صادرٍ إيصالُها ═══
+     الحذفُ الصلبُ كان يمحو سطرَ الدفعِ ولا يبقى إلا صفُّ تدقيقٍ يُهذَّب
+     بعد خمسِ سنوات. والآن يُلغى **الإيصال**: الرقمُ يبقى مشغولاً،
+     والسطورُ باقيةٌ لا تُمَسّ، والسببُ مطلوبٌ ومحفوظ. */
+  function requestCancelReceipt(id: number) {
     if (!assertWritable()) return;
     if (!requireManage()) return;
-    /* الحذفُ الماليّ يسمّي ما يُحذَف: مبلغٌ وتاريخٌ وطريقة — لا «هذه الدفعة» */
-    const target = payments.find(p => p.id === id);
-    const what = target
-      ? `دفعة بمبلغ ${fmtAmt(Number(target.amount))} ر.ق بتاريخ ${target.payment_date} (${target.method})`
-      : "هذه الدفعة";
-    if (!await showConfirm(`هل تريد حذف ${what}؟ لا يمكن التراجع.`, { title: "حذف دفعة" })) return;
-    const { error } = await supabase.from("payments").delete().eq("id",id);
-    if (error) { showAlert("error", "تعذر حذف الدفعة، لم يتم تنفيذ الحذف"); return; }
-    setPayments(prev => prev.filter(p => p.id !== id));
-    showAlert("success", "تم حذف الدفعة");
+    const py = payments.find(p => p.id === id);
+    const rc = py?.receipt ?? null;
+    if (!rc) {
+      showAlert("error", "هذه دفعةٌ قديمةٌ بلا إيصال — لا يمكن إلغاؤها من هنا");
+      return;
+    }
+    if (rc.status === "cancelled") { showAlert("error", "الإيصال ملغى بالفعل"); return; }
+    setCancelReason("");
+    setCancelTarget(rc);
+  }
+
+  async function confirmCancelReceipt() {
+    if (!cancelTarget) return;
+    if (!cancelReason.trim()) { showAlert("error", "سبب الإلغاء مطلوب"); return; }
+    setCancelling(true);
+    const { data, error } = await supabase.rpc("cancel_payment_receipt", {
+      p_receipt_id: cancelTarget.id,
+      p_reason: cancelReason.trim(),
+    });
+    setCancelling(false);
+    if (error || !data) { showAlert("error", error?.message || "تعذر إلغاء الإيصال، لم يتغيّر شيء"); return; }
+    setCancelTarget(null);
+    setCancelReason("");
+    setSelectedPayment(null);
+    void loadFinanceData(true);
+    showAlert("success", `تم إلغاء الإيصال رقم ${(data as PaymentReceipt).receipt_number}`);
   }
 
   async function addCustomCharge() {
@@ -574,11 +615,20 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const baseUnits  = Math.floor(totalUnits / members.length);
     const extraUnits = totalUnits - baseUnits * members.length;
     const shares = members.map((_, i) => (baseUnits + (i >= members.length - extraUnits ? 1 : 0)) / 100);
-    const inserts = members.map((p, i) => ({ passenger_id:p.id, amount:shares[i], payment_date:groupPayForm.payment_date, method:groupPayForm.method, notes:`${groupPayForm.notes?groupPayForm.notes+" — ":""}دفعة مجموعة: ${selectedGroup.name}`, created_by:currentUser.email||"" }));
-    const { data, error } = await supabase.from("payments").insert(inserts).select();
+    /* دفعةُ المجموعةِ حدثٌ **واحد**: إيصالٌ واحدٌ برقمٍ واحد، وسطورُ
+       توزيعٍ عدّة. ومنطقُ التوزيعِ بالسنتاتِ أعلاه لم يتغيّر حرفاً —
+       يُمرَّر كما هو والقاعدةُ تجمعه فتُحسب الإجمالياتُ منه لا من مُدخَل. */
+    const { data, error } = await supabase.rpc("issue_payment_receipt", {
+      p_allocations: members.map((p, i) => ({ passenger_id: p.id, amount: shares[i] })),
+      p_payment_date: groupPayForm.payment_date,
+      p_method: groupPayForm.method,
+      p_notes: groupPayForm.notes || null,
+      p_group_name: selectedGroup.name,
+    });
     setSavingGroupPay(false);
-    if (error || !data) { showAlert("error", "تعذر توزيع الدفعة، لم يتم تسجيل أي مبلغ"); return; }
-    setPayments(prev => [...(data as Payment[]), ...prev]);
+    if (error || !data) { showAlert("error", error?.message || "تعذر توزيع الدفعة، لم يتم تسجيل أي مبلغ"); return; }
+    setIssuedReceipt(data as PaymentReceipt);
+    void loadFinanceData(true);
     setShowGroupPayModal(false);
     setGroupPayForm({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
     const minShare = Math.min(...shares), maxShare = Math.max(...shares);
@@ -675,25 +725,142 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     setSortDir(key === "name" ? "asc" : "desc");
   }
 
+  /* سطورُ توزيعِ إيصالٍ بأسماءِ أصحابِها — للطباعةِ وحدَها.
+     وإيصالٌ زالت سطورُه (أُزيل حاجُّه) يُطبَع بإجماليِّه التاريخيِّ
+     بلا جدولِ أنصبة: الإجماليُّ لا يُعاد حسابُه من الباقي. */
+  const allocationsOf = (rc: PaymentReceipt) =>
+    payments
+      .filter(py => py.receipt_id === rc.id)
+      .map(py => {
+        const p = passengers.find(x => x.id === py.passenger_id);
+        return { name: p ? (p.short_ar || p.name_ar) : "—", amount: Number(py.amount) };
+      });
+
+  /* ═══ حدُّ التكاملِ مع الختمِ والتوقيع (PR #177) — أصغرُ ما يكفي ═══
+     الأصلانِ خاصّان: المخزَّنُ في `company_assets.asset_url` **مفتاحُ
+     كائنٍ** لا رابط. فيُوقَّع هنا لحظةَ الطباعةِ بعمرٍ قصير، ويُمرَّر
+     إلى القشرةِ `src` جاهزاً — ولا يُخزَّن الرابطُ الموقَّعُ بحال،
+     ولا يُعلَن مفتاحُ الكائن، ولا تُمَسُّ حاويةٌ ولا سياسةٌ من #177.
+     ومَن لا يملك `manage_users` لا يُوقَّع له شيءٌ فترجع "" ويُطبَع
+     الإطارُ فارغاً كما اليوم — لا انكسار. */
+  const printReceipt = async (rc: PaymentReceipt) => {
+    const [stampUrl, signatureUrl] = await Promise.all([
+      signedPrivateCompanyUrl(companyAssets.company_stamp?.url),
+      signedPrivateCompanyUrl(companyAssets.manager_signature?.url),
+    ]);
+    printInPage(makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc)));
+  };
+
+
+  // ══════════════════════════════════════════════
+  // RECEIPT VIEW — إعادةُ طباعةٍ أو إلغاء
+  // ══════════════════════════════════════════════
+  /* عقدةُ JSX لا مكوّنٌ يُنشأ أثناء التصيير: القاعدةُ تمنع تعريفَ
+     مكوّنٍ داخل مكوّن، والحاجةُ هنا عقدةٌ شرطيّةٌ لا مكوّن. */
+  const receiptViewNode = (() => {
+    if (!viewReceipt) return null;
+    const rc = viewReceipt;
+    const cancelled = rc.status === "cancelled";
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }} onClick={() => setViewReceipt(null)}>
+        <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:380, boxShadow:"var(--shadow-xl)" }} onClick={e => e.stopPropagation()}>
+          <div style={{ fontWeight:700, fontSize:16, color:"var(--text)", marginBottom:4, textAlign:"center" }}>إيصال رقم {rc.receipt_number}</div>
+          {cancelled && (
+            <div style={{ background:"var(--danger-bg)", border:"1px solid var(--danger)", color:"var(--danger)", borderRadius:10, padding:"8px 10px", fontSize:12, fontWeight:700, marginBottom:12, textAlign:"center" }}>
+              ملغي{rc.cancel_reason ? ` — ${rc.cancel_reason}` : ""}
+            </div>
+          )}
+          <div style={{ background:"var(--success-bg)", border:"1px solid var(--success)", borderRadius:12, padding:14, marginBottom:14, textAlign:"center" }}>
+            <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>المبلغ</div>
+            <div style={{ fontSize:30, fontWeight:900, color:"var(--success)", textDecoration: cancelled ? "line-through" : "none" }}>{fmtAmt(Number(rc.total_amount))}</div>
+            <div style={{ fontSize:12, color:"var(--text-muted)" }}>ر.ق</div>
+          </div>
+          {[
+            { label:"الدافع", value: rc.payer_name },
+            ...(rc.group_name ? [{ label:"مجموعة", value: rc.group_name }] : []),
+            { label:"التاريخ", value: rc.payment_date },
+            { label:"طريقة الدفع", value: rc.method },
+            { label:"الموسم", value: rc.season_name },
+            ...(rc.issued_by ? [{ label:"المُحصِّل", value: rc.issued_by }] : []),
+          ].map(row => (
+            <div key={row.label} style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid var(--border)", fontSize:13 }}>
+              <span style={{ color:"var(--text-muted)" }}>{row.label}</span>
+              <span style={{ fontWeight:600 }}>{row.value}</span>
+            </div>
+          ))}
+          <div style={{ display:"flex", gap:10, marginTop:16 }}>
+            <button onClick={() => { void printReceipt(rc); }}
+              style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+              🖨️ طباعة
+            </button>
+            {!cancelled && canManage && (
+              <button onClick={() => { if (!assertWritable()) return; setCancelReason(""); setCancelTarget(rc); setViewReceipt(null); }}
+                style={{ flex:1, padding:10, background:"transparent", color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+                إلغاء الإيصال
+              </button>
+            )}
+          </div>
+          <button onClick={() => setViewReceipt(null)}
+            style={{ width:"100%", marginTop:10, padding:8, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
+            إغلاق
+          </button>
+        </div>
+      </div>
+    );
+  })();
+
+  // ══════════════════════════════════════════════
+  // CANCEL RECEIPT — السببُ مطلوب
+  // ══════════════════════════════════════════════
+  const cancelReceiptNode = (() => {
+    if (!cancelTarget) return null;
+    const rc = cancelTarget;
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1600 }}>
+        <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:400, boxShadow:"var(--shadow-xl)" }}>
+          <div style={{ fontWeight:700, fontSize:16, color:"var(--danger)", marginBottom:6, textAlign:"center" }}>إلغاء الإيصال رقم {rc.receipt_number}</div>
+          <div style={{ fontSize:12.5, color:"var(--text-muted)", lineHeight:1.7, marginBottom:14, textAlign:"center" }}>
+            {rc.payer_name} · {fmtAmt(Number(rc.total_amount))} ر.ق · {rc.payment_date}
+            <br />
+            الرقم يبقى محفوظاً ولا يُعاد استخدامه، ويظل الإيصال قابلاً للطباعة موسوماً «ملغي».
+          </div>
+          <label style={{ fontSize:12, fontWeight:700, color:"var(--em8)", display:"block", marginBottom:5 }}>سبب الإلغاء (مطلوب)</label>
+          <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={3}
+            placeholder="مثال: خطأ في الإدخال — لم تُستلم الدفعة · أو: تم استرجاع المبلغ للحاج"
+            style={{ width:"100%", padding:10, borderRadius:10, border:"1px solid var(--border)", background:"var(--bg-2)", color:"var(--text)", fontFamily:"var(--font-body)", fontSize:13, resize:"vertical" }} />
+          <div style={{ display:"flex", gap:10, marginTop:14 }}>
+            <button onClick={confirmCancelReceipt} disabled={cancelling || !cancelReason.trim()}
+              style={{ flex:1, padding:10, background:"var(--danger)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, fontWeight:600, cursor: cancelling || !cancelReason.trim() ? "not-allowed" : "pointer", opacity: cancelling || !cancelReason.trim() ? 0.6 : 1 }}>
+              {cancelling ? "جارٍ الإلغاء..." : "تأكيد الإلغاء"}
+            </button>
+            <button onClick={() => { setCancelTarget(null); setCancelReason(""); }} disabled={cancelling}
+              style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
+              رجوع
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
   // ══════════════════════════════════════════════
   // RECEIPT MODAL
   // ══════════════════════════════════════════════
   const ReceiptModal = () => {
-    if (!receiptPayment) return null;
-    const { payment, passengerName } = receiptPayment;
-    const receiptHtml = makeReceiptHTML(passengerName, payment, reportBranding);
+    if (!issuedReceipt) return null;
     return (
       <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1500 }}>
         <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)", textAlign:"center" }}>
           <div style={{ width:48, height:48, borderRadius:"50%", background:"var(--success-bg)", color:"var(--success)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, fontWeight:700, margin:"0 auto 12px" }}>✓</div>
           <div style={{ fontSize:15, fontWeight:700, color:"var(--text)", marginBottom:4 }}>تم تسجيل الدفعة</div>
-          <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:4 }}>{passengerName}</div>
-          <div style={{ fontSize:24, fontWeight:900, color:"var(--success)", marginBottom:16 }}>{fmtAmt(Number(payment.amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
-          <button onClick={() => printInPage(receiptHtml)}
+          <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:2 }}>{issuedReceipt.payer_name}</div>
+          <div style={{ fontSize:12, color:"var(--em8)", fontWeight:700, marginBottom:4 }}>إيصال رقم {issuedReceipt.receipt_number}</div>
+          <div style={{ fontSize:24, fontWeight:900, color:"var(--success)", marginBottom:16 }}>{fmtAmt(Number(issuedReceipt.total_amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
+          <button onClick={() => { void printReceipt(issuedReceipt); }}
             style={{ width:"100%", padding:10, marginBottom:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
             🖨️ طباعة
           </button>
-          <button onClick={() => setReceiptPayment(null)}
+          <button onClick={() => setIssuedReceipt(null)}
             style={{ width:"100%", padding:8, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer" }}>
             إغلاق
           </button>
@@ -720,6 +887,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           </div>
           {[
             { label:"الحاج",         value: pName },
+            ...(selectedPayment.receipt ? [{ label:"رقم الإيصال", value: String(selectedPayment.receipt.receipt_number) }] : []),
+            ...(selectedPayment.receipt?.status === "cancelled"
+                  ? [{ label:"الحالة", value: `ملغي — ${selectedPayment.receipt.cancel_reason ?? ""}` }] : []),
+            ...(selectedPayment.receipt?.group_name ? [{ label:"دفعة مجموعة", value: selectedPayment.receipt.group_name }] : []),
             { label:"التاريخ",       value: selectedPayment.payment_date },
             { label:"طريقة الدفع",   value: selectedPayment.method },
             ...(selectedPayment.notes ? [{ label:"ملاحظات", value: selectedPayment.notes }] : []),
@@ -731,8 +902,9 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             </div>
           ))}
           <div style={{ display:"flex", gap:10, marginTop:16 }}>
-            <button onClick={() => { printInPage(makeReceiptHTML(pName, selectedPayment, reportBranding)); }}
-              style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
+            <button disabled={!selectedPayment.receipt}
+              onClick={() => { const rc = selectedPayment.receipt; if (rc) void printReceipt(rc); }}
+              style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor: selectedPayment.receipt ? "pointer" : "not-allowed", fontWeight:600, opacity: selectedPayment.receipt ? 1 : 0.5 }}>
               🖨️ طباعة إيصال
             </button>
             <button onClick={() => setSelectedPayment(null)}
@@ -820,7 +992,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={() => showAlert(null)} />
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
-        <ReceiptModal />
+        <ReceiptModal />{receiptViewNode}{cancelReceiptNode}
         {pricingNotice}
         <FinancialGroupView
           canManage={canManage}
@@ -864,7 +1036,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
-        <ReceiptModal />
+        <ReceiptModal />{receiptViewNode}{cancelReceiptNode}
         <PaymentDetailModal />
         {pricingNotice}
         <PassengerFinanceView
@@ -888,7 +1060,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           onAddPayment={()=>{ if (assertWritable()) setShowPayModal(true); }}
           onAddCharge={t=>{ if (!assertWritable()) return; setChargeType(t);setChargeForm({description:"",amount:"",notes:""});setShowChargeModal(true);}}
           onOpenPayment={py=>setSelectedPayment(py)}
-          onDeletePayment={id=>deletePayment(id)}
+          onDeletePayment={id=>requestCancelReceipt(id)}
           onDeleteCharge={id=>deleteCustomCharge(id)}
           onOpenGroup={g=>{setSelectedGroup(g);setSubView("group");}}
           onRemoveFromGroup={gid=>removeFromGroup(selectedP.id,gid)}
@@ -1009,19 +1181,50 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       const d = py.payment_date;
       return (!cashflowFrom || d >= cashflowFrom) && (!cashflowTo || d <= cashflowTo);
     });
+    /* ═══ صفوفُ تقريرِ الدفعات = إيصالات ═══
+       دفعةُ المجموعةِ حدثٌ واحدٌ فتُعرَض **سطراً واحداً** بإجماليِّها
+       التاريخيّ، لا أربعةَ سطورٍ مستقلّة. والدفعاتُ السابقةُ لهذه
+       المرحلةِ بلا إيصالٍ تُعرَض كما كانت، فلا تاريخَ يختفي.
+       والملغى يبقى ظاهراً موسوماً ولا يدخل إجمالياً. */
+    const inRange = (d: string) => (!cashflowFrom || d >= cashflowFrom) && (!cashflowTo || d <= cashflowTo);
+    type CfRow = {
+      key: string; receiptNo: string; name: string; date: string; method: string;
+      amount: number; notes: string; cancelled: boolean;
+      receipt: PaymentReceipt | null; payment: Payment | null;
+    };
+    const cfRows: CfRow[] = [
+      ...receipts.filter(r => inRange(r.payment_date)).map(r => ({
+        key: `r${r.id}`, receiptNo: String(r.receipt_number),
+        name: r.payer_name + (r.group_name ? " (مجموعة)" : ""),
+        date: r.payment_date, method: r.method, amount: Number(r.total_amount),
+        notes: r.notes ?? "", cancelled: r.status === "cancelled",
+        receipt: r, payment: null,
+      })),
+      ...cfPayments.filter(py => !py.receipt_id).map(py => {
+        const p = passengers.find(x => x.id === py.passenger_id);
+        return {
+          key: `p${py.id}`, receiptNo: "—",
+          name: p ? (p.short_ar || p.name_ar) : "—",
+          date: py.payment_date, method: py.method, amount: Number(py.amount),
+          notes: py.notes ?? "", cancelled: false,
+          receipt: null, payment: py,
+        };
+      }),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     const cfByDate: Record<string, { total: number; count: number; methods: Record<string, number> }> = {};
-    cfPayments.forEach(py => {
-      if (!cfByDate[py.payment_date]) cfByDate[py.payment_date] = { total: 0, count: 0, methods: {} };
-      cfByDate[py.payment_date].total += Number(py.amount);
-      cfByDate[py.payment_date].count += 1;
-      cfByDate[py.payment_date].methods[py.method] = (cfByDate[py.payment_date].methods[py.method] || 0) + Number(py.amount);
+    cfRows.filter(r => !r.cancelled).forEach(r => {
+      if (!cfByDate[r.date]) cfByDate[r.date] = { total: 0, count: 0, methods: {} };
+      cfByDate[r.date].total += r.amount;
+      cfByDate[r.date].count += 1;
+      cfByDate[r.date].methods[r.method] = (cfByDate[r.date].methods[r.method] || 0) + r.amount;
     });
     const cfDates = Object.keys(cfByDate).sort();
-    const cfTotal = cfPayments.reduce((s, p) => s + Number(p.amount), 0);
+    const cfTotal = cfRows.filter(r => !r.cancelled).reduce((s, r) => s + r.amount, 0);
     /* الموسمُ قدرةٌ مشتركة — والحسابُ والجداولُ كما هي بالحرف.
        والخياراتُ عرضٌ لا حساب: لا صفَّ ولا إجماليَّ ولا باقةَ تمسّها. */
     const finChrome = chromeFromOptions("finance", printOpts, { season: viewedSeason });
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfPayments,passengers,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
+    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfRows,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
@@ -1074,16 +1277,16 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             </div>
           </>
         )}
-        {reportType==="payments"&&cfPayments.length===0&&(
+        {reportType==="payments"&&cfRows.length===0&&(
           <div style={{ textAlign:"center", padding:40, color:"var(--text-muted)", fontSize:13 }}>لا توجد دفعات في الفترة المحددة</div>
         )}
-        {reportType==="payments"&&cfPayments.length>0&&(
+        {reportType==="payments"&&cfRows.length>0&&(
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
+              <thead><tr><th style={{ ...thStyle, textAlign:"center", width:36 }}>م</th><th style={{ ...thStyle, textAlign:"center", width:70 }}>الإيصال</th><th style={thStyle}>الحاج</th><th style={{ ...thStyle, textAlign:"center" }}>التاريخ</th><th style={{ ...thStyle, textAlign:"center" }}>طريقة الدفع</th><th style={{ ...thStyle, textAlign:"center" }}>المبلغ</th><th style={thStyle}>ملاحظات</th><th style={{ ...thStyle, width:32 }}></th></tr></thead>
               <tbody>
-                {[...cfPayments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime()).map((py,i)=>{const p=passengers.find(x=>x.id===py.passenger_id);const pName=p?(p.short_ar||p.name_ar):"—";return(<tr key={py.id} onClick={()=>{ if(p) setSelectedP(p); setSelectedPayment(py); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={tdStyle}>{pName}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.payment_date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{py.method}</td><td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:600 }}>{fmtAmt(py.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{py.notes||"—"}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}><span onClick={e=>{e.stopPropagation();printInPage(makeReceiptHTML(pName, py, reportBranding));}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span></td></tr>);})}
-                <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={4}>الإجمالي</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(cfTotal)}</td><td style={{ padding:"10px 12px" }}></td></tr>
+                {cfRows.map((r,i)=>{const p=r.payment?passengers.find(x=>x.id===r.payment!.passenger_id):null;return(<tr key={r.key} onClick={()=>{ if(p) setSelectedP(p); if(r.payment) setSelectedPayment(r.payment); else if(r.receipt) setViewReceipt(r.receipt); }} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)", cursor:"pointer", transition:"background 0.15s", opacity:r.cancelled?0.65:1 }} onMouseEnter={e=>(e.currentTarget.style.background="var(--primary-light,#f0e8ec)")} onMouseLeave={e=>(e.currentTarget.style.background=i%2===0?"var(--bg-card)":"var(--bg-2)")}><td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700, color:"var(--em8)" }}>{r.receiptNo}</td><td style={tdStyle}>{r.name}{r.cancelled&&<span style={{ marginInlineStart:6, fontSize:10, fontWeight:800, color:"var(--danger)", border:"1px solid var(--danger)", borderRadius:5, padding:"1px 5px" }}>ملغي</span>}</td><td style={{ ...tdStyle, textAlign:"center" }}>{r.date}</td><td style={{ ...tdStyle, textAlign:"center" }}>{r.method}</td><td style={{ ...tdStyle, textAlign:"center", color:r.cancelled?"var(--text-muted)":"var(--success)", fontWeight:600, textDecoration:r.cancelled?"line-through":"none" }}>{fmtAmt(r.amount)}</td><td style={{ ...tdStyle, color:"var(--text-muted)", fontSize:12 }}>{r.cancelled&&r.receipt?.cancel_reason?`سبب الإلغاء: ${r.receipt.cancel_reason}`:(r.notes||"—")}</td><td style={{ ...tdStyle, textAlign:"center", width:32 }}>{r.receipt&&<span onClick={e=>{e.stopPropagation();void printReceipt(r.receipt!);}} title="طباعة إيصال" style={{ cursor:"pointer", display:"inline-flex" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>}</td></tr>);})}
+                <tr style={{ background:"var(--em8)", color:"#fff", fontWeight:700 }}><td style={{ padding:"10px 12px" }} colSpan={5}>الإجمالي (بلا الملغى)</td><td style={{ padding:"10px 12px", textAlign:"center" }}>{fmtAmt(cfTotal)}</td><td style={{ padding:"10px 12px" }} colSpan={2}></td></tr>
               </tbody>
             </table>
           </div>
@@ -1185,7 +1388,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
       <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
-      <ReceiptModal />
+      <ReceiptModal />{receiptViewNode}{cancelReceiptNode}
       {pricingNotice}
       <FinanceListView
         canManage={canManage}

@@ -2,7 +2,8 @@
 // إنشاء صفحات HTML والطباعة للحسابات (بدون React ولا JSX)
 // ============================================================
 import type { Passenger } from "../../types";
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate } from "./finance.types";
+import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
+import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, isSpecialPackage, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, PRICING_KEYS } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
@@ -26,7 +27,7 @@ const printStatusColor = (label: string) => PRINT_STATUS_COLOR[label] || "#1c1c1
    أجساماً ويسلّمها للبنية المشتركة.
    ⚠️ ولا حسابَ انتقل إلى هنا ولا تغيّر: `calcTotalDue` تبقى المصدرَ
    الوحيد، وسلوكُ المالية V1 (#115) كما هو حرفاً. */
-import { esc, safeBranding, logoOrInitial, issuedStamp, pageRule,
+import { esc, safeBranding, logoOrInitial, issuedStamp, pageRule, joinSections,
          COLOR_ADJUST_RULE_ALL, makeFinanceHTML, printInPage } from "../../print";
 import type { PrintChrome } from "../../print";
 export { makeFinanceHTML, printInPage };
@@ -36,78 +37,121 @@ export { makeFinanceHTML, printInPage };
 
 
 // ============================================================
-// HTML إيصال الدفعة
+// HTML إيصال الدفعة — نصفُ A4، والبنيةُ القائمةُ تُحسَّن لا تُستبدل
 // ============================================================
+/* الإيصالُ يُطبَع من **صفِّ الإيصال** لا من سطرِ الدفع: الرقمُ الرسميُّ
+   والإجماليُّ التاريخيُّ واسمُ الدافعِ واسمُ الموسمِ كلُّها مجمَّدةٌ فيه،
+   فإعادةُ الطباعةِ تُخرج الورقةَ نفسَها حتى بعد إزالةِ الحاجِّ أو حذفِ
+   الموسمِ كلِّه.
+
+   والملغى يُطبَع بنفسِ رقمِه وعليه «ملغي» وسببُه — الرقمُ لا يُعاد. */
 export function makeReceiptHTML(
-  passengerName: string, payment: Payment, brand: PrintBranding
+  receipt: PaymentReceipt, brand: PrintBranding, allocations: { name: string; amount: number }[] = []
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
+  const { logoUrl, companyName, tagline, primaryColor, accentColor, stampUrl, signatureUrl } = safeBranding(brand);
   const logoHtml = logoOrInitial(logoUrl, companyName);
-  const receiptNo = String(payment.id).padStart(5, "0");
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>إيصال استلام دفعة</title>
+  const receiptNo = String(receipt.receipt_number);
+  const cancelled = receipt.status === "cancelled";
+  const total = Number(receipt.total_amount);
+  const isGroup = !!receipt.group_name;
+
+  /* صندوقُ الختمِ/التوقيعِ يقبل صورةً موقَّعةً إن مُرِّرت، وإلا يبقى
+     إطاراً فارغاً كما اليوم — فلا شيءَ يتعطّل قبل دمج #177. */
+  const assetBox = (url: string, label: string) => url
+    ? `<div class="stamp-box"><img src="${url}" alt="${label}" /></div>`
+    : `<div class="stamp-box"><span style="color:#ddd;font-size:11px">${label}</span></div>`;
+
+  const allocRows = isGroup && allocations.length
+    ? `<table class="alloc"><thead><tr><th>الحاج</th><th>النصيب</th></tr></thead><tbody>${
+        allocations.map(a => `<tr><td>${esc(a.name)}</td><td>${fmtAmt(Number(a.amount))}</td></tr>`).join("")
+      }</tbody></table>`
+    : "";
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>إيصال استلام دفعة ${esc(receiptNo)}</title>
 <style>
   ${pageRule("10mm", false, "A5")}
   * { box-sizing: border-box; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; }
-  .receipt { border:2px solid ${primaryColor}; border-radius:12px; overflow:hidden; }
-  .receipt-header { background:linear-gradient(135deg,${primaryColor},${accentColor}); color:#fff; padding:16px 20px; display:flex; align-items:center; gap:14px; }
-  .logo-box { width:54px; height:54px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.15); color:#fff; font-size:22px; font-weight:800; flex-shrink:0; }
+  .receipt { border:2px solid ${cancelled ? PRINT_DANGER : primaryColor}; border-radius:12px; overflow:hidden; position:relative; }
+  .receipt-header { background:linear-gradient(135deg,${cancelled ? PRINT_DANGER : primaryColor},${cancelled ? "#7d1f1f" : accentColor}); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; }
+  .logo-box { width:50px; height:50px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.15); color:#fff; font-size:20px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; }
-  .receipt-title { font-size:11px; color:rgba(255,255,255,0.8); margin-bottom:2px; }
-  .receipt-subtitle { font-size:17px; font-weight:700; }
-  .receipt-body { padding:20px; }
-  .passenger-name { font-size:22px; font-weight:800; color:${primaryColor}; text-align:center; margin-bottom:16px; padding-bottom:12px; border-bottom:1.5px dashed #ddd; }
-  .amount-box { background:${primaryColor}10; border:2px solid ${primaryColor}; border-radius:10px; padding:16px; text-align:center; margin-bottom:16px; }
-  .amount-label { font-size:11px; color:#888; margin-bottom:4px; }
-  .amount-value { font-size:36px; font-weight:900; color:${primaryColor}; line-height:1; }
-  .amount-currency { font-size:14px; color:#888; margin-top:4px; }
-  .details-grid { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; font-size:13px; margin-bottom:16px; }
+  .receipt-title { font-size:10px; color:rgba(255,255,255,0.85); margin-bottom:2px; }
+  .receipt-subtitle { font-size:16px; font-weight:700; }
+  .no-badge { margin-inline-start:auto; text-align:center; background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.55); border-radius:9px; padding:5px 12px; }
+  .no-badge-label { font-size:8.5px; color:rgba(255,255,255,0.85); }
+  .no-badge-value { font-size:21px; font-weight:900; line-height:1.1; letter-spacing:.5px; }
+  .receipt-body { padding:16px 18px; }
+  .passenger-name { font-size:19px; font-weight:800; color:${primaryColor}; text-align:center; margin-bottom:12px; padding-bottom:10px; border-bottom:1.5px dashed #ddd; }
+  .amount-box { background:${primaryColor}10; border:2px solid ${primaryColor}; border-radius:10px; padding:12px; text-align:center; margin-bottom:12px; }
+  .amount-label { font-size:10px; color:#888; margin-bottom:3px; }
+  .amount-value { font-size:31px; font-weight:900; color:${primaryColor}; line-height:1; }
+  .amount-currency { font-size:12.5px; color:#888; margin-top:3px; }
+  .amount-words { font-size:11px; color:#444; margin-top:7px; padding-top:7px; border-top:1px dashed #ccc; line-height:1.6; }
+  .details-grid { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-size:12px; margin-bottom:12px; }
   .detail-label { color:#888; white-space:nowrap; }
   .detail-value { font-weight:600; }
-  .receipt-footer { border-top:1.5px dashed #ddd; padding-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .alloc { width:100%; border-collapse:collapse; font-size:10.5px; margin-bottom:12px; }
+  .alloc th { background:${primaryColor}; color:#fff; padding:3px 6px; font-weight:600; }
+  .alloc td { border-bottom:1px solid #eee; padding:3px 6px; }
+  .cancel-note { border:1.5px solid ${PRINT_DANGER}; background:#fdeaea; color:${PRINT_DANGER}; border-radius:8px; padding:8px 10px; font-size:11px; margin-bottom:12px; font-weight:700; }
+  .watermark { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .watermark span { font-size:74px; font-weight:900; color:${PRINT_DANGER}; opacity:.17; transform:rotate(-22deg); letter-spacing:8px; }
+  .receipt-footer { border-top:1.5px dashed #ddd; padding-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   .stamp-area { text-align:center; }
-  .stamp-label { font-size:10px; color:#aaa; margin-bottom:6px; }
-  .stamp-box { border:1px dashed #ccc; border-radius:8px; height:70px; display:flex; align-items:center; justify-content:center; }
-  .receipt-no { text-align:center; font-size:10px; color:#bbb; margin-top:12px; }
+  .stamp-label { font-size:9.5px; color:#aaa; margin-bottom:5px; }
+  .stamp-box { border:1px dashed #ccc; border-radius:8px; height:62px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:3px; }
+  .stamp-box img { max-width:100%; max-height:100%; object-fit:contain; }
   ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
 <div class="receipt">
+  ${cancelled ? `<div class="watermark"><span>ملغي</span></div>` : ""}
   <div class="receipt-header">
     <div class="logo-box">${logoHtml}</div>
     <div>
-      <div class="receipt-title">${esc(companyName)}${tagline?" · "+esc(tagline):""}</div>
-      <div class="receipt-subtitle">إيصال استلام دفعة</div>
+      <div class="receipt-title">${esc(companyName)}${tagline ? " · " + esc(tagline) : ""}</div>
+      <div class="receipt-subtitle">إيصال استلام دفعة${cancelled ? " — ملغي" : ""}</div>
+    </div>
+    <div class="no-badge">
+      <div class="no-badge-label">رقم الإيصال</div>
+      <div class="no-badge-value">${esc(receiptNo)}</div>
     </div>
   </div>
   <div class="receipt-body">
-    <div class="passenger-name">${esc(passengerName)}</div>
+    <div class="passenger-name">${esc(receipt.payer_name)}${isGroup ? " — دفعة مجموعة" : ""}</div>
+    ${cancelled ? `<div class="cancel-note">هذا الإيصال ملغي${receipt.cancel_reason ? ` — السبب: ${esc(receipt.cancel_reason)}` : ""}</div>` : ""}
     <div class="amount-box">
       <div class="amount-label">المبلغ المستلم</div>
-      <div class="amount-value">${fmtAmt(Number(payment.amount))}</div>
-      <div class="amount-currency">ريال قطري</div>
+      <div class="amount-value">${fmtAmt(total)}</div>
+      <div class="amount-currency">ريال قطري · QAR</div>
+      <div class="amount-words">${esc(amountInArabicWords(total))}</div>
     </div>
     <div class="details-grid">
       <div class="detail-label">التاريخ:</div>
-      <div class="detail-value">${esc(payment.payment_date)}</div>
+      <div class="detail-value">${esc(receipt.payment_date)}</div>
       <div class="detail-label">طريقة الدفع:</div>
-      <div class="detail-value">${esc(payment.method)}</div>
-      ${payment.notes ? `<div class="detail-label">ملاحظات:</div><div class="detail-value">${esc(payment.notes)}</div>` : ""}
+      <div class="detail-value">${esc(receipt.method)}</div>
+      <div class="detail-label">الموسم:</div>
+      <div class="detail-value">${esc(receipt.season_name)}</div>
+      ${receipt.issued_by ? `<div class="detail-label">المُحصِّل:</div><div class="detail-value">${esc(receipt.issued_by)}</div>` : ""}
+      ${receipt.notes ? `<div class="detail-label">ملاحظات:</div><div class="detail-value">${esc(receipt.notes)}</div>` : ""}
     </div>
+    ${allocRows}
     <div class="receipt-footer">
       <div class="stamp-area">
-        <div class="stamp-label">الختم</div>
-        <div class="stamp-box"><span style="color:#ddd;font-size:11px">الختم</span></div>
+        <div class="stamp-label">ختم الشركة</div>
+        ${assetBox(stampUrl, "الختم")}
       </div>
       <div class="stamp-area">
-        <div class="stamp-label">التوقيع</div>
-        <div class="stamp-box"><span style="color:#ddd;font-size:11px">التوقيع</span></div>
+        <div class="stamp-label">توقيع المسؤول</div>
+        ${assetBox(signatureUrl, "التوقيع")}
       </div>
     </div>
-    <div class="receipt-no">رقم الإيصال: #${receiptNo}</div>
   </div>
 </div>
 </body></html>`;
 }
+
 
 // ============================================================
 // كشف حساب الحاج الفردي - تصميم كبير للطباعة
@@ -346,18 +390,29 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
 }
 
 
-export function printPaymentsReport(payments: Payment[], passengers: Passenger[], brand: PrintBranding, from = "", to = "", chrome: PrintChrome = {}) {
+/* صفٌّ واحدٌ لكلِّ **إيصال** لا لكلِّ سطرِ توزيع: دفعةُ المجموعةِ حدثٌ
+   واحدٌ فتُطبَع سطراً واحداً. والملغى يبقى ظاهراً موسوماً مشطوباً ولا
+   يدخل الإجمالي. */
+export type PaymentReportRow = {
+  key: string; receiptNo: string; name: string; date: string;
+  method: string; amount: number; notes: string; cancelled: boolean;
+};
+
+export function printPaymentsReport(rows: PaymentReportRow[], brand: PrintBranding, from = "", to = "", chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
-  const periodLine = `<div style="margin-bottom:10pt;font-size:11pt;color:#555">الفترة: من <b>${esc(from || "البداية")}</b> إلى <b>${esc(to || "اليوم")}</b> · عدد الدفعات: <b>${payments.length}</b></div>`;
-  const sorted=[...payments].sort((a,b)=>new Date(b.payment_date).getTime()-new Date(a.payment_date).getTime());
-  const total=payments.reduce((s,p)=>s+Number(p.amount),0);
+  const active = rows.filter(r => !r.cancelled);
+  const cancelledCount = rows.length - active.length;
+  const periodLine = `<div style="margin-bottom:10pt;font-size:11pt;color:#555">الفترة: من <b>${esc(from || "البداية")}</b> إلى <b>${esc(to || "اليوم")}</b> · عدد الإيصالات: <b>${rows.length}</b>${cancelledCount ? ` · منها ملغي: <b>${cancelledCount}</b>` : ""}</div>`;
+  const sorted = [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const total = active.reduce((s, r) => s + Number(r.amount), 0);
   const PER_PAGE = 30;
   const header = `<tr style="background:${primaryColor};color:#fff">
     <th style="width:20pt;text-align:center;font-size:9pt;padding:5pt 4pt">م</th>
+    <th style="width:42pt;text-align:center;font-size:9pt;padding:5pt 4pt">الإيصال</th>
     <th style="font-size:9pt;padding:5pt 6pt">الحاج</th>
-    <th style="width:65pt;text-align:center;font-size:9pt;padding:5pt 4pt">التاريخ</th>
-    <th style="width:55pt;text-align:center;font-size:9pt;padding:5pt 4pt">طريقة الدفع</th>
-    <th style="width:65pt;text-align:center;font-size:9pt;padding:5pt 4pt">المبلغ</th>
+    <th style="width:60pt;text-align:center;font-size:9pt;padding:5pt 4pt">التاريخ</th>
+    <th style="width:52pt;text-align:center;font-size:9pt;padding:5pt 4pt">طريقة الدفع</th>
+    <th style="width:62pt;text-align:center;font-size:9pt;padding:5pt 4pt">المبلغ</th>
     <th style="font-size:9pt;padding:5pt 4pt">ملاحظات</th>
   </tr>`;
   const ROW_H = "21pt";
@@ -365,45 +420,29 @@ export function printPaymentsReport(payments: Payment[], passengers: Passenger[]
   for (let i = 0; i < sorted.length; i += PER_PAGE) {
     const chunk = sorted.slice(i, i + PER_PAGE);
     const isLast = i + PER_PAGE >= sorted.length;
-    const rows = chunk.map((py, j) => {
-      const p = passengers.find(x=>x.id===py.passenger_id);
+    const rowsHtml = chunk.map((r, j) => {
       const idx = i + j;
-      return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
-        <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
-        <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${esc(p?(p.short_ar||p.name_ar):"—")}</td>
-        <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${esc(py.payment_date)}</td>
-        <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H}">${esc(py.method)}</td>
-        <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(py.amount)}</td>
-        <td style="font-size:9pt;padding:0 6pt;height:${ROW_H};color:#888">${esc(py.notes||"—")}</td>
+      const strike = r.cancelled ? "text-decoration:line-through;color:#999" : "";
+      return `<tr style="${idx % 2 === 1 ? "background:#f5f5f5" : ""}">
+        <td style="height:${ROW_H};text-align:center;font-size:9pt;color:#777">${idx + 1}</td>
+        <td style="height:${ROW_H};text-align:center;font-size:9pt;font-weight:700">${esc(r.receiptNo)}</td>
+        <td style="height:${ROW_H};font-size:9.5pt;padding:0 6pt;${strike}">${esc(r.name)}${r.cancelled ? ` <span style="color:${PRINT_DANGER};font-weight:700;font-size:8pt">(ملغي)</span>` : ""}</td>
+        <td style="height:${ROW_H};text-align:center;font-size:9pt">${esc(r.date)}</td>
+        <td style="height:${ROW_H};text-align:center;font-size:9pt">${esc(r.method)}</td>
+        <td style="height:${ROW_H};text-align:center;font-size:9.5pt;font-weight:700;${r.cancelled ? strike : `color:${PRINT_SUCCESS}`}">${fmtAmt(Number(r.amount))}</td>
+        <td style="height:${ROW_H};font-size:8.5pt;padding:0 4pt;color:#666">${esc(r.notes || "—")}</td>
       </tr>`;
     }).join("");
-    const totRow = isLast ? `<tr class="tot-row" style="background:${primaryColor};color:#fff;font-weight:700">
-      <td colspan="4" style="text-align:right;padding:6pt 6pt;font-size:11pt">الإجمالي</td>
-      <td style="text-align:center;padding:6pt;font-size:11pt">${fmtAmt(total)}</td>
-      <td></td>
-    </tr>` : "";
-    pages.push(`<div style="${!isLast?"page-break-after:always":""}"><table style="table-layout:fixed">${header}${rows}${totRow}</table></div>`);
+    const totalRow = isLast
+      ? `<tr style="background:${primaryColor};color:#fff;font-weight:700">
+           <td colspan="5" style="height:${ROW_H};padding:0 6pt;font-size:10pt">الإجمالي (بلا الملغى)</td>
+           <td style="height:${ROW_H};text-align:center;font-size:10pt">${fmtAmt(total)}</td>
+           <td style="height:${ROW_H}"></td>
+         </tr>`
+      : "";
+    pages.push(`${i === 0 ? periodLine : ""}<table style="width:100%;border-collapse:collapse;table-layout:fixed">${header}${rowsHtml}${totalRow}</table>`);
   }
-  // ملخص طرق الدفع في نهاية التقرير
-  const byMethod: Record<string, { total: number; count: number }> = {};
-  sorted.forEach(py => {
-    if (!byMethod[py.method]) byMethod[py.method] = { total: 0, count: 0 };
-    byMethod[py.method].total += Number(py.amount);
-    byMethod[py.method].count += 1;
-  });
-  const methodRows = Object.entries(byMethod)
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([m, v]) => `<tr><td style="padding:5pt 8pt;border:1px solid #e8e8e8;font-size:11pt">${esc(m)}</td><td style="padding:5pt 8pt;border:1px solid #e8e8e8;text-align:center;font-size:11pt">${v.count}</td><td style="padding:5pt 8pt;border:1px solid #e8e8e8;text-align:center;font-size:11pt;color:#2A9D8F;font-weight:700">${fmtAmt(v.total)}</td></tr>`)
-    .join("");
-  const methodSummary = methodRows ? `<div style="margin-top:14pt">
-    <div style="font-size:12pt;font-weight:700;color:${primaryColor};margin-bottom:6pt">ملخص طرق الدفع</div>
-    <table style="border-collapse:collapse">
-      <tr style="background:${primaryColor};color:#fff"><th style="padding:5pt 8pt;font-size:10pt">طريقة الدفع</th><th style="padding:5pt 8pt;font-size:10pt;width:80pt">عدد الدفعات</th><th style="padding:5pt 8pt;font-size:10pt;width:100pt">الإجمالي</th></tr>
-      ${methodRows}
-      <tr class="tot-row" style="background:${primaryColor};color:#fff;font-weight:700"><td style="padding:5pt 8pt;font-size:11pt">الإجمالي العام</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${sorted.length}</td><td style="padding:5pt 8pt;text-align:center;font-size:11pt">${fmtAmt(total)}</td></tr>
-    </table>
-  </div>` : "";
-  printInPage(makeFinanceHTML("سجل الدفعات التفصيلي", periodLine + pages.join("") + methodSummary, brand, chrome));
+  printInPage(makeFinanceHTML("تقرير الإيصالات والدفعات", joinSections(pages), brand, chrome));
 }
 
 export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding, chrome: PrintChrome = {}) {

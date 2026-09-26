@@ -1158,10 +1158,48 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const getFamilyMembers = (p: Passenger) => p.family_id ? passengers.filter(x => x.family_id === p.family_id && x.id !== p.id) : [];
 
-  const deleteP = async (id: number) => {
-    if (!await writeOk(supabase.from("passengers").delete().eq("id", id), "تعذّر حذف الحاج، لم يُحذف من قاعدة البيانات")) return;
-    setPassengers(prev => prev.filter(p => p.id !== id));
+  /* ═══ حذفُ الحاجّ لا يمحو تاريخَه الماليّ ═══
+     كان المفتاحُ الأجنبيُّ `on delete cascade`، وهذا الزرُّ بلا أيِّ
+     فحصٍ ماليّ — فنقرةٌ واحدةٌ تمحو الدفعاتِ وإيصالاتِها. وقد صار
+     المفتاحُ `restrict`، فالحذفُ المباشرُ يُرفَض من القاعدةِ نفسِها.
+
+     والمسارُ الآن: نقرأ ما له من دفعاتٍ **قبل** السؤال، ونُسمّي العددَ
+     والإجماليَّ وعددَ الإيصالات، ثُمّ نمضي بدالّةٍ واحدةٍ تحذف سطورَ
+     التوزيعِ وصفَّ الحاجّ — وتُبقي صفوفَ الإيصالِ وأرقامَها وإجمالياتِها
+     التاريخيّةَ كما هي. ولا يُعاد حسابُ إجماليِّ إيصالِ مجموعةٍ نقص
+     أحدُ أنصبتِه: هو ما استُلم فعلاً. */
+  const requestDeleteP = async (p: Passenger) => {
+    const who = p.name_ar || p.name_en || "هذا الحاج";
+    const { data, error } = await supabase
+      .from("payments").select("amount, receipt_id").eq("passenger_id", p.id);
+    if (error) { showAlert("error", "تعذّر التحقّق من السجل المالي — لم يُحذف شيء"); return; }
+
+    const rows = data ?? [];
+    const total = rows.reduce((s2, r) => s2 + Number(r.amount), 0);
+    const receiptCount = new Set(rows.filter(r => r.receipt_id != null).map(r => r.receipt_id)).size;
+
+    if (rows.length === 0) {
+      const ok = await confirmAction(`سيُحذف «${who}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" });
+      if (!ok) return;
+      if (!await writeOk(supabase.from("passengers").delete().eq("id", p.id), "تعذّر حذف الحاج، لم يُحذف من قاعدة البيانات")) return;
+      setPassengers(prev => prev.filter(x => x.id !== p.id));
+      setSelected(null);
+      return;
+    }
+
+    const ok = await confirmAction(
+      `لهذا الحاج ${rows.length} دفعة بإجمالي ${total.toLocaleString("ar-QA")} ر.ق`
+      + (receiptCount ? ` و${receiptCount} إيصال صادر` : "")
+      + `.\n\nإزالته تحذف أنصبته من الدفعات، وتُبقي الإيصالات وأرقامها ومبالغها التاريخية محفوظة وقابلة للطباعة.\n\nهل تتابع إزالة «${who}»؟`,
+      { title: "إزالة حاج له سجل مالي", confirmLabel: "نعم، أزِل الحاج" }
+    );
+    if (!ok) return;
+
+    const { error: rpcError } = await supabase.rpc("remove_passenger_with_history", { p_passenger_id: p.id });
+    if (rpcError) { showAlert("error", rpcError.message || "تعذّرت إزالة الحاج، لم يتغيّر شيء"); return; }
+    setPassengers(prev => prev.filter(x => x.id !== p.id));
     setSelected(null);
+    showAlert("success", `تم إزالة «${who}» — الإيصالات وأرقامها محفوظة`);
   };
 
   /* ═══ إعادة ترتيب الحجاج — مسار واحد ═══
@@ -1555,7 +1593,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </div>
-                    <div onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`سيُحذف «${p.name_ar || p.name_en}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" }); if (ok) deleteP(p.id); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                    <div onClick={async e => { e.stopPropagation(); void requestDeleteP(p); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--fb)"; e.currentTarget.style.color = "var(--ff)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
@@ -1722,7 +1760,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                             <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                           </svg>
                         </button>
-                        <button onClick={async e => { e.stopPropagation(); const ok = await confirmAction(`سيُحذف «${p.name_ar || p.name_en}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" }); if (ok) deleteP(p.id); }} title="حذف"
+                        <button onClick={async e => { e.stopPropagation(); void requestDeleteP(p); }} title="حذف"
                           style={{ ...roOff, width: 30, height: 30, borderRadius: 9, border: "none", background: "#FFCDD2", cursor: "pointer", color: "#B71C1C", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#B71C1C"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#FFCDD2"; b.style.color = "#B71C1C"; b.style.transform = "scale(1)"; }}>
@@ -2119,7 +2157,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           )}
           <div style={{ display: "flex", gap: 6 }}>
             <button disabled={readOnly} onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), ...roOff, flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
-            <button onClick={async () => { const ok = await confirmAction(`سيُحذف «${selected.name_ar || selected.name_en}» نهائياً مع بياناته. هل تتابع؟`, { title: "حذف حاج" }); if (ok) deleteP(selected.id); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+            <button onClick={async () => { void requestDeleteP(selected); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
           </div>
           <button onClick={() => {
             /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير */

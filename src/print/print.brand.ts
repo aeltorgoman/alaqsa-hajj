@@ -12,9 +12,18 @@ export const esc = escapeCompanyHtml;
 
 /* هويّةُ الطباعة كما تحتاجها القشرة — مجموعةٌ فرعيّةٌ من
    `ReportBranding`، فتقبلها كما هي وتقبل هويّةَ المالية كذلك. */
+/* ═══ حدُّ التكاملِ مع الختمِ والتوقيع (PR #177) ═══
+   حقلان اختياريّان **يملؤهما المستدعي** برابطٍ موقَّعٍ قصيرِ العمرِ
+   لحظةَ الطباعة. وطبقةُ الطباعةِ لا تعرف حاويةً ولا مفتاحاً ولا توقيعاً:
+   تتلقّى `src` جاهزاً أو لا تتلقّى شيئاً فتطبع إطاراً فارغاً كما اليوم.
+
+   ⚠️ ولا يُخزَّن رابطٌ موقَّعٌ في القاعدةِ بحال، ولا يُعلَن مفتاحُ
+      كائنٍ خاصّ. وحتى تُدمَج #177 يبقى الحقلان فارغين ولا شيءَ يتعطّل. */
 export type PrintBranding = {
   logoUrl?: string | null;
   headerUrl?: string | null;
+  stampUrl?: string | null;
+  signatureUrl?: string | null;
   companyName?: string | null;
   tagline?: string | null;
   footerText?: string | null;
@@ -26,6 +35,7 @@ export type SafeBranding = {
   companyName: string; tagline: string; footerText: string;
   primaryColor: string; accentColor: string;
   logoUrl: string; headerUrl: string;
+  stampUrl: string; signatureUrl: string;
 };
 
 /** تطبيعُ الهويّة مرّةً واحدة. */
@@ -38,6 +48,8 @@ export function safeBranding(b: PrintBranding): SafeBranding {
     accentColor:  normalizeCompanyColor(b.accentColor, "#085041"),
     logoUrl:      normalizeCompanyAssetUrl(b.logoUrl) || "",
     headerUrl:    normalizeCompanyAssetUrl(b.headerUrl) || "",
+    stampUrl:     normalizeCompanyAssetUrl(b.stampUrl) || "",
+    signatureUrl: normalizeCompanyAssetUrl(b.signatureUrl) || "",
   };
 }
 
