@@ -92,6 +92,22 @@ export function calcTotalPaid(passengerId: number, payments: PaymentSource): num
     .reduce((s, p) => s + Number(p.amount), 0);
 }
 
+/* ═══ تاريخُ اليومِ بتقويمِ الجهاز، لا بـUTC ═══
+   كان الافتراضيُّ `new Date().toISOString().split("T")[0]` — و`toISOString`
+   **UTC دائماً**. فالإيصال #1001 صدر عند ٠١:٢٠ بتوقيتِ قطر يومَ ٢٧، أي
+   ٢٢:٢٠ UTC يومَ ٢٦، فخرج مؤرَّخاً بالأمس. وكلُّ دفعةٍ بين منتصفِ الليلِ
+   والثالثةِ فجراً بتوقيتِ قطر (UTC+3) كانت تُؤرَّخ باليومِ السابق.
+
+   والإيصالُ وثيقةٌ ماليّة: تاريخُه يومُ الصندوقِ حيث يقف المُحصِّل، فيُبنى
+   من مكوّناتِ التاريخِ المحلّيّة. والعمودُ `date` بلا منطقةٍ زمنيّة،
+   فيُحفَظ النصُّ كما هو ولا يتحوّل في القاعدة. */
+export function localDateISO(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function fmtAmt(n: number): string {
   return n.toLocaleString("ar-QA", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }

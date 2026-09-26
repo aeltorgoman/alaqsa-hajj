@@ -12,7 +12,7 @@ import { signedPrivateCompanyUrl } from "../utils";
 import type { Passenger, User } from "../types";
 
 import type { PricingMap, Payment, PaymentReceipt, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
-import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, isSpecialPackage, matchesPackageFilter, matchesServiceFilter, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus } from "./finance/finance.utils";
+import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, isSpecialPackage, matchesPackageFilter, matchesServiceFilter, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus, localDateISO } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
 import { FinancialGroupView } from "./finance/FinancialGroupView";
@@ -124,7 +124,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
   // مودال دفعة
   const [showPayModal, setShowPayModal] = useState(false);
-  const [payForm, setPayForm]           = useState<PayForm>({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+  const [payForm, setPayForm]           = useState<PayForm>({ amount:"", payment_date:localDateISO(), method:"نقدي", notes:"" });
   const [savingPay, setSavingPay]       = useState(false);
 
   // إيصال
@@ -180,7 +180,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [selectedP, selectedGroup, selectedPayment, showPayModal, showChargeModal, showAddMemberModal, showPassengerGroupModal, showGroupPayModal]);
-  const [groupPayForm, setGroupPayForm]           = useState<GroupPayForm>({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+  const [groupPayForm, setGroupPayForm]           = useState<GroupPayForm>({ amount:"", payment_date:localDateISO(), method:"نقدي", notes:"" });
   const [savingGroupPay, setSavingGroupPay]       = useState(false);
 
   // بيانات الشركة للطباعة
@@ -507,7 +507,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     }
     setShowPayModal(false);
     setIssuedReceipt(data as PaymentReceipt);
-    setPayForm({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+    setPayForm({ amount:"", payment_date:localDateISO(), method:"نقدي", notes:"" });
     /* إعادةُ الجلبِ لا دفعٌ محلّيّ: السطورُ أُنشئت في القاعدةِ ولها
        حالةُ أبٍ مُضمَّنةٌ لا تُخمَّن هنا. */
     void loadFinanceData(true);
@@ -729,7 +729,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     setIssuedReceipt(data as PaymentReceipt);
     void loadFinanceData(true);
     setShowGroupPayModal(false);
-    setGroupPayForm({ amount:"", payment_date:new Date().toISOString().split("T")[0], method:"نقدي", notes:"" });
+    setGroupPayForm({ amount:"", payment_date:localDateISO(), method:"نقدي", notes:"" });
     const minShare = Math.min(...shares), maxShare = Math.max(...shares);
     const shareText = minShare === maxShare ? `${fmtAmt(minShare)} ر.ق للفرد` : `${fmtAmt(minShare)} — ${fmtAmt(maxShare)} ر.ق للفرد`;
     showAlert("success", `تم توزيع ${fmtAmt(total)} ر.ق على ${members.length} من الأعضاء (${shareText})`);
