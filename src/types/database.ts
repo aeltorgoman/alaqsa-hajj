@@ -739,6 +739,7 @@ export type Database = {
           notes: string | null
           passenger_id: number
           payment_date: string
+          receipt_id: number | null
         }
         Insert: {
           amount: number
@@ -749,6 +750,7 @@ export type Database = {
           notes?: string | null
           passenger_id: number
           payment_date?: string
+          receipt_id?: number | null
         }
         Update: {
           amount?: number
@@ -759,6 +761,7 @@ export type Database = {
           notes?: string | null
           passenger_id?: number
           payment_date?: string
+          receipt_id?: number | null
         }
         Relationships: [
           {
@@ -768,7 +771,71 @@ export type Database = {
             referencedRelation: "passengers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "payments_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "payment_receipts"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      payment_receipts: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          group_name: string | null
+          id: number
+          issued_at: string
+          issued_by: string | null
+          method: string
+          notes: string | null
+          payer_name: string
+          payment_date: string
+          receipt_number: number
+          season_id: number
+          season_name: string
+          status: string
+          total_amount: number
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          group_name?: string | null
+          id?: never
+          issued_at?: string
+          issued_by?: string | null
+          method: string
+          notes?: string | null
+          payer_name: string
+          payment_date: string
+          receipt_number: number
+          season_id: number
+          season_name: string
+          status?: string
+          total_amount: number
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          group_name?: string | null
+          id?: never
+          issued_at?: string
+          issued_by?: string | null
+          method?: string
+          notes?: string | null
+          payer_name?: string
+          payment_date?: string
+          receipt_number?: number
+          season_id?: number
+          season_name?: string
+          status?: string
+          total_amount?: number
+        }
+        Relationships: []
       }
       pilgrim_push_subscriptions: {
         Row: {
@@ -965,6 +1032,8 @@ export type Database = {
           mina_address: string | null
           mina_url: string | null
           name: string
+          receipt_next_number: number
+          receipt_start_number: number
         }
         Insert: {
           arafa_address?: string | null
@@ -980,6 +1049,8 @@ export type Database = {
           mina_address?: string | null
           mina_url?: string | null
           name: string
+          receipt_next_number?: number
+          receipt_start_number?: number
         }
         Update: {
           arafa_address?: string | null
@@ -995,6 +1066,8 @@ export type Database = {
           mina_address?: string | null
           mina_url?: string | null
           name?: string
+          receipt_next_number?: number
+          receipt_start_number?: number
         }
         Relationships: []
       }
@@ -1086,6 +1159,10 @@ export type Database = {
           passenger_id: number
         }[]
       }
+      cancel_payment_receipt: {
+        Args: { p_reason: string; p_receipt_id: number }
+        Returns: Database["public"]["Tables"]["payment_receipts"]["Row"]
+      }
       close_season: {
         Args: {
           p_actor: string
@@ -1093,6 +1170,24 @@ export type Database = {
           p_new_hijri_year: number
           p_new_name: string
         }
+        Returns: number
+      }
+      issue_payment_receipt: {
+        Args: {
+          p_allocations: Json
+          p_group_name?: string | null
+          p_method: string
+          p_notes?: string | null
+          p_payment_date: string
+        }
+        Returns: Database["public"]["Tables"]["payment_receipts"]["Row"]
+      }
+      remove_passenger_with_history: {
+        Args: { p_passenger_id: number }
+        Returns: Json
+      }
+      set_season_receipt_start: {
+        Args: { p_season_id: number; p_start: number }
         Returns: number
       }
       consume_rate_limit: {

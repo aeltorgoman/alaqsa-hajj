@@ -4,7 +4,22 @@
 import type { Passenger } from "../../types";
 
 export type PricingMap = Record<string, { label: string; amount: number; type: string }>;
-export type Payment = { id: number; passenger_id: number; amount: number; payment_date: string; method: string; notes?: string; created_by?: string; created_at: string };
+/* ═══ الإيصالُ أبٌ وسطورُ الدفعِ توزيعُه ═══
+   إيصالٌ فرديّ → سطرٌ واحد · إيصالُ مجموعة → سطورٌ عدّة برقمٍ واحد.
+   و`total_amount` مبلغٌ تاريخيٌّ **لا يُحسَب** من السطورِ الباقية. */
+export type ReceiptStatus = "valid" | "cancelled";
+export type PaymentReceipt = {
+  id: number; season_id: number; season_name: string; receipt_number: number;
+  issued_at: string; issued_by?: string | null; group_name?: string | null;
+  total_amount: number; payer_name: string; method: string; payment_date: string;
+  notes?: string | null; status: ReceiptStatus;
+  cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null;
+};
+
+/* `receipt` يأتي مُضمَّناً من PostgREST في نفسِ استعلامِ الدفعات، فلا
+   ربطَ يدويٌّ ولا تمريرَ خريطةٍ إلى كلِّ دالّةِ حساب. ويكون `null`
+   للدفعاتِ السابقةِ لهذه المرحلة — وهي صالحةٌ كما هي. */
+export type Payment = { id: number; passenger_id: number; amount: number; payment_date: string; method: string; notes?: string; created_by?: string; created_at: string; receipt_id?: number | null; receipt?: PaymentReceipt | null };
 export type CustomCharge = { id: number; passenger_id: number; description: string; amount: number; type: "إضافة" | "خصم"; notes?: string; created_by?: string; created_at: string };
 export type FinancialGroup = { id: number; name: string; notes?: string; created_by?: string; created_at: string };
 export type FinancialGroupMember = { id: number; group_id: number; passenger_id: number };

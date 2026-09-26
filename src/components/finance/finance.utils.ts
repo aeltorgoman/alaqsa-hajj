@@ -78,8 +78,18 @@ export function calcTotalDue(p: Passenger, pricing: PricingMap, custom: ChargeSo
   return Math.max(0, total);
 }
 
+/* ⚠️ سطرُ التوزيعِ التابعُ لإيصالٍ **ملغىً** لا يُحتسَب مدفوعاً — وهو
+   باقٍ في القاعدةِ ولم يُحذف، فالأثرُ محفوظٌ والرقمُ مشغول. وحالةُ
+   الأبِ تأتي مُضمَّنةً مع الصفّ، فلا استعلامَ ثانيَ هنا.
+   والدفعاتُ السابقةُ لهذه المرحلة بلا إيصالٍ فتُحتسَب كما كانت. */
+export function isPaymentCounted(p: Payment): boolean {
+  return p.receipt?.status !== "cancelled";
+}
+
 export function calcTotalPaid(passengerId: number, payments: PaymentSource): number {
-  return paymentsFor(passengerId, payments).reduce((s, p) => s + Number(p.amount), 0);
+  return paymentsFor(passengerId, payments)
+    .filter(isPaymentCounted)
+    .reduce((s, p) => s + Number(p.amount), 0);
 }
 
 export function fmtAmt(n: number): string {
