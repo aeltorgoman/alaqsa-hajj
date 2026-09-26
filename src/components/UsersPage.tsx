@@ -703,21 +703,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
-            {/* ══ بيانات البنك والسداد: انتقل محرّرُها إلى الحسابات ══
-                المُحرِّرُ الآن: الحسابات → إعدادات الحسابات → البنك والسداد.
-                والأعمدةُ لم تتغيّر ولا نُسخت — `company_config` وحدَها
-                المصدر، وهذه إحالةٌ لا مُحرِّرٌ ثانٍ. */}
-            <div style={card}>
-              <div style={cardHead}><div style={cardIcon}>ر.ق</div><div><div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>بيانات البنك والسداد</div><div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>انتقلت إلى صفحة الحسابات</div></div></div>
-              <div style={cardBody}>
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 2 }}>
-                  بياناتُ البنكِ والـIBAN والـSWIFT ورقمِ السجلِّ التجاريِّ تُحرَّر الآن من:
-                  <div style={{ marginTop: 6, fontWeight: 700, color: "var(--text)" }}>الحسابات ← إعدادات الحسابات ← البنك والسداد</div>
-                  <div style={{ marginTop: 6 }}>وهي بياناتُ الحملةِ نفسُها — لم تُنقَل قيمتُها ولم تُنسَخ، إنّما تغيّر موضعُ تحريرِها.</div>
-                </div>
-              </div>
-            </div>
-
           </div>
         )}
 

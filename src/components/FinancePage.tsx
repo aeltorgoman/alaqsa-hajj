@@ -53,13 +53,22 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   /* تبويباتُ «إعدادات الحسابات» — تنظيمُ واجهةٍ لا تغييرُ مالكِ بيانات.
      ولكلِّ تبويبٍ مصدرُه وصلاحيتُه كما هي في القاعدة، لا كما يوحي
      جمعُها في سطحٍ واحد. */
-  const [settingsTab, setSettingsTab] = useState<"pricing"|"bank"|"receipts">("pricing");
+  /* والافتراضيُّ يُحسب مرّةً: من لا يملك المالَ لا يُنزَل على مُحرِّرِ
+     أسعارٍ لا يستطيع حفظَه. */
+  const [settingsTab, setSettingsTab] = useState<"pricing"|"bank"|"receipts">(
+    () => (currentUser.permissions?.manage_payments ? "pricing" : "bank"));
 
   /* ── البنك والسداد: مِلكُ `company_config` كما كان ──
      الكتابةُ عليه تشترط `manage_users` في RLS، وهذا السطحُ يُفتَح
      بـ`manage_payments`. فلا تُوسَّع صلاحيةٌ ولا تُنسَخ حقول: من لا
      يملك `manage_users` يرى القيمَ ولا يُعدّلها. */
   const canEditBank = !!currentUser.permissions?.manage_users;
+
+  /* ⚠️ فتحُ السطحِ ليس صلاحيةً ثالثةً: هو «أملكُ قسماً واحداً على
+     الأقلّ». وقرنُه بـ`manage_payments` وحدَها كان انحداراً حقيقيّاً —
+     مالكُ `manage_users` وحدَه كان يُحرّر البنكَ في موضعِه القديم، فلو
+     نُقل المُحرِّرُ إلى سطحٍ لا يبلغه لفقد قدرةً كانت له. */
+  const canOpenSettings = canManage || canEditBank;
   /* يُهيَّأ مرّةً من سياقِ الشركة. والسياقُ يُبنى عند الإقلاعِ ولا
      يتغيّر في أثناء الجلسة (الحفظُ الناجحُ يُعيد تحميلَ الصفحة)، فلا
      أثرَ يُرآي حالةً قائمةً — ولا حالةَ موازيةَ تُنشَأ. */
@@ -1103,15 +1112,26 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                 {PRICING_KEYS.filter(k=>k.type===type).map(k => (
                   <div key={k.key} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                     <div style={{ flex:1, fontSize:13 }}>{k.label}</div>
-                    <input type="number" min="0" value={editPricing[k.key]||"0"} onChange={e=>setEditPricing(prev=>({...prev,[k.key]:e.target.value}))} style={{ width:130, padding:"6px 10px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", textAlign:"center", fontSize:13 }} />
+                    <input type="number" min="0" value={editPricing[k.key]||"0"}
+                      readOnly={!canManage} disabled={!canManage}
+                      onChange={e=>setEditPricing(prev=>({...prev,[k.key]:e.target.value}))}
+                      style={{ width:130, padding:"6px 10px", borderRadius:8, border:"1px solid var(--border)", background:canManage?"var(--bg-input)":"var(--bg-2)", textAlign:"center", fontSize:13, cursor:canManage?"text":"not-allowed" }} />
                     <span style={{ fontSize:12, color:"var(--text-muted)", width:24 }}>ر.ق</span>
                   </div>
                 ))}
               </div>
             ))}
-            <button onClick={savePricing} disabled={savingPricing} style={{ width:"100%", padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:"pointer", fontWeight:600 }}>
-              {savingPricing?"جارٍ الحفظ...":"حفظ الأسعار"}
-            </button>
+            {canManage ? (
+              <button onClick={savePricing} disabled={savingPricing} style={{ width:"100%", padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:savingPricing?"not-allowed":"pointer", fontWeight:600, opacity:savingPricing?0.6:1 }}>
+                {savingPricing?"جارٍ الحفظ...":"حفظ الأسعار"}
+              </button>
+            ) : (
+              /* لا زرَّ حفظٍ لمن لا يملك الصلاحية: `savePricing` كانت
+                 ترفض عند النداءِ، والرفضُ قبلَ الضغطِ أصدق. */
+              <div style={{ padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text-muted)", lineHeight:1.9 }}>
+                تعديل الأسعار يحتاج صلاحية إدارة الحسابات المالية. القيمُ معروضةٌ للاطّلاع.
+              </div>
+            )}
           </>
         )}
 
@@ -1154,7 +1174,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
               /* لا زرَّ حفظٍ لمن لا يملك الصلاحية — والرسالةُ تقول السببَ
                  صراحةً بدل زرٍّ يُضغَط فيُرفَض من الخادم. */
               <div style={{ marginTop:16, padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text-muted)", lineHeight:1.9 }}>
-                هذه بياناتُ حملةٍ، وتعديلُها يحتاج صلاحيةَ «إدارة المستخدمين والإعدادات». القيمُ معروضةٌ للاطّلاع، وتُعدَّل من: إعدادات الحملة.
+                هذه بياناتُ حملةٍ، وتعديلُها يحتاج صلاحيةَ «إدارة المستخدمين والإعدادات». القيمُ معروضةٌ للاطّلاع — وهذا هو موضعُ تحريرِها، فليُطلَب من مسؤولٍ يملك الصلاحية.
               </div>
             )}
             {bankMsg && <div style={noteBox(bankMsg.ok)}>{bankMsg.text}</div>}
@@ -1638,7 +1658,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       <ReceiptModal />{receiptViewNode}{cancelReceiptNode}
       {pricingNotice}
       <FinanceListView
-        canManage={canManage}
+        canOpenSettings={canOpenSettings}
         sortedPassengers={sortedPassengers}
         filteredPassengers={filteredPassengers}
         pricing={pricing}

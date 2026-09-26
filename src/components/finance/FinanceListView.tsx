@@ -19,7 +19,10 @@ export type FinanceListViewProps = {
   getPassengerGroup: (passengerId: number) => FinancialGroup | null;
 
   // الصلاحيات
-  canManage: boolean;
+  /* قدرةُ فتحِ «إعدادات الحسابات» منفصلةٌ عن صلاحيةِ المالِ عمداً:
+     السطحُ يجمع ثلاثةَ أقسامٍ لكلٍّ صلاحيتُه، فيُفتَح لمن يملك واحداً
+     منها على الأقلّ — والقسمُ نفسُه هو من يأذن بالكتابة. */
+  canOpenSettings: boolean;
 
   // الحالة
   loading: boolean;
@@ -69,7 +72,7 @@ const COLUMNS: { label: string; key?: FinanceSortKey; center?: boolean }[] = [
 
 export function FinanceListView({
   sortedPassengers, filteredPassengers, pricing, totalsByPassenger, summary, getPassengerGroup,
-  canManage,
+  canOpenSettings,
   loading, refreshing, lastUpdated, loadError,
   searchTerm, filterStatus, filterPackage, filterService, sortKey, sortDir,
   onSearchTermChange, onFilterStatusChange, onFilterPackageChange, onFilterServiceChange, onSortChange, onClearFilters,
@@ -99,7 +102,7 @@ export function FinanceListView({
             {refreshing?"جارٍ التحديث...":"تحديث البيانات"}
           </button>
           <button onClick={()=>onOpenReports()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>التقارير</button>
-          {canManage && <button onClick={()=>onOpenSettings()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الحسابات</button>}
+          {canOpenSettings && <button onClick={()=>onOpenSettings()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الحسابات</button>}
         </div>
       </div>
 
