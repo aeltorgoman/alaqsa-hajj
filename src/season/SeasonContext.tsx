@@ -27,27 +27,38 @@ export function SeasonProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  /* تحميلٌ واحدٌ يستعمله الأثرُ الأوّلُ وطلبُ التحديثِ سواءً، فمصدرُ
+     الحقيقةِ واحدٌ ولا يتفرّع. و`select("*")` كما كان — الأعمدةُ
+     الجديدةُ تأتي معه بلا استعلامٍ ثانٍ. */
+  const load = useCallback(async (isStale?: () => boolean) => {
+    const { data, error: err } = await supabase
+      .from("seasons").select("*").order("id", { ascending: false });
+    if (isStale?.()) return;
+    const open = (data || []).find(s => s.closed_at === null) || null;
+    /* لا موسم مفتوح = النظام بلا وجهة للكتابة. الفهرس الفريد
+       الجزئي يمنع الحالة، لكن عرضها أصدق من التظاهر بموسم */
+    if (err || !data || !open) {
+      console.error("تعذر تحميل المواسم", err);
+      setError(true);
+    } else {
+      setSeasons(data);
+      setActiveSeason(open);
+      setError(false);
+    }
+    setLoading(false);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const { data, error: err } = await supabase
-        .from("seasons").select("*").order("id", { ascending: false });
-      if (cancelled) return;
-      const open = (data || []).find(s => s.closed_at === null) || null;
-      /* لا موسم مفتوح = النظام بلا وجهة للكتابة. الفهرس الفريد
-         الجزئي يمنع الحالة، لكن عرضها أصدق من التظاهر بموسم */
-      if (err || !data || !open) {
-        console.error("تعذر تحميل المواسم", err);
-        setError(true);
-      } else {
-        setSeasons(data);
-        setActiveSeason(open);
-        setError(false);
-      }
-      setLoading(false);
-    })();
+    /* الاستدعاء داخلَ دالّةٍ لا مباشرةً: `load` تُضبط حالتَها بعد
+       `await`، فلا تصييرَ متتالياً — والصيغةُ تُبقي ذلك ظاهراً. */
+    (async () => { await load(() => cancelled); })();
     return () => { cancelled = true; };
-  }, []);
+  }, [load]);
+
+  /* يُنادى بعد كتابةٍ مأذونةٍ على صفِّ الموسم — كضبطِ رقمِ بدايةِ
+     الإيصالات — فتُقرأ الحالةُ المُثبَتةُ من القاعدةِ لا تُخمَّن. */
+  const refreshSeasons = useCallback(async () => { await load(); }, [load]);
 
   const viewSeason = useCallback((id: number) => {
     setViewedId(id);
@@ -80,7 +91,7 @@ export function SeasonProvider({ children }: { children: ReactNode }) {
     <SeasonContext.Provider value={{
       activeSeason, viewedSeason, seasons,
       canWrite, readOnly: !canWrite,
-      viewSeason, returnToActive,
+      viewSeason, returnToActive, refreshSeasons,
     }}>
       {children}
     </SeasonContext.Provider>

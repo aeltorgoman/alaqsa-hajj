@@ -99,7 +99,7 @@ export function FinanceListView({
             {refreshing?"جارٍ التحديث...":"تحديث البيانات"}
           </button>
           <button onClick={()=>onOpenReports()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>التقارير</button>
-          {canManage && <button onClick={()=>onOpenSettings()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الأسعار</button>}
+          {canManage && <button onClick={()=>onOpenSettings()} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-2)", fontFamily:"var(--font-body)", fontSize:12, cursor:"pointer" }}>إعدادات الحسابات</button>}
         </div>
       </div>
 

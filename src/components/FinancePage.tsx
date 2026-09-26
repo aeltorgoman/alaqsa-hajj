@@ -5,7 +5,9 @@ import { isHajj, byOrder } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
-import { useReportBranding, useCompanyAssets } from "../company/CompanyContext";
+import { useReportBranding, useCompanyAssets, useCompanyFinancial } from "../company/CompanyContext";
+import { companyService } from "../company/companyService";
+import { isSaved, saveErrorText } from "../company/saveResult";
 import { signedPrivateCompanyUrl } from "../utils";
 import type { Passenger, User } from "../types";
 
@@ -26,7 +28,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const companyAssets = useCompanyAssets();
   const { alert: alertState, showAlert } = useAlert();
   const { assertWritable } = useSeasonWrite(showAlert);
-  const { viewedSeason } = useSeason();
+  const { viewedSeason, canWrite: seasonWritable, refreshSeasons } = useSeason();
+  const companyFinancial = useCompanyFinancial();
 
   /* مصدر التسعير الذي حُسبت به أرقام هذه الشاشة:
        live            الموسم مفتوح  → التسعير الحيّ، وهو الصحيح له
@@ -47,6 +50,37 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const canManage = !!currentUser.permissions?.manage_payments;
 
   const [subView, setSubView]     = useState<"list"|"detail"|"settings"|"reports"|"group">("list");
+  /* تبويباتُ «إعدادات الحسابات» — تنظيمُ واجهةٍ لا تغييرُ مالكِ بيانات.
+     ولكلِّ تبويبٍ مصدرُه وصلاحيتُه كما هي في القاعدة، لا كما يوحي
+     جمعُها في سطحٍ واحد. */
+  const [settingsTab, setSettingsTab] = useState<"pricing"|"bank"|"receipts">("pricing");
+
+  /* ── البنك والسداد: مِلكُ `company_config` كما كان ──
+     الكتابةُ عليه تشترط `manage_users` في RLS، وهذا السطحُ يُفتَح
+     بـ`manage_payments`. فلا تُوسَّع صلاحيةٌ ولا تُنسَخ حقول: من لا
+     يملك `manage_users` يرى القيمَ ولا يُعدّلها. */
+  const canEditBank = !!currentUser.permissions?.manage_users;
+  /* يُهيَّأ مرّةً من سياقِ الشركة. والسياقُ يُبنى عند الإقلاعِ ولا
+     يتغيّر في أثناء الجلسة (الحفظُ الناجحُ يُعيد تحميلَ الصفحة)، فلا
+     أثرَ يُرآي حالةً قائمةً — ولا حالةَ موازيةَ تُنشَأ. */
+  const [bankForm, setBankForm] = useState(() => ({
+    bank_name: companyFinancial.bankName,
+    bank_account_name: companyFinancial.accountName,
+    bank_account_number: companyFinancial.accountNumber,
+    bank_iban: companyFinancial.iban,
+    bank_swift: companyFinancial.swift,
+    commercial_registration: companyFinancial.commercialRegistration,
+  }));
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankMsg, setBankMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  /* ── الإيصالات: مِلكُ صفِّ الموسم ── */
+  /* مُخزَّنٌ مع معرّفِ موسمِه: العرضُ يُشتَقّ، فإن لم يُحرَّر شيءٌ —
+     أو حُرِّر لموسمٍ آخر — ظهرت قيمةُ الموسمِ المعروضِ من القاعدة.
+     ولا أثرَ يُزامِن، ولا رايةَ «عُدِّل» تُخترَع. */
+  const [startEdit, setStartEdit] = useState<{ seasonId: number; value: string } | null>(null);
+  const [startSaving, setStartSaving] = useState(false);
+  const [startMsg, setStartMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [selectedP, setSelectedP] = useState<Passenger | null>(null);
   const [editingCustomPrice, setEditingCustomPrice] = useState(false);
   const [customPriceInput, setCustomPriceInput]     = useState("");
@@ -313,6 +347,62 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      المجموعة أداةُ ذلك الاشتقاق. أمّا المجموعةُ المالية فصارت
      موسميةً بالتخزين في م٧/٣، وتُجلب بموسمها أعلاه. */
   const viewedPassengerIds = useMemo(() => new Set(passengers.map(p => p.id)), [passengers]);
+
+  /* حفظُ البنك: **نفسُ** أعمدةِ `company_config` التي كانت تُكتَب من
+     صفحة الإعدادات، وحدَها لا غير — لا عمودَ هويّةٍ ولا لونَ يُرسَل
+     من هنا، فلا يُصادِر هذا السطحُ حقلاً ليس له. */
+  async function saveBank() {
+    if (!canEditBank) { setBankMsg({ text: "لا تملك صلاحية تعديل بيانات الحملة.", ok: false }); return; }
+    setBankSaving(true);
+    setBankMsg(null);
+    const res = await companyService.updateConfig({
+      bank_name: bankForm.bank_name || null,
+      bank_account_name: bankForm.bank_account_name || null,
+      bank_account_number: bankForm.bank_account_number || null,
+      bank_iban: bankForm.bank_iban || null,
+      bank_swift: bankForm.bank_swift || null,
+      commercial_registration: bankForm.commercial_registration || null,
+    });
+    setBankSaving(false);
+    if (!isSaved(res)) { setBankMsg({ text: saveErrorText(res), ok: false }); return; }
+    /* سياقُ الشركةِ يُبنى عند الإقلاع، وتحديثُه يجري بإعادةِ التحميل
+       كما تفعل صفحةُ الإعدادات — لا مالكَ حالةٍ ثانياً يُخترَع هنا. */
+    setBankMsg({ text: "تم الحفظ — سيتم تحديث الصفحة...", ok: true });
+    setTimeout(() => window.location.reload(), 1200);
+  }
+
+  /* حفظُ رقمِ البداية عبر الدالّةِ المعتمَدةِ وحدَها. ولا تفاؤلَ:
+     لا يُعلَن نجاحٌ إلا بعد أن تعود الدالّةُ بلا خطأ، ثُمّ تُقرأ
+     حالةُ الموسمِ المُثبَتةُ من القاعدة. */
+  async function saveReceiptStart() {
+    const raw = (startEdit?.seasonId === viewedSeason.id
+      ? startEdit.value
+      : String(viewedSeason.receipt_start_number ?? 1)).trim();
+    if (!raw) { setStartMsg({ text: "أدخل رقم البداية.", ok: false }); return; }
+    if (!/^\d+$/.test(raw)) {
+      setStartMsg({ text: "رقم البداية عدد صحيح موجب — بلا كسور ولا إشارة.", ok: false }); return; }
+    const n = Number(raw);
+    if (!Number.isSafeInteger(n) || n < 1) {
+      setStartMsg({ text: "رقم البداية يجب أن يكون ١ أو أكبر.", ok: false }); return; }
+
+    setStartSaving(true);
+    setStartMsg(null);
+    const { error } = await supabase.rpc("set_season_receipt_start", {
+      p_season_id: viewedSeason.id, p_start: n,
+    });
+    if (error) {
+      setStartSaving(false);
+      /* رسالةُ الخادمِ كما هي — هي التي تقول «صدرت إيصالات» أو
+         «الموسم مقفل»، ولا تُستبدَل بعبارةٍ عامّةٍ تُخفيها. */
+      setStartMsg({ text: error.message || "تعذّر حفظ رقم البداية.", ok: false });
+      return;
+    }
+    await refreshSeasons();
+    /* يُطرَح المُخزَّنُ فيرجع العرضُ إلى قيمةِ القاعدةِ المُثبَتة */
+    setStartEdit(null);
+    setStartSaving(false);
+    setStartMsg({ text: "تم حفظ رقم البداية.", ok: true });
+  }
 
   async function savePricing() {
     if (!assertWritable()) return;
@@ -948,36 +1038,193 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     );
   })();
 
-  if (subView === "settings") return (
+  if (subView === "settings") {
+    /* ═══ إعدادات الحسابات — سطحٌ واحدٌ، وثلاثةُ مُلّاكِ بياناتٍ ═══
+         الأسعار   → `pricing_settings`  · الكتابةُ manage_payments
+         البنك    → `company_config`    · الكتابةُ manage_users
+         الإيصالات → صفُّ الموسم         · الكتابةُ manage_payments عبر RPC
+       الجمعُ بصريٌّ لا صلاحيّ: لم تُوسَّع سياسةٌ واحدةٌ في القاعدة. */
+    const tabs = [
+      { key: "pricing"  as const, label: "الأسعار" },
+      { key: "bank"     as const, label: "البنك والسداد" },
+      { key: "receipts" as const, label: "الإيصالات" },
+    ];
+    const tabBtn = (active: boolean) => ({
+      padding: "7px 16px", borderRadius: 8, fontFamily: "var(--font-body)", fontSize: 12.5,
+      fontWeight: active ? 700 : 500, cursor: "pointer",
+      border: active ? "1px solid var(--primary)" : "1px solid var(--border)",
+      background: active ? "var(--primary)" : "var(--bg-2)",
+      color: active ? "#fff" : "var(--text)",
+    });
+    const cardBox = { background:"var(--bg-card)", borderRadius:12, padding:16, marginBottom:16, boxShadow:"var(--shadow-sm)" };
+    const cardTitle = { fontWeight:700, color:"var(--text)", marginBottom:12, fontSize:14, borderBottom:"1px solid var(--border)", paddingBottom:8 };
+    const noteBox = (ok: boolean) => ({
+      marginTop: 12, padding: "9px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, lineHeight: 1.7,
+      background: ok ? "var(--success-bg)" : "var(--danger-bg)",
+      color: ok ? "var(--success)" : "var(--danger)",
+      border: `1px solid ${ok ? "var(--success)" : "var(--danger)"}`,
+    });
+
+    /* ⚠️ حالةُ القفلِ من عقدِ القاعدةِ لا من رايةٍ في المتصفّح:
+       تقدُّمُ العدّادِ عن رقمِ البدايةِ هو نفسُه شرطُ الدالّةِ
+       (`v_next <> v_start`)، فما يُعرَض هو ما سيُنفَّذ. */
+    const startNo = viewedSeason.receipt_start_number ?? 1;
+    const nextNo  = viewedSeason.receipt_next_number ?? 1;
+    const numberingLocked = nextNo !== startNo;
+    const issuedCount = Math.max(0, nextNo - startNo);
+
+    return (
     <div style={{ flex:1, overflowY:"auto", padding:20 }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
       <div style={{ maxWidth:560, margin:"0 auto" }}>
         {pricingNotice}
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={() => setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>
-          <div style={{ fontFamily:"var(--font-heading)", fontSize:20, fontWeight:600, color:"var(--text)" }}>إعدادات الأسعار</div>
+          <div style={{ fontFamily:"var(--font-heading)", fontSize:20, fontWeight:600, color:"var(--text)" }}>إعدادات الحسابات</div>
         </div>
-        {(["package","addon","discount"] as const).map(type => (
-          <div key={type} style={{ background:"var(--bg-card)", borderRadius:12, padding:16, marginBottom:16, boxShadow:"var(--shadow-sm)" }}>
-            <div style={{ fontWeight:700, color:"var(--text)", marginBottom:12, fontSize:14, borderBottom:"1px solid var(--border)", paddingBottom:8 }}>
-              {type==="package"?"الباقات الأساسية":type==="addon"?"الإضافات":"الخصومات"}
-            </div>
-            {PRICING_KEYS.filter(k=>k.type===type).map(k => (
-              <div key={k.key} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                <div style={{ flex:1, fontSize:13 }}>{k.label}</div>
-                <input type="number" min="0" value={editPricing[k.key]||"0"} onChange={e=>setEditPricing(prev=>({...prev,[k.key]:e.target.value}))} style={{ width:130, padding:"6px 10px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", textAlign:"center", fontSize:13 }} />
-                <span style={{ fontSize:12, color:"var(--text-muted)", width:24 }}>ر.ق</span>
+
+        <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setSettingsTab(t.key)} style={tabBtn(settingsTab === t.key)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ══════════ الأسعار — كما كانت، نُقل موضعُها لا منطقُها ══════════ */}
+        {settingsTab === "pricing" && (
+          <>
+            {(["package","addon","discount"] as const).map(type => (
+              <div key={type} style={cardBox}>
+                <div style={cardTitle}>
+                  {type==="package"?"الباقات الأساسية":type==="addon"?"الإضافات":"الخصومات"}
+                </div>
+                {PRICING_KEYS.filter(k=>k.type===type).map(k => (
+                  <div key={k.key} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                    <div style={{ flex:1, fontSize:13 }}>{k.label}</div>
+                    <input type="number" min="0" value={editPricing[k.key]||"0"} onChange={e=>setEditPricing(prev=>({...prev,[k.key]:e.target.value}))} style={{ width:130, padding:"6px 10px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", textAlign:"center", fontSize:13 }} />
+                    <span style={{ fontSize:12, color:"var(--text-muted)", width:24 }}>ر.ق</span>
+                  </div>
+                ))}
               </div>
             ))}
+            <button onClick={savePricing} disabled={savingPricing} style={{ width:"100%", padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:"pointer", fontWeight:600 }}>
+              {savingPricing?"جارٍ الحفظ...":"حفظ الأسعار"}
+            </button>
+          </>
+        )}
+
+        {/* ══════════ البنك والسداد — بيانُ شركةٍ، مصدرُه company_config ══════════ */}
+        {settingsTab === "bank" && (
+          <div style={cardBox}>
+            <div style={cardTitle}>بيانات البنك والسداد</div>
+            <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:14, lineHeight:1.8 }}>
+              بياناتُ التحويلِ والسجلِّ التجاريّ. وهي بياناتُ حملةٍ لا موسم — تُحفَظ مرّةً وتخدم المواسمَ كلَّها.
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:10 }}>
+              {([
+                { key:"bank_name",               label:"اسم البنك",          ltr:false },
+                { key:"bank_account_name",       label:"اسم الحساب",         ltr:false },
+                { key:"bank_account_number",     label:"رقم الحساب",         ltr:true  },
+                { key:"bank_iban",               label:"IBAN",               ltr:true  },
+                { key:"bank_swift",              label:"SWIFT",              ltr:true  },
+                /* رقمُ السجلِّ التجاريّ يبقى مع بيانات البنك — قرارُ
+                   منتَجٍ مقصود: استعمالُه هنا لدعمِ التحويلِ والسداد. */
+                { key:"commercial_registration", label:"رقم السجل التجاري",  ltr:true  },
+              ] as const).map(f => (
+                <div key={f.key}>
+                  <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4, fontWeight:600 }}>{f.label}</div>
+                  <input
+                    style={{ ...inputStyle, background: canEditBank ? "var(--bg-input)" : "var(--bg-2)", cursor: canEditBank ? "text" : "not-allowed" }}
+                    dir={f.ltr ? "ltr" : undefined}
+                    value={bankForm[f.key]}
+                    readOnly={!canEditBank}
+                    disabled={!canEditBank}
+                    onChange={e => setBankForm(prev => ({ ...prev, [f.key]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+
+            {canEditBank ? (
+              <button onClick={saveBank} disabled={bankSaving} style={{ width:"100%", marginTop:16, padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:bankSaving?"not-allowed":"pointer", fontWeight:600, opacity:bankSaving?0.6:1 }}>
+                {bankSaving ? "جارٍ الحفظ..." : "حفظ بيانات البنك"}
+              </button>
+            ) : (
+              /* لا زرَّ حفظٍ لمن لا يملك الصلاحية — والرسالةُ تقول السببَ
+                 صراحةً بدل زرٍّ يُضغَط فيُرفَض من الخادم. */
+              <div style={{ marginTop:16, padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text-muted)", lineHeight:1.9 }}>
+                هذه بياناتُ حملةٍ، وتعديلُها يحتاج صلاحيةَ «إدارة المستخدمين والإعدادات». القيمُ معروضةٌ للاطّلاع، وتُعدَّل من: إعدادات الحملة.
+              </div>
+            )}
+            {bankMsg && <div style={noteBox(bankMsg.ok)}>{bankMsg.text}</div>}
           </div>
-        ))}
-        <button onClick={savePricing} disabled={savingPricing} style={{ width:"100%", padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:"pointer", fontWeight:600 }}>
-          {savingPricing?"جارٍ الحفظ...":"حفظ الأسعار"}
-        </button>
+        )}
+
+        {/* ══════════ الإيصالات — ترقيمٌ يملكه صفُّ الموسم ══════════ */}
+        {settingsTab === "receipts" && (
+          <div style={cardBox}>
+            <div style={cardTitle}>إعدادات الإيصالات</div>
+            {/* سياقُ الموسمِ صريحٌ: الترقيمُ موسميٌّ ولو ظهر هنا */}
+            <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>
+              ترقيم إيصالات الموسم: <strong style={{ color:"var(--primary)" }}>{viewedSeason.name}</strong>
+            </div>
+            {!seasonWritable && (
+              <div style={{ margin:"10px 0 14px", padding:"10px 13px", borderRadius:9, background:"var(--warn-bg, var(--bg-2))", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text)", lineHeight:1.9 }}>
+                أنت تُطالع موسماً مؤرشفاً (<strong>{viewedSeason.name}</strong>). الأرقامُ المعروضةُ ترقيمُ هذا الموسمِ وحدَه، وهي للقراءةِ فقط.
+              </div>
+            )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:12, marginTop:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4, fontWeight:600 }}>
+                  {numberingLocked ? "رقم البداية" : "رقم بداية الإيصالات"}
+                </div>
+                {numberingLocked || !seasonWritable || !canManage ? (
+                  <div style={{ ...inputStyle, background:"var(--bg-2)", display:"flex", alignItems:"center", gap:8, fontWeight:700 }}>
+                    <span>{startNo}</span>
+                    {numberingLocked && <span title="مُثبَّت">🔒</span>}
+                  </div>
+                ) : (
+                  <input
+                    type="text" inputMode="numeric" dir="ltr"
+                    value={startEdit?.seasonId === viewedSeason.id ? startEdit.value : String(startNo)}
+                    onChange={e => setStartEdit({ seasonId: viewedSeason.id, value: e.target.value })}
+                    style={inputStyle} />
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4, fontWeight:600 }}>الرقم التالي</div>
+                <div style={{ ...inputStyle, background:"var(--bg-2)", fontWeight:700 }}>{nextNo}</div>
+              </div>
+            </div>
+
+            {numberingLocked ? (
+              <div style={{ marginTop:14, padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text)", lineHeight:1.9 }}>
+                تم تثبيت الترقيم بعد إصدار أوّل إيصال ولا يمكن تغيير رقم البداية.
+                {issuedCount > 0 && <> صدر في هذا الموسم <strong>{issuedCount}</strong> إيصالاً.</>}
+              </div>
+            ) : seasonWritable && canManage ? (
+              <>
+                <div style={{ marginTop:12, fontSize:11, color:"var(--text-muted)", lineHeight:1.9 }}>
+                  يمكن تحديد رقم البداية قبل إصدار أول إيصال فقط.
+                </div>
+                <button onClick={saveReceiptStart} disabled={startSaving} style={{ width:"100%", marginTop:12, padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:startSaving?"not-allowed":"pointer", fontWeight:600, opacity:startSaving?0.6:1 }}>
+                  {startSaving ? "جارٍ الحفظ..." : "حفظ رقم البداية"}
+                </button>
+              </>
+            ) : !canManage ? (
+              <div style={{ marginTop:14, padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text-muted)", lineHeight:1.9 }}>
+                تعديل ترقيم الإيصالات يحتاج صلاحية إدارة الحسابات المالية.
+              </div>
+            ) : null}
+            {startMsg && <div style={noteBox(startMsg.ok)}>{startMsg.text}</div>}
+          </div>
+        )}
       </div>
     </div>
-  );
+    );
+  }
 
   // ══════════════════════════════════════════════
   // GROUP VIEW
