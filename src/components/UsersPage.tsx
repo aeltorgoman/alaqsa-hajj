@@ -4,7 +4,7 @@ import { supabase } from "../supabase";
 import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset,
   normalizeStampImage, uploadPrivateCompanyAsset, deletePrivateCompanyAsset,
-  useSignedPrivateCompanyAsset, type NormalizedImage } from "../utils";
+  useSignedPrivateCompanyAsset, type NormalizedImage, type StampKind } from "../utils";
 import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
 import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
@@ -98,7 +98,7 @@ const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", mar
 const STAMP_MIME = ["image/png", "image/webp", "image/jpeg"] as const;
 const STAMP_ACCEPT = STAMP_MIME.join(",");
 const STAMP_MAX_BYTES = 5 * 1024 * 1024;   // حدُّ الحاوية نفسُه
-const NORMALIZED_VERSION = 1;
+const NORMALIZED_VERSION = 2;
 
 /* رقعةُ الشطرنج تُظهر الشفافيةَ وحدودَ الإطار؛ والورقةُ البيضاء تُقارب
    ما سيظهر على الإيصال. السياقان معاً يجعلان الخللَ ظاهراً: صورةٌ
@@ -141,12 +141,13 @@ function AssetPreviewPair({ src, label }: { src: string; label: string }) {
 type PendingImage = { image: NormalizedImage; objectUrl: string };
 
 function CompanyAssetRow({
-  label, hint, assetKey, uploadKind, storageKey, disabled, onChange, confirmRemove,
+  label, hint, assetKey, uploadKind, kind, storageKey, disabled, onChange, confirmRemove,
 }: {
   label: string;
   hint: string;
   assetKey: CompanyAssetKey;
   uploadKind: string;
+  kind: StampKind;
   storageKey: string;
   disabled: boolean;
   onChange: (nextKey: string) => void;
@@ -181,9 +182,19 @@ function CompanyAssetRow({
     discardPending();
     setMsg(null);
     setBusy("read");
-    const image = await normalizeStampImage(file);
+    const result = await normalizeStampImage(file, kind);
     setBusy("");
-    if (!image) { setMsg({ text: "تعذّرت قراءة الصورة، جرّب ملفاً آخر.", ok: false }); return; }
+    if (!result.ok) {
+      setMsg({
+        text: result.reason === "no_content"
+          /* رفضٌ صريح: لا حبرَ يُذكَر. أفضلُ من تسليمِ لوحةٍ فارغةٍ تبدو نجاحاً. */
+          ? "لم يُعثَر على ختمٍ أو توقيعٍ واضحٍ في الصورة. صوّر الورقة في ضوءٍ أفضل ثُمّ أعِد المحاولة."
+          : "تعذّرت قراءة الصورة، جرّب ملفاً آخر.",
+        ok: false,
+      });
+      return;
+    }
+    const image = result.image;
     setPending({ image, objectUrl: URL.createObjectURL(image.blob) });
   };
 
@@ -205,6 +216,7 @@ function CompanyAssetRow({
       originalWidth: pending.image.originalWidth, originalHeight: pending.image.originalHeight,
       mimeType: pending.image.mimeType, bytes: pending.image.blob.size,
       hasAlpha: pending.image.hasAlpha, trimmed: pending.image.trimmed,
+      backgroundRemoved: pending.image.backgroundRemoved,
       normalizedVersion: NORMALIZED_VERSION,
     };
     const { error } = await companyService.saveAsset({
@@ -245,7 +257,8 @@ function CompanyAssetRow({
 
   const dims = pending
     ? `${pending.image.width}×${pending.image.height}px · ${pending.image.mimeType.replace("image/", "").toUpperCase()}`
-      + (pending.image.trimmed ? " · قُصّت الهوامش الشفافة" : "")
+      + (pending.image.backgroundRemoved ? " · أُزيلت خلفية الورق" : "")
+      + (pending.image.trimmed ? " · قُصّت الهوامش" : "")
       + (pending.image.hasAlpha ? " · بشفافية" : " · خلفية مُصمتة")
     : "";
 
@@ -795,9 +808,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 <div style={{ display: "grid", gap: 14 }}>
                   <CompanyAssetRow
                     label="ختم الشركة"
-                    hint="يُفضَّل PNG بخلفية شفافة · حتى ٥ ميجابايت"
+                    hint="PNG شفاف أو صورة ورقٍ مصوَّرة — تُزال خلفيتها تلقائياً · حتى ٥ ميجابايت"
                     assetKey="company_stamp"
                     uploadKind="company_stamp"
+                    kind="stamp"
                     storageKey={stampKey}
                     disabled={!currentUser.permissions.manage_users}
                     onChange={setStampKey}
@@ -805,9 +819,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   />
                   <CompanyAssetRow
                     label="توقيع المسؤول"
-                    hint="يُفضَّل PNG بخلفية شفافة · حتى ٥ ميجابايت"
+                    hint="PNG شفاف أو صورة ورقٍ مصوَّرة — تُزال خلفيتها تلقائياً · حتى ٥ ميجابايت"
                     assetKey="manager_signature"
                     uploadKind="manager_signature"
+                    kind="signature"
                     storageKey={signatureKey}
                     disabled={!currentUser.permissions.manage_users}
                     onChange={setSignatureKey}

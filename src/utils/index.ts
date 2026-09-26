@@ -627,7 +627,7 @@ export async function uploadCompanyAsset(file: File, kind: string): Promise<stri
    ═══════════════════════════════════════════════════════════════ */
 
 import { type NormalizedImage } from "./stampImage";
-export { normalizeStampImage, type NormalizedImage } from "./stampImage";
+export { normalizeStampImage, type NormalizedImage, type StampKind, type NormalizeResult } from "./stampImage";
 
 const PRIVATE_COMPANY_BUCKET = "company-private";
 

@@ -47,6 +47,8 @@ export interface CompanyAssetImageMeta {
   originalWidth?: number; originalHeight?: number;
   mimeType?: string; bytes?: number;
   hasAlpha?: boolean; trimmed?: boolean;
+  /** أُزيلت خلفيّةُ الورقِ المُصمَتة أثناءَ التطبيع */
+  backgroundRemoved?: boolean;
   normalizedVersion?: number;
 }
 export interface CompanyProfile {
