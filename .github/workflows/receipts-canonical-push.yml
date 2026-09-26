@@ -1,0 +1,470 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — payment receipts (#54–#56)
+# ════════════════════════════════════════════════════════════
+# Applies the THREE migrations 20260926090000 / 20260926091000 /
+# 20260926092000 through the canonical CLI path, on the pattern of
+# company-config-seed-canonical-push.yml, room-fk-canonical-push.yml
+# and company-private-bucket-push.yml.
+#
+# ⚠️ `--db-url`, not `--linked`. PR #148 established that
+# `supabase link` resolves the project's SECRET service-role key,
+# which no scoped personal access token can satisfy.
+#
+# Exactly ONE production-mutating command may run, and only after
+# every gate passes. Deliberately absent, and audited for: migration
+# repair · migration up · `--include-all` · manual SQL mutation ·
+# rollback · baseline execution · any operation on a historical
+# migration · any Dashboard action.
+#
+# These three DO carry `public` schema DDL — unlike the bucket push —
+# so the gates are shaped for that instead:
+#   · BEFORE: not one of the three may carry a data verb against an
+#     existing application table (no INSERT/UPDATE/DELETE/TRUNCATE on
+#     public.payments / passengers / seasons rows beyond the two new
+#     counter columns' defaults), and the receipt objects must not
+#     already exist.
+#   · BEFORE: zero referential orphans, so the CASCADE→RESTRICT
+#     conversion cannot fail mid-transaction.
+#   · BEFORE: `delete_season` in production must be byte-identical to
+#     the body migration #55 was written against — otherwise a
+#     third-party change would be silently overwritten.
+#   · AFTER: every financial value and every passenger row unchanged,
+#     proved by fingerprints captured before the write.
+#   · AFTER: the new surface is present AND closed — guards, RESTRICT,
+#     no write policy for manage_payments, bucket still private.
+#
+# There is NO automatic rollback. Reverting is a new forward migration,
+# and a human decision.
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+
+name: Payment receipts - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-RECEIPTS-20260926092000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: receipts-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      M54: "20260926090000"
+      M55: "20260926091000"
+      M56: "20260926092000"
+      F54: supabase/migrations/20260926090000_payment_receipts.sql
+      F55: supabase/migrations/20260926091000_payments_fk_restrict.sql
+      F56: supabase/migrations/20260926092000_company_private_read_for_payments.sql
+      SHA54: "2da67218cdc99eadc4df62cb71705284b670da81bb4f7eacbf38e1a6389002dc"
+      SHA55: "c33c023ae2b64a57a5791515ffaaa66a1d9d75f108c68f2ef37fadbe9275c160"
+      SHA56: "939a89b1d58fe30404eb8ea00b7f4b1d1436718242e20244c2176c10a41f2eaf"
+      EXPECT_REPO_MIGRATIONS: "56"
+      EXPECT_ROWS_BEFORE: "53"
+      EXPECT_LATEST_BEFORE: "20260925090000"
+      EXPECT_ROWS_AFTER: "56"
+      # جسمُ delete_season الذي كُتبت عليه الترحيلة ٥٥ — يُطابَق قبل الكتابة
+      DELETE_SEASON_MD5_BEFORE: "45db0a04663749cecbe9a06bd5decaba"
+      BUCKET: company-private
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: receipts-push-evidence
+
+    steps:
+      - name: "GATE: confirmation and secrets"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-RECEIPTS-20260926092000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact three migrations under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          for pair in "$F54:$SHA54" "$F55:$SHA55" "$F56:$SHA56"; do
+            f="${pair%:*}"; want="${pair##*:}"
+            [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
+            got="$(sha256sum "$f" | cut -d' ' -f1)"
+            [ "$got" = "$want" ] || { echo "::error::$f sha256 mismatch: $got != $want"; exit 1; }
+            echo "ok   $(basename "$f")  $got"
+          done
+          # ولا صفَّ تطبيقٍ تُكتبه أيُّ واحدةٍ منها على الجداولِ القائمة
+          if grep -inE "^[[:space:]]*(insert[[:space:]]+into|update|delete[[:space:]]+from|truncate)[[:space:]]+(public\.)?(payments|passengers|seasons|custom_charges|financial_groups)\b" "$F54" "$F55" "$F56"; then
+            echo "::error::a migration writes application rows on an existing table"; exit 1; fi
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 53 / 20260925090000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: pending set is exactly the three"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${M54}', '${M55}', '${M56}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M54 $M55 $M56]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+          echo "Exactly three pending migrations, and they are the approved three."
+
+      - name: "GATE: production preconditions these migrations require"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+
+          # ١) صفرُ أيتامٍ — وإلا فشل التحويلُ إلى RESTRICT في منتصفِ المعاملة
+          orph="$(p "select count(*) from public.payments p where p.passenger_id is not null
+                       and not exists (select 1 from public.passengers x where x.id = p.passenger_id)")"
+          [ "$orph" -eq 0 ] || { echo "::error::$orph orphan payment rows - the FK conversion would fail"; bad=1; }
+
+          # ٢) كائناتُ الإيصالِ يجب ألّا تكون موجودةً أصلاً
+          for chk in \
+            "select count(*) from information_schema.tables where table_schema='public' and table_name='payment_receipts'" \
+            "select count(*) from information_schema.columns where table_schema='public' and table_name='payments' and column_name='receipt_id'" \
+            "select count(*) from pg_proc pr join pg_namespace ns on ns.oid=pr.pronamespace where ns.nspname='public' and pr.proname in ('issue_payment_receipt','cancel_payment_receipt','set_season_receipt_start','remove_passenger_with_history')"; do
+            got="$(p "$chk")"
+            [ "$got" -eq 0 ] || { echo "::error::receipt object already exists (got $got): $chk"; bad=1; }
+          done
+
+          # ٣) الحاويةُ الخاصّةُ خاصّة، وسياساتُ manage_users أربعٌ، ولا شيءَ لـmanage_payments بعد
+          pub="$(p "select public::text from storage.buckets where id='$BUCKET'")"
+          mu="$(p "select count(*) from pg_policies where schemaname='storage' and tablename='objects'
+                     and coalesce(qual,'')||coalesce(with_check,'') like '%$BUCKET%'
+                     and coalesce(qual,'')||coalesce(with_check,'') like '%manage_users%'")"
+          mp="$(p "select count(*) from pg_policies where schemaname='storage' and tablename='objects'
+                     and coalesce(qual,'')||coalesce(with_check,'') like '%manage_payments%'")"
+          [ "$pub" = "false" ] || { echo "::error::$BUCKET is public before we start"; bad=1; }
+          [ "$mu" -eq 4 ] || { echo "::error::manage_users policies = $mu, expected 4"; bad=1; }
+          [ "$mp" -eq 0 ] || { echo "::error::a manage_payments storage policy already exists ($mp)"; bad=1; }
+
+          # ٤) قاعدةُ الحذفِ الحاليّةُ CASCADE — هي ما نحوّله
+          fk="$(p "select confdeltype::text from pg_constraint where conname='payments_passenger_id_fkey'")"
+          [ "$fk" = "c" ] || { echo "::error::payments FK delete rule is '$fk', expected 'c' (cascade)"; bad=1; }
+
+          # ٥) جسمُ delete_season كما كُتبت عليه الترحيلة ٥٥ — لا تغييرَ لطرفٍ ثالثٍ يُمحى بصمت
+          dsm="$(p "select md5(pg_get_functiondef(pr.oid)) from pg_proc pr
+                      join pg_namespace ns on ns.oid=pr.pronamespace
+                     where ns.nspname='public' and pr.proname='delete_season'")"
+          echo "delete_season md5=$dsm"
+          [ "$dsm" = "$DELETE_SEASON_MD5_BEFORE" ] || {
+            echo "::error::delete_season in production is NOT the body migration 55 patches ($dsm)"; bad=1; }
+
+          # ٦) بصماتُ ما يجب ألّا يتغيّر — لا قيمةَ شخصيّةٌ تُطبع
+          p "select count(*) from public.payments"                > "$OUT/pay-n-before.txt"
+          p "select coalesce(sum(amount),0) from public.payments"  > "$OUT/pay-sum-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||passenger_id||':'||amount||':'||payment_date||':'||method,'|' order by id)),'(none)')
+               from public.payments"                              > "$OUT/pay-fp-before.txt"
+          p "select count(*) from public.passengers"              > "$OUT/psg-n-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||coalesce(season_id::text,'-')||':'||coalesce(room_id::text,'-'),'|' order by id)),'(none)')
+               from public.passengers"                            > "$OUT/psg-fp-before.txt"
+          p "select count(*) from public.seasons"                 > "$OUT/ssn-n-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||name||':'||coalesce(closed_at::text,'open'),'|' order by id)),'(none)')
+               from public.seasons"                               > "$OUT/ssn-fp-before.txt"
+          p "select count(*) from public.custom_charges"           > "$OUT/cc-n-before.txt"
+          p "select count(*) from pg_trigger where not tgisinternal and tgname='trg_reject_closed_season'" > "$OUT/cs-trg-before.txt"
+          echo "payments=$(cat "$OUT/pay-n-before.txt") sum=$(cat "$OUT/pay-sum-before.txt")"
+          echo "passengers=$(cat "$OUT/psg-n-before.txt") seasons=$(cat "$OUT/ssn-n-before.txt")"
+          echo "closed_season_triggers=$(cat "$OUT/cs-trg-before.txt")"
+
+          [ "$bad" -eq 0 ] || { echo "::error::preconditions failed - nothing was written"; exit 1; }
+          echo "All preconditions PASS."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 53 -> 56, the 53 originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$M56" ] || { echo "::error::latest is $latest, expected $M56"; bad=1; }
+          for v in "$M54" "$M55" "$M56"; do
+            d="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='$v'")"
+            [ "$d" -eq 1 ] || { echo "::error::$v appears $d times, expected exactly once"; bad=1; }
+          done
+          grep -vE "^($M54|$M55|$M56)	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more of the 53 original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M56" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: not one financial value or passenger row changed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          cmp_one() { # الاسم · الاستعلام · ملفُّ ما قبل
+            got="$(p "$2")"; want="$(cat "$3")"
+            if [ "$got" = "$want" ]; then printf 'ok   %-34s unchanged\n' "$1"
+            else echo "::error::$1 CHANGED: $want -> $got"; bad=1; fi
+          }
+          cmp_one payments_count   "select count(*) from public.payments"               "$OUT/pay-n-before.txt"
+          cmp_one payments_sum     "select coalesce(sum(amount),0) from public.payments" "$OUT/pay-sum-before.txt"
+          cmp_one payments_finger  "select coalesce(md5(string_agg(id||':'||passenger_id||':'||amount||':'||payment_date||':'||method,'|' order by id)),'(none)') from public.payments" "$OUT/pay-fp-before.txt"
+          cmp_one passengers_count "select count(*) from public.passengers"             "$OUT/psg-n-before.txt"
+          cmp_one passengers_finger "select coalesce(md5(string_agg(id||':'||coalesce(season_id::text,'-')||':'||coalesce(room_id::text,'-'),'|' order by id)),'(none)') from public.passengers" "$OUT/psg-fp-before.txt"
+          cmp_one seasons_count    "select count(*) from public.seasons"                "$OUT/ssn-n-before.txt"
+          cmp_one seasons_finger   "select coalesce(md5(string_agg(id||':'||name||':'||coalesce(closed_at::text,'open'),'|' order by id)),'(none)') from public.seasons" "$OUT/ssn-fp-before.txt"
+          cmp_one custom_charges   "select count(*) from public.custom_charges"          "$OUT/cc-n-before.txt"
+          # ولا إيصالَ وُلد: الترحيلةُ تُنشئ الجدولَ فارغاً
+          n="$(p "select count(*) from public.payment_receipts")"
+          echo "payment_receipts rows = $n"
+          [ "$n" -eq 0 ] || { echo "::error::$n receipt rows exist - the migration created data"; bad=1; }
+          # وكلُّ الدفعاتِ القديمةِ بلا receipt_id، غيرَ ممسوسة
+          nn="$(p "select count(*) from public.payments where receipt_id is null")"
+          [ "$nn" = "$(cat "$OUT/pay-n-before.txt")" ] || {
+            echo "::error::legacy payments no longer all have NULL receipt_id ($nn)"; bad=1; }
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-data.txt"; else echo FAIL > "$OUT/status-data.txt"; fi
+          echo "Data-integrity verdict: $(cat "$OUT/status-data.txt")"
+
+      - name: "POST: the new surface is present AND closed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          want() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-44s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+
+          want receipts_table        "select count(*) from information_schema.tables where table_schema='public' and table_name='payment_receipts'" 1
+          want receipts_rls_enabled  "select relrowsecurity::text from pg_class where oid='public.payment_receipts'::regclass" true
+          want receipts_select_policy "select count(*) from pg_policies where tablename='payment_receipts' and cmd='SELECT'" 1
+          want receipts_write_policies "select count(*) from pg_policies where tablename='payment_receipts' and cmd<>'SELECT'" 0
+          want receipts_no_fk        "select count(*) from pg_constraint c join pg_class t on t.oid=c.conrelid where c.contype='f' and t.relname='payment_receipts'" 0
+          want three_rpcs            "select count(*) from pg_proc pr join pg_namespace ns on ns.oid=pr.pronamespace where ns.nspname='public' and pr.proname in ('issue_payment_receipt','cancel_payment_receipt','set_season_receipt_start')" 3
+          want remove_passenger_rpc  "select count(*) from pg_proc pr join pg_namespace ns on ns.oid=pr.pronamespace where ns.nspname='public' and pr.proname='remove_passenger_with_history'" 1
+          want immutable_trigger     "select count(*) from pg_trigger where not tgisinternal and tgname='trg_payment_receipts_immutable'" 1
+          want require_receipt_guard "select count(*) from pg_trigger where not tgisinternal and tgname='trg_payments_require_receipt'" 1
+          want payments_fk_restrict  "select confdeltype::text from pg_constraint where conname='payments_passenger_id_fkey'" r
+          want season_counters       "select count(*) from information_schema.columns where table_schema='public' and table_name='seasons' and column_name in ('receipt_start_number','receipt_next_number')" 2
+          want closed_season_guards  "select count(*) from pg_trigger where not tgisinternal and tgname='trg_reject_closed_season'" "$(cat "$OUT/cs-trg-before.txt")"
+          want delete_season_payments "select (position('delete from public.payments' in lower(pg_get_functiondef(pr.oid))) > 0)::text from pg_proc pr join pg_namespace ns on ns.oid=pr.pronamespace where ns.nspname='public' and pr.proname='delete_season'" true
+
+          # الحاويةُ الخاصّةُ وسياساتُها
+          want bucket_still_private  "select public::text from storage.buckets where id='$BUCKET'" false
+          want manage_users_policies "select count(*) from pg_policies where schemaname='storage' and tablename='objects' and coalesce(qual,'')||coalesce(with_check,'') like '%$BUCKET%' and coalesce(qual,'')||coalesce(with_check,'') like '%manage_users%'" 4
+          want manage_payments_total "select count(*) from pg_policies where schemaname='storage' and tablename='objects' and coalesce(qual,'')||coalesce(with_check,'') like '%manage_payments%'" 1
+          want manage_payments_select_only "select coalesce(min(cmd),'(none)') from pg_policies where schemaname='storage' and tablename='objects' and coalesce(qual,'')||coalesce(with_check,'') like '%manage_payments%'" SELECT
+          want manage_payments_no_writes "select count(*) from pg_policies where schemaname='storage' and tablename='objects' and coalesce(qual,'')||coalesce(with_check,'') like '%manage_payments%' and cmd<>'SELECT'" 0
+          want anon_on_private       "select count(*) from pg_policies where schemaname='storage' and tablename='objects' and coalesce(qual,'')||coalesce(with_check,'') like '%$BUCKET%' and ('anon' = any(roles) or 'public' = any(roles))" 0
+          want company_assets_public "select public::text from storage.buckets where id='company-assets'" true
+
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-surface.txt"; else echo FAIL > "$OUT/status-surface.txt"; fi
+          echo "Surface verdict: $(cat "$OUT/status-surface.txt")"
+
+      - name: "POST: behaviour probes that persist NOTHING"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
+          bad=0
+
+          # ١) تجاوزُ الإيصالِ بإدراجٍ مباشرٍ في payments — مرفوضٌ ولو كان المنفّذُ المالك.
+          #    وكلُّ شيءٍ داخل معاملةٍ تُلفُّ راجعةً، فلا صفَّ يُولد بحال.
+          out="$(psql "$URL" -X -q -At -c "
+            begin;
+            do \$\$
+            begin
+              insert into public.payments (passenger_id, amount, payment_date, method)
+              values ((select min(id) from public.passengers), 0.01, current_date, 'نقدي');
+              raise exception 'PROBE_ACCEPTED';
+            exception
+              when others then
+                if sqlerrm = 'PROBE_ACCEPTED' then raise notice 'RESULT=ACCEPTED';
+                else raise notice 'RESULT=REJECTED %', sqlerrm; end if;
+            end
+            \$\$;
+            rollback;" 2>&1)"
+          echo "$out" | sed -n 's/^NOTICE:[[:space:]]*RESULT=/direct_insert: /p' | tee "$OUT/probe-direct-insert.txt"
+          if echo "$out" | grep -q "RESULT=REJECTED.*لا تُسجَّل دفعةٌ بلا إيصال"; then
+            echo "ok   direct payments INSERT is blocked by the guard"
+          else
+            echo "::error::the direct-insert bypass was NOT blocked as expected"; bad=1; fi
+
+          # ٢) المسارُ المعتمَدُ يعمل — بهويّةِ موظّفٍ حقيقيٍّ مخوَّلٍ، وبمعاملةٍ تُلفُّ راجعة.
+          #    لا إيصالَ يبقى، ولا رقمَ يُستهلك (العدّادُ عمودٌ لا تسلسل، فيرجع بالـrollback).
+          uid="$(p "select up.id::text from public.user_profiles up
+                     where up.is_active and coalesce((up.permissions->>'manage_payments')::boolean,false)
+                     order by up.created_at limit 1")"
+          pid="$(p "select coalesce(min(g.id)::text,'') from public.passengers g
+                      join public.seasons s on s.id = g.season_id where s.closed_at is null")"
+          if [ -z "$uid" ] || [ -z "$pid" ]; then
+            echo "::warning::no active manage_payments user, or no passenger in an open season - RPC probe skipped (not a failure)"
+            echo SKIPPED > "$OUT/probe-rpc.txt"
+          else
+            echo "::add-mask::$uid"
+            out2="$(psql "$URL" -X -q -At -c "
+              begin;
+              select set_config('request.jwt.claim.sub', '$uid', true);
+              do \$\$
+              declare r public.payment_receipts;
+              begin
+                select * into r from public.issue_payment_receipt(
+                  jsonb_build_array(jsonb_build_object(
+                    'passenger_id', $pid,
+                    'amount', 1.00)),
+                  current_date, 'نقدي', 'PROBE - rolled back');
+                raise notice 'RESULT=ISSUED number=% status=% total=%', r.receipt_number, r.status, r.total_amount;
+              exception when others then raise notice 'RESULT=FAILED %', sqlerrm;
+              end
+              \$\$;
+              rollback;" 2>&1)"
+            echo "$out2" | sed -n 's/^NOTICE:[[:space:]]*RESULT=/rpc: /p' | tee "$OUT/probe-rpc.txt"
+            if echo "$out2" | grep -q "RESULT=ISSUED"; then echo "ok   approved RPC path works"
+            else echo "::error::the approved RPC path did not work"; bad=1; fi
+          fi
+
+          # ٣) وبعد الفحصَين: لا صفَّ وُلد، ولا عدّادَ تحرّك
+          nr="$(p "select count(*) from public.payment_receipts")"
+          np="$(p "select count(*) from public.payments")"
+          nx="$(p "select coalesce(max(receipt_next_number),0) from public.seasons")"
+          echo "after probes: receipts=$nr payments=$np max_next_number=$nx" | tee -a "$OUT/probe-rpc.txt"
+          [ "$nr" -eq 0 ] || { echo "::error::a receipt row PERSISTED - rollback failed"; bad=1; }
+          [ "$np" = "$(cat "$OUT/pay-n-before.txt")" ] || { echo "::error::a payment row PERSISTED"; bad=1; }
+          [ "$nx" -eq 1 ] || { echo "::error::a receipt number was consumed (max_next_number=$nx)"; bad=1; }
+
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-probes.txt"; else echo FAIL > "$OUT/status-probes.txt"; fi
+          echo "Probe verdict: $(cat "$OUT/status-probes.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger data surface probes; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then echo "::warning::$k did not run"; printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migrations 54-56 applied; ledger 56; no financial or passenger row changed; guards closed."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipts-canonical-push
+          path: receipts-push-evidence
+          if-no-files-found: error
