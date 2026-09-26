@@ -601,8 +601,11 @@ const COMPANY_BUCKET = "company-assets";
 export async function uploadCompanyAsset(file: File, kind: string): Promise<string | null> {
   const compressed = await compressImage(file);
   const isPng = file.type === "image/png";
-  const ext = isPng ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const contentType = isPng ? "image/png" : file.type === "image/webp" ? "image/webp" : "image/jpeg";
+  /* ⚠️ الامتدادُ والنوعُ يتبعان ما خرج فعلاً من `compressImage` لا ما
+     دخل: هي تُخرج PNG أو JPEG لا ثالثَ لهما، فالفرعُ القديمُ الذي كان
+     يسم WebP بـ`image/webp` كان يُخزّن بايتات JPEG باسمٍ كاذب. */
+  const ext = isPng ? "png" : "jpg";
+  const contentType = isPng ? "image/png" : "image/jpeg";
   const path = `${kind}_${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage.from(COMPANY_BUCKET).upload(path, compressed, { upsert: true, contentType });
@@ -611,6 +614,80 @@ export async function uploadCompanyAsset(file: File, kind: string): Promise<stri
   const { data } = supabase.storage.from(COMPANY_BUCKET).getPublicUrl(path);
   return data?.publicUrl || null;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   الأصولُ الخاصّة — الخِتم وتوقيع المسؤول
+
+   حاويةٌ **خاصّة** لا عامّة، ويُخزَّن منها **مفتاحُ الكائن** لا رابط،
+   ويُوقَّع عند العرض بعمرٍ قصير. وهو منوالُ `passengers-docs` نفسُه لا
+   معمارٌ جديد — راجع ترحيلة `20260925090000`.
+
+   ⚠️ ولا يُخزَّن الرابطُ الموقَّع في القاعدة أبداً: عمرُه دقائق،
+   وتخزينُه يعني صورةً تموت بعد ساعة بلا سببٍ ظاهر.
+   ═══════════════════════════════════════════════════════════════ */
+
+import { type NormalizedImage } from "./stampImage";
+export { normalizeStampImage, type NormalizedImage, type StampKind, type NormalizeResult } from "./stampImage";
+
+const PRIVATE_COMPANY_BUCKET = "company-private";
+
+/** عمرُ رابطِ معاينةِ الخِتم/التوقيع — دقائقُ تكفي للمراجعة. */
+export const COMPANY_PRIVATE_TTL = 300;
+
+/** يرفع الصورةَ المُطبَّعة ويُعيد **مفتاحَ الكائن** — لا رابطاً. */
+export async function uploadPrivateCompanyAsset(image: NormalizedImage, kind: string): Promise<string | null> {
+  const ext = image.mimeType === "image/png" ? "png" : "jpg";
+  const key = `${kind}_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(PRIVATE_COMPANY_BUCKET)
+    .upload(key, image.blob, { upsert: false, contentType: image.mimeType });
+  if (error) { console.error("تعذّر رفع الأصل الخاصّ", error); return null; }
+  return key;
+}
+
+export async function deletePrivateCompanyAsset(key: string): Promise<boolean> {
+  if (!key) return false;
+  const { error } = await supabase.storage.from(PRIVATE_COMPANY_BUCKET).remove([key]);
+  if (error) { console.error("تعذّر حذف الأصل الخاصّ", error); return false; }
+  return true;
+}
+
+/** رابطٌ موقّعٌ قصيرُ العمر للأصل الخاصّ — المسارُ الوحيدُ لقراءته. */
+export async function signedPrivateCompanyUrl(
+  key: string | null | undefined, ttlSeconds: number = COMPANY_PRIVATE_TTL,
+): Promise<string> {
+  if (!key) return "";
+  const cacheKey = `${PRIVATE_COMPANY_BUCKET}|${key}|${ttlSeconds}`;
+  const cached = signedCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+
+  const { data, error } = await supabase.storage
+    .from(PRIVATE_COMPANY_BUCKET).createSignedUrl(key, ttlSeconds);
+  if (error || !data?.signedUrl) {
+    console.error("تعذّر توقيع رابط الأصل الخاصّ", { key, error });
+    return "";
+  }
+  signedCache.set(cacheKey, {
+    url: data.signedUrl,
+    expiresAt: Date.now() + ttlSeconds * 1000 - SIGN_MARGIN_MS,
+  });
+  return data.signedUrl;
+}
+
+/** خطّاف عرض: يوقّع المفتاحَ المخزّن ويعيد رابطاً جاهزاً للـ`src`. */
+export function useSignedPrivateCompanyAsset(key: string | null | undefined): string {
+  const [url, setUrl] = useState("");
+  /* لا ضبطَ متزامنٌ داخل الأثر: `signedPrivateCompanyUrl` تُرجع ""
+     للمفتاح الفارغ أصلاً، فالمسارُ واحدٌ في الحالتين ولا تصييرَ
+     متتالياً. */
+  useEffect(() => {
+    let alive = true;
+    void signedPrivateCompanyUrl(key).then(u => { if (alive) setUrl(u); });
+    return () => { alive = false; };
+  }, [key]);
+  return url;
+}
+
 /* ═══ طبقةُ الطباعة انتقلت إلى `src/print/` ═══
    القشرةُ والسمةُ والهويّةُ والكتلُ والإخراجُ ومطبوعاتُ الشنط صارت
    وحدةً مشتركةً واحدة. وإعاداتُ التصدير أدناه توافقيّةٌ فلا يتغيّر

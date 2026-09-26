@@ -1,6 +1,7 @@
 import type { AppConfig } from "../config/AppConfig";
 import type { Database, Json } from "../types/database";
 import type { CompanyAsset, CompanyAssetKey, CompanyProfile, SeasonMasterData } from "./types";
+import { isPrivateCompanyAssetKey } from "./types";
 import { supabase } from "../supabase";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "./safety";
 import { classifyPostgrestError, type SaveResult } from "./saveResult";
@@ -25,10 +26,23 @@ function isCompanyAssetKey(value: string): value is CompanyAssetKey {
 function normalizeAssets(rows: AssetRow[]): Partial<Record<CompanyAssetKey, CompanyAsset>> {
   const assets: Partial<Record<CompanyAssetKey, CompanyAsset>> = {};
   rows.forEach(row => {
+    if (!isCompanyAssetKey(row.asset_key)) return;
+    /* الأصلُ الخاصُّ يحمل **مفتاحَ كائنٍ** لا رابطاً، فلا يمرّ على
+       مُطبِّعِ الروابط — كان يردّه `null` فيختفي الأصل. ويُتحقَّق منه
+       بشرطه: مسارٌ نسبيٌّ بلا بروتوكول ولا صعودٍ إلى أعلى. */
+    if (isPrivateCompanyAssetKey(row.asset_key)) {
+      const key = typeof row.asset_url === "string" ? row.asset_url.trim() : "";
+      if (!key || /^[a-z]+:/i.test(key) || key.startsWith("/") || key.includes("..")) return;
+      assets[row.asset_key] = {
+        key: row.asset_key, url: key, isPrivate: true, altText: row.alt_text,
+        metadata: row.metadata ?? ({} as Json), updatedAt: row.updated_at,
+      };
+      return;
+    }
     const url = normalizeCompanyAssetUrl(row.asset_url);
-    if (!url || !isCompanyAssetKey(row.asset_key)) return;
+    if (!url) return;
     assets[row.asset_key] = {
-      key: row.asset_key, url, altText: row.alt_text,
+      key: row.asset_key, url, isPrivate: false, altText: row.alt_text,
       metadata: row.metadata ?? ({} as Json), updatedAt: row.updated_at,
     };
   });
@@ -104,13 +118,23 @@ export const companyService = {
        يبقَ في `company_config` عمودُ أصلٍ يُرتَدّ إليه. */
     return { config: configResult.data, assets: assetsResult.data ?? [], error: configResult.error };
   },
+  /* ⚠️ `.select().single()` هنا لنفس سببها في `updateConfig`: بدونها
+     يرسل PostgREST الطلبَ بلا تمثيل، فيردّ 204 على النجاح **وعلى
+     صفرِ صفوفٍ رشّحتها RLS سواء**. والمسارُ الخطر هو فرعُ التحديث من
+     الـupsert: الإدراجُ الممنوعُ يردّ 42501 صريحاً، أمّا تحديثُ صفٍّ
+     قائمٍ رشّحته `USING` فيمضي صامتاً. والآن يعود PGRST116 فيُقرأ
+     خطأً — وشكلُ النتيجةِ لم يتغيّر، فالمستدعي القائمُ يفحص `error`
+     كما كان. */
   async saveAsset(asset: { key: CompanyAssetKey; url: string; altText?: string | null; metadata?: Json }) {
     return supabase.from("company_assets").upsert({
       asset_key: asset.key, asset_url: asset.url, alt_text: asset.altText ?? null,
       metadata: asset.metadata ?? {}, updated_at: new Date().toISOString(),
-    });
+    }).select().single();
   },
-  async removeAsset(key: CompanyAssetKey) { return supabase.from("company_assets").delete().eq("asset_key", key); },
+  /* والحذفُ مثلُها: `delete` بلا تمثيل يردّ 204 سواءٌ حُذف صفٌّ أم
+     رشّحت RLS كلَّ شيء. و`.select()` تُعيد المحذوفَ فعلاً، فالمصفوفةُ
+     الفارغةُ تعني «لم يُحذف شيء» لا «تمّ». */
+  async removeAsset(key: CompanyAssetKey) { return supabase.from("company_assets").delete().eq("asset_key", key).select(); },
   async loadConfig() { return supabase.from("company_config").select("*").eq("id", 1).single(); },
 
   /* ⚠️ `.select().single()` ليست زينة: بدونها يرسل PostgREST

@@ -2,13 +2,17 @@ import { useState, useEffect } from "react";
 import type { ChangeEvent } from "react";
 import { supabase } from "../supabase";
 import type { User } from "../types";
-import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset } from "../utils";
-import { useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
+import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset,
+  normalizeStampImage, uploadPrivateCompanyAsset, deletePrivateCompanyAsset,
+  useSignedPrivateCompanyAsset, type NormalizedImage, type StampKind } from "../utils";
+import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
 import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { companyService, seasonMasterData } from "../company/companyService";
+import type { CompanyAssetKey, CompanyAssetImageMeta } from "../company/types";
+import type { Json } from "../types/database";
 import { isSaved, saveErrorText } from "../company/saveResult";
 
 /* ─── helpers ─── */
@@ -77,6 +81,262 @@ const fieldLabel: React.CSSProperties = {
 
 const divider: React.CSSProperties = { height: 1, background: "var(--bg-2)", margin: "14px 0" };
 
+/* ═══════════════════════════════════════════════════════════════
+   الخِتم وتوقيع المسؤول — أصلٌ خاصٌّ يُدار بنفسه
+
+   ليسا هويّةً بصريّةً علنيّة: يعيشان في حاوية `company-private`
+   الخاصّة، ويُخزَّن منهما **مفتاحُ الكائن** لا رابطٌ عامّ، ويُوقَّع
+   عند العرض بعمرٍ قصير (ترحيلة `20260925090000`).
+
+   والمسارُ: اختيارٌ → تطبيعٌ في المتصفّح → **معاينةٌ قبل الاعتماد** →
+   رفعٌ وحفظٌ عند الاعتماد وحدَه. فما رُفض لا يُرفع أصلاً، والمعروضُ
+   بعد الحفظِ هو الكائنُ المخزَّنُ نفسُه لا مشتقٌّ خفيّ.
+
+   ومرجعُه `company_assets` وحدَها — لا عمودَ في `company_config`.
+   ═══════════════════════════════════════════════════════════════ */
+
+const STAMP_MIME = ["image/png", "image/webp", "image/jpeg"] as const;
+const STAMP_ACCEPT = STAMP_MIME.join(",");
+const STAMP_MAX_BYTES = 5 * 1024 * 1024;   // حدُّ الحاوية نفسُه
+const NORMALIZED_VERSION = 2;
+
+/* رقعةُ الشطرنج تُظهر الشفافيةَ وحدودَ الإطار؛ والورقةُ البيضاء تُقارب
+   ما سيظهر على الإيصال. السياقان معاً يجعلان الخللَ ظاهراً: صورةٌ
+   بخلفيةٍ بيضاء مُصمتة تبدو سليمةً على الورقةِ وتفضحها الرقعة. */
+const checkerBg: React.CSSProperties = {
+  backgroundImage:
+    "linear-gradient(45deg,#d8d8d8 25%,transparent 25%,transparent 75%,#d8d8d8 75%)," +
+    "linear-gradient(45deg,#d8d8d8 25%,transparent 25%,transparent 75%,#d8d8d8 75%)",
+  backgroundSize: "16px 16px", backgroundPosition: "0 0,8px 8px",
+  backgroundColor: "#f4f4f4",
+};
+
+const previewPane: React.CSSProperties = {
+  height: 150, borderRadius: 8, border: "1px solid var(--line)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  overflow: "hidden", padding: 8,
+};
+
+/* المعاينةُ في سياقيها — بالحجمِ الذي يُحكَم به لا بإبهامٍ صغير */
+function AssetPreviewPair({ src, label }: { src: string; label: string }) {
+  const imgStyle: React.CSSProperties = { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" };
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>خلفية شفافة</div>
+        <div style={{ ...previewPane, ...checkerBg }}>
+          <img src={src} alt={`${label} — شفاف`} style={imgStyle} />
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 3 }}>على ورق المستند</div>
+        <div style={{ ...previewPane, background: "#ffffff" }}>
+          <img src={src} alt={`${label} — ورق`} style={imgStyle} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type PendingImage = { image: NormalizedImage; objectUrl: string };
+
+function CompanyAssetRow({
+  label, hint, assetKey, uploadKind, kind, storageKey, disabled, onChange, confirmRemove,
+}: {
+  label: string;
+  hint: string;
+  assetKey: CompanyAssetKey;
+  uploadKind: string;
+  kind: StampKind;
+  storageKey: string;
+  disabled: boolean;
+  onChange: (nextKey: string) => void;
+  confirmRemove: (message: string, opts: { title: string; confirmLabel: string }) => Promise<boolean>;
+}) {
+  const [pending, setPending] = useState<PendingImage | null>(null);
+  const [busy, setBusy] = useState<"" | "read" | "save" | "remove">("");
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const savedUrl = useSignedPrivateCompanyAsset(storageKey || null);
+  const working = busy !== "";
+
+  /* الرابطُ المحلّيُّ للمعاينةِ يُحرَّر دائماً — ولو خرج المكوّن وسط
+     المراجعة، فلا يتسرّب. */
+  useEffect(() => () => { if (pending) URL.revokeObjectURL(pending.objectUrl); }, [pending]);
+
+  const discardPending = () => {
+    if (pending) URL.revokeObjectURL(pending.objectUrl);
+    setPending(null);
+  };
+
+  const choose = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";              // ليعمل onChange لو أُعيد اختيارُ الملفِّ نفسِه
+    if (!file) return;
+    if (!(STAMP_MIME as readonly string[]).includes(file.type)) {
+      setMsg({ text: "الملف يجب أن يكون صورة PNG أو WebP أو JPG.", ok: false }); return;
+    }
+    if (file.size > STAMP_MAX_BYTES) {
+      setMsg({ text: "حجم الملف يتجاوز ٥ ميجابايت.", ok: false }); return;
+    }
+
+    discardPending();
+    setMsg(null);
+    setBusy("read");
+    const result = await normalizeStampImage(file, kind);
+    setBusy("");
+    if (!result.ok) {
+      setMsg({
+        text: result.reason === "no_content"
+          /* رفضٌ صريح: لا حبرَ يُذكَر. أفضلُ من تسليمِ لوحةٍ فارغةٍ تبدو نجاحاً. */
+          ? "لم يُعثَر على ختمٍ أو توقيعٍ واضحٍ في الصورة. صوّر الورقة في ضوءٍ أفضل ثُمّ أعِد المحاولة."
+          : "تعذّرت قراءة الصورة، جرّب ملفاً آخر.",
+        ok: false,
+      });
+      return;
+    }
+    const image = result.image;
+    setPending({ image, objectUrl: URL.createObjectURL(image.blob) });
+  };
+
+  /* الاعتمادُ وحدَه يرفع ويحفظ. والترتيبُ محسوب:
+       رفعٌ → حفظُ المؤشّر → **ثُمّ** حذفُ السابق.
+     وإن أخفق الحفظُ بعد الرفع، يُنظَّف الجديدُ وتبقى الحالةُ القديمة
+     كما هي — فلا مؤشّرَ يشير إلى كائنٍ معدومٍ بحال. */
+  const confirmSave = async () => {
+    if (!pending) return;
+    const previous = storageKey;
+    setBusy("save");
+    setMsg(null);
+
+    const key = await uploadPrivateCompanyAsset(pending.image, uploadKind);
+    if (!key) { setBusy(""); setMsg({ text: "تعذّر رفع الصورة، لم يتغيّر شيء.", ok: false }); return; }
+
+    const meta: CompanyAssetImageMeta = {
+      width: pending.image.width, height: pending.image.height,
+      originalWidth: pending.image.originalWidth, originalHeight: pending.image.originalHeight,
+      mimeType: pending.image.mimeType, bytes: pending.image.blob.size,
+      hasAlpha: pending.image.hasAlpha, trimmed: pending.image.trimmed,
+      backgroundRemoved: pending.image.backgroundRemoved,
+      normalizedVersion: NORMALIZED_VERSION,
+    };
+    const { error } = await companyService.saveAsset({
+      key: assetKey, url: key, altText: label, metadata: meta as unknown as Json,
+    });
+    if (error) {
+      await deletePrivateCompanyAsset(key);
+      setBusy("");
+      setMsg({ text: "تعذّر حفظ الصورة، لم يتغيّر شيء.", ok: false });
+      return;
+    }
+
+    onChange(key);
+    discardPending();
+    if (previous && previous !== key) await deletePrivateCompanyAsset(previous);
+    setBusy("");
+    setMsg({ text: "تم الحفظ.", ok: true });
+  };
+
+  const remove = async () => {
+    if (!storageKey) return;
+    const yes = await confirmRemove(`سيُحذف ${label} نهائياً من إعدادات الحملة.`, {
+      title: `حذف ${label}؟`, confirmLabel: "نعم، احذف",
+    });
+    if (!yes) return;
+    const target = storageKey;
+    setBusy("remove");
+    setMsg(null);
+    const { data, error } = await companyService.removeAsset(assetKey);
+    if (error || !data || data.length === 0) {
+      setBusy(""); setMsg({ text: "تعذّر الحذف، لم يتغيّر شيء.", ok: false }); return;
+    }
+    onChange("");
+    await deletePrivateCompanyAsset(target);
+    setBusy("");
+    setMsg({ text: "تم الحذف.", ok: true });
+  };
+
+  const dims = pending
+    ? `${pending.image.width}×${pending.image.height}px · ${pending.image.mimeType.replace("image/", "").toUpperCase()}`
+      + (pending.image.backgroundRemoved ? " · أُزيلت خلفية الورق" : "")
+      + (pending.image.trimmed ? " · قُصّت الهوامش" : "")
+      + (pending.image.hasAlpha ? " · بشفافية" : " · خلفية مُصمتة")
+    : "";
+
+  return (
+    <div style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14, background: "var(--bg-2)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+        <span style={{ ...fieldLabel, marginBottom: 0 }}>{label}</span>
+        <span style={{ fontSize: 9, color: "var(--text-muted)" }}>{hint}</span>
+      </div>
+
+      {pending ? (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--primary)", margin: "8px 0 6px" }}>
+            راجِع النتيجة قبل الاعتماد — {dims}
+          </div>
+          <AssetPreviewPair src={pending.objectUrl} label={label} />
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button type="button" onClick={confirmSave} disabled={working}
+              style={btnP({ fontSize: 11, padding: "6px 14px", opacity: working ? 0.6 : 1 })}>
+              {busy === "save" ? "جاري الحفظ..." : "اعتماد وحفظ"}
+            </button>
+            <button type="button" onClick={discardPending} disabled={working}
+              style={btnS({ fontSize: 11, padding: "6px 12px", opacity: working ? 0.6 : 1 })}>
+              إلغاء
+            </button>
+          </div>
+        </>
+      ) : storageKey ? (
+        <>
+          {savedUrl
+            ? <AssetPreviewPair src={savedUrl} label={label} />
+            : <div style={{ ...previewPane, ...checkerBg }}>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>جاري تحميل المعاينة...</span>
+              </div>}
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <label style={btnS({
+              fontSize: 11, padding: "6px 12px", margin: 0, display: "inline-flex", alignItems: "center",
+              cursor: working || disabled ? "not-allowed" : "pointer", opacity: working || disabled ? 0.6 : 1,
+            })}>
+              {busy === "read" ? "جاري المعالجة..." : "استبدال الصورة"}
+              <input type="file" accept={STAMP_ACCEPT} style={{ display: "none" }}
+                disabled={working || disabled} onChange={choose} />
+            </label>
+            <button type="button" onClick={remove} disabled={working || disabled}
+              style={btnS({
+                fontSize: 11, padding: "6px 12px", color: "#C62828", borderColor: "#C62828",
+                cursor: working || disabled ? "not-allowed" : "pointer", opacity: working || disabled ? 0.6 : 1,
+              })}>
+              {busy === "remove" ? "جاري الحذف..." : "حذف"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{
+          ...previewPane, marginTop: 8, flexDirection: "column", gap: 8,
+          border: "1.5px dashed var(--accent)", background: "var(--paper)",
+        }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>لم تُضف بعد</span>
+          <label style={btnS({
+            fontSize: 11, padding: "6px 12px", margin: 0, display: "inline-flex", alignItems: "center",
+            cursor: working || disabled ? "not-allowed" : "pointer", opacity: working || disabled ? 0.6 : 1,
+          })}>
+            {busy === "read" ? "جاري المعالجة..." : "رفع صورة"}
+            <input type="file" accept={STAMP_ACCEPT} style={{ display: "none" }}
+              disabled={working || disabled} onChange={choose} />
+          </label>
+        </div>
+      )}
+
+      {msg && (
+        <div style={{ fontSize: 10, marginTop: 8, fontWeight: 700, color: msg.ok ? "var(--primary)" : "#C62828" }}>
+          {msg.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── component ─── */
 /* رسالة الخادم تُستخرج من جسم الاستجابة: functions.invoke يضع
    الاستجابة غير الناجحة في error ويترك data فارغاً */
@@ -120,6 +380,14 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     bank_account_number: financial.accountNumber, bank_iban: financial.iban,
     bank_swift: financial.swift, commercial_registration: financial.commercialRegistration,
   }));
+
+  /* الخِتمُ والتوقيعُ خارجَ `companyForm` عمداً: يُحفظان لحظةَ الرفع
+     لا مع زرّ «حفظ بيانات الحملة»، فلا يُخلطان بنموذجٍ يُحفظ دفعةً.
+     والقيمةُ الأولى من `company_assets` — فإعادةُ التحميل تُظهر
+     المحفوظَ من مرجعه لا من ذاكرةٍ محلّيّة. */
+  const companyAssets = useCompanyAssets();
+  const [stampKey, setStampKey] = useState(companyAssets.company_stamp?.url ?? "");
+  const [signatureKey, setSignatureKey] = useState(companyAssets.manager_signature?.url ?? "");
 
   /* ═══ إعداداتُ الموسم ═══
      تُحمَّل من **الموسم المعروض** ليرى المديرُ بياناتِ ما يتصفّحه،
@@ -522,6 +790,45 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                   </div>
                 </div>
 
+              </div>
+            </div>
+
+            {/* ── الخِتم وتوقيع المسؤول ── */}
+            <div style={card}>
+              <div style={cardHead}>
+                <div style={cardIcon}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11.5V7a3 3 0 0 1 6 0v4.5"/><path d="M5 16h14v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z"/><path d="M8 16c0-1.5 1-2.5 1.5-3.5"/><path d="M16 16c0-1.5-1-2.5-1.5-3.5"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>الختم والتوقيع</div>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>يُحفظ كلٌّ منهما فور رفعه</div>
+                </div>
+              </div>
+              <div style={cardBody}>
+                <div style={{ display: "grid", gap: 14 }}>
+                  <CompanyAssetRow
+                    label="ختم الشركة"
+                    hint="PNG شفاف أو صورة ورقٍ مصوَّرة — تُزال خلفيتها تلقائياً · حتى ٥ ميجابايت"
+                    assetKey="company_stamp"
+                    uploadKind="company_stamp"
+                    kind="stamp"
+                    storageKey={stampKey}
+                    disabled={!currentUser.permissions.manage_users}
+                    onChange={setStampKey}
+                    confirmRemove={confirmAction}
+                  />
+                  <CompanyAssetRow
+                    label="توقيع المسؤول"
+                    hint="PNG شفاف أو صورة ورقٍ مصوَّرة — تُزال خلفيتها تلقائياً · حتى ٥ ميجابايت"
+                    assetKey="manager_signature"
+                    uploadKind="manager_signature"
+                    kind="signature"
+                    storageKey={signatureKey}
+                    disabled={!currentUser.permissions.manage_users}
+                    onChange={setSignatureKey}
+                    confirmRemove={confirmAction}
+                  />
+                </div>
               </div>
             </div>
 
