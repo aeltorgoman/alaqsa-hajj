@@ -859,37 +859,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      والصورةُ تُجلب بعده عند رسمِ المستند. وانتظارُها قبلَ النداءِ على
      `print()` مِلكُ `printInPage` لا هذه الدالّة. */
   const printReceipt = async (rc: PaymentReceipt) => {
-    const stampKey = companyAssets.company_stamp?.url ?? "";
-    const signatureKey = companyAssets.manager_signature?.url ?? "";
     const [stampUrl, signatureUrl] = await Promise.all([
-      signedPrivateCompanyUrl(stampKey),
-      signedPrivateCompanyUrl(signatureKey),
+      signedPrivateCompanyUrl(companyAssets.company_stamp?.url),
+      signedPrivateCompanyUrl(companyAssets.manager_signature?.url),
     ]);
-    const html = makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc));
-
-    /* ═══ تشخيصٌ مؤقّتٌ لمعاينةِ الإيصال #1001 — أعلامٌ لا روابط ═══
-       يقول **أيَّ مرحلةٍ** سقطت: لا مفتاحَ في ملفِّ الحملة (السياق)، أم
-       لا رابطَ من التوقيع، أم لم تدخل الصورةُ المستند. ⚠️ لا يُطبَع
-       رابطٌ موقَّعٌ ولا رمز — الأطوالُ والقيمُ المنطقيّةُ وحدَها. ويُزال
-       بعد أن تمرّ المعاينة. */
-    const seal = {
-      hasStampKey: stampKey.length > 0,
-      hasSignatureKey: signatureKey.length > 0,
-      hasStampSignedUrl: stampUrl.length > 0,
-      hasSignatureSignedUrl: signatureUrl.length > 0,
-      htmlHasStampImg: /<img[^>]*alt="الختم"/.test(html),
-      htmlHasSignatureImg: /<img[^>]*alt="التوقيع"/.test(html),
-    };
-    console.info("[receipt-seals]", seal);
-    const stage = (hasKey: boolean, hasUrl: boolean, hasImg: boolean) =>
-      !hasKey ? "لا مفتاح في ملفِّ الحملة" : !hasUrl ? "تعذّر توقيعُ الرابط" : !hasImg ? "لم تدخل الصورةُ المستند" : "";
-    const missing = [
-      ["الختم", stage(seal.hasStampKey, seal.hasStampSignedUrl, seal.htmlHasStampImg)],
-      ["التوقيع", stage(seal.hasSignatureKey, seal.hasSignatureSignedUrl, seal.htmlHasSignatureImg)],
-    ].filter(([, why]) => why).map(([what, why]) => `${what}: ${why}`);
-    if (missing.length) showAlert("error", `يُطبَع الإيصالُ بلا — ${missing.join(" · ")}`);
-
-    printInPage(html);
+    printInPage(makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc)));
   };
 
 

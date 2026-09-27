@@ -386,8 +386,19 @@ function UsersPage({ currentUser }: { currentUser: User }) {
      الشاشةُ المفتاحَ الجديدَ في حالتِها المحلّيّة، وبقي الإيصالُ في
      الحسابات يقرأ الملفَّ القديمَ فيُطبَع بلا ختم (الإيصال #1001). */
   const refreshCompany = useCompanyRefresh();
-  const [stampKey, setStampKey] = useState(companyAssets.company_stamp?.url ?? "");
-  const [signatureKey, setSignatureKey] = useState(companyAssets.manager_signature?.url ?? "");
+  /* ═══ المفتاحُ الحاليُّ من ملفِّ الحملة — هو المرجع، لا نسخةٌ محلّيّة ═══
+     ⚠️ كان يُهيَّأ مرّةً من السياق عند التركيب. فإن رُكِّبت هذه الشاشةُ
+     قبل أن تكتمل قراءةُ ما بعد الدخول، ثبت المفتاحُ فارغاً: لا معاينة،
+     والاستبدالُ لا يحذف السابق (`previous` فارغ) — وهكذا تراكمت ستّةُ
+     كائناتٍ يتيمة. فالمفتاحُ **مُشتقٌّ** من السياق، والمحلّيُّ لا يُعرَض
+     إلا ما بقي السياقُ على القيمةِ التي بُني عليها — أي في الفجوةِ بين
+     الحفظِ ووصولِ إعادةِ القراءة. فإذا وصلت صار السياقُ هو الحَكَم. */
+  const ctxStampKey = companyAssets.company_stamp?.url ?? "";
+  const ctxSignatureKey = companyAssets.manager_signature?.url ?? "";
+  const [stampLocal, setStampLocal] = useState<{ base: string; key: string } | null>(null);
+  const [signatureLocal, setSignatureLocal] = useState<{ base: string; key: string } | null>(null);
+  const stampKey = stampLocal && stampLocal.base === ctxStampKey ? stampLocal.key : ctxStampKey;
+  const signatureKey = signatureLocal && signatureLocal.base === ctxSignatureKey ? signatureLocal.key : ctxSignatureKey;
 
   /* ═══ إعداداتُ الموسم ═══
      تُحمَّل من **الموسم المعروض** ليرى المديرُ بياناتِ ما يتصفّحه،
@@ -798,7 +809,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     kind="stamp"
                     storageKey={stampKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={k => { setStampKey(k); void refreshCompany(); }}
+                    onChange={k => { setStampLocal({ base: ctxStampKey, key: k }); void refreshCompany(); }}
                     confirmRemove={confirmAction}
                   />
                   <CompanyAssetRow
@@ -809,7 +820,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     kind="signature"
                     storageKey={signatureKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={k => { setSignatureKey(k); void refreshCompany(); }}
+                    onChange={k => { setSignatureLocal({ base: ctxSignatureKey, key: k }); void refreshCompany(); }}
                     confirmRemove={confirmAction}
                   />
                 </div>
