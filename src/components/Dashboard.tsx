@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { Passenger, User } from "../types";
+import { canAccessPage } from "../navigation/nav";
 import { SeasonPhaseCard, PackagesCard, TotalPilgrimsCard, SmartAlertsCard } from "./Seasontimeline";
 
 function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
@@ -10,18 +11,9 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   onScan?: (file: File) => void;
 }) {
 
-  const PERM_MAP: Record<string, string> = {
-    passengers: "manage_passengers",
-    buses:      "manage_buses",
-    mina:       "manage_camps",
-    arafa:      "manage_camps",
-    hotel:      "manage_hotel",
-    flights:    "manage_flights",
-  };
-
   const navTo = (page: string) => {
-    const perm = PERM_MAP[page];
-    if (!perm || currentUser.permissions[perm]) setPage(page);
+    /* الصلاحيةُ من مصدر التنقّل الواحد — لا خريطةَ ثانية */
+    if (canAccessPage(currentUser, page)) setPage(page);
   };
 
   const scanInputRef = useRef<HTMLInputElement>(null);

@@ -5,15 +5,14 @@ import { isHajj, byOrder } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
-import { useReportBranding, useCompanyAssets, useCompanyFinancial } from "../company/CompanyContext";
-import { companyService } from "../company/companyService";
-import { isSaved, saveErrorText } from "../company/saveResult";
+import { useReportBranding, useCompanyAssets } from "../company/CompanyContext";
 import { signedPrivateCompanyUrl } from "../utils";
 import type { Passenger, User } from "../types";
 
 import type { PricingMap, Payment, PaymentReceipt, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
 import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, isSpecialPackage, matchesPackageFilter, matchesServiceFilter, getPackageKey, getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus, localDateISO } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
+import { CompanyBankCard } from "./finance/CompanyBankCard";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
 import { FinancialGroupView } from "./finance/FinancialGroupView";
 import { initialPrintOptions, chromeFromOptions } from "../print";
@@ -29,7 +28,6 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const { alert: alertState, showAlert } = useAlert();
   const { assertWritable } = useSeasonWrite(showAlert);
   const { viewedSeason, canWrite: seasonWritable, refreshSeasons } = useSeason();
-  const companyFinancial = useCompanyFinancial();
 
   /* مصدر التسعير الذي حُسبت به أرقام هذه الشاشة:
        live            الموسم مفتوح  → التسعير الحيّ، وهو الصحيح له
@@ -69,27 +67,6 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      مالكُ `manage_users` وحدَه كان يُحرّر البنكَ في موضعِه القديم، فلو
      نُقل المُحرِّرُ إلى سطحٍ لا يبلغه لفقد قدرةً كانت له. */
   const canOpenSettings = canManage || canEditBank;
-  /* ═══ نموذجُ البنك يتبع السياقَ ولا يُرآيه ═══
-     ⚠️ كان يُهيَّأ مرّةً عند التركيب، على افتراضِ أنّ السياقَ لا يتغيّر
-     في الجلسة. وقد ظهر أنّه كان يُبنى **قبل الدخول** من الملفِّ العلنيّ
-     بلا أعمدةِ البنك — فصار يُعاد بعد الدخول، وما هُيِّئ قبل ذلك يبقى
-     فارغاً لو ثُبِّت. فالعرضُ **مُشتقٌّ** من السياقِ، والتحريرُ مُخزَّنٌ
-     مع بصمةِ المصدرِ الذي حُرِّر عليه: إن تغيّر المصدرُ ظهرت قيمُه هو. */
-  const bankSource = useMemo(() => ({
-    bank_name: companyFinancial.bankName,
-    bank_account_name: companyFinancial.accountName,
-    bank_account_number: companyFinancial.accountNumber,
-    bank_iban: companyFinancial.iban,
-    bank_swift: companyFinancial.swift,
-    commercial_registration: companyFinancial.commercialRegistration,
-  }), [companyFinancial]);
-  const bankSourceKey = JSON.stringify(bankSource);
-  const [bankEdit, setBankEdit] = useState<{ sourceKey: string; values: typeof bankSource } | null>(null);
-  const bankForm = bankEdit?.sourceKey === bankSourceKey ? bankEdit.values : bankSource;
-  const setBankField = (key: keyof typeof bankSource, value: string) =>
-    setBankEdit({ sourceKey: bankSourceKey, values: { ...bankForm, [key]: value } });
-  const [bankSaving, setBankSaving] = useState(false);
-  const [bankMsg, setBankMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   /* ── الإيصالات: مِلكُ صفِّ الموسم ── */
   /* مُخزَّنٌ مع معرّفِ موسمِه: العرضُ يُشتَقّ، فإن لم يُحرَّر شيءٌ —
@@ -365,29 +342,6 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      موسميةً بالتخزين في م٧/٣، وتُجلب بموسمها أعلاه. */
   const viewedPassengerIds = useMemo(() => new Set(passengers.map(p => p.id)), [passengers]);
 
-  /* حفظُ البنك: **نفسُ** أعمدةِ `company_config` التي كانت تُكتَب من
-     صفحة الإعدادات، وحدَها لا غير — لا عمودَ هويّةٍ ولا لونَ يُرسَل
-     من هنا، فلا يُصادِر هذا السطحُ حقلاً ليس له. */
-  async function saveBank() {
-    if (!canEditBank) { setBankMsg({ text: "لا تملك صلاحية تعديل بيانات الحملة.", ok: false }); return; }
-    /* ⚠️ لا يُرسَل إلا **ما غيّره المستخدم**. لو كان المصدرُ ملفّاً
-       ناقصاً — كالعلنيِّ قبل اكتمالِ إعادةِ القراءةِ بعد الدخول — لكان
-       إرسالُ النموذجِ كاملاً يكتب الفراغَ فوق بياناتِ البنكِ الحقيقيّة.
-       والحقلُ الذي لم يُلمَس لا يُكتَب أبداً، فلا يُمحى بحال. */
-    const changed = (Object.keys(bankSource) as (keyof typeof bankSource)[])
-      .filter(k => bankForm[k] !== bankSource[k]);
-    if (changed.length === 0) { setBankMsg({ text: "لا تغييرَ للحفظ.", ok: true }); return; }
-    const patch = Object.fromEntries(changed.map(k => [k, bankForm[k] || null]));
-    setBankSaving(true);
-    setBankMsg(null);
-    const res = await companyService.updateConfig(patch);
-    setBankSaving(false);
-    if (!isSaved(res)) { setBankMsg({ text: saveErrorText(res), ok: false }); return; }
-    /* سياقُ الشركةِ يُبنى عند الإقلاع، وتحديثُه يجري بإعادةِ التحميل
-       كما تفعل صفحةُ الإعدادات — لا مالكَ حالةٍ ثانياً يُخترَع هنا. */
-    setBankMsg({ text: "تم الحفظ — سيتم تحديث الصفحة...", ok: true });
-    setTimeout(() => window.location.reload(), 1200);
-  }
 
   /* حفظُ رقمِ البداية عبر الدالّةِ المعتمَدةِ وحدَها. ولا تفاؤلَ:
      لا يُعلَن نجاحٌ إلا بعد أن تعود الدالّةُ بلا خطأ، ثُمّ تُقرأ
@@ -1152,50 +1106,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         )}
 
         {/* ══════════ البنك والسداد — بيانُ شركةٍ، مصدرُه company_config ══════════ */}
-        {settingsTab === "bank" && (
-          <div style={cardBox}>
-            <div style={cardTitle}>بيانات البنك والسداد</div>
-            <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:14, lineHeight:1.8 }}>
-              بياناتُ التحويلِ والسجلِّ التجاريّ. وهي بياناتُ حملةٍ لا موسم — تُحفَظ مرّةً وتخدم المواسمَ كلَّها.
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:10 }}>
-              {([
-                { key:"bank_name",               label:"اسم البنك",          ltr:false },
-                { key:"bank_account_name",       label:"اسم الحساب",         ltr:false },
-                { key:"bank_account_number",     label:"رقم الحساب",         ltr:true  },
-                { key:"bank_iban",               label:"IBAN",               ltr:true  },
-                { key:"bank_swift",              label:"SWIFT",              ltr:true  },
-                /* رقمُ السجلِّ التجاريّ يبقى مع بيانات البنك — قرارُ
-                   منتَجٍ مقصود: استعمالُه هنا لدعمِ التحويلِ والسداد. */
-                { key:"commercial_registration", label:"رقم السجل التجاري",  ltr:true  },
-              ] as const).map(f => (
-                <div key={f.key}>
-                  <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:4, fontWeight:600 }}>{f.label}</div>
-                  <input
-                    style={{ ...inputStyle, background: canEditBank ? "var(--bg-input)" : "var(--bg-2)", cursor: canEditBank ? "text" : "not-allowed" }}
-                    dir={f.ltr ? "ltr" : undefined}
-                    value={bankForm[f.key]}
-                    readOnly={!canEditBank}
-                    disabled={!canEditBank}
-                    onChange={e => setBankField(f.key, e.target.value)} />
-                </div>
-              ))}
-            </div>
-
-            {canEditBank ? (
-              <button onClick={saveBank} disabled={bankSaving} style={{ width:"100%", marginTop:16, padding:12, background:"var(--primary)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:14, cursor:bankSaving?"not-allowed":"pointer", fontWeight:600, opacity:bankSaving?0.6:1 }}>
-                {bankSaving ? "جارٍ الحفظ..." : "حفظ بيانات البنك"}
-              </button>
-            ) : (
-              /* لا زرَّ حفظٍ لمن لا يملك الصلاحية — والرسالةُ تقول السببَ
-                 صراحةً بدل زرٍّ يُضغَط فيُرفَض من الخادم. */
-              <div style={{ marginTop:16, padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text-muted)", lineHeight:1.9 }}>
-                هذه بياناتُ حملةٍ، وتعديلُها يحتاج صلاحيةَ «إدارة المستخدمين والإعدادات». القيمُ معروضةٌ للاطّلاع — وهذا هو موضعُ تحريرِها، فليُطلَب من مسؤولٍ يملك الصلاحية.
-              </div>
-            )}
-            {bankMsg && <div style={noteBox(bankMsg.ok)}>{bankMsg.text}</div>}
-          </div>
-        )}
+        {settingsTab === "bank" && <CompanyBankCard canEdit={canEditBank} />}
 
         {/* ══════════ الإيصالات — ترقيمٌ يملكه صفُّ الموسم ══════════ */}
         {settingsTab === "receipts" && (
