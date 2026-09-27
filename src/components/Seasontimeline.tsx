@@ -5,6 +5,7 @@ import type { Passenger, Flight } from "../types";
 import { itemsLabel } from "../utils";
 import { hasIssue, type IssueKey } from "../utils/readiness";
 import { useSeason } from "../season/useSeason";
+import { localDateISO } from "./finance/finance.utils";
 
 /* ════════════════════════════════════════════════════════════
    منطق حساب مراحل الموسم — تلقائي بالكامل من البيانات
@@ -54,11 +55,16 @@ function useSeasonPhases(passengers: Passenger[]) {
     const retDates = flights.filter(f => f.type === "إياب" && f.date).map(f => f.date).sort();
     const firstDep = depDates[0] || null;
     const firstRet = retDates[0] || null;
-    const todayStr = new Date().toISOString().split("T")[0];
+    /* «اليوم» بتقويمِ الجهازِ لا بـUTC: كان `toISOString` يجعل الساعاتِ
+       ٠٠:٠٠–٠٣:٠٠ بتوقيتِ قطر يومَ أمس، فتتأخّر المرحلةُ والعدُّ التنازليّ.
+       وتواريخُ الرحلاتِ نصوصٌ اختارها المستخدمُ وتبقى كما هي؛ والفرقُ يُحسب
+       بين يومَين تقويميَّين، لا بتحليل `YYYY-MM-DD` منتصفَ ليلِ UTC. */
+    const todayStr = localDateISO();
     const travelActive = !!firstDep && todayStr >= firstDep;
     const travelEnded = !!firstRet && todayStr > firstRet;
+    const dayNum = (iso: string) => { const [y, m, d] = iso.slice(0, 10).split("-").map(Number); return Date.UTC(y, m - 1, d) / 86400000; };
     let daysToTravel: number | null = null;
-    if (firstDep) { const diff = Math.ceil((new Date(firstDep).getTime() - Date.now()) / 86400000); daysToTravel = diff > 0 ? diff : 0; }
+    if (firstDep) { const diff = dayNum(firstDep) - dayNum(todayStr); daysToTravel = diff > 0 ? diff : 0; }
 
     const phases: PhaseInfo[] = [
       { id: "reg", label: "التسجيل", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/>`, active: regActive, current: false, sub: `${total} حاج · المستندات ${regPct}٪`, pct: regPct },
