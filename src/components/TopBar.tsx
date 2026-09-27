@@ -3,30 +3,23 @@ import { useCompanyBranding } from "../company/CompanyContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { NotificationBell } from "./NotificationBell";
 import type { User } from "../types";
+import { NAV_PAGES, canAccessPage, pageMeta, type PageId } from "../navigation/nav";
 
-const PAGE_META: Record<string, { label: string; sub: string; icon: string }> = {
-  passengers: { label: "الحجاج",          sub: "إدارة بيانات الحجاج",             icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
-  buses:      { label: "الباصات",          sub: "توزيع الحجاج على الحافلات",       icon: `<rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 4v4h-7V8z"/>` },
-  flights:    { label: "الطيران",          sub: "رحلات وتذاكر الحجاج",            icon: `<path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>` },
-  mina:       { label: "مخيمات منى",       sub: "توزيع الحجاج في منى",            icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
-  arafa:      { label: "مخيمات عرفة",      sub: "توزيع الحجاج في عرفة",          icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/>` },
-  hotel:      { label: "الفندق",           sub: "غرف وإقامة الحجاج",             icon: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/>` },
-  reports:    { label: "التقارير",         sub: "تقارير وإحصاءات الحملة",         icon: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>` },
-  archive:    { label: "إدارة المواسم",     sub: "إقفال الموسم وتصفّح المواسم السابقة",          icon: `<rect x="2" y="3" width="20" height="4" rx="2"/><path d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7"/><path d="M10 12h4"/>` },
-  users:      { label: "الإعدادات",        sub: "إعدادات وبيانات الحملة",         icon: `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>` },
-  finance:    { label: "الحسابات المالية", sub: "مدفوعات وحسابات الحجاج",        icon: `<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>` },
-  admins:     { label: "الإداريون",        sub: "إدارة فريق الحملة",             icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>` },
-  scan:       { label: "مسح مستند",        sub: "استخراج بيانات جواز السفر",      icon: `<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>` },
-};
+/* قائمةُ ⚙ — وجهاتٌ من مصدر التنقّل، مُصفّاةٌ بالصلاحية */
+const QUICK_PAGES: PageId[] = ["users", "finance", "admins"];
 
-function TopBar({ page, setPage, currentUser, onLogout }: {
+
+function TopBar({ page, setPage, currentUser, onLogout, onOpenNav }: {
   page: string;
   setPage: (p: string) => void;
   currentUser: User;
   onLogout: () => void;
+  /** على العرض الضيّق: زرُّ فتح درج التنقّل */
+  onOpenNav?: () => void;
 }) {
   const primary = useCompanyBranding().primaryColor;
-  const meta    = PAGE_META[page] || { label: page, sub: "", icon: "" };
+  const meta    = pageMeta(page);
+  const quickPages = QUICK_PAGES.filter(id => canAccessPage(currentUser, id)).map(id => NAV_PAGES[id]);
   const initials = currentUser.name.trim().split(" ").map((w: string) => w[0]).slice(0, 2).join("");
 
   const [showThemes,   setShowThemes]   = useState(false);
@@ -72,22 +65,29 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
         <div style={{ position:"absolute", inset:0, background:"repeating-linear-gradient(45deg,rgba(255,255,255,.03) 0px,rgba(255,255,255,.03) 1px,transparent 1px,transparent 8px)", pointerEvents:"none" }} />
 
         {/* اسم الصفحة */}
-        <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative", zIndex:1 }}>
-          {meta.icon && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative", zIndex:1, minWidth:0 }}>
+          {onOpenNav && (
+            <button type="button" className="nav-menu-btn" onClick={onOpenNav} aria-label="فتح القائمة" style={{ ...iconBtn, color:"white" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+          )}
+          {/* على العرض الضيّق (زرُّ الدرج ظاهر) تُحذف الأيقونةُ والوصفُ ليتّسع الشريطُ للعنوان والأيقونات */}
+          {meta.icon && !onOpenNav && (
             <div style={{ ...iconBtn, background:"rgba(255,255,255,.15)", border:"none" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" strokeWidth="1.8" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: meta.icon }} />
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 800, color: "white", lineHeight: 1 }}>{meta.label}</div>
-            {meta.sub && <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", paddingTop: 1 }}>{meta.sub}</div>}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-heading)", fontSize: onOpenNav ? 16 : 18, fontWeight: 800, color: "white", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta.label}</div>
+            {meta.sub && !onOpenNav && <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", paddingTop: 1 }}>{meta.sub}</div>}
           </div>
         </div>
 
         {/* الأيقونات — نفس الـ userStrip في DashboardBanner */}
         <div style={{ display:"flex", alignItems:"center", gap:4, position:"relative", zIndex:1 }}>
 
-          {/* 1. إعدادات */}
+          {/* 1. إعدادات — تختفي إن لم يبقَ فيها وجهةٌ مسموحة */}
+          {quickPages.length > 0 && (
           <div ref={settingsRef} style={{ position: "relative", flexShrink: 0 }}>
             <div style={iconBtn} onClick={() => {
               if (!showSettings && settingsRef.current) {
@@ -107,12 +107,8 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
               <div style={{ position: "fixed", top: settingsPos.top, left: settingsPos.left, zIndex: 9999, background: "var(--bg-card)", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,.25)", border: "1px solid var(--border)", minWidth: 200, overflow: "hidden" }}>
                 <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--line)", fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: ".5px" }}>الإعدادات</div>
                 <div style={{ padding: 6 }}>
-                  {[
-                    { label: "إعدادات الحملة", icon: `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`, page: "users" },
-                    { label: "الحسابات المالية", icon: `<rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>`, page: "finance" },
-                    { label: "الإداريون", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>`, page: "admins" },
-                  ].map(item => (
-                    <button key={item.page} onClick={() => { setShowSettings(false); setPage(item.page); }}
+                  {quickPages.map(item => (
+                    <button key={item.id} onClick={() => { setShowSettings(false); setPage(item.id); }}
                       style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "none", background: "transparent", color: "var(--ink)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", gap: 8, textAlign: "right" }}
                       onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "var(--ivory)"}
                       onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "transparent"}>
@@ -124,6 +120,7 @@ function TopBar({ page, setPage, currentUser, onLogout }: {
               </div>
             )}
           </div>
+          )}
 
           {/* 2. ثيم */}
           <div ref={themeRef} style={{ position:"relative", flexShrink:0 }}>

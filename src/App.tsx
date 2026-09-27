@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
-import { NAV } from "./utils";
+import { pagePerm } from "./navigation/nav";
+import { useSidebarPrefs, useIsNarrow, useIsCompactViewport } from "./navigation/useSidebar";
 import type { Passenger, User } from "./types";
 import { mapPassenger, upsertPassenger, isHajj } from "./utils/passenger";
 import type { PassengerRow } from "./utils/passenger";
@@ -25,12 +26,6 @@ import { AdminsPage } from "./components/AdminsPage";
 import { PortalPage } from "./components/PortalPage";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-
-// الصلاحية المطلوبة لكل صفحة، مشتقّة من NAV نفسه الذي يبني الـ Sidebar
-// فلا تنفصل عنه إذا أُضيفت صفحة أو تغيّرت صلاحيتها
-const PAGE_PERM: Record<string, string> = Object.fromEntries(
-  NAV.flatMap(s => s.items).filter(it => it.perm).map(it => [it.id, it.perm])
-);
 
 /* الملفّ مصدر الصلاحيات — يُقرأ من القاعدة بمعرّف الجلسة، لا من
    المتصفح. تعديل التخزين المحلي لا يمنح شيئاً (الثابت أ٢). */
@@ -100,6 +95,25 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
   const { viewedSeason } = useSeason();
   const [page, setPage] = useState(() => sessionStorage.getItem("hajj_page") || "dash");
   const [reportsResetKey, setReportsResetKey] = useState(0);
+  /* السايدبار: الطيُّ تفضيلُ المستخدم (محفوظٌ محلّياً) لا نتيجةُ الصفحة؛
+     وتحت عرضٍ ضيّقٍ يصير درجاً يُفتَح ويُغلَق دون مسّ الصفحة أو الموسم. */
+  const { compact, toggleCompact } = useSidebarPrefs();
+  const narrow = useIsNarrow();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerVisible = narrow && drawerOpen;
+  useEffect(() => {
+    if (!drawerVisible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerVisible]);
+  const openNav = narrow ? () => setDrawerOpen(true) : undefined;
+  /* ⚠️ على الجوّال واللوحيّ: صفحةٌ أعرضُ من الشاشة (جدولُ الحجاج مثلاً) كانت تفيض
+     خارج الغلاف، فيُوسِّع متصفّحُ الجوّال «منفذَ التخطيط» كلَّه إلى عرضها
+     ويُصغِّر الصفحةَ كاملةً — الشريطَ والدرجَ معها. فيُحبَس فيضُ الصفحة في
+     منطقتها: تتمرّر أفقيّاً وحدَها ويبقى الغلافُ بعرض الشاشة. */
+  const containPage = useIsCompactViewport();
+  const pageContain: React.CSSProperties = containPage ? { minWidth: 0, maxWidth: "100vw", overflowX: "auto" } : {};
 
   useEffect(() => {
     const handler = () => setPage("dash");
@@ -162,7 +176,9 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
   const isFull = FULL_PAGES.includes(page);
 
   const renderPage = () => {
-    const requiredPerm = PAGE_PERM[page];
+    /* الصلاحيةُ من مصدر التنقّل الواحد (navigation/nav.ts) — نفسُه الذي
+       يبني السايدبار وقائمتي ⚙، فلا تنفصل عنه إذا تغيّرت صفحة. */
+    const requiredPerm = pagePerm(page);
     if (requiredPerm && !currentUser.permissions?.[requiredPerm]) {
       return (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>
@@ -196,28 +212,47 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
 
       {/* البانر — كامل العرض فوق الكل، يظهر فقط في الداشبورد */}
       {page === "dash" && (
-        <DashboardBanner setPage={setPage} currentUser={currentUser!} onLogout={onLogout} />
+        <DashboardBanner setPage={setPage} currentUser={currentUser!} onLogout={onLogout} onOpenNav={openNav} />
       )}
 
       {/* الجسم — السايدبار + المحتوى */}
       <div style={{ flex: 1, display: "flex", alignItems: "flex-start" }}>
-        {/* السايدبار ثابت */}
-        <div style={{ position: "sticky", top: 0, height: "100vh", flexShrink: 0 }}>
-          <Sidebar
-            page={page} setPage={setPage}
-            count={passengers.filter(p => isHajj(p)).length}
-            currentUser={currentUser} onLogout={onLogout}
-            onReportsClick={() => setReportsResetKey(k => k + 1)}
-          />
-        </div>
+        {/* السايدبار ثابت — على العرض الضيّق يصير درجاً فوق المحتوى */}
+        {!narrow && (
+          <div style={{ position: "sticky", top: 0, height: "100vh", flexShrink: 0 }}>
+            <Sidebar
+              page={page} setPage={setPage}
+              count={passengers.filter(p => isHajj(p)).length}
+              currentUser={currentUser}
+              onReportsClick={() => setReportsResetKey(k => k + 1)}
+              compact={compact} onToggleCompact={toggleCompact}
+            />
+          </div>
+        )}
+        {drawerVisible && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 10000 }}>
+            <div onClick={() => setDrawerOpen(false)} aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.45)" }} />
+            <div role="dialog" aria-modal="true" aria-label="القائمة" style={{ position: "absolute", top: 0, bottom: 0, right: 0, display: "flex" }}>
+              <Sidebar
+                page={page} setPage={setPage}
+                count={passengers.filter(p => isHajj(p)).length}
+                currentUser={currentUser}
+                onReportsClick={() => setReportsResetKey(k => k + 1)}
+                compact={false} drawer onNavigate={() => setDrawerOpen(false)}
+              />
+              <button type="button" className="nav-menu-btn" onClick={() => setDrawerOpen(false)} aria-label="إغلاق القائمة"
+                style={{ position: "absolute", top: 10, left: -44, width: 36, height: 36, borderRadius: 10, border: "none", background: "rgba(0,0,0,.55)", color: "white", cursor: "pointer", fontSize: 18, lineHeight: 1, zIndex: 3 }}>×</button>
+            </div>
+          </div>
+        )}
 
         {/* المحتوى — يتمرر بشكل طبيعي */}
         <div style={{ flex: 1, minWidth: 0, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
           {page !== "dash" && (
-            <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={onLogout} />
+            <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={onLogout} onOpenNav={openNav} />
           )}
           {isFull ? (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", ...pageContain }}>
               {/* key= يُعيد تركيب شجرة الصفحات عند تبديل الموسم، فلا
                   تتسرّب مودالات ولا تحديدات ولا مسوّدات من موسم سابق */}
               <ErrorBoundary key={viewedSeason.id}>
@@ -230,7 +265,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
               </ErrorBoundary>
             </div>
           ) : (
-            <div style={{ background: "var(--ivory)", padding: "20px" }}>
+            <div style={{ background: "var(--ivory)", padding: "20px", ...pageContain }}>
               <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
                 <ErrorBoundary key={viewedSeason.id}>
                   {passengersLoading ? <LoadingSpinner /> : passengersError ? (
