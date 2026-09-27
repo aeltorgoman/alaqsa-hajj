@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { AppConfig } from "./AppConfig";
 import { DEFAULT_CONFIG } from "./AppConfig";
 import { ThemeProvider } from "./ThemeContext";
-import { CompanyContext } from "../company/CompanyContext";
+import { CompanyContext, CompanyRefreshContext } from "../company/CompanyContext";
+import { supabase } from "../supabase";
 import { companyService, normalizeCompanyProfile } from "../company/companyService";
 import type { Database } from "../types/database";
 import { applyCompanyMetadata } from "../company/companyMetadata";
@@ -13,35 +14,58 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [assets, setAssets] = useState<Database["public"]["Tables"]["company_assets"]["Row"][]>([]);
 
-  useEffect(() => {
-    companyService.load().then(({ config: data, assets: assetRows, error }) => {
-        if (data && !error) {
-          setConfig({ ...DEFAULT_CONFIG, ...data } as unknown as AppConfig);
-          /* حفظ نسخة محلية تُستخدم في شاشة البدء بالزيارات القادمة.
+  /* ═══ ملفُّ الحملةِ يُقرأ بهويّةِ الجلسةِ الحاليّة، ويُعاد عند تغيّرها ═══
+     ⚠️ عطبٌ أظهره الإيصال #1001: هذا المزوّدُ يلفّ التطبيقَ **فوق** بوّابةِ
+     الدخول، وكان يقرأ مرّةً واحدةً عند التركيب — أي قبل تسجيلِ الدخول،
+     بدورِ `anon`. وسياسةُ `company_assets` لـ`anon` قائمةُ سماحٍ علنيّةٌ
+     لا تضمّ `company_stamp` ولا `manager_signature`، و`company_config`
+     يُقرأ من `company_profile_public` بلا أعمدةِ البنك. ثُمّ لا إعادةَ بعد
+     الدخول — فتبقى الجلسةُ كلُّها على ملفٍّ علنيّ:
+       · الإيصالُ بلا ختمٍ ولا توقيع (لا مفتاحَ يُوقَّع — صفرُ نداءِ توقيع)
+       · وتبويبُ البنكِ فارغ، وحفظُه كان سيكتب الفراغَ فوق البياناتِ الحقيقيّة
+     فصار يُعاد عند الدخولِ والخروج. */
+  const loadSeq = useRef(0);
+  const load = useCallback(async () => {
+    /* تسلسلٌ لا قفل: قراءةٌ بطيئةٌ بدورِ anon قد تعود **بعد** قراءةِ ما
+       بعد الدخول، فتكتب العلنيَّ فوق الكامل. فلا تُطبَّق إلا أحدثُها. */
+    const seq = ++loadSeq.current;
+    const { config: data, assets: assetRows, error } = await companyService.load();
+    if (seq !== loadSeq.current) return;
+    if (data && !error) {
+      setConfig({ ...DEFAULT_CONFIG, ...data } as unknown as AppConfig);
+      /* حفظ نسخة محلية تُستخدم في شاشة البدء بالزيارات القادمة.
 
-             ⚠️ والشعارُ يُحسَب من الملفّ المُطبَّع لا من العمود الخام:
-             `company_assets` هي المرجع، وعمودُ التوافق `logo_url`
-             سقط من القاعدة في ترحيل التنظيف. وكتابةُ الخام هنا كانت
-             تجعل شاشةَ البدء آخرَ قارئٍ للمصدر القديم — فتعرض
-             شعاراً بينما يعرض النظامُ كلُّه غيرَه.
+         ⚠️ والشعارُ يُحسَب من الملفّ المُطبَّع لا من العمود الخام:
+         `company_assets` هي المرجع، وعمودُ التوافق `logo_url`
+         سقط من القاعدة في ترحيل التنظيف. وكتابةُ الخام هنا كانت
+         تجعل شاشةَ البدء آخرَ قارئٍ للمصدر القديم — فتعرض
+         شعاراً بينما يعرض النظامُ كلُّه غيرَه.
 
-             و`logo_url` أدناه مفتاحُ مخزنٍ محلّيٍّ لا عمودُ قاعدة:
-             اسمُه باقٍ كي لا تفقد المتصفّحاتُ نسختَها المحفوظة. */
-          const bootProfile = normalizeCompanyProfile(data, assetRows);
-          try {
-            localStorage.setItem("hajj_company_boot", JSON.stringify({
-              name_ar: bootProfile.identity.nameAr || "",
-              tagline: bootProfile.identity.tagline || "",
-              logo_url: bootProfile.identity.logoUrl || "",
-              color_primary: bootProfile.branding.primaryColor || "",
-              color_accent: bootProfile.branding.accentColor || "",
-            }));
-          } catch { /* التخزين المحلي غير متاح */ }
-        }
-        setAssets(assetRows);
-        setLoading(false);
-      });
+         و`logo_url` أدناه مفتاحُ مخزنٍ محلّيٍّ لا عمودُ قاعدة:
+         اسمُه باقٍ كي لا تفقد المتصفّحاتُ نسختَها المحفوظة. */
+      const bootProfile = normalizeCompanyProfile(data, assetRows);
+      try {
+        localStorage.setItem("hajj_company_boot", JSON.stringify({
+          name_ar: bootProfile.identity.nameAr || "",
+          tagline: bootProfile.identity.tagline || "",
+          logo_url: bootProfile.identity.logoUrl || "",
+          color_primary: bootProfile.branding.primaryColor || "",
+          color_accent: bootProfile.branding.accentColor || "",
+        }));
+      } catch { /* التخزين المحلي غير متاح */ }
+    }
+    setAssets(assetRows);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    (async () => { await load(); })();
+    /* `TOKEN_REFRESHED` يقع كلَّ ساعةٍ ولا يغيّر الهويّة — لا يُعاد له */
+    const { data: sub } = supabase.auth.onAuthStateChange(event => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") void load();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [load]);
 
   const profile = normalizeCompanyProfile(config, assets);
   useEffect(() => { applyCompanyMetadata(profile); }, [profile]);
@@ -136,9 +160,11 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
   return (
     <CompanyContext.Provider value={profile}>
-      <ThemeProvider>
-        {children}
-      </ThemeProvider>
+      <CompanyRefreshContext.Provider value={load}>
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
+      </CompanyRefreshContext.Provider>
     </CompanyContext.Provider>
   );
 }

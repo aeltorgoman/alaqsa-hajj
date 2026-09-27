@@ -7,8 +7,10 @@
 
    ⚠️ والمهلةُ الثابتة لا تكفي صفحةً مبنيّةً على صور: مستنداتُ الحاجّ
    تُجلب من التخزين برابطٍ موقَّع، فقد لا تصل في ثانية. ومن طبع قبل
-   وصولها طبع إطاراتٍ فارغة. فصار `waitForImages` ينتظر **الصورَ
-   نفسها** لا الساعةَ — وبسقفٍ زمنيّ فلا يُعلَّق الأمرُ إلى الأبد. */
+   وصولها طبع إطاراتٍ فارغة. فصارت الطباعةُ تنتظر **الصورَ نفسها** لا
+   الساعةَ — لكلِّ منادٍ لا لمن طلب ذلك وحدَه — وبسقفٍ زمنيّ فلا يُعلَّق
+   الأمرُ إلى الأبد. و`waitForImages` تبقى لمن يريد ألّا ينتظر مهلةَ
+   التخطيطِ فوق ذلك (صفحاتُ المستندات). */
 
 /** أقصى انتظارٍ للصور قبل الطباعة على أي حال (ملّي ثانية). */
 const IMAGE_WAIT_CAP_MS = 15_000;
@@ -22,19 +24,32 @@ export type PrintOptions = {
   landscape?: boolean;
 };
 
-/** ينتظر كلَّ صورةٍ حتى تكتمل أو تفشل، بسقفٍ زمنيّ لا يُتجاوز. */
+/** ينتظر كلَّ صورةٍ حتى **تُحمَّلَ وتُفَكَّ** أو تفشل، بسقفٍ زمنيّ لا يُتجاوز.
+
+    ⚠️ و«اكتمالُ التحميلِ» وحدَه لا يكفي: `complete` يعني وصولَ البايتات،
+    لا أنّ الصورةَ فُكَّت وصارت جاهزةً للرسم. وختمٌ بأبعادِ ١٥٠٣×١٦٠٠ يأخذ
+    فكُّه وقتاً على الهاتف — ومن طبع في تلك الفجوةِ طبع إطاراً فارغاً.
+    فتُطلَب `decode()` صراحةً لكلِّ صورةٍ وصلت، وهي وعدٌ يُحَلّ حين تصير
+    الصورةُ قابلةً للرسمِ فعلاً. والفشلُ هنا كالنجاح: صورةٌ لا تصل
+    لا تمنع طباعةَ البقيّة. */
 function imagesSettled(doc: Document): Promise<void> {
   const imgs = Array.from(doc.images);
   if (imgs.length === 0) return Promise.resolve();
-  const each = imgs.map(img => img.complete
-    ? Promise.resolve()
-    : new Promise<void>(resolve => {
-        /* الفشلُ كالنجاح هنا: صورةٌ لا تصل لا تمنع طباعةَ البقيّة */
-        img.addEventListener("load", () => resolve(), { once: true });
-        img.addEventListener("error", () => resolve(), { once: true });
-      }));
+  const settle = (img: HTMLImageElement) => new Promise<void>(resolve => {
+    const decoded = () => {
+      /* صورةٌ فشلت (`naturalWidth === 0`) لا تُفَكّ — تُعَدّ مستقرّة */
+      if (img.naturalWidth > 0 && typeof img.decode === "function") {
+        img.decode().then(() => resolve(), () => resolve());
+      } else {
+        resolve();
+      }
+    };
+    if (img.complete) { decoded(); return; }
+    img.addEventListener("load", decoded, { once: true });
+    img.addEventListener("error", () => resolve(), { once: true });
+  });
   return Promise.race([
-    Promise.all(each).then(() => undefined),
+    Promise.all(imgs.map(settle)).then(() => undefined),
     new Promise<void>(resolve => setTimeout(resolve, IMAGE_WAIT_CAP_MS)),
   ]);
 }
@@ -68,7 +83,21 @@ export function printInPage(html: string, options: PrintOptions = {}) {
     void imagesSettled(doc).then(() => setTimeout(fire, 120));
     return;
   }
-  setTimeout(fire, LAYOUT_SETTLE_MS);
+  /* ⚠️ عطبٌ أظهرته المعاينةُ الحقيقيّة للإيصال #1001: الختمُ والتوقيعُ
+     صورتان برابطٍ موقَّعٍ (١٫١ و٠٫٣٥ ميغابايت)، والطباعةُ كانت تُنادى بعد
+     مهلةٍ ثابتةٍ قدرُها ثانية — قبل وصولِهما. وعلى الهاتفِ يُلتقَط المستندُ
+     لحظةَ النداء، فتخرج الورقةُ بإطارَين فارغَين والشعارُ الصغيرُ وحدَه ظاهر.
+
+     والمهلةُ الثابتةُ لا تُصلَح بمهلةٍ أطول: الشبكةُ لا تعد بزمن. فصار
+     الانتظارُ **لحالةٍ** لا لساعة: لا طباعةَ قبل أن تستقرّ صورُ المستند.
+
+     والضمانُ لكلِّ منادٍ قائم: `Promise.all` هنا تعني **الأبطأَ من الاثنين**
+       · صفحةٌ بلا صور        → تستقرّ فوراً → تُطبَع عند الثانيةِ كما اليوم
+       · صورٌ تصل قبل الثانية → تُطبَع عند الثانيةِ كما اليوم
+       · صورٌ أبطأ           → تُطبَع حين تستقرّ (إلى السقف) — وهذا وحدَه تغيّر
+     فلا منادٍ يُطبَع **أبكرَ** ممّا كان، والذي يتأخّر هو من كان يُطبَع ناقصاً. */
+  const layoutFloor = new Promise<void>(resolve => setTimeout(resolve, LAYOUT_SETTLE_MS));
+  void Promise.all([layoutFloor, imagesSettled(doc)]).then(fire);
 }
 
 export function downloadPDF(html: string, filename: string) {

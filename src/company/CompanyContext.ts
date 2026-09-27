@@ -3,6 +3,10 @@ import type { CompanyProfile } from "./types";
 import { companyService } from "./companyService";
 
 export const CompanyContext = createContext<CompanyProfile | null>(null);
+/* إعادةُ قراءةِ ملفِّ الحملةِ من القاعدة — لمن كتب فيه (رفعُ ختمٍ أو
+   توقيع) كي يراه الشركاءُ في السياقِ نفسِه لا نسختَه المحلّيّةَ وحدَه. */
+export const CompanyRefreshContext = createContext<() => Promise<void>>(async () => {});
+export function useCompanyRefresh() { return useContext(CompanyRefreshContext); }
 export function useCompanyProfile() { const value = useContext(CompanyContext); if (!value) throw new Error("useCompanyProfile خارج ConfigProvider"); return value; }
 export function useCompanyIdentity() { return companyService.identity(useCompanyProfile()); }
 export function useCompanyContact() { return companyService.contact(useCompanyProfile()); }

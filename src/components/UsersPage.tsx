@@ -5,7 +5,7 @@ import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset,
   normalizeStampImage, uploadPrivateCompanyAsset, deletePrivateCompanyAsset,
   useSignedPrivateCompanyAsset, type NormalizedImage, type StampKind } from "../utils";
-import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyFinancial, useCompanyIdentity } from "../company/CompanyContext";
+import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyIdentity, useCompanyRefresh } from "../company/CompanyContext";
 import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -353,7 +353,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
   const identity = useCompanyIdentity();
   const contact = useCompanyContact();
   const branding = useCompanyBranding();
-  const financial = useCompanyFinancial();
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
 
@@ -376,9 +375,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     country: contact.country, city: contact.city,
     color_primary: branding.primaryColor, color_accent: branding.accentColor,
     logo_url: identity.logoUrl || "", banner_image_url: branding.bannerUrl || "",
-    bank_name: financial.bankName, bank_account_name: financial.accountName,
-    bank_account_number: financial.accountNumber, bank_iban: financial.iban,
-    bank_swift: financial.swift, commercial_registration: financial.commercialRegistration,
   }));
 
   /* الخِتمُ والتوقيعُ خارجَ `companyForm` عمداً: يُحفظان لحظةَ الرفع
@@ -386,8 +382,23 @@ function UsersPage({ currentUser }: { currentUser: User }) {
      والقيمةُ الأولى من `company_assets` — فإعادةُ التحميل تُظهر
      المحفوظَ من مرجعه لا من ذاكرةٍ محلّيّة. */
   const companyAssets = useCompanyAssets();
-  const [stampKey, setStampKey] = useState(companyAssets.company_stamp?.url ?? "");
-  const [signatureKey, setSignatureKey] = useState(companyAssets.manager_signature?.url ?? "");
+  /* بعد حفظِ ختمٍ أو توقيعٍ يُعاد ملفُّ الحملةِ المشترك — وإلا رأت هذه
+     الشاشةُ المفتاحَ الجديدَ في حالتِها المحلّيّة، وبقي الإيصالُ في
+     الحسابات يقرأ الملفَّ القديمَ فيُطبَع بلا ختم (الإيصال #1001). */
+  const refreshCompany = useCompanyRefresh();
+  /* ═══ المفتاحُ الحاليُّ من ملفِّ الحملة — هو المرجع، لا نسخةٌ محلّيّة ═══
+     ⚠️ كان يُهيَّأ مرّةً من السياق عند التركيب. فإن رُكِّبت هذه الشاشةُ
+     قبل أن تكتمل قراءةُ ما بعد الدخول، ثبت المفتاحُ فارغاً: لا معاينة،
+     والاستبدالُ لا يحذف السابق (`previous` فارغ) — وهكذا تراكمت ستّةُ
+     كائناتٍ يتيمة. فالمفتاحُ **مُشتقٌّ** من السياق، والمحلّيُّ لا يُعرَض
+     إلا ما بقي السياقُ على القيمةِ التي بُني عليها — أي في الفجوةِ بين
+     الحفظِ ووصولِ إعادةِ القراءة. فإذا وصلت صار السياقُ هو الحَكَم. */
+  const ctxStampKey = companyAssets.company_stamp?.url ?? "";
+  const ctxSignatureKey = companyAssets.manager_signature?.url ?? "";
+  const [stampLocal, setStampLocal] = useState<{ base: string; key: string } | null>(null);
+  const [signatureLocal, setSignatureLocal] = useState<{ base: string; key: string } | null>(null);
+  const stampKey = stampLocal && stampLocal.base === ctxStampKey ? stampLocal.key : ctxStampKey;
+  const signatureKey = signatureLocal && signatureLocal.base === ctxSignatureKey ? signatureLocal.key : ctxSignatureKey;
 
   /* ═══ إعداداتُ الموسم ═══
      تُحمَّل من **الموسم المعروض** ليرى المديرُ بياناتِ ما يتصفّحه،
@@ -472,12 +483,12 @@ function UsersPage({ currentUser }: { currentUser: User }) {
          صارت المرجع، والعمودان يبقيان في القاعدة عمودَي توافقٍ
          مجمَّدين حتى ترحيل التنظيف. والكتابةُ المزدوجةُ كانت تُبقي
          لمصدرين حياةً — فمن كتب أحدَهما وحده صنع خلافاً. */
-      bank_name: companyForm.bank_name || null,
-      bank_account_name: companyForm.bank_account_name || null,
-      bank_account_number: companyForm.bank_account_number || null,
-      bank_iban: companyForm.bank_iban || null,
-      bank_swift: companyForm.bank_swift || null,
-      commercial_registration: companyForm.commercial_registration || null,
+      /* ⚠️ ولا عمودَ بنكٍ ولا سجلٍّ تجاريٍّ هنا. مُحرِّرُها انتقل إلى
+         الحسابات ← إعدادات الحسابات ← البنك والسداد، والعمودُ واحدٌ
+         في `company_config` لم يُنسَخ. وإبقاءُ الإرسالِ من هنا كان
+         يجعل هذه الصفحةَ كاتباً ثانياً: من حرَّرها في الحسابات ثُمّ
+         حُفظت هذه الصفحةُ من لسانِ تبويبٍ قديمٍ لعادت القيمُ القديمة.
+         فالكتابةُ من مكانٍ واحدٍ عمداً. */
     });
     if (!isSaved(res)) { setCompanySaving(false); setCompanyMsg(saveErrorText(res)); return; }
 
@@ -707,22 +718,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
-            <div style={card}>
-              <div style={cardHead}><div style={cardIcon}>ر.ق</div><div><div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>بيانات البنك والسداد</div><div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>بيانات التحويل والسجلّ التجاريّ</div></div></div>
-              <div style={cardBody}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-                  <div><label style={fieldLabel}>اسم البنك</label><input style={inp} value={companyForm.bank_name} onChange={e => setCompanyForm(p => ({ ...p, bank_name: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>اسم الحساب</label><input style={inp} value={companyForm.bank_account_name} onChange={e => setCompanyForm(p => ({ ...p, bank_account_name: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>رقم الحساب</label><input style={inp} dir="ltr" value={companyForm.bank_account_number} onChange={e => setCompanyForm(p => ({ ...p, bank_account_number: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>IBAN</label><input style={inp} dir="ltr" value={companyForm.bank_iban} onChange={e => setCompanyForm(p => ({ ...p, bank_iban: e.target.value }))} /></div>
-                  <div><label style={fieldLabel}>SWIFT</label><input style={inp} dir="ltr" value={companyForm.bank_swift} onChange={e => setCompanyForm(p => ({ ...p, bank_swift: e.target.value }))} /></div>
-                  {/* رقمُ السجلّ التجاريّ — بيانُ شركةٍ، وموضعُه هنا
-                      لأنّ استعمالَه المقصود مع بيانات التحويل والسداد. */}
-                  <div><label style={fieldLabel}>رقم السجل التجاري</label><input style={inp} dir="ltr" value={companyForm.commercial_registration} onChange={e => setCompanyForm(p => ({ ...p, commercial_registration: e.target.value }))} /></div>
-                </div>
-              </div>
-            </div>
-
           </div>
         )}
 
@@ -814,7 +809,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     kind="stamp"
                     storageKey={stampKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={setStampKey}
+                    onChange={k => { setStampLocal({ base: ctxStampKey, key: k }); void refreshCompany(); }}
                     confirmRemove={confirmAction}
                   />
                   <CompanyAssetRow
@@ -825,7 +820,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     kind="signature"
                     storageKey={signatureKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={setSignatureKey}
+                    onChange={k => { setSignatureLocal({ base: ctxSignatureKey, key: k }); void refreshCompany(); }}
                     confirmRemove={confirmAction}
                   />
                 </div>

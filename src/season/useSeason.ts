@@ -35,6 +35,16 @@ export interface Season {
   mina_url: string | null;
   arafa_address: string | null;
   arafa_url: string | null;
+  /* ═══ ترقيمُ إيصالاتِ الموسم ═══
+     العدّادُ مِلكُ صفِّ الموسمِ لا `company_config`، ولكلِّ موسمٍ
+     تسلسلُه. والقراءةُ تأتي مع `select("*")` القائمِ أصلاً — كان
+     النوعُ وحدَه يُسقطهما، فلا استعلامَ ثانيَ يُضاف.
+
+     · `receipt_start_number` رقمُ البداية، يُعدَّل قبل أوّلِ إيصالٍ فقط
+     · `receipt_next_number`  الرقمُ القادم — وتقدُّمُه عن البدايةِ هو
+       **وحدَه** دليلُ أنّ إيصالاً صدر، فلا رايةَ عميلٍ تُخترَع. */
+  receipt_start_number: number;
+  receipt_next_number: number;
 }
 
 export interface SeasonValue {
@@ -52,6 +62,8 @@ export interface SeasonValue {
   viewSeason: (id: number) => void;
   /** العودة إلى الموسم النشط */
   returnToActive: () => void;
+  /** إعادةُ قراءةِ المواسمِ من القاعدة بعد كتابةٍ على صفِّ الموسم */
+  refreshSeasons: () => Promise<void>;
 }
 
 export const SeasonContext = createContext<SeasonValue | null>(null);
