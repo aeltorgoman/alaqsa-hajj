@@ -43,7 +43,7 @@ export function PortalLogin({
                 ? <img src={logoUrl} alt="" style={{ width: 70, height: 70, objectFit: "contain" }} />
                 : <Icon d={ICONS.star} size={54} color={t.goldBright} sw={1.3} />}
             </div>
-            <div style={{ fontFamily: t.fontT, fontSize: 32, fontWeight: 700 }}>{nameAr}</div>
+            <div style={{ fontFamily: t.fontT, fontSize: "clamp(22px, 7vw, 32px)", fontWeight: 700, lineHeight: 1.3, maxWidth: "100%", overflowWrap: "anywhere", padding: "0 8px" }}>{nameAr}</div>
             <div style={{ fontSize: 15.5, color: t.goldBright, marginTop: 8, fontWeight: 700 }}>بوابة الحاج {seasonName ? `— ${seasonName}` : ""}</div>
           </div>
 
