@@ -5,7 +5,7 @@ import type { User } from "../types";
 import { ALL_PERMISSIONS, inp, btnP, btnS, uploadCompanyAsset,
   normalizeStampImage, uploadPrivateCompanyAsset, deletePrivateCompanyAsset,
   useSignedPrivateCompanyAsset, type NormalizedImage, type StampKind } from "../utils";
-import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyIdentity } from "../company/CompanyContext";
+import { useCompanyAssets, useCompanyBranding, useCompanyContact, useCompanyIdentity, useCompanyRefresh } from "../company/CompanyContext";
 import { useSeason } from "../season/useSeason";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -382,6 +382,10 @@ function UsersPage({ currentUser }: { currentUser: User }) {
      والقيمةُ الأولى من `company_assets` — فإعادةُ التحميل تُظهر
      المحفوظَ من مرجعه لا من ذاكرةٍ محلّيّة. */
   const companyAssets = useCompanyAssets();
+  /* بعد حفظِ ختمٍ أو توقيعٍ يُعاد ملفُّ الحملةِ المشترك — وإلا رأت هذه
+     الشاشةُ المفتاحَ الجديدَ في حالتِها المحلّيّة، وبقي الإيصالُ في
+     الحسابات يقرأ الملفَّ القديمَ فيُطبَع بلا ختم (الإيصال #1001). */
+  const refreshCompany = useCompanyRefresh();
   const [stampKey, setStampKey] = useState(companyAssets.company_stamp?.url ?? "");
   const [signatureKey, setSignatureKey] = useState(companyAssets.manager_signature?.url ?? "");
 
@@ -794,7 +798,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     kind="stamp"
                     storageKey={stampKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={setStampKey}
+                    onChange={k => { setStampKey(k); void refreshCompany(); }}
                     confirmRemove={confirmAction}
                   />
                   <CompanyAssetRow
@@ -805,7 +809,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                     kind="signature"
                     storageKey={signatureKey}
                     disabled={!currentUser.permissions.manage_users}
-                    onChange={setSignatureKey}
+                    onChange={k => { setSignatureKey(k); void refreshCompany(); }}
                     confirmRemove={confirmAction}
                   />
                 </div>

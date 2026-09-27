@@ -69,17 +69,25 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      مالكُ `manage_users` وحدَه كان يُحرّر البنكَ في موضعِه القديم، فلو
      نُقل المُحرِّرُ إلى سطحٍ لا يبلغه لفقد قدرةً كانت له. */
   const canOpenSettings = canManage || canEditBank;
-  /* يُهيَّأ مرّةً من سياقِ الشركة. والسياقُ يُبنى عند الإقلاعِ ولا
-     يتغيّر في أثناء الجلسة (الحفظُ الناجحُ يُعيد تحميلَ الصفحة)، فلا
-     أثرَ يُرآي حالةً قائمةً — ولا حالةَ موازيةَ تُنشَأ. */
-  const [bankForm, setBankForm] = useState(() => ({
+  /* ═══ نموذجُ البنك يتبع السياقَ ولا يُرآيه ═══
+     ⚠️ كان يُهيَّأ مرّةً عند التركيب، على افتراضِ أنّ السياقَ لا يتغيّر
+     في الجلسة. وقد ظهر أنّه كان يُبنى **قبل الدخول** من الملفِّ العلنيّ
+     بلا أعمدةِ البنك — فصار يُعاد بعد الدخول، وما هُيِّئ قبل ذلك يبقى
+     فارغاً لو ثُبِّت. فالعرضُ **مُشتقٌّ** من السياقِ، والتحريرُ مُخزَّنٌ
+     مع بصمةِ المصدرِ الذي حُرِّر عليه: إن تغيّر المصدرُ ظهرت قيمُه هو. */
+  const bankSource = useMemo(() => ({
     bank_name: companyFinancial.bankName,
     bank_account_name: companyFinancial.accountName,
     bank_account_number: companyFinancial.accountNumber,
     bank_iban: companyFinancial.iban,
     bank_swift: companyFinancial.swift,
     commercial_registration: companyFinancial.commercialRegistration,
-  }));
+  }), [companyFinancial]);
+  const bankSourceKey = JSON.stringify(bankSource);
+  const [bankEdit, setBankEdit] = useState<{ sourceKey: string; values: typeof bankSource } | null>(null);
+  const bankForm = bankEdit?.sourceKey === bankSourceKey ? bankEdit.values : bankSource;
+  const setBankField = (key: keyof typeof bankSource, value: string) =>
+    setBankEdit({ sourceKey: bankSourceKey, values: { ...bankForm, [key]: value } });
   const [bankSaving, setBankSaving] = useState(false);
   const [bankMsg, setBankMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -362,16 +370,17 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      من هنا، فلا يُصادِر هذا السطحُ حقلاً ليس له. */
   async function saveBank() {
     if (!canEditBank) { setBankMsg({ text: "لا تملك صلاحية تعديل بيانات الحملة.", ok: false }); return; }
+    /* ⚠️ لا يُرسَل إلا **ما غيّره المستخدم**. لو كان المصدرُ ملفّاً
+       ناقصاً — كالعلنيِّ قبل اكتمالِ إعادةِ القراءةِ بعد الدخول — لكان
+       إرسالُ النموذجِ كاملاً يكتب الفراغَ فوق بياناتِ البنكِ الحقيقيّة.
+       والحقلُ الذي لم يُلمَس لا يُكتَب أبداً، فلا يُمحى بحال. */
+    const changed = (Object.keys(bankSource) as (keyof typeof bankSource)[])
+      .filter(k => bankForm[k] !== bankSource[k]);
+    if (changed.length === 0) { setBankMsg({ text: "لا تغييرَ للحفظ.", ok: true }); return; }
+    const patch = Object.fromEntries(changed.map(k => [k, bankForm[k] || null]));
     setBankSaving(true);
     setBankMsg(null);
-    const res = await companyService.updateConfig({
-      bank_name: bankForm.bank_name || null,
-      bank_account_name: bankForm.bank_account_name || null,
-      bank_account_number: bankForm.bank_account_number || null,
-      bank_iban: bankForm.bank_iban || null,
-      bank_swift: bankForm.bank_swift || null,
-      commercial_registration: bankForm.commercial_registration || null,
-    });
+    const res = await companyService.updateConfig(patch);
     setBankSaving(false);
     if (!isSaved(res)) { setBankMsg({ text: saveErrorText(res), ok: false }); return; }
     /* سياقُ الشركةِ يُبنى عند الإقلاع، وتحديثُه يجري بإعادةِ التحميل
@@ -850,11 +859,37 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      والصورةُ تُجلب بعده عند رسمِ المستند. وانتظارُها قبلَ النداءِ على
      `print()` مِلكُ `printInPage` لا هذه الدالّة. */
   const printReceipt = async (rc: PaymentReceipt) => {
+    const stampKey = companyAssets.company_stamp?.url ?? "";
+    const signatureKey = companyAssets.manager_signature?.url ?? "";
     const [stampUrl, signatureUrl] = await Promise.all([
-      signedPrivateCompanyUrl(companyAssets.company_stamp?.url),
-      signedPrivateCompanyUrl(companyAssets.manager_signature?.url),
+      signedPrivateCompanyUrl(stampKey),
+      signedPrivateCompanyUrl(signatureKey),
     ]);
-    printInPage(makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc)));
+    const html = makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc));
+
+    /* ═══ تشخيصٌ مؤقّتٌ لمعاينةِ الإيصال #1001 — أعلامٌ لا روابط ═══
+       يقول **أيَّ مرحلةٍ** سقطت: لا مفتاحَ في ملفِّ الحملة (السياق)، أم
+       لا رابطَ من التوقيع، أم لم تدخل الصورةُ المستند. ⚠️ لا يُطبَع
+       رابطٌ موقَّعٌ ولا رمز — الأطوالُ والقيمُ المنطقيّةُ وحدَها. ويُزال
+       بعد أن تمرّ المعاينة. */
+    const seal = {
+      hasStampKey: stampKey.length > 0,
+      hasSignatureKey: signatureKey.length > 0,
+      hasStampSignedUrl: stampUrl.length > 0,
+      hasSignatureSignedUrl: signatureUrl.length > 0,
+      htmlHasStampImg: /<img[^>]*alt="الختم"/.test(html),
+      htmlHasSignatureImg: /<img[^>]*alt="التوقيع"/.test(html),
+    };
+    console.info("[receipt-seals]", seal);
+    const stage = (hasKey: boolean, hasUrl: boolean, hasImg: boolean) =>
+      !hasKey ? "لا مفتاح في ملفِّ الحملة" : !hasUrl ? "تعذّر توقيعُ الرابط" : !hasImg ? "لم تدخل الصورةُ المستند" : "";
+    const missing = [
+      ["الختم", stage(seal.hasStampKey, seal.hasStampSignedUrl, seal.htmlHasStampImg)],
+      ["التوقيع", stage(seal.hasSignatureKey, seal.hasSignatureSignedUrl, seal.htmlHasSignatureImg)],
+    ].filter(([, why]) => why).map(([what, why]) => `${what}: ${why}`);
+    if (missing.length) showAlert("error", `يُطبَع الإيصالُ بلا — ${missing.join(" · ")}`);
+
+    printInPage(html);
   };
 
 
@@ -1168,7 +1203,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                     value={bankForm[f.key]}
                     readOnly={!canEditBank}
                     disabled={!canEditBank}
-                    onChange={e => setBankForm(prev => ({ ...prev, [f.key]: e.target.value }))} />
+                    onChange={e => setBankField(f.key, e.target.value)} />
                 </div>
               ))}
             </div>
