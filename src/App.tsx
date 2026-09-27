@@ -108,6 +108,11 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerVisible]);
   const openNav = narrow ? () => setDrawerOpen(true) : undefined;
+  /* ⚠️ على الجوّال: صفحةٌ أعرضُ من الشاشة (جدولُ الحجاج مثلاً) كانت تفيض
+     خارج الغلاف، فيُوسِّع متصفّحُ الجوّال «منفذَ التخطيط» كلَّه إلى عرضها
+     ويُصغِّر الصفحةَ كاملةً — الشريطَ والدرجَ معها. فيُحبَس فيضُ الصفحة في
+     منطقتها: تتمرّر أفقيّاً وحدَها ويبقى الغلافُ بعرض الشاشة. */
+  const pageContain: React.CSSProperties = narrow ? { minWidth: 0, maxWidth: "100vw", overflowX: "auto" } : {};
 
   useEffect(() => {
     const handler = () => setPage("dash");
@@ -246,7 +251,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
             <TopBar page={page} setPage={setPage} currentUser={currentUser!} onLogout={onLogout} onOpenNav={openNav} />
           )}
           {isFull ? (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", ...pageContain }}>
               {/* key= يُعيد تركيب شجرة الصفحات عند تبديل الموسم، فلا
                   تتسرّب مودالات ولا تحديدات ولا مسوّدات من موسم سابق */}
               <ErrorBoundary key={viewedSeason.id}>
@@ -259,7 +264,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
               </ErrorBoundary>
             </div>
           ) : (
-            <div style={{ background: "var(--ivory)", padding: "20px" }}>
+            <div style={{ background: "var(--ivory)", padding: "20px", ...pageContain }}>
               <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
                 <ErrorBoundary key={viewedSeason.id}>
                   {passengersLoading ? <LoadingSpinner /> : passengersError ? (
