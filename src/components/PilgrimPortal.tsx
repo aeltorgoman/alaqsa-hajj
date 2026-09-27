@@ -9,6 +9,7 @@ import {
   registerServiceWorker, resubscribeIfNeeded,
   type PushState,
 } from "../utils/pushClient";
+import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
 import { setupPortalManifest } from "../utils/portalManifest";
 import type { PortalData, Ann } from "./portal/portal.types";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
@@ -210,6 +211,31 @@ function PilgrimPortal() {
     localStorage.setItem("portal_push_dismissed", "1");
   }
 
+  /* هويّةُ الحملة قبل الدخول — من المسار العامّ المعتمد وحده:
+     عرضُ `company_profile_public` (اسمٌ وألوان) وصفُّ `logo` من
+     `company_assets`. أعمدةٌ مسمّاةٌ صراحةً، وعميلُ البوابة المجهول. */
+  const [publicBrand, setPublicBrand] = useState<{ name_ar: string | null; color_primary: string | null; color_accent: string | null; logo: string | null } | null>(null);
+  const hasData = !!data;
+  useEffect(() => {
+    if (hasData) return;
+    let alive = true;
+    (async () => {
+      const [prof, logo] = await Promise.all([
+        portalSupabase.from("company_profile_public").select("name_ar,color_primary,color_accent").eq("id", 1).maybeSingle(),
+        portalSupabase.from("company_assets").select("asset_url").eq("asset_key", "logo").maybeSingle(),
+      ]);
+      if (!alive) return;
+      const p = prof.data as { name_ar?: unknown; color_primary?: unknown; color_accent?: unknown } | null;
+      setPublicBrand({
+        name_ar: typeof p?.name_ar === "string" && p.name_ar.trim() ? p.name_ar.trim() : null,
+        color_primary: p ? normalizeCompanyColor(p.color_primary, "") || null : null,
+        color_accent: p ? normalizeCompanyColor(p.color_accent, "") || null : null,
+        logo: normalizeCompanyAssetUrl((logo.data as { asset_url?: unknown } | null)?.asset_url),
+      });
+    })().catch(() => {});
+    return () => { alive = false; };
+  }, [hasData]);
+
   const cfg = data?.config;
   /* موسمُ الحاجّ — اسمُه وأماكنُه من صفّ موسمه هو، لا من إعدادات
      الحملة العالميّة. فالحاجُّ يرى فندقَ موسمه دائماً. */
@@ -394,9 +420,9 @@ function PilgrimPortal() {
   if (!data) {
     return (
       <PortalLogin
-        t={t}
-        logoUrl={portalLogo}
-        nameAr={cfg?.name_ar || "بوابة الحاج"}
+        t={buildTheme({ color_primary: publicBrand?.color_primary, color_accent: publicBrand?.color_accent } as typeof cfg)}
+        logoUrl={publicBrand?.logo ?? null}
+        nameAr={publicBrand?.name_ar || "بوابة الحاج"}
         seasonName={season?.name}
         adminPhone={cfg?.admin_phone}
         doc={doc} setDoc={setDoc}

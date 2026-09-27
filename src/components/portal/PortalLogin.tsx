@@ -37,21 +37,26 @@ export function PortalLogin({
       <div dir="rtl" style={{ minHeight: "100dvh", background: `linear-gradient(168deg,${t.brand} 0%,${t.brandDeep} 85%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: t.font, color: "#fff", position: "relative" }}>
         <div style={{ position: "absolute", inset: 0, opacity: .06, backgroundImage: STAR_PATTERN, pointerEvents: "none" }} />
         <div style={{ width: "100%", maxWidth: 410, position: "relative" }}>
-          <div style={{ textAlign: "center", marginBottom: 30 }}>
-            <div style={{ width: 110, height: 110, borderRadius: "50%", border: `3px solid ${t.goldBright}`, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", boxShadow: "0 0 0 10px rgba(240,200,74,.08)" }}>
-              {logoUrl
-                ? <img src={logoUrl} alt="" style={{ width: 70, height: 70, objectFit: "contain" }} />
-                : <Icon d={ICONS.star} size={54} color={t.goldBright} sw={1.3} />}
-            </div>
-            <div style={{ fontFamily: t.fontT, fontSize: 32, fontWeight: 700 }}>{nameAr}</div>
-            <div style={{ fontSize: 15.5, color: t.goldBright, marginTop: 8, fontWeight: 700 }}>بوابة الحاج {seasonName ? `— ${seasonName}` : ""}</div>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            {/* الشعارُ الحقيقيّ كثيراً ما يحمل خلفيّتَه البيضاء — فيُقدَّم على
+                لوحٍ أبيضَ مستديرِ الزوايا يحتويه كاملاً (contain)، فيبدو
+                مقصوداً لا صورةً ملصقةً داخل دائرة. والمرتدُّ يبقى النجمة. */}
+            {logoUrl
+              ? <div style={{ width: 116, height: 116, borderRadius: 28, background: "#fff", border: `2px solid ${t.goldBright}`, boxShadow: "0 6px 18px rgba(0,0,0,.18)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", padding: 12, boxSizing: "border-box", overflow: "hidden" }}>
+                  <img src={logoUrl} alt="" style={{ display: "block", maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", objectFit: "contain" }} />
+                </div>
+              : <div style={{ width: 110, height: 110, borderRadius: "50%", border: `3px solid ${t.goldBright}`, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: "0 0 0 10px rgba(240,200,74,.08)" }}>
+                  <Icon d={ICONS.star} size={54} color={t.goldBright} sw={1.3} />
+                </div>}
+            <div style={{ fontFamily: t.fontT, fontSize: "clamp(20px, 5.6vw, 26px)", fontWeight: 700, lineHeight: 1.35, maxWidth: "100%", overflowWrap: "anywhere", padding: "0 8px" }}>{nameAr}</div>
+            <div style={{ fontSize: 16, color: t.goldBright, marginTop: 6, fontWeight: 800, letterSpacing: .3 }}>بوابة الحاج {seasonName ? `— ${seasonName}` : ""}</div>
           </div>
 
-          <label style={{ display: "block", fontSize: 15, color: t.goldBright, fontWeight: 800, marginBottom: 9 }}>رقم جواز السفر أو البطاقة الشخصية</label>
+          <label style={{ display: "block", fontSize: 15, color: t.goldBright, fontWeight: 800, marginBottom: 8 }}>رقم جواز السفر أو البطاقة الشخصية</label>
           <input value={doc} onChange={e => setDoc(e.target.value)} placeholder="A12345678"
             style={{ ...inpStyle, width: "100%", direction: "ltr", textAlign: "left", letterSpacing: 1.5, padding: "16px 16px" }} />
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "20px 0 9px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "18px 0 8px", gap: 12 }}>
             <label style={{ fontSize: 15, color: t.goldBright, fontWeight: 800 }}>تاريخ الميلاد</label>
             <div style={{ display: "flex", background: "rgba(255,255,255,.12)", borderRadius: 99, padding: 3, border: "1px solid rgba(255,255,255,.25)" }}>
               {[{ id: "select", l: "اختيار" }, { id: "type", l: "كتابة" }].map(o => (
@@ -98,11 +103,11 @@ export function PortalLogin({
           {loginError && <div style={{ marginTop: 16, fontSize: 14.5, fontWeight: 700, background: "rgba(255,80,80,.18)", border: "1.5px solid rgba(255,130,130,.5)", borderRadius: 12, padding: "13px 15px", lineHeight: 1.9 }}>{loginError}</div>}
 
           <button onClick={onSubmit} disabled={loading}
-            style={{ width: "100%", marginTop: 24, padding: 18, border: "none", borderRadius: 15, background: t.goldBright, color: t.brandDeep, fontFamily: t.fontD, fontWeight: 900, fontSize: 19, cursor: "pointer", opacity: loading ? .6 : 1, boxShadow: "0 8px 24px rgba(240,200,74,.35)" }}>
+            style={{ width: "100%", marginTop: 22, padding: 18, border: "none", borderRadius: 15, background: t.goldBright, color: t.brandDeep, fontFamily: t.fontD, fontWeight: 900, fontSize: 19, cursor: "pointer", opacity: loading ? .6 : 1, boxShadow: "0 4px 14px rgba(240,200,74,.22)" }}>
             {loading ? "جارٍ التحقق..." : "دخول إلى رحلتي"}
           </button>
 
-          <div style={{ textAlign: "center", fontSize: 13.5, color: "rgba(255,255,255,.8)", fontWeight: 600, marginTop: 24, lineHeight: 2.1 }}>
+          <div style={{ textAlign: "center", fontSize: 13.5, color: "rgba(255,255,255,.8)", fontWeight: 600, marginTop: 20, lineHeight: 2.1 }}>
             تدخل مرة واحدة وتبقى بوابتك مفتوحة طوال الموسم
             {adminPhone && <><br />للمساعدة: <a href={`tel:${adminPhone}`} style={{ direction: "ltr", display: "inline-block", color: t.goldBright, fontWeight: 800, textDecoration: "none" }}>{adminPhone}</a></>}
           </div>
