@@ -22,18 +22,27 @@ export function useSidebarPrefs() {
   return { compact, toggleCompact };
 }
 
-function matchNarrow(): boolean {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(NARROW_QUERY).matches;
+function matchQuery(q: string): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(q).matches;
 }
 
 export function useIsNarrow(): boolean {
-  const [narrow, setNarrow] = useState(matchNarrow);
+  return useMedia(NARROW_QUERY);
+}
+
+/** شاشاتٌ لا تتّسع لصفحةٍ عريضة بجانب السايدبار (جوّال ولوحيّ) */
+export function useIsCompactViewport(): boolean {
+  return useMedia("(max-width: 1024px)");
+}
+
+function useMedia(query: string): boolean {
+  const [narrow, setNarrow] = useState(() => matchQuery(query));
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia(NARROW_QUERY);
+    const mq = window.matchMedia(query);
     const on = () => setNarrow(mq.matches);
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
-  }, []);
+  }, [query]);
   return narrow;
 }

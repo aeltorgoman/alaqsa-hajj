@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { pagePerm } from "./navigation/nav";
-import { useSidebarPrefs, useIsNarrow } from "./navigation/useSidebar";
+import { useSidebarPrefs, useIsNarrow, useIsCompactViewport } from "./navigation/useSidebar";
 import type { Passenger, User } from "./types";
 import { mapPassenger, upsertPassenger, isHajj } from "./utils/passenger";
 import type { PassengerRow } from "./utils/passenger";
@@ -108,11 +108,12 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerVisible]);
   const openNav = narrow ? () => setDrawerOpen(true) : undefined;
-  /* ⚠️ على الجوّال: صفحةٌ أعرضُ من الشاشة (جدولُ الحجاج مثلاً) كانت تفيض
+  /* ⚠️ على الجوّال واللوحيّ: صفحةٌ أعرضُ من الشاشة (جدولُ الحجاج مثلاً) كانت تفيض
      خارج الغلاف، فيُوسِّع متصفّحُ الجوّال «منفذَ التخطيط» كلَّه إلى عرضها
      ويُصغِّر الصفحةَ كاملةً — الشريطَ والدرجَ معها. فيُحبَس فيضُ الصفحة في
      منطقتها: تتمرّر أفقيّاً وحدَها ويبقى الغلافُ بعرض الشاشة. */
-  const pageContain: React.CSSProperties = narrow ? { minWidth: 0, maxWidth: "100vw", overflowX: "auto" } : {};
+  const containPage = useIsCompactViewport();
+  const pageContain: React.CSSProperties = containPage ? { minWidth: 0, maxWidth: "100vw", overflowX: "auto" } : {};
 
   useEffect(() => {
     const handler = () => setPage("dash");
