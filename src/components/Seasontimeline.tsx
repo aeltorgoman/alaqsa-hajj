@@ -6,6 +6,7 @@ import { itemsLabel } from "../utils";
 import { hasIssue, type IssueKey } from "../utils/readiness";
 import { useSeason } from "../season/useSeason";
 import { localDateISO } from "./finance/finance.utils";
+import { isPlainLeftClick, pathForPage } from "../navigation/nav";
 
 /* ════════════════════════════════════════════════════════════
    منطق حساب مراحل الموسم — تلقائي بالكامل من البيانات
@@ -205,12 +206,13 @@ function SeasonPhaseCard({ passengers, setPage }: { passengers: Passenger[]; set
           { label: "منى", count: minaCount, page: "mina",   icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M2 21h20"/>` },
           { label: "عرفة", count: arafaCount, page: "arafa", icon: `<path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M2 21h20"/>` },
         ]).map(item => (
-          <span key={item.label}
-            onClick={() => setPage?.(item.page)}
-            style={{ fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6, cursor: setPage ? "pointer" : "default", fontWeight: 700 }}>
+          /* رابطٌ حقيقيّ بلا حالةٍ عابرة — فيُفتح في تبويبٍ جديدٍ أيضاً */
+          <a key={item.label} href={pathForPage(item.page)}
+            onClick={e => { if (!isPlainLeftClick(e)) return; e.preventDefault(); setPage?.(item.page); }}
+            style={{ fontSize: 14, color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: 700, textDecoration: "none" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
             {item.label}: <b style={{ color: "var(--ink)", fontSize: 15.5, fontWeight: 900 }}>{item.count}/{total}</b>
-          </span>
+          </a>
         ))}
       </div>
     </div>
@@ -454,7 +456,7 @@ function SmartAlertsCard({ passengers, setPage }: { passengers: Passenger[]; set
           {/* التذييل سطرٌ واحد: التنويه ضروريّ (الحاجّ قد يتكرّر) لكنه
               لا يستحق صفّاً مستقلاً بعد ضغط الكارت. */}
           <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>اضغط أي بند للانتقال · قد يظهر الحاج في أكثر من بند</span>
-          <span onClick={() => setPage("passengers")} style={{ fontSize: 10.5, color: "var(--primary)", fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>عرض الكل ←</span>
+          <a href={pathForPage("passengers")} onClick={e => { if (!isPlainLeftClick(e)) return; e.preventDefault(); setPage("passengers"); }} style={{ fontSize: 10.5, color: "var(--primary)", fontWeight: 800, cursor: "pointer", flexShrink: 0, textDecoration: "none" }}>عرض الكل ←</a>
         </div>
       )}
     </div>

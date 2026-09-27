@@ -1,5 +1,5 @@
 import type { User } from "../types";
-import { NAV_LAYOUT, NAV_PAGES, NAV_ICON, canAccessPage, type PageId } from "../navigation/nav";
+import { NAV_LAYOUT, NAV_PAGES, NAV_ICON, canAccessPage, isPlainLeftClick, pathForPage, type PageId } from "../navigation/nav";
 import { useSeason } from "../season/useSeason";
 
 type Props = {
@@ -56,10 +56,10 @@ function SeasonContextCard({ compact, canOpen, onOpen }: { compact: boolean; can
   };
 
   return canOpen ? (
-    <button type="button" className="nav-focus" onClick={onOpen} title={compact ? full : `${full} — إدارة المواسم`}
-      aria-label={`${full} — فتح إدارة المواسم`} style={{ ...style, cursor: "pointer" }}>
+    <a href={pathForPage("archive")} className="nav-focus" onClick={e => { if (!isPlainLeftClick(e)) return; e.preventDefault(); onOpen(); }} title={compact ? full : `${full} — إدارة المواسم`}
+      aria-label={`${full} — فتح إدارة المواسم`} style={{ ...style, cursor: "pointer", textDecoration: "none" }}>
       {body}
-    </button>
+    </a>
   ) : (
     <div role="status" title={full} aria-label={full} style={style}>{body}</div>
   );
@@ -90,11 +90,14 @@ function Sidebar({ page, setPage, count, currentUser, onReportsClick, compact, o
                 const active = page === id;
                 const badge = id === "passengers" && count > 0;
                 return (
-                  <button type="button" key={id} className="nav-item" onClick={() => go(id)}
+                  <a href={pathForPage(id)} key={id} className="nav-item"
+                    /* رابطٌ حقيقيّ: النقرةُ العاديّة تنتقل داخل التبويب، وما سواها
+                       (Ctrl/Cmd، الزرّ الأوسط، «فتح في تبويب جديد») للمتصفّح */
+                    onClick={e => { if (!isPlainLeftClick(e)) return; e.preventDefault(); go(id); }}
                     aria-current={active ? "page" : undefined}
                     aria-label={badge ? `${label} (${count})` : label}
                     title={compact ? label : undefined}
-                    style={{ display: "flex", alignItems: "center", width: "100%", gap: compact ? 0 : 11, padding: compact ? "7px 0" : "6px 12px", border: "none", borderRadius: "var(--radius-md)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, textAlign: "start", color: active ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 1, position: "relative", background: active ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)", justifyContent: compact ? "center" : "flex-start" }}>
+                    style={{ display: "flex", alignItems: "center", width: "100%", gap: compact ? 0 : 11, padding: compact ? "7px 0" : "6px 12px", border: "none", borderRadius: "var(--radius-md)", fontFamily: "inherit", fontSize: 13, fontWeight: 500, textAlign: "start", color: active ? "var(--text-inverse)" : "var(--text-sidebar)", cursor: "pointer", marginBottom: 1, position: "relative", background: active ? "linear-gradient(90deg,rgba(200,162,75,0.22),rgba(200,162,75,0.05))" : "transparent", transition: "var(--transition)", justifyContent: compact ? "center" : "flex-start", textDecoration: "none", boxSizing: "border-box" }}>
                     {active && <span aria-hidden="true" style={{ position: "absolute", right: 0, top: "20%", bottom: "20%", width: 3, background: "var(--accent)", borderRadius: "0 3px 3px 0" }} />}
                     <Svg html={icon} active={active} />
                     {!compact && <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>}
@@ -104,7 +107,7 @@ function Sidebar({ page, setPage, count, currentUser, onReportsClick, compact, o
                     {compact && badge && (
                       <span style={{ position: "absolute", top: 2, left: 2, background: "var(--accent)", color: "white", fontSize: 9, fontWeight: 700, padding: "0 4px", borderRadius: 99, minWidth: 16, textAlign: "center" }}>{count}</span>
                     )}
-                  </button>
+                  </a>
                 );
               })}
             </div>

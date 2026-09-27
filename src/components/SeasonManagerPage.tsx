@@ -14,6 +14,7 @@ import { SeasonCloseWizard } from "./SeasonCloseWizard";
 import { SeasonDeleteDialog } from "./SeasonDeleteDialog";
 import type { User } from "../types";
 import { btnP } from "../utils";
+import { pathForPage } from "../navigation/nav";
 
 /* عدّادات الموسم — أربعة أرقام لا صفوف. تُجلب بـ head+count فلا
    ينتقل جسم أي صفّ عبر الشبكة. */
@@ -181,7 +182,7 @@ function SeasonManagerPage({ currentUser }: { currentUser: User }) {
         counts={counts[activeSeason.id]}
         currentUser={currentUser}
         existingYears={seasons.map(s => s.hijri_year)}
-        onGoToNewSeason={() => { sessionStorage.setItem("hajj_page", "passengers"); window.location.reload(); }}
+        onGoToNewSeason={() => { window.history.replaceState(null, "", pathForPage("passengers")); window.location.reload(); }}
       />
 
       <SeasonDeleteDialog
