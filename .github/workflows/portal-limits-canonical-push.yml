@@ -1,0 +1,275 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — portal login failure limits (#188)
+# ════════════════════════════════════════════════════════════
+# Applies ONE migration, 20260928090000_portal_login_failure_limits,
+# through the canonical CLI path, on the pattern of
+# receipts-canonical-push.yml.
+#
+# ⚠️ `--db-url`, not `--linked` (PR #148).
+#
+# Exactly ONE production-mutating command may run, and only after
+# every gate passes. Deliberately absent, and audited for: migration
+# repair · migration up · `--include-all` · manual SQL mutation ·
+# rollback · baseline execution · any operation on a historical
+# migration · any Dashboard action.
+#
+# The migration only REPLACES function definitions and adds one
+# read-only helper. No table, no index, no data. Gates:
+#   · BEFORE: file hash · pending set is exactly this one · the helper
+#     does not exist yet · table/index inventory captured.
+#   · AFTER: ledger 57, originals untouched · helper exists, anon can
+#     NOT execute it, service_role can · create_pilgrim_session still
+#     SECURITY DEFINER with fixed search_path and the document
+#     pre-check present · consume_rate_limit cleanup is scope-aware ·
+#     table and index inventory unchanged · passenger rows unchanged.
+#   · No live rate-limit probe runs against production.
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+
+name: Portal login limits - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-PORTAL-LIMITS-20260928090000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portal-limits-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      M57: "20260928090000"
+      F57: supabase/migrations/20260928090000_portal_login_failure_limits.sql
+      SHA57: "87eddc56ed56395c63554dd70fbb9766d03aaea2c0fabbf985780533bf34b341"
+      EXPECT_REPO_MIGRATIONS: "57"
+      EXPECT_ROWS_BEFORE: "56"
+      EXPECT_LATEST_BEFORE: "20260926092000"
+      EXPECT_ROWS_AFTER: "57"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: portal-limits-push-evidence
+
+    steps:
+      - name: "GATE: confirmation and secrets"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "PUSH-PORTAL-LIMITS-20260928090000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          got="$(sha256sum "$F57" | cut -d' ' -f1)"
+          [ "$got" = "$SHA57" ] || { echo "::error::$F57 sha256 mismatch: $got"; exit 1; }
+          echo "ok   $(basename "$F57")  $got"
+          python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F57"
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 56 / 20260926092000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: pending set is exactly this one"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${M57}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M57]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+
+      - name: "GATE: production preconditions"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          h="$(p "select count(*) from pg_proc pr join pg_namespace ns on ns.oid=pr.pronamespace where ns.nspname='public' and pr.proname='rate_limit_exceeded'")"
+          [ "$h" -eq 0 ] || { echo "::error::rate_limit_exceeded already exists"; bad=1; }
+          c="$(p "select count(*) from pg_proc pr join pg_namespace ns on ns.oid=pr.pronamespace where ns.nspname='public' and pr.proname in ('create_pilgrim_session','consume_rate_limit')")"
+          [ "$c" -eq 2 ] || { echo "::error::expected create_pilgrim_session and consume_rate_limit, found $c"; bad=1; }
+          # جردُ الجداول والفهارس — يجب ألّا يتغيّر
+          p "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" > "$OUT/tables-before.txt"
+          p "select string_agg(schemaname||'.'||indexname, ',' order by schemaname, indexname) from pg_indexes where schemaname in ('public','storage')" > "$OUT/indexes-before.txt"
+          p "select count(*) from public.passengers" > "$OUT/psg-n-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||coalesce(season_id::text,'-'),'|' order by id)),'(none)') from public.passengers" > "$OUT/psg-fp-before.txt"
+          echo "passengers=$(cat "$OUT/psg-n-before.txt")"
+          [ "$bad" -eq 0 ] || { echo "::error::preconditions failed - nothing was written"; exit 1; }
+          echo "All preconditions PASS."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 56 -> 57, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$M57" ] || { echo "::error::latest is $latest, expected $M57"; bad=1; }
+          grep -vE "^$M57	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M57" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: functions, grants, and no table/index/data change"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          want() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-46s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          RLE="'public.rate_limit_exceeded(text,uuid,integer,integer)'"
+          CPS="'public.create_pilgrim_session(text,integer,integer,integer)'"
+          want helper_exists           "select count(*) from pg_proc where oid = to_regprocedure($RLE)" 1
+          want helper_anon_no_exec     "select has_function_privilege('anon', $RLE, 'execute')::text" false
+          want helper_auth_no_exec     "select has_function_privilege('authenticated', $RLE, 'execute')::text" false
+          want helper_service_exec     "select has_function_privilege('service_role', $RLE, 'execute')::text" true
+          want login_security_definer  "select prosecdef::text from pg_proc where oid = to_regprocedure($CPS)" true
+          want login_search_path       "select (proconfig::text like '%search_path=public, pg_temp%')::text from pg_proc where oid = to_regprocedure($CPS)" true
+          want login_anon_exec         "select has_function_privilege('anon', $CPS, 'execute')::text" true
+          want login_doc_precheck      "select (position('rate_limit_exceeded(''portal-verify-doc''' in pg_get_functiondef(to_regprocedure($CPS))) > 0)::text" true
+          want login_src_precheck_300  "select (position('rate_limit_exceeded(''portal-verify-src'', v_src_key, 300' in pg_get_functiondef(to_regprocedure($CPS))) > 0)::text" true
+          want login_scoped_cleanup    "select (position('where passenger_id = v_p.id' in pg_get_functiondef(to_regprocedure($CPS))) > 0)::text" true
+          want consume_scope_predicate "select (position('where scope = p_scope and subject = p_subject' in pg_get_functiondef('public.consume_rate_limit(text,uuid,integer,integer)'::regprocedure)) > 0)::text" true
+          want tables_unchanged        "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" "$(cat "$OUT/tables-before.txt")"
+          want indexes_unchanged       "select string_agg(schemaname||'.'||indexname, ',' order by schemaname, indexname) from pg_indexes where schemaname in ('public','storage')" "$(cat "$OUT/indexes-before.txt")"
+          want passengers_count        "select count(*) from public.passengers" "$(cat "$OUT/psg-n-before.txt")"
+          want passengers_finger       "select coalesce(md5(string_agg(id||':'||coalesce(season_id::text,'-'),'|' order by id)),'(none)') from public.passengers" "$(cat "$OUT/psg-fp-before.txt")"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-surface.txt"; else echo FAIL > "$OUT/status-surface.txt"; fi
+          echo "Surface verdict: $(cat "$OUT/status-surface.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger surface; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration 57 applied; ledger 57; functions and grants as approved; no table/index/passenger change."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-limits-canonical-push
+          path: portal-limits-push-evidence
+          if-no-files-found: warn
