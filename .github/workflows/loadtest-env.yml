@@ -108,9 +108,13 @@ jobs:
           set -euo pipefail
           DB_URL="postgresql://postgres.${LT_REF}:${PGPASSWORD}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$LT_REF" "$DB_URL" >/dev/null
-          npm run --silent supabase -- db push --db-url "$DB_URL" --include-all --output-format json > "$OUT/push.json" 2> "$OUT/push.err" || {
-            echo "::error::db push failed"; sed -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.err"; exit 1; }
-          sed -i -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.err"
+          rc=0
+          npm run --silent supabase -- db push --db-url "$DB_URL" --include-all --output-format json > "$OUT/push.json" 2> "$OUT/push.err" || rc=$?
+          # scrub BOTH streams before anything is printed or uploaded: the failure
+          # path used to exit before push.json was ever scrubbed, and push.json is
+          # uploaded by the always() evidence step.
+          sed -i -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err"
+          if [ "$rc" -ne 0 ]; then echo "::error::db push failed"; cat "$OUT/push.err"; exit 1; fi
 
       - name: "VERIFY: ledger = exact bidirectional correspondence, 58 / latest"
         env:
