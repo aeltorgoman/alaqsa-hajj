@@ -1,0 +1,38 @@
+-- Read-only environment verification for the load-test project.
+-- Every row is one named check: name | got | expected | ok
+with c(name, got, expected) as (values
+  ('ledger_rows',     (select count(*)::text from supabase_migrations.schema_migrations), '58'),
+  ('ledger_latest',   (select max(version) from supabase_migrations.schema_migrations), '20260928100000'),
+  ('fn_create_session_secdef', (select prosecdef::text from pg_proc where oid = to_regprocedure('public.create_pilgrim_session(text,integer,integer,integer)')), 'true'),
+  ('fn_create_session_path',   (select (proconfig::text like '%search_path=public, pg_temp%')::text from pg_proc where oid = to_regprocedure('public.create_pilgrim_session(text,integer,integer,integer)')), 'true'),
+  ('fn_portal_exists',   (select count(*)::text from pg_proc where oid = to_regprocedure('public.get_pilgrim_portal_by_session(text)')), '1'),
+  ('fn_verify_exists',   (select count(*)::text from pg_proc where oid = to_regprocedure('public.verify_pilgrim_session(text)')), '1'),
+  ('fn_revoke_exists',   (select count(*)::text from pg_proc where oid = to_regprocedure('public.revoke_pilgrim_session(text)')), '1'),
+  ('fn_markread_exists', (select count(*)::text from pg_proc where oid = to_regprocedure('public.mark_pilgrim_notification_read(text,bigint)')), '1'),
+  ('anon_exec_create_session', has_function_privilege('anon', 'public.create_pilgrim_session(text,integer,integer,integer)', 'execute')::text, 'true'),
+  ('anon_exec_portal',         has_function_privilege('anon', 'public.get_pilgrim_portal_by_session(text)', 'execute')::text, 'true'),
+  ('anon_exec_revoke',         has_function_privilege('anon', 'public.revoke_pilgrim_session(text)', 'execute')::text, 'true'),
+  ('anon_exec_markread',       has_function_privilege('anon', 'public.mark_pilgrim_notification_read(text,bigint)', 'execute')::text, 'true'),
+  ('anon_no_exec_rle',         has_function_privilege('anon', 'public.rate_limit_exceeded(text,uuid,integer,integer)', 'execute')::text, 'false'),
+  ('auth_no_exec_rle',         has_function_privilege('authenticated', 'public.rate_limit_exceeded(text,uuid,integer,integer)', 'execute')::text, 'false'),
+  ('anon_no_exec_consume',     has_function_privilege('anon', 'public.consume_rate_limit(text,uuid,integer,integer)', 'execute')::text, 'false'),
+  ('rle_exec_holders', (select coalesce(string_agg(h, ',' order by h collate "C"), '') from (select distinct coalesce(r.rolname,'PUBLIC') h from pg_proc p, aclexplode(p.proacl) a left join pg_roles r on r.oid = a.grantee where p.oid = to_regprocedure('public.rate_limit_exceeded(text,uuid,integer,integer)') and a.privilege_type = 'EXECUTE') s), 'postgres,service_role'),
+  ('anon_no_select_passengers', has_table_privilege('anon', 'public.passengers', 'select')::text, 'false'),
+  ('anon_no_select_sessions',   has_table_privilege('anon', 'public.pilgrim_sessions', 'select')::text, 'false'),
+  ('public_tables_all_rls', (select count(*)::text from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity), '0'),
+  ('seed_season',       (select count(*)::text from public.seasons where name = 'LT-1447' and closed_at is null), '1'),
+  ('seed_active_season_is_lt', (select name from public.seasons where id = public.active_season_id()), 'LT-1447'),
+  ('seed_main_pilgrims', (select count(*)::text from public.passengers where passport ~ '^LT[0-9]{6}$'), '600'),
+  ('seed_doc_pilgrims',  (select count(*)::text from public.passengers where passport ~ '^LD[0-9]{6}$'), '20'),
+  ('seed_non_synthetic', (select count(*)::text from public.passengers where coalesce(passport,'') !~ '^L[TD][0-9]{6}$'), '0'),
+  ('seed_main_no_docs',  (select count(*)::text from public.passengers where passport like 'LT%' and (photo_url is not null or hajj_permit_url is not null or flight_ticket_url is not null)), '0'),
+  ('seed_rooms',   (select count(*)::text from public.rooms), '150'),
+  ('seed_buses',   (select count(*)::text from public.buses), '12'),
+  ('seed_camps',   (select count(*)::text from public.camps), '8'),
+  ('seed_flights', (select count(*)::text from public.flights), '4'),
+  ('seed_families',(select count(distinct family_id)::text from public.passengers where family_id is not null), '120'),
+  ('seed_announcements', (select count(*)::text from public.announcements), '5'),
+  ('sessions_empty',     (select count(*)::text from public.pilgrim_sessions), '0'),
+  ('rate_limits_empty',  (select count(*)::text from public.edge_rate_limits), '0')
+)
+select name, got, expected, (got is not distinct from expected) as ok from c order by ok, name;

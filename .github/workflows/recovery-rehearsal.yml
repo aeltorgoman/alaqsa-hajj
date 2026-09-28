@@ -48,6 +48,8 @@ jobs:
       DB_PORT: ${{ inputs.db_port }}
       OUT: rehearsal-evidence
       GUARD: supabase/verification/assert-not-production.sh
+      # the guard no longer hardcodes a disposable ref; this (now deleted) rehearsal project keeps its pin here
+      ALLOWED_TMP_REF: edkngsadjkeujyacqidd
 
     steps:
       - name: "GATE: confirmation and secrets present"
