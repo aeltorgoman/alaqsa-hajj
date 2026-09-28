@@ -3,7 +3,7 @@ import { useCompanyBranding } from "../company/CompanyContext";
 import { ThemeSwitcher } from "../config/ThemeContext";
 import { NotificationBell } from "./NotificationBell";
 import type { User } from "../types";
-import { NAV_PAGES, canAccessPage, pageMeta, type PageId } from "../navigation/nav";
+import { NAV_PAGES, canAccessPage, isPlainLeftClick, pageMeta, type PageId } from "../navigation/nav";
 
 /* قائمةُ ⚙ — وجهاتٌ من مصدر التنقّل، مُصفّاةٌ بالصلاحية */
 const QUICK_PAGES: PageId[] = ["users", "finance", "admins"];
@@ -108,13 +108,14 @@ function TopBar({ page, setPage, currentUser, onLogout, onOpenNav }: {
                 <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--line)", fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: ".5px" }}>الإعدادات</div>
                 <div style={{ padding: 6 }}>
                   {quickPages.map(item => (
-                    <button key={item.id} onClick={() => { setShowSettings(false); setPage(item.id); }}
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "none", background: "transparent", color: "var(--ink)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", gap: 8, textAlign: "right" }}
-                      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "var(--ivory)"}
-                      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "transparent"}>
+                    <a href={item.path} key={item.id}
+                  onClick={e => { if (!isPlainLeftClick(e)) return; e.preventDefault(); setShowSettings(false); setPage(item.id); }}
+                      style={{ textDecoration: "none", boxSizing: "border-box", width: "100%", padding: "9px 12px", borderRadius: 8, border: "none", background: "transparent", color: "var(--ink)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)", display: "flex", alignItems: "center", gap: 8, textAlign: "right" }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--ivory)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.7" strokeLinecap="round" dangerouslySetInnerHTML={{ __html: item.icon }} />
                       {item.label}
-                    </button>
+                    </a>
                   ))}
                 </div>
               </div>

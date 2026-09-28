@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { pagePerm } from "./navigation/nav";
 import { useSidebarPrefs, useIsNarrow, useIsCompactViewport } from "./navigation/useSidebar";
+import { useStaffRoute } from "./navigation/useStaffRoute";
 import type { Passenger, User } from "./types";
 import { mapPassenger, upsertPassenger, isHajj } from "./utils/passenger";
 import type { PassengerRow } from "./utils/passenger";
@@ -74,7 +75,9 @@ export default function App() {
   const handleLogin = (user: User) => setCurrentUser(user);
 
   const handleLogout = async () => {
-    sessionStorage.removeItem("hajj_page");
+    /* الخروجُ يُعيد العنوانَ إلى الرئيسية:
+       الدخولُ التالي لا يرث صفحةَ من خرج */
+    window.history.replaceState(null, "", "/");
     await supabase.auth.signOut();
     setCurrentUser(null);
   };
@@ -93,7 +96,9 @@ export default function App() {
 
 function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () => void }) {
   const { viewedSeason } = useSeason();
-  const [page, setPage] = useState(() => sessionStorage.getItem("hajj_page") || "dash");
+  /* الصفحةُ من عنوان المتصفّح؛ و`setPage` مُحوِّلٌ يدفع التاريخ — نفسُ
+     التوقيع لكلّ مستدعٍ قائم */
+  const { page, navigate: setPage } = useStaffRoute();
   const [reportsResetKey, setReportsResetKey] = useState(0);
   /* السايدبار: الطيُّ تفضيلُ المستخدم (محفوظٌ محلّياً) لا نتيجةُ الصفحة؛
      وتحت عرضٍ ضيّقٍ يصير درجاً يُفتَح ويُغلَق دون مسّ الصفحة أو الموسم. */
@@ -126,9 +131,8 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
       window.removeEventListener("hajj_return_dash", handler);
       window.removeEventListener("hajj_goto_page", goto);
     };
-  }, []);
+  }, [setPage]);
 
-  useEffect(() => { sessionStorage.setItem("hajj_page", page); }, [page]);
   const [passengers, setPassengers] = useState<Passenger[]>([]);
   const [passengersLoading, setPassengersLoading] = useState(true);
   const [passengersError, setPassengersError] = useState(false);
@@ -266,7 +270,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
             </div>
           ) : (
             <div style={{ background: "var(--ivory)", padding: "20px", ...pageContain }}>
-              <div style={{ maxWidth: page === "scan" ? 620 : 900, margin: "0 auto" }}>
+              <div style={{ maxWidth: (page as string) === "scan" ? 620 : 900, margin: "0 auto" }}>
                 <ErrorBoundary key={viewedSeason.id}>
                   {passengersLoading ? <LoadingSpinner /> : passengersError ? (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 6, padding: 24, textAlign: "center" }}>

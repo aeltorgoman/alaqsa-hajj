@@ -4,7 +4,7 @@
 // معرّفُ الصفحة، واسمُها العربيّ، ووصفُها، وأيقونتُها، وصلاحيتُها —
 // في موضعٍ واحد. يقرؤه السايدبار والشريطُ العلويّ وقائمتا ⚙ والرئيسيّةُ
 // وحارسُ الصفحات في App، فلا تتباعد تسميةٌ ولا صلاحيةٌ بين موضعين.
-// المعرّفاتُ هي هي — لا تُعاد تسميتُها: تُحفَظ في sessionStorage
+// المعرّفاتُ هي هي — لا تُعاد تسميتُها: كلٌّ منها يقابل عنواناً (`path`)
 // وتُرسَل في حدث `hajj_goto_page`.
 import type { User } from "../types";
 
@@ -15,6 +15,9 @@ export type PageId =
 export interface NavPage {
   id: PageId;
   label: string;
+  /** عنوانُ الصفحة في المتصفّح — لا يحوي «hajj» أبداً: ذاك مسارُ بوابة
+      الحاجّ (`main.tsx` و`sw-push.js` يطابقانه بالبادئة والاحتواء) */
+  path: string;
   /** سطرُ الوصف في الشريط العلويّ */
   sub: string;
   /** صلاحيةُ الوصول — فارغةٌ = متاحةٌ لكلّ مستخدم */
@@ -46,19 +49,19 @@ const ICONS = {
 export const NAV_ICON = ICONS;
 
 export const NAV_PAGES: Record<PageId, NavPage> = {
-  dash:       { id: "dash",       label: "الرئيسية",       sub: "",                                     perm: "",                  icon: ICONS.home },
-  passengers: { id: "passengers", label: "الحجاج",         sub: "إدارة بيانات الحجاج",                  perm: "manage_passengers", icon: ICONS.people },
-  hotel:      { id: "hotel",      label: "الفندق",         sub: "غرف وإقامة الحجاج",                    perm: "manage_hotel",      icon: ICONS.hotel },
-  flights:    { id: "flights",    label: "الطيران",        sub: "رحلات وتذاكر الحجاج",                  perm: "manage_flights",    icon: ICONS.plane },
-  buses:      { id: "buses",      label: "الباصات",        sub: "توزيع الحجاج على الحافلات",            perm: "manage_buses",      icon: ICONS.bus },
-  mina:       { id: "mina",       label: "مخيمات منى",     sub: "توزيع الحجاج في منى",                  perm: "manage_camps",      icon: ICONS.tent },
-  arafa:      { id: "arafa",      label: "مخيمات عرفة",    sub: "توزيع الحجاج في عرفة",                 perm: "manage_camps",      icon: ICONS.mountain },
-  admins:     { id: "admins",     label: "الإداريون",      sub: "إدارة فريق الحملة",                    perm: "manage_admins",     icon: ICONS.staff },
-  finance:    { id: "finance",    label: "الحسابات",       sub: "مدفوعات وحسابات الحجاج",               perm: "manage_payments",   icon: ICONS.wallet },
-  portal:     { id: "portal",     label: "بوابة الحاج",    sub: "التنبيهات وإعدادات بوابة الحاج",       perm: "manage_portal",     icon: ICONS.phone },
-  reports:    { id: "reports",    label: "التقارير",       sub: "تقارير وإحصاءات الحملة",               perm: "view_reports",      icon: ICONS.report },
-  users:      { id: "users",      label: "الإعدادات",      sub: "إعدادات وبيانات الحملة والمستخدمون",   perm: "manage_users",      icon: ICONS.gear },
-  archive:    { id: "archive",    label: "إدارة المواسم",  sub: "إقفال الموسم وتصفّح المواسم السابقة",  perm: "view_archive",      icon: ICONS.calendar },
+  dash:       { id: "dash", path: "/",       label: "الرئيسية",       sub: "",                                     perm: "",                  icon: ICONS.home },
+  passengers: { id: "passengers", path: "/pilgrims", label: "الحجاج",         sub: "إدارة بيانات الحجاج",                  perm: "manage_passengers", icon: ICONS.people },
+  hotel:      { id: "hotel", path: "/hotel",      label: "الفندق",         sub: "غرف وإقامة الحجاج",                    perm: "manage_hotel",      icon: ICONS.hotel },
+  flights:    { id: "flights", path: "/flights",    label: "الطيران",        sub: "رحلات وتذاكر الحجاج",                  perm: "manage_flights",    icon: ICONS.plane },
+  buses:      { id: "buses", path: "/buses",      label: "الباصات",        sub: "توزيع الحجاج على الحافلات",            perm: "manage_buses",      icon: ICONS.bus },
+  mina:       { id: "mina", path: "/mina",       label: "مخيمات منى",     sub: "توزيع الحجاج في منى",                  perm: "manage_camps",      icon: ICONS.tent },
+  arafa:      { id: "arafa", path: "/arafat",      label: "مخيمات عرفة",    sub: "توزيع الحجاج في عرفة",                 perm: "manage_camps",      icon: ICONS.mountain },
+  admins:     { id: "admins", path: "/admins",     label: "الإداريون",      sub: "إدارة فريق الحملة",                    perm: "manage_admins",     icon: ICONS.staff },
+  finance:    { id: "finance", path: "/finance",    label: "الحسابات",       sub: "مدفوعات وحسابات الحجاج",               perm: "manage_payments",   icon: ICONS.wallet },
+  portal:     { id: "portal", path: "/portal-settings",     label: "بوابة الحاج",    sub: "التنبيهات وإعدادات بوابة الحاج",       perm: "manage_portal",     icon: ICONS.phone },
+  reports:    { id: "reports", path: "/reports",    label: "التقارير",       sub: "تقارير وإحصاءات الحملة",               perm: "view_reports",      icon: ICONS.report },
+  users:      { id: "users", path: "/settings",      label: "الإعدادات",      sub: "إعدادات وبيانات الحملة والمستخدمون",   perm: "manage_users",      icon: ICONS.gear },
+  archive:    { id: "archive", path: "/seasons",    label: "إدارة المواسم",  sub: "إقفال الموسم وتصفّح المواسم السابقة",  perm: "view_archive",      icon: ICONS.calendar },
 };
 
 /* ترتيبُ السايدبار المعتمَد. العنوانُ حيث يضيف تسلسلاً حقيقيّاً فقط —
@@ -93,4 +96,26 @@ export function pagePerm(id: string): string {
 export function canAccessPage(user: Pick<User, "permissions">, id: string): boolean {
   const perm = pagePerm(id);
   return !perm || !!user.permissions?.[perm];
+}
+
+/* ── العناوين — من `NAV_PAGES` نفسه، فلا جدولَ مساراتٍ ثانٍ ── */
+const PAGE_BY_PATH: ReadonlyMap<string, PageId> = new Map(
+  (Object.values(NAV_PAGES) as NavPage[]).map(p => [p.path, p.id]),
+);
+
+export function pathForPage(id: string): string {
+  return isPageId(id) ? NAV_PAGES[id].path : "/";
+}
+
+/** الصفحةُ لعنوانٍ ما — `null` لعنوانٍ غير معروف */
+export function pageForPath(pathname: string): PageId | null {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") || "/" : pathname;
+  return PAGE_BY_PATH.get(normalized) ?? null;
+}
+
+/** نقرةٌ يسرى عاديّة بلا مفاتيح تعديل — وحدها تُعترَض للتنقّل داخل
+    التبويب. ما سواها (Ctrl/Cmd/Shift/Alt، الزرّ الأوسط، القائمة) يُترك
+    للمتصفّح كي يفتح الرابطَ في تبويبٍ أو نافذةٍ جديدة. */
+export function isPlainLeftClick(e: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; defaultPrevented: boolean }): boolean {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.defaultPrevented;
 }
