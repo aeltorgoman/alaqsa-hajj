@@ -1,9 +1,13 @@
 # ════════════════════════════════════════════════════════════
-# canonical production db push — portal login failure limits (#188)
+# canonical production db push — portal login failure limits (#57 + #58)
 # ════════════════════════════════════════════════════════════
-# Applies ONE migration, 20260928090000_portal_login_failure_limits,
-# through the canonical CLI path, on the pattern of
-# receipts-canonical-push.yml.
+# Applies the TWO pending migrations, in order, through the canonical
+# CLI path (on the pattern of receipts-canonical-push.yml):
+#   #57 20260928090000_portal_login_failure_limits
+#   #58 20260928100000_rate_limit_exceeded_revoke_client_roles
+# #58 is the forward grant fix for #57: #57 must never reach production
+# alone, so the pending set must be exactly both, and `db push` applies
+# every pending migration in version order in one run.
 #
 # ⚠️ `--db-url`, not `--linked` (PR #148).
 #
@@ -13,12 +17,14 @@
 # rollback · baseline execution · any operation on a historical
 # migration · any Dashboard action.
 #
-# The migration only REPLACES function definitions and adds one
-# read-only helper. No table, no index, no data. Gates:
-#   · BEFORE: file hash · pending set is exactly this one · the helper
-#     does not exist yet · table/index inventory captured.
-#   · AFTER: ledger 57, originals untouched · helper exists, anon can
-#     NOT execute it, service_role can · create_pilgrim_session still
+# Together they only REPLACE function definitions, add one read-only
+# helper and set its grants. No table, no index, no data. Gates:
+#   · BEFORE: both file hashes · pending set is exactly both · the helper
+#     does not exist yet · table/index inventory and every public
+#     function ACL captured.
+#   · AFTER: ledger 58, originals untouched · helper exists; PUBLIC,
+#     anon and authenticated can NOT execute it; service_role can ·
+#     every other public function ACL unchanged · create_pilgrim_session still
 #     SECURITY DEFINER with fixed search_path and the document
 #     pre-check present · consume_rate_limit cleanup is scope-aware ·
 #     table and index inventory unchanged · passenger rows unchanged.
@@ -33,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type PUSH-PORTAL-LIMITS-20260928090000 to authorize the single production write"
+        description: "Type PUSH-PORTAL-LIMITS-20260928100000 to authorize the single production write"
         required: true
         default: ""
       db_host:
@@ -63,12 +69,15 @@ jobs:
 
     env:
       M57: "20260928090000"
+      M58: "20260928100000"
       F57: supabase/migrations/20260928090000_portal_login_failure_limits.sql
+      F58: supabase/migrations/20260928100000_rate_limit_exceeded_revoke_client_roles.sql
       SHA57: "87eddc56ed56395c63554dd70fbb9766d03aaea2c0fabbf985780533bf34b341"
-      EXPECT_REPO_MIGRATIONS: "57"
+      SHA58: "2de35867a9e292d1c190d20e789c8f65a040c84e7f635896df9b3ef34b19070a"
+      EXPECT_REPO_MIGRATIONS: "58"
       EXPECT_ROWS_BEFORE: "56"
       EXPECT_LATEST_BEFORE: "20260926092000"
-      EXPECT_ROWS_AFTER: "57"
+      EXPECT_ROWS_AFTER: "58"
       DB_HOST: ${{ inputs.db_host }}
       DB_PORT: ${{ inputs.db_port }}
       DB_USER: ${{ inputs.db_user }}
@@ -80,7 +89,7 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
-          [ "${{ inputs.confirm }}" = "PUSH-PORTAL-LIMITS-20260928090000" ] || {
+          [ "${{ inputs.confirm }}" = "PUSH-PORTAL-LIMITS-20260928100000" ] || {
             echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
           [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
           echo "Authorized. Secret present (value not printed)."
@@ -90,7 +99,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: "GATE: toolchain and the exact migration under review"
+      - name: "GATE: toolchain and the exact two migrations under review"
         run: |
           set -euo pipefail
           mkdir -p "$OUT"
@@ -100,11 +109,15 @@ jobs:
           n="$(ls supabase/migrations/*.sql | wc -l)"
           [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
           git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
-          got="$(sha256sum "$F57" | cut -d' ' -f1)"
-          [ "$got" = "$SHA57" ] || { echo "::error::$F57 sha256 mismatch: $got"; exit 1; }
-          echo "ok   $(basename "$F57")  $got"
+          for pair in "$F57:$SHA57" "$F58:$SHA58"; do
+            f="${pair%:*}"; want="${pair##*:}"
+            [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
+            got="$(sha256sum "$f" | cut -d' ' -f1)"
+            [ "$got" = "$want" ] || { echo "::error::$f sha256 mismatch: $got != $want"; exit 1; }
+            echo "ok   $(basename "$f")  $got"
+          done
           python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
-          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F57"
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F57" "$F58"
           python3 supabase/verification/assert-ledger-correspondence.py --selftest
           { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
 
@@ -127,15 +140,15 @@ jobs:
           psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
             -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
 
-      - name: "GATE: pending set is exactly this one"
+      - name: "GATE: pending set is exactly #57 and #58"
         run: |
           set -euo pipefail
           python3 supabase/verification/assert-ledger-correspondence.py \
             supabase/migrations "$OUT/ledger-versions-before.txt" \
             "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
           cat "$OUT/correspondence-before.txt"
-          grep -q "repository versions absent from production: \['${M57}'\]" "$OUT/correspondence-before.txt" || {
-            echo "::error::the pending set is not exactly [$M57]"; exit 1; }
+          grep -q "repository versions absent from production: \['${M57}', '${M58}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M57 $M58]"; exit 1; }
           grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
             echo "::error::production carries a migration the repository does not"; exit 1; }
 
@@ -155,6 +168,8 @@ jobs:
           # جردُ الجداول والفهارس — يجب ألّا يتغيّر
           p "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" > "$OUT/tables-before.txt"
           p "select string_agg(schemaname||'.'||indexname, ',' order by schemaname, indexname) from pg_indexes where schemaname in ('public','storage')" > "$OUT/indexes-before.txt"
+          # كلُّ صلاحيات دوالّ public — يجب ألّا يتغيّر منها إلا ما يخصّ الدالّة الجديدة
+          p "select string_agg(p.oid::regprocedure::text || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'" > "$OUT/fn-acl-before.txt"
           p "select count(*) from public.passengers" > "$OUT/psg-n-before.txt"
           p "select coalesce(md5(string_agg(id||':'||coalesce(season_id::text,'-'),'|' order by id)),'(none)') from public.passengers" > "$OUT/psg-fp-before.txt"
           echo "passengers=$(cat "$OUT/psg-n-before.txt")"
@@ -181,7 +196,7 @@ jobs:
           echo "--- stderr ---"; cat "$OUT/push.err"
           [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
 
-      - name: "POST: ledger 56 -> 57, originals untouched"
+      - name: "POST: ledger 56 -> 58, originals untouched"
         if: always() && steps.live_push.outcome != 'skipped'
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -198,13 +213,17 @@ jobs:
           echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
           bad=0
           [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
-          [ "$latest" = "$M57" ] || { echo "::error::latest is $latest, expected $M57"; bad=1; }
-          grep -vE "^$M57	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          [ "$latest" = "$M58" ] || { echo "::error::latest is $latest, expected $M58"; bad=1; }
+          for v in "$M57" "$M58"; do
+            d="$(psql "$URL" -X -q -At -c "$RO" -c "select count(*) from supabase_migrations.schema_migrations where version='$v'")"
+            [ "$d" -eq 1 ] || { echo "::error::$v appears $d times, expected exactly once"; bad=1; }
+          done
+          grep -vE "^($M57|$M58)	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
           diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
             echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
           psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
           python3 supabase/verification/assert-ledger-correspondence.py \
-            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M57" \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M58" \
             | tee "$OUT/correspondence-after.txt" || bad=1
           if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
           echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
@@ -224,6 +243,8 @@ jobs:
           RLE="'public.rate_limit_exceeded(text,uuid,integer,integer)'"
           CPS="'public.create_pilgrim_session(text,integer,integer,integer)'"
           want helper_exists           "select count(*) from pg_proc where oid = to_regprocedure($RLE)" 1
+          want helper_public_no_exec   "select (not exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = to_regprocedure($RLE) and a.grantee = 0 and a.privilege_type = 'EXECUTE'))::text" true
+          want helper_exec_holders     "select string_agg(coalesce(r.rolname,'PUBLIC'), ',' order by 1) from pg_proc p, aclexplode(p.proacl) a left join pg_roles r on r.oid = a.grantee where p.oid = to_regprocedure($RLE) and a.privilege_type = 'EXECUTE'" "postgres,service_role"
           want helper_anon_no_exec     "select has_function_privilege('anon', $RLE, 'execute')::text" false
           want helper_auth_no_exec     "select has_function_privilege('authenticated', $RLE, 'execute')::text" false
           want helper_service_exec     "select has_function_privilege('service_role', $RLE, 'execute')::text" true
@@ -234,6 +255,7 @@ jobs:
           want login_src_precheck_300  "select (position('rate_limit_exceeded(''portal-verify-src'', v_src_key, 300' in pg_get_functiondef(to_regprocedure($CPS))) > 0)::text" true
           want login_scoped_cleanup    "select (position('where passenger_id = v_p.id' in pg_get_functiondef(to_regprocedure($CPS))) > 0)::text" true
           want consume_scope_predicate "select (position('where scope = p_scope and subject = p_subject' in pg_get_functiondef('public.consume_rate_limit(text,uuid,integer,integer)'::regprocedure)) > 0)::text" true
+          want other_fn_acls_unchanged "select string_agg(p.oid::regprocedure::text || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname <> 'rate_limit_exceeded'" "$(cat "$OUT/fn-acl-before.txt")"
           want tables_unchanged        "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" "$(cat "$OUT/tables-before.txt")"
           want indexes_unchanged       "select string_agg(schemaname||'.'||indexname, ',' order by schemaname, indexname) from pg_indexes where schemaname in ('public','storage')" "$(cat "$OUT/indexes-before.txt")"
           want passengers_count        "select count(*) from public.passengers" "$(cat "$OUT/psg-n-before.txt")"
@@ -254,7 +276,7 @@ jobs:
           done
           if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
           echo PASS > "$OUT/verdict.txt"
-          echo "Migration 57 applied; ledger 57; functions and grants as approved; no table/index/passenger change."
+          echo "Migrations 57 and 58 applied in order; ledger 58; functions and grants as approved; no table/index/passenger change."
 
       - name: "Scan evidence for secret-like material"
         if: always()
