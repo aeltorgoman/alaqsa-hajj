@@ -6,7 +6,11 @@
 # ترتيبُ الخطوات ليس ضماناً، والنيّةُ ليست ضماناً. الضمانُ أن
 # تسأل كلُّ خطوةٍ بنفسها قبل أن تفتح اتصالاً.
 #
-#   assert-not-production.sh <ref> [url-or-string ...]
+#   ALLOWED_TMP_REF=<ref> assert-not-production.sh <ref> [url-or-string ...]
+#
+# المرجعُ المسموحُ به يُمرَّر صراحةً في `ALLOWED_TMP_REF` من الـworkflow
+# (مدخلٌ يكتبه المشغّل، لا سرٌّ ولا قيمةٌ في الشيفرة)، فلا يبقى مرجعٌ
+# لمشروعٍ مؤقّتٍ محذوفٍ مثبَّتاً هنا. أمّا رفضُ الإنتاج فيبقى مثبَّتاً.
 #
 # يُخفق إن كان المرجع فارغاً، أو غيرَ مطابقٍ للشكل، أو مرجعَ
 # الإنتاج، أو غيرَ مرجعِ مشروع التمرين المتوقَّع. ويفحص كذلك كلَّ
@@ -18,8 +22,17 @@ set -euo pipefail
 
 # مرجعُ الإنتاج — قيمةٌ محرَّمةٌ مثبَّتةٌ في الشيفرة، لا مُدخَلٌ ولا سرّ.
 readonly PRODUCTION_REF="zkucwcnclbfvukhdqhgc"
-# مشروعُ التمرين المتوقَّع — «Alaqsa Recovery Test»، مُعايَنٌ قبل الكتابة.
-readonly EXPECTED_TMP_REF="edkngsadjkeujyacqidd"
+# المشروعُ المؤقّتُ المتوقَّع — يُمرَّر صراحةً، ويُفحص شكلُه، ولا يكون الإنتاجَ أبداً.
+readonly EXPECTED_TMP_REF="${ALLOWED_TMP_REF:-}"
+if [ -z "$EXPECTED_TMP_REF" ]; then
+  echo "::error::ALLOWED_TMP_REF is not set - the allowed disposable ref must be supplied explicitly - refusing"; exit 1
+fi
+if ! printf '%s' "$EXPECTED_TMP_REF" | grep -qE '^[a-z]{20}$'; then
+  echo "::error::ALLOWED_TMP_REF is not a well-formed ref - refusing"; exit 1
+fi
+if [ "$EXPECTED_TMP_REF" = "$PRODUCTION_REF" ]; then
+  echo "::error::REFUSING: ALLOWED_TMP_REF is the PRODUCTION project. Nothing was touched."; exit 1
+fi
 
 ref="${1:-}"
 shift || true
@@ -36,8 +49,8 @@ if [ "$ref" = "$PRODUCTION_REF" ]; then
 fi
 
 if [ "$ref" != "$EXPECTED_TMP_REF" ]; then
-  echo "::error::REFUSING: the target is neither production nor the expected disposable"
-  echo "::error::rehearsal project. An unrecognised target is not a safe target."
+  echo "::error::REFUSING: the target is neither production nor the explicitly allowed disposable"
+  echo "::error::project (ALLOWED_TMP_REF). An unrecognised target is not a safe target."
   exit 1
 fi
 
@@ -51,4 +64,4 @@ for s in "$@"; do
   fi
 done
 
-echo "  guard ok: target is the disposable rehearsal project (not production)"
+echo "  guard ok: target is the explicitly allowed disposable project (not production)"

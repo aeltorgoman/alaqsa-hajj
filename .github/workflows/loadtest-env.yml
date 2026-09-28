@@ -1,0 +1,157 @@
+name: Load test - build the disposable environment
+
+# Builds the DISPOSABLE load-test project from the canonical migrations, seeds the
+# synthetic dataset, and verifies it. Never production:
+#   - the operator types the target ref; it must equal secrets.LT_PROJECT_REF
+#   - supabase/verification/assert-not-production.sh hard-refuses zkucwcnclbfvukhdqhgc at every step
+#   - this workflow references LT_* secrets only (self-checked below)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type BUILD-LOADTEST-ENV"
+        required: true
+        default: ""
+      target_ref:
+        description: "Load-test project ref (NOT a secret; must equal the LT_PROJECT_REF secret)"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loadtest
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LT_REF: ${{ secrets.LT_PROJECT_REF }}
+      ALLOWED_TMP_REF: ${{ inputs.target_ref }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      GUARD: supabase/verification/assert-not-production.sh
+      OUT: loadtest-env-evidence
+      EXPECT_MIGRATIONS: "58"
+      EXPECT_LATEST: "20260928100000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "GATE: confirmation, explicit target, secrets, pinned CLI, LT-only secrets"
+        env:
+          PW: ${{ secrets.LT_DB_PASSWORD }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          [ "$CONFIRM" = "BUILD-LOADTEST-ENV" ] || { echo "::error::confirmation text mismatch"; exit 1; }
+          [ -n "$LT_REF" ] && [ -n "$PW" ] || { echo "::error::LT_PROJECT_REF / LT_DB_PASSWORD secret missing"; exit 1; }
+          [ "$ALLOWED_TMP_REF" = "$LT_REF" ] || { echo "::error::typed target_ref does not match the LT_PROJECT_REF secret"; exit 1; }
+          "$GUARD" "$LT_REF"
+          if grep -oE 'secrets\.[A-Z_]+' .github/workflows/loadtest-env.yml | sort -u | grep -v '^secrets\.LT_'; then
+            echo "::error::this workflow references a non-LT secret"; exit 1; fi
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_MIGRATIONS" ] || { echo "::error::expected $EXPECT_MIGRATIONS repository migrations, found $n"; exit 1; }
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "cli=$v"; echo "repo_migrations=$n"; echo "target_ref=$LT_REF"; echo "target_is_production=false"; } | tee "$OUT/identity.txt"
+
+      - name: "GATE: resolve the pooler host serving this project"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # the password is only ever sent to a Supabase pooler host
+          printf '%s' "$DB_HOST" | grep -qE '^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$' || { echo "::error::db_host is not a Supabase pooler host"; exit 1; }
+          printf '%s' "$DB_PORT" | grep -qE '^[0-9]{2,5}$' || { echo "::error::db_port is not a port"; exit 1; }
+          found=""
+          for h in "$DB_HOST" aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
+            U="postgresql://postgres.${LT_REF}@${h}:${DB_PORT}/postgres"
+            "$GUARD" "$LT_REF" "$U" >/dev/null
+            if psql "$U" -X -q -At -v ON_ERROR_STOP=1 -c "select 1" >/dev/null 2>&1; then found="$h"; break; fi
+            echo "  not served by: $h"
+          done
+          [ -n "$found" ] || { echo "::error::no candidate pooler host serves this project"; exit 1; }
+          echo "DB_HOST=$found" >> "$GITHUB_ENV"; echo "pooler_host=$found" | tee -a "$OUT/identity.txt"
+
+      - name: "PREFLIGHT: the target must be empty or an already-built load-test project"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          tables="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_tables where schemaname='public'")"
+          ledger="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select case when to_regclass('supabase_migrations.schema_migrations') is null then 0 else (select count(*) from supabase_migrations.schema_migrations) end")"
+          echo "public_tables_before=$tables ledger_rows_before=$ledger" | tee -a "$OUT/identity.txt"
+          if [ "$tables" -gt 0 ]; then
+            real="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from public.passengers where coalesce(passport,'') !~ '^L[TD][0-9]{6}\$'")"
+            [ "$real" -eq 0 ] || { echo "::error::REFUSING: target holds non-synthetic passengers"; exit 1; }
+          fi
+
+      - name: "BUILD: canonical db push of the repository migrations"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="postgresql://postgres.${LT_REF}:${PGPASSWORD}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$DB_URL" >/dev/null
+          rc=0
+          npm run --silent supabase -- db push --db-url "$DB_URL" --include-all --output-format json > "$OUT/push.json" 2> "$OUT/push.err" || rc=$?
+          # scrub BOTH streams before anything is printed or uploaded: the failure
+          # path used to exit before push.json was ever scrubbed, and push.json is
+          # uploaded by the always() evidence step.
+          sed -i -E 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err"
+          if [ "$rc" -ne 0 ]; then echo "::error::db push failed"; cat "$OUT/push.err"; exit 1; fi
+
+      - name: "VERIFY: ledger = exact bidirectional correspondence, 58 / latest"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py supabase/migrations "$OUT/ledger-versions.txt" "$EXPECT_MIGRATIONS" "$EXPECT_LATEST" | tee "$OUT/correspondence.txt"
+
+      - name: "SEED: deterministic synthetic dataset (data step, not a migration)"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          python3 loadtest/seed/generate.py
+          git diff --exit-code -- loadtest/seed/seed.sql loadtest/k6/identities.json || { echo "::error::committed seed differs from the generator"; exit 1; }
+          seeded="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from public.seasons where name = 'LT-1447'")"
+          if [ "$seeded" -eq 0 ]; then psql "$URL" -X -q -v ON_ERROR_STOP=1 -f loadtest/seed/seed.sql; else echo "already seeded - skipping"; fi
+
+      - name: "VERIFY: functions, grants, RLS surface, dataset counts"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          psql "$URL" -X -q -A -F ' | ' -v ON_ERROR_STOP=1 -f loadtest/sql/verify-env.sql | tee "$OUT/verify-env.txt"
+          if grep -qE '\| f$' "$OUT/verify-env.txt"; then echo "::error::environment verification failed"; exit 1; fi
+          psql "$URL" -X -q -A -F ' | ' -v ON_ERROR_STOP=1 -f loadtest/sql/fingerprint.sql | tee "$OUT/fingerprint.txt"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-env-evidence
+          path: loadtest-env-evidence

@@ -1,0 +1,180 @@
+name: Load test - run one scenario
+
+# Runs ONE k6 scenario against the DISPOSABLE load-test project. Never production.
+# One scenario per dispatch: a failed stage never continues to the next one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scenario"
+        required: true
+        type: choice
+        options: [probes, smoke, A, B, C, D, burst, docs]
+      confirm:
+        description: "Type RUN-LOADTEST-<scenario>, e.g. RUN-LOADTEST-probes"
+        required: true
+        default: ""
+      target_ref:
+        description: "Load-test project ref (NOT a secret; must equal the LT_PROJECT_REF secret)"
+        required: true
+        default: ""
+      reset_first:
+        description: "Clear sessions / rate-limit rows / read receipts / pg_stat_statements before the run"
+        type: boolean
+        default: true
+      db_host:
+        description: "Session pooler host (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loadtest
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LT_REF: ${{ secrets.LT_PROJECT_REF }}
+      ALLOWED_TMP_REF: ${{ inputs.target_ref }}
+      SCENARIO: ${{ inputs.scenario }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      GUARD: supabase/verification/assert-not-production.sh
+      OUT: loadtest-evidence
+      K6_VERSION: "1.3.0"
+      K6_SHA256: "84d26fc1f7bc03e02f2e016b3b1b20c032e05dfe461fca82de4e3a6ebe72ddbd"
+      MAX_CONNS_ABORT: "50"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "GATE: confirmation, explicit target, LT-only secrets"
+        env:
+          PW: ${{ secrets.LT_DB_PASSWORD }}
+          AK: ${{ secrets.LT_ANON_KEY }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          [ "$CONFIRM" = "RUN-LOADTEST-${SCENARIO}" ] || { echo "::error::confirmation text mismatch"; exit 1; }
+          [ -n "$LT_REF" ] && [ -n "$PW" ] && [ -n "$AK" ] || { echo "::error::an LT_* secret is missing"; exit 1; }
+          [ "$ALLOWED_TMP_REF" = "$LT_REF" ] || { echo "::error::typed target_ref does not match the LT_PROJECT_REF secret"; exit 1; }
+          "$GUARD" "$LT_REF" "https://${LT_REF}.supabase.co"
+          if grep -oE 'secrets\.[A-Z_]+' .github/workflows/loadtest-run.yml | sort -u | grep -v '^secrets\.LT_'; then
+            echo "::error::this workflow references a non-LT secret"; exit 1; fi
+          # the anon key must belong to the target project, never production
+          ref_in_key="$(AK="$AK" python3 -c 'import os,json,base64;p=os.environ["AK"].split(".")[1];print(json.loads(base64.urlsafe_b64decode(p+"="*(-len(p)%4))).get("ref",""))' 2>/dev/null || true)"
+          [ "$ref_in_key" = "$LT_REF" ] || { echo "::error::LT_ANON_KEY does not belong to the load-test project"; exit 1; }
+          { echo "commit=${GITHUB_SHA}"; echo "scenario=${SCENARIO}"; echo "target_ref=$LT_REF"; echo "target_is_production=false"; } | tee "$OUT/identity.txt"
+
+      - name: "GATE: resolve the pooler host"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # the password is only ever sent to a Supabase pooler host
+          printf '%s' "$DB_HOST" | grep -qE '^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$' || { echo "::error::db_host is not a Supabase pooler host"; exit 1; }
+          printf '%s' "$DB_PORT" | grep -qE '^[0-9]{2,5}$' || { echo "::error::db_port is not a port"; exit 1; }
+          found=""
+          for h in "$DB_HOST" aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
+            U="postgresql://postgres.${LT_REF}@${h}:${DB_PORT}/postgres"
+            "$GUARD" "$LT_REF" "$U" >/dev/null
+            if psql "$U" -X -q -At -c "select 1" >/dev/null 2>&1; then found="$h"; break; fi
+          done
+          [ -n "$found" ] || { echo "::error::no candidate pooler host serves this project"; exit 1; }
+          echo "DB_HOST=$found" >> "$GITHUB_ENV"
+
+      - name: "PRE: verify environment, optional reset, fingerprint BEFORE"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+          RESET: ${{ inputs.reset_first }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          if [ "$RESET" = "true" ]; then psql "$URL" -X -q -v ON_ERROR_STOP=1 -f loadtest/sql/reset-between-stages.sql >/dev/null; fi
+          psql "$URL" -X -q -A -F ' | ' -v ON_ERROR_STOP=1 -f loadtest/sql/verify-env.sql > "$OUT/verify-env-before.txt"
+          grep -E '\| f$' "$OUT/verify-env-before.txt" | grep -vE '^(sessions_empty|rate_limits_empty) ' && { echo "::error::environment verification failed"; cat "$OUT/verify-env-before.txt"; exit 1; } || true
+          psql "$URL" -X -q -A -F ' | ' -v ON_ERROR_STOP=1 -f loadtest/sql/fingerprint.sql > "$OUT/fingerprint-before.txt"
+          psql "$URL" -X -q -A -F ',' -v ON_ERROR_STOP=1 -f loadtest/sql/sample.sql > "$OUT/baseline-sample.csv"
+          cat "$OUT/fingerprint-before.txt" "$OUT/baseline-sample.csv"
+
+      - name: Install pinned k6
+        run: |
+          set -euo pipefail
+          curl -sSL -o k6.tgz "https://github.com/grafana/k6/releases/download/v${K6_VERSION}/k6-v${K6_VERSION}-linux-amd64.tar.gz"
+          echo "${K6_SHA256}  k6.tgz" | sha256sum -c -
+          tar xzf k6.tgz && sudo mv "k6-v${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6 && k6 version
+
+      - name: "RUN: k6 + database sampler + watchdog"
+        id: run
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+          ANON_KEY: ${{ secrets.LT_ANON_KEY }}
+        run: |
+          set -uo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL" "https://${LT_REF}.supabase.co"
+          case "$SCENARIO" in
+            probes) SCRIPT=probes.js; EXTRA="" ;;
+            burst)  SCRIPT=burst.js;  EXTRA="" ;;
+            docs)   SCRIPT=docs.js;   EXTRA="" ;;
+            *)      SCRIPT=journey.js; EXTRA="-e STAGE=${SCENARIO}" ;;
+          esac
+          # sampler: one row every 10 s; watchdog aborts k6 on connection saturation or new deadlocks
+          ( base_dl=""; while [ ! -f "$OUT/.done" ]; do
+              row="$(psql "$URL" -X -q -At -F ',' -f loadtest/sql/sample.sql 2>/dev/null || echo "sample_error")"
+              echo "$row" >> "$OUT/samples.csv"
+              conns="$(echo "$row" | cut -d, -f2)"; dl="$(echo "$row" | cut -d, -f10)"
+              [ -z "$base_dl" ] && base_dl="$dl"
+              if [ "${conns:-0}" -ge "$MAX_CONNS_ABORT" ] 2>/dev/null || { [ -n "$dl" ] && [ "$dl" != "$base_dl" ]; }; then
+                echo "WATCHDOG ABORT: conns=$conns deadlocks=$dl (base $base_dl)" | tee "$OUT/watchdog-abort.txt"
+                pkill -INT -x k6 || true; break
+              fi
+              sleep 10; done ) &
+          cd loadtest/k6
+          k6 run --no-color -e BASE_URL="https://${LT_REF}.supabase.co" -e LT_REF="$LT_REF" -e ANON_KEY="$ANON_KEY" $EXTRA \
+            --summary-export "../../$OUT/summary.json" --out "json=../../$OUT/raw.json" "$SCRIPT" 2>&1 | tee "../../$OUT/k6.txt"
+          rc=${PIPESTATUS[0]}
+          cd ../..; touch "$OUT/.done"; wait || true
+          gzip -f "$OUT/raw.json" || true
+          echo "k6_exit=$rc" | tee -a "$OUT/identity.txt"
+          [ -f "$OUT/watchdog-abort.txt" ] && exit 1
+          exit $rc
+
+      - name: "POST: fingerprint AFTER, protected-data comparison, slow statements"
+        # only after k6 actually ran (never after a refused gate)
+        if: always() && steps.run.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          psql "$URL" -X -q -A -F ' | ' -v ON_ERROR_STOP=1 -f loadtest/sql/fingerprint.sql > "$OUT/fingerprint-after.txt"
+          psql "$URL" -X -q -A -F ' | ' -v ON_ERROR_STOP=1 -f loadtest/sql/top-statements.sql > "$OUT/top-statements.txt" || true
+          cat "$OUT/fingerprint-after.txt"
+          prot='^(announcements|buses|flights|passengers|rooms|seasons) '
+          diff <(grep -E "$prot" "$OUT/fingerprint-before.txt") <(grep -E "$prot" "$OUT/fingerprint-after.txt") \
+            || { echo "::error::protected (seeded) data changed during the run"; exit 1; }
+          if [ "$SCENARIO" = "probes" ]; then
+            # probe 4/5: exactly the 3 deliberate failures were counted; 5 successful logins counted nothing
+            grep -qE '^rate_limits:portal-verify-doc \| 3 ' "$OUT/fingerprint-after.txt" || { echo "::error::per-document failure counter != 3"; exit 1; }
+            grep -qE '^rate_limits:portal-verify-src \| 3 ' "$OUT/fingerprint-after.txt" || { echo "::error::source failure counter != 3"; exit 1; }
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-evidence-${{ inputs.scenario }}-${{ github.run_id }}
+          path: loadtest-evidence
