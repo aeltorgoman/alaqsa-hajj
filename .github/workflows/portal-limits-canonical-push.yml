@@ -244,7 +244,9 @@ jobs:
           CPS="'public.create_pilgrim_session(text,integer,integer,integer)'"
           want helper_exists           "select count(*) from pg_proc where oid = to_regprocedure($RLE)" 1
           want helper_public_no_exec   "select (not exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = to_regprocedure($RLE) and a.grantee = 0 and a.privilege_type = 'EXECUTE'))::text" true
-          want helper_exec_holders     "select string_agg(coalesce(r.rolname,'PUBLIC'), ',' order by 1) from pg_proc p, aclexplode(p.proacl) a left join pg_roles r on r.oid = a.grantee where p.oid = to_regprocedure($RLE) and a.privilege_type = 'EXECUTE'" "postgres,service_role"
+          # Exact EXECUTE holder set, sorted deterministically (collate "C"; `order by 1`
+          # inside an aggregate sorts by the constant 1). Any extra role changes the string.
+          want helper_exec_holders     "select coalesce(string_agg(h, ',' order by h collate \"C\"), '') from (select distinct coalesce(r.rolname,'PUBLIC') h from pg_proc p, aclexplode(p.proacl) a left join pg_roles r on r.oid = a.grantee where p.oid = to_regprocedure($RLE) and a.privilege_type = 'EXECUTE') s" "postgres,service_role"
           want helper_anon_no_exec     "select has_function_privilege('anon', $RLE, 'execute')::text" false
           want helper_auth_no_exec     "select has_function_privilege('authenticated', $RLE, 'execute')::text" false
           want helper_service_exec     "select has_function_privilege('service_role', $RLE, 'execute')::text" true
