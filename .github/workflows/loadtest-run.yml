@@ -61,10 +61,11 @@ jobs:
         env:
           PW: ${{ secrets.LT_DB_PASSWORD }}
           AK: ${{ secrets.LT_ANON_KEY }}
+          CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
           mkdir -p "$OUT"
-          [ "${{ inputs.confirm }}" = "RUN-LOADTEST-${SCENARIO}" ] || { echo "::error::confirmation text mismatch"; exit 1; }
+          [ "$CONFIRM" = "RUN-LOADTEST-${SCENARIO}" ] || { echo "::error::confirmation text mismatch"; exit 1; }
           [ -n "$LT_REF" ] && [ -n "$PW" ] && [ -n "$AK" ] || { echo "::error::an LT_* secret is missing"; exit 1; }
           [ "$ALLOWED_TMP_REF" = "$LT_REF" ] || { echo "::error::typed target_ref does not match the LT_PROJECT_REF secret"; exit 1; }
           "$GUARD" "$LT_REF" "https://${LT_REF}.supabase.co"
@@ -80,6 +81,9 @@ jobs:
           PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
         run: |
           set -euo pipefail
+          # the password is only ever sent to a Supabase pooler host
+          printf '%s' "$DB_HOST" | grep -qE '^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$' || { echo "::error::db_host is not a Supabase pooler host"; exit 1; }
+          printf '%s' "$DB_PORT" | grep -qE '^[0-9]{2,5}$' || { echo "::error::db_port is not a port"; exit 1; }
           found=""
           for h in "$DB_HOST" aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
             U="postgresql://postgres.${LT_REF}@${h}:${DB_PORT}/postgres"
@@ -112,6 +116,7 @@ jobs:
           tar xzf k6.tgz && sudo mv "k6-v${K6_VERSION}-linux-amd64/k6" /usr/local/bin/k6 && k6 version
 
       - name: "RUN: k6 + database sampler + watchdog"
+        id: run
         env:
           PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
           ANON_KEY: ${{ secrets.LT_ANON_KEY }}
@@ -147,7 +152,8 @@ jobs:
           exit $rc
 
       - name: "POST: fingerprint AFTER, protected-data comparison, slow statements"
-        if: always()
+        # only after k6 actually ran (never after a refused gate)
+        if: always() && steps.run.outcome != 'skipped'
         env:
           PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
         run: |

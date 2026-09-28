@@ -51,10 +51,11 @@ jobs:
       - name: "GATE: confirmation, explicit target, secrets, pinned CLI, LT-only secrets"
         env:
           PW: ${{ secrets.LT_DB_PASSWORD }}
+          CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
           mkdir -p "$OUT"
-          [ "${{ inputs.confirm }}" = "BUILD-LOADTEST-ENV" ] || { echo "::error::confirmation text mismatch"; exit 1; }
+          [ "$CONFIRM" = "BUILD-LOADTEST-ENV" ] || { echo "::error::confirmation text mismatch"; exit 1; }
           [ -n "$LT_REF" ] && [ -n "$PW" ] || { echo "::error::LT_PROJECT_REF / LT_DB_PASSWORD secret missing"; exit 1; }
           [ "$ALLOWED_TMP_REF" = "$LT_REF" ] || { echo "::error::typed target_ref does not match the LT_PROJECT_REF secret"; exit 1; }
           "$GUARD" "$LT_REF"
@@ -72,6 +73,9 @@ jobs:
           PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
         run: |
           set -euo pipefail
+          # the password is only ever sent to a Supabase pooler host
+          printf '%s' "$DB_HOST" | grep -qE '^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$' || { echo "::error::db_host is not a Supabase pooler host"; exit 1; }
+          printf '%s' "$DB_PORT" | grep -qE '^[0-9]{2,5}$' || { echo "::error::db_port is not a port"; exit 1; }
           found=""
           for h in "$DB_HOST" aws-1-eu-central-1.pooler.supabase.com aws-0-eu-central-1.pooler.supabase.com; do
             U="postgresql://postgres.${LT_REF}@${h}:${DB_PORT}/postgres"
