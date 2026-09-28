@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   portalDocUrl, usePortalDoc, clearPortalDocCache, PORTAL_SESSION_KEY,
   type PortalDocType, type PortalSession,
@@ -125,14 +125,18 @@ function PilgrimPortal() {
     if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
   }, []);
 
+  /* الدخولُ جلب الملفّ لتوّه — فلا يُعاد جلبه فوراً حين تتغيّر الجلسة */
+  const skipNextRefresh = useRef(false);
+
   /* ─── تحديث تلقائي كامل عند كل فتح + كل ٣ دقائق (دخول مرة واحدة) ─── */
   useEffect(() => {
     if (!data || !session) return;
+    const justLoggedIn = skipNextRefresh.current;
+    skipNextRefresh.current = false;
     /* جلبٌ أوّليّ متعمَّد: غير متزامن، وتحديث الحالة يقع بعد عودة
        الشبكة لا داخل العرض. صار مرئياً للقاعدة لأن الدالة خرجت من
        جوف الأثر لتُشارَك مع مستمع عامل الخدمة. */
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refreshPortal();
+    if (!justLoggedIn) refreshPortal();
     const t = setInterval(refreshPortal, 180000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -377,6 +381,7 @@ function PilgrimPortal() {
           localStorage.removeItem(PORTAL_SESSION_KEY);
           setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى.");
         } else {
+          skipNextRefresh.current = true;
           setSession(s.token);
           setData(res as unknown as PortalData);
           localStorage.setItem("portal_data", JSON.stringify(res));
