@@ -94,7 +94,14 @@ jobs:
           URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
           "$GUARD" "$LT_REF" "$URL"
           tables="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_tables where schemaname='public'")"
-          ledger="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select case when to_regclass('supabase_migrations.schema_migrations') is null then 0 else (select count(*) from supabase_migrations.schema_migrations) end")"
+          # Postgres resolves every relation at parse time, so a CASE/to_regclass
+          # guard cannot protect a branch that names the ledger: on a fresh project
+          # the statement fails to parse. Ask whether it exists first, then count.
+          if [ "$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select to_regclass('supabase_migrations.schema_migrations') is not null")" = "t" ]; then
+            ledger="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from supabase_migrations.schema_migrations")"
+          else
+            ledger=0
+          fi
           echo "public_tables_before=$tables ledger_rows_before=$ledger" | tee -a "$OUT/identity.txt"
           if [ "$tables" -gt 0 ]; then
             real="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select count(*) from public.passengers where coalesce(passport,'') !~ '^L[TD][0-9]{6}\$'")"
