@@ -146,6 +146,24 @@ function PilgrimPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, !!data]);
 
+  /* ─── فتحُ التنبيهات من عامل الخدمة — **بلا شرط الدخول** ───
+     ضغطةُ التنبيه على نافذةٍ مفتوحةٍ لم يدخل صاحبُها بعدُ كانت تضيع:
+     مستمعُ الرسائل كان داخل أثرٍ يبدأ بـ `if (!data) return`، فلا
+     يُسجَّل أصلاً قبل الدخول. فتبقى الشاشةُ على `/hajj`، ويهبط
+     الحاجُّ بعد الدخول على «رحلتي» لا «التنبيهات».
+     والعنوانُ هو ما يحمل القصد عبر الدخول، فيُضبط الآن ويُقرأ بعده. */
+  useEffect(() => {
+    const onOpenAlerts = (e: MessageEvent) => {
+      if (e.data?.type !== "OPEN_ALERTS") return;
+      navigate("alerts");
+      /* بلا جلسةٍ تعود فوراً — والدخولُ يجلب الملفّ بنفسه */
+      void refreshPortal();
+    };
+    navigator.serviceWorker?.addEventListener("message", onOpenAlerts);
+    navigator.serviceWorker?.startMessages?.();
+    return () => navigator.serviceWorker?.removeEventListener("message", onOpenAlerts);
+  }, [navigate, refreshPortal]);
+
   /* ─── تهيئة التنبيهات: عامل الخدمة وملف تعريف التطبيق ─── */
   useEffect(() => {
     if (!data) return;
@@ -163,7 +181,6 @@ function PilgrimPortal() {
     })();
 
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === "OPEN_ALERTS") { navigate("alerts"); void refreshPortal(); }
       if (e.data?.type === "RESUBSCRIBE") resubscribeIfNeeded();
       /* وصل تنبيه والبوابة مفتوحة: **نجلب من المصدر** ولا نبني
          الإعلان من حمولة الدفع. الحمولة ليست مصدر حقيقة — والدالة
