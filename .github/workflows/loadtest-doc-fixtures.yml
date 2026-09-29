@@ -1,0 +1,333 @@
+name: Load test - upload the document fixtures
+
+# Uploads the 60 deterministic synthetic document fixtures to the DISPOSABLE
+# load-test project's `passengers-docs` bucket, then verifies them and runs the
+# minimal functional probe. Never production:
+#   - the operator types the target ref; it must equal secrets.LT_PROJECT_REF
+#   - supabase/verification/assert-not-production.sh hard-refuses the production
+#     ref at every step
+#   - the service-role key's own `ref` claim must be the load-test project
+#   - this workflow references LT_* secrets only (self-checked below)
+#
+# This is fixture infrastructure. It never runs k6 and never runs docs.js.
+#
+# On what the probe does and does not prove: pilgrim-doc accepts a session
+# token and a doc_type, and nothing else. It derives the pilgrim from the
+# session and the object key from that pilgrim's own row, so a caller cannot
+# express "give me another pilgrim's file" - there is no passenger id and no
+# object path in the request. A literal foreign-document request is therefore
+# not representable through the public API, and this workflow does not fake one
+# by editing ownership or adding a selector. What it runs instead is a
+# two-pilgrim ownership/scoping control - each session must receive a URL
+# inside its own namespace and never the other probe pilgrim's - plus a genuine
+# revoked-session negative control.
+#
+# LT_SERVICE_ROLE_KEY is extremely privileged: it is read into a curl config
+# file with 0600 permissions (curl offers no way to pass a header without it
+# reaching argv otherwise), never echoed, never interpolated into a printed
+# string, and removed by a trap on exit. Signed URLs embed a token, so they are
+# never logged or written to the evidence artifact either.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type UPLOAD-LOADTEST-FIXTURES"
+        required: true
+        default: ""
+      target_ref:
+        description: "Load-test project ref (NOT a secret; must equal the LT_PROJECT_REF secret)"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host (NOT a secret)"
+        required: true
+        default: "aws-0-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loadtest
+  cancel-in-progress: false
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LT_REF: ${{ secrets.LT_PROJECT_REF }}
+      ALLOWED_TMP_REF: ${{ inputs.target_ref }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      GUARD: supabase/verification/assert-not-production.sh
+      OUT: loadtest-fixture-evidence
+      BUCKET: passengers-docs
+      PREFIX: loadtest
+      EXPECT_OBJECTS: "60"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "GATE: confirmation, explicit target, LT-only secrets, key identity"
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          PW: ${{ secrets.LT_DB_PASSWORD }}
+          AK: ${{ secrets.LT_ANON_KEY }}
+          SK: ${{ secrets.LT_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          [ "$CONFIRM" = "UPLOAD-LOADTEST-FIXTURES" ] || { echo "::error::confirmation text mismatch"; exit 1; }
+          [ -n "$LT_REF" ] || { echo "::error::LT_PROJECT_REF secret is missing"; exit 1; }
+          [ -n "$PW" ] || { echo "::error::LT_DB_PASSWORD secret is missing"; exit 1; }
+          [ -n "$AK" ] || { echo "::error::LT_ANON_KEY secret is missing"; exit 1; }
+          [ -n "$SK" ] || { echo "::error::LT_SERVICE_ROLE_KEY secret is missing"; exit 1; }
+          [ "$ALLOWED_TMP_REF" = "$LT_REF" ] || { echo "::error::typed target_ref does not match the LT_PROJECT_REF secret"; exit 1; }
+          "$GUARD" "$LT_REF" "https://${LT_REF}.supabase.co"
+          if grep -oE 'secrets\.[A-Z_]+' .github/workflows/loadtest-doc-fixtures.yml | sort -u | grep -v '^secrets\.LT_'; then
+            echo "::error::this workflow references a non-LT secret"; exit 1; fi
+          # the service-role key must belong to THIS project and carry the service_role
+          # claim - only the two non-secret claims are read, never the key itself
+          claims="$(SK="$SK" python3 -c 'import os,json,base64;p=os.environ["SK"].split(".")[1];d=json.loads(base64.urlsafe_b64decode(p+"="*(-len(p)%4)));print(d.get("ref",""),d.get("role",""))' 2>/dev/null || true)"
+          key_ref="${claims%% *}"; key_role="${claims##* }"
+          [ "$key_ref" = "$LT_REF" ] || { echo "::error::LT_SERVICE_ROLE_KEY does not belong to the load-test project"; exit 1; }
+          [ "$key_role" = "service_role" ] || { echo "::error::LT_SERVICE_ROLE_KEY is not a service-role key"; exit 1; }
+          "$GUARD" "$LT_REF" "$key_ref"
+          { echo "commit=${GITHUB_SHA}"; echo "target_ref=$LT_REF"; echo "target_is_production=false";
+            echo "service_role_key_ref=$key_ref"; echo "service_role_key_role=$key_role"; } | tee "$OUT/identity.txt"
+
+      - name: "GATE: resolve the pooler host serving this project"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$DB_HOST" | grep -qE '^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$' || { echo "::error::db_host is not a Supabase pooler host"; exit 1; }
+          printf '%s' "$DB_PORT" | grep -qE '^[0-9]{2,5}$' || { echo "::error::db_port is not a port"; exit 1; }
+          found=""
+          for h in "$DB_HOST" aws-0-eu-central-1.pooler.supabase.com aws-1-eu-central-1.pooler.supabase.com; do
+            U="postgresql://postgres.${LT_REF}@${h}:${DB_PORT}/postgres"
+            "$GUARD" "$LT_REF" "$U" >/dev/null
+            if psql "$U" -X -q -At -v ON_ERROR_STOP=1 -c "select 1" >/dev/null 2>&1; then found="$h"; break; fi
+          done
+          [ -n "$found" ] || { echo "::error::no candidate pooler host serves this project"; exit 1; }
+          echo "DB_HOST=$found" >> "$GITHUB_ENV"; echo "pooler_host=$found" | tee -a "$OUT/identity.txt"
+
+      - name: "MANIFEST: generate fixtures and reconcile against the database"
+        env:
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL"
+          python3 loadtest/seed/generate-doc-fixtures.py fixtures | tee -a "$OUT/identity.txt"
+
+          # every key the database expects, one per line
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "
+            select key from (
+              select photo_url as key from public.passengers where passport like 'LD%'
+              union all select hajj_permit_url from public.passengers where passport like 'LD%'
+              union all select flight_ticket_url from public.passengers where passport like 'LD%'
+            ) k where key is not null order by key" > "$OUT/db-keys.txt"
+          python3 -c "
+          import json
+          m = json.load(open('fixtures/manifest.json'))
+          open('$OUT/fixture-keys.txt','w').write(''.join(sorted(x['key']+chr(10) for x in m)))"
+          diff "$OUT/db-keys.txt" "$OUT/fixture-keys.txt" \
+            || { echo '::error::generated fixture keys differ from the database document keys'; exit 1; }
+          n="$(wc -l < "$OUT/db-keys.txt")"
+          [ "$n" -eq "$EXPECT_OBJECTS" ] || { echo "::error::expected $EXPECT_OBJECTS keys, found $n"; exit 1; }
+
+          # no key may escape the approved synthetic namespace
+          if grep -vE "^${PREFIX}/LD[0-9]{6}/(photo\.png|permit\.pdf|ticket\.pdf)\$" "$OUT/db-keys.txt"; then
+            echo "::error::a key is outside the approved fixture namespace"; exit 1; fi
+          echo "manifest_keys=$n" | tee -a "$OUT/identity.txt"
+
+      - name: "UPLOAD: 60 fixtures to passengers-docs via the Storage API"
+        env:
+          SK: ${{ secrets.LT_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          CFG="$(mktemp)"; chmod 600 "$CFG"
+          trap 'rm -f "$CFG"' EXIT
+          # the key never reaches argv, a printed string or the log
+          { printf 'header = "Authorization: Bearer %s"\n' "$SK"
+            printf 'header = "apikey: %s"\n' "$SK"; } > "$CFG"
+          BASE="https://${LT_REF}.supabase.co/storage/v1"
+          printf '%s' "$BASE" | grep -qF "$LT_REF" || { echo "::error::storage base url is not the target project"; exit 1; }
+          "$GUARD" "$LT_REF" "$BASE"
+
+          ok=0
+          while read -r key; do
+            # belt and braces: only ever write an approved fixture key
+            printf '%s' "$key" | grep -qE "^${PREFIX}/LD[0-9]{6}/(photo\.png|permit\.pdf|ticket\.pdf)\$" \
+              || { echo "::error::refusing to upload unexpected key"; exit 1; }
+            case "$key" in *.png) ct="image/png" ;; *.pdf) ct="application/pdf" ;; *) echo "::error::unexpected extension"; exit 1 ;; esac
+            code="$(curl -sS -K "$CFG" -o /dev/null -w '%{http_code}' \
+                      -X POST "$BASE/object/${BUCKET}/${key}" \
+                      -H "Content-Type: ${ct}" -H "x-upsert: true" \
+                      --data-binary "@fixtures/${key}")"
+            [ "$code" = "200" ] || { echo "::error::upload failed for ${key} (http ${code})"; exit 1; }
+            ok=$((ok + 1))
+          done < "$OUT/db-keys.txt"
+          [ "$ok" -eq "$EXPECT_OBJECTS" ] || { echo "::error::uploaded $ok of $EXPECT_OBJECTS"; exit 1; }
+          echo "uploaded=$ok" | tee -a "$OUT/identity.txt"
+
+      - name: "VERIFY: real bytes, exact set equality, bucket still private"
+        env:
+          SK: ${{ secrets.LT_SERVICE_ROLE_KEY }}
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CFG="$(mktemp)"; chmod 600 "$CFG"
+          trap 'rm -f "$CFG"' EXIT
+          { printf 'header = "Authorization: Bearer %s"\n' "$SK"
+            printf 'header = "apikey: %s"\n' "$SK"; } > "$CFG"
+          BASE="https://${LT_REF}.supabase.co/storage/v1"
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          "$GUARD" "$LT_REF" "$URL" "$BASE"
+
+          # 1. every expected object downloads with real, non-zero bytes
+          png=0; pdf=0
+          : > "$OUT/object-verification.txt"
+          while read -r key; do
+            tmp="$(mktemp)"
+            code="$(curl -sS -K "$CFG" -o "$tmp" -w '%{http_code}' "$BASE/object/authenticated/${BUCKET}/${key}")"
+            [ "$code" = "200" ] || { echo "::error::download failed for ${key} (http ${code})"; exit 1; }
+            sz="$(stat -c%s "$tmp")"
+            [ "$sz" -gt 0 ] || { echo "::error::${key} is zero bytes"; exit 1; }
+            sig="$(head -c 4 "$tmp" | od -An -tx1 | tr -d ' \n')"
+            case "$key" in
+              *.png) [ "$sig" = "89504e47" ] || { echo "::error::${key} is not a PNG"; exit 1; }; png=$((png + 1)) ;;
+              *.pdf) [ "$sig" = "25504446" ] || { echo "::error::${key} is not a PDF"; exit 1; }; pdf=$((pdf + 1)) ;;
+            esac
+            echo "${key} ${sz} ${sig}" >> "$OUT/object-verification.txt"
+            rm -f "$tmp"
+          done < "$OUT/db-keys.txt"
+          [ "$png" -eq 20 ] && [ "$pdf" -eq 40 ] || { echo "::error::expected 20 PNG and 40 PDF, got $png and $pdf"; exit 1; }
+
+          # 2. nothing unexpected exists under the fixture namespace
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "
+            select name from storage.objects
+            where bucket_id = '${BUCKET}' and name like '${PREFIX}/%' order by name" > "$OUT/storage-keys.txt"
+          diff "$OUT/db-keys.txt" "$OUT/storage-keys.txt" \
+            || { echo '::error::stored objects differ from the expected manifest'; exit 1; }
+
+          # 3. the bucket is still private and no policy was added for anon
+          priv="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "select public from storage.buckets where id = '${BUCKET}'")"
+          [ "$priv" = "f" ] || { echo "::error::bucket is no longer private"; exit 1; }
+          anonpol="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "
+            select count(*) from pg_policy p join pg_class c on c.oid = p.polrelid
+            join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'storage' and c.relname = 'objects'
+              and exists (select 1 from pg_roles r where r.oid = any(p.polroles) and r.rolname = 'anon')")"
+          [ "$anonpol" = "0" ] || { echo "::error::an anon storage policy appeared"; exit 1; }
+          { echo "objects_verified=$((png + pdf))"; echo "png=$png"; echo "pdf=$pdf";
+            echo "bucket_public=$priv"; echo "anon_storage_policies=$anonpol"; } | tee -a "$OUT/identity.txt"
+
+      - name: "PROBE: two-pilgrim ownership/scoping control + revoked-session negative control"
+        env:
+          AK: ${{ secrets.LT_ANON_KEY }}
+          PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://postgres.${LT_REF}@${DB_HOST}:${DB_PORT}/postgres"
+          BASE="https://${LT_REF}.supabase.co"
+          "$GUARD" "$LT_REF" "$URL" "$BASE"
+
+          rl() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c \
+                 "select coalesce(sum(hits),0) from public.edge_rate_limits where scope = '$1'"; }
+          src0="$(rl portal-doc-src)"; ses0="$(rl portal-doc-session)"; sgn0="$(rl portal-doc-sign)"
+
+          # two document-cohort pilgrims, credentials read from the database
+          read -r A_DOC A_D A_M A_Y <<<"$(psql "$URL" -X -q -At -F ' ' -v ON_ERROR_STOP=1 -c "
+            select passport, split_part(dob,'-',3)::int, split_part(dob,'-',2)::int, split_part(dob,'-',1)::int
+            from public.passengers where passport = 'LD000001'")"
+          read -r B_DOC B_D B_M B_Y <<<"$(psql "$URL" -X -q -At -F ' ' -v ON_ERROR_STOP=1 -c "
+            select passport, split_part(dob,'-',3)::int, split_part(dob,'-',2)::int, split_part(dob,'-',1)::int
+            from public.passengers where passport = 'LD000002'")"
+
+          login() { curl -sS -X POST "$BASE/rest/v1/rpc/create_pilgrim_session" \
+                      -H "apikey: $AK" -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' \
+                      -d "{\"p_doc\":\"$1\",\"p_day\":$2,\"p_month\":$3,\"p_year\":$4}" \
+                    | python3 -c 'import sys,json;d=json.load(sys.stdin) or {};print(d.get("token",""))'; }
+          # returns "<http_code> <key-or-empty>"; the signed URL itself is never printed
+          docreq() { curl -sS -o /tmp/doc.json -w '%{http_code}' -X POST "$BASE/functions/v1/pilgrim-doc" \
+                       -H "apikey: $AK" -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' \
+                       -d "{\"token\":\"$1\",\"doc_type\":\"$2\"}"; }
+
+          TOKEN_A="$(login "$A_DOC" "$A_D" "$A_M" "$A_Y")"
+          TOKEN_B="$(login "$B_DOC" "$B_D" "$B_M" "$B_Y")"
+          [ -n "$TOKEN_A" ] && [ -n "$TOKEN_B" ] || { echo "::error::document-cohort login failed"; exit 1; }
+
+          : > "$OUT/probe.txt"
+          reqs=0
+          for pair in "A:$TOKEN_A:$A_DOC:$B_DOC" "B:$TOKEN_B:$B_DOC:$A_DOC"; do
+            who="${pair%%:*}"; rest="${pair#*:}"; tok="${rest%%:*}"; rest="${rest#*:}"
+            mine="${rest%%:*}"; other="${rest##*:}"
+            for t in photo hajj_permit flight_ticket; do
+              code="$(docreq "$tok" "$t")"; reqs=$((reqs + 1))
+              [ "$code" = "200" ] || { echo "::error::${who} ${t}: pilgrim-doc returned ${code}"; exit 1; }
+              # Ownership/scoping control, not a foreign-document request: the call
+              # carries only this pilgrim's own session token and a doc_type, and the
+              # server picks the key. What is asserted is that the URL that comes back
+              # lands in this pilgrim's namespace and not the other probe pilgrim's.
+              # The signed URL is checked in place; only the derived facts are printed.
+              python3 - "$mine" "$other" "$t" "$OUT/probe.txt" <<'PY'
+          import json, sys, urllib.parse, urllib.request
+          mine, other, doc_type, out = sys.argv[1:5]
+          body = json.load(open('/tmp/doc.json'))
+          url = body.get('url') or ''
+          if not url:
+              print(f'::error::{mine} {doc_type}: no signed url'); raise SystemExit(1)
+          path = urllib.parse.urlparse(url).path
+          if f'/{mine}/' not in path:
+              print(f'::error::{mine} {doc_type}: signed url is not this pilgrim\'s object'); raise SystemExit(1)
+          if f'/{other}/' in path:
+              print(f'::error::SCOPING FAILURE: {mine} session received an object in {other} namespace'); raise SystemExit(1)
+          with urllib.request.urlopen(url, timeout=30) as r:
+              data, code = r.read(), r.status
+          if code != 200 or not data:
+              print(f'::error::{mine} {doc_type}: signed url download failed ({code}, {len(data)} bytes)'); raise SystemExit(1)
+          sig = data[:4]
+          want = b'\x89PNG' if doc_type == 'photo' else b'%PDF'
+          if sig != want:
+              print(f'::error::{mine} {doc_type}: downloaded bytes are not {want!r}'); raise SystemExit(1)
+          if b'SYNTHETIC FIXTURE' not in data:
+              print(f'::error::{mine} {doc_type}: downloaded object is not a synthetic fixture'); raise SystemExit(1)
+          # the key, size and signature only - never the signed url (it carries a token)
+          with open(out, 'a') as fh:
+              fh.write(f'{mine} {doc_type} key_ok=1 bytes={len(data)} sig={sig.hex()} download=200\n')
+          print(f'  {mine} {doc_type}: scoped to own namespace, {len(data)} bytes, downloaded 200')
+          PY
+            done
+          done
+
+          # genuine negative control: a revoked session yields no document at all
+          curl -sS -o /dev/null -X POST "$BASE/rest/v1/rpc/revoke_pilgrim_session" \
+            -H "apikey: $AK" -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' \
+            -d "{\"p_token\":\"$TOKEN_A\"}"
+          code="$(docreq "$TOKEN_A" photo)"; reqs=$((reqs + 1))
+          [ "$code" = "404" ] || { echo "::error::revoked session returned ${code}, expected 404"; exit 1; }
+          echo "revoked_session photo http=404 (expected)" >> "$OUT/probe.txt"
+
+          # rate-limit reconciliation: 7 requests -> src +7, sign +6 (3 per pilgrim), session +1
+          src1="$(rl portal-doc-src)"; ses1="$(rl portal-doc-session)"; sgn1="$(rl portal-doc-sign)"
+          { echo "probe_requests=$reqs";
+            echo "portal-doc-src ${src0} -> ${src1} (expected +7)";
+            echo "portal-doc-session ${ses0} -> ${ses1} (expected +1)";
+            echo "portal-doc-sign ${sgn0} -> ${sgn1} (expected +6)"; } | tee -a "$OUT/identity.txt"
+          [ "$reqs" -eq 7 ] || { echo "::error::probe made $reqs requests, expected 7"; exit 1; }
+          [ "$((src1 - src0))" -eq 7 ] || { echo "::error::portal-doc-src moved $((src1 - src0)), expected 7"; exit 1; }
+          [ "$((ses1 - ses0))" -eq 1 ] || { echo "::error::portal-doc-session moved $((ses1 - ses0)), expected 1"; exit 1; }
+          [ "$((sgn1 - sgn0))" -eq 6 ] || { echo "::error::portal-doc-sign moved $((sgn1 - sgn0)), expected 6"; exit 1; }
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-fixture-evidence
+          path: loadtest-fixture-evidence
