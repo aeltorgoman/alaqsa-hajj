@@ -127,7 +127,10 @@ Deno.serve(async (req: Request) => {
       title: ann.title || "حملة الأقصى",
       body: ann.body,
       priority: ann.priority,
-      url: "/hajj",
+      /* شاشةُ التنبيهات صار لها عنوانٌ قانونيّ، وضغطةُ التنبيه تقصدها
+         هي لا «رحلتي». والعاملُ يقرأ هذا الحقل عند الضغط، فبه يطابق
+         الفتحُ البارد الفتحَ الدافئ (`OPEN_ALERTS`). */
+      url: "/hajj/alerts",
     });
 
     const results = new Map<number, { status: string; error: string | null }>();
