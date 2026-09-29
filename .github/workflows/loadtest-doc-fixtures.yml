@@ -11,6 +11,17 @@ name: Load test - upload the document fixtures
 #
 # This is fixture infrastructure. It never runs k6 and never runs docs.js.
 #
+# On what the probe does and does not prove: pilgrim-doc accepts a session
+# token and a doc_type, and nothing else. It derives the pilgrim from the
+# session and the object key from that pilgrim's own row, so a caller cannot
+# express "give me another pilgrim's file" - there is no passenger id and no
+# object path in the request. A literal foreign-document request is therefore
+# not representable through the public API, and this workflow does not fake one
+# by editing ownership or adding a selector. What it runs instead is a
+# two-pilgrim ownership/scoping control - each session must receive a URL
+# inside its own namespace and never the other probe pilgrim's - plus a genuine
+# revoked-session negative control.
+#
 # LT_SERVICE_ROLE_KEY is extremely privileged: it is read into a curl config
 # file with 0600 permissions (curl offers no way to pass a header without it
 # reaching argv otherwise), never echoed, never interpolated into a printed
@@ -217,7 +228,7 @@ jobs:
           { echo "objects_verified=$((png + pdf))"; echo "png=$png"; echo "pdf=$pdf";
             echo "bucket_public=$priv"; echo "anon_storage_policies=$anonpol"; } | tee -a "$OUT/identity.txt"
 
-      - name: "PROBE: signed URLs are real, downloadable and own-pilgrim only"
+      - name: "PROBE: two-pilgrim ownership/scoping control + revoked-session negative control"
         env:
           AK: ${{ secrets.LT_ANON_KEY }}
           PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
@@ -260,7 +271,11 @@ jobs:
             for t in photo hajj_permit flight_ticket; do
               code="$(docreq "$tok" "$t")"; reqs=$((reqs + 1))
               [ "$code" = "200" ] || { echo "::error::${who} ${t}: pilgrim-doc returned ${code}"; exit 1; }
-              # assert on the signed URL in place; only the derived facts are printed
+              # Ownership/scoping control, not a foreign-document request: the call
+              # carries only this pilgrim's own session token and a doc_type, and the
+              # server picks the key. What is asserted is that the URL that comes back
+              # lands in this pilgrim's namespace and not the other probe pilgrim's.
+              # The signed URL is checked in place; only the derived facts are printed.
               python3 - "$mine" "$other" "$t" "$OUT/probe.txt" <<'PY'
           import json, sys, urllib.parse, urllib.request
           mine, other, doc_type, out = sys.argv[1:5]
@@ -272,7 +287,7 @@ jobs:
           if f'/{mine}/' not in path:
               print(f'::error::{mine} {doc_type}: signed url is not this pilgrim\'s object'); raise SystemExit(1)
           if f'/{other}/' in path:
-              print(f'::error::CROSS-PILGRIM EXPOSURE: {mine} received {other}'); raise SystemExit(1)
+              print(f'::error::SCOPING FAILURE: {mine} session received an object in {other} namespace'); raise SystemExit(1)
           with urllib.request.urlopen(url, timeout=30) as r:
               data, code = r.read(), r.status
           if code != 200 or not data:
@@ -286,12 +301,12 @@ jobs:
           # the key, size and signature only - never the signed url (it carries a token)
           with open(out, 'a') as fh:
               fh.write(f'{mine} {doc_type} key_ok=1 bytes={len(data)} sig={sig.hex()} download=200\n')
-          print(f'  {mine} {doc_type}: own object, {len(data)} bytes, downloaded 200')
+          print(f'  {mine} {doc_type}: scoped to own namespace, {len(data)} bytes, downloaded 200')
           PY
             done
           done
 
-          # negative control: a revoked session yields no document
+          # genuine negative control: a revoked session yields no document at all
           curl -sS -o /dev/null -X POST "$BASE/rest/v1/rpc/revoke_pilgrim_session" \
             -H "apikey: $AK" -H "Authorization: Bearer $AK" -H 'Content-Type: application/json' \
             -d "{\"p_token\":\"$TOKEN_A\"}"
