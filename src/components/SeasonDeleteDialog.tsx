@@ -29,6 +29,10 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /* عددُ الملفّات التي بقيت بعد حذفٍ نجح في القاعدة — صفر يعني تمام.
+     والجردُ الناقص لا يصل إلى هنا: الخادم يوقف العملية قبل الحذف
+     فيعود خطأً عاديّاً، ولا موسمَ حُذف ولا ملفّ. */
+  const [leftover, setLeftover] = useState(0);
 
   if (!season) return null;
 
@@ -45,7 +49,7 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
     }
 
     /* الحارس الحقيقي: الهوية والصلاحية على الخادم من JWT الجلسة */
-    const { error: err } = await supabase.functions.invoke("season-admin", {
+    const { data, error: err } = await supabase.functions.invoke("season-admin", {
       body: { action: "delete", seasonId: season.id },
     });
     if (err) {
@@ -57,6 +61,15 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
         if (ctx) message = (await ctx.json())?.error || "";
       } catch { /* الجسم ليس JSON */ }
       setError(message || "تعذّر حذف الموسم، يرجى المحاولة مرة أخرى.");
+      setBusy(false);
+      return;
+    }
+    /* ⚠️ الموسمُ ذهب ولا رجعة، لكنّ ملفّاته قد تكون بقيت. والنجاحُ
+       لا يُعلَن على نقص: يُعرض ما بقي ويُترك القرارُ للمدير بدل
+       إعادة تحميلٍ صامتةٍ تُخفي اليتامى. */
+    const st = (data as { storage?: { orphans?: number; ok?: boolean } } | null)?.storage;
+    if (st && st.ok === false) {
+      setLeftover(st.orphans ?? 0);
       setBusy(false);
       return;
     }
@@ -73,6 +86,22 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
       title={`حذف موسم ${season.name} نهائياً`}
       maxWidth={520}
     >
+      {leftover > 0 ? (
+        <>
+          <div style={{ fontSize: 12, color: "var(--warning)", fontWeight: 700, marginBottom: 10 }}>
+            ⚠ حُذف الموسم، وبقيت {leftover} من ملفّات المستندات.
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.9, marginBottom: 14 }}>
+            بيانات الموسم أُزيلت من القاعدة نهائياً، لكنّ تنظيف التخزين لم يكتمل.
+            الملفّات الباقية مسجَّلة بأسمائها في سجلّ الخادم. أبلغ الدعم الفنّي
+            لإزالتها — لا أثر لها في الواجهة، ولا تُعرض لأحد.
+          </div>
+          <button onClick={() => window.location.reload()} style={btnP({ width: "100%" })}>
+            حسناً
+          </button>
+        </>
+      ) : (
+      <>
       <div style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 10 }}>
         ⚠ هذه العملية لا يمكن التراجع عنها.
       </div>
@@ -110,6 +139,8 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
           <button onClick={() => { setPassword(""); setError(""); onClose(); }} style={btnS()}>إلغاء</button>
         )}
       </div>
+      </>
+      )}
     </Modal>
   );
 }

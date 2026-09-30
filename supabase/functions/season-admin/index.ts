@@ -38,6 +38,31 @@ const PERMISSION_BY_ACTION: Record<string, string> = {
   delete: "manage_season_lifecycle",
 };
 
+/* ═══ مستندات الموسم المحذوف ═══
+   حذفُ الموسم يمحو صفوفَ حجّاجه، وكانت ملفّاتهم تبقى في الحاوية
+   بلا صفٍّ يدلّ عليها — لا واجهةَ تعرضها ولا مسارَ يحذفها، فتتراكم
+   إلى الأبد. وهذا ليس حذفاً بالتبعية (م‑٧٠): الحذف هنا مقصودٌ
+   معلَن — «سيُحذف الموسم وكلّ ما يخصّه نهائياً» — والمستنداتُ من
+   «ما يخصّه»، فتمامُ الحذف هو الصواب لا تركُ اليتامى.
+
+   والحذفُ بقائمةِ مفاتيحَ صريحةٍ لموسمٍ واحد: لا مسحَ ببادئة ولا
+   بالحاوية كلّها. */
+const DOC_BUCKET = "passengers-docs";
+const DOC_COLUMNS = [
+  "passport_url", "national_id_url", "photo_url",
+  "contract_url", "flight_ticket_url", "hajj_permit_url",
+] as const;
+const PUBLIC_PREFIX = `/storage/v1/object/public/${DOC_BUCKET}/`;
+/** يقبل مفتاحَ كائنٍ أو رابطاً عامّاً قديماً (ق٤)، ويعيد المفتاح. */
+function docKey(value: unknown): string {
+  if (typeof value !== "string" || !value) return "";
+  const idx = value.indexOf(PUBLIC_PREFIX);
+  if (idx !== -1) return decodeURIComponent(value.slice(idx + PUBLIC_PREFIX.length).split("?")[0]);
+  /* رابطٌ لا يخصّ حاويتنا: لا مفتاح له، ولا يُحذف */
+  if (/^https?:\/\//i.test(value)) return "";
+  return value;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   if (req.method !== "POST") return fail(req, 405, "الطريقة غير مدعومة.");
@@ -118,8 +143,94 @@ Deno.serve(async (req: Request) => {
   const seasonId = body.seasonId;
   if (typeof seasonId !== "number") return fail(req, 400, "معرّف الموسم مطلوب.");
 
-  /* س٨: العملية الهدّامة تحمل فاعلها معها — الدالة تكتب صفّاً
-     ملخّصاً واحداً بالأعداد والفاعل، لا صفّاً لكل سطر ساقط */
+  /* ١) المفاتيحُ تُحصى **قبل** الحذف (م‑٥٨): الصفوفُ تختفي بعده
+        فلا سبيلَ إلى مفاتيحها. وفشلُ الإحصاء يوقف كلّ شيء — لا
+        يُحذف موسمٌ لا نعرف ماذا نترك وراءه. */
+  const { data: docRows, error: docsErr } = await admin
+    .from("passengers")
+    .select(["id", ...DOC_COLUMNS].join(","))
+    .eq("season_id", seasonId);
+  if (docsErr) {
+    console.error("تعذر حصر مستندات الموسم", { seasonId, docsErr });
+    return fail(req, 400, "تعذّر حصر مستندات الموسم — لم يُحذف شيء.");
+  }
+  const rows = (docRows ?? []) as Record<string, unknown>[];
+
+  /* (أ) ما تشير إليه الأعمدة الستّة */
+  const referenced = rows
+    .flatMap((row) => DOC_COLUMNS.map((c) => docKey(row[c])))
+    .filter(Boolean);
+
+  /* (ب) ما في مجلّد كلّ حاجّ فعلاً.
+     `uploadDoc` تبني مفتاحاً جديداً بكلّ رفع (`_${Date.now()}`)،
+     ومسارُ الاستبدال في صفحة الحجّاج لا يحذف القديم — فتتراكم
+     كائناتٌ لا يشير إليها عمود. الأعمدة وحدها تترك هؤلاء وراءها،
+     فيُقرأ المجلّد نفسه.
+
+     والنطاق مصونٌ كما هو: المجلّدات حجّاجُ هذا الموسم وحدهم
+     (`{id}/`)، لا سردَ للحاوية ولا حذفَ ببادئة. */
+  const passengerIds = rows
+    .map((r) => r.id)
+    .filter((v): v is number => typeof v === "number");
+
+  const listed: string[] = [];
+  /* المجلّداتُ التي تعذّر سردُها — تُجمع بمعرّفاتها لا بعددها */
+  const unreadable: number[] = [];
+  /* صفحةٌ كبيرة تكفي مجلّدَ حاجّ بمراحل، والترقيمُ احتياطٌ لا أكثر */
+  const PAGE = 1000;
+  async function listFolder(id: number): Promise<void> {
+    for (let offset = 0; ; offset += PAGE) {
+      const { data: page, error: lsErr } = await admin.storage
+        .from(DOC_BUCKET).list(String(id), { limit: PAGE, offset });
+      if (lsErr) {
+        /* لا يُبتلع ولا يُنقص مجموعةَ الحذف صامتاً */
+        unreadable.push(id);
+        console.error("تعذر سرد مجلّد مستندات حاجّ", { seasonId, passengerId: id, lsErr });
+        return;
+      }
+      const entries = (page ?? []) as { name: string; id: string | null }[];
+      for (const e of entries) {
+        /* `id === null` مجلّدٌ لا كائن — لا يُحذف بالاسم */
+        if (e.id !== null && e.name) listed.push(`${id}/${e.name}`);
+      }
+      if (entries.length < PAGE) return;
+    }
+  }
+
+  /* مجموعةُ عمّالٍ محدودة: ٥٠٠ حاجّ لا يعني ٥٠٠ طلبٍ متزامن */
+  const LIST_CONCURRENCY = 10;
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(LIST_CONCURRENCY, passengerIds.length) }, async () => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= passengerIds.length) return;
+        await listFolder(passengerIds[i]);
+      }
+    }),
+  );
+
+  /* ⚠️ الجردُ ناقصٌ ⇒ توقّف قبل الهدم.
+     السردُ كلُّه يقع **قبل** `delete_season`، فالصفوفُ ما تزال
+     قائمةً كلُّها ولم يُمسّ ملفّ. ومجلّدٌ لم يُقرأ يعني مفاتيحَ لا
+     نعرفها، فالمضيُّ يمحو الصفوفَ ويترك ملفّاتٍ لا دليلَ عليها بعد
+     اليوم. والتراجعُ هنا مجّانيّ: لا شيءَ حدث، والمحاولةُ تُعاد. */
+  if (unreadable.length > 0) {
+    console.error("[season-delete] جردُ التخزين ناقص — أُلغيت العملية قبل الحذف", {
+      seasonId, at: new Date().toISOString(),
+      unreadableCount: unreadable.length, passengerIds: unreadable,
+    });
+    return fail(req, 503, `تعذّر حصر مستندات ${unreadable.length} من الحجّاج. لم يُحذف الموسم ولا أيُّ ملفّ — يرجى إعادة المحاولة.`);
+  }
+
+  /* الاتّحاد: المعروفُ من الأعمدة + الموجودُ في المجلّدات.
+     والأعمدةُ تبقى في الحساب لأن مفتاحاً قديماً قد لا يتبع
+     اصطلاحَ المجلّد (ق٤ — رابطٌ عامّ سابق). */
+  const keys = [...new Set([...referenced, ...listed])];
+
+  /* ٢) س٨: العملية الهدّامة تحمل فاعلها معها — الدالة تكتب صفّاً
+        ملخّصاً واحداً بالأعداد والفاعل، لا صفّاً لكل سطر ساقط.
+        وترتيبُها قبل الملفّات مقصود: لو فشلت لم يُمسّ ملفٌّ واحد. */
   const { error } = await admin.rpc("delete_season", {
     p_season_id: seasonId,
     p_actor: userId,
@@ -128,5 +239,35 @@ Deno.serve(async (req: Request) => {
     console.error("تعذر حذف الموسم", error);
     return fail(req, 400, error.message || "تعذّر حذف الموسم.");
   }
-  return json(req, 200, { ok: true });
+
+  /* ٣) الملفّات بعد نجاح القاعدة. `remove` ينجح جزئياً: ما لم
+        يُذكر في `data` لم يُحذف. واليتامى يُسجَّلون بأسمائهم لا
+        بعددهم، ويُعادون إلى المستدعي — فالنجاحُ لا يُعلَن على نقص. */
+  let removed = 0;
+  const orphans: string[] = [];
+  for (let i = 0; i < keys.length; i += 100) {
+    const chunk = keys.slice(i, i + 100);
+    const { data: rm, error: rmErr } = await admin.storage.from(DOC_BUCKET).remove(chunk);
+    if (rmErr) console.error("تعذر حذف دفعة من مستندات الموسم", { seasonId, rmErr });
+    const done = new Set(((rm ?? []) as { name: string }[]).map((f) => f.name));
+    removed += done.size;
+    for (const k of chunk) if (!done.has(k)) orphans.push(k);
+  }
+  /* `ok` هنا نتيجةُ **الحذف** وحده: الجردُ الناقص لا يصل إلى هذه
+     النقطة أصلاً — يوقف العمليةَ قبل القاعدة. فما يبقى احتمالاً هو
+     كائنٌ معلومُ المفتاح لم يُحذف. */
+  const storageOk = orphans.length === 0;
+  if (!storageOk) {
+    console.error("[season-delete] مستندات لم تُحذف — ملفات يتيمة في " + DOC_BUCKET, {
+      seasonId, at: new Date().toISOString(),
+      orphanCount: orphans.length, paths: orphans,
+    });
+  }
+
+  /* القاعدةُ ذهبت ولا رجعةَ فيها، فالردُّ يفصل الأمرين: الموسمُ
+     حُذف، والملفّاتُ حالتُها هذه. ولا يُقال «تمّ» على نقص. */
+  return json(req, 200, {
+    ok: true,
+    storage: { expected: keys.length, removed, orphans: orphans.length, ok: storageOk },
+  });
 });
