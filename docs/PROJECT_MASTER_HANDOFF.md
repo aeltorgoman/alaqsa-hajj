@@ -140,7 +140,11 @@ else    → <ConfigProvider><App /></ConfigProvider>   staff application
 
 ## 5. Architectural principles
 
-`docs/ENGINEERING_PLAYBOOK.md` (1,280 lines) is the **authoritative** engineering policy. This is an orientation summary, not a replacement.
+`docs/ENGINEERING_PLAYBOOK.md` (**v2.0**) is the **authoritative** engineering policy. This is an orientation summary, not a replacement.
+
+> ⚠️ **Do not cite the Playbook by line count.** An earlier version of this line said "1,280 lines", which was never accurate and went stale immediately. Cite the version and the rule identifier — e.g. `M-59` for RLS — which are stable. The Playbook's Appendix B indexes every MUST.
+
+The v1.0 text reached this repository mechanically damaged, losing 42 of its 80 sections; it was restored from the approved source, reconciled against the repository, and restructured as v2.0. Both prior editions are archived byte-for-byte in `docs/archive/` with their provenance and hashes in `docs/archive/README.md`.
 
 ✅ **VERIFIED** — Playbook principles:
 
