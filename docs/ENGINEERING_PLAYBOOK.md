@@ -2,7 +2,7 @@
 # Engineering Playbook
 
 **Version:** 2.0
-**Status:** Draft — awaiting approval
+**Status:** Approved
 **Supersedes:** v1.0 (approved), archived at `docs/archive/ENGINEERING_PLAYBOOK_v1.0_original.md`
 **Owner:** Project Architecture Team
 **Applies To:** Entire Hajj Management System
