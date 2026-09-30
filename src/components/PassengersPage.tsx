@@ -1027,7 +1027,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const runDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
     if (docType === "passport_doc") {
-      const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "passport")]);
+      /* ⚠️ التحليلُ قبل الرفع — نفسُ ترتيب `hajj_permit` أدناه وللسبب
+         نفسه. كانا متوازيين في `Promise.all`، فإذا فشل التحليل رُفض
+         الوعدُ كلُّه وقفز التنفيذُ إلى `catch` الخارجيّ — والكائنُ
+         الذي نجح رفعُه يبقى في الحاوية بلا مرجعٍ ولا تعويض.
+         والتسلسلُ يُلغي النافذة بدل أن يعوّض عنها: ما لم يُقرأ
+         المستند لا يُرفع أصلاً. والكلفةُ جولةُ شبكةٍ واحدة. */
+      const parsed = await scanDocument(file, "passport");
+      const url = await uploadDoc(file, p.id, docType);
       const updates: any = {};
       if (url) updates.passport_url = url;
       if (parsed.name_en) { updates.name_en = parsed.name_en; updates.short_en = makeShort(parsed.name_en); }
@@ -1046,7 +1053,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         await saveDocUpdates(p, updates);
       }
     } else if (docType === "idcard") {
-      const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "idcard")]);
+      /* التحليلُ قبل الرفع — كما في الجواز أعلاه */
+      const parsed = await scanDocument(file, "idcard");
+      const url = await uploadDoc(file, p.id, docType);
       const updates: any = {};
       if (url) updates.national_id_url = url;
       if (parsed.national_id) updates.national_id = parsed.national_id;
