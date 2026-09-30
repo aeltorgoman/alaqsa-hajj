@@ -1377,18 +1377,33 @@ require redesigning the existing architecture.
 *(NEW — governance. v1.0 listed "Documentation Rules" and "Engineering Playbook
 Governance" in its table of contents and never wrote them.)*
 
-**MUST `M-94`** — Where two project documents conflict, this order decides:
+**MUST `M-94`** — Authority is **by domain, not by a single ranking**. Each domain
+has one governing document, and within its domain that document is not outranked:
 
-1. `SECURITY_ARCHITECTURE.md` — supreme on anything touching security.
-2. This Playbook — the general engineering and architecture authority.
-3. The authoritative season reference — on season architecture.
-4. Architecture Decision Records — on the decision each one records.
-5. Implementation designs and runbooks — on how a rule is carried out.
-6. Orientation and status documents — never authoritative over any of the above.
+| Domain | Governs |
+|---|---|
+| Security — identity, authorization, RLS, the security constants | `SECURITY_ARCHITECTURE.md` |
+| Season architecture — the invariants and the frozen season decisions | the approved season reference (GitHub Issue #42) |
+| A decision an approved ADR records | that ADR |
+| General engineering standards — everything not claimed above | **this Playbook** |
+| How a governing rule is carried out | implementation designs and runbooks |
+| Current state, orientation, status, backlog | **never authoritative** over any of the above |
 
-A document lower in this list never silently overrides one above it. If it reveals
-that a higher document is wrong, the higher document is amended by a new version and
-a review.
+This Playbook is **not** the top of a hierarchy. It governs general engineering
+standards and nothing further: where a matter falls inside another document's domain,
+that document governs and this one summarises at most, as 6.3 does for seasons.
+
+Implementation designs and runbooks never compete with the document whose rule they
+carry out. If an implementation reveals that its governing document is wrong, the
+governing document is amended by a new version and a review — never bypassed
+silently.
+
+**Cross-domain conflicts are not settled by ranking.** Where a matter sits in two
+domains at once — a season rule that is also a security rule, an ADR that touches
+the security model — no list decides it. The conflict is recorded and resolved
+through review, under the discipline of `M-121`: state both positions, investigate,
+and amend one of them deliberately. Picking the "higher" document is not a
+resolution.
 
 ## 7.2 The Repository Is Source of Truth
 
@@ -1418,6 +1433,10 @@ true, and which one must be established rather than assumed:
 Until that is established, this Playbook records **both** — what the decision says and
 what the code does — and names the discrepancy as open. Silently adopting whichever
 side is newer is not a resolution.
+
+The same discipline governs a **cross-domain conflict between two governing
+documents** (`M-94`): record both positions, investigate, and resolve by amending one
+of them under review. Neither is preferred because of where it sits in a list.
 
 Non-approved documents — orientation notes, status summaries, backlog entries — carry
 no such standing: where they disagree with the repository they are simply stale, and
@@ -1785,7 +1804,7 @@ None. No rule has been retired from this edition.
 | `M-91` | MUST | 6.9 Automation | v1.0 §71 — restored | Never automate a business decision that requires human judgement |
 | `M-92` | MUST | 6.10 Artificial Intelligence | v1.0 §72 — restored | AI suggestions remain reviewable by humans, and human operators |
 | `M-93` | MUST | 6.11 Arabic Domain Values | imported: Handoff §17 / project skill | Preserve Arabic enum and domain values exactly as stored |
-| `M-94` | MUST | 7.1 Document Authority | NEW (governance) | Where two project documents conflict, this order decides: |
+| `M-94` | MUST | 7.1 Document Authority | NEW (governance) | Authority is by domain, not by a single ranking |
 | `M-95` | MUST | 7.2 The Repository Is Source of Truth | NEW (governance) | Never cite a document as evidence of what the code currently does |
 | `M-96` | MUST | 7.2 The Repository Is Source of Truth | NEW (governance) | This Playbook states durable engineering and architecture rules |
 | `M-97` | MUST | 7.3 Feature Lifecycle | v1.0 §6 — restored | Skipping stages is not allowed |
@@ -1990,7 +2009,7 @@ MUST exists that is not listed here, the document fails `M-117`.
 | `M-91` | 6.9 Automation | Never automate a business decision that requires human judgement |
 | `M-92` | 6.10 Artificial Intelligence | AI suggestions remain reviewable by humans, and human operators |
 | `M-93` | 6.11 Arabic Domain Values | Preserve Arabic enum and domain values exactly as stored |
-| `M-94` | 7.1 Document Authority | Where two project documents conflict, this order decides: |
+| `M-94` | 7.1 Document Authority | Authority is by domain, not by a single ranking |
 | `M-95` | 7.2 The Repository Is Source of Truth | Never cite a document as evidence of what the code currently does |
 | `M-121` | 7.2 The Repository Is Source of Truth | Where the repository and an approved decision disagree, that is a |
 | `M-96` | 7.2 The Repository Is Source of Truth | This Playbook states durable engineering and architecture rules |
