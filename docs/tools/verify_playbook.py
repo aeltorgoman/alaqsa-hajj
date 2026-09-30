@@ -56,18 +56,29 @@ def main():
     ids = [r[1] for r in rules]
     for i in sorted({i for i in ids if ids.count(i) > 1}):
         fail(f"duplicate rule id in body: {i}")
+    # the retired register lives in Appendix A.1; a gap is legitimate only if listed there
+    try:
+        a1 = text.split("## A.1 Retired identifiers")[1].split("## A.2")[0]
+    except IndexError:
+        a1 = ""
+        fail("Appendix A.1 (retired identifiers register) is missing")
     for pre, lvl in (("M", "MUST"), ("S", "SHOULD"), ("G", "GUIDELINE"), ("C", "CONTEXTUAL")):
         nums = sorted(int(i.split("-")[1]) for l, i in rules if i.startswith(pre + "-"))
         if not nums:
             fail(f"no {lvl} rules found")
             continue
-        gaps = [n for n in range(1, max(nums) + 1) if n not in nums]
+        # Identifiers are stable and never renumbered (M-115). A gap is therefore
+        # legitimate once a rule is retired -- but only if Appendix A records it,
+        # so a gap can never be an accidental omission.
+        retired = set(int(x) for x in re.findall(r"`" + pre + r"-0*(\d+)`", a1))
+        gaps = [n for n in range(1, max(nums) + 1)
+                if n not in nums and n not in retired]
         if gaps:
-            fail(f"{lvl} id gaps: {gaps}")
+            fail(f"{lvl} ids neither defined nor recorded as retired in Appendix A: {gaps}")
         wrong = [i for l, i in rules if i.startswith(pre + "-") and l != lvl]
         if wrong:
             fail(f"{lvl} prefix used with another level: {wrong}")
-        notes.append(f"{lvl}: {len(nums)} contiguous ids")
+        notes.append(f"{lvl}: {len(nums)} defined, {len(retired)} retired, none unaccounted")
 
     # ---- 4. every rule in Appendix A, every MUST in Appendix B -----------
     appA = text.split("# Appendix A")[1].split("# Appendix B")[0]
@@ -86,7 +97,9 @@ def main():
 
     # ---- 4b. every referenced rule id is defined -------------------------
     defined = set(rid for _l, rid in rules)
-    referenced = set(re.findall(r"`([MSGC]-\d+)`", text))
+    # A.1 names retired ids by definition, so it is not a source of references.
+    scan = text.replace(a1, "") if a1 else text
+    referenced = set(re.findall(r"`([MSGC]-\d+)`", scan))
     for rid in sorted(referenced - defined):
         fail(f"cross-reference to an undefined rule id: {rid}")
     notes.append(f"cross-references resolved: {len(referenced)} distinct ids, none dangling")

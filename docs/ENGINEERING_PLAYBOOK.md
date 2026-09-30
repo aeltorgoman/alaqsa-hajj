@@ -49,6 +49,26 @@ with its reason.
 
 ---
 
+# Where to Start
+
+Read the Part that governs what you are touching; the rest is reference. Every route
+below is short, and none of them is a separate document.
+
+| If you are working on… | Read | Then |
+|---|---|---|
+| **UI — a screen, a form, a report view** | Part 3, all of it; it is short | 2.7 frontend code architecture · 2.11 result contracts · `M-19` UI hiding is not authorization |
+| **Security, permissions, a public surface** | Part 5 | `SECURITY_ARCHITECTURE.md` governs and is the next thing to read (`M-94`) · 2.5 backend authority |
+| **A database migration** | Part 4 | `docs/runbooks/MIGRATION_WORKFLOW.md` for the commands · 5.6 for `SECURITY DEFINER` |
+| **Anything touching seasons** | 6.2–6.3 | GitHub Issue #42 governs (`M-94`) · 4.2 ownership · 4.13 destructive operations |
+| **Reviewing a pull request** | Appendix B — the MUST index | 7.7–7.8 · 7.9 verification regime |
+| **Writing or amending a rule here** | Part 7 | 7.16 ADR lifecycle · 7.17 amending this Playbook |
+
+Two things are worth knowing before anything else, because they are the most common
+false assumptions about this system: it is **not multi-tenant** (2.2), and it has
+**no automated test suite** (`C-06`).
+
+---
+
 # Rule Levels
 
 Every rule carries a level and an identifier. The identifier is stable: cite it in
@@ -743,9 +763,14 @@ Derived: `payments` and `custom_charges` via `passenger_id`;
 > `passenger_id`, and `financial_groups` had neither. It was the last remaining hole
 > in ث٣, and it was populated, not theoretical.
 >
-> Per `M-95` the repository is correct and the reference is stale on this point.
-> This Playbook records the repository's state and does **not** amend the season
-> reference; correcting it is an owner decision, raised as an open item.
+> **This is an open discrepancy under `M-121`, not a resolved question.** The season
+> reference is an approved decision, so the repository does not override it merely by
+> existing. Both are recorded above: the decision says derived, the code stores. The
+> migration's reasoning is strong and it was reviewed and merged, which makes case (2)
+> — a later reviewed change superseding §4 on this point — the likely reading; but
+> "likely" is not "established", and amending a frozen reference is an owner decision.
+> Until it is made, engineers follow the **code** for how the table behaves today and
+> treat the classification as open.
 
 Not seasonal at all: `user_profiles`, `company_config`, `company_assets`,
 `pricing_settings`.
@@ -1343,10 +1368,34 @@ a review.
 
 *(NEW — governance)*
 
-**MUST `M-95`** — Where a document and the repository disagree about what the system
-does, the repository is correct and the document is a defect to be fixed. Verify
-before citing: a backlog entry, a status note or a summary may have been overtaken by
-a later merge.
+Two different things can be true at once, and conflating them is how an unreviewed
+change becomes policy:
+
+- **An approved architectural decision states the *intended* behaviour.** It is
+  authoritative about what the system is supposed to do.
+- **The repository states the *implemented* behaviour.** It is authoritative about
+  what the system currently does — and about nothing else.
+
+**MUST `M-95`** — Never cite a document as evidence of what the code currently does.
+Verify against the repository: a backlog entry, a status note or a summary may have
+been overtaken by a later merge.
+
+**MUST `M-121`** — Where the repository and an approved decision disagree, that is a
+**discrepancy to be recorded and investigated**, not a settled question. Code does
+not override an approved decision merely by existing. Exactly one of two things is
+true, and which one must be established rather than assumed:
+
+1. the implementation is a defect against the decision, and the code is corrected; or
+2. the decision was superseded by a later reviewed change, and the decision document
+   is amended by a new version (`M-94`).
+
+Until that is established, this Playbook records **both** — what the decision says and
+what the code does — and names the discrepancy as open. Silently adopting whichever
+side is newer is not a resolution.
+
+Non-approved documents — orientation notes, status summaries, backlog entries — carry
+no such standing: where they disagree with the repository they are simply stale, and
+`M-95` applies.
 
 **MUST `M-96`** — This Playbook states durable engineering and architecture rules. It
 must not accumulate pull request history, bug logs, milestone diaries, temporary
@@ -1533,9 +1582,14 @@ README.
 
 **MUST `M-117`** — Every edition satisfies the structural checks in Appendix A's
 preamble before it is proposed: the table of contents matches the body in both
-directions, headings are unique, rule identifiers are unique and contiguous, every
-MUST appears in Appendix B, every prior-edition section is accounted for in
-Appendix C, and every referenced path resolves.
+directions, headings are unique, rule identifiers are unique and **fully accounted
+for** — every number up to the highest in use is either defined in the body or listed
+as retired in Appendix A — every MUST appears in Appendix B, every prior-edition
+section is accounted for in Appendix C, and every referenced path resolves.
+
+Identifiers are **never renumbered to close a gap.** A gap left by a retired rule is
+the record that the rule existed; closing it would silently repoint every review
+comment and commit message that cited the old number.
 
 ## 7.18 Working With AI Agents
 
@@ -1589,13 +1643,26 @@ where it now lives.
 | `NEW (governance)` | Genuinely new text about how these documents are maintained. v1.0 listed §§81–86 and never wrote them; this is that intent fulfilled. **Never described as recovered.** |
 | `NEW (engineering)` | A genuinely new engineering rule. **One only — `S-05`**, explicitly approved by the project owner on 2026-09-30. It is not restored and was not previously approved. |
 
-**Structural checks every edition must pass** (`M-117`): table of contents matches the
-body both ways · headings unique · rule identifiers unique and contiguous · every
-MUST in Appendix B · every prior-edition section in Appendix C · every referenced
-path resolves.
+**Identifier stability** (`M-115`). Identifiers are assigned in document order within
+each level for this first edition. From approval onward they are **fixed**: a new
+rule takes the next unused number wherever it sits in the document, a retired rule's
+number is never reused, and **rules are never renumbered to close a gap or to match a
+reordering**. A gap is legitimate only when the Retired register below records it.
 
-Identifiers are numbered in document order within each level. From approval of this
-edition onward they are stable and append-only (`M-115`).
+**Structural checks every edition must pass** (`M-117`): table of contents matches the
+body both ways · headings unique · rule identifiers unique and fully accounted for
+(defined, or recorded as retired below) · every MUST in Appendix B · every
+prior-edition section in Appendix C · every referenced path resolves.
+
+## A.1 Retired identifiers
+
+None. No rule has been retired from this edition.
+
+| ID | Retired in | Superseded by | Reason |
+|---|---|---|---|
+| — | — | — | — |
+
+## A.2 Active rules
 
 | ID | Level | Destination | Source | Rule |
 |---|---|---|---|---|
@@ -1693,7 +1760,7 @@ edition onward they are stable and append-only (`M-115`).
 | `M-92` | MUST | 6.10 Artificial Intelligence | v1.0 §72 — restored | AI suggestions remain reviewable by humans, and human operators |
 | `M-93` | MUST | 6.11 Arabic Domain Values | imported: Handoff §17 / project skill | Preserve Arabic enum and domain values exactly as stored |
 | `M-94` | MUST | 7.1 Document Authority | NEW (governance) | Where two project documents conflict, this order decides: |
-| `M-95` | MUST | 7.2 The Repository Is Source of Truth | NEW (governance) | Where a document and the repository disagree about what the system |
+| `M-95` | MUST | 7.2 The Repository Is Source of Truth | NEW (governance) | Never cite a document as evidence of what the code currently does |
 | `M-96` | MUST | 7.2 The Repository Is Source of Truth | NEW (governance) | This Playbook states durable engineering and architecture rules |
 | `M-97` | MUST | 7.3 Feature Lifecycle | v1.0 §6 — restored | Skipping stages is not allowed |
 | `M-98` | MUST | 7.4 Scope Management | v1.0 §7 — restored | Every feature has a clearly defined scope |
@@ -1719,6 +1786,7 @@ edition onward they are stable and append-only (`M-115`).
 | `M-118` | MUST | 7.18 Working With AI Agents | NEW (governance) | Never state that tests pass (C-06, M-104) |
 | `M-119` | MUST | 7.18 Working With AI Agents | NEW (governance) | Never apply a migration, merge, deploy or delete data without |
 | `M-120` | MUST | 7.18 Working With AI Agents | NEW (governance) | Verify a claim against the repository before repeating it from a |
+| `M-121` | MUST | 7.2 The Repository Is Source of Truth | NEW (governance) — added in final review: approved architecture vs implemented behaviour | Where the repository and an approved decision disagree, that is a |
 | `S-01` | SHOULD | 1.1 Correctness Before Speed | v1.0 §39 — restored | Measure before optimising |
 | `S-02` | SHOULD | 1.2 Simplicity, Readability, Explicitness | v1.0 §3 + §11 — restored | Prefer the simplest architecture capable of supporting future |
 | `S-03` | SHOULD | 1.2 Simplicity, Readability, Explicitness | v1.0 §3 + §11 — restored | Optimise for readability |
@@ -1798,7 +1866,7 @@ edition onward they are stable and append-only (`M-115`).
 
 # Appendix B — Index of Every MUST
 
-All 120 MUST rules, in document order. This index is generated from the body; if a
+All 121 MUST rules, in document order. This index is generated from the body; if a
 MUST exists that is not listed here, the document fails `M-117`.
 
 | ID | Section | Rule |
@@ -1897,7 +1965,8 @@ MUST exists that is not listed here, the document fails `M-117`.
 | `M-92` | 6.10 Artificial Intelligence | AI suggestions remain reviewable by humans, and human operators |
 | `M-93` | 6.11 Arabic Domain Values | Preserve Arabic enum and domain values exactly as stored |
 | `M-94` | 7.1 Document Authority | Where two project documents conflict, this order decides: |
-| `M-95` | 7.2 The Repository Is Source of Truth | Where a document and the repository disagree about what the system |
+| `M-95` | 7.2 The Repository Is Source of Truth | Never cite a document as evidence of what the code currently does |
+| `M-121` | 7.2 The Repository Is Source of Truth | Where the repository and an approved decision disagree, that is a |
 | `M-96` | 7.2 The Repository Is Source of Truth | This Playbook states durable engineering and architecture rules |
 | `M-97` | 7.3 Feature Lifecycle | Skipping stages is not allowed |
 | `M-98` | 7.4 Scope Management | Every feature has a clearly defined scope |
@@ -2108,6 +2177,15 @@ to one copy appeared to do nothing.
 **Policy:** reduce per file touched. No sweeping refactor, and no new file admitted
 above the threshold without justification.
 
+**Tracking:** the specific defect this size has already caused is recorded as
+`docs/architecture/BACKLOG.md` ن١٣ (a document-viewer modal duplicated verbatim in
+`PassengersPage.tsx`). The size exceedance itself is **untracked** — no issue and no
+backlog entry covers it.
+
+**Closure criterion:** every file in the table above is either under 500 lines or
+carries the recorded architectural justification `M-24` requires. This entry does not
+require zero exceedances — it requires zero *unjustified* ones.
+
 ## E-2 · `M-25` TypeScript `any`
 
 139 occurrences across 12 files, plus 10 `ts-ignore` / `ts-nocheck` /
@@ -2118,6 +2196,14 @@ per file touched, never swept in one pass. Lint is reported as a delta against t
 baseline (`M-105`).
 
 **Policy:** as E-1. New `any` needs the documented justification.
+
+**Tracking:** the lint baseline is recorded as `docs/architecture/BACKLOG.md` ن٥. The
+`any` count and the suppression directives are **not** separately tracked — no issue
+and no backlog entry covers them.
+
+**Closure criterion:** every remaining `any` and every suppression directive carries
+the documented, reviewed justification `M-25` requires. Undocumented occurrences reach
+zero; documented ones may remain.
 
 ## E-3 · `M-32` Accessibility — status unknown, not assessed
 
@@ -2139,6 +2225,14 @@ the point of change.
 **Policy:** an actual assessment is required before any statement about conformance.
 Until one exists, the correct answer to "is the system accessible?" is "it has not
 been assessed".
+
+**Tracking: untracked.** No issue and no backlog entry covers accessibility. This
+register entry is currently the only record that the question is open.
+
+**Closure criterion:** an assessment has been *performed* and its result recorded —
+not that remediation is complete. A recorded "assessed, these are the findings" closes
+E-3 and opens whatever follow-up the findings justify. It cannot be closed by adding
+attributes.
 
 ---
 
