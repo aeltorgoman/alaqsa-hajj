@@ -38,6 +38,31 @@ const PERMISSION_BY_ACTION: Record<string, string> = {
   delete: "manage_season_lifecycle",
 };
 
+/* ═══ مستندات الموسم المحذوف ═══
+   حذفُ الموسم يمحو صفوفَ حجّاجه، وكانت ملفّاتهم تبقى في الحاوية
+   بلا صفٍّ يدلّ عليها — لا واجهةَ تعرضها ولا مسارَ يحذفها، فتتراكم
+   إلى الأبد. وهذا ليس حذفاً بالتبعية (م‑٧٠): الحذف هنا مقصودٌ
+   معلَن — «سيُحذف الموسم وكلّ ما يخصّه نهائياً» — والمستنداتُ من
+   «ما يخصّه»، فتمامُ الحذف هو الصواب لا تركُ اليتامى.
+
+   والحذفُ بقائمةِ مفاتيحَ صريحةٍ لموسمٍ واحد: لا مسحَ ببادئة ولا
+   بالحاوية كلّها. */
+const DOC_BUCKET = "passengers-docs";
+const DOC_COLUMNS = [
+  "passport_url", "national_id_url", "photo_url",
+  "contract_url", "flight_ticket_url", "hajj_permit_url",
+] as const;
+const PUBLIC_PREFIX = `/storage/v1/object/public/${DOC_BUCKET}/`;
+/** يقبل مفتاحَ كائنٍ أو رابطاً عامّاً قديماً (ق٤)، ويعيد المفتاح. */
+function docKey(value: unknown): string {
+  if (typeof value !== "string" || !value) return "";
+  const idx = value.indexOf(PUBLIC_PREFIX);
+  if (idx !== -1) return decodeURIComponent(value.slice(idx + PUBLIC_PREFIX.length).split("?")[0]);
+  /* رابطٌ لا يخصّ حاويتنا: لا مفتاح له، ولا يُحذف */
+  if (/^https?:\/\//i.test(value)) return "";
+  return value;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
   if (req.method !== "POST") return fail(req, 405, "الطريقة غير مدعومة.");
@@ -118,8 +143,26 @@ Deno.serve(async (req: Request) => {
   const seasonId = body.seasonId;
   if (typeof seasonId !== "number") return fail(req, 400, "معرّف الموسم مطلوب.");
 
-  /* س٨: العملية الهدّامة تحمل فاعلها معها — الدالة تكتب صفّاً
-     ملخّصاً واحداً بالأعداد والفاعل، لا صفّاً لكل سطر ساقط */
+  /* ١) المفاتيحُ تُحصى **قبل** الحذف (م‑٥٨): الصفوفُ تختفي بعده
+        فلا سبيلَ إلى مفاتيحها. وفشلُ الإحصاء يوقف كلّ شيء — لا
+        يُحذف موسمٌ لا نعرف ماذا نترك وراءه. */
+  const { data: docRows, error: docsErr } = await admin
+    .from("passengers")
+    .select(DOC_COLUMNS.join(","))
+    .eq("season_id", seasonId);
+  if (docsErr) {
+    console.error("تعذر حصر مستندات الموسم", { seasonId, docsErr });
+    return fail(req, 400, "تعذّر حصر مستندات الموسم — لم يُحذف شيء.");
+  }
+  const keys = [...new Set(
+    ((docRows ?? []) as Record<string, unknown>[])
+      .flatMap((row) => DOC_COLUMNS.map((c) => docKey(row[c])))
+      .filter(Boolean),
+  )];
+
+  /* ٢) س٨: العملية الهدّامة تحمل فاعلها معها — الدالة تكتب صفّاً
+        ملخّصاً واحداً بالأعداد والفاعل، لا صفّاً لكل سطر ساقط.
+        وترتيبُها قبل الملفّات مقصود: لو فشلت لم يُمسّ ملفٌّ واحد. */
   const { error } = await admin.rpc("delete_season", {
     p_season_id: seasonId,
     p_actor: userId,
@@ -128,5 +171,31 @@ Deno.serve(async (req: Request) => {
     console.error("تعذر حذف الموسم", error);
     return fail(req, 400, error.message || "تعذّر حذف الموسم.");
   }
-  return json(req, 200, { ok: true });
+
+  /* ٣) الملفّات بعد نجاح القاعدة. `remove` ينجح جزئياً: ما لم
+        يُذكر في `data` لم يُحذف. واليتامى يُسجَّلون بأسمائهم لا
+        بعددهم، ويُعادون إلى المستدعي — فالنجاحُ لا يُعلَن على نقص. */
+  let removed = 0;
+  const orphans: string[] = [];
+  for (let i = 0; i < keys.length; i += 100) {
+    const chunk = keys.slice(i, i + 100);
+    const { data: rm, error: rmErr } = await admin.storage.from(DOC_BUCKET).remove(chunk);
+    if (rmErr) console.error("تعذر حذف دفعة من مستندات الموسم", { seasonId, rmErr });
+    const done = new Set(((rm ?? []) as { name: string }[]).map((f) => f.name));
+    removed += done.size;
+    for (const k of chunk) if (!done.has(k)) orphans.push(k);
+  }
+  const storageOk = orphans.length === 0;
+  if (!storageOk) {
+    console.error("[season-delete] مستندات لم تُحذف — ملفات يتيمة في " + DOC_BUCKET, {
+      seasonId, at: new Date().toISOString(), count: orphans.length, paths: orphans,
+    });
+  }
+
+  /* القاعدةُ ذهبت ولا رجعةَ فيها، فالردُّ يفصل الأمرين: الموسمُ
+     حُذف، والملفّاتُ حالتُها هذه. ولا يُقال «تمّ» على نقص. */
+  return json(req, 200, {
+    ok: true,
+    storage: { expected: keys.length, removed, orphans: orphans.length, ok: storageOk },
+  });
 });

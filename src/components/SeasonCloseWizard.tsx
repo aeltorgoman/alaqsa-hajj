@@ -363,7 +363,13 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
   const yearNum = Number(newYear.trim());
   const yearValid = /^\d{1,4}$/.test(newYear.trim()) && yearNum > 0;
   const yearTaken = yearValid && existingYears.includes(yearNum);
-  const canProceed = yearValid && !yearTaken && newName.trim() !== "";
+  /* ⚠️ النسخةُ شرطٌ للهدم لا إشعارٌ عنه: كانت `backupComplete`
+     تُحسب وتُعرض نصّاً، ولا تحرس زرّاً واحداً — فيصل المديرُ إلى
+     خطوة التنفيذ ويمحو مستندات الموسم كلَّها بلا نسخةٍ في يده.
+     والموسمُ بلا مستندات لا نسخةَ له تُنتظر: الخطوة ٣ لا تُعرض له
+     أصلاً (`setStep(docItems.length > 0 ? 3 : 4)`). */
+  const backupSatisfied = docItems.length === 0 || backupComplete;
+  const canProceed = yearValid && !yearTaken && newName.trim() !== "" && backupSatisfied;
 
   return (
     <Modal
@@ -486,7 +492,10 @@ function SeasonCloseWizard({ show, onClose, activeSeason, counts, currentUser, o
               </>
             )}
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setStep(4)} disabled={busy} style={btnP({ flex: 1 })}>التالي</button>
+            {/* الحارسُ عند موضع القرار: لا تقدّم من خطوة المستندات
+                قبل نسخةٍ كاملة. و«السابق» و«إلغاء» يبقيان مفتوحين. */}
+            <button onClick={() => setStep(4)} disabled={busy || !backupSatisfied}
+              style={btnP({ flex: 1, opacity: busy || !backupSatisfied ? 0.6 : 1 })}>التالي</button>
             <button onClick={() => setStep(2)} disabled={busy} style={btnS()}>السابق</button>
             <button onClick={closeAndReset} disabled={busy} style={btnS()}>إلغاء</button>
           </div>
