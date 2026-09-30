@@ -925,6 +925,15 @@ Example:
 provides no operational value.
 
 Prefer structured logs.
+
+---
+
+**End of Part II**
+
+> *Editorial correction (recovery review, 2026-09-30): the approved v1.0 text
+> carries no `End of Part II` marker, although Parts I, III, IV and V all close
+> with one. This marker is added — it is the only line in this document that is
+> in neither the archived original nor the three later additions.*
 # Part III — Backend, Database & Security Standards
 
 This section defines the architecture standards for the backend, database, APIs, security model, and data integrity.
@@ -1001,23 +1010,59 @@ Never assume the frontend will always behave correctly.
 
 Each piece of business data must have exactly one owner.
 
-Examples:
+Ownership is **stored where the entity is independent, and derived where ownership
+is unambiguous** (Issue #42 §4). Deriving is not laziness: storing `season_id` on
+`payments` makes it possible for a payment's season to contradict its owner's.
+Deriving makes that contradiction impossible by construction.
+
+Season ownership **stored** (the row carries `season_id`):
+
+- `passengers`
+- `rooms`
+- `camps`
+- `buses`
+- `flights`
+- `announcements`
+
+Season ownership **derived** (reached through the owning row):
+
+- `payments`, `custom_charges` → via `passenger_id`
+- `financial_group_members`, `financial_groups` → via their members
+- `notification_deliveries`, `pilgrim_push_subscriptions` → via `passenger_id`
+
+**Not seasonal at all:**
+
+- `user_profiles`
+- `company_config`, `company_assets`
+- `pricing_settings`
+
+Other business facts and their owners:
 
 Passenger status
 
-→ passengers table
+→ `passengers`
 
 Room occupancy
 
-→ room assignments
+→ `passengers.room_id`, counted against `rooms.capacity`
 
 Financial balance
 
-→ financial transactions
+→ computed from `payments` and `custom_charges` against the season's price
+snapshot — never stored as a column
 
 Season status
 
-→ seasons table
+→ `seasons`
+
+Historical price for a past season
+
+→ `season_pricing_snapshot`, **not** `pricing_settings`
+
+`pricing_settings` is a **current company setting**, not a seasonal one. A season's
+dues are fixed against the snapshot taken for that season, because computing them
+from live settings at render time retroactively rewrote the balances of archived
+seasons.
 
 Never duplicate values across tables unless there is a documented architectural reason.
 
@@ -1125,13 +1170,24 @@ Use them only when absolutely necessary.
 
 Every SECURITY DEFINER function must:
 
-- set search_path explicitly
+- **pin `search_path` to `public, pg_temp`** — with `pg_temp` **last**, so it cannot
+  shadow `public` — or to `''` when the body names no schema object at all. Never
+  leave it unset, and never merely "set it explicitly": an unpinned or badly ordered
+  `search_path` is how a definer function is made to execute an attacker's object.
 - validate permissions internally
 - expose the smallest possible capability
 - avoid privilege escalation
+- **carry explicit grants.** PostgreSQL grants `EXECUTE` to `PUBLIC` by default, and
+  `PUBLIC` includes `anon`. Every restriction therefore begins with
+  `REVOKE EXECUTE ... FROM PUBLIC`, then grants the required roles by name.
+  `REVOKE ... FROM anon` alone does nothing.
 - be documented
 
 Never expose unrestricted administrative operations.
+
+This is the authoritative statement of the rule. §35.1 applies it to migration
+authoring and drift checking; where the two are read together, they say the same
+thing and neither relaxes the other.
 
 ---
 
@@ -1201,9 +1257,8 @@ Validation should be redundant by design.
 
 Files are business assets.
 
-Treat uploaded files as permanent records.
-
-Store:
+**Business documents are permanent records** and are never deleted as a side effect
+of anything:
 
 - passports
 - IDs
@@ -1212,6 +1267,10 @@ Store:
 - permits
 - visas
 - pilgrim photos
+
+**Transient artefacts are not**, and must have a defined lifecycle: failed and
+orphaned uploads, generated previews, temporary imports. An orphan-cleanup path is
+legitimate for these and only these.
 
 Each file should have:
 
@@ -1224,6 +1283,38 @@ Each file should have:
 Never depend solely on filenames.
 
 Metadata belongs in the database.
+
+## Buckets are private by default
+
+A bucket is public only where a genuine unauthenticated surface needs it, and that
+exception is named, not assumed.
+
+- `passengers-docs` — **private**. Pilgrim documents.
+- `company-private` — **private**, and narrower still: every policy is gated on
+  `manage_users`, so an authenticated employee without that permission cannot read
+  it either.
+- `company-assets` — **public, deliberately**. The logo, login background and banner
+  must render on the login screen, before any session exists. That is the whole
+  justification, and it does not extend to anything else.
+
+Every bucket declares its MIME allowlist and size limit at creation.
+
+## Store object keys, never URLs
+
+Database columns hold **storage object keys**. Access to a private object is a
+**short-lived signed URL**, minted per request by the server.
+
+Columns named `*_url` currently hold object keys, not URLs — a naming debt recorded
+in `docs/architecture/BACKLOG.md` ن١٢, not a licence to store URLs.
+
+## Public surfaces get booleans, not keys
+
+The Pilgrim Portal projection returns **document existence flags**
+(`has_photo`, `has_hajj_permit`, `has_flight_ticket`) and never an object key. Actual
+document access goes through the `pilgrim-doc` Edge Function, which resolves the
+pilgrim from their session and returns a signed URL for that pilgrim's own object.
+A caller cannot express "give me another pilgrim's file" because no passenger id and
+no object path is part of the request.
 
 ---
 
@@ -1243,7 +1334,27 @@ What was the previous value?
 
 What is the new value?
 
-Audit history is not optional for business-critical operations.
+Audit history is not optional for the operations within audit scope.
+
+**Scope is explicit, not assumed.** Audit coverage is a named set of tables, defined
+by `SECURITY_ARCHITECTURE.md` §10, and it is smaller than "everything". Adding a
+business-critical table to that set is an architectural decision; assuming a table
+is covered because it feels important is how an audit gap is discovered after the
+fact. Do not claim coverage you have not checked against the triggers that exist.
+
+**The actor is never supplied by the client.** It comes from `auth.uid()`, or from
+the delegated-actor pattern for paths that write with the service key (where
+`auth.uid()` is empty). When the actor cannot be determined, the write **fails
+closed** — an audit row with an empty actor leaves "who did this?" unanswered, which
+is the first question the log exists to answer.
+
+**Suppression exists, once, and does not generalise.** `delete_season()` alone may
+suppress row-level audit triggers, through the `audit_suppression` table keyed on
+`txid_current()`. That table carries no grant to any role — not even `service_role` —
+so no application role can set the flag. This replaced a session-variable (GUC) flag
+that an adversarial review proved could be set by any `authenticated` role, deleting
+a pilgrim with no audit row and no error: the one control in the audit design that
+failed **open and silently**. Do not add a second suppression path.
 
 Never overwrite history.
 
@@ -1251,29 +1362,44 @@ Append new records.
 
 ---
 
-# 34. Soft Delete vs Hard Delete
+# 34. Destructive Operations
 
-Not everything should be deleted permanently.
+Permanent deletion must be intentional, and it must be survivable.
 
-Business entities should be classified.
+**The system does not implement soft delete.** There is no `deleted_at` column
+anywhere in the schema, and none should be added without an approved architectural
+decision. Soft delete is a **deferred** design option, not the current design, and
+the Playbook must not describe it as though it were.
 
-Soft Delete:
+What protects business data today is not a hidden row — it is four rules.
 
-- passengers
-- financial records
-- assignments
-- payments
-- operational history
+## Refuse rather than cascade
 
-Hard Delete:
+Where losing a record would destroy history, the foreign key is `RESTRICT`, not
+`CASCADE`. `payments.passenger_id` is `RESTRICT` precisely so that a payment can
+never disappear as a side effect of deleting a pilgrim. Removal goes through a named
+path that preserves the history, or it does not happen.
 
-- temporary imports
-- failed uploads
-- cache
-- generated previews
-- orphan temporary files
+`RESTRICT` is also a safety net: if a seasonal table is added later and forgotten in
+`delete_season()`, the delete fails loudly instead of orphaning rows.
 
-Permanent deletion must be intentional.
+## Destructive operations are transactional and counted
+
+`delete_season()` runs in one transaction, refuses to delete an **open** season, and
+counts every affected category **before** deleting — after deletion there is nothing
+left to count. Partial completion is not a possible outcome.
+
+## Evidence outlives the data
+
+`audit_log` and `season_pricing_snapshot` have no foreign key to `seasons`, and
+`delete_season()` deliberately does not touch them. This is what makes a season
+deletion provable after the fact. Any future destructive operation must answer the
+same question: what remains afterwards to prove this happened?
+
+## Transient data may be deleted outright
+
+Temporary imports, failed uploads, caches, generated previews and orphaned temporary
+files carry no business history and may be removed by a cleanup path.
 
 ---
 
@@ -1281,17 +1407,33 @@ Permanent deletion must be intentional.
 
 Database schema changes must always use migrations.
 
-Never modify production tables manually.
+**Never modify production tables manually.** The single exception is the recorded
+break-glass procedure in §35.1, which is an incident, not an alternative route.
 
 Every migration must be:
 
 - deterministic
 - repeatable
 - version controlled
-- reviewed
-- reversible whenever possible
+- reviewed **before it reaches any database**
+- **immutable once merged or applied**
+
+**Corrections roll forward.** A migration that has been merged or applied is never
+edited: its content is the record of what the database was told to do, and changing
+it makes that record a lie while silently diverging every environment rebuilt from
+it. Write a new migration instead. Down-migrations are not this project's recovery
+mechanism and "reversible whenever possible" is not a requirement here.
+
+Where a historical version exists in the remote ledger but its SQL is reproduced by
+the V1 baseline, the repository keeps a **ledger compatibility anchor**: a file that
+deliberately contains no SQL, carrying only the version string the CLI matches on.
+Adding SQL to an anchor executes it against an empty database on every fresh rebuild
+and breaks the baseline proof. Anchors are never "filled in".
 
 Schema history is part of the source code.
+
+§35.1 states the procedure that makes this section operational. Where both speak,
+§35.1 is the operative text and this section is its summary.
 
 ---
 
@@ -1449,14 +1591,28 @@ API names should communicate business intent.
 
 Errors should be predictable.
 
-Every API should return structured responses.
+Every write must return a **discriminated result**, and the caller must branch on it.
 
-Include:
+**Success is proven, never inferred.** The absence of an error object is not success:
+an `UPDATE` filtered to zero rows by RLS returns no error at all, and code that read
+success from "no error" reported "saved" when nothing had been saved. A successful
+result therefore **carries the row**.
 
-- success status
-- error code
-- human-readable message
-- machine-readable identifier
+The project's contract is `SaveResult<T>` (`src/company/saveResult.ts`):
+
+- `saved` — the row was found, authorized, and changed. Carries the row.
+- `unchanged` — found and authorized, nothing differed. Success, and carries the row.
+- `unauthorized` — permission refused. Not a fault, not an absence.
+- `not_found` — zero rows reached. **Never read as success.**
+- `invalid` — a value rejected before it reached the database. Names the field.
+- `failed` — network or database fault.
+
+Distinguishing `unauthorized` from `not_found` from `failed` matters: they need
+different messages and different operator responses. Collapsing them into a boolean
+and a string throws that away.
+
+User-facing text for a failure is resolved in one place, so messages do not diverge
+between screens.
 
 Avoid ambiguous responses.
 
@@ -1807,8 +1963,6 @@ Filters should represent business concepts.
 Examples:
 
 Season
-
-Campaign
 
 Status
 
@@ -2346,13 +2500,16 @@ More users.
 
 More pilgrims.
 
-More campaigns.
-
 More seasons.
 
 More reports.
 
 More integrations.
+
+**Serving more companies is not a scaling axis inside one system.** A new customer is
+a new deployment — its own Supabase project, its own database, its own Vercel
+deployment, from the same codebase (§73). Nothing in this section authorises a
+tenant identifier, a `companies` table or a company selector.
 
 Architectural decisions should prioritize sustainable growth over short-term implementation speed.
 
@@ -2513,4 +2670,87 @@ Application components must never understand the database representation of comp
 Future features must follow this architecture.
 
 Direct database consumption is prohibited.
+
+---
+
+# Known Exceptions Register
+
+This register records where the repository does **not** currently meet a rule stated
+above.
+
+It exists so that the gap is visible and bounded. **It does not weaken any rule.**
+Every rule named here remains in force exactly as written; what is recorded is debt
+against it, not an amendment to it. A new violation is still a review defect — the
+register is a list of the ones already known, not a licence to add more.
+
+## E-1 · §14 Component Size Limits
+
+§14 requires architectural justification above 500 lines. **13 of 108 TypeScript
+files in `src/` exceed 500 lines; 17 exceed the 400-line review threshold.**
+
+| Lines | File |
+|---:|---|
+| 2485 | `src/components/PassengersPage.tsx` |
+| 2392 | `src/components/ReportsPage.tsx` |
+| 1621 | `src/components/FinancePage.tsx` |
+| 1431 | `src/types/database.ts` — **generated**, see below |
+| 1217 | `src/components/UsersPage.tsx` |
+| 1113 | `src/components/HotelPage.tsx` |
+| 1005 | `src/components/AdminsPage.tsx` |
+| 831 | `src/utils/index.ts` |
+| 813 | `src/components/FlightsPage.tsx` |
+| 706 | `src/components/CampsPage.tsx` |
+| 629 | `src/components/SeasonCloseWizard.tsx` |
+| 575 | `src/components/PortalPage.tsx` |
+| 546 | `src/components/PilgrimPortal.tsx` |
+
+`src/types/database.ts` is generated from the schema and is **out of scope** for §14:
+it is not hand-maintained code and splitting it would be meaningless.
+
+`PassengersPage.tsx` is the case §13 names as its **Bad** example — one component that
+loads data, validates forms, uploads files, calculates finance, prints reports and
+updates permissions. The cost is not theoretical: `docs/architecture/BACKLOG.md` ن١٣
+records a document-viewer modal duplicated verbatim twice in that file, both
+rendering, the second covering the first — which is why a fix applied to one copy
+appeared to do nothing.
+
+**Policy:** reduce per file touched, on the ESLint-baseline pattern. No sweeping
+refactor, and no new file admitted above the threshold without justification.
+
+## E-2 · §16 TypeScript Standards
+
+§16 permits `any` only under documented and reviewed circumstances. **139 occurrences
+across 12 files** in `src/`, plus 10 `ts-ignore` / `ts-nocheck` / `eslint-disable`
+directives. None carries the documentation §16 requires.
+
+This sits alongside the standing ESLint baseline (`BACKLOG.md` ن٥: 291 notes, held as
+a fixed reference, reduced per file touched, never swept in one pass). Lint is
+reported as a **delta against that baseline**, never as an absolute count.
+
+**Policy:** same as E-1 — reduce per file touched; new `any` needs the documented
+justification §16 already demands.
+
+## E-3 · §58 Accessibility — **status unknown, not assessed**
+
+§58 states that accessibility is mandatory. **No accessibility audit has ever been
+performed on this project**, and there is no automated accessibility checking in the
+lint configuration or in CI.
+
+The honest status is therefore **unknown**. This register does not claim the product
+is accessible, and it does not claim it is inaccessible.
+
+> **Attribute counts are not evidence either way.** Counting `aria-*` attributes or
+> `role=` occurrences measures neither conformance nor failure: a correct, semantic,
+> keyboard-navigable interface may need very few ARIA attributes, and a heavily
+> annotated one may still be unusable. Do not cite such counts as a pass or a fail,
+> and do not treat adding attributes as remediation.
+
+§58's five requirements — keyboard navigation, visible focus, sufficient contrast,
+readable typography, screen readers where practical — remain binding on new work and
+are reviewable directly at the point of change.
+
+**Policy:** an actual assessment is required before any statement is made about
+conformance. Until one exists, the correct answer to "is the system accessible?" is
+"it has not been assessed", and §58 continues to bind every change on its own terms.
+
 **End of Part V**
