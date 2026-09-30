@@ -2645,33 +2645,20 @@ The objective is to build the most reliable Hajj Management Platform possible.
 
 # Architecture Decisions
 
-This section records architectural decisions that become mandatory project standards.
+Architectural decisions that become mandatory project standards are recorded in
+`docs/architecture/ADR/`, one file per decision, numbered sequentially and never
+renumbered. They are not temporary implementation notes: each defines a long-term
+engineering rule and remains valid until an approved successor supersedes it.
 
-These decisions are not temporary implementation notes.
+This document **references** an ADR; it does not copy it. Where a rule here is
+implemented by an ADR, the rule states the requirement and names the ADR, so that a
+decision and its statement cannot drift apart.
 
-They define long-term engineering rules and remain valid until officially replaced.
+| # | Decision | Status |
+|---|---|---|
+| `ADR-001` | **Company Profile** — `CompanyProfile` is the application contract; `company_config` is only the persistence model. See `docs/architecture/ADR/ADR-001-company-profile.md`. | Approved |
 
-### ADR-001 — Company Profile
-
-Company information must never be accessed directly from company_config by application components.
-
-company_config is the persistence model.
-
-It is not the application contract.
-
-The application contract is CompanyProfile.
-
-All application code must consume company information exclusively through CompanyService and its typed selectors.
-
-Normalization, backward compatibility, legacy mapping, and configuration translation belong only inside CompanyService.
-
-Application components must never understand the database representation of company configuration.
-
-Future features must follow this architecture.
-
-Direct database consumption is prohibited.
-
----
+The Company Profile rule itself is stated in §73.
 
 # Known Exceptions Register
 
