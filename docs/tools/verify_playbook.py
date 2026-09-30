@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structural verification for docs/ENGINEERING_PLAYBOOK.md — the checks M-110 requires.
+"""Structural verification for docs/ENGINEERING_PLAYBOOK.md — the checks M-117 requires.
 
 Read-only. Exits non-zero on any failure.
 
@@ -83,6 +83,13 @@ def main():
         if rid not in musts:
             fail(f"Appendix B lists {rid}, which is not a MUST in the body")
     notes.append(f"Appendix A covers {len(rules)} rules; Appendix B covers {len(musts)} MUSTs")
+
+    # ---- 4b. every referenced rule id is defined -------------------------
+    defined = set(rid for _l, rid in rules)
+    referenced = set(re.findall(r"`([MSGC]-\d+)`", text))
+    for rid in sorted(referenced - defined):
+        fail(f"cross-reference to an undefined rule id: {rid}")
+    notes.append(f"cross-references resolved: {len(referenced)} distinct ids, none dangling")
 
     # ---- 5. every v1.0 section accounted for in Appendix C ---------------
     appC = text.split("# Appendix C")[1].split("# Appendix D")[0]
