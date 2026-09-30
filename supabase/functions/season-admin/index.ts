@@ -148,17 +148,71 @@ Deno.serve(async (req: Request) => {
         يُحذف موسمٌ لا نعرف ماذا نترك وراءه. */
   const { data: docRows, error: docsErr } = await admin
     .from("passengers")
-    .select(DOC_COLUMNS.join(","))
+    .select(["id", ...DOC_COLUMNS].join(","))
     .eq("season_id", seasonId);
   if (docsErr) {
     console.error("تعذر حصر مستندات الموسم", { seasonId, docsErr });
     return fail(req, 400, "تعذّر حصر مستندات الموسم — لم يُحذف شيء.");
   }
-  const keys = [...new Set(
-    ((docRows ?? []) as Record<string, unknown>[])
-      .flatMap((row) => DOC_COLUMNS.map((c) => docKey(row[c])))
-      .filter(Boolean),
-  )];
+  const rows = (docRows ?? []) as Record<string, unknown>[];
+
+  /* (أ) ما تشير إليه الأعمدة الستّة */
+  const referenced = rows
+    .flatMap((row) => DOC_COLUMNS.map((c) => docKey(row[c])))
+    .filter(Boolean);
+
+  /* (ب) ما في مجلّد كلّ حاجّ فعلاً.
+     `uploadDoc` تبني مفتاحاً جديداً بكلّ رفع (`_${Date.now()}`)،
+     ومسارُ الاستبدال في صفحة الحجّاج لا يحذف القديم — فتتراكم
+     كائناتٌ لا يشير إليها عمود. الأعمدة وحدها تترك هؤلاء وراءها،
+     فيُقرأ المجلّد نفسه.
+
+     والنطاق مصونٌ كما هو: المجلّدات حجّاجُ هذا الموسم وحدهم
+     (`{id}/`)، لا سردَ للحاوية ولا حذفَ ببادئة. */
+  const passengerIds = rows
+    .map((r) => r.id)
+    .filter((v): v is number => typeof v === "number");
+
+  const listed: string[] = [];
+  let listFailed = 0;
+  /* صفحةٌ كبيرة تكفي مجلّدَ حاجّ بمراحل، والترقيمُ احتياطٌ لا أكثر */
+  const PAGE = 1000;
+  async function listFolder(id: number): Promise<void> {
+    for (let offset = 0; ; offset += PAGE) {
+      const { data: page, error: lsErr } = await admin.storage
+        .from(DOC_BUCKET).list(String(id), { limit: PAGE, offset });
+      if (lsErr) {
+        /* لا يُبتلع ولا يُنقص مجموعةَ الحذف صامتاً: يُعدّ ويُعلَن */
+        listFailed++;
+        console.error("تعذر سرد مجلّد مستندات حاجّ", { seasonId, passengerId: id, lsErr });
+        return;
+      }
+      const entries = (page ?? []) as { name: string; id: string | null }[];
+      for (const e of entries) {
+        /* `id === null` مجلّدٌ لا كائن — لا يُحذف بالاسم */
+        if (e.id !== null && e.name) listed.push(`${id}/${e.name}`);
+      }
+      if (entries.length < PAGE) return;
+    }
+  }
+
+  /* مجموعةُ عمّالٍ محدودة: ٥٠٠ حاجّ لا يعني ٥٠٠ طلبٍ متزامن */
+  const LIST_CONCURRENCY = 10;
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(LIST_CONCURRENCY, passengerIds.length) }, async () => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= passengerIds.length) return;
+        await listFolder(passengerIds[i]);
+      }
+    }),
+  );
+
+  /* الاتّحاد: المعروفُ من الأعمدة + الموجودُ في المجلّدات.
+     والأعمدةُ تبقى في الحساب لأن مفتاحاً قديماً قد لا يتبع
+     اصطلاحَ المجلّد (ق٤ — رابطٌ عامّ سابق). */
+  const keys = [...new Set([...referenced, ...listed])];
 
   /* ٢) س٨: العملية الهدّامة تحمل فاعلها معها — الدالة تكتب صفّاً
         ملخّصاً واحداً بالأعداد والفاعل، لا صفّاً لكل سطر ساقط.
@@ -185,10 +239,14 @@ Deno.serve(async (req: Request) => {
     removed += done.size;
     for (const k of chunk) if (!done.has(k)) orphans.push(k);
   }
-  const storageOk = orphans.length === 0;
+  /* التمامُ شرطان: لا يتيمَ بقي، **ولا مجلّدَ تعذّر سردُه**. فمجلّدٌ
+     لم يُقرأ قد يحوي ما لم يدخل مجموعةَ الحذف أصلاً — والصمتُ عنه
+     يجعل النقصَ يبدو تماماً. */
+  const storageOk = orphans.length === 0 && listFailed === 0;
   if (!storageOk) {
-    console.error("[season-delete] مستندات لم تُحذف — ملفات يتيمة في " + DOC_BUCKET, {
-      seasonId, at: new Date().toISOString(), count: orphans.length, paths: orphans,
+    console.error("[season-delete] تنظيف التخزين لم يكتمل في " + DOC_BUCKET, {
+      seasonId, at: new Date().toISOString(),
+      orphanCount: orphans.length, paths: orphans, foldersUnreadable: listFailed,
     });
   }
 
@@ -196,6 +254,9 @@ Deno.serve(async (req: Request) => {
      حُذف، والملفّاتُ حالتُها هذه. ولا يُقال «تمّ» على نقص. */
   return json(req, 200, {
     ok: true,
-    storage: { expected: keys.length, removed, orphans: orphans.length, ok: storageOk },
+    storage: {
+      expected: keys.length, removed, orphans: orphans.length,
+      listFailed, ok: storageOk,
+    },
   });
 });

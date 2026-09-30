@@ -29,8 +29,9 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  /* عددُ الملفّات التي بقيت بعد حذفٍ نجح في القاعدة — صفر يعني تمام */
+  /* نقصُ التنظيف بعد حذفٍ نجح في القاعدة — صفرٌ وصفرٌ يعني تمام */
   const [leftover, setLeftover] = useState(0);
+  const [unreadable, setUnreadable] = useState(0);
 
   if (!season) return null;
 
@@ -65,9 +66,13 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
     /* ⚠️ الموسمُ ذهب ولا رجعة، لكنّ ملفّاته قد تكون بقيت. والنجاحُ
        لا يُعلَن على نقص: يُعرض ما بقي ويُترك القرارُ للمدير بدل
        إعادة تحميلٍ صامتةٍ تُخفي اليتامى. */
-    const st = (data as { storage?: { orphans?: number; expected?: number } } | null)?.storage;
-    if (st && (st.orphans ?? 0) > 0) {
+    const st = (data as {
+      storage?: { orphans?: number; listFailed?: number; ok?: boolean };
+    } | null)?.storage;
+    /* `ok` هي الحكم: مجلّدٌ تعذّر سردُه نقصٌ وإن لم يبقَ يتيمٌ معلوم */
+    if (st && st.ok === false) {
       setLeftover(st.orphans ?? 0);
+      setUnreadable(st.listFailed ?? 0);
       setBusy(false);
       return;
     }
@@ -84,10 +89,12 @@ function SeasonDeleteDialog({ season, counts, currentUser, onClose }: Props) {
       title={`حذف موسم ${season.name} نهائياً`}
       maxWidth={520}
     >
-      {leftover > 0 ? (
+      {leftover > 0 || unreadable > 0 ? (
         <>
           <div style={{ fontSize: 12, color: "var(--warning)", fontWeight: 700, marginBottom: 10 }}>
-            ⚠ حُذف الموسم، وبقيت {leftover} من ملفّات المستندات.
+            ⚠ حُذف الموسم، ولم يكتمل تنظيف المستندات.
+            {leftover > 0 && <> بقيت {leftover} من الملفّات.</>}
+            {unreadable > 0 && <> وتعذّر قراءة {unreadable} من مجلّدات الحجّاج.</>}
           </div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.9, marginBottom: 14 }}>
             بيانات الموسم أُزيلت من القاعدة نهائياً، لكنّ تنظيف التخزين لم يكتمل.
