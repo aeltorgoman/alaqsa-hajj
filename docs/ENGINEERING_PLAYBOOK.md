@@ -1456,9 +1456,13 @@ Dashboard SQL editor and MCP `apply_migration` are **not** the normal migration 
 
 The CLI version this workflow assumes is pinned in `package.json`. Invoke it as `npm run supabase -- <command>` so every developer and agent runs the same binary.
 
+> **Procedure:** the step-by-step commands live in
+> `docs/runbooks/MIGRATION_WORKFLOW.md`. Commands date faster than rules, so the
+> runbook can be updated when the CLI changes without reopening a standard. The
+> binding rules, and the reasons this project learned them, stay here.
+
 ## CREATE
 
-- Create migrations with `npm run supabase -- migration new <name>`.
 - **The CLI-generated timestamp is authoritative.** After cutover, never hand-write, invent, renumber, or reuse a migration version. A version that the CLI did not generate is a defect.
 - One migration per logical change. Do not batch unrelated changes to save a file.
 
@@ -1475,7 +1479,7 @@ The CLI version this workflow assumes is pinned in `package.json`. Invoke it as 
 
 ## LOCAL VERIFY
 
-- Rebuild from repository state alone: `npm run supabase -- db reset`.
+- Rebuild from repository state alone. The repository, by itself, must produce a working system.
 - The seed is **local bootstrap only** (`supabase/seed.sql`). It carries no production or demo rows, and `db push` never runs it.
 - Where the change is security-relevant, verify the outcome with independent queries after the reset — not only with the migration's own postconditions, which cannot be their own witness.
 - Exercise the real failure path, not just the happy one.
@@ -1488,16 +1492,12 @@ The CLI version this workflow assumes is pinned in `package.json`. Invoke it as 
 
 ## PRE-DEPLOY
 
-- Review the exact set of migrations that will be applied — `npm run supabase -- migration list` against the target.
-- Verify the intended migration set matches expectation; investigate anything unexpected before pushing, never after.
-- `npm run build`.
-- `npm run lint`, and report the **delta** against the known baseline, not the absolute count.
-- A clean `db reset` from repository state.
+- Review the exact set of migrations that will be applied, and verify that set matches expectation; investigate anything unexpected before pushing, never after.
+- A clean build, a lint run reported as the **delta** against the known baseline rather than an absolute count, and a clean rebuild from repository state.
 
 ## DEPLOY
 
 - **After merge**, never before.
-- The normal mechanism is `npm run supabase -- db push`.
 - Dashboard and MCP `apply_migration` are **prohibited** for normal migrations.
 
 ## POST-DEPLOY
