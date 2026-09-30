@@ -174,7 +174,8 @@ Deno.serve(async (req: Request) => {
     .filter((v): v is number => typeof v === "number");
 
   const listed: string[] = [];
-  let listFailed = 0;
+  /* المجلّداتُ التي تعذّر سردُها — تُجمع بمعرّفاتها لا بعددها */
+  const unreadable: number[] = [];
   /* صفحةٌ كبيرة تكفي مجلّدَ حاجّ بمراحل، والترقيمُ احتياطٌ لا أكثر */
   const PAGE = 1000;
   async function listFolder(id: number): Promise<void> {
@@ -182,8 +183,8 @@ Deno.serve(async (req: Request) => {
       const { data: page, error: lsErr } = await admin.storage
         .from(DOC_BUCKET).list(String(id), { limit: PAGE, offset });
       if (lsErr) {
-        /* لا يُبتلع ولا يُنقص مجموعةَ الحذف صامتاً: يُعدّ ويُعلَن */
-        listFailed++;
+        /* لا يُبتلع ولا يُنقص مجموعةَ الحذف صامتاً */
+        unreadable.push(id);
         console.error("تعذر سرد مجلّد مستندات حاجّ", { seasonId, passengerId: id, lsErr });
         return;
       }
@@ -208,6 +209,19 @@ Deno.serve(async (req: Request) => {
       }
     }),
   );
+
+  /* ⚠️ الجردُ ناقصٌ ⇒ توقّف قبل الهدم.
+     السردُ كلُّه يقع **قبل** `delete_season`، فالصفوفُ ما تزال
+     قائمةً كلُّها ولم يُمسّ ملفّ. ومجلّدٌ لم يُقرأ يعني مفاتيحَ لا
+     نعرفها، فالمضيُّ يمحو الصفوفَ ويترك ملفّاتٍ لا دليلَ عليها بعد
+     اليوم. والتراجعُ هنا مجّانيّ: لا شيءَ حدث، والمحاولةُ تُعاد. */
+  if (unreadable.length > 0) {
+    console.error("[season-delete] جردُ التخزين ناقص — أُلغيت العملية قبل الحذف", {
+      seasonId, at: new Date().toISOString(),
+      unreadableCount: unreadable.length, passengerIds: unreadable,
+    });
+    return fail(req, 503, `تعذّر حصر مستندات ${unreadable.length} من الحجّاج. لم يُحذف الموسم ولا أيُّ ملفّ — يرجى إعادة المحاولة.`);
+  }
 
   /* الاتّحاد: المعروفُ من الأعمدة + الموجودُ في المجلّدات.
      والأعمدةُ تبقى في الحساب لأن مفتاحاً قديماً قد لا يتبع
@@ -239,14 +253,14 @@ Deno.serve(async (req: Request) => {
     removed += done.size;
     for (const k of chunk) if (!done.has(k)) orphans.push(k);
   }
-  /* التمامُ شرطان: لا يتيمَ بقي، **ولا مجلّدَ تعذّر سردُه**. فمجلّدٌ
-     لم يُقرأ قد يحوي ما لم يدخل مجموعةَ الحذف أصلاً — والصمتُ عنه
-     يجعل النقصَ يبدو تماماً. */
-  const storageOk = orphans.length === 0 && listFailed === 0;
+  /* `ok` هنا نتيجةُ **الحذف** وحده: الجردُ الناقص لا يصل إلى هذه
+     النقطة أصلاً — يوقف العمليةَ قبل القاعدة. فما يبقى احتمالاً هو
+     كائنٌ معلومُ المفتاح لم يُحذف. */
+  const storageOk = orphans.length === 0;
   if (!storageOk) {
-    console.error("[season-delete] تنظيف التخزين لم يكتمل في " + DOC_BUCKET, {
+    console.error("[season-delete] مستندات لم تُحذف — ملفات يتيمة في " + DOC_BUCKET, {
       seasonId, at: new Date().toISOString(),
-      orphanCount: orphans.length, paths: orphans, foldersUnreadable: listFailed,
+      orphanCount: orphans.length, paths: orphans,
     });
   }
 
@@ -254,9 +268,6 @@ Deno.serve(async (req: Request) => {
      حُذف، والملفّاتُ حالتُها هذه. ولا يُقال «تمّ» على نقص. */
   return json(req, 200, {
     ok: true,
-    storage: {
-      expected: keys.length, removed, orphans: orphans.length,
-      listFailed, ok: storageOk,
-    },
+    storage: { expected: keys.length, removed, orphans: orphans.length, ok: storageOk },
   });
 });
