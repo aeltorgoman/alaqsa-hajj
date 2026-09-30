@@ -4,36 +4,73 @@
 
 ```
 supabase/
-├── migrations/
-│   ├── 20260101000000_baseline_schema.sql            المخطط الكامل
-│   ├── 20260731000000_delete_empty_financial_groups.sql
-│   ├── 20260731000100_create_financial_group_with_member.sql
-│   ├── 20260802021913_season_integrity_backfill_constraints_indexes.sql
-│   ├── 20260802021944_season_reject_writes_to_closed_season.sql
-│   ├── 20260802022009_season_close_and_delete_transactions.sql
-│   ├── 20260802022040_portal_active_season_only.sql
-│   ├── 20260802022310_season_restrict_close_and_delete_execution.sql
-│   ├── 20260804090000_s1_identity_foundation.sql     أساس الهوية
-│   ├── 20260804120000_s1_user_profiles_email.sql     البريد معرّف الدخول
-│   ├── 20260806110000_company_profile_phase1.sql     ملف الشركة والأصول
-│   ├── 20260808120000_s4_portal_announcements.sql    تنبيهات البوابة خلف إسقاط
-│   ├── 20260808140000_s4_rls_and_anon_revocation.sql سياسات RLS وسحب صلاحيات anon
-│   ├── 20260809100000_s9_pin_search_path.sql         تثبيت مسار البحث
-│   ├── 20260810100000_s9_edge_rate_limit.sql         عدّاد حدّ الاستدعاءات
-│   ├── 20260811090000_s5_drop_legacy_auth.sql        حذف نظام الهوية القديم
-│   ├── 20260811140000_s6_close_public_storage_writes.sql  إغلاق الكتابة العامة
-│   ├── 20260811160000_s6_backfill_object_keys.sql    مفاتيح الكائنات بدل الروابط
-│   ├── 20260811180000_s6_company_assets_bucket.sql   حاوية أصول الشركة
-│   ├── 20260811200000_s6_repoint_company_asset_refs.sql   توجيه المراجع إليها
-│   ├── 20260812090000_s6_portal_hardening.sql        تحصين البوابة وحدّ التحقّق
-│   ├── 20260815100000_s6_privatize_passengers_docs.sql    خصخصة حاوية المستندات
-│   ├── 20260818090000_s1_resource_ordering.sql       ترتيب الموارد لكل سياق
-│   ├── 20260819120000_b_permission_separation.sql    فصل الصلاحيتين
-│   ├── 20260820100000_s7_portal_session.sql          جلسة بوابة الحاجّ
-│   ├── 20260820110000_s7_close_credential_path.sql   إغلاق مسار الاعتماد الثابت
-│   └── 20260822120000_s8_audit_log.sql               سجل التدقيق والفاعل المفوَّض
+├── migrations/                     58 ملفّاً · 46 منها مِرساةُ توافقٍ بلا SQL
+│   ├── 20260101000000_baseline_schema.sql ← مِرساة
+│   ├── 20260702073456_add_capacity_to_buses.sql ← مِرساة
+│   ├── 20260703210244_add_arrival_time_and_date_to_flights.sql ← مِرساة
+│   ├── 20260710075811_add_custom_price_to_passengers.sql ← مِرساة
+│   ├── 20260710080114_add_missing_passenger_columns.sql ← مِرساة
+│   ├── 20260710224827_pilgrim_portal_foundation.sql ← مِرساة
+│   ├── 20260711104414_portal_campaign_location_fields.sql ← مِرساة
+│   ├── 20260714203342_portal_add_short_ar_and_camp_names.sql ← مِرساة
+│   ├── 20260715084806_add_map_urls_to_company_config.sql ← مِرساة
+│   ├── 20260715084831_update_portal_function_with_urls.sql ← مِرساة
+│   ├── 20260722095952_add_wants_flight_to_passengers.sql ← مِرساة
+│   ├── 20260729133636_pilgrim_push_notifications_foundation.sql ← مِرساة
+│   ├── 20260729133707_fix_announcement_audience_null_season.sql ← مِرساة
+│   ├── 20260730102529_unique_passenger_per_financial_group.sql ← مِرساة
+│   ├── 20260730190755_delete_empty_financial_groups.sql ← مِرساة
+│   ├── 20260731022245_create_financial_group_with_member.sql ← مِرساة
+│   ├── 20260802021913_season_integrity_backfill_constraints_indexes.sql ← مِرساة
+│   ├── 20260802021944_season_reject_writes_to_closed_season.sql ← مِرساة
+│   ├── 20260802022009_season_close_and_delete_transactions.sql ← مِرساة
+│   ├── 20260802022040_portal_active_season_only.sql ← مِرساة
+│   ├── 20260802022310_season_restrict_close_and_delete_execution.sql ← مِرساة
+│   ├── 20260807220302_s1_identity_foundation.sql ← مِرساة
+│   ├── 20260807220313_s1_user_profiles_email.sql ← مِرساة
+│   ├── 20260808145406_company_profile_phase1_schema.sql ← مِرساة
+│   ├── 20260808145435_company_profile_phase1_portal_function.sql ← مِرساة
+│   ├── 20260808152323_s4_portal_announcements.sql ← مِرساة
+│   ├── 20260810090027_s9_edge_rate_limit.sql ← مِرساة
+│   ├── 20260811073723_s4_rls_and_anon_revocation.sql ← مِرساة
+│   ├── 20260811075138_s5_drop_legacy_auth.sql ← مِرساة
+│   ├── 20260811081632_s6_close_public_storage_writes.sql ← مِرساة
+│   ├── 20260811130619_s6_backfill_object_keys.sql ← مِرساة
+│   ├── 20260811133553_s6_company_assets_bucket.sql ← مِرساة
+│   ├── 20260811140657_s6_repoint_company_asset_refs.sql ← مِرساة
+│   ├── 20260812074032_s6_portal_hardening.sql ← مِرساة
+│   ├── 20260815133103_s6_privatize_passengers_docs.sql ← مِرساة
+│   ├── 20260818103237_s1_resource_ordering.sql ← مِرساة
+│   ├── 20260818103356_s1_revoke_trigger_fn_execute.sql ← مِرساة
+│   ├── 20260819112558_b_permission_separation.sql ← مِرساة
+│   ├── 20260820140021_s7_portal_session.sql ← مِرساة
+│   ├── 20260822144243_s7_close_credential_path.sql ← مِرساة
+│   ├── 20260822224739_s8_audit_log.sql ← مِرساة
+│   ├── 20260822224856_s8_audit_log_delete_season_comment_fidelity.sql ← مِرساة
+│   ├── 20260918023358_settings_security_remediation.sql ← مِرساة
+│   ├── 20260919120000_season_master_data_and_settings_ia.sql ← مِرساة
+│   ├── 20260920115407_drop_company_config_legacy_columns.sql ← مِرساة
+│   ├── 20260921141422_s9_pin_search_path_forward.sql ← مِرساة
+│   ├── 20260922120000_v1_baseline.sql
+│   ├── 20260922192049_c6_canonical_migration_path_proof.sql
+│   ├── 20260922195044_room_cross_season_guard.sql
+│   ├── 20260924093000_financial_groups_seasonal.sql
+│   ├── 20260924140000_company_config_seed_row.sql
+│   ├── 20260924210000_passengers_room_id_fk.sql
+│   ├── 20260925090000_company_private_assets_bucket.sql
+│   ├── 20260926090000_payment_receipts.sql
+│   ├── 20260926091000_payments_fk_restrict.sql
+│   ├── 20260926092000_company_private_read_for_payments.sql
+│   ├── 20260928090000_portal_login_failure_limits.sql
+│   └── 20260928100000_rate_limit_exceeded_revoke_client_roles.sql
+├── migrations-archive/             نصُّ الترحيلات قبل التحوّل — دليلٌ لا يُشغَّل
+├── baseline/ · baseline-candidate/ · cutover-candidate/
+├── verification/                   فاحصاتُ التحوّل والتمرين — للقراءة والإثبات
+├── seed.sql                        إقلاعٌ محلّيّ فقط — `db push` لا يشغّله أبداً
+├── config.toml
 ├── scripts/
 │   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
+│   ├── purge_orphan_company_uploads.mjs              تنظيفُ الرفعات اليتيمة
 │   ├── seed_first_admin.mjs                          أداة طوارئ — لا مسار تثبيت
 │   └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
 └── functions/
@@ -48,6 +85,14 @@ supabase/
     ├── send-pilgrim-push/                            دفع التنبيهات إلى أجهزة الحجاج
     └── whatsapp-send/                                رسالة واتساب واحدة إلى حاجّ في الموسم النشط
 ```
+
+> **هذه الشجرة كانت متقادمة:** كانت تعدّد أسماءَ ترحيلاتٍ سابقةٍ للتحوّل لم تعد
+> في `migrations/`. وقد أُعيد توليدها من المستودع نفسه. و**المستودعُ مرجعٌ فوق
+> أيّ وثيقة** (`ENGINEERING_PLAYBOOK.md` `M-95`).
+
+> **مِرساةُ التوافق ملفٌّ لا يحوي SQL** عمداً، يحمل رقمَ الإصدار وحده ليطابق
+> السجلَّ البعيد. وإضافةُ SQL إليها تُشغّله على قاعدةٍ فارغة في كلّ إعادة بناء
+> وتكسر برهانَ الأساس (`M-45`).
 
 ## جرد الوصول المجهول — Anonymous Access Inventory
 
@@ -358,7 +403,7 @@ alter role postgres set search_path to "$user", public, extensions;
 >
 > ولا يُشغَّل من هذا المجلّد الآن: `repair` · `db push` ·
 > `migration up`. والمسارُ الدائم بعد التحوّل موصوفٌ في
-> `docs/ENGINEERING_PLAYBOOK.md` §٣٥.١.
+> `docs/runbooks/MIGRATION_WORKFLOW.md`.
 
 ## سير العمل الدائم للترحيلات
 
@@ -376,5 +421,6 @@ npm run supabase -- <الأمر>
 ```
 
 والتفصيلُ المُلزِم — الإنشاء والتطوير والتحقّق والنشر والتراجع
-وحالةُ الطوارئ — في `docs/ENGINEERING_PLAYBOOK.md` §٣٥.١.
+وحالةُ الطوارئ — الإجراءُ في `docs/runbooks/MIGRATION_WORKFLOW.md`
+والقواعدُ المُلزِمة في `docs/ENGINEERING_PLAYBOOK.md` الجزء ٤.
 **ولوحةُ التحكم و`apply_migration` ليستا مساراً عادياً للترحيل.**

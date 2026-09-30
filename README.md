@@ -15,7 +15,7 @@ campaign must require configuration only, never source-code changes.
 
 ## Engineering documentation
 
-- [`docs/ENGINEERING_PLAYBOOK.md`](docs/ENGINEERING_PLAYBOOK.md) — mandatory
+- [`docs/ENGINEERING_PLAYBOOK.md`](docs/ENGINEERING_PLAYBOOK.md) — **v2.0** · mandatory
   engineering rules; Company Profile is defined in §73.
 - [`docs/COMPANY_PROFILE_ARCHITECTURE_REVIEW.md`](docs/COMPANY_PROFILE_ARCHITECTURE_REVIEW.md)
   — approved architecture and historical decision record.

@@ -1,7 +1,8 @@
 # Company Profile Refactoring — Phase 2
 
 **Status:** Completed — authoritative implementation record. The mandatory
-engineering rules are maintained in `ENGINEERING_PLAYBOOK.md` §73.
+engineering rules are maintained in `ENGINEERING_PLAYBOOK.md` §2.1–2.4 (`M-09`–`M-16`),
+and the decision itself in `architecture/ADR/ADR-001-company-profile.md`.
 
 Phase 2 completes application consumption through Company Service. UI
 components no longer import `useConfig`, query `company_config`, or construct
