@@ -754,30 +754,29 @@ and derived where ownership is unambiguous**. Deriving is not laziness: storing
 owner's, and deriving makes that contradiction impossible by construction.
 
 Stored (the row carries `season_id`): `passengers`, `rooms`, `camps`, `buses`,
-`flights`, `announcements`.
+`flights`, `announcements`, `financial_groups`.
 
 Derived: `payments` and `custom_charges` via `passenger_id`;
 `financial_group_members` via `passenger_id`; `notification_deliveries` and
 `pilgrim_push_subscriptions` via `passenger_id`.
 
-> **Source disagreement, reported rather than resolved here.** The authoritative
-> season reference classifies `financial_groups` as **derived** (season taken from
-> its members). The repository **stores** it: `season_id` is `not null` with a
-> default, carries a foreign key, and the table has both `trg_reject_closed_season`
-> and a season-change guard. The migration that made the change states the reason
-> explicitly — derivation *produces no guard*, because the closed-season trigger
-> reads `season_id` from the row itself and the derived variant reads it through
-> `passenger_id`, and `financial_groups` had neither. It was the last remaining hole
-> in ث٣, and it was populated, not theoretical.
+> **`financial_groups` — why it is stored, and where that was decided.** The season
+> reference's §4 table originally placed it under *derive*. That classification was
+> **superseded inside the same reference**, the same day, by the owner-approved
+> Operational Rules decision (§4/3, M7 item 3), which requires `season_id` on
+> `financial_groups`, database-enforced membership/season consistency, and the group
+> as a seasonal entity. That decision is registered in the reference's own list of
+> approved decisions. The implementation followed it 53 days later.
 >
-> **This is an open discrepancy under `M-121`, not a resolved question.** The season
-> reference is an approved decision, so the repository does not override it merely by
-> existing. Both are recorded above: the decision says derived, the code stores. The
-> migration's reasoning is strong and it was reviewed and merged, which makes case (2)
-> — a later reviewed change superseding §4 on this point — the likely reading; but
-> "likely" is not "established", and amending a frozen reference is an owner decision.
-> Until it is made, engineers follow the **code** for how the table behaves today and
-> treat the classification as open.
+> This is **not** a repository-versus-decision discrepancy and `M-121` does not
+> apply: the governing decision and the code agree. §4's table is superseded on this
+> one row; the reference as a whole already carries the right answer.
+>
+> The reason the override was made: derivation *produces no guard*. The closed-season
+> trigger reads `season_id` from the row itself, and the derived variant reads it
+> through `passenger_id` — `financial_groups` had neither, making it the one table
+> the no-writes-to-a-closed-season invariant could not reach. The gap was populated,
+> not theoretical.
 
 Not seasonal at all: `user_profiles`, `company_config`, `company_assets`,
 `pricing_settings`.

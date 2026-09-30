@@ -186,10 +186,12 @@ Per Issue #42 §4, the decision is **store on independent entities, derive where
 | `season_id` **stored** | Season **derived** | **Not seasonal at all** |
 |---|---|---|
 | `passengers`, `buses`, `camps`, `rooms` | `payments`, `custom_charges` ← via `passenger_id` | `users` / `user_profiles` |
-| `flights`, `announcements` (added in M7) | `financial_groups` ← via members | `company_config` |
-| | `notification_deliveries`, `pilgrim_push_subscriptions` | `pricing_settings` |
+| `flights`, `announcements` (added in M7) | `financial_group_members` ← via `passenger_id` | `company_config` |
+| **`financial_groups`** (added in M7 — see below) | `notification_deliveries`, `pilgrim_push_subscriptions` | `pricing_settings` |
 
 > **Why derive rather than store:** storing `season_id` on `payments` creates the possibility of a payment whose season contradicts its owner's. Deriving makes that contradiction **impossible by construction**. This reduced the work from five tables to two.
+
+> ⚠️ **`financial_groups` is STORED, not derived.** §4's table originally placed it under *derive*; that was **superseded inside Issue #42 itself**, the same day, by the owner-approved Operational Rules decision ([§4/3 · ت٥](https://github.com/aeltorgoman/alaqsa-hajj/issues/42#issuecomment-5160454337)) making it **M7 item 3**: `season_id` on `financial_groups`, database-enforced membership/season consistency, and the group as a seasonal entity. Delivered by **PR #150** (`20260924093000`). Derivation produced no guard — the closed-season trigger reads `season_id` off the row and the derived variant reads it via `passenger_id`, and `financial_groups` had neither, leaving the one table ث٣ could not reach. **This is a settled decision, not an open question.**
 
 ### Closed-season immutability ✅ **VERIFIED**
 
