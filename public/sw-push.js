@@ -5,6 +5,11 @@
    ══════════════════════════════════════════════════════════════ */
 
 const PORTAL_PATH = "/hajj";
+/* وِجهةُ فتحِ نافذةٍ جديدة من تنبيه — شاشةُ التنبيهات نفسها صار لها
+   عنوانٌ قانونيّ، فالفتحُ البارد يطابق الفتحَ الدافئ (`OPEN_ALERTS`).
+   ⚠️ ولا يُستعمَل في مطابقة النوافذ المفتوحة: تلك تبقى على
+   `PORTAL_PATH` كي تطابق `/hajj` و`/hajj/stay` و`/hajj/alerts` جميعاً. */
+const PORTAL_ALERTS_PATH = "/hajj/alerts";
 
 /* التفعيل الفوري دون انتظار إغلاق النوافذ المفتوحة */
 self.addEventListener("install", () => {
@@ -54,7 +59,7 @@ self.addEventListener("push", (event) => {
     vibrate: urgent ? [200, 100, 200, 100, 200] : [150, 80, 150],
     timestamp: Date.now(),
     data: {
-      url: payload.url || PORTAL_PATH,
+      url: payload.url || PORTAL_ALERTS_PATH,
       id: payload.id || null,
     },
     actions: [{ action: "open", title: "عرض التفاصيل" }],
@@ -71,7 +76,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const target = (event.notification.data && event.notification.data.url) || PORTAL_PATH;
+  const target = (event.notification.data && event.notification.data.url) || PORTAL_ALERTS_PATH;
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {

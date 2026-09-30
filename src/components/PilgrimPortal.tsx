@@ -15,6 +15,7 @@ import type { PortalData, Ann } from "./portal/portal.types";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
 import { getSeasonArafa, civilDate } from "./portal/portal.dates";
 import { readSession, clearPortalLocalState } from "./portal/portal.session";
+import { usePortalRoute } from "./portal/portal.route";
 import { cardStyle } from "./portal/portal.styles";
 import { PortalLogin } from "./portal/PortalLogin";
 import { UrgentBanner } from "./portal/UrgentBanner";
@@ -69,7 +70,8 @@ function PilgrimPortal() {
   const [year, setYear] = useState("");
   const [loading, setLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
-  const [tab, setTab] = useState<"trip" | "stay" | "alerts">("trip");
+  /* الشاشةُ من العنوان لا من حالةٍ داخليّة — فتصمد أمام التحديث */
+  const { tab, navigate, resetToRoot } = usePortalRoute();
   const [lostOpen, setLostOpen] = useState(false);
   const [docView, setDocView] = useState<{ title: string; url: string; isPdf: boolean } | null>(null);
   const [docBusy, setDocBusy] = useState<PortalDocType | null>(null);
@@ -117,13 +119,15 @@ function PilgrimPortal() {
       clearPortalLocalState();
       setSession(null);
       setData(null);
+      /* العنوانُ يعود إلى الجذر: لا يبقى رابطٌ عميقٌ لجلسةٍ انتهت */
+      resetToRoot();
       return;
     }
     /* عطلٌ عابر: تبقى الجلسة، وتُحدَّث التنبيهات وحدها كما كان —
        إسقاط مضبوط خلف دالة SECURITY DEFINER (س٤ / §٣.٦) */
     const { data: anns } = await portalSupabase.rpc("get_portal_announcements");
     if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
-  }, []);
+  }, [resetToRoot]);
 
   /* الدخولُ جلب الملفّ لتوّه — فلا يُعاد جلبه فوراً حين تتغيّر الجلسة */
   const skipNextRefresh = useRef(false);
@@ -142,6 +146,24 @@ function PilgrimPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, !!data]);
 
+  /* ─── فتحُ التنبيهات من عامل الخدمة — **بلا شرط الدخول** ───
+     ضغطةُ التنبيه على نافذةٍ مفتوحةٍ لم يدخل صاحبُها بعدُ كانت تضيع:
+     مستمعُ الرسائل كان داخل أثرٍ يبدأ بـ `if (!data) return`، فلا
+     يُسجَّل أصلاً قبل الدخول. فتبقى الشاشةُ على `/hajj`، ويهبط
+     الحاجُّ بعد الدخول على «رحلتي» لا «التنبيهات».
+     والعنوانُ هو ما يحمل القصد عبر الدخول، فيُضبط الآن ويُقرأ بعده. */
+  useEffect(() => {
+    const onOpenAlerts = (e: MessageEvent) => {
+      if (e.data?.type !== "OPEN_ALERTS") return;
+      navigate("alerts");
+      /* بلا جلسةٍ تعود فوراً — والدخولُ يجلب الملفّ بنفسه */
+      void refreshPortal();
+    };
+    navigator.serviceWorker?.addEventListener("message", onOpenAlerts);
+    navigator.serviceWorker?.startMessages?.();
+    return () => navigator.serviceWorker?.removeEventListener("message", onOpenAlerts);
+  }, [navigate, refreshPortal]);
+
   /* ─── تهيئة التنبيهات: عامل الخدمة وملف تعريف التطبيق ─── */
   useEffect(() => {
     if (!data) return;
@@ -159,7 +181,6 @@ function PilgrimPortal() {
     })();
 
     const onMessage = (e: MessageEvent) => {
-      if (e.data?.type === "OPEN_ALERTS") { setTab("alerts"); void refreshPortal(); }
       if (e.data?.type === "RESUBSCRIBE") resubscribeIfNeeded();
       /* وصل تنبيه والبوابة مفتوحة: **نجلب من المصدر** ولا نبني
          الإعلان من حمولة الدفع. الحمولة ليست مصدر حقيقة — والدالة
@@ -260,8 +281,10 @@ function PilgrimPortal() {
   const showDocs = portalSettings.documents !== false;
 
   useEffect(() => {
-    if (!showNotifications && tab === "alerts") setTab("trip");
-  }, [showNotifications, tab]);
+    /* التنبيهاتُ مُطفأة والعنوانُ عليها: يُصحَّح العنوانُ أيضاً بلا
+       إدخالٍ في التاريخ، فلا يبقى عنوانٌ يَعِد بشاشةٍ لا تُعرض */
+    if (!showNotifications && tab === "alerts") resetToRoot();
+  }, [showNotifications, tab, resetToRoot]);
 
   /* صورة الحاجّ: رابط موقّع قصير العمر يُطلب عند العرض — والخطّاف
      قبل أي عودة مبكّرة كي لا يتغيّر ترتيب الخطّافات بين عرض وآخر */
@@ -409,6 +432,9 @@ function PilgrimPortal() {
     clearPortalLocalState();
     setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
     setSession(null); setDocView(null);
+    /* والعنوانُ إلى الجذر بلا إدخالٍ في التاريخ — كي لا يعيد زرُّ
+       الرجوع شاشةَ من خرج */
+    resetToRoot();
   }
 
   function ackUrgent(id: number) {
@@ -533,7 +559,7 @@ function PilgrimPortal() {
       </div>
 
       <PortalNav
-        t={t} tab={tab} setTab={setTab}
+        t={t} tab={tab} setTab={navigate}
         showNotifications={showNotifications}
         unread={unread}
         announcements={data.announcements}
