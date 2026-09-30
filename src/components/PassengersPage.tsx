@@ -792,9 +792,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         if (!passenger.national_id && parsed.national_id) updates.national_id = parsed.national_id;
         if (!(passenger as any).id_expiry && parsed.id_expiry) updates.id_expiry = parsed.id_expiry;
         if (!passenger.dob && parsed.dob) updates.dob = parsed.dob;
-        if (!await writeOk(supabase.from("passengers").update(updates).eq("id", passenger.id), "تعذّر حفظ البطاقة الشخصية، لم يُحفظ أي تغيير")) { setAutoScanning(false); return; }
+        if (!await writeOk(supabase.from("passengers").update(updates).eq("id", passenger.id), "تعذّر حفظ البطاقة الشخصية، لم يُحفظ أي تغيير")) {
+          await discardUnsavedDocs(passenger, updates);
+          setAutoScanning(false); return;
+        }
         const updated = { ...passenger, ...updates } as Passenger;
         setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
+        await purgeSupersededDocs(passenger, updates);
         showAlert("success", `تم ربط البطاقة الشخصية بملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
@@ -813,9 +817,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           updates.name_en = parsed.name_en;
           updates.short_en = makeShort(parsed.name_en);
         }
-        if (!await writeOk(supabase.from("passengers").update(updates).eq("id", passenger.id), "تعذّر حفظ صورة جواز السفر، لم يُحفظ أي تغيير")) { setAutoScanning(false); return; }
+        if (!await writeOk(supabase.from("passengers").update(updates).eq("id", passenger.id), "تعذّر حفظ صورة جواز السفر، لم يُحفظ أي تغيير")) {
+          await discardUnsavedDocs(passenger, updates);
+          setAutoScanning(false); return;
+        }
         const updated = { ...passenger, ...updates } as Passenger;
         setPassengers(prev => prev.map(x => x.id === passenger.id ? updated : x));
+        await purgeSupersededDocs(passenger, updates);
         showAlert("success", `تم حفظ صورة جواز السفر وتحديث بيانات ملف ${passenger.short_ar || passenger.name_ar} بنجاح`);
       } else {
         showAlert("error", "فشل رفع الملف، يرجى المحاولة مرة أخرى");
@@ -958,6 +966,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       const updated = { ...target, [field]: url };
       setPassengers(prev => prev.map(x => x.id === target.id ? updated : x));
       if (selected?.id === target.id) setSelected(updated);
+      /* التصريحُ السابق — إن كان — يذهب بعد نجاح الحفظ وحده */
+      await purgeSupersededDocs(target, { [field]: url } as Partial<Passenger>);
       showAlert("success", `تم حفظ تصريح الحج في ملف ${target.short_ar || target.name_ar}`);
       setPermitConfirm(null);
     } finally {
@@ -1017,7 +1027,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const runDocUpload = async (p: Passenger, docType: string, field: string, file: File) => {
     if (docType === "passport_doc") {
-      const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "passport")]);
+      /* ⚠️ التحليلُ قبل الرفع — نفسُ ترتيب `hajj_permit` أدناه وللسبب
+         نفسه. كانا متوازيين في `Promise.all`، فإذا فشل التحليل رُفض
+         الوعدُ كلُّه وقفز التنفيذُ إلى `catch` الخارجيّ — والكائنُ
+         الذي نجح رفعُه يبقى في الحاوية بلا مرجعٍ ولا تعويض.
+         والتسلسلُ يُلغي النافذة بدل أن يعوّض عنها: ما لم يُقرأ
+         المستند لا يُرفع أصلاً. والكلفةُ جولةُ شبكةٍ واحدة. */
+      const parsed = await scanDocument(file, "passport");
+      const url = await uploadDoc(file, p.id, docType);
       const updates: any = {};
       if (url) updates.passport_url = url;
       if (parsed.name_en) { updates.name_en = parsed.name_en; updates.short_en = makeShort(parsed.name_en); }
@@ -1036,7 +1053,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         await saveDocUpdates(p, updates);
       }
     } else if (docType === "idcard") {
-      const [url, parsed] = await Promise.all([uploadDoc(file, p.id, docType), scanDocument(file, "idcard")]);
+      /* التحليلُ قبل الرفع — كما في الجواز أعلاه */
+      const parsed = await scanDocument(file, "idcard");
+      const url = await uploadDoc(file, p.id, docType);
       const updates: any = {};
       if (url) updates.national_id_url = url;
       if (parsed.national_id) updates.national_id = parsed.national_id;
@@ -1098,25 +1117,91 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     } else {
       const url = await uploadDoc(file, p.id, docType);
       if (url) {
-        if (!await writeOk(supabase.from("passengers").update({ [field]: url } as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) { setDocUploading(null); return; }
+        const updates = { [field]: url } as Partial<Passenger>;
+        if (!await writeOk(supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ المستند، لم يُحفظ أي تغيير")) {
+          await discardUnsavedDocs(p, updates);
+          setDocUploading(null); return;
+        }
         const updated = { ...p, [field]: url };
         setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
         setSelected(updated);
+        await purgeSupersededDocs(p, updates);
       }
       setDocUploading(null);
     }
   };
 
+  /* ═══ دورةُ حياة المستند المستبدَل ═══
+     `uploadDoc` تبني مفتاحاً جديداً بكلّ رفع (`_${Date.now()}`)، فلا
+     يُستبدل كائنٌ بكائن أبداً: الجديد يُضاف والقديم يبقى بلا مرجع.
+     وكانت مسارات هذه الصفحة ترفع وتحفظ ولا تحذف القديم، فيتراكم في
+     الحاوية ما لا تعرفه القاعدة.
+
+     والترتيب مُلزَم — وهو نفسه المعتمد في `AdminsPage`:
+       يُرفع الجديد ← يُحفظ مرجعه ← **ثم** يُحذف القديم.
+     فلا لحظةَ يشير فيها العمود إلى كائن غير موجود، ولا لحظةَ يضيع
+     فيها المستندان معاً.
+
+     والمقارنةُ بالمفتاح لا بالقيمة الخام: العمود قد يحمل رابطاً
+     عامّاً قديماً (ق٤)، و`getStoragePath` تردّ الاثنين إلى مفتاح. */
+  const DOC_FIELDS = ["passport_url", "national_id_url", "photo_url",
+                      "contract_url", "flight_ticket_url", "hajj_permit_url"] as const;
+
+  /** حقولُ المستندات التي يغيّرها هذا التحديث — بمفتاحَي قبلُ وبعد. */
+  const changedDocKeys = (before: Passenger, updates: Partial<Passenger>) => {
+    const keyOf = (v: unknown) => getStoragePath(typeof v === "string" ? v : "");
+    return DOC_FIELDS.flatMap((f) => {
+      if (!(f in updates)) return [];
+      const oldKey = keyOf((before as unknown as Record<string, unknown>)[f]);
+      const newKey = keyOf((updates as unknown as Record<string, unknown>)[f]);
+      /* لا تغيير في المفتاح ⇒ لا كائن يُحذف */
+      return oldKey === newKey ? [] : [{ oldKey, newKey }];
+    });
+  };
+
+  /** بعد نجاح الحفظ: يُحذف الكائن القديم وحده. وفشلُ حذفه لا ينقض
+      استبدالاً نجح — يُسجَّل مفتاحه (في `removeDoc`) ويُعلَن تحذيراً. */
+  const purgeSupersededDocs = async (before: Passenger, updates: Partial<Passenger>) => {
+    for (const { oldKey } of changedDocKeys(before, updates)) {
+      if (!oldKey) continue;
+      if (!await removeDoc(oldKey)) {
+        showAlert("warning", "حُفظ المستند الجديد، وتعذّر حذف القديم من التخزين — أبلغ المسؤول التقني.");
+      }
+    }
+  };
+
+  /** حُفظ الرفعُ ولم يُحفظ مرجعُه (فشلٌ أو تراجع): يُحذف **الجديد**
+      وحده، ويبقى القديم ومرجعُه في القاعدة كما كانا. */
+  const discardUnsavedDocs = async (before: Passenger, updates: Partial<Passenger>) => {
+    for (const { newKey } of changedDocKeys(before, updates)) {
+      if (!newKey) continue;
+      if (!await removeDoc(newKey)) {
+        showAlert("warning", "تعذّر حذف الملف المرفوع — أبلغ المسؤول التقني.");
+      }
+    }
+  };
+
   const saveDocUpdates = async (p: Passenger, updates: Partial<Passenger>) => {
-    if (!await writeOk(supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ بيانات المستند، لم يُحفظ أي تغيير")) return;
+    if (!await writeOk(supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حفظ بيانات المستند، لم يُحفظ أي تغيير")) {
+      /* القاعدة لم تُحفظ: الرفعُ الجديد لا يُترك يتيماً، والقديم لا يُمسّ */
+      await discardUnsavedDocs(p, updates);
+      return;
+    }
     const updated = { ...p, ...updates };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
+    await purgeSupersededDocs(p, updates);
   };
 
   const confirmVerify = async () => {
     if (!verifyData) return;
     await saveDocUpdates(verifyData.passenger, verifyData.updates);
+    setShowVerify(false); setVerifyData(null);
+  };
+
+  /* التراجع عن مودال التحقّق = حفظٌ لم يقع: الرفعُ الجديد يُحذف */
+  const discardVerify = async () => {
+    if (verifyData) await discardUnsavedDocs(verifyData.passenger, verifyData.updates);
     setShowVerify(false); setVerifyData(null);
   };
 
@@ -2178,7 +2263,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       )}
 
       {/* مودال التحقق من الهوية */}
-      <Modal show={showVerify} onClose={() => { setShowVerify(false); setVerifyData(null); }} title="تأكيد هوية الحاج" maxWidth={520}>
+      <Modal show={showVerify} onClose={discardVerify} title="تأكيد هوية الحاج" maxWidth={520}>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px", lineHeight: 1.6 }}>تأكد إن صورة الجواز وصورة البطاقة لنفس الشخص قبل الحفظ</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
           {[["صورة الجواز", verifyData?.passportUrl], ["صورة البطاقة", verifyData?.idUrl]].map(([label, url]) => (
@@ -2200,7 +2285,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <button onClick={confirmVerify} style={{ background: "var(--em7)", color: "var(--g3)", border: "none", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> نعم، نفس الشخص — حفظ</button>
-          <button onClick={() => { setShowVerify(false); setVerifyData(null); }} style={{ background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> لا، مش نفس الشخص</button>
+          <button onClick={discardVerify} style={{ background: "var(--female-bg)", color: "var(--danger)", border: "0.5px solid #f0c0cc", padding: "10px 0", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> لا، مش نفس الشخص</button>
         </div>
       </Modal>
 
