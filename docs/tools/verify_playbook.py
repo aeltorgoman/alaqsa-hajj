@@ -127,6 +127,31 @@ def main():
             fail(f"referenced path does not exist: {p}")
     notes.append(f"referenced repository paths resolved: {len(paths)}")
 
+    # ---- 6b. rule references in OTHER project documents ------------------
+    # Rule ids are cited across the repo. A renumber or a retirement must not
+    # leave a sibling document pointing at a rule that no longer means what the
+    # citation claims -- so every external citation must at least resolve.
+    sibling_globs = (
+        "docs/*.md", "docs/architecture/*.md", "docs/architecture/ADR/*.md",
+        "docs/runbooks/*.md", "supabase/README.md", "README.md",
+    )
+    import glob as _glob
+    ext_total = 0
+    for pattern in sibling_globs:
+        for path in sorted(_glob.glob(os.path.join(ROOT, pattern))):
+            rel = os.path.relpath(path, ROOT)
+            if rel == "docs/ENGINEERING_PLAYBOOK.md" or rel.startswith("docs/archive/"):
+                continue
+            try:
+                other = open(path, encoding="utf-8").read()
+            except OSError:
+                continue
+            for rid in sorted(set(re.findall(r"`([MSGC]-\d+)`", other))):
+                ext_total += 1
+                if rid not in defined:
+                    fail(f"{rel} cites {rid}, which is not a rule in the Playbook")
+    notes.append(f"external documents: {ext_total} rule citations, all resolve")
+
     # ---- 7. archives byte-for-byte --------------------------------------
     import hashlib
     expected = {

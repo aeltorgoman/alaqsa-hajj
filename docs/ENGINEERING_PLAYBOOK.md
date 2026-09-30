@@ -33,16 +33,23 @@ this repository in a mechanically damaged state that lost 42 of its 80 sections;
 damage was diagnosed, the text was restored from the approved source, and its rules
 were then reconciled against the repository before this restructuring began.
 
-**Nothing in this document is new policy invented during the rewrite.** Every rule
-below is one of three things, and Appendix A says which for each:
+**No new product or engineering policy was invented during the rewrite**, with one
+named and approved exception. Every rule carries its provenance in Appendix A, and it
+is one of these:
 
-- **Restored** — the approved v1.0 rule, carried over.
+- **Restored** — the approved v1.0 rule, carried over at its original strength.
 - **Modernised** — the v1.0 rule, corrected against what the repository actually does,
   with the evidence recorded in Appendix C.
+- **Reconciled** — written to replace v1.0 text that no longer described the system at
+  all, where correcting a sentence was not enough.
+- **Imported** — an existing, already-recorded project standard brought in from another
+  project document. Not a new decision; the source is named.
 - **New (governance)** — rules about how this document and its companions are
   maintained. These are genuinely new text. v1.0 listed §§81–86 in its table of
   contents and **never wrote them**; that intent is now fulfilled in Part 7. Such text
   is labelled `NEW (governance)` and is never described as recovered.
+- **New (engineering)** — exactly one rule, **`S-05`**, approved by the project owner
+  on 2026-09-30. It is not restored and was not previously approved elsewhere.
 
 Appendix C maps every v1.0 section to its destination here, including every removal
 with its reason.
@@ -56,7 +63,7 @@ below is short, and none of them is a separate document.
 
 | If you are working on… | Read | Then |
 |---|---|---|
-| **UI — a screen, a form, a report view** | Part 3, all of it; it is short | 2.7 frontend code architecture · 2.11 result contracts · `M-19` UI hiding is not authorization |
+| **UI — a screen, a form, a report view** | Part 3, all of it; it is short | 2.7 frontend code architecture · 2.11 result contracts · `M-18` UI hiding is not authorization |
 | **Security, permissions, a public surface** | Part 5 | `SECURITY_ARCHITECTURE.md` governs and is the next thing to read (`M-94`) · 2.5 backend authority |
 | **A database migration** | Part 4 | `docs/runbooks/MIGRATION_WORKFLOW.md` for the commands · 5.6 for `SECURITY DEFINER` |
 | **Anything touching seasons** | 6.2–6.3 | GitHub Issue #42 governs (`M-94`) · 4.2 ownership · 4.13 destructive operations |
@@ -1084,12 +1091,20 @@ of anything. Transient artefacts are not permanent and must have a defined lifec
 genuine unauthenticated surface needs it, and that exception is named, not assumed.
 Every bucket declares its MIME allowlist and size limit at creation.
 
-**CONTEXTUAL `C-04`** — Current buckets: `passengers-docs` is private;
-`company-private` is private and narrower still, every policy gated on the user-
-management permission, so an authenticated employee without it cannot read it either;
-`company-assets` is public **deliberately** — the logo, login background and banner
-must render on the login screen before any session exists. That is the whole
-justification and it does not extend to anything else.
+**CONTEXTUAL `C-04`** — Current buckets:
+
+- `passengers-docs` — **private**.
+- `company-private` — **private**, and its access is narrower than the bucket. Its
+  four original policies (read, upload, replace, delete) are gated on the
+  user-management permission. One later **read-only** policy additionally grants the
+  payments permission `SELECT` on the stamp and signature objects, matched **by name
+  pattern** rather than by bucket, so a finance user can print a receipt without
+  gaining the bucket. Writing remains user-management only, and any private asset
+  added later stays invisible to the payments permission until that is decided
+  deliberately.
+- `company-assets` — **public deliberately**: the logo, login background and banner
+  must render on the login screen before any session exists. That is the whole
+  justification and it does not extend to anything else.
 
 **MUST `M-72`** — Database columns hold storage object keys, never URLs. Access to a
 private object is a short-lived signed URL, minted per request by the server.
@@ -1182,15 +1197,26 @@ requires it.
 
 ## 6.3 Season Invariants and Lifecycle
 
-**Authority.** GitHub Issue #42 is the authoritative season reference; it is frozen
-and approved, and supersedes issues #38, #39 and #40. Its closure records that its
-work is done, not that it has been superseded. The summary below exists so that
-someone reading only this Playbook does not design against the wrong model. It is
-**not a competing specification**: definitions, phase history, component structure
-and mechanism detail stay in the reference. Where this summary and the reference
-differ, the reference governs and this summary is corrected — except where the
-repository contradicts both, in which case `M-95` applies and the disagreement is
-reported, not silently resolved.
+**Authority.** Precedence here is domain-specific, as `M-94` sets it out:
+
+- `SECURITY_ARCHITECTURE.md` governs anything touching **security**, including where a
+  season rule and a security rule meet.
+- **GitHub Issue #42 governs season architecture.** It is frozen and approved and
+  supersedes issues #38, #39 and #40; its closure records that its work is done, not
+  that it has been superseded.
+- **This Playbook governs general engineering standards.** In this section it is
+  authoritative only for the engineering consequences stated below, never for the
+  season design itself.
+
+The summary that follows exists so that someone reading only this Playbook does not
+design against the wrong model. It is **not a competing specification**: definitions,
+phase history, component structure and mechanism detail stay in the reference. Where
+this summary and the reference differ, **the reference governs** and this summary is
+corrected.
+
+Where the reference and the **repository** differ, neither silently wins: **`M-121`**
+applies — the discrepancy is recorded and investigated, and both are stated until it
+is resolved.
 
 ### The invariants
 
@@ -1858,7 +1884,7 @@ None. No rule has been retired from this edition.
 | `C-01` | CONTEXTUAL | 3.18 Accessibility | reconciled 2026-09-30 | The conformance status of the existing interface is |
 | `C-02` | CONTEXTUAL | 4.2 Ownership of Business Data | v1.0 §24 — modernised (Issue #42 §4) | Season ownership is stored where the entity is independent |
 | `C-03` | CONTEXTUAL | 4.13 Destructive Operations | reconciled 2026-09-30 | The system does not implement soft delete |
-| `C-04` | CONTEXTUAL | 5.7 Storage | reconciled 2026-09-30 | Current buckets: passengers-docs is private; |
+| `C-04` | CONTEXTUAL | 5.7 Storage | reconciled 2026-09-30 | Current buckets: |
 | `C-05` | CONTEXTUAL | 5.9 Rate Limiting | imported: supabase/README.md | Rate limiting sits behind authorization, not instead of |
 | `C-06` | CONTEXTUAL | 7.9 Verification Regime | imported: Handoff §4 | This project has no automated test framework |
 
@@ -2183,7 +2209,7 @@ above the threshold without justification.
 backlog entry covers it.
 
 **Closure criterion:** every file in the table above is either under 500 lines or
-carries the recorded architectural justification `M-24` requires. This entry does not
+carries the recorded architectural justification `M-22` requires. This entry does not
 require zero exceedances — it requires zero *unjustified* ones.
 
 ## E-2 · `M-25` TypeScript `any`

@@ -30,44 +30,44 @@ The CLI version this workflow assumes is pinned in `package.json`. Invoke it as
 ## CREATE
 
 - Create migrations with `npm run supabase -- migration new <name>`.
-- The CLI-generated timestamp is authoritative (`M-36`).
-- One migration per logical change (`S-38`).
+- The CLI-generated timestamp is authoritative (`M-42`).
+- One migration per logical change (`S-36`).
 
 ## DEVELOP
 
 Authoring rules — exact function signatures, `SECURITY DEFINER` `search_path`,
 explicit grants, destructive-DDL preconditions, no `DROP ... CASCADE`, fail-loudly
-assertions, scoped postconditions — are `M-40`–`M-42`, `S-39`, `S-40`, `M-61`–`M-63`.
+assertions, scoped postconditions — are `M-46`–`M-48`, `S-37`, `S-38`, `M-67`–`M-69`.
 Read them there; they carry the reasons this project learned them from.
 
 ## LOCAL VERIFY
 
-- Rebuild from repository state alone: `npm run supabase -- db reset` (`M-43`).
+- Rebuild from repository state alone: `npm run supabase -- db reset` (`M-49`).
 - The seed is local bootstrap only (`supabase/seed.sql`). It carries no production or
   demo rows, and `db push` never runs it.
 - Verify security-relevant outcomes with independent queries after the reset
-  (`M-44`).
-- Exercise the real failure path, not just the happy one (`S-41`).
+  (`M-50`).
+- Exercise the real failure path, not just the happy one (`S-39`).
 
 ## PR
 
-- The migration is reviewed before it reaches any database (`M-35`).
-- Ordering must be safe in both directions (`M-45`).
-- A migration PR should contain the migration (`S-42`).
+- The migration is reviewed before it reaches any database (`M-41`).
+- Ordering must be safe in both directions (`M-51`).
+- A migration PR should contain the migration (`S-40`).
 
 ## PRE-DEPLOY
 
 - `npm run supabase -- migration list` against the target; verify the pending set
-  matches expectation (`M-47`).
+  matches expectation (`M-53`).
 - `npm run build`.
-- `npm run lint`, reported as a **delta** against the known baseline (`M-98`).
+- `npm run lint`, reported as a **delta** against the known baseline (`M-105`).
 - A clean `db reset` from repository state.
 
 ## DEPLOY
 
-- After merge, never before (`M-46`).
+- After merge, never before (`M-52`).
 - The normal mechanism is `npm run supabase -- db push`.
-- Dashboard and MCP `apply_migration` are prohibited for normal migrations (`M-34`).
+- Dashboard and MCP `apply_migration` are prohibited for normal migrations (`M-40`).
 
 > ⚠️ `--db-url`, not `--linked`. `supabase link` resolves the project's **secret**
 > service-role key through the management API, which no scoped personal access token
@@ -79,18 +79,18 @@ Read them there; they carry the reasons this project learned them from.
 
 - Verify the exact migration version in the remote ledger against the repository
   filename, and the intended schema and security state by independent catalog
-  queries (`M-48`).
+  queries (`M-54`).
 - Run a drift check. **A schema diff alone is not sufficient for security
-  equivalence** — the nine things it misses are enumerated in `M-49`.
+  equivalence** — the nine things it misses are enumerated in `M-55`.
 
 ## ROLLBACK
 
-Roll forward (`M-38`). Never edit a migration that has been merged or applied
-(`M-37`). Ledger compatibility anchors are never filled in (`M-39`).
+Roll forward (`M-44`). Never edit a migration that has been merged or applied
+(`M-43`). Ledger compatibility anchors are never filled in (`M-45`).
 
 ## BREAK-GLASS
 
-The five conditions are `M-50`. Break-glass is an incident, not a shortcut.
+The five conditions are `M-56`. Break-glass is an incident, not a shortcut.
 
 ---
 
@@ -105,8 +105,8 @@ execution, any operation on a historical migration, any Dashboard action).
 
 Read-only remote verification is enforced at the server with
 `default_transaction_read_only = on`, so a mistaken write is rejected by the database
-rather than prevented by care (`S-43`).
+rather than prevented by care (`S-41`).
 
 Destructive rehearsals guard their target at every step that opens a connection or
 writes — `supabase/verification/assert-not-production.sh` — not once at the top
-(`M-102`).
+(`M-109`).

@@ -2,13 +2,13 @@
 
 **Status:** Approved
 **Applies to:** Entire Hajj Management System
-**Referenced by:** `ENGINEERING_PLAYBOOK.md` §2.4 (`M-13`, `M-14`, `M-15`)
+**Referenced by:** `ENGINEERING_PLAYBOOK.md` §2.4 (`M-14`, `M-15`, `M-16`)
 **Implemented by:** the approved Company Profile architecture described in
 `../../COMPANY_PROFILE_ARCHITECTURE_REVIEW.md`
 
 > This decision was recorded inside the Engineering Playbook until v2.0. It was moved
 > here unchanged in substance so that it can be superseded independently of the
-> Playbook (`M-105`, `M-106`). The Playbook now states the requirement and names this
+> Playbook (`M-112`, `M-113`). The Playbook now states the requirement and names this
 > ADR rather than carrying a second copy of it.
 
 ---
