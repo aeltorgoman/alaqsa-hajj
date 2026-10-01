@@ -1189,6 +1189,30 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
   };
 
+  /** مفاتيحُ مستندات الحاجّ كما يشير إليها صفُّه الآن — تُقرأ **قبل**
+      الحذف، فبعده لا يبقى في القاعدة ما يدلُّ عليها. والمجموعةُ تُزيل
+      التكرار: عمودان يحملان المفتاحَ نفسه لا يُحذف مرّتين. */
+  const ownedDocKeys = (p: Passenger) => {
+    const row = p as unknown as Record<string, unknown>;
+    return [...new Set(DOC_FIELDS
+      .map((f) => getStoragePath(typeof row[f] === "string" ? row[f] as string : ""))
+      .filter(Boolean))];
+  };
+
+  /** بعد نجاح حذف الصفّ: تُحذف مستنداتُه المعروفةُ بأعيانها — بالمفتاح
+      لا بالمجلّد، فلا يُمسّ ما لم يُشِر إليه عمود. وفشلُ الحذف لا يُعيد
+      الحاجّ: السجلُّ حُذف ولا يُنقض، و`removeDoc` تُسجّل كلَّ مفتاحٍ
+      تعذّر حذفُه، ويُعلَن تحذيرٌ غيرُ حاجب. */
+  const purgeOwnedDocs = async (keys: string[]) => {
+    let failed = false;
+    for (const key of keys) {
+      if (!await removeDoc(key)) failed = true;
+    }
+    if (failed) {
+      showAlert("warning", "حُذف الحاج من السجلّ، وتعذّر حذف بعض ملفاته من التخزين — أبلغ المسؤول التقني.");
+    }
+  };
+
   /** حُفظ الرفعُ ولم يُحفظ مرجعُه (فشلٌ أو تراجع): يُحذف **الجديد**
       وحده، ويبقى القديم ومرجعُه في القاعدة كما كانا. */
   const discardUnsavedDocs = async (before: Passenger, updates: Partial<Passenger>) => {
@@ -1288,6 +1312,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       .from("payments").select("amount, receipt_id").eq("passenger_id", p.id);
     if (error) { showAlert("error", "تعذّر التحقّق من السجل المالي — لم يُحذف شيء"); return; }
 
+    /* المفاتيحُ تُحصر الآن، قبل أيِّ حذف: بعد زوال الصفّ لا مرجعَ لها.
+       وهي قراءةٌ محضة — لا تُستعمل إلا إن نجح الحذف. */
+    const docKeys = ownedDocKeys(p);
     const rows = data ?? [];
     const total = rows.reduce((s2, r) => s2 + Number(r.amount), 0);
     const receiptCount = new Set(rows.filter(r => r.receipt_id != null).map(r => r.receipt_id)).size;
@@ -1298,6 +1325,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (!await writeOk(supabase.from("passengers").delete().eq("id", p.id), "تعذّر حذف الحاج، لم يُحذف من قاعدة البيانات")) return;
       setPassengers(prev => prev.filter(x => x.id !== p.id));
       setSelected(null);
+      await purgeOwnedDocs(docKeys);
       return;
     }
 
@@ -1314,6 +1342,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setPassengers(prev => prev.filter(x => x.id !== p.id));
     setSelected(null);
     showAlert("success", `تم إزالة «${who}» — الإيصالات وأرقامها محفوظة`);
+    /* الدالّةُ حذفت الصفَّ وأنصبتَه وأبقت الإيصالات — والمستنداتُ
+       ليست إيصالاً، فلا سببَ لبقائها بعد زوال من تخصّه. */
+    await purgeOwnedDocs(docKeys);
   };
 
   /* ═══ إعادة ترتيب الحجاج — مسار واحد ═══
