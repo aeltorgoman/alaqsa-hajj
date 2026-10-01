@@ -924,8 +924,18 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
              لا يُلغى لأجل ملفّ)، والكائناتُ المرفوعة تُحذف فلا يتراكم
              في الحاوية ما لا يشير إليه عمود. والرسالةُ هي هي: يُعاد
              الرفعُ من صفحة الحاجّ. */
-          for (const key of uploadedKeys) await removeDoc(key);
+          /* وفشلُ التنظيف نفسه لا يُبتلع: تحذيرُ «لم تُحفظ المستندات»
+             يصف القاعدة لا الحاوية، فيبقى الكائنُ يتيماً بلا أثرٍ في
+             الواجهة. ولا إعادةَ محاولةٍ تلقائية — `removeDoc` سجّلت
+             المفتاح، والتنظيفُ قرارُ مسؤولٍ لا حلقةٌ صامتة. */
+          let cleanupFailed = false;
+          for (const key of uploadedKeys) {
+            if (!await removeDoc(key)) cleanupFailed = true;
+          }
           showAlert("warning", "تم حفظ الحاج لكن تعذّر حفظ المستندات، يرجى رفعها من صفحة الحاج");
+          if (cleanupFailed) {
+            showAlert("warning", "تعذّر حذف الملف المرفوع — أبلغ المسؤول التقني.");
+          }
         } else if (updatedRows) {
           row = updatedRows;
         }
