@@ -904,18 +904,27 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
          الجلب الأولي وأحداث Realtime */
       let row = data[0];
       const docUpdates: { passport_url?: string; national_id_url?: string } = {};
+      /* مفاتيحُ ما رُفع فعلاً في هذه المحاولة وحدها — لا أكثر: إن فشل
+         حفظُ مراجعها بقيت كائناتٍ لا يعرفها أحد، فتُحذف هي بعينها.
+         ورفعٌ فاشل لا يُسجَّل، فلا يُحذف ما لم يُرفع. */
+      const uploadedKeys: string[] = [];
       if (manualPassportFile) {
         const url = await uploadDoc(manualPassportFile, newId, "passport_doc");
-        if (url) docUpdates.passport_url = url;
+        if (url) { docUpdates.passport_url = url; uploadedKeys.push(url); }
       }
       if (manualIdFile) {
         const url = await uploadDoc(manualIdFile, newId, "idcard");
-        if (url) docUpdates.national_id_url = url;
+        if (url) { docUpdates.national_id_url = url; uploadedKeys.push(url); }
       }
       if (Object.keys(docUpdates).length > 0) {
         const { data: updatedRows, error: docErr } = await supabase
           .from("passengers").update(docUpdates).eq("id", newId).select().single();
         if (docErr) {
+          /* الحاجُّ حُفظ ومراجعُ مستنداته لم تُحفظ: الصفُّ يبقى (العملُ
+             لا يُلغى لأجل ملفّ)، والكائناتُ المرفوعة تُحذف فلا يتراكم
+             في الحاوية ما لا يشير إليه عمود. والرسالةُ هي هي: يُعاد
+             الرفعُ من صفحة الحاجّ. */
+          for (const key of uploadedKeys) await removeDoc(key);
           showAlert("warning", "تم حفظ الحاج لكن تعذّر حفظ المستندات، يرجى رفعها من صفحة الحاج");
         } else if (updatedRows) {
           row = updatedRows;
@@ -1209,12 +1218,22 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (!assertWritable()) return;
     const ok = await confirmAction("هتمسح المستند ده؟", { title: "حذف مستند" });
     if (!ok) return;
+    /* ⚠️ الترتيب مقصود، وكان معكوساً: كان الكائن يُحذف **قبل** تصفير
+       العمود، فإن فشل التحديث بقي العمود يشير إلى ملفٍّ لم يبقَ له
+       وجود — والمستخدم يرى مستنداً لا يُفتح. فالسجلُّ أوّلاً: ما تشير
+       إليه القاعدة موجودٌ دائماً، وأسوأُ ما يبقى كائنٌ يتيم يُسجَّل
+       مفتاحه. وهو نفس اتجاه `purgeSupersededDocs`: القاعدة تحكم،
+       والتخزين يتبع. */
     const path = getStoragePath(url);
-    if (path) await supabase.storage.from("passengers-docs").remove([path]);
     if (!await writeOk(supabase.from("passengers").update({ [field]: null } as TablesUpdate<"passengers">).eq("id", p.id), "تعذّر حذف المستند، لم يُحفظ أي تغيير")) return;
     const updated = { ...p, [field]: null };
     setPassengers(prev => prev.map(x => x.id === p.id ? updated : x));
     setSelected(updated);
+    /* الحذفُ من السجلّ وقع ولا يُنقض: فشلُ حذف الملف تحذيرٌ لا تراجع،
+       و`removeDoc` تُسجّل المفتاح بالضبط لمن يُنظّف الحاوية لاحقاً. */
+    if (path && !await removeDoc(path)) {
+      showAlert("warning", "حُذف المستند من سجلّ الحاج، وتعذّر حذف ملفه من التخزين — أبلغ المسؤول التقني.");
+    }
   };
   const [showLinkFamily, setShowLinkFamily] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
