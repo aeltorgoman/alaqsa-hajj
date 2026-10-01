@@ -1199,6 +1199,43 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       .filter(Boolean))];
   };
 
+  /** جردُ مجلّد الحاجّ `{id}/` وحده — لا الحاوية. يُرجع المفاتيح، أو
+      `null` إن تعذّر السرد.
+
+      ولمَ لا تكفي الأعمدةُ الستّة؟ لأنّ ما قبل #199 كان يستبدل المستند
+      ولا يحذف القديم، فتحت المجلّد كائناتٌ لا يشير إليها عمود. وهي
+      بعد زوال الصفّ لا تُدرَك أبداً: إقفالُ الموسم يمرّ على الحجّاج،
+      ولا حاجَّ بعدُ ولا `season_id`. فالجردُ هنا أو لا جردَ أبداً.
+
+      والصفحةُ كبيرةٌ تكفي مجلّدَ حاجّ بمراحل، والترقيمُ احتياطٌ لا أكثر
+      — نفسُ النمط المعتمد في `season-admin`. */
+  const DOC_PAGE = 1000;
+  const listPassengerFolder = async (id: number): Promise<string[] | null> => {
+    const found: string[] = [];
+    for (let offset = 0; ; offset += DOC_PAGE) {
+      const { data: page, error } = await supabase.storage
+        .from("passengers-docs").list(String(id), { limit: DOC_PAGE, offset });
+      if (error) {
+        console.error("تعذّر سرد مجلّد مستندات الحاجّ — أُلغي الحذف", { passengerId: id, error });
+        return null;
+      }
+      const entries = (page ?? []) as { name: string; id: string | null }[];
+      for (const e of entries) {
+        /* `id === null` مجلّدٌ لا كائن — لا يُحذف بالاسم */
+        if (e.id !== null && e.name) found.push(`${id}/${e.name}`);
+      }
+      if (entries.length < DOC_PAGE) return found;
+    }
+  };
+
+  /** جردُ الحذف: اتّحادُ ما يشير إليه الصفُّ وما يقع فعلاً تحت مجلّده.
+      و`null` تعني «الجردُ ناقص» — ولا حذفَ على جردٍ ناقص. */
+  const deletionInventory = async (p: Passenger): Promise<string[] | null> => {
+    const listed = await listPassengerFolder(p.id);
+    if (listed === null) return null;
+    return [...new Set([...ownedDocKeys(p), ...listed])];
+  };
+
   /** بعد نجاح حذف الصفّ: تُحذف مستنداتُه المعروفةُ بأعيانها — بالمفتاح
       لا بالمجلّد، فلا يُمسّ ما لم يُشِر إليه عمود. وفشلُ الحذف لا يُعيد
       الحاجّ: السجلُّ حُذف ولا يُنقض، و`removeDoc` تُسجّل كلَّ مفتاحٍ
@@ -1312,9 +1349,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       .from("payments").select("amount, receipt_id").eq("passenger_id", p.id);
     if (error) { showAlert("error", "تعذّر التحقّق من السجل المالي — لم يُحذف شيء"); return; }
 
-    /* المفاتيحُ تُحصر الآن، قبل أيِّ حذف: بعد زوال الصفّ لا مرجعَ لها.
-       وهي قراءةٌ محضة — لا تُستعمل إلا إن نجح الحذف. */
-    const docKeys = ownedDocKeys(p);
+    /* الجردُ يقع الآن، قبل أيِّ حذف: بعد زوال الصفّ لا مرجعَ ولا موسم.
+       وهو قراءةٌ محضة — لا يُستعمل إلا إن نجح الحذف. وإن تعذّر، لا
+       يمضي الحذفُ أصلاً: حاجٌّ باقٍ خيرٌ من ملفاتٍ لا يُدركها أحد. */
+    const docKeys = await deletionInventory(p);
+    if (docKeys === null) {
+      showAlert("error", "تعذّر حصر مستندات الحاج من التخزين — لم يُحذف الحاج ولا أيُّ ملفّ، يرجى إعادة المحاولة.");
+      return;
+    }
     const rows = data ?? [];
     const total = rows.reduce((s2, r) => s2 + Number(r.amount), 0);
     const receiptCount = new Set(rows.filter(r => r.receipt_id != null).map(r => r.receipt_id)).size;
