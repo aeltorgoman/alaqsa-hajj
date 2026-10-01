@@ -1,0 +1,127 @@
+# ════════════════════════════════════════════════════════════
+# #32 — redeploy whatsapp-send, and nothing else
+# ════════════════════════════════════════════════════════════
+# The parity run found one divergence in the whole project, and it
+# is not in the function's own file: the deployed `whatsapp-send`
+# bundle carries a stale copy of `_shared/rateLimit.ts`, in which
+# `portalDocSrc` is still 120/hour where the repository says 2000.
+#
+# The function was last deployed before that limit was raised, and
+# has not been deployed since; the other three functions carry 2000.
+# So the divergence is a historical artefact, not a new change.
+#
+# ⚠️ It changes NO runtime behaviour: `whatsapp-send` uses
+# `LIMITS.whatsappSend`, never `LIMITS.portalDocSrc`. But byte parity
+# is the property under test (M-108), and a bundle that is not the
+# reviewed source fails it regardless of whether the difference runs.
+#
+# The fix is to make the platform carry the reviewed source, not to
+# edit the source to match the platform. No file is touched here.
+#
+# ⚠️ ONE function. The slug is hard-coded, not an input: a
+# `workflow_dispatch` field would let a typo redeploy something else.
+# `functions deploy` with no slug deploys ALL of them, so the argument
+# is mandatory here and asserted before the call.
+#
+# ⚠️ FOUR hashes, not one. The precedent workflows pin the function's
+# own `index.ts`, which is enough when the drift is there. Here the
+# drift is in a *shared* file that is bundled into the deployment, so
+# pinning `index.ts` alone would gate the one file that is already
+# correct and leave the one that is wrong unchecked. Every file that
+# goes up is pinned.
+#
+# `verify_jwt` is NOT set here. It comes from `supabase/config.toml`
+# (`whatsapp-send = true`) and stays a reviewed repository change.
+# Secrets are not touched: deploying code neither reads nor rewrites
+# them — and `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` in particular are
+# project secrets this workflow has no reason to see.
+#
+# Nothing about the database, the migrations or any other function is
+# in scope. Deliberately absent and audited for:
+# `db push` · `secrets set` · `config push` · any second slug.
+
+name: Redeploy whatsapp-send (ONE function)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type REDEPLOY-WHATSAPP-SEND to authorize"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: whatsapp-send-redeploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      SLUG: whatsapp-send
+      SRC_SHA256: "e6d0e2ed9f1a86737d19066ee0cd5bdb37e8e802f4ce5421ce4159b538062aed"
+      SHARED_RATELIMIT_SHA256: "02e26e648c3eb0918675be96d59e5eaed4d9548d7fb5d86aba44d977c7be7cd7"
+      SHARED_AUTHORIZE_SHA256: "e5317ddc205ed598f08e0643ddb15447ce94f235d15b7e6944567c68805349f2"
+      SHARED_HTTP_SHA256: "147f3657212178c7e96cbef08ff3048fbe4e010ee8c2826e41e142608bd1d1d1"
+
+    steps:
+      - name: "GATE: confirmation"
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "REDEPLOY-WHATSAPP-SEND" ] || {
+            echo "::error::confirmation string does not match"; exit 1; }
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: the exact source under review, unmodified"
+        run: |
+          set -euo pipefail
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+
+          # كلُّ ملفٍّ يصعد مع الحزمة مُثبَّتٌ ببصمته — لا ملفَّ الدالّة
+          # وحده. والانحرافُ المرصود في ملفٍّ مشترك، فتثبيتُ `index.ts`
+          # وحده كان يحرس السليمَ ويترك المعطوب.
+          check() {
+            [ -f "$1" ] || { echo "::error::$1 missing"; exit 1; }
+            got="$(sha256sum "$1" | cut -d' ' -f1)"
+            [ "$got" = "$2" ] || { echo "::error::sha256 mismatch for $1: $got"; exit 1; }
+            printf '  %s  %s\n' "$got" "$1"
+          }
+          echo "pinned files:"
+          check "supabase/functions/$SLUG/index.ts"     "$SRC_SHA256"
+          check "supabase/functions/_shared/rateLimit.ts" "$SHARED_RATELIMIT_SHA256"
+          check "supabase/functions/_shared/authorize.ts" "$SHARED_AUTHORIZE_SHA256"
+          check "supabase/functions/_shared/http.ts"      "$SHARED_HTTP_SHA256"
+
+          git diff --quiet || { echo "::error::working tree is dirty"; exit 1; }
+
+          # الإعدادُ يُقرأ ولا يُكتب: الساقُ الأولى من النمط الثلاثيّ
+          # تبقى من المستودع، ولا يضبطها أمرُ النشر.
+          grep -A1 "^\[functions\.$SLUG\]" supabase/config.toml | grep -q "verify_jwt = true" || {
+            echo "::error::config.toml no longer declares verify_jwt = true for $SLUG"; exit 1; }
+
+          # القيمةُ التي من أجلها يقع هذا النشر — تُؤكَّد قبله لا بعده،
+          # فلا يُرفع بناءٌ يحمل الرقمَ القديم نفسَه.
+          grep -qE 'portalDocSrc:[[:space:]]+\{[[:space:]]*scope:[[:space:]]*"portal-doc-src",[[:space:]]+limit:[[:space:]]*2000,[[:space:]]+windowSeconds:[[:space:]]*3600[[:space:]]*\}' \
+            supabase/functions/_shared/rateLimit.ts || {
+            echo "::error::canonical portalDocSrc is not 2000/3600 in the repository source"; exit 1; }
+
+          echo "commit=${GITHUB_SHA} slug=$SLUG"
+
+      - name: "DEPLOY: exactly one function"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          [ -n "$SLUG" ] || { echo "::error::empty slug would deploy EVERY function"; exit 1; }
+          npm run --silent supabase -- functions deploy "$SLUG" --project-ref "$PROJECT_REF" 2>&1 \
+            | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
