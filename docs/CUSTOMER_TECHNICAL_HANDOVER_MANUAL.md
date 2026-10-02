@@ -278,7 +278,98 @@ The exact backup destination, frequency, encryption, retention policy, and autom
 
 ---
 
-# 8. Sections Pending Architecture Approval
+# 8. Supabase Customer Environment
+
+## 8.1 Ownership and Billing
+
+Each customer's production Supabase account/Organization and project are customer-owned.
+
+The account should be established using an official email address controlled by the customer. The customer may create the account directly, or the technical team may perform the setup on the customer's behalf. The important requirement is that ownership and account recovery remain under the customer's control.
+
+Supabase subscription, billing details, and operating charges are the customer's responsibility.
+
+## 8.2 Technical Team Access
+
+While the technical team is responsible for operating and maintaining the system, it may hold full administrative access to the customer's Supabase environment.
+
+This access must use the technical team's own authorized accounts rather than shared use of the customer's password.
+
+The customer remains the underlying owner of the account and project.
+
+## 8.3 Production and Optional Additional Environments
+
+One production Supabase project is the normal baseline for a customer deployment.
+
+Additional Staging or Test environments are optional and may be created when there is a practical need. A permanent additional Supabase project is not required for every customer.
+
+Real customer and pilgrim data must not be copied casually into Test or Staging environments.
+
+## 8.4 Database Migrations
+
+Database schema changes must be represented by migrations stored with the code and associated release history.
+
+When a customer is upgraded, the migrations required by that release are applied to the customer's Supabase project.
+
+Untracked or arbitrary Production schema changes are not the normal deployment path.
+
+## 8.5 Emergency or Necessary Manual Database Changes
+
+Direct manual changes in Supabase are permitted when operationally necessary.
+
+If a manual change alters database structure or security configuration, such as a table, column, policy, function, or equivalent schema element, the change must subsequently be represented in a migration in the codebase so that the repository and deployed database do not permanently diverge.
+
+## 8.6 Customer Data and Documents
+
+All customer operational data and documents stored in the customer's Supabase Database or Storage belong to the customer.
+
+This includes pilgrim records and operational data as well as uploaded documents such as passport images, ID images, personal photos, contracts, tickets, permits, and other customer files.
+
+The technical team must not maintain an independent copy of customer pilgrim data or documents outside the customer's environment except where an approved customer-specific backup process requires it.
+
+## 8.7 Backup Approach
+
+For the database, the project relies on the backup capability provided by the customer's Supabase service/plan.
+
+For Storage documents, an independent external backup may be added when it can be implemented in a simple, automated, and low-maintenance way.
+
+A complex custom backup platform is not a requirement for the product.
+
+The exact Storage backup mechanism may therefore be selected during customer deployment or later operational setup when appropriate.
+
+## 8.8 Secrets and API Key Inventory
+
+The technical documentation must maintain an inventory of required Secrets and API Keys without recording their actual secret values.
+
+For each entry, the documentation should identify:
+
+- Variable/key name.
+- Purpose.
+- Where it is stored.
+- Whether it is client-safe/public configuration or a server-side secret.
+
+Existing Secrets do not require mandatory rotation solely because a maintenance relationship ends. Rotation may be performed when there is a specific operational or security reason.
+
+## 8.9 End of Maintenance or Technical Handover
+
+Because the Supabase environment is customer-owned from the beginning, ending the maintenance relationship does not require transferring the Supabase project.
+
+The handover process consists of confirming that the customer or replacement technical team has the required access and technical information, then removing the outgoing technical team's Supabase access after the handover is complete.
+
+## 8.10 Production Project Deletion
+
+A customer's Production Supabase project must not be deleted as part of normal operation or maintenance.
+
+Permanent deletion requires the customer's explicit request or approval and confirmation that any customer data or documents that must be retained have been preserved as required.
+
+## 8.11 Supabase Platform Compatibility
+
+During an active maintenance period, the technical team is responsible for tracking Supabase platform changes that materially affect the system and taking the actions necessary to preserve compatibility and continued operation.
+
+This includes relevant changes to APIs, authentication/key models, platform services, or deprecated functionality used by the system.
+
+---
+
+# 9. Sections Pending Architecture Approval
 
 The following areas are not yet finalized in this manual and must be documented only after their decisions are approved:
 
