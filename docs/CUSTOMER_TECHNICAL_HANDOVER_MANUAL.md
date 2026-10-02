@@ -369,7 +369,125 @@ This includes relevant changes to APIs, authentication/key models, platform serv
 
 ---
 
-# 9. Sections Pending Architecture Approval
+# 9. Vercel Customer Environment
+
+## 9.1 Ownership and Billing
+
+Each customer's Production Vercel account/team and project are customer-owned.
+
+The account should use an official email address controlled by the customer. The technical team may create and configure the account on the customer's behalf, but ownership and account recovery must remain under the customer's control.
+
+Vercel subscription, billing details, domain registration/renewal charges, and applicable operating charges are the customer's responsibility.
+
+The Production plan used for a commercial customer deployment must permit commercial use under Vercel's applicable terms at that time.
+
+## 9.2 Technical Team Access
+
+While the technical team is responsible for operating and maintaining the system, it may hold full administrative access to the customer's Vercel environment.
+
+Access must use the technical team's own authorized accounts rather than shared use of the customer's password.
+
+The customer remains the underlying owner of the Vercel account/project and may remove the outgoing technical team's access after a completed handover.
+
+## 9.3 Spend Management
+
+When configuring the customer's Production Vercel environment, appropriate spend-management controls and usage/billing alerts should be configured to reduce the risk of unexpected usage charges.
+
+This is an operational configuration requirement and does not require a separate monitoring platform.
+
+## 9.4 Customer Repository Connection
+
+The customer's Vercel Production project must connect to that customer's approved Customer Repository, not directly to the internal Master Repository.
+
+The release path is:
+
+```text
+Master Repository
+        ↓
+Approved Customer Release
+        ↓
+Customer Repository
+        ↓
+Vercel
+        ↓
+Production
+```
+
+This preserves the Customer Repository as the deployable source for that customer's running system.
+
+## 9.5 Automatic Production Deployment
+
+After an approved Pull Request is merged into the Customer Repository's protected `main` branch, Vercel may automatically deploy that merged version to Production.
+
+The approval controls occur before the merge through the agreed Pull Request and release process.
+
+## 9.6 Environment Variables
+
+Vercel Environment Variables are customer-specific and belong to the customer's Vercel project.
+
+Actual environment values must not be committed to GitHub.
+
+The technical team may manage these values during the maintenance period.
+
+Documentation records variable names, purpose, and storage location without recording secret values.
+
+Client-safe/public frontend configuration required by the application, such as the Supabase project URL, the applicable public/publishable Supabase key, and the VAPID public key, is configured in Vercel as appropriate.
+
+Server-only secrets remain in their designated server-side environment rather than being exposed through frontend Vercel variables.
+
+## 9.7 Preview Deployments
+
+Vercel Preview Deployments are used as part of reviewing Customer Repository Pull Requests before they are approved for Production.
+
+The normal path is:
+
+```text
+Pull Request
+    ↓
+Vercel Preview
+    ↓
+Review / Verification
+    ↓
+Approval
+    ↓
+Merge to main
+    ↓
+Automatic Production Deployment
+```
+
+A separate permanent Vercel project is not required solely to provide this preview capability.
+
+## 9.8 Application Rollback
+
+The operating process must preserve the ability to return the application to the last known stable Vercel deployment when a newly deployed application release causes a Production problem.
+
+Application rollback and database rollback are separate concerns. Reverting the deployed application does not by itself reverse database migrations or data changes.
+
+## 9.9 Domain Ownership and Connection
+
+The Production custom domain belongs to the customer.
+
+The technical team may configure the domain and DNS records and connect the domain to the customer's Vercel project, but domain ownership and renewal remain under the customer's control.
+
+This ensures that ending the maintenance relationship does not require transferring the customer's Production domain away from the technical team.
+
+## 9.10 HTTPS and TLS
+
+Every Production deployment must be served over HTTPS.
+
+Under the normal Vercel deployment model, TLS/SSL certificate provisioning and renewal are managed through Vercel for the connected domain unless a specific customer environment requires a different arrangement.
+
+## 9.11 Hosting Continuity
+
+Vercel is the primary application hosting platform for the current deployment architecture.
+
+A second hosting provider is not maintained as a permanently running parallel standby solely for redundancy.
+
+If future contractual, operational, or availability requirements justify a secondary hosting architecture, it should be evaluated as a separate architecture decision at that time.
+
+---
+
+# 10. Sections Pending Architecture Approval
 
 The following areas are not yet finalized in this manual and must be documented only after their decisions are approved:
 
