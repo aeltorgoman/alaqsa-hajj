@@ -487,7 +487,67 @@ If future contractual, operational, or availability requirements justify a secon
 
 ---
 
-# 10. Sections Pending Architecture Approval
+# 10. Domain and DNS
+
+## 10.1 Domain Registrar Ownership
+
+The Domain Registrar account used for the customer's Production domain must be customer-owned and should use an official email address controlled by the customer.
+
+The technical team may purchase, configure, or manage the domain on the customer's behalf, but ownership, account recovery, and ultimate control remain with the customer.
+
+## 10.2 Default Use of a Subdomain
+
+When the customer already owns and uses an existing company domain, the default approach is to host the Hajj Management System on a dedicated subdomain, for example:
+
+```text
+hajj.company.qa
+```
+
+or:
+
+```text
+system.company.qa
+```
+
+The customer's main website remains independent and is not replaced or modified merely to host the Hajj Management System.
+
+If the customer does not already have a suitable domain, an appropriate customer-owned domain may be registered during deployment setup.
+
+## 10.3 DNS Ownership and Technical Access
+
+DNS remains within an account or service controlled by the customer.
+
+The technical team may receive the permissions required to configure and maintain DNS records related to the system during the maintenance period.
+
+DNS must not be moved into a vendor-owned account merely to operate the Hajj Management System.
+
+After a completed handover, the customer may remove the outgoing technical team's DNS access.
+
+## 10.4 Domain Renewal
+
+Automatic renewal should be enabled whenever supported by the Domain Registrar.
+
+The customer is responsible for the domain's payment method and for domain registration and renewal charges.
+
+Continued operation of the customer's domain must not depend on a vendor-owned payment card or vendor-owned registrar account.
+
+## 10.5 DNS Documentation Scope
+
+Technical documentation should record the DNS records that are materially required to operate the Hajj Management System and connect it to Vercel, such as applicable CNAME or A records.
+
+The handover documentation does not need to duplicate the customer's complete DNS configuration for unrelated services such as corporate email, unrelated websites, or other infrastructure.
+
+## 10.6 Future Domain or Subdomain Change
+
+A Production domain or subdomain may be changed in the future.
+
+When changing it, the new address must first be configured, connected to Vercel, and verified to operate correctly.
+
+The old Production address should only be removed after the new address has been successfully validated, reducing the risk of avoidable service interruption.
+
+---
+
+# 11. Sections Pending Architecture Approval
 
 The following areas are not yet finalized in this manual and must be documented only after their decisions are approved:
 
