@@ -52,7 +52,7 @@ jobs:
     env:
       PROJECT_REF: zkucwcnclbfvukhdqhgc
       SLUG: send-pilgrim-push
-      SRC_SHA256: "c456738585760b599d8d2abdd916dffae420a5008a7d19ac98835109cb588199"
+      SRC_SHA256: "38fc0d0f784b56cb25d997a4c22d471d1ab683e009ee75136942bf721b255216"
 
     steps:
       - name: "GATE: confirmation"
