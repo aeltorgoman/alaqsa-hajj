@@ -1,8 +1,8 @@
 # Hajj Management System
 # Customer Technical Handover Manual
 
-**Version:** Draft 0.1  
-**Status:** In Progress — Approved Decisions Only  
+**Version:** Draft 0.2  
+**Status:** Architecture Complete — Pending Final Review  
 **Owner:** Project Architecture Team  
 **Applies To:** Customer production deployments of the Hajj Management System
 
@@ -14,7 +14,26 @@ This manual defines the approved technical ownership, release, deployment, acces
 
 It is intentionally updated section by section as architecture decisions are approved. Unapproved or future decisions must not be treated as project policy.
 
-The Engineering Playbook remains the engineering standard for how the product is designed, developed, reviewed, and maintained. This manual defines how a customer deployment is structured, operated, released, and handed over.
+## Document Authority
+
+The Engineering Playbook (`docs/ENGINEERING_PLAYBOOK.md`) remains the authoritative general engineering standard for how the product is designed, developed, reviewed, and maintained.
+
+Within its own domain, this manual is the authoritative project document for:
+
+- Customer deployment ownership.
+- Infrastructure handover.
+- Operational continuity.
+- Source-code handover policy.
+
+Existing domain-specific authorities are unchanged. Security remains governed by `docs/architecture/SECURITY_ARCHITECTURE.md`, season architecture by its approved reference, and each approved ADR by its own record (Engineering Playbook `M-94`).
+
+Where this manual touches a rule that another document already owns — migrations, break-glass, storage rules, destructive operations — it states the customer-deployment consequence and cross-references the governing document. It does not maintain a competing copy of that rule.
+
+## Approved Architecture Versus Current Implementation
+
+This manual records the **approved architecture for customer deployments**. It is not a description of what the internal development repository currently implements.
+
+Where a section describes a capability that is approved but not yet built, that is stated explicitly. A reader must not treat this manual as evidence of current implemented behaviour; the repository is authoritative about what exists today (Engineering Playbook `M-95`).
 
 ---
 
@@ -42,15 +61,15 @@ Shared passwords must not be used as the normal access model.
 
 Access should use personal accounts, appropriate roles, least privilege, and two-factor authentication where supported.
 
+Access granted during the maintenance period is removed at final offboarding under section 12.3.
+
 ## 1.3 Source Code Ownership
 
-The Master Repository and customer source repositories remain under the vendor's ownership and control under the currently approved model.
+The Master Repository and customer source repositories remain under the vendor's ownership and control under the currently approved model. Customers do not receive source-code access as part of standard deployment or handover.
 
-Customers do not receive source-code access at this stage.
+Production infrastructure and customer data ownership are separate from source-code ownership and are governed by their own sections: Supabase (section 8), Vercel (section 9), Domain and DNS (section 10), and handover (section 12).
 
-The future source-code continuity or delivery mechanism is intentionally deferred and must be approved separately before becoming policy.
-
-Production infrastructure and customer data ownership are handled separately from source-code ownership and will be documented in their relevant sections as those decisions are approved.
+The full source-code delivery and continuity policy, including what possession of source code does and does not grant, is in **section 14**. That section governs; this one only establishes the ownership separation.
 
 ---
 
@@ -156,6 +175,8 @@ Examples include:
 - WhatsApp phone identifier.
 - Other server-only integration credentials.
 
+The customer's Supabase Edge Function configuration also holds the non-secret per-customer values in section 3.7.
+
 ## 3.4 GitHub Actions Secrets
 
 GitHub Actions Secrets are reserved for credentials that GitHub automation itself requires.
@@ -177,6 +198,29 @@ Before the first commercial customer deployment, perform a dedicated Secret and 
 - GitHub Actions workflows and secrets.
 - Environment documentation and examples.
 - Current Supabase key model and the planned migration from legacy keys where applicable.
+- The required per-customer configuration values in section 3.7.
+
+## 3.7 Required Per-Customer Configuration Values
+
+Some configuration values are not secrets but are still **customer-specific** and must be set explicitly for every customer deployment:
+
+| Value | Where it is set | Purpose |
+|---|---|---|
+| `ALLOWED_ORIGINS` | Customer's Supabase Edge Function configuration | The browser origins the customer's Edge Functions accept requests from — the customer's own Production domain and preview origins |
+| `VERCEL_PROJECT_SLUG` | Customer's Supabase Edge Function configuration | Identifies the customer's own Vercel project |
+| `VERCEL_OWNER_SLUG` | Customer's Supabase Edge Function configuration | Identifies the customer's own Vercel account/team |
+
+These values must reference the **customer's own** domain, Vercel project, and Vercel account. A customer deployment must never be left pointing at a vendor-owned or another customer's origin, project, or account — that would breach the customer isolation rule in section 3.5.
+
+They are also required by:
+
+- Deployment setup (section 9.6).
+- Domain or subdomain change (section 10.6).
+- Configuration recovery documentation (section 11.10).
+- The Final Customer Deployment Checklist (section 13).
+
+> **Follow-up implementation item (not resolved by this manual).**
+> The shared Edge Function code currently carries **vendor-specific fallback values** for these three settings, so a deployment that omits them silently inherits vendor defaults instead of failing. Before the first commercial customer deployment, that fallback behaviour must be removed or made safe for customer deployments — for example by requiring the values explicitly and failing loudly when they are absent. This is an application-code change and is deliberately **not** made by this manual. Until it is done, setting all three values explicitly is mandatory for every customer deployment, and the checklist in section 13 verifies it.
 
 ---
 
@@ -197,9 +241,11 @@ Master
   -> Production
 ```
 
-The Release Gate should automate as much verification as practical, including build validation, required configuration checks, database migration checks, and appropriate smoke tests.
+The Release Gate should automate as much verification as practical, including build validation, required configuration checks, database migration and Edge Function checks (section 4.4), and appropriate release verification.
 
 If the gate fails, the existing Production release remains the active version.
+
+> **Status.** The Release Gate is **approved architecture, not current implementation.** The repository today has no gate that runs automatically on a pull request or a merge, and — as the Engineering Playbook records in `C-06` — the project has **no automated test framework and no test suite**. Nothing in this section should be read as a claim that automated tests exist. Release verification today is a clean build, a lint run reported as a delta against the known baseline, purpose-built checks for the change, and manual acceptance in a real Preview deployment (`M-104`, `M-105`).
 
 ## 4.2 Pull Request Requirement
 
@@ -226,6 +272,35 @@ Final approval and merge authority belongs to the authorized administrative acco
 The rule is role/account based rather than permanently tied to a named individual.
 
 Automated checks do not replace the required authorized approval.
+
+## 4.4 Releases Containing Migrations or Edge Function Changes
+
+The normal release flow is unchanged:
+
+```text
+Pull Request
+  -> Preview
+  -> Approval
+  -> Merge
+  -> Production
+```
+
+This is the same flow as sections 4.2 and 9.7, shown compactly; nothing is added to it here.
+
+Merging the release deploys the **application** (section 9.5). It does not by itself apply database migrations or deploy Edge Functions. Those are separate deployment actions, and a release that contains either is not complete until they are done.
+
+The Release Gate must therefore **identify** whether an approved release contains:
+
+- database migrations, and/or
+- Supabase Edge Function changes,
+
+and the release must then follow the project's existing approved rules for each.
+
+**Database migrations.** Governed by the Engineering Playbook Part 4 and the migration runbook (`docs/runbooks/MIGRATION_WORKFLOW.md`). This manual does not define a competing migration workflow. The two rules that most affect a customer release are that migrations are applied **after** merge and never before (`M-52`), and that application code and schema must be safe in **both** directions for the window in which they overlap — additive schema change first, code second (`M-51`). Because merging triggers the application deployment, the migration ordering required by `M-51` must be planned before the release is approved, not discovered afterwards.
+
+**Edge Functions.** The deployed function must correspond to the **reviewed release source** (`M-108`). Where a deployed function and the approved release diverge, the correction is to redeploy the release source — never to edit source to match what is deployed.
+
+**Responsibility.** Applying the migrations and deploying the Edge Functions for an approved release is the responsibility of the authorized technical team performing that release, under the authorization rule in `M-102`. Section 13 verifies that both were actually done before a deployment is declared Production Ready.
 
 ---
 
@@ -260,21 +335,21 @@ This history is required for traceability and recovery.
 
 A formal rollback procedure is required.
 
-If a new Production release causes a critical problem, the system must support returning to the last known stable application release according to the approved rollback procedure.
+If a new Production release causes a critical problem, the system must support returning to the last known stable application release according to the approved rollback procedure. The application-side mechanism is in section 9.8.
 
-Application-release rollback and database rollback are not treated as the same operation.
+**Application rollback and database rollback are not the same operation.** Reverting the deployed application does not reverse a database migration or undo data changes.
 
-Database rollback rules are intentionally deferred until the Supabase section is designed and approved.
+For the database, this manual does not define a separate rollback system. The governing rule is the Engineering Playbook's roll-forward principle (`M-44`): **corrections roll forward.** A problem introduced by a migration is corrected by writing a new migration that fixes it — down-migrations are not this project's recovery mechanism, and an applied migration is never edited after the fact (`M-43`).
+
+Where a database problem cannot be corrected by rolling forward, the path is recovery from backup under section 11.4, not reversal.
 
 ---
 
 # 7. Independent Repository Backup
 
-An independent backup of critical GitHub repositories is required before commercial operation.
+An independent, automated backup of each Customer Repository outside GitHub is required before commercial operation, so that repository recovery does not depend solely on continued access to the GitHub account or service.
 
-The backup must exist outside GitHub so that repository recovery does not depend solely on continued access to the GitHub account or service.
-
-The exact backup destination, frequency, encryption, retention policy, and automation mechanism are intentionally deferred until the backup architecture is approved.
+This requirement is defined in full in **section 11.3**, which governs. Protection of the backup copy itself — including where it is stored and how it is secured — is part of that section.
 
 ---
 
@@ -290,11 +365,13 @@ Supabase subscription, billing details, and operating charges are the customer's
 
 ## 8.2 Technical Team Access
 
-While the technical team is responsible for operating and maintaining the system, it may hold full administrative access to the customer's Supabase environment.
+The technical team receives the permissions necessary to carry out its responsibilities, following least privilege.
+
+Full administrative access may be granted where it is genuinely required for administration or maintenance of the customer's Supabase environment. It is a justified grant, not an automatic default.
 
 This access must use the technical team's own authorized accounts rather than shared use of the customer's password.
 
-The customer remains the underlying owner of the account and project.
+The customer remains the underlying owner of the account and project. At final offboarding, the outgoing team's access is removed and the secret-rotation rule in section 12.3 applies.
 
 ## 8.3 Production and Optional Additional Environments
 
@@ -308,15 +385,20 @@ Real customer and pilgrim data must not be copied casually into Test or Staging 
 
 Database schema changes must be represented by migrations stored with the code and associated release history.
 
-When a customer is upgraded, the migrations required by that release are applied to the customer's Supabase project.
+When a customer is upgraded, the migrations required by that release are applied to the customer's Supabase project. How this fits into the release — who applies them, when, and in what order relative to the automatic application deployment — is in section 4.4, under the Engineering Playbook's migration rules.
 
-Untracked or arbitrary Production schema changes are not the normal deployment path.
+Untracked or arbitrary Production schema changes are not the normal deployment path; the exception is governed by section 8.5.
 
 ## 8.5 Emergency or Necessary Manual Database Changes
 
-Direct manual changes in Supabase are permitted when operationally necessary.
+Migrations are the normal and only routine path for schema change (section 8.4). A direct manual change to a customer's Production database structure or security configuration is an **incident, not an alternative route**.
 
-If a manual change alters database structure or security configuration, such as a table, column, policy, function, or equivalent schema element, the change must subsequently be represented in a migration in the codebase so that the repository and deployed database do not permanently diverge.
+This manual does not define a second break-glass policy. Where such a change is genuinely unavoidable, it is governed by the existing procedure:
+
+- Engineering Playbook Part 4, section 4.12 — **`M-56`**, which states the conditions that must all hold, including recorded explicit authorization, preservation of the exact SQL executed, a same-day repository migration reconciling the change, a documented reason, and drift never left silently in place.
+- `docs/architecture/BREAK_GLASS.md` — the break-glass account and its recovery procedure.
+
+Those rules apply unchanged to customer Production environments. The customer-deployment consequence is that the reconciling migration belongs in the release history for that customer, so the Customer Repository and the customer's deployed database do not permanently diverge — which is what makes section 11's recovery model work at all.
 
 ## 8.6 Customer Data and Documents
 
@@ -328,13 +410,13 @@ The technical team must not maintain an independent copy of customer pilgrim dat
 
 ## 8.7 Backup Approach
 
-For the database, the project relies on the backup capability provided by the customer's Supabase service/plan.
+For the **database**, the project relies on the backup capability provided by the customer's Supabase service/plan. No second or custom database-backup system is introduced.
 
-For Storage documents, an independent external backup may be added when it can be implemented in a simple, automated, and low-maintenance way.
+For **Storage documents**, an independent external backup is required, and the mechanism is approved and settled: a daily, copy-oriented `rclone` backup to a customer-owned Cloudflare R2 destination.
 
 A complex custom backup platform is not a requirement for the product.
 
-The exact Storage backup mechanism may therefore be selected during customer deployment or later operational setup when appropriate.
+Both are defined in full in **section 11**, which governs — section 11.4 for the database and sections 11.5 to 11.7 for Storage. The mechanism is not left to be selected during deployment.
 
 ## 8.8 Secrets and API Key Inventory
 
@@ -347,13 +429,19 @@ For each entry, the documentation should identify:
 - Where it is stored.
 - Whether it is client-safe/public configuration or a server-side secret.
 
-Existing Secrets do not require mandatory rotation solely because a maintenance relationship ends. Rotation may be performed when there is a specific operational or security reason.
+The inventory must also cover the required per-customer configuration values in section 3.7 (`ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`, `VERCEL_OWNER_SLUG`), which are not secrets but are customer-specific and required.
+
+**Rotation during normal maintenance.** There is no mandatory periodic rotation merely for the sake of rotation. Rotation is performed when there is a specific operational or security reason.
+
+**Rotation at final offboarding** is different, and is required — see section 12.3.
 
 ## 8.9 End of Maintenance or Technical Handover
 
 Because the Supabase environment is customer-owned from the beginning, ending the maintenance relationship does not require transferring the Supabase project.
 
 The handover process consists of confirming that the customer or replacement technical team has the required access and technical information, then removing the outgoing technical team's Supabase access after the handover is complete.
+
+Where this is a **final** offboarding, the secret-rotation and verification steps in section 12.3 also apply: removing a console seat does not invalidate a server-side key the outgoing team already held.
 
 ## 8.10 Production Project Deletion
 
@@ -383,11 +471,13 @@ The Production plan used for a commercial customer deployment must permit commer
 
 ## 9.2 Technical Team Access
 
-While the technical team is responsible for operating and maintaining the system, it may hold full administrative access to the customer's Vercel environment.
+The technical team receives the permissions necessary to carry out its responsibilities, following least privilege.
+
+Full administrative access may be granted where it is genuinely required for administration or maintenance of the customer's Vercel environment. It is a justified grant, not an automatic default.
 
 Access must use the technical team's own authorized accounts rather than shared use of the customer's password.
 
-The customer remains the underlying owner of the Vercel account/project and may remove the outgoing technical team's access after a completed handover.
+The customer remains the underlying owner of the Vercel account/project and may remove the outgoing technical team's access after a completed handover. At final offboarding, section 12.3 applies.
 
 ## 9.3 Spend Management
 
@@ -417,9 +507,11 @@ This preserves the Customer Repository as the deployable source for that custome
 
 ## 9.5 Automatic Production Deployment
 
-After an approved Pull Request is merged into the Customer Repository's protected `main` branch, Vercel may automatically deploy that merged version to Production.
+After an approved Pull Request is merged into the Customer Repository's protected `main` branch, Vercel automatically deploys that merged version to Production.
 
 The approval controls occur before the merge through the agreed Pull Request and release process.
+
+This deploys the **application only**. A release that also contains database migrations or Edge Function changes is not complete at merge — see section 4.4 for what else must happen and in what order.
 
 ## 9.6 Environment Variables
 
@@ -434,6 +526,8 @@ Documentation records variable names, purpose, and storage location without reco
 Client-safe/public frontend configuration required by the application, such as the Supabase project URL, the applicable public/publishable Supabase key, and the VAPID public key, is configured in Vercel as appropriate.
 
 Server-only secrets remain in their designated server-side environment rather than being exposed through frontend Vercel variables.
+
+Deployment setup must also configure the required per-customer values in section 3.7 — `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG` and `VERCEL_OWNER_SLUG` — in the customer's Supabase Edge Function configuration, pointing at the customer's own domain, Vercel project and Vercel account. A deployment is not correctly configured until these are set explicitly.
 
 ## 9.7 Preview Deployments
 
@@ -543,7 +637,9 @@ A Production domain or subdomain may be changed in the future.
 
 When changing it, the new address must first be configured, connected to Vercel, and verified to operate correctly.
 
-The old Production address should only be removed after the new address has been successfully validated, reducing the risk of avoidable service interruption.
+A domain or subdomain change also requires updating `ALLOWED_ORIGINS` (section 3.7) so the customer's Edge Functions accept requests from the new address. If this is missed, the application will fail against the Edge Functions once the old address stops being used. Where the customer's Vercel project or account also changes, `VERCEL_PROJECT_SLUG` and `VERCEL_OWNER_SLUG` must be updated with it.
+
+The old Production address should only be removed after the new address has been successfully validated — including the Edge Function paths — reducing the risk of avoidable service interruption.
 
 ---
 
@@ -574,33 +670,41 @@ Each Customer Repository must have one automated independent backup outside GitH
 
 GitHub remains the operational repository, while the external copy provides repository continuity if GitHub access or repository availability is lost.
 
-The exact external destination may be selected during implementation, with simplicity and maintainability as the primary criteria.
+The external copy contains application source and must be protected accordingly — it is stored in a controlled location, not an open or casually shared one.
+
+The exact external destination may be selected during implementation, with simplicity and maintainability as the primary criteria. This is the single statement of the repository-backup requirement; section 7 refers here.
 
 ## 11.4 Database Backup and Restore
 
-The customer's Supabase backup capability is the primary database backup mechanism.
+The customer's Supabase backup capability is the database backup mechanism.
 
-The restoration procedure must be documented clearly enough to be executed when required.
+**No second or off-platform database backup is introduced.** A separate custom database-backup system is deliberately not part of this architecture, and the Cloudflare R2 destination used for Storage (section 11.5) is **not** used for database dumps. This is an accepted, deliberate simplicity trade-off: the architecture stays low-maintenance, and the residual risk — that database recovery depends on the customer's Supabase project and its native backups remaining available — is knowingly accepted.
 
-A separate custom database-backup platform is not required unless a future operational requirement justifies one.
+The restoration procedure must be documented clearly enough to be executed when required, and must be proven once by the Recovery Test in section 11.9 before the first commercial deployment.
 
 ## 11.5 Supabase Storage Backup
 
-Customer Supabase Storage must have an independent external backup when the approved simple implementation is in place.
+Customer Supabase Storage must have an independent external backup.
 
-The selected architecture is:
+The approved architecture is:
 
 ```text
 Customer Supabase Storage
           ↓
-        rclone
+        rclone  (copy-oriented)
           ↓
 Customer-owned Cloudflare R2
 ```
 
 The Cloudflare/R2 account and backup destination are customer-owned.
 
-Before this mechanism is relied upon operationally for the first customer, a small proof of concept must confirm that both backup and restoration work correctly.
+**The backup is copy-oriented, not a destructive mirror.** Deleting a file from Supabase Storage must **not** cause the backup copy in R2 to be deleted. Destructive `sync --delete` semantics must not be used.
+
+This matters because the files in question are permanent business records — passports, IDs, contracts, tickets, permits, pilgrim photos — which the Engineering Playbook states are never deleted as a side effect of anything (`M-70`). A destructive mirror would propagate an accidental or malicious deletion into the only external copy within a day.
+
+No Object Lock, retention platform, or separate archive system is introduced at this stage.
+
+Before this mechanism is relied upon operationally for the first customer, the Recovery Test in section 11.9 must confirm that both backup and restoration work correctly.
 
 ## 11.6 Storage Backup Frequency
 
@@ -618,15 +722,15 @@ Season archiving and long-term historical retention are separate product/lifecyc
 
 If the automated Storage backup fails, the technical team must receive a failure notification.
 
+A run that completes without copying anything is treated as a failure, not a success. A backup that reports success while having saved nothing is the failure mode that matters most, and the notification must cover it.
+
 This requirement should be implemented without introducing a separate complex monitoring platform solely for the backup process.
 
-## 11.9 Restore Verification
+## 11.9 Recovery Test
 
-The Storage restore path must be tested when the backup mechanism is initially implemented and after a material change to the backup method.
+**Before the first commercial customer deployment, one complete Recovery Test must be performed and must succeed.**
 
-Continuous or frequent scheduled restore drills are not required by the current architecture.
-
-The intended recovery path is:
+The Recovery Test proves that the recovery process documented in this section can actually restore the required system and data state — not merely that backups exist. It covers the database restore path (section 11.4) and the Storage restore path:
 
 ```text
 Cloudflare R2
@@ -636,9 +740,18 @@ Restore
 Supabase Storage
 ```
 
+**Why this is required rather than assumed.** The repository records that a previous full recovery attempt for this system **was not completed successfully**: the restore of Supabase-managed Auth and Storage state collided with the managed project's own state and the attempt was stopped (`docs/PROJECT_MASTER_HANDOFF.md`, section 11.2). The backup itself was complete and verified; the restore was never proven end to end. Until the Recovery Test described here succeeds, recovery for this system is **not proven**, and the first commercial deployment must not be declared Production Ready on the assumption that it is (section 13).
+
+**After it succeeds:**
+
+- No recurring or scheduled restore drills are required.
+- The Recovery Test is repeated only after a material change to the backup or recovery architecture.
+
+A recurring recovery-testing system is deliberately not built.
+
 ## 11.10 Configuration Recovery Information
 
-Recovery documentation must preserve the information required to reconstruct the customer environment, including the required Environment Variable names, relevant Supabase/Vercel configuration, system DNS records, and external service dependencies.
+Recovery documentation must preserve the information required to reconstruct the customer environment, including the required Environment Variable names, relevant Supabase/Vercel configuration, the per-customer configuration values in section 3.7 (`ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`, `VERCEL_OWNER_SLUG`), system DNS records, and external service dependencies.
 
 Actual passwords and secret values must not be written into this manual.
 
@@ -661,9 +774,41 @@ The technical handover must confirm that the customer or replacement technical t
 
 Access must be practically verified rather than assumed.
 
-After the handover is complete, the outgoing technical team's access to customer-owned infrastructure may be removed.
+Source-code delivery is not automatically part of this standard infrastructure handover. What that means in practice is in section 12.4, and the governing policy is in section 14.
 
-Source-code delivery is not automatically part of this standard infrastructure handover and is governed separately below.
+## 12.3 Final Offboarding
+
+At **final** offboarding — when the outgoing technical team is being removed and the customer or another team takes control — three things are required:
+
+1. **Remove outgoing access.** Remove the outgoing team's accounts and permissions from Supabase, Vercel, the Domain Registrar and DNS, and any other customer-owned service it held.
+
+2. **Rotate sensitive server-side credentials.** Rotate the server-side credentials and secrets the outgoing team could have known or accessed — for example the Supabase service-role key, the database password, platform access tokens, and server-side integration credentials such as the OCR/AI API key, the WhatsApp token and the private VAPID key, together with the backup destination credentials.
+
+   This is required because removing an account removes **console** access, not knowledge of a key. A server-side key that was legitimately handled during the maintenance period keeps working after the account that used it is gone, and a service-role key bypasses row-level security entirely.
+
+3. **Verify the system still operates** after the credential changes, before the handover is treated as complete. Rotating a secret that something depends on and not noticing is the predictable failure here.
+
+This is a one-time offboarding step. It does not create a recurring key-rotation programme; during normal ongoing maintenance the rule in section 8.8 applies and there is no mandatory periodic rotation.
+
+## 12.4 What the Standard Handover Does and Does Not Provide
+
+A completed standard technical handover gives the customer **independence over its Production infrastructure and data**. The customer and any replacement technical team can operate, administer, support and recover the running system, because Supabase, Vercel, the domain and DNS, and the backup destination are all customer-owned.
+
+It does **not** give a replacement technical team the ability to modify, develop or deploy new application source-code releases. Source code is not part of the standard handover (section 14.1), and application releases are deployed from the Customer Repository (section 9.4), which remains vendor-controlled.
+
+The practical consequence, stated plainly so the two sections cannot be read as contradicting each other:
+
+| Capability | Standard handover |
+|---|---|
+| Operate, administer and support the running system | Yes |
+| Manage users, data, configuration and secrets | Yes |
+| Restore from backup and recover the environment | Yes |
+| Change DNS, domain, and platform settings | Yes |
+| Roll back to a previous deployed application version | Yes |
+| Build, change or deploy a **new** application release | No |
+| Apply a new database migration as part of a release | No |
+
+If the customer wants another technical team to take over source-code development or maintenance, source-code access is governed by the separate arrangement in **section 14** — it is not an extension of the standard handover, and it does not follow from it automatically.
 
 ---
 
@@ -677,12 +822,14 @@ The checklist must verify, as applicable:
 - Customer-owned Vercel Production environment is configured and accessible.
 - The approved Customer Repository is connected to Vercel.
 - Pull Request, Preview, approval, merge, and Production deployment flow is working.
-- Required Environment Variables and server-side secrets are configured in their designated platforms.
 - Customer-owned Domain/DNS is connected correctly.
 - Production HTTPS is working.
-- Backup and recovery arrangements required by this manual are configured.
 - Required administrative access is available to the authorized technical team.
 - Production has been practically verified to operate after deployment.
+- **Backup** — the first Storage backup has actually **run and copied data successfully** to the customer-owned R2 destination. The existence of a configured backup job is not sufficient evidence (sections 11.5 to 11.8).
+- **Recovery** — the foundational Recovery Test in section 11.9 has **succeeded**. Before the first commercial deployment this is a prerequisite, not an optional check.
+- **Database and Edge Functions** — the migrations required by the release are applied, and the required Edge Functions are deployed from the approved release source (sections 4.4 and 8.4).
+- **Configuration** — required Secrets, Environment Variables and customer-specific configuration are set in their designated platforms, including the per-customer values in section 3.7: `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`, `VERCEL_OWNER_SLUG`.
 
 When the applicable checklist items pass, the customer deployment may be marked Production Ready.
 
@@ -697,6 +844,8 @@ The checklist is intended to be short and operational; it must not duplicate the
 Source code is not included automatically in the customer's standard technical handover.
 
 The Master Repository and Customer Repository remain under the approved vendor-controlled source-code model unless a separate agreement changes that arrangement.
+
+The technical consequence of this for a customer or a replacement technical team — what the standard handover does and does not enable — is set out in section 12.4. The two sections are intended to be read together: section 12 governs infrastructure handover, this section governs source code.
 
 ## 14.2 Optional Source Code Delivery
 
@@ -715,6 +864,10 @@ This manual does not create an automatic source-code escrow or automatic source-
 ---
 
 # Document Governance
+
+This document is the authoritative project document for customer deployment ownership, infrastructure handover, operational continuity, and source-code handover policy, as stated under Purpose. It does not outrank the Engineering Playbook on general engineering standards, nor any existing domain-specific authority.
+
+Where this manual and a governing document appear to disagree, that is a discrepancy to be recorded and resolved by review under Engineering Playbook `M-121` — not settled silently in favour of whichever document is newer.
 
 This document must be updated when a relevant technical handover decision is formally approved.
 
