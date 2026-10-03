@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "THE AUTHORITATIVE LINT BASELINE, in machine-readable form.",
+    "ENGINEERING_PLAYBOOK M-105 requires lint to be reported as a delta against",
+    "a known baseline, never as an absolute count. This file is that baseline, so",
+    "no operator has to know or type the current number: the release validator",
+    "reads it by default.",
+    "Lowering it is a reviewed repository change, made in the same pull request as",
+    "the lint debt it retires — which is what keeps the baseline authoritative.",
+    "Raising it is a regression and is not an acceptable way to make a run pass.",
+    "Cross-referenced by docs/architecture/BACKLOG.md entry 5."
+  ],
+  "command": "npm run lint",
+  "problems": 198,
+  "errors": 189,
+  "warnings": 9,
+  "measuredOn": "2026-10-03",
+  "measuredAt": "8b263765017b0a09651e74b059ba83dc9eec5f54"
+}

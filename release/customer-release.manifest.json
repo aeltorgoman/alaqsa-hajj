@@ -98,7 +98,8 @@
     "supabase/scripts/cleanup_empty_financial_groups.sql",
     "supabase/scripts/purge_orphan_company_uploads.mjs",
     "supabase/scripts/seed_test_seasons.sql",
-    "release"
+    "release",
+    "scripts"
   ],
 
   "forbiddenFileGlobs": [

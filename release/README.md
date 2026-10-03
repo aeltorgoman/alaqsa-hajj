@@ -21,7 +21,7 @@ node scripts/release/generate-customer-release.mjs \
 
 # 2. validate it — clean install, production build, lint delta
 node scripts/release/validate-customer-release.mjs \
-  --dir /tmp/customer-release-v1.0.0 --lint-baseline 198
+  --dir /tmp/customer-release-v1.0.0
 
 # 3. publish, only after both steps exited 0 (see "Publishing" below)
 ```
@@ -62,11 +62,61 @@ The validator then proves the snapshot stands on its own: `npm ci` from the
 shipped lockfile, `npm run build`, and `npm run lint` reported as a **delta**
 against the baseline (`M-105`) — a positive delta fails.
 
+### The lint baseline is committed, not typed
+
+The baseline lives in `release/lint-baseline.json` and the validator reads it by
+default, so **the operator neither knows nor updates the number**. Lowering it is
+a reviewed repository change made in the same pull request as the lint debt it
+retires — which is what keeps it authoritative — and `docs/architecture/BACKLOG.md`
+ن٥ cross-references it. The delta check is not optional: a missing or malformed
+baseline file fails the validation, a positive delta fails it, and a negative
+delta prints the instruction to lower the committed number. `--lint-baseline <n>`
+exists only to override it for a one-off investigation.
+
 ## Generated into the snapshot
 
 `.env.example` (variable **names and empty placeholders only** — never values),
 `README.md`, `RELEASE.md` (version, date, boundary statement, deployment steps)
 and `release-manifest.json` (sha256 of every shipped file).
+
+## Deployment readiness is a separate question
+
+Generating and validating a release needs **no environment and no secret value**;
+a snapshot is produced and proven with nothing configured anywhere. Whether a
+*target environment* is ready to receive a deployment is a different check, and
+it belongs to the deployment path, not to snapshot generation.
+
+`scripts/release/preflight-edge-config.mjs` is that check. Since the vendor
+fallbacks were removed, `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`,
+`VERCEL_OWNER_SLUG` and `VAPID_SUBJECT` are required in every environment, and a
+correct code change must not depend on an operator remembering that. The
+preflight runs as a `GATE` step inside the existing per-function redeploy
+workflows — `send-pilgrim-push`, `pilgrim-doc`, `whatsapp-send` — immediately
+before `supabase functions deploy`, and refuses the deployment when the target
+project does not hold the configuration the function's own source reads.
+
+```bash
+node scripts/release/preflight-edge-config.mjs \
+  --function send-pilgrim-push --project-ref <ref>
+```
+
+It derives what each function needs by reading every `Deno.env.get("…")` in that
+function and in the `_shared` files it imports, so a newly introduced variable
+cannot be missed. Each name is then classified against
+`envExampleVariables` in the manifest: platform-injected names are skipped,
+`edgeRequired` names must be present, `edgeFeature` names are reported as
+unavailable but do not fail, and a name in **none** of the three groups fails the
+gate as unclassified configuration.
+
+**What it can and cannot prove.** It reads secret **names only**, via
+`supabase secrets list` — the same names-only pattern already reviewed in
+`whatsapp-credential-free-verification.yml`. Secret values are never read,
+printed or compared; the Management API does not expose them and the gate must
+not want them. So it proves that a required name *is configured on the target*.
+It cannot prove a value is correct, current, or points at this customer's own
+domain, project and contact — that stays a human check under handover manual §13.
+It never passes on an unverifiable result: if the inventory cannot be read, or
+reads as empty, the gate **fails** rather than assuming.
 
 ## Publishing
 

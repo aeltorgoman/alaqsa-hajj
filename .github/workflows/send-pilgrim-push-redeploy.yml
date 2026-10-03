@@ -25,6 +25,9 @@
 # Nothing about the database, the migrations, WhatsApp or any other
 # function is in scope. Deliberately absent and audited for:
 # `db push` · `secrets set` · `config push` · any second slug.
+#
+# (`secrets list` IS used, in the configuration gate below: it reads
+# secret NAMES only and never a value. `secrets set` remains absent.)
 
 name: Redeploy send-pilgrim-push (ONE function)
 
@@ -49,7 +52,7 @@ jobs:
     env:
       PROJECT_REF: zkucwcnclbfvukhdqhgc
       SLUG: send-pilgrim-push
-      SRC_SHA256: "3d28c2e5b3b1737d79e3a6066e1f2cca9474532618bc2b4d82d3d8bb8c76be36"
+      SRC_SHA256: "c456738585760b599d8d2abdd916dffae420a5008a7d19ac98835109cb588199"
 
     steps:
       - name: "GATE: confirmation"
@@ -78,6 +81,23 @@ jobs:
           grep -A1 "^\[functions\.$SLUG\]" supabase/config.toml | grep -q "verify_jwt = true" || {
             echo "::error::config.toml no longer declares verify_jwt = true for $SLUG"; exit 1; }
           echo "commit=${GITHUB_SHA} sha256=$got"
+
+      # ── الساقُ الصفريّة: جاهزيةُ البيئة قبل النشر ──────────────
+      # `ALLOWED_ORIGINS` و`VERCEL_PROJECT_SLUG` و`VERCEL_OWNER_SLUG`
+      # و`VAPID_SUBJECT` لم يبقَ لها افتراضٌ في الشيفرة، فصارت ضبطاً
+      # **إلزاميّاً** لكلّ بيئة. ونشرٌ بلا ضبطٍ يُنتج دالّةً لا يبلغها
+      # متصفّح — ولا يجوز أن يُكتشف ذلك بعد النشر.
+      # والأسماءُ وحدها تُقرأ (`secrets list`) كما في فحص واتساب
+      # العديم الاعتماد: لا قيمةَ سرٍّ تُقرأ ولا تُطبع ولا تُقارَن.
+      # وتعذُّرُ قراءة الجرد **إخفاقٌ** لا مرورٌ مفترَض.
+      - name: "GATE: required Edge Function configuration is present on the project"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          node scripts/release/preflight-edge-config.mjs \
+            --function "$SLUG" --project-ref "$PROJECT_REF"
 
       - name: "DEPLOY: exactly one function"
         env:

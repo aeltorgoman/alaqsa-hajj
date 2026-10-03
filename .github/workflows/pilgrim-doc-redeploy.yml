@@ -15,6 +15,9 @@
 # (`pilgrim-doc = false`, the approved public-with-session design).
 # Secrets are not touched. Deliberately absent and audited for:
 # `db push` · `secrets set` · `config push` · any second slug.
+#
+# (`secrets list` IS used, in the configuration gate below: it reads
+# secret NAMES only and never a value. `secrets set` remains absent.)
 
 name: Redeploy pilgrim-doc (ONE function)
 
@@ -41,7 +44,7 @@ jobs:
       SLUG: pilgrim-doc
       SRC_SHA256: "6eaa7c95192757a936074ecfe226ce3c167c0b85b059e7191f46cb02a6be39f0"
       RATELIMIT_SHA256: "02e26e648c3eb0918675be96d59e5eaed4d9548d7fb5d86aba44d977c7be7cd7"
-      HTTP_SHA256: "147f3657212178c7e96cbef08ff3048fbe4e010ee8c2826e41e142608bd1d1d1"
+      HTTP_SHA256: "81620f9953f2b2f62018bc5132fb3b108a53c84ef6d6375785c3a517c25a0388"
 
     steps:
       - name: "GATE: confirmation"
@@ -72,6 +75,23 @@ jobs:
           grep -q 'portalDocSession: { scope: "portal-doc-session", limit: 60, windowSeconds: 3600 }' supabase/functions/_shared/rateLimit.ts
           grep -q 'portalDocSign: { scope: "portal-doc-sign", limit: 60,  windowSeconds: 3600 }' supabase/functions/_shared/rateLimit.ts
           echo "commit=${GITHUB_SHA} limits src=2000 session=60 sign=60"
+
+      # ── الساقُ الصفريّة: جاهزيةُ البيئة قبل النشر ──────────────
+      # `ALLOWED_ORIGINS` و`VERCEL_PROJECT_SLUG` و`VERCEL_OWNER_SLUG`
+      # و`VAPID_SUBJECT` لم يبقَ لها افتراضٌ في الشيفرة، فصارت ضبطاً
+      # **إلزاميّاً** لكلّ بيئة. ونشرٌ بلا ضبطٍ يُنتج دالّةً لا يبلغها
+      # متصفّح — ولا يجوز أن يُكتشف ذلك بعد النشر.
+      # والأسماءُ وحدها تُقرأ (`secrets list`) كما في فحص واتساب
+      # العديم الاعتماد: لا قيمةَ سرٍّ تُقرأ ولا تُطبع ولا تُقارَن.
+      # وتعذُّرُ قراءة الجرد **إخفاقٌ** لا مرورٌ مفترَض.
+      - name: "GATE: required Edge Function configuration is present on the project"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          node scripts/release/preflight-edge-config.mjs \
+            --function "$SLUG" --project-ref "$PROJECT_REF"
 
       - name: "DEPLOY: exactly one function"
         env:
