@@ -20,7 +20,7 @@ The Engineering Playbook (`docs/ENGINEERING_PLAYBOOK.md`) remains the authoritat
 
 Within its own domain, this manual is the authoritative project document for:
 
-- Customer deployment ownership.
+- Customer deployment ownership, including the external service accounts a deployment depends on.
 - Infrastructure handover.
 - Operational continuity.
 - Source-code handover policy.
@@ -114,6 +114,9 @@ The following are **not** transferred into a Customer Repository:
 - Experiments and abandoned work.
 - Unrelated development history.
 - Any internal work that is not part of the approved customer release.
+- Internal operational workflows and verification tooling that target vendor-owned infrastructure.
+
+That last exclusion is not theoretical. The Master Repository's operational workflows and verification scripts carry vendor project identifiers, and a snapshot that copied them unchanged would give a customer repository active automation pointing at vendor-owned production or test infrastructure — and would leave the vendor's own production-safety guards protecting the wrong project. The clean release process must ensure a Customer Repository contains no automation that unintentionally targets vendor-owned infrastructure. Where a customer deployment genuinely needs an operational workflow, it is included deliberately and configured for that customer's own environment.
 
 The Customer Repository maintains **its own clean customer release history** instead — one identifiable commit/release state per approved customer release, tagged under the versioning rules in section 5:
 
@@ -205,6 +208,8 @@ Examples include:
 
 The customer's Supabase Edge Function configuration also holds the non-secret per-customer values in section 3.7.
 
+The external service accounts these credentials belong to — who owns them, who pays, and what happens at handover — are covered in **section 15**. Documenting a secret is not the same as documenting the account behind it.
+
 ## 3.4 GitHub Actions Secrets
 
 GitHub Actions Secrets are reserved for credentials that GitHub automation itself requires.
@@ -227,6 +232,7 @@ Before the first commercial customer deployment, perform a dedicated Secret and 
 - Environment documentation and examples.
 - Current Supabase key model and the planned migration from legacy keys where applicable.
 - The required per-customer configuration values in section 3.7.
+- The external service accounts and credentials in section 15.
 
 ## 3.7 Required Per-Customer Configuration Values
 
@@ -237,8 +243,9 @@ Some configuration values are not secrets but are still **customer-specific** an
 | `ALLOWED_ORIGINS` | Customer's Supabase Edge Function configuration | The browser origins the customer's Edge Functions accept requests from — the customer's own Production domain and preview origins |
 | `VERCEL_PROJECT_SLUG` | Customer's Supabase Edge Function configuration | Identifies the customer's own Vercel project |
 | `VERCEL_OWNER_SLUG` | Customer's Supabase Edge Function configuration | Identifies the customer's own Vercel account/team |
+| `VAPID_SUBJECT` | Customer's Supabase Edge Function configuration | The Web Push sender contact identity required by the VAPID standard — an appropriate customer contact address, not a vendor address (section 15.3) |
 
-These values must reference the **customer's own** domain, Vercel project, and Vercel account. A customer deployment must never be left pointing at a vendor-owned or another customer's origin, project, or account — that would breach the customer isolation rule in section 3.5.
+These values must reference the **customer's own** domain, Vercel project, Vercel account, and contact identity. A customer deployment must never be left pointing at a vendor-owned or another customer's origin, project, account, or contact address — that would breach the customer isolation rule in section 3.5.
 
 They are also required by:
 
@@ -247,8 +254,13 @@ They are also required by:
 - Configuration recovery documentation (section 11.10).
 - The Final Customer Deployment Checklist (section 13).
 
+**What happens today when they are not set.** The current implementation carries **vendor-specific fallback values** for all four. The behaviour differs by value and should not be described in one sentence:
+
+- For `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG` and `VERCEL_OWNER_SLUG`, an unconfigured customer deployment **fails closed, not open**. CORS is not opened to everyone: the customer's own origin is simply not trusted, so the application does not work against its Edge Functions. The remaining defect is the inverse one — the customer's Edge Functions continue to trust the **vendor's** origin and the vendor's preview-origin pattern. A valid customer session is still required, so this is not an open door, but it is a trust relationship the customer never agreed to and it must be removed for proper customer isolation.
+- For `VAPID_SUBJECT`, the fallback is a **vendor contact address**, which would be presented as the sender identity for that customer's push notifications.
+
 > **Follow-up implementation item (not resolved by this manual).**
-> The shared Edge Function code currently carries **vendor-specific fallback values** for these three settings, so a deployment that omits them silently inherits vendor defaults instead of failing. Before the first commercial customer deployment, that fallback behaviour must be removed or made safe for customer deployments — for example by requiring the values explicitly and failing loudly when they are absent. This is an application-code change and is deliberately **not** made by this manual. Until it is done, setting all three values explicitly is mandatory for every customer deployment, and the checklist in section 13 verifies it.
+> The vendor-specific fallbacks must be removed or made safe for customer deployments before the first commercial deployment — for example by requiring the values explicitly and failing loudly when they are absent, and by removing the vendor preview-origin trust. This affects the shared Edge Function HTTP code for the three origin/project values and the push function for `VAPID_SUBJECT`. These are application-code changes and are deliberately **not** made by this manual. Until they are done, setting all four values explicitly is mandatory for every customer deployment, and the checklist in section 13 verifies it.
 
 ---
 
@@ -465,7 +477,7 @@ The inventory must also cover the required per-customer configuration values in 
 
 **Rotation during normal maintenance.** There is no mandatory periodic rotation merely for the sake of rotation. Rotation is performed when there is a specific operational or security reason.
 
-**Rotation at final offboarding** is different, and is required — see section 12.3.
+**Rotation at final offboarding** is different, and is required for the credentials named in section 12.3 — with two deliberate exceptions, the customer's Anthropic credential and the VAPID key pair, where routine rotation would break a working customer service. Those exceptions are defined in sections 15.1 and 15.3.
 
 ## 8.9 End of Maintenance or Technical Handover
 
@@ -486,6 +498,8 @@ Permanent deletion requires the customer's explicit request or approval and conf
 During an active maintenance period, the technical team is responsible for tracking Supabase platform changes that materially affect the system and taking the actions necessary to preserve compatibility and continued operation.
 
 This includes relevant changes to APIs, authentication/key models, platform services, or deprecated functionality used by the system.
+
+The same responsibility applies to the external service APIs the system calls directly, which are listed in section 15. The concrete current case is the Anthropic API: the model identifier and API version used for document OCR are fixed in the application code, and provider model lifecycles move independently of this system (section 15.1).
 
 ---
 
@@ -793,6 +807,8 @@ A recurring recovery-testing system is deliberately not built.
 
 Recovery documentation must preserve the information required to reconstruct the customer environment, including the required Environment Variable names, relevant Supabase/Vercel configuration, the per-customer configuration values in section 3.7 (`ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`, `VERCEL_OWNER_SLUG`), system DNS records, and external service dependencies.
 
+It must also record the external service accounts and third-party dependencies in section 15, since an environment cannot be reconstructed from platform configuration alone.
+
 Actual passwords and secret values must not be written into this manual.
 
 ---
@@ -810,6 +826,7 @@ The technical handover must confirm that the customer or replacement technical t
 - Supabase.
 - Vercel.
 - Domain Registrar and relevant DNS management.
+- The customer-owned external service accounts in section 15 that the deployment actually uses.
 - Required technical documentation, configuration references, Environment Variable names, and external-service dependencies.
 
 Access must be practically verified rather than assumed.
@@ -822,13 +839,20 @@ At **final** offboarding — when the outgoing technical team is being removed a
 
 1. **Remove outgoing access.** Remove the outgoing team's accounts and permissions from Supabase, Vercel, the Domain Registrar and DNS, and any other customer-owned service it held.
 
-2. **Rotate sensitive server-side credentials.** Rotate the server-side credentials and secrets the outgoing team could have known or accessed — for example the Supabase service-role key, the database password, platform access tokens, and server-side integration credentials such as the OCR/AI API key, the WhatsApp token and the private VAPID key, together with the credentials for the customer's R2 Storage backup destination.
-
-   The vendor-controlled Customer Repository backup (section 11.3) is not customer infrastructure and is not part of this handover; its credentials are managed under the outgoing team's own practice, not rotated or transferred here.
+2. **Rotate sensitive server-side credentials — with two defined exceptions.** Rotate the server-side credentials and secrets the outgoing team could have known or accessed: the Supabase service-role key, the database password, platform access tokens, and the credentials for the customer's R2 Storage backup destination.
 
    This is required because removing an account removes **console** access, not knowledge of a key. A server-side key that was legitimately handled during the maintenance period keeps working after the account that used it is gone, and a service-role key bypasses row-level security entirely.
 
-3. **Verify the system still operates** after the credential changes, before the handover is treated as complete. Rotating a secret that something depends on and not noticing is the predictable failure here.
+   **The two exceptions exist because rotating them would break a working customer service, which would defeat the purpose of the handover:**
+
+   - **The customer's Anthropic credential** is not rotated or revoked merely because maintenance ends, where doing so would stop document OCR working. It is rotated when there is a genuine reason — suspected exposure, a security requirement, access removal, or normal credential lifecycle — and then in a way that preserves the customer's service. See section 15.1.
+   - **The VAPID key pair** is not routinely rotated at offboarding. Changing it invalidates every existing pilgrim push subscription. The working key pair stays with the customer's production environment and is made available to the authorized incoming technical team. See section 15.3.
+
+   Where an exception applies, the corresponding account access is still removed under step 1, and the credential's custody passes to the customer or the incoming team.
+
+   The vendor-controlled Customer Repository backup (section 11.3) is not customer infrastructure and is not part of this handover; its credentials are managed under the outgoing team's own practice, not rotated or transferred here.
+
+3. **Verify the system still operates** after the credential changes, before the handover is treated as complete. Rotating a secret that something depends on and not noticing is the predictable failure here, so the verification must exercise the features that depend on the rotated credentials — not only confirm that the application loads.
 
 This is a one-time offboarding step. It does not create a recurring key-rotation programme; during normal ongoing maintenance the rule in section 8.8 applies and there is no mandatory periodic rotation.
 
@@ -872,7 +896,9 @@ The checklist must verify, as applicable:
 - **Backup** — the first Storage backup has actually **run and copied data successfully** to the customer-owned R2 destination. The existence of a configured backup job is not sufficient evidence (sections 11.5 to 11.8).
 - **Recovery** — the foundational Recovery Test in section 11.9 has **succeeded**. Before the first commercial deployment this is a prerequisite, not an optional check.
 - **Database and Edge Functions** — the migrations required by the release are applied, and the required Edge Functions are deployed from the approved release source (sections 4.4 and 8.4).
-- **Configuration** — required Secrets, Environment Variables and customer-specific configuration are set in their designated platforms, including the per-customer values in section 3.7: `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`, `VERCEL_OWNER_SLUG`.
+- **Configuration** — required Secrets, Environment Variables and customer-specific configuration are set in their designated platforms, including the per-customer values in section 3.7: `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`, `VERCEL_OWNER_SLUG`, `VAPID_SUBJECT`. The VAPID public key configured in Vercel and the private key in Supabase are the **same key pair** (section 15.3).
+- **External service accounts** — the customer-owned Anthropic account and credential are in place for that customer (section 15.1), and, where WhatsApp is being activated, the customer-owned Meta/WhatsApp assets are in place before activation (section 15.2).
+- **Feature verification** — document OCR and Pilgrim Portal push notifications have each been practically verified to work in the customer's Production environment, not merely configured.
 
 When the applicable checklist items pass, the customer deployment may be marked Production Ready.
 
@@ -905,6 +931,107 @@ Any broader transfer of ownership or commercial rights requires an explicit sepa
 Any special source-code arrangement intended for exceptional circumstances, including permanent discontinuation of maintenance or service, is a contractual and commercial matter to be defined separately before such a commitment is offered to a customer.
 
 This manual does not create an automatic source-code escrow or automatic source-code release right.
+
+---
+
+# 15. External Service Accounts and Third-Party Dependencies
+
+Sections 8 to 10 cover the three platforms every customer deployment owns: Supabase, Vercel, and the Domain/DNS. This section covers the remaining external services the system depends on.
+
+Naming a secret is not the same as defining the account behind it. Section 3 says where each credential is stored; this section says **who owns the account, who pays, who has access, what happens at handover, and whether the customer can keep operating the feature without the vendor**.
+
+This section states the ownership rules and the constraints that follow from them. It deliberately does not give step-by-step setup instructions. Creating and configuring the customer's Anthropic account, configuring Meta/WhatsApp when that feature is activated, generating the customer's VAPID key pair and setting `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, and testing OCR and push notifications, are operational procedures for the separate Customer Deployment Guide. The rules here are what that guide must satisfy.
+
+## 15.1 Anthropic — Document OCR
+
+The system extracts passport and document data by calling the Anthropic API from a Supabase Edge Function. Without it, document scanning does not work; the rest of the system is unaffected.
+
+**This means the Anthropic API / Console account used by a customer's production deployment, not a personal Claude.ai chat subscription.** They are different products: a Claude.ai subscription does not provide an API credential and cannot be used by this system.
+
+**Ownership and billing.**
+
+- The production Anthropic API / Console account is **customer-owned**, created using an appropriate customer-controlled identity or account.
+- API usage and billing are the **customer's** responsibility.
+- The technical team receives only the access required to configure and maintain the integration, following the least-privilege rule in section 1.2.
+
+**Credential handling.**
+
+- `ANTHROPIC_API_KEY` is a server-side secret and is stored in the **customer's** Supabase Edge Function secrets (section 3.3). It is never exposed to the frontend.
+- Production Anthropic credentials must **not** be shared between customer deployments (section 3.5).
+- A customer's production OCR must use a credential belonging to that customer's own environment.
+
+**Final handover and offboarding.**
+
+- Remove the outgoing technical team's access to the customer's Anthropic account, as applicable.
+- **Do not rotate or revoke the customer's working Anthropic credential merely because maintenance ends**, where doing so would break OCR. This is a deliberate exception to the rotation rule in section 12.3.
+- Rotate or revoke it where there is a genuine reason — suspected exposure, a security requirement, access removal, or normal credential lifecycle — and do so in a way that preserves the customer's service continuity.
+
+**Continuity.** Because the account, the billing relationship and the credential are the customer's, the customer can continue operating document OCR after the vendor is no longer involved.
+
+**Operational dependency a replacement team must know about.** The Anthropic **model identifier and API version are currently fixed in the application code** rather than configured per deployment. Provider model lifecycles move independently of this system, so a model retirement or API change can stop OCR working with no change on our side. Anthropic API and model compatibility must therefore be monitored as part of the responsibility in section 8.11, and updating them is an application-code change made through the normal release process (section 4.4).
+
+## 15.2 Meta / WhatsApp Business
+
+The system can send a WhatsApp message to a pilgrim through the Meta Graph API from a Supabase Edge Function.
+
+**Current state — this integration is not live.** The live WhatsApp integration is **deliberately deferred** until a real external number and configuration are available and approved. The function performs all of its authorization, permission and rate-limit checks and then returns a clear "configuration incomplete" response when the credentials are absent. The system operates fully without it; only the sending of the message itself is unavailable. Nothing in this section should be read as describing a currently active production integration.
+
+**The ownership rules below apply when the feature is activated for a customer, and are to be settled before activation, not after.** A WhatsApp Business phone number is bound to the Meta Business Account it was registered under and is materially harder to move afterwards than an API key.
+
+**Ownership and billing, on activation.**
+
+- The Meta Business and WhatsApp Business assets used by that customer's production deployment are **customer-owned**.
+- The production WhatsApp phone number belongs to the customer and control of it remains with the customer.
+- Message templates and their approvals belong to the **customer's** WhatsApp Business environment.
+- Any applicable Meta/WhatsApp usage charges are the **customer's** responsibility.
+- The technical team receives only the access required for setup and maintenance.
+
+**Credential handling.**
+
+- `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_ID` are server-side production configuration held in the **customer's** environment (section 3.3).
+- Production WhatsApp credentials and assets must **not** be shared between customer deployments (section 3.5).
+
+**Final handover and offboarding.** Remove the outgoing technical team's access to the customer's Meta Business and WhatsApp Business assets, while preserving the customer's phone number, message templates and messaging capability.
+
+**Continuity.** Because the Business account, the number and the templates are the customer's, the customer can continue operating WhatsApp messaging after the vendor is no longer involved.
+
+## 15.3 Web Push and the VAPID Key Pair
+
+Pilgrim Portal notifications use the Web Push standard, which authenticates the sender with a VAPID key pair.
+
+**VAPID is not an external service account.** There is no provider to register with, no subscription, and no billing. It is a cryptographic key pair this project generates itself. A replacement technical team should not go looking for an account that does not exist. The browser push services that actually deliver the notifications are chosen by each pilgrim's own browser and require no account from us.
+
+**Per-customer key pair.**
+
+- Generate a **dedicated VAPID key pair for each customer deployment**.
+- A production VAPID key pair must **not** be reused across different customers.
+- `VAPID_PUBLIC_KEY` is the public component; `VAPID_PRIVATE_KEY` is sensitive and remains server-side in the customer's Supabase Edge Function secrets.
+- `VITE_VAPID_PUBLIC_KEY`, configured in the customer's Vercel project, must correspond to the **same key pair** as the backend private key. A mismatched pair produces push that fails without an obvious error.
+- `VAPID_SUBJECT` must be explicitly configured with an appropriate customer contact identity and must not rely on the vendor default (section 3.7).
+
+**The key pair is production continuity configuration, not an ordinary secret.**
+
+The application subscribes each pilgrim's browser using the public key, so **every stored push subscription is bound to the specific key pair that created it. Changing the key pair invalidates all existing subscriptions**, and each pilgrim must re-enable notifications on their own device — an action no technical team can perform for them. The failure is silent: notifications simply stop arriving, and an administrative console shows nothing wrong.
+
+Therefore:
+
+- **Do not routinely rotate the VAPID key pair merely because the maintenance or vendor relationship ends.** This is a deliberate exception to the rotation rule in section 12.3.
+- The existing working key pair remains with the customer's production environment and is made available to the authorized incoming technical team as required for continuity.
+- Rotate it only where there is a genuine reason, such as suspected compromise or another security requirement — and then treat the resulting re-subscription of pilgrims as a planned, communicated activity, not a side effect.
+
+The key pair must be preserved in the customer's configuration recovery information (section 11.10): losing the private key has the same effect as rotating it.
+
+## 15.4 Third-Party Runtime and Deployment Dependencies
+
+The current implementation depends on a small number of externally hosted resources. **None of these requires a customer account, credential, or billing relationship**, and none is customer infrastructure. They are recorded here so a future technical team knows they exist and can diagnose failures that originate outside the customer's own platforms.
+
+| Dependency | Where it is used | Practical consequence if unavailable |
+|---|---|---|
+| **Google Fonts** | Arabic webfonts in the Pilgrim Portal, the application theme, and printed output | Typography falls back to other fonts. Because printed output is treated as authoritative and its layout is verified, a font substitution can change how printed documents render. |
+| **Externally hosted airline logo** | An airline logo in the flights and reports screens is **hotlinked** from an external encyclopedia-hosted image rather than served from the application | The logo stops displaying in flight screens and printed reports. Availability is outside this project's control, and the external host may change or restrict the asset at any time. |
+| **`esm.sh` and `deno.land/std`** | Module sources imported directly by the Supabase Edge Functions | These resolve when a function is **deployed**. If either source is unavailable, Edge Functions cannot be deployed — including a security fix. This is a dependency of the deployment path in section 4.4, not of the running system. |
+
+Whether to self-host the fonts and the logo asset, or to vendor and pin the Edge Function module sources, is implementation work to be decided when it is addressed. It is not an architecture decision for this manual, and no customer account or ownership question arises from any of it.
 
 ---
 
