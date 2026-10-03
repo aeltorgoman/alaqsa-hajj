@@ -136,6 +136,26 @@ Deno.serve(async (req: Request) => {
     const results = new Map<number, { status: string; error: string | null }>();
     const deadEndpoints: string[] = [];
 
+    /* ⚠️ مهلةُ كلِّ نداء — بالمللي ثانية (`socket.setTimeout` في Node).
+       بلا هذه المهلة لا سقفَ لنداءٍ واحد: نقطةُ نهايةٍ تقبل الوصلةَ ولا
+       تردّ تُجمّد دفعتَها بلا حدّ، فتستهلك الـ١٥٠ ثانيةً كلَّها ويُقتل
+       الاستدعاء — **فلا يُكتب أيُّ سجلِّ تسليم ولا `push_sent_at`** وقد
+       وصلت مئاتُ التنبيهات فعلاً. فالسجلُّ يقول «لم يُرسَل» والحاجُّ
+       استلم، وإعادةُ الإرسال تُكرّر عليه. والمهلةُ تُحوّل ذلك إلى فشلٍ
+       محدودٍ مُصنَّفٍ يبقى معه الحسابُ كاملاً.
+
+       ولمَ ٣٠٠٠ بالضبط: أسوأُ حالةٍ أن تنتهي مهلةُ أبطأِ نداءٍ في كلِّ
+       دفعة، أي ٢٥ × ٣ث + ~٥ث (بدءٌ بارد وقراءاتٌ قبل الحلقة وتثبيتٌ
+       بعدها) ≈ ٨٠ث — نحوَ نصفِ السقف، فالهامشُ ~٧٠ث. و٥ آلافٍ تبلغ
+       ١٣٠ث فلا هامشَ فيها، و٣ آلافٍ تبقى أضعافَ زمنِ خدمات الدفع
+       الواقعيّ (١٠٠–٥٠٠ مللي) فلا تُجهض تسليماً ناجحاً — وهذا مهمّ
+       لأنّه لا إعادةَ محاولةَ هنا.
+
+       والتصنيفُ لا يتغيّر: المهلةُ تُنتج `Error("Socket timeout")` بلا
+       `statusCode`، فتقع في فرع `failed` أدناه. و٤٠٤/٤١٠ تأتي
+       `WebPushError` بـ`statusCode` من مسار الاستجابة، فلا تتأثّر. */
+    const SEND_TIMEOUT_MS = 3000;
+
     /* دفعات من عشرين جهازاً لتفادي إرهاق الدالة */
     for (let i = 0; i < subs.length; i += 20) {
       const batch = subs.slice(i, i + 20);
@@ -145,7 +165,7 @@ Deno.serve(async (req: Request) => {
             await webpush.sendNotification(
               { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
               payload,
-              { TTL: 86400, urgency: ann.priority === "عاجل" ? "high" : "normal" }
+              { TTL: 86400, urgency: ann.priority === "عاجل" ? "high" : "normal", timeout: SEND_TIMEOUT_MS }
             );
             /* نجاح جهاز واحد يكفي لاعتبار الحاج قد استلم */
             results.set(s.passenger_id, { status: "sent", error: null });
