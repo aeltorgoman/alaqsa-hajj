@@ -1,0 +1,106 @@
+# ════════════════════════════════════════════════════════════
+# redeploy season-admin, and nothing else
+# ════════════════════════════════════════════════════════════
+# إقفالُ الموسم وحذفُه — أهدمُ مسارٍ في النظام. وهي تقرأ `cors`
+# من `_shared/http.ts`، فحصرُ الأصول لا يصل الإنتاجَ إلا بإعادة نشرها.
+#
+# ⚠️ ONE function. The slug is hard-coded, not an input: a
+# `workflow_dispatch` field would let a typo redeploy something else.
+# `functions deploy` with no slug deploys ALL of them, so the argument
+# is mandatory here and asserted before the call.
+#
+# `verify_jwt` is NOT set here. It comes from `supabase/config.toml`
+# (`season-admin = true`) and stays a reviewed repository change.
+# Deliberately absent and audited for:
+# `db push` · `secrets set` · `config push` · any second slug.
+#
+# (`secrets list` IS used, in the configuration gate below: it reads
+# secret NAMES only and never a value. `secrets set` remains absent.)
+#
+# The pinned sha256 values below are the reviewed source (`M-108`).
+# They are updated in the same pull request that changes the source;
+# a stale pin REFUSES the deployment, which is the intended direction
+# of failure.
+
+name: Redeploy season-admin (ONE function)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type REDEPLOY-SEASON-ADMIN to authorize"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: season-admin-redeploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      SLUG: season-admin
+      SRC_SHA256: "5f32db773cb3760eba1d115092807b9e32c600c0d02ff2236d94695168388e7c"
+      SHARED_AUTHORIZE_SHA256: "e5317ddc205ed598f08e0643ddb15447ce94f235d15b7e6944567c68805349f2"
+      SHARED_HTTP_SHA256: "81620f9953f2b2f62018bc5132fb3b108a53c84ef6d6375785c3a517c25a0388"
+      SHARED_RATELIMIT_SHA256: "02e26e648c3eb0918675be96d59e5eaed4d9548d7fb5d86aba44d977c7be7cd7"
+
+    steps:
+      - name: "GATE: confirmation"
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "REDEPLOY-SEASON-ADMIN" ] || {
+            echo "::error::confirmation string does not match"; exit 1; }
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: the exact sources under review, unmodified"
+        run: |
+          set -euo pipefail
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          chk() { got="$(sha256sum "$1" | cut -d' ' -f1)"; [ "$got" = "$2" ] || { echo "::error::$1 sha256 mismatch: $got"; exit 1; }; echo "ok   $1  $got"; }
+          chk "supabase/functions/$SLUG/index.ts" "$SRC_SHA256"
+          chk "supabase/functions/_shared/authorize.ts" "$SHARED_AUTHORIZE_SHA256"
+          chk "supabase/functions/_shared/http.ts" "$SHARED_HTTP_SHA256"
+          chk "supabase/functions/_shared/rateLimit.ts" "$SHARED_RATELIMIT_SHA256"
+          git diff --quiet || { echo "::error::working tree is dirty"; exit 1; }
+          # الإعدادُ يُقرأ ولا يُكتب: الساقُ الأولى من النمط الثلاثيّ
+          # تبقى من المستودع، ولا يضبطها أمرُ النشر.
+          grep -A1 "^\[functions\.$SLUG\]" supabase/config.toml | grep -q "verify_jwt = true" || {
+            echo "::error::config.toml no longer declares verify_jwt = true for $SLUG"; exit 1; }
+          echo "commit=${GITHUB_SHA} sha256=$SRC_SHA256"
+
+      # ── الساقُ الصفريّة: جاهزيةُ البيئة قبل النشر ──────────────
+      # `ALLOWED_ORIGINS` و`VERCEL_PROJECT_SLUG` و`VERCEL_OWNER_SLUG`
+      # لم يبقَ لها افتراضٌ في `_shared/http.ts`، فصارت ضبطاً
+      # **إلزاميّاً** لكلّ بيئة. ونشرٌ بلا ضبطٍ يُنتج دالّةً لا يبلغها
+      # متصفّح — ولا يجوز أن يُكتشف ذلك بعد النشر.
+      # والأسماءُ وحدها تُقرأ: لا قيمةَ سرٍّ تُقرأ ولا تُطبع ولا تُقارَن.
+      # وتعذُّرُ قراءة الجرد **إخفاقٌ** لا مرورٌ مفترَض.
+      - name: "GATE: required Edge Function configuration is present on the project"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          node scripts/release/preflight-edge-config.mjs \
+            --function "$SLUG" --project-ref "$PROJECT_REF"
+
+      - name: "DEPLOY: exactly one function"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          [ -n "$SLUG" ] || { echo "::error::empty slug would deploy EVERY function"; exit 1; }
+          npm run --silent supabase -- functions deploy "$SLUG" --project-ref "$PROJECT_REF" 2>&1 \
+            | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'

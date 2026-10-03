@@ -90,10 +90,47 @@ it belongs to the deployment path, not to snapshot generation.
 fallbacks were removed, `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG`,
 `VERCEL_OWNER_SLUG` and `VAPID_SUBJECT` are required in every environment, and a
 correct code change must not depend on an operator remembering that. The
-preflight runs as a `GATE` step inside the existing per-function redeploy
-workflows — `send-pilgrim-push`, `pilgrim-doc`, `whatsapp-send` — immediately
-before `supabase functions deploy`, and refuses the deployment when the target
-project does not hold the configuration the function's own source reads.
+preflight runs as a `GATE` step inside the per-function redeploy workflow of
+**every** Edge Function, immediately before `supabase functions deploy`, and
+refuses the deployment when the target project does not hold the configuration
+that function's own source reads.
+
+| Edge Function | Production deployment path | Protection |
+|---|---|---|
+| `Scan-passport` | `.github/workflows/scan-passport-redeploy.yml` | pinned source + preflight |
+| `pilgrim-doc` | `.github/workflows/pilgrim-doc-redeploy.yml` | pinned source + preflight |
+| `season-admin` | `.github/workflows/season-admin-redeploy.yml` | pinned source + preflight |
+| `send-pilgrim-push` | `.github/workflows/send-pilgrim-push-redeploy.yml` | pinned source + preflight |
+| `user-admin` | `.github/workflows/user-admin-redeploy.yml` | pinned source + preflight |
+| `whatsapp-send` | `.github/workflows/whatsapp-send-redeploy.yml` | pinned source + preflight |
+
+All six follow the one reviewed pattern: a hard-coded slug (never an input), the
+pinned CLI, `sha256` gates on the function source **and every `_shared` file it
+imports** (`M-108`), a clean-tree check, the `verify_jwt` declaration read from
+`supabase/config.toml` and never written, the configuration preflight, and then
+exactly one `functions deploy`. `db push`, `secrets set`, `config push` and any
+second slug remain absent and audited for. A stale source pin **refuses** the
+deployment, which is the intended direction of failure; pins are updated in the
+same pull request that changes the source.
+
+That the set stays complete is itself checked, so this gap cannot silently
+reopen when a function is added:
+
+```bash
+node scripts/release/preflight-edge-config.mjs --assert-coverage
+```
+
+It asks a different question from the gate and needs no project and no secret:
+does every function in `supabase/functions/` have a production redeploy workflow
+that pins its reviewed source **and** runs the preflight? A function with no
+path, or a path missing either protection, fails.
+
+`recovery-rehearsal.yml` is deliberately **not** one of these paths and is not
+counted as one. It deploys to a disposable restored project to prove that the
+repository alone produces a working system (`S-59`); a recovery target is not a
+serving environment, so Production origin and VAPID requirements do not belong
+to it, and requiring them would block the rehearsal. No repository authority
+places it under the Production readiness gate.
 
 ```bash
 node scripts/release/preflight-edge-config.mjs \

@@ -43,6 +43,13 @@
      --names-file <path>  read the configured names from a file
                           instead of the CLI (for testing the gate
                           itself; never a production substitute)
+
+     --assert-coverage    a different question, asked without any
+                          project: does EVERY function have a
+                          production redeploy workflow that pins its
+                          reviewed source AND runs this gate? It
+                          exists so the gap this closed cannot
+                          silently reopen when a function is added.
    ═══════════════════════════════════════════════════════════════ */
 
 import { execFileSync } from "node:child_process";
@@ -60,15 +67,17 @@ function die(msg) {
 }
 
 function parseArgs(argv) {
-  const out = { functions: [], all: false };
+  const out = { functions: [], all: false, assertCoverage: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--function") out.functions.push(argv[++i]);
     else if (a === "--all") out.all = true;
     else if (a === "--project-ref") out.projectRef = argv[++i];
     else if (a === "--names-file") out.namesFile = argv[++i];
+    else if (a === "--assert-coverage") out.assertCoverage = true;
     else die(`unknown argument: ${a}`);
   }
+  if (out.assertCoverage) return out;
   if (!out.all && out.functions.length === 0) die("--function <slug> (repeatable) or --all is required");
   if (!out.namesFile && !out.projectRef) die("--project-ref <ref> is required");
   return out;
@@ -85,6 +94,59 @@ const failures = [];
 
 const allSlugs = fs.readdirSync(FUNCTIONS_DIR, { withFileTypes: true })
   .filter((d) => d.isDirectory() && d.name !== "_shared").map((d) => d.name).sort();
+
+/* ── coverage mode: every function must have a protected path ─── */
+
+if (args.assertCoverage) {
+  const WORKFLOWS = path.join(REPO_ROOT, ".github", "workflows");
+  const files = fs.existsSync(WORKFLOWS)
+    ? fs.readdirSync(WORKFLOWS).filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"))
+    : [];
+  /* The production deployment path for one function is its dedicated
+     redeploy workflow: a hard-coded SLUG, a pinned reviewed source, and
+     this gate. recovery-rehearsal.yml is deliberately NOT one of these:
+     it deploys to a disposable restored project to prove recovery
+     (S-59), which is not a serving environment, so Production origin
+     and VAPID requirements do not belong to it. */
+  const paths = [];
+  for (const file of files) {
+    const text = fs.readFileSync(path.join(WORKFLOWS, file), "utf8");
+    const slug = /^\s{6}SLUG:\s*(\S+)\s*$/m.exec(text)?.[1];
+    if (!slug || !/functions deploy/.test(text)) continue;
+    paths.push({
+      file,
+      slug,
+      pinsSource: /SRC_SHA256:/.test(text) && /sha256sum/.test(text),
+      runsPreflight: /preflight-edge-config\.mjs/.test(text),
+    });
+  }
+
+  log(`\n── Production deployment path coverage ───────────────────────\n`);
+  for (const slug of allSlugs) {
+    const own = paths.filter((p) => p.slug === slug);
+    if (own.length === 0) {
+      failures.push(`${slug} has no production redeploy workflow, so its deployment path is unprotected`);
+      log(`${slug.padEnd(20)} ✖ no redeploy workflow`);
+      continue;
+    }
+    for (const p of own) {
+      const bad = [];
+      if (!p.pinsSource) bad.push("no pinned reviewed-source sha256 gate");
+      if (!p.runsPreflight) bad.push("does not run the configuration preflight");
+      for (const b of bad) failures.push(`${p.file} deploys ${slug} but ${b}`);
+      log(`${slug.padEnd(20)} ${bad.length ? "✖" : "✔"} ${p.file}${bad.length ? ` — ${bad.join("; ")}` : " (reviewed source + preflight)"}`);
+    }
+  }
+
+  if (failures.length) {
+    process.stderr.write(`\n✖ ${failures.length} coverage failure(s):\n`);
+    for (const f of failures) process.stderr.write(`   · ${f}\n`);
+    process.stderr.write("\nEvery Edge Function needs a production path that deploys reviewed source\nonly and runs the configuration preflight before deploying.\n\n");
+    process.exit(1);
+  }
+  log(`\n✔ all ${allSlugs.length} Edge Functions have a protected production deployment path\n`);
+  process.exit(0);
+}
 
 const slugs = args.all ? allSlugs : args.functions;
 for (const s of slugs) {
