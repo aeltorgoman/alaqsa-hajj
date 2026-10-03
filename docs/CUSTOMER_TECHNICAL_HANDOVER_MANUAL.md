@@ -648,11 +648,6 @@ Actual passwords and secret values must not be written into this manual.
 
 The following areas are not yet finalized in this manual and must be documented only after their decisions are approved:
 
-- Supabase ownership, access, database, storage, backups, and recovery.
-- Vercel ownership, access, environments, and deployment controls.
-- Domain and DNS ownership and handover.
-- Detailed production secrets inventory and rotation procedure.
-- Full backup and disaster-recovery procedure.
 - Emergency access and technical handover procedure.
 - Final customer deployment verification checklist.
 - Future source-code continuity/delivery mechanism.
