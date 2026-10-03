@@ -547,7 +547,104 @@ The old Production address should only be removed after the new address has been
 
 ---
 
-# 11. Sections Pending Architecture Approval
+# 11. Backup and Disaster Recovery
+
+## 11.1 Recovery Scope
+
+The recovery approach must cover the four components required to restore a customer deployment:
+
+1. Source code.
+2. Database.
+3. Supabase Storage files.
+4. Required technical configuration and environment documentation.
+
+Database backup alone is not considered a complete system backup.
+
+The backup and recovery design must remain simple, low-maintenance, and use existing platform capabilities wherever practical rather than introducing a separate complex backup platform.
+
+## 11.2 Automation Principle
+
+Recurring Production backups should be automated wherever practical.
+
+Native backup capabilities provided by the platforms should be preferred over custom backup systems when they satisfy the recovery requirement.
+
+## 11.3 Source Code Backup
+
+Each Customer Repository must have one automated independent backup outside GitHub.
+
+GitHub remains the operational repository, while the external copy provides repository continuity if GitHub access or repository availability is lost.
+
+The exact external destination may be selected during implementation, with simplicity and maintainability as the primary criteria.
+
+## 11.4 Database Backup and Restore
+
+The customer's Supabase backup capability is the primary database backup mechanism.
+
+The restoration procedure must be documented clearly enough to be executed when required.
+
+A separate custom database-backup platform is not required unless a future operational requirement justifies one.
+
+## 11.5 Supabase Storage Backup
+
+Customer Supabase Storage must have an independent external backup when the approved simple implementation is in place.
+
+The selected architecture is:
+
+```text
+Customer Supabase Storage
+          ↓
+        rclone
+          ↓
+Customer-owned Cloudflare R2
+```
+
+The Cloudflare/R2 account and backup destination are customer-owned.
+
+Before this mechanism is relied upon operationally for the first customer, a small proof of concept must confirm that both backup and restoration work correctly.
+
+## 11.6 Storage Backup Frequency
+
+Supabase Storage is backed up to the external R2 destination automatically once per day.
+
+The design intentionally avoids unnecessary high-frequency backup operations for the current product requirements.
+
+## 11.7 Backup Versus Archive
+
+The R2 Storage backup is a current disaster-recovery copy, not a permanent historical archive containing every daily version of every file.
+
+Season archiving and long-term historical retention are separate product/lifecycle concerns and are not implemented by accumulating indefinite daily backup versions.
+
+## 11.8 Backup Failure Notification
+
+If the automated Storage backup fails, the technical team must receive a failure notification.
+
+This requirement should be implemented without introducing a separate complex monitoring platform solely for the backup process.
+
+## 11.9 Restore Verification
+
+The Storage restore path must be tested when the backup mechanism is initially implemented and after a material change to the backup method.
+
+Continuous or frequent scheduled restore drills are not required by the current architecture.
+
+The intended recovery path is:
+
+```text
+Cloudflare R2
+      ↓
+Restore
+      ↓
+Supabase Storage
+```
+
+## 11.10 Configuration Recovery Information
+
+Recovery documentation must preserve the information required to reconstruct the customer environment, including the required Environment Variable names, relevant Supabase/Vercel configuration, system DNS records, and external service dependencies.
+
+Actual passwords and secret values must not be written into this manual.
+
+---
+
+# 12. Sections Pending Architecture Approval
 
 The following areas are not yet finalized in this manual and must be documented only after their decisions are approved:
 
