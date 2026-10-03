@@ -644,13 +644,73 @@ Actual passwords and secret values must not be written into this manual.
 
 ---
 
-# 12. Sections Pending Architecture Approval
+# 12. Access and Technical Handover
 
-The following areas are not yet finalized in this manual and must be documented only after their decisions are approved:
+## 12.1 Handover Objective
 
-- Emergency access and technical handover procedure.
-- Final customer deployment verification checklist.
-- Future source-code continuity/delivery mechanism.
+If maintenance ends or the customer appoints another technical team, the customer environment must be capable of being handed over without requiring continued operational dependence on the outgoing technical team.
+
+## 12.2 Handover Scope
+
+The technical handover must confirm that the customer or replacement technical team has the required access to:
+
+- Supabase.
+- Vercel.
+- Domain Registrar and relevant DNS management.
+- Required technical documentation, configuration references, Environment Variable names, and external-service dependencies.
+
+Access must be practically verified rather than assumed.
+
+After the handover is complete, the outgoing technical team's access to customer-owned infrastructure may be removed.
+
+Source-code delivery is not automatically part of this standard infrastructure handover and is governed separately below.
+
+---
+
+# 13. Final Customer Deployment Checklist
+
+Before a customer deployment is declared Production Ready, a concise final verification must confirm that the approved deployment architecture is in place.
+
+The checklist must verify, as applicable:
+
+- Customer-owned Supabase Production environment is configured and accessible.
+- Customer-owned Vercel Production environment is configured and accessible.
+- The approved Customer Repository is connected to Vercel.
+- Pull Request, Preview, approval, merge, and Production deployment flow is working.
+- Required Environment Variables and server-side secrets are configured in their designated platforms.
+- Customer-owned Domain/DNS is connected correctly.
+- Production HTTPS is working.
+- Backup and recovery arrangements required by this manual are configured.
+- Required administrative access is available to the authorized technical team.
+- Production has been practically verified to operate after deployment.
+
+When the applicable checklist items pass, the customer deployment may be marked Production Ready.
+
+The checklist is intended to be short and operational; it must not duplicate the full manual as a second process.
+
+---
+
+# 14. Source Code Delivery and Continuity
+
+## 14.1 Standard Customer Handover
+
+Source code is not included automatically in the customer's standard technical handover.
+
+The Master Repository and Customer Repository remain under the approved vendor-controlled source-code model unless a separate agreement changes that arrangement.
+
+## 14.2 Optional Source Code Delivery
+
+If a customer requests a copy of source code, any delivery must be governed by a separate commercial and licensing agreement and may require a separate payment.
+
+Receiving a copy of source code does not, by itself, transfer ownership of the product, intellectual property, or the right to resell, redistribute, sublicense, or commercially exploit the product beyond the rights expressly granted in that separate agreement.
+
+Any broader transfer of ownership or commercial rights requires an explicit separate agreement.
+
+## 14.3 Exceptional Long-Term Continuity
+
+Any special source-code arrangement intended for exceptional circumstances, including permanent discontinuation of maintenance or service, is a contractual and commercial matter to be defined separately before such a commitment is offered to a customer.
+
+This manual does not create an automatic source-code escrow or automatic source-code release right.
 
 ---
 
