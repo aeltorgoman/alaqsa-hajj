@@ -1384,6 +1384,7 @@ has one governing document, and within its domain that document is not outranked
 | Security — identity, authorization, RLS, the security constants | `SECURITY_ARCHITECTURE.md` |
 | Season architecture — the invariants and the frozen season decisions | the approved season reference (GitHub Issue #42) |
 | A decision an approved ADR records | that ADR |
+| Customer deployment ownership, infrastructure handover, operational continuity, source-code handover policy | `CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md` |
 | General engineering standards — everything not claimed above | **this Playbook** |
 | How a governing rule is carried out | implementation designs and runbooks |
 | Current state, orientation, status, backlog | **never authoritative** over any of the above |
@@ -2291,6 +2292,7 @@ attributes.
 | `docs/architecture/BACKLOG.md` | Recorded debt and deferred decisions |
 | `docs/architecture/BREAK_GLASS.md` | Break-glass account and its recovery procedure |
 | `docs/runbooks/MIGRATION_WORKFLOW.md` | The migration procedure (Part 4) |
+| `docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md` | Customer deployment ownership, infrastructure handover, operational continuity and source-code handover policy (`M-94`) |
 | `docs/PROJECT_MASTER_HANDOFF.md` | Orientation and current state; never authoritative over this document |
 | `docs/COMPANY_PROFILE_ARCHITECTURE_REVIEW.md` | The approved Company Profile architecture |
 | `supabase/README.md` | Database structure, anonymous access inventory, Edge Function rules |
