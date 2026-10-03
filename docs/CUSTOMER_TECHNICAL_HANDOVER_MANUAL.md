@@ -95,13 +95,39 @@ Each customer receives a private Customer Repository used for that customer's ap
 A Customer Repository:
 
 - Is separate from the Master Repository.
-- Must not be maintained as a permanent direct fork that exposes Master development history.
+- Is a **clean release repository**, not a permanent GitHub fork of Master and not a full-history mirror of Master.
 - Starts from an approved clean customer release.
 - Represents the actual application version intended for that customer.
 - Does not contain production secrets.
 - Does not contain customer operational data or uploaded customer documents.
 
 A customer release repository may include the application source required to run the approved release, database migrations, Edge Functions, package manifests, configuration templates, documentation, and version information.
+
+### Clean Snapshot, Not Transferred History
+
+Each approved customer release reaches the Customer Repository as a **clean snapshot** of that release. The Master Repository's internal development history is not transferred with it.
+
+The following are **not** transferred into a Customer Repository:
+
+- Master development branches.
+- Internal Pull Requests.
+- Experiments and abandoned work.
+- Unrelated development history.
+- Any internal work that is not part of the approved customer release.
+
+The Customer Repository maintains **its own clean customer release history** instead — one identifiable commit/release state per approved customer release, tagged under the versioning rules in section 5:
+
+```text
+v1.0.0
+  -> v1.0.1
+  -> v1.1.0
+  -> future approved customer releases
+```
+
+The division of responsibility is:
+
+- **Master Repository** — the internal product-development source of truth.
+- **Customer Repository** — the clean, approved release history required for that customer's deployed system.
 
 ## 2.3 Development Rule
 
@@ -110,15 +136,17 @@ Development must not be performed directly in a Customer Repository.
 The approved path is:
 
 ```text
-Master
+Master Repository
   -> Development and Testing
   -> Approved Customer Release
+  -> Clean Release Snapshot
   -> Customer Repository
+  -> Customer Release Version/Tag
   -> Release Validation
   -> Production
 ```
 
-This prevents customer repositories from drifting into separate products.
+This prevents customer repositories from drifting into separate products, and keeps Master's internal development history out of them (section 2.2).
 
 ## 2.4 Customer-Specific Customization
 
@@ -325,6 +353,8 @@ The exact version deployed to each customer must be identifiable.
 
 Each released customer version must retain its corresponding version/tag history.
 
+This history lives in the Customer Repository as that customer's own clean release history (section 2.2). It is not the Master Repository's development history, and it is not derived from it.
+
 Older releases must not be deleted merely because a newer release exists.
 
 This history is required for traceability and recovery.
@@ -349,7 +379,9 @@ Where a database problem cannot be corrected by rolling forward, the path is rec
 
 An independent, automated backup of each Customer Repository outside GitHub is required before commercial operation, so that repository recovery does not depend solely on continued access to the GitHub account or service.
 
-This requirement is defined in full in **section 11.3**, which governs. Protection of the backup copy itself — including where it is stored and how it is secured — is part of that section.
+This backup remains under vendor control and is not placed in customer-owned storage, because the Customer Repository contains source code (sections 11.3 and 14).
+
+The requirement is defined in full in **section 11.3**, which governs.
 
 ---
 
@@ -495,6 +527,8 @@ The release path is:
 Master Repository
         ↓
 Approved Customer Release
+        ↓
+Clean Release Snapshot
         ↓
 Customer Repository
         ↓
@@ -649,10 +683,12 @@ The old Production address should only be removed after the new address has been
 
 The recovery approach must cover the four components required to restore a customer deployment:
 
-1. Source code.
-2. Database.
-3. Supabase Storage files.
-4. Required technical configuration and environment documentation.
+1. Source code — vendor-controlled backup, outside GitHub (section 11.3).
+2. Database — the customer's Supabase backup capability (section 11.4).
+3. Supabase Storage files — customer-owned Cloudflare R2 (section 11.5).
+4. Required technical configuration and environment documentation (section 11.10).
+
+These destinations are deliberately not the same: the customer's R2 account holds the customer's **Storage** backup, never the repository source-code backup (section 11.3).
 
 Database backup alone is not considered a complete system backup.
 
@@ -666,13 +702,17 @@ Native backup capabilities provided by the platforms should be preferred over cu
 
 ## 11.3 Source Code Backup
 
-Each Customer Repository must have one automated independent backup outside GitHub.
+Each Customer Repository must have one automated independent backup **outside GitHub**, so that repository recovery does not depend solely on continued access to the GitHub account or service. GitHub remains the operational repository; the external copy provides continuity.
 
-GitHub remains the operational repository, while the external copy provides repository continuity if GitHub access or repository availability is lost.
+**The backup destination must remain under vendor control.**
 
-The external copy contains application source and must be protected accordingly — it is stored in a controlled location, not an open or casually shared one.
+**It must not be stored in the customer's Cloudflare R2 account, or in any other customer-controlled storage.** The reason is a policy one, not a technical one: a Customer Repository contains application source code, and placing a readable repository backup in customer-owned storage would effectively provide source-code access outside the separate agreement required by section 14. The repository backup and the source-code policy must not be allowed to contradict each other.
 
-The exact external destination may be selected during implementation, with simplicity and maintainability as the primary criteria. This is the single statement of the repository-backup requirement; section 7 refers here.
+This is the one place in the architecture where a backup is deliberately **not** customer-owned. Everything that belongs to the customer — the database, Storage documents, and the R2 Storage backup destination — remains customer-owned under sections 8.6, 11.4 and 11.5.
+
+The specific storage provider and destination are **not** selected by this manual. Choosing them is implementation work to be resolved when the repository-backup mechanism is built, with simplicity and maintainability as the primary criteria, and under the constraint above. No new backup platform is introduced here.
+
+This is the single statement of the repository-backup requirement; section 7 refers here.
 
 ## 11.4 Database Backup and Restore
 
@@ -782,7 +822,9 @@ At **final** offboarding — when the outgoing technical team is being removed a
 
 1. **Remove outgoing access.** Remove the outgoing team's accounts and permissions from Supabase, Vercel, the Domain Registrar and DNS, and any other customer-owned service it held.
 
-2. **Rotate sensitive server-side credentials.** Rotate the server-side credentials and secrets the outgoing team could have known or accessed — for example the Supabase service-role key, the database password, platform access tokens, and server-side integration credentials such as the OCR/AI API key, the WhatsApp token and the private VAPID key, together with the backup destination credentials.
+2. **Rotate sensitive server-side credentials.** Rotate the server-side credentials and secrets the outgoing team could have known or accessed — for example the Supabase service-role key, the database password, platform access tokens, and server-side integration credentials such as the OCR/AI API key, the WhatsApp token and the private VAPID key, together with the credentials for the customer's R2 Storage backup destination.
+
+   The vendor-controlled Customer Repository backup (section 11.3) is not customer infrastructure and is not part of this handover; its credentials are managed under the outgoing team's own practice, not rotated or transferred here.
 
    This is required because removing an account removes **console** access, not knowledge of a key. A server-side key that was legitimately handled during the maintenance period keeps working after the account that used it is gone, and a service-role key bypasses row-level security entirely.
 
@@ -807,6 +849,7 @@ The practical consequence, stated plainly so the two sections cannot be read as 
 | Roll back to a previous deployed application version | Yes |
 | Build, change or deploy a **new** application release | No |
 | Apply a new database migration as part of a release | No |
+| Receive the application source code, or a backup copy of it | No |
 
 If the customer wants another technical team to take over source-code development or maintenance, source-code access is governed by the separate arrangement in **section 14** — it is not an extension of the standard handover, and it does not follow from it automatically.
 
@@ -846,6 +889,8 @@ Source code is not included automatically in the customer's standard technical h
 The Master Repository and Customer Repository remain under the approved vendor-controlled source-code model unless a separate agreement changes that arrangement.
 
 The technical consequence of this for a customer or a replacement technical team — what the standard handover does and does not enable — is set out in section 12.4. The two sections are intended to be read together: section 12 governs infrastructure handover, this section governs source code.
+
+Consistent with this, the Customer Repository backup required by section 11.3 is held under vendor control and is never placed in customer-owned storage. A backup is not a delivery mechanism, and no part of the backup or handover architecture grants source-code access that this section does not grant.
 
 ## 14.2 Optional Source Code Delivery
 
