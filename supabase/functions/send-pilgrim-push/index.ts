@@ -57,10 +57,13 @@ Deno.serve(async (req: Request) => {
   try {
     const publicKey = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
     const privateKey = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
-    const subject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@alaqsa-hajj.app";
+    /* ⚠️ لا افتراضَ لهويةِ المُرسل: افتراضُ عنوانِ المورِّد كان
+       يُقدّم المورِّدَ مُرسلاً لتنبيهات العميل (§٣.٧ من دليل التسليم).
+       وغيابُه إغلاقٌ معلَنٌ لا إرسالٌ بهويةٍ خاطئة. */
+    const subject = (Deno.env.get("VAPID_SUBJECT") ?? "").trim();
 
-    if (!publicKey || !privateKey) {
-      return json({ error: "مفاتيح التنبيهات غير مضبوطة في إعدادات الدالة." }, 500);
+    if (!publicKey || !privateKey || !subject) {
+      return json({ error: "إعدادات التنبيهات غير مكتملة في إعدادات الدالة." }, 500);
     }
     webpush.setVapidDetails(subject, publicKey, privateKey);
 
