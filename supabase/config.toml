@@ -16,7 +16,7 @@
 # لا غير؛ ومرجعُ المشروع البعيد يُخزَّن في `supabase/.temp/`
 # بعد `link` وهو مُتجاهَلٌ في git.
 
-project_id = "alaqsa-hajj"
+project_id = "hajj-management-system"
 
 # ── القاعدة ──────────────────────────────────────────────────
 [db]

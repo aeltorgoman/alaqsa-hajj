@@ -254,13 +254,12 @@ They are also required by:
 - Configuration recovery documentation (section 11.10).
 - The Final Customer Deployment Checklist (section 13).
 
-**What happens today when they are not set.** The current implementation carries **vendor-specific fallback values** for all four. The behaviour differs by value and should not be described in one sentence:
+**What happens today when they are not set.** All four are **required, with no fallback value**. The vendor-specific fallbacks that previously stood behind them have been removed, so an unconfigured deployment fails closed and fails visibly:
 
-- For `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG` and `VERCEL_OWNER_SLUG`, an unconfigured customer deployment **fails closed, not open**. CORS is not opened to everyone: the customer's own origin is simply not trusted, so the application does not work against its Edge Functions. The remaining defect is the inverse one — the customer's Edge Functions continue to trust the **vendor's** origin and the vendor's preview-origin pattern. A valid customer session is still required, so this is not an open door, but it is a trust relationship the customer never agreed to and it must be removed for proper customer isolation.
-- For `VAPID_SUBJECT`, the fallback is a **vendor contact address**, which would be presented as the sender identity for that customer's push notifications.
+- For `ALLOWED_ORIGINS`, `VERCEL_PROJECT_SLUG` and `VERCEL_OWNER_SLUG`, an unconfigured deployment trusts **no browser origin at all**. CORS is not opened to everyone, and — unlike before — the customer's Edge Functions no longer trust the vendor's production origin or the vendor's Vercel preview-origin pattern. The preview-origin pattern is built from `VERCEL_PROJECT_SLUG` and `VERCEL_OWNER_SLUG` and is disabled entirely when either is unset.
+- `VAPID_SUBJECT` has no default sender address. The push function rejects a send with an explicit configuration error rather than presenting a vendor contact address as the customer's sender identity.
 
-> **Follow-up implementation item (not resolved by this manual).**
-> The vendor-specific fallbacks must be removed or made safe for customer deployments before the first commercial deployment — for example by requiring the values explicitly and failing loudly when they are absent, and by removing the vendor preview-origin trust. This affects the shared Edge Function HTTP code for the three origin/project values and the push function for `VAPID_SUBJECT`. These are application-code changes and are deliberately **not** made by this manual. Until they are done, setting all four values explicitly is mandatory for every customer deployment, and the checklist in section 13 verifies it.
+Setting all four explicitly is therefore mandatory for every deployment, including the vendor's own. The checklist in section 13 verifies it, and the `.env.example` shipped with each customer release lists them under the required Edge Function group.
 
 ---
 

@@ -1,0 +1,176 @@
+{
+  "manifestVersion": 1,
+  "productName": "Hajj Management System",
+
+  "_comment": [
+    "EXPLICIT CUSTOMER RELEASE ALLOWLIST.",
+    "Only paths named here are copied into a Customer Release snapshot.",
+    "Nothing is copied and then deleted. A path that is not listed is not shipped.",
+    "Authority: docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md sections 2.2, 3.1, 3.7;",
+    "supabase/README.md (canonical migrations / functions / config);",
+    "docs/ENGINEERING_PLAYBOOK.md M-104, M-105, M-108."
+  ],
+
+  "files": [
+    "index.html",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "tsconfig.app.json",
+    "tsconfig.node.json",
+    "vite.config.ts",
+    "eslint.config.js",
+    "vercel.json",
+    ".gitignore",
+    "supabase/config.toml",
+    "supabase/scripts/seed_first_admin.mjs",
+    "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
+    "docs/runbooks/MIGRATION_WORKFLOW.md"
+  ],
+
+  "trees": [
+    { "path": "src",                  "include": ["**/*"] },
+    { "path": "public",               "include": ["**/*"] },
+    { "path": "supabase/migrations",  "include": ["*.sql"] },
+    { "path": "supabase/functions",   "include": ["**/*.ts", "**/*.json", "**/*.toml"] }
+  ],
+
+  "generated": [
+    ".env.example",
+    "README.md",
+    "RELEASE.md",
+    "release-manifest.json"
+  ],
+
+  "required": [
+    "index.html",
+    "package.json",
+    "package-lock.json",
+    "vite.config.ts",
+    "vercel.json",
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/supabase.ts",
+    "src/portalSupabase.ts",
+    "public/sw-push.js",
+    "supabase/config.toml",
+    "supabase/functions/_shared/authorize.ts",
+    "supabase/functions/_shared/http.ts",
+    "supabase/functions/_shared/rateLimit.ts",
+    ".env.example",
+    "RELEASE.md"
+  ],
+
+  "requiredFunctions": [
+    "Scan-passport",
+    "pilgrim-doc",
+    "season-admin",
+    "send-pilgrim-push",
+    "user-admin",
+    "whatsapp-send"
+  ],
+
+  "forbiddenPaths": [
+    ".git",
+    ".github",
+    ".replit",
+    "attached_assets",
+    "loadtest",
+    "docs/ENGINEERING_PLAYBOOK.md",
+    "docs/PROJECT_MASTER_HANDOFF.md",
+    "docs/COMPANY_PROFILE_ARCHITECTURE_REVIEW.md",
+    "docs/COMPANY_PROFILE_PHASE1.md",
+    "docs/COMPANY_PROFILE_PHASE2.md",
+    "docs/architecture",
+    "docs/archive",
+    "docs/migration-recovery",
+    "docs/tools",
+    "node_modules",
+    "dist",
+    "supabase/.temp",
+    "supabase/baseline",
+    "supabase/baseline-candidate",
+    "supabase/cutover-candidate",
+    "supabase/migrations-archive",
+    "supabase/verification",
+    "supabase/seed.sql",
+    "supabase/README.md",
+    "supabase/scripts/cleanup_empty_financial_groups.sql",
+    "supabase/scripts/purge_orphan_company_uploads.mjs",
+    "supabase/scripts/seed_test_seasons.sql",
+    "release",
+    "scripts"
+  ],
+
+  "forbiddenFileGlobs": [
+    "**/.env",
+    "**/.env.local",
+    "**/.env.*",
+    "**/*.pem",
+    "**/*.key",
+    "**/*.p12",
+    "**/*.pfx",
+    "**/*.crt",
+    "**/id_rsa*",
+    "**/*.sqlite",
+    "**/*.dump",
+    "**/*.bak",
+    "**/*.csv",
+    "**/*.xlsx",
+    "**/*.log"
+  ],
+
+  "forbiddenFileGlobExceptions": [
+    ".env.example"
+  ],
+
+  "secretPatterns": [
+    { "name": "JWT / Supabase legacy key",      "re": "eyJ[A-Za-z0-9_-]{15,}\\.[A-Za-z0-9_-]{15,}" },
+    { "name": "Supabase publishable/secret key","re": "sb_(publishable|secret)_[A-Za-z0-9_-]{10,}" },
+    { "name": "Supabase personal access token", "re": "sbp_[a-f0-9]{30,}" },
+    { "name": "Supabase project ref URL",       "re": "https://[a-z]{20}\\.supabase\\.(co|in)" },
+    { "name": "Anthropic API key",              "re": "sk-ant-[A-Za-z0-9_-]{10,}" },
+    { "name": "GitHub token",                   "re": "(ghp_|gho_|ghs_|github_pat_)[A-Za-z0-9_]{20,}" },
+    { "name": "Meta / WhatsApp access token",   "re": "EAA[A-Za-z0-9]{60,}" },
+    { "name": "PEM private key block",          "re": "-----BEGIN [A-Z ]*PRIVATE KEY-----" },
+    { "name": "AWS access key id",              "re": "AKIA[0-9A-Z]{16}" },
+    { "name": "Google API key",                 "re": "AIza[0-9A-Za-z_-]{30,}" },
+    { "name": "Slack token",                    "re": "xox[abprs]-[A-Za-z0-9-]{10,}" },
+    { "name": "Assigned secret env value",      "re": "(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY|VAPID_PRIVATE_KEY|WHATSAPP_TOKEN|ANTHROPIC_API_KEY|SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD)\\s*[:=]\\s*[\"']?[A-Za-z0-9+/_.=-]{12,}" }
+  ],
+
+  "forbiddenIdentifiers": [
+    { "name": "retired campaign/test name 'alaqsa'", "re": "al[-_ ]?aqsa" },
+    { "name": "vendor Vercel account slug",          "re": "aeltorgoman" }
+  ],
+
+  "envExampleVariables": {
+    "_frontend_comment": "Set in the customer's Vercel project (handover manual 3.2).",
+    "frontend": [
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_ANON_KEY",
+      "VITE_VAPID_PUBLIC_KEY"
+    ],
+    "_edgeRequired_comment": "Set as Supabase Edge Function secrets. Required: the functions fail closed without them (handover manual 3.3, 3.7).",
+    "edgeRequired": [
+      "ALLOWED_ORIGINS",
+      "VERCEL_PROJECT_SLUG",
+      "VERCEL_OWNER_SLUG",
+      "VAPID_SUBJECT",
+      "VAPID_PUBLIC_KEY",
+      "VAPID_PRIVATE_KEY"
+    ],
+    "_edgeFeature_comment": "Set only for the features the customer deployment uses.",
+    "edgeFeature": [
+      "ANTHROPIC_API_KEY",
+      "WHATSAPP_TOKEN",
+      "WHATSAPP_PHONE_ID"
+    ],
+    "_platformProvided_comment": "Injected by the Supabase platform at function runtime. Do not set by hand.",
+    "platformProvided": [
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ]
+  }
+}
