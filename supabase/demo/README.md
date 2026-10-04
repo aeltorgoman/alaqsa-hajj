@@ -5,10 +5,13 @@
 > project only. Its tools must refuse any other target, Production above all.
 > If you are unsure which project a connection string points at, stop.
 
-**Status:** contract only. Right now this directory has two files: this README
-and `demo.manifest.json`. The seed, the document generator, the guard and the
-verifier don't exist yet. They will be built against the manifest in later,
-separately reviewed steps.
+**Status:** implemented. The seed, guards, document generator, Storage
+loader, reset path and independent verifier are all in this directory.
+They were rehearsed end to end on a local, non-production Supabase stack
+(seed → verify → reset → seed → verify, identical fingerprints).
+Implementation adjustments to the contract are listed in
+`demo.manifest.json` → `implementation_adjustments`. Product issues found
+along the way, and deliberately not fixed here, are in `BACKLOG.md`.
 
 ---
 
@@ -187,9 +190,9 @@ It also applies to every `company_assets` row.
 Files must be PNG, JPEG or PDF, and their magic bytes must match the extension.
 The app's document fetch rejects anything else.
 
-### Generated documents (later step)
+### Generated documents (`tools/generate-demo-documents.mjs`)
 
-The future generator produces:
+The generator produces:
 
 - generated passport
 - generated national ID
@@ -218,67 +221,197 @@ Rules for every generated asset:
 | Document opening (`pilgrim-doc`, signed URLs) | **Live** | Needs real objects (§8), plus the Demo frontend origin in the Edge CORS allowlist. |
 | Staff login | **Setup step** | Uses the existing `scripts/seed_first_admin.mjs` pattern. The repository holds no passwords. |
 
-## 10. Lifecycle (high level)
+## 10. Operator runbook
 
-1. **Bootstrap (once).**
+All tools read their settings from the environment, or from a file named
+by `DEMO_ENV_FILE` (template: `demo.env.example`). Keep that file outside
+the repository, or name it `*.env` inside `supabase/demo/`, which is
+git-ignored. Requirements: `bash`, `psql`, Node ≥ 22, Python 3. Run
+`npm ci` once in the repository root, because `seed_first_admin.mjs`
+needs `@supabase/supabase-js`.
+
+### 10.1 One-time bootstrap of the persistent Demo project
+
+1. **Create the Demo projects.**
    - Create the Demo Supabase project and the Demo Vercel deployment.
-   - Apply migrations.
-   - Place the Demo sentinel.
-   - Create the Demo staff account.
-   - Deploy the Edge Functions and set Demo-only secrets.
-2. **Seed.**
-   - Guards run first.
-   - The archived season is populated while open, then closed with
-     `close_season()`.
-   - Live pricing changes.
-   - The active season is populated: master data, pilgrims, allocation,
-     finance through the receipt RPCs, announcements and portal settings.
-   - Business data is deterministic from `DEMO_ANCHOR_DATE`.
-3. **Load Storage.**
-   - Guards run first.
-   - Documents are generated, then uploaded to fixed keys.
-   - Reference columns are written only for objects that actually uploaded.
-4. **Verify.**
-   - Guards run first.
-   - Independent queries assert every manifest expectation: counts,
-     occupancy, finance states, alert counts, receipt numbering, and
-     bidirectional reference ↔ object reconciliation.
-   - The seed never acts as its own witness.
-5. **Reset** (before or after a customer demo).
-   - Guards run first, plus the destructive confirmation.
-   - Demo Storage objects are purged first.
-   - Demo rows are removed in a constraint-safe order, using `delete_season()`
-     for the archived season.
-   - Then seed → load → verify again. Same anchor means the same dataset.
+   - Point the Vercel environment variables (`VITE_SUPABASE_URL`,
+     `VITE_SUPABASE_ANON_KEY`) at the Demo project only.
+2. **Apply migrations.** Apply the repository migrations to the Demo
+   project, following the normal migration process (Playbook §4.10).
+3. **Place the sentinel.** Do this once, deliberately:
+   ```
+   DEMO_SENTINEL_CONFIRM=PLACE-DEMO-SENTINEL-<ref> bash supabase/demo/tools/demo-bootstrap-sentinel.sh
+   ```
+4. **Create the operator.** This reuses `supabase/scripts/seed_first_admin.mjs`
+   and grants 11 operational permissions:
+   ```
+   DEMO_OPERATOR_PASSWORD=… bash supabase/demo/tools/demo-operator.sh
+   ```
+5. **Deploy Edge Functions to the Demo project**:
+   - `pilgrim-doc` and `Scan-passport` are required;
+   - `send-pilgrim-push` is optional.
 
-## 11. Files that will belong here
+   Then set Demo-only secrets with the Supabase CLI against the Demo ref:
+   - `ALLOWED_ORIGINS` (the Demo Vercel origin);
+   - `ANTHROPIC_API_KEY` (a Demo-only key, for OCR);
+   - optionally the VAPID keys.
+
+   Never reuse Production credentials.
+
+### 10.2 Before each customer demonstration
+
+```
+DEMO_RESET_CONFIRM=RESET-DEMO-<ref> bash supabase/demo/tools/demo-refresh.sh
+```
+
+This runs reset → seed → generate documents → load Storage → verify, and
+stops on the first failure. Each stage runs the guard again on its own.
+The command ends with `✓ verify-demo: N checks passed, 0 failed`.
+
+To rehearse the portal without spending the presenter's credential:
+
+```
+node supabase/demo/tools/demo-portal-smoke.mjs        # uses DEMO-P-002
+```
+
+### 10.3 Reproducibility proof (optional, slower)
+
+```
+DEMO_RESET_CONFIRM=RESET-DEMO-<ref> bash supabase/demo/tools/demo-rehearsal.sh
+```
+
+This runs refresh → portal smoke → refresh, then compares the two
+fingerprints. They must be identical. A fingerprint covers every seeded
+business row and the SHA-256 of all 488 Storage objects. The
+`determinism.excluded` list in the manifest names what it leaves out:
+database ids, wall-clock timestamps, receipt `issued_at`/`issued_by`,
+and the passenger id inside object keys.
+
+### 10.4 What each stage does
+
+| Stage | Tool | Writes |
+|---|---|---|
+| guard | `tools/assert-demo-target.sh` | nothing. It checks: the Production ref is denied in every value; `DEMO_PROJECT_REF` is explicit; every URL belongs to that ref; the sentinel is in the database; `--destructive` has its token |
+| dataset | `tools/build-dataset.mjs` (`--check`) | `data/dataset.json` only. It is the single deterministic source, and is re-derived and matched against every manifest count |
+| seed | `tools/demo-seed.sh` → `sql/10…70` | DB rows through the normal schema. Every SQL file includes `sql/00_guard.sql` first |
+| documents | `tools/generate-demo-documents.mjs` | `.generated/` only (git-ignored) |
+| storage | `tools/demo-storage-load.mjs` | It uploads objects, confirms that they exist, and only then writes the references |
+| verify | `tools/verify-demo.py` | nothing (read-only session). Expected values come only from the manifest |
+| portal smoke | `tools/demo-portal-smoke.mjs` | one real portal session (then revoked), plus rate-limit counters |
+| reset | `tools/demo-reset.sh` → `tools/demo-storage-purge.mjs`, `sql/90_reset.sql` | It empties the three Demo buckets, then runs `close_season()` → `delete_season()` |
+
+Seed order: `10` company + archive-era pricing → `20` archived season
+(open) → `21` its receipts (as the operator) → `22` `close_season()` opens
+1448, then live pricing and season locations → `30` resources → `40`
+people → `50` allocation (one `UPDATE` per person, so every
+capacity/gender/season trigger checks it) → `60` charges, groups and
+receipts (as the operator) → `70` announcements and portal settings (as
+the operator).
+
+**Authorization is real.** Finance, announcement and portal steps run
+inside a transaction that does `set local role authenticated`, with the
+operator's JWT claims. This is exactly what PostgREST does for a
+logged-in user. So the following execute for real:
+
+- `has_permission()`;
+- RLS insert policies;
+- `issue_payment_receipt()` / `cancel_payment_receipt()` numbering;
+- `update_active_season()`;
+- `update_portal_settings()`.
+
+Nothing in the seed sets `app.season_maintenance`.
+
+### 10.5 What a reset keeps (by design)
+
+- `payment_receipts` rows of the deleted Demo seasons. Receipts are
+  immutable in Production, with no bypass. They are invisible in the app
+  and excluded from verification by season id. Only recreating the
+  project purges them.
+- `audit_log`, which is immutable.
+- The sentinel.
+- The operator account.
+- `company_config` row 1 and `pricing_settings`, which the seed rewrites.
+
+### 10.6 OCR readiness (live demo)
+
+- **Input.** The generator writes three walk-in samples that are *not*
+  in the database. They are meant to be scanned live as a new pilgrim:
+  - `.generated/ocr-samples/walk-in-passport.png`: specimen state
+    `UTO`, passport `DX1449901`, name `SAMIR KHALED AL-HADDAD`;
+  - `.generated/ocr-samples/walk-in-national-id.png`;
+  - `.generated/ocr-samples/walk-in-hajj-permit.png`.
+
+  All three are PNG, which `Scan-passport` accepts. Any seeded pilgrim's
+  generated passport or ID under `.generated/people/<ref>/` works too.
+- **Needs**
+  - `Scan-passport` deployed on the Demo project.
+  - `ANTHROPIC_API_KEY` set as a Demo project secret, using a Demo-only
+    key that is never committed.
+  - An operator login.
+- **Expected.** The Latin fields are extracted: passport number, names,
+  nationality code, dates. The OCR logic was not changed for the Demo.
+- **Not rehearsed here.** No Anthropic key was available in the
+  rehearsal environment, and none may be committed. The first live
+  check is part of the hosted Demo bootstrap.
+
+### 10.7 WhatsApp (simulated) and Web Push (optional)
+
+- **WhatsApp.** There is no Meta integration in Demo v1. Demonstrate the
+  Reports → WhatsApp workflow up to the confirmation step.
+  - The synthetic numbers (`+97400…`) are non-routable by design.
+  - No delivery history is seeded, so none can be fabricated.
+- **Web Push.** No subscription is seeded. To add one real opt-in later:
+  1. Set Demo-only `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+     `VAPID_SUBJECT` secrets.
+  2. Set `VITE_VAPID_PUBLIC_KEY` on the Demo Vercel deployment.
+  3. Deploy `send-pilgrim-push`.
+  4. Open the Demo portal on the presenter's device as `DEMO-P-001` and
+     accept notifications.
+
+  That creates the only `pilgrim_push_subscriptions` row, through
+  `register_pilgrim_push`.
+
+## 11. Files
 
 ```
 supabase/demo/
-├── README.md                        # this runbook
-├── demo.manifest.json               # expected-state contract
-├── sql/                             # ordered, guard-first seed steps (later)
-│   ├── 00_guard.sql
+├── README.md                  # this runbook
+├── BACKLOG.md                 # product findings recorded, not fixed here
+├── demo.manifest.json         # the contract (expected state)
+├── demo.env.example           # environment template — no values
+├── .gitignore                 # .generated/ and *.env never committed
+├── data/
+│   └── dataset.json           # generated by tools/build-dataset.mjs (deterministic, committed)
+├── sql/
+│   ├── 00_guard.sql           # in-database guard, included by every file
 │   ├── 10_company_profile.sql
 │   ├── 20_archive_season.sql
-│   ├── 30_active_season.sql
-│   ├── 40_pilgrims.sql
+│   ├── 21_archive_finance.sql
+│   ├── 22_archive_close.sql
+│   ├── 30_active_resources.sql
+│   ├── 40_people.sql
 │   ├── 50_allocation.sql
 │   ├── 60_finance.sql
 │   ├── 70_portal.sql
-│   └── 99_summary.sql
-└── tools/                           # later
-    ├── assert-demo-target.sh        # Production denylist + explicit allowlist
+│   ├── 90_reset.sql           # reset only (destructive path)
+│   ├── 99_summary.sql
+│   └── _resources.sql · _people.sql · _allocation.sql · _receipts.sql · _as_operator.sql
+└── tools/
+    ├── assert-demo-target.sh       # the guard (pattern of verification/assert-not-production.sh)
+    ├── demo-lib.sh · demo-common.mjs
+    ├── demo-bootstrap-sentinel.sh  # once per Demo project
+    ├── demo-operator.sh            # wraps scripts/seed_first_admin.mjs
+    ├── build-dataset.mjs
     ├── demo-seed.sh
-    ├── demo-reset.sh
     ├── generate-demo-documents.mjs
     ├── demo-storage-load.mjs
     ├── demo-storage-purge.mjs
-    └── verify-demo.py               # asserts demo.manifest.json
+    ├── demo-reset.sh
+    ├── demo-refresh.sh
+    ├── demo-portal-smoke.mjs
+    ├── demo-rehearsal.sh
+    └── verify-demo.py
 ```
-
-Generated document files go to a git-ignored working directory and are never
-committed.
 
 ---
 

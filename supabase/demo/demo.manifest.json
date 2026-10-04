@@ -1,13 +1,22 @@
 {
   "manifest": "alaqsa-hajj-demo-dataset",
-  "manifest_version": "1.0.0",
-  "status": "contract-only — no seed, generator, guard or verifier implemented yet",
+  "manifest_version": "1.1.0",
+  "status": "implemented — seed in supabase/demo/sql, tooling in supabase/demo/tools, dataset in supabase/demo/data/dataset.json",
   "description": "Expected end state of the persistent Sales Demo environment. This file is the independent contract that the future seed must produce and the future verifier must assert. It describes state, not implementation.",
   "repository_baseline": {
     "main_sha": "be236a88ee26d48d15d8fc07b96021daa7f34dac",
     "latest_migration": "20260928100000_rate_limit_exceeded_revoke_client_roles.sql",
     "note": "Re-validate this manifest against the schema whenever a migration lands after this baseline."
   },
+
+  "implementation_adjustments": [
+    { "item": "Demo sentinel row", "change": "company_assets carries one extra row, asset_key 'demo_environment_marker' (not a brand asset; ignored by CompanyService and the portal projection).", "reason": "The approved in-database sentinel needs a home without a schema change; company_assets is data-only and key-extensible by design.", "counts_affected": "company_assets has 7 rows: the 6 contract assets + the sentinel. totals.company_assets keeps counting assets only." },
+    { "item": "Receipts of deleted Demo seasons are retained after reset", "change": "demo-reset leaves the payment_receipts rows of the seasons it deletes.", "reason": "trg_payment_receipts_immutable forbids DELETE with no bypass (fiscal immutability, a Production rule that must not be weakened). Their season ids no longer exist, so no screen shows them and their numbers cannot collide with a new season's.", "counts_affected": "All receipt expectations are scoped to the current seasons' ids. Retained rows grow by 122 per reset; recreating the Demo project is the only full purge." },
+    { "item": "Orphan pricing snapshots removed on reset", "change": "demo-reset deletes season_pricing_snapshot rows whose season no longer exists.", "reason": "delete_season() does not remove them (no FK, no cascade), so they accumulate. The table has no protection, so nothing is bypassed. Recorded as backlog finding B-2.", "counts_affected": "none (the verifier asserts zero orphan snapshot rows)" },
+    { "item": "Archived-season lifecycle in reset", "change": "Reset closes the open Demo season into an empty placeholder (hijri 9999) with close_season(), deletes every closed season with delete_season(), then removes the never-written placeholder with a plain DELETE after proving it empty.", "reason": "delete_season() only deletes closed seasons, by design. It proved sufficient: the Demo tooling never sets app.season_maintenance itself — delete_season() uses it internally, exactly as in Production.", "counts_affected": "none" },
+    { "item": "Ticket images carry no airline name", "change": "flights rows keep the airline names (so the existing report-logo mapping renders), but generated ticket images read 'DEMO E-TICKET SPECIMEN - NO REAL CARRIER'.", "reason": "A generated ticket must not present itself under a real carrier's name.", "counts_affected": "none" },
+    { "item": "Local rehearsal target", "change": "DEMO_PROJECT_REF=local is accepted only when every connection host is loopback; the sentinel is still required.", "reason": "End-to-end rehearsal on a local Supabase stack (real Postgres, Auth and Storage) before any hosted Demo project exists.", "counts_affected": "none" }
+  ],
 
   "demo_anchor_date": "2026-10-01",
   "anchor_policy": {
@@ -398,7 +407,8 @@
     ],
     "bank_details": "synthetic, visibly non-functional",
     "public_asset_keys": ["logo", "favicon", "portal_banner", "dashboard_banner"],
-    "private_asset_keys": ["company_stamp", "manager_signature"]
+    "private_asset_keys": ["company_stamp", "manager_signature"],
+    "sentinel_row": { "asset_key": "demo_environment_marker", "counted_in_asset_keys": false }
   },
 
   "storage": {
@@ -470,6 +480,21 @@
     "pilgrim_sessions": 0,
     "company_config": 1,
     "company_assets": 6,
+    "company_assets_rows_including_sentinel": 7,
     "storage_objects": 488
+  },
+
+  "determinism": {
+    "fingerprint_tool": "tools/verify-demo.py --fingerprint",
+    "covered": "every seeded business row (seasons, people, allocation by resource name, services, pricing, snapshot, receipts with their lines, payments, charges, groups, announcements, company profile, asset keys) and the SHA-256 of every Storage object",
+    "excluded": [
+      "database ids (identity sequences continue across resets)",
+      "created_at / updated_at",
+      "payment_receipts.issued_at, issued_by, cancelled_at, cancelled_by",
+      "seasons.closed_at",
+      "audit_log",
+      "Storage object metadata timestamps",
+      "the passenger_id inside object keys (<passenger_id>/<doc_type>_demo.<ext>)"
+    ]
   }
 }
