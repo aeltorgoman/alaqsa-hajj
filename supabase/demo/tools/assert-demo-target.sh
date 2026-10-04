@@ -83,6 +83,14 @@ p=u.urlsplit(sys.argv[1]); print((p.hostname or "").lower())' "$1"; }
 user_of() { python3 -c 'import sys,urllib.parse as u
 p=u.urlsplit(sys.argv[1]); print((p.username or "").lower())' "$1"; }
 
+# libpq lets query parameters override the URL host (?host=, ?hostaddr=,
+# ?service=); that would make the host checks below meaningless. Refuse them.
+for u in "$DB_URL" "$API_URL" "$FN_URL"; do
+  if printf '%s' "${u#*\?}" | grep -qiE '(^|&)(host|hostaddr|service|servicefile)='; then
+    [ "${u#*\?}" != "$u" ] && refuse "a connection URL overrides its host through query parameters"
+  fi
+done
+
 # ── layers 2+3: explicit ref, every connection belongs to it ────
 if [ "$REF" = "local" ]; then
   for u in "$DB_URL" $( [ "$NO_API" = 1 ] || printf '%s' "$API_URL" ) $FN_URL; do
