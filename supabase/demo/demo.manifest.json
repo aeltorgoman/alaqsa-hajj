@@ -1,0 +1,475 @@
+{
+  "manifest": "alaqsa-hajj-demo-dataset",
+  "manifest_version": "1.0.0",
+  "status": "contract-only — no seed, generator, guard or verifier implemented yet",
+  "description": "Expected end state of the persistent Sales Demo environment. This file is the independent contract that the future seed must produce and the future verifier must assert. It describes state, not implementation.",
+  "repository_baseline": {
+    "main_sha": "be236a88ee26d48d15d8fc07b96021daa7f34dac",
+    "latest_migration": "20260928100000_rate_limit_exceeded_revoke_client_roles.sql",
+    "note": "Re-validate this manifest against the schema whenever a migration lands after this baseline."
+  },
+
+  "demo_anchor_date": "2026-10-01",
+  "anchor_policy": {
+    "rule": "Every seeded business date is DEMO_ANCHOR_DATE plus or minus a fixed day offset.",
+    "forbidden_in_seeded_business_data": ["CURRENT_DATE", "now()", "clock_timestamp()", "random()", "gen_random_uuid() as a business value"],
+    "out_of_scope_for_determinism": [
+      "created_at / updated_at defaults",
+      "payment_receipts.issued_at and cancelled_at (set to wall-clock by the receipt RPCs)",
+      "audit_log rows",
+      "storage object metadata timestamps"
+    ],
+    "drift_window_days": 45,
+    "drift_note": "Expiry alerts, announcement visibility and the travel phase are evaluated by the application against the real current date. The anchor-relative offsets below keep every expected alert count stable while the real date is within drift_window_days after the anchor. Moving the anchor is a deliberate, reviewed change to this file."
+  },
+
+  "safety": {
+    "production_targets_allowed": false,
+    "requires_dedicated_demo_project": true,
+    "requires_in_database_demo_sentinel": true,
+    "uses_app_season_maintenance_while_seeding": false,
+    "app_season_maintenance_in_reset": "only if delete_season() is proven insufficient; transaction-local; after all demo target guards pass; documented; never in Production",
+    "weakens_rls_triggers_constraints_or_grants": false,
+    "secrets_in_repository": false,
+    "real_or_production_derived_records": 0
+  },
+
+  "seasons": {
+    "total": 2,
+    "open": 1,
+    "closed": 1,
+    "active": {
+      "ref": "S-ACTIVE",
+      "hijri_year": 1448,
+      "closed": false,
+      "location_fields_populated": ["hotel_name", "hotel_address", "hotel_url", "mina_address", "mina_url", "arafa_address", "arafa_url"],
+      "receipt_start_number": 1001,
+      "receipt_next_number": 1105
+    },
+    "archived": {
+      "ref": "S-ARCHIVE",
+      "hijri_year": 1447,
+      "closed": true,
+      "closed_via": "close_season() RPC — never by writing closed_at",
+      "has_own_pricing_snapshot": true,
+      "receipt_start_number": 501,
+      "receipt_next_number": 519
+    },
+    "creation_order": ["S-ARCHIVE created open", "S-ARCHIVE fully populated while open", "S-ARCHIVE closed via close_season() which opens S-ACTIVE", "live pricing changed", "S-ACTIVE populated"]
+  },
+
+  "pricing": {
+    "table": "pricing_settings",
+    "scope": "global (not per season); historical seasons read season_pricing_snapshot",
+    "keys": [
+      "package_double", "package_triple", "package_quad", "package_suite",
+      "addon_view", "addon_mina", "addon_arafa", "addon_bus_vip", "addon_first_class",
+      "discount_no_ticket"
+    ],
+    "live_amounts": {
+      "package_double": 16500, "package_triple": 15000, "package_quad": 13500, "package_suite": 21000,
+      "addon_view": 2000, "addon_mina": 3500, "addon_arafa": 2500, "addon_bus_vip": 1200, "addon_first_class": 6000,
+      "discount_no_ticket": 4000
+    },
+    "archived_snapshot_amounts": {
+      "package_double": 15500, "package_triple": 14000, "package_quad": 12500, "package_suite": 20000,
+      "addon_view": 2000, "addon_mina": 3500, "addon_arafa": 2500, "addon_bus_vip": 1200, "addon_first_class": 6000,
+      "discount_no_ticket": 4000
+    },
+    "season_pricing_snapshot_rows": { "S-ARCHIVE": 10, "S-ACTIVE": 0 }
+  },
+
+  "active_season": {
+    "passengers": {
+      "total": 126,
+      "by_passenger_type": { "حاج": 120, "مرافق": 3, "مشرف": 2, "إداري": 1 },
+      "hajj_by_gender": { "ذكر": 63, "أنثى": 57 },
+      "staff_by_gender": { "ذكر": 4, "أنثى": 2 },
+      "staff_by_type_and_gender": {
+        "مرافق": { "ذكر": 1, "أنثى": 2 },
+        "مشرف": { "ذكر": 2, "أنثى": 0 },
+        "إداري": { "ذكر": 1, "أنثى": 0 }
+      },
+      "staff_wants_flight": 2,
+      "hajj_by_nationality_base": { "قطري": 72, "مصري": 14, "سوري": 8, "أردني": 8, "فلسطيني": 6, "سوداني": 6, "يمني": 6 },
+      "nationality_note": "Stored in the gendered Arabic form the airline report maps (e.g. قطري / قطرية) so natCode() never falls back to raw text.",
+      "families": {
+        "count": 14,
+        "members_total": 42,
+        "size_distribution": { "2": 5, "3": 5, "4": 3, "5": 1 },
+        "members_are_hajj_only": true
+      },
+      "dob_format": "DD/MM/YYYY",
+      "name_fields_populated": ["name_ar", "short_ar", "name_en", "short_en"]
+    },
+
+    "documents": {
+      "columns": ["photo_url", "passport_url", "national_id_url", "contract_url", "hajj_permit_url", "flight_ticket_url"],
+      "rule": "non-null DB document reference = existing, openable Demo Storage object",
+      "hajj_identity_document_states": {
+        "photo_passport_national_id_complete": 84,
+        "missing_passport_only": 10,
+        "missing_national_id_only": 6,
+        "missing_photo_only": 4,
+        "photo_only": 8,
+        "missing_photo_and_passport": 2,
+        "missing_photo_and_national_id": 2,
+        "missing_all_three": 4
+      },
+      "hajj_present_per_column": {
+        "photo_url": 108, "passport_url": 96, "national_id_url": 100,
+        "contract_url": 70, "hajj_permit_url": 46, "flight_ticket_url": 38
+      },
+      "staff_present_per_column": {
+        "photo_url": 6, "passport_url": 6, "national_id_url": 4,
+        "contract_url": 0, "hajj_permit_url": 6, "flight_ticket_url": 2
+      },
+      "constraints": [
+        "flight_ticket_url only for passengers with an outbound flight_id",
+        "staff flight_ticket_url only for staff with wants_flight = true",
+        "hajj with services.flight = 'بدون' have no flight_ticket_url"
+      ]
+    },
+
+    "validity_states_hajj": {
+      "passport_expired": 4,
+      "passport_expiring_within_6_months": 9,
+      "national_id_expired": 3,
+      "national_id_expiring_within_6_months": 6,
+      "anchor_offsets_days": {
+        "expired": "between -120 and -30",
+        "expiring": "between +60 and +140",
+        "valid": "at least +400"
+      }
+    },
+
+    "phones_hajj": {
+      "missing": 7,
+      "duplicate_phone_groups": 3,
+      "pilgrims_in_duplicate_groups": 6,
+      "format": "synthetic, non-routable, documented range only"
+    },
+
+    "commercial_services_hajj": {
+      "hotel_type": { "فردية": 10, "ثنائية": 38, "ثلاثية": 34, "رباعية": 32, "خاص": 6 },
+      "custom_price_for_خاص": [17500, 18000, 19500, 21000, 22500, 24000],
+      "hotel_view": { "مطلة": 54, "غير مطلة": 66 },
+      "hotel_view_note": "Must be written explicitly; a NULL hotel_view is rendered as 'مطلة' and would silently add addon_view to everyone.",
+      "bus": { "VIP": 22, "عادي": 98 },
+      "flight": { "عادي": 94, "درجة أولى": 18, "بدون": 8 },
+      "camp_mina": { "خاص": 12, "عادي": 108 },
+      "camp_arafa": { "خاص": 9, "عادي": 111 },
+      "staff_services": "all 'عادي'; staff never appear in Finance"
+    },
+
+    "buses": {
+      "count": 4,
+      "items": [
+        { "ref": "BUS-1", "type": "VIP",  "capacity": 30, "occupancy": { "hajj": 20, "staff": 2 }, "state": "partial" },
+        { "ref": "BUS-2", "type": "عادي", "capacity": 50, "occupancy": { "hajj": 48, "staff": 1 }, "state": "near_full" },
+        { "ref": "BUS-3", "type": "عادي", "capacity": 50, "occupancy": { "hajj": 24, "staff": 3 }, "state": "half" },
+        { "ref": "BUS-4", "type": "عادي", "capacity": 45, "occupancy": { "hajj": 0,  "staff": 0 }, "state": "empty_bulk_assignment_target" }
+      ],
+      "hajj_assigned": 92,
+      "hajj_unassigned": 28,
+      "service_coherence": { "vip_payers_on_vip_bus": 20, "vip_payers_on_regular_bus_mismatch": 1, "vip_payers_unassigned": 1 }
+    },
+
+    "camps": {
+      "count": 8,
+      "mina": [
+        { "ref": "MINA-M-REG", "gender": "ذكر",  "type": "عادي", "capacity": 50, "occupancy": { "hajj": 44, "staff": 4 } },
+        { "ref": "MINA-M-VIP", "gender": "ذكر",  "type": "خاص",  "capacity": 8,  "occupancy": { "hajj": 6,  "staff": 0 } },
+        { "ref": "MINA-F-REG", "gender": "أنثى", "type": "عادي", "capacity": 50, "occupancy": { "hajj": 41, "staff": 2 } },
+        { "ref": "MINA-F-VIP", "gender": "أنثى", "type": "خاص",  "capacity": 6,  "occupancy": { "hajj": 4,  "staff": 0 } }
+      ],
+      "arafat": [
+        { "ref": "ARAFA-M-REG", "gender": "ذكر",  "type": "عادي", "capacity": 50, "occupancy": { "hajj": 42, "staff": 4 } },
+        { "ref": "ARAFA-M-VIP", "gender": "ذكر",  "type": "خاص",  "capacity": 8,  "occupancy": { "hajj": 5,  "staff": 0 } },
+        { "ref": "ARAFA-F-REG", "gender": "أنثى", "type": "عادي", "capacity": 50, "occupancy": { "hajj": 39, "staff": 2 } },
+        { "ref": "ARAFA-F-VIP", "gender": "أنثى", "type": "خاص",  "capacity": 6,  "occupancy": { "hajj": 4,  "staff": 0 } }
+      ],
+      "hajj_assigned": { "mina": 95, "arafat": 90 },
+      "hajj_unassigned": { "mina": 25, "arafat": 30 },
+      "service_coherence": {
+        "mina_خاص_payers": { "in_خاص_camp": 10, "in_regular_camp_mismatch": 1, "unassigned": 1 },
+        "arafat_خاص_payers": { "in_خاص_camp": 9, "in_regular_camp_mismatch": 0, "unassigned": 0 }
+      },
+      "rules": ["every camp has a non-NULL capacity", "gender and page_type match every occupant"]
+    },
+
+    "rooms": {
+      "count": 50,
+      "floors": ["1", "2", "3", "4", "5"],
+      "floor_note": "Floors are numeric strings — the hotel report sorts floors with Number().",
+      "by_type": {
+        "فردية":  { "rooms": 10, "capacity_each": 1, "full": 8,  "partial": 0, "empty": 2, "occupancy": { "hajj": 8,  "staff": 0 } },
+        "ثنائية": { "rooms": 16, "capacity_each": 2, "full": 13, "partial": 2, "empty": 1, "occupancy": { "hajj": 26, "staff": 2 } },
+        "ثلاثية": { "rooms": 12, "capacity_each": 3, "full": 8,  "partial": 2, "empty": 2, "occupancy": { "hajj": 27, "staff": 1 } },
+        "رباعية": { "rooms": 9,  "capacity_each": 4, "full": 5,  "partial": 2, "empty": 2, "occupancy": { "hajj": 22, "staff": 3 } },
+        "خاص":    { "rooms": 2,  "capacity_each": 3, "full": 1,  "partial": 1, "empty": 0, "occupancy": { "hajj": 5,  "staff": 0 } },
+        "مجلس":   { "rooms": 1,  "capacity_each": 0, "full": 0,  "partial": 0, "empty": 0, "occupancy": { "hajj": 0,  "staff": 0 }, "note": "capacity 0 — the database refuses any occupant; shown with status 'مجلس'" }
+      },
+      "status_totals": { "مكتملة": 35, "قيد التسكين": 7, "جاهزة": 7, "مجلس": 1, "تجاوز": 0, "غير محدّدة": 0 },
+      "total_assignable_capacity": 120,
+      "occupancy_total": 94,
+      "hajj_assigned": 88,
+      "hajj_unassigned": 32,
+      "hajj_unassigned_by_hotel_type": { "فردية": 2, "ثنائية": 12, "ثلاثية": 7, "رباعية": 10, "خاص": 1 },
+      "rules": ["every occupant's hotel_type equals the room type", "rooms.type always written explicitly (baseline default 'مطل' is not a valid hotel type)"]
+    },
+
+    "flights": {
+      "count": 6,
+      "items": [
+        { "ref": "OUT-1", "type": "ذهاب", "airline": "Qatar Airways", "capacity": 60, "occupancy": { "hajj": 52, "staff": 2 }, "date_offset_days": 219 },
+        { "ref": "OUT-2", "type": "ذهاب", "airline": "Saudia",        "capacity": 50, "occupancy": { "hajj": 34, "staff": 0 }, "date_offset_days": 220 },
+        { "ref": "OUT-3", "type": "ذهاب", "airline": "Qatar Airways", "capacity": 40, "occupancy": { "hajj": 0,  "staff": 0 }, "date_offset_days": 221 },
+        { "ref": "RET-1", "type": "إياب", "airline": "Qatar Airways", "capacity": 60, "occupancy": { "hajj": 48, "staff": 2 }, "date_offset_days": 240 },
+        { "ref": "RET-2", "type": "إياب", "airline": "Saudia",        "capacity": 50, "occupancy": { "hajj": 26, "staff": 0 }, "date_offset_days": 241 },
+        { "ref": "RET-3", "type": "إياب", "airline": "Qatar Airways", "capacity": 40, "occupancy": { "hajj": 0,  "staff": 0 }, "date_offset_days": 242 }
+      ],
+      "airline_note": "Airline names chosen so the existing report logo mapping (qatar / saudia) renders; flight numbers are synthetic.",
+      "fields_populated": ["name", "airline", "date", "time", "arrival_date", "arrival_time", "from_airport", "to_airport", "capacity"],
+      "hajj_needing_flight": 112,
+      "hajj_outbound_assigned": 86,
+      "hajj_return_assigned": 74,
+      "hajj_both_legs": 74,
+      "hajj_outbound_only": 12,
+      "hajj_no_flight_but_needed": 26,
+      "hajj_flight_service_بدون_assigned": 0,
+      "first_class_payers_with_outbound": 18,
+      "travel_phase_active_at_anchor": false
+    },
+
+    "finance": {
+      "population": "حاج only (staff never appear in Finance)",
+      "status_counts": { "مسدد": 44, "جزئي": 50, "لم يدفع": 24, "رصيد دائن": 2, "غير مسعّر": 0 },
+      "financial_groups": {
+        "count": 9,
+        "memberships": 24,
+        "size_distribution": { "2": 4, "3": 4, "4": 1 },
+        "groups_matching_a_family": 6,
+        "paying_members": 20,
+        "fully_unpaid_groups": 1
+      },
+      "receipts": {
+        "total": 104,
+        "valid": 101,
+        "cancelled": 3,
+        "individual": 92,
+        "group": 12,
+        "by_method": { "نقدي": 48, "تحويل بنكي": 46, "شيك": 10 },
+        "number_range": [1001, 1104],
+        "issued_via": "issue_payment_receipt() / cancel_payment_receipt() as an authenticated demo staff identity — never by direct INSERT"
+      },
+      "payment_lines": {
+        "total": 119,
+        "individual": 92,
+        "group": 27,
+        "on_cancelled_receipts": 3,
+        "counted_as_paid": 116,
+        "legacy_without_receipt": 0
+      },
+      "payment_dates": { "distinct": 30, "offset_range_days": [-90, -1] },
+      "custom_charges": { "total": 26, "إضافة": 18, "خصم": 8, "distinct_pilgrims": 26 },
+      "report_views_with_content": ["full", "late", "payments", "packages", "addons", "cashflow"]
+    },
+
+    "announcements": {
+      "count": 6,
+      "by_priority": { "عاجل": 1, "مهم": 2, "عام": 3 },
+      "by_target_type": { "all": 3, "bus": 1, "camp_mina": 1, "custom": 1 },
+      "visible_in_portal": 5,
+      "expired": 1,
+      "without_expires_at": 2,
+      "push_sent_at_set": 0,
+      "note": "The portal shows all season announcements; target_type only scopes the push audience."
+    },
+
+    "notifications": {
+      "notification_deliveries": 0,
+      "pilgrim_push_subscriptions": 0,
+      "pilgrim_sessions": 0,
+      "note": "No fabricated delivery history. Rows appear only from a live, optional push setup or real portal logins."
+    },
+
+    "operations_room_expected_hajj_counts": {
+      "expired_passport": 4,
+      "expiring_passport": 9,
+      "expired_id": 3,
+      "expiring_id": 6,
+      "missing_phone": 7,
+      "missing_passport": 24,
+      "missing_id": 20,
+      "missing_photo": 12,
+      "missing_ticket": 82,
+      "missing_permit": 74,
+      "missing_hotel": 32,
+      "missing_bus": 28,
+      "missing_mina": 25,
+      "missing_arafah": 30,
+      "missing_flight": 26,
+      "missing_return_flight": 38,
+      "duplicate_phone_pilgrims": 6
+    },
+
+    "dashboard_expected": {
+      "hajj_total": 120,
+      "registration_documents_pct": 70,
+      "distribution_phase_active": true,
+      "preparation_phase_active": true,
+      "travel_phase_active": false,
+      "current_phase": "التجهيز للسفر"
+    },
+
+    "reports_expected": {
+      "pilgrims_kpi_total": 120,
+      "flight_kpi": "74/112",
+      "bus_pct": 77,
+      "mina_pct": 79,
+      "arafat_pct": 75,
+      "hotel_pct": 73,
+      "airline_booking_list": { "total": 114, "hajj": 112, "staff": 2, "first_class": 18 },
+      "documents_report_has_rows_for": ["passport_url", "national_id_url", "hajj_permit_url", "flight_ticket_url"],
+      "documents_report_admin_filter_non_empty": true
+    },
+
+    "portal_demo_pilgrim": {
+      "ref": "DEMO-P-001",
+      "credential_kind": "synthetic passport number + DOB — non-secret by design, valid only in the Demo project",
+      "passport": "DX1448001",
+      "dob": "15/03/1968",
+      "passenger_type": "حاج",
+      "gender": "ذكر",
+      "requirements": [
+        "in the active season",
+        "assigned bus, room, Mina camp, Arafat camp, outbound and return flight",
+        "member of a family of at least 3 with roommates",
+        "real Storage objects for photo_url, hajj_permit_url and flight_ticket_url",
+        "phone present and not part of a duplicate group",
+        "passport and national ID valid (no expiry alerts)"
+      ],
+      "rehearsal_credential_ref": "DEMO-P-002"
+    }
+  },
+
+  "archived_season": {
+    "passengers": { "total": 18, "by_passenger_type": { "حاج": 18 }, "hajj_by_gender": { "ذكر": 10, "أنثى": 8 } },
+    "documents": {
+      "non_null_document_references": 0,
+      "reason": "The real season-close workflow removes a closed season's objects from passengers-docs. Under the Storage-truthfulness rule, archived pilgrims therefore carry no document references."
+    },
+    "buses": [
+      { "ref": "A-BUS-1", "type": "عادي", "capacity": 50, "occupancy": 10 },
+      { "ref": "A-BUS-2", "type": "عادي", "capacity": 50, "occupancy": 8 }
+    ],
+    "camps": [
+      { "ref": "A-MINA-M",  "page_type": "منى",  "gender": "ذكر",  "type": "عادي", "capacity": 20, "occupancy": 10 },
+      { "ref": "A-MINA-F",  "page_type": "منى",  "gender": "أنثى", "type": "عادي", "capacity": 20, "occupancy": 8 },
+      { "ref": "A-ARAFA-M", "page_type": "عرفة", "gender": "ذكر",  "type": "عادي", "capacity": 20, "occupancy": 10 },
+      { "ref": "A-ARAFA-F", "page_type": "عرفة", "gender": "أنثى", "type": "عادي", "capacity": 20, "occupancy": 8 }
+    ],
+    "rooms": { "count": 6, "by_type": { "رباعية": { "rooms": 4, "occupancy": 16 }, "ثنائية": { "rooms": 1, "occupancy": 2 }, "ثلاثية": { "rooms": 1, "occupancy": 0 } } },
+    "commercial_services": { "hotel_type": { "رباعية": 16, "ثنائية": 2 }, "hotel_view": { "غير مطلة": 18 }, "bus": { "عادي": 18 }, "flight": { "عادي": 18 }, "camp_mina": { "عادي": 18 }, "camp_arafa": { "عادي": 18 } },
+    "flights": [
+      { "ref": "A-OUT", "type": "ذهاب", "capacity": 30, "occupancy": 18 },
+      { "ref": "A-RET", "type": "إياب", "capacity": 30, "occupancy": 18 }
+    ],
+    "finance": {
+      "status_counts": { "مسدد": 18 },
+      "receipts": { "total": 18, "valid": 18, "cancelled": 0, "individual": 18, "group": 0, "number_range": [501, 518] },
+      "payment_lines": 18,
+      "custom_charges": 0,
+      "financial_groups": 0
+    },
+    "announcements": { "count": 1, "without_expires_at": 1, "purpose": "proves season isolation in the portal" }
+  },
+
+  "company": {
+    "company_config_rows": 1,
+    "fictitious_identity": true,
+    "fields_populated": [
+      "name_ar", "name_en", "tagline", "color_primary", "color_accent", "color_sidebar",
+      "contact_phone", "contact_email", "admin_name", "admin_phone", "admin_whatsapp",
+      "country", "city", "commercial_registration",
+      "bank_name", "bank_account_name", "bank_account_number", "bank_iban", "bank_swift",
+      "portal_welcome_message", "portal_help_message", "portal_settings"
+    ],
+    "bank_details": "synthetic, visibly non-functional",
+    "public_asset_keys": ["logo", "favicon", "portal_banner", "dashboard_banner"],
+    "private_asset_keys": ["company_stamp", "manager_signature"]
+  },
+
+  "storage": {
+    "rule": "non-null reference = existing Storage object; every object referenced exactly once; no object without a reference",
+    "buckets": {
+      "passengers-docs": { "public": false, "stored_value": "object key", "key_shape": "<passenger_id>/<doc_type>_demo.<ext>", "doc_types": ["photo", "passport", "national_id", "contract", "hajj_permit", "flight_ticket"] },
+      "company-assets": { "public": true, "stored_value": "full public URL", "key_shape": "<asset_key>_demo.<ext>" },
+      "company-private": { "public": false, "stored_value": "object key", "key_shape": "<asset_key>_demo.<ext>" }
+    },
+    "expected_objects": {
+      "passengers-docs": { "active_hajj": 458, "active_staff": 24, "archived": 0, "total": 482 },
+      "company-assets": 4,
+      "company-private": 2,
+      "total": 488
+    },
+    "allowed_formats": ["image/png", "image/jpeg", "application/pdf"],
+    "magic_bytes_must_match_extension": true,
+    "orphans_allowed": 0
+  },
+
+  "generated_documents": {
+    "watermark_text": "DEMO — NOT A REAL DOCUMENT",
+    "kinds": ["generated passport", "generated national ID", "geometric avatar", "generated contract", "generated Hajj permit", "generated flight ticket"],
+    "human_faces": false,
+    "ai_generated_faces": false,
+    "real_branding": false,
+    "deterministic_from_passenger_ref": true,
+    "committed_binaries": false
+  },
+
+  "synthetic_identifiers": {
+    "names": "realistic-looking Arabic and English names from a fixed synthetic pool; no real person",
+    "passport_pattern": "DX + 7 digits",
+    "national_id_pattern": "14 digits beginning 99 (fails the real checksum)",
+    "phone": "documented non-routable range only",
+    "created_by_tag": "demo-seed"
+  },
+
+  "auth": {
+    "demo_staff_accounts": "created by the existing seed_first_admin.mjs pattern; no passwords in the repository",
+    "minimum_accounts": 1
+  },
+
+  "external_services": {
+    "ocr_scan_passport": { "mode": "live", "requires": ["Scan-passport deployed on the Demo project", "Demo-only Anthropic API key set as a Demo project secret"] },
+    "whatsapp": { "mode": "simulated", "live_meta_delivery": false, "demonstrated_until": "confirmation step in the UI" },
+    "web_push": { "mode": "optional_later", "seeded_subscriptions": 0, "requires_when_enabled": ["Demo-only VAPID keys", "real browser opt-in on the presenter device"] },
+    "pilgrim_doc_edge_function": { "mode": "live", "requires": ["deployed on the Demo project", "Demo frontend origin allowed"] },
+    "production_credentials_reused": false
+  },
+
+  "totals": {
+    "seasons": 2,
+    "passengers": 144,
+    "buses": 6,
+    "camps": 12,
+    "rooms": 56,
+    "flights": 8,
+    "announcements": 7,
+    "pricing_settings": 10,
+    "season_pricing_snapshot": 10,
+    "payment_receipts": 122,
+    "payments": 137,
+    "custom_charges": 26,
+    "financial_groups": 9,
+    "financial_group_members": 24,
+    "notification_deliveries": 0,
+    "pilgrim_push_subscriptions": 0,
+    "pilgrim_sessions": 0,
+    "company_config": 1,
+    "company_assets": 6,
+    "storage_objects": 488
+  }
+}
