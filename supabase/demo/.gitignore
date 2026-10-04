@@ -1,0 +1,6 @@
+# Generated synthetic documents and rehearsal output — never committed.
+.generated/
+# Local operator environment files (secrets) — never committed.
+*.env
+!demo.env.example
+__pycache__/
