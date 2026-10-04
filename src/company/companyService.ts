@@ -83,6 +83,7 @@ export function normalizeCompanyProfile(config: AppConfig | ConfigRow | PublicCo
         notifications: enabled(portal.notifications), pdfDownloads: enabled(portal.pdf_downloads),
         roommates: enabled(portal.roommates),
         lostCard: enabled(portal.lost_card),
+        arafaCountdown: enabled(portal.arafa_countdown),
       },
     },
     assets,

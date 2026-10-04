@@ -14,7 +14,6 @@ import { companyService, seasonMasterData } from "../company/companyService";
 import type { CompanyAssetKey, CompanyAssetImageMeta } from "../company/types";
 import type { Json } from "../types/database";
 import { isSaved, saveErrorText } from "../company/saveResult";
-import { CompanyBankCard } from "./finance/CompanyBankCard";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -719,10 +718,24 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
-            {/* البنك والسداد — مالكُ `manage_users` يحرّره هنا دون أن
-                يحتاج صفحةَ الحسابات (التي تشترط `manage_payments`). */}
-            <CompanyBankCard canEdit={!!currentUser.permissions?.manage_users} />
+            {/* ⚠️ «البنك والسداد» لم يبقَ هنا: مالكُه الواحد صار
+                «الحسابات ← إعدادات الحسابات ← البنك».
 
+                والصلاحيةُ لم تتغيّر بهذا الحذف: الكتابةُ على
+                `company_config` تبقى مشروطةً بـ`manage_users` في سياسة
+                `company_config_management_update`، والواجهةُ لا تمنحها
+                ولا تتجاوزها. وسطحُ الحسابات يُراعي ذلك أصلاً —
+                `canEditBank = manage_users` و`canOpenSettings` تفتح
+                لمالكِ أيِّ القسمَين.
+
+                ⚠️ وتبقى ملاحظةٌ مقصودة: التنقّلُ إلى «الحسابات» نفسُه
+                مشروطٌ بـ`manage_payments` (`nav.ts`)، فمستخدمٌ يملك
+                `manage_users` وحدَها لا يبلغ المُحرِّرَ. ولا مستخدمَ
+                كذلك اليوم (الأربعةُ أصحابُ `manage_users` يملكون
+                `manage_payments` أيضاً). فإن مُنحت `manage_users`
+                منفردةً مستقبلاً فالمسارُ يحتاج مدخلاً صريحاً — ولا
+                يُحَلُّ بإظهار زرٍّ ولا بتوسيع بوّابةِ التنقّل، فتلك
+                تكشف ماليّاتِ الحجّاج لمن لا يملك `manage_payments`. */}
           </div>
         )}
 

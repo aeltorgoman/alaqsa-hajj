@@ -325,6 +325,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     { key: "notifications", label: "التنبيهات", desc: "إظهار تبويب التنبيهات وخيارات التفعيل" },
     { key: "roommates", label: "رفقاء الغرفة", desc: "إظهار أسماء زملاء الغرفة" },
     { key: "lost_card", label: "بطاقة أنا تائه", desc: "إظهار بطاقة تعريف الطوارئ" },
+    { key: "arafa_countdown", label: "عداد يوم عرفة", desc: "إظهار العد التنازلي المتبقي ليوم عرفة في بوابة الحاج" },
   ];
 
   const annCard = (a: Announcement, kind: "live" | "scheduled" | "ended") => {
