@@ -1,0 +1,159 @@
+name: Customer Backend Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      allowed_origin:
+        description: "Vercel Production URL, e.g. https://customer.vercel.app"
+        required: true
+      vercel_project_slug:
+        description: "Vercel Project Name"
+        required: true
+      vercel_owner_slug:
+        description: "Vercel Team/Owner slug"
+        required: true
+      vapid_subject:
+        description: "Customer contact, e.g. mailto:it@customer.com"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-backend-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      API: https://api.supabase.com/v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "Check required setup secrets"
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "${PROJECT_REF:-}" ] || { echo "::error::SUPABASE_PROJECT_REF is missing"; exit 1; }
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
+          [ -n "${DB_PASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is missing"; exit 1; }
+          echo "::add-mask::$PROJECT_REF"
+          echo "Required GitHub secrets are present."
+
+      - name: "Install pinned project toolchain"
+        run: |
+          set -euo pipefail
+          npm ci
+          v="$(npm run --silent supabase -- --version)"
+          echo "Supabase CLI $v"
+
+      - name: "Apply repository migrations"
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          history="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/database/migrations")"
+          mapfile -t applied < <(printf '%s' "$history" | jq -r '.[].version')
+
+          is_applied() {
+            local wanted="$1"
+            printf '%s\n' "${applied[@]}" | grep -Fxq "$wanted"
+          }
+
+          count=0
+          for file in $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort); do
+            base="$(basename "$file" .sql)"
+            version="${base%%_*}"
+            name="${base#*_}"
+            if is_applied "$version"; then
+              echo "skip  $version"
+              continue
+            fi
+            jq -n --rawfile query "$file" --arg name "$name"               '{query:$query,name:$name}' > "$RUNNER_TEMP/migration.json"
+            curl --fail-with-body -sS               "${auth[@]}"               -H "Content-Type: application/json"               -X POST "$API/projects/$PROJECT_REF/database/migrations"               --data-binary @"$RUNNER_TEMP/migration.json" >/dev/null
+            echo "apply $version"
+            applied+=("$version")
+            count=$((count + 1))
+          done
+          echo "Applied $count migration(s)."
+
+      - name: "Generate customer VAPID pair"
+        id: vapid
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' > "$RUNNER_TEMP/vapid.txt"
+          const { generateKeyPairSync } = require('node:crypto');
+          const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+          const pub = publicKey.export({ format: 'jwk' });
+          const priv = privateKey.export({ format: 'jwk' });
+          const b64 = s => Buffer.from(s, 'base64url');
+          const publicVapid = Buffer.concat([Buffer.from([4]), b64(pub.x), b64(pub.y)]).toString('base64url');
+          console.log(publicVapid);
+          console.log(priv.d);
+          NODE
+          PUBLIC_KEY="$(sed -n '1p' "$RUNNER_TEMP/vapid.txt")"
+          PRIVATE_KEY="$(sed -n '2p' "$RUNNER_TEMP/vapid.txt")"
+          echo "::add-mask::$PRIVATE_KEY"
+          echo "public_key=$PUBLIC_KEY" >> "$GITHUB_OUTPUT"
+          echo "private_key=$PRIVATE_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: "Set required Edge Function secrets"
+        env:
+          ALLOWED_ORIGIN: ${{ inputs.allowed_origin }}
+          VERCEL_PROJECT: ${{ inputs.vercel_project_slug }}
+          VERCEL_OWNER: ${{ inputs.vercel_owner_slug }}
+          VAPID_SUBJECT: ${{ inputs.vapid_subject }}
+          VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
+          VAPID_PRIVATE_KEY: ${{ steps.vapid.outputs.private_key }}
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- secrets set             "ALLOWED_ORIGINS=$ALLOWED_ORIGIN"             "VERCEL_PROJECT_SLUG=$VERCEL_PROJECT"             "VERCEL_OWNER_SLUG=$VERCEL_OWNER"             "VAPID_SUBJECT=$VAPID_SUBJECT"             "VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY"             "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY"             --project-ref "$PROJECT_REF"
+
+      - name: "Deploy all six Edge Functions"
+        run: |
+          set -euo pipefail
+          npm run --silent supabase -- functions deploy --project-ref "$PROJECT_REF" --use-api
+
+      - name: "Verify backend deployment"
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          history="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/database/migrations")"
+          expected="$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)"
+          actual="$(printf '%s' "$history" | jq 'length')"
+          [ "$actual" -eq "$expected" ] || {
+            echo "::error::Migration count mismatch: expected $expected, found $actual"; exit 1; }
+
+          functions="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/functions")"
+          for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send; do
+            printf '%s' "$functions" | jq -e --arg slug "$slug"               'any(.[]; .slug == $slug and .status == "ACTIVE")' >/dev/null || {
+                echo "::error::Function $slug is not ACTIVE"; exit 1; }
+          done
+          echo "Backend setup verified."
+
+      - name: "Setup result"
+        env:
+          VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
+        run: |
+          {
+            echo "## Customer Backend Setup — SUCCESS"
+            echo
+            echo "Database migrations and all six Edge Functions are deployed."
+            echo
+            echo "### One value to copy to Vercel"
+            echo
+            echo "\`VITE_VAPID_PUBLIC_KEY\`"
+            echo
+            echo "\`$VAPID_PUBLIC_KEY\`"
+            echo
+            echo "Use this public value only. The private VAPID key was stored in Supabase and was not printed."
+          } >> "$GITHUB_STEP_SUMMARY"
