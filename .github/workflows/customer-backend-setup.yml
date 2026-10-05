@@ -39,15 +39,12 @@ jobs:
           node-version: "20"
 
       - name: "Check required setup secrets"
-        env:
-          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
           [ -n "${PROJECT_REF:-}" ] || { echo "::error::SUPABASE_PROJECT_REF is missing"; exit 1; }
           [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
-          [ -n "${DB_PASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is missing"; exit 1; }
           echo "::add-mask::$PROJECT_REF"
-          echo "Required GitHub secrets are present."
+          echo "Required GitHub secrets are present. Database password is not needed by this setup path."
 
       - name: "Install pinned project toolchain"
         run: |
