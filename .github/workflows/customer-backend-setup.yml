@@ -15,6 +15,12 @@ on:
       vapid_subject:
         description: "Customer contact, e.g. mailto:it@customer.com"
         required: true
+      admin_login:
+        description: "First Administrator Login ID (create this user in Supabase Auth first)"
+        required: true
+      admin_name:
+        description: "First Administrator display name"
+        required: true
 
 permissions:
   contents: read
@@ -82,6 +88,58 @@ jobs:
           done
           echo "Applied $count migration(s)."
 
+      - name: "Grant First Administrator all system permissions"
+        env:
+          ADMIN_LOGIN: ${{ inputs.admin_login }}
+          ADMIN_NAME: ${{ inputs.admin_name }}
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          query="$(cat <<'SQL'
+          do $bootstrap$
+          declare
+            v_id uuid;
+            v_email text := :'admin_login';
+            v_name text := :'admin_name';
+            v_permissions jsonb := jsonb_build_object(
+              'manage_passengers', true,
+              'manage_buses', true,
+              'manage_camps', true,
+              'manage_hotel', true,
+              'view_reports', true,
+              'manage_users', true,
+              'view_archive', true,
+              'manage_season_lifecycle', true,
+              'manage_flights', true,
+              'manage_payments', true,
+              'manage_admins', true,
+              'manage_portal', true,
+              'view_audit', true
+            );
+          begin
+            if exists (select 1 from public.user_profiles) then
+              raise exception 'First Administrator setup requires a fresh deployment with no existing user profiles';
+            end if;
+
+            select id into v_id
+              from auth.users
+             where lower(email) = lower(v_email)
+             limit 1;
+
+            if v_id is null then
+              raise exception 'Create the First Administrator in Supabase Authentication > Users before running backend setup';
+            end if;
+
+            insert into public.user_profiles (id, email, name, permissions, is_active, updated_at)
+            values (v_id, lower(v_email), v_name, v_permissions, true, now());
+          end
+          $bootstrap$;
+          SQL
+          )"
+          payload="$(jq -n --arg query "$query" --arg admin_login "$ADMIN_LOGIN" --arg admin_name "$ADMIN_NAME"             '{query:$query,parameters:{admin_login:$admin_login,admin_name:$admin_name}}')"
+          curl --fail-with-body -sS             "${auth[@]}"             -H "Content-Type: application/json"             -X POST "$API/projects/$PROJECT_REF/database/query"             --data "$payload" >/dev/null
+          echo "First Administrator profile created with all 13 permissions."
+
       - name: "Generate customer VAPID pair"
         id: vapid
         shell: bash
@@ -144,7 +202,9 @@ jobs:
           {
             echo "## Customer Backend Setup — SUCCESS"
             echo
-            echo "Database migrations and all six Edge Functions are deployed."
+            echo "Database migrations, all six Edge Functions, and the First Administrator are configured."
+            echo
+            echo "**First Administrator permissions:** 13 / 13"
             echo
             echo "### One value to copy to Vercel"
             echo
