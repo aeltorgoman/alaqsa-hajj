@@ -211,10 +211,12 @@ stored.
    password, and tick **Auto Confirm User**.
 2. **GitHub** — Actions → **Customer Backend Setup** → Run workflow. Enter the
    Vercel production URL, Vercel project name and owner, a contact
-   (\`mailto:…\`), and the same administrator Login ID with a display name.
-   The workflow applies the database, creates the First Administrator with
-   every system permission, configures the Edge Function secrets, deploys the
-   six Edge Functions and verifies the result. If a run fails, fix the reported
+   (\`mailto:…\`), the same administrator Login ID with a display name, and
+   the Hijri year of the first Hajj season (e.g. \`1448\`). The workflow applies
+   the database, creates the First Administrator with every system permission,
+   creates the first open season (an existing open season is kept unchanged),
+   configures the Edge Function secrets, deploys the six Edge Functions and
+   verifies the result. If a run fails, fix the reported
    cause and run it again — it continues safely.
 3. **Vercel** — set \`VITE_SUPABASE_URL\`, \`VITE_SUPABASE_ANON_KEY\` and the
    \`VITE_VAPID_PUBLIC_KEY\` shown in the workflow's summary, then deploy.
