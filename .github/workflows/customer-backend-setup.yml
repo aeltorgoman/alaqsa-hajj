@@ -95,12 +95,14 @@ jobs:
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
-          query="$(cat <<'SQL'
+          admin_login_sql="${ADMIN_LOGIN//\'/\'\'}"
+          admin_name_sql="${ADMIN_NAME//\'/\'\'}"
+          query="$(cat <<SQL
           do $bootstrap$
           declare
             v_id uuid;
-            v_email text := :'admin_login';
-            v_name text := :'admin_name';
+            v_email text := '$admin_login_sql';
+            v_name text := '$admin_name_sql';
             v_permissions jsonb := jsonb_build_object(
               'manage_passengers', true,
               'manage_buses', true,
@@ -136,7 +138,7 @@ jobs:
           $bootstrap$;
           SQL
           )"
-          payload="$(jq -n --arg query "$query" --arg admin_login "$ADMIN_LOGIN" --arg admin_name "$ADMIN_NAME"             '{query:$query,parameters:{admin_login:$admin_login,admin_name:$admin_name}}')"
+          payload="$(jq -n --arg query "$query" '{query:$query}')"
           curl --fail-with-body -sS             "${auth[@]}"             -H "Content-Type: application/json"             -X POST "$API/projects/$PROJECT_REF/database/query"             --data "$payload" >/dev/null
           echo "First Administrator profile created with all 13 permissions."
 
