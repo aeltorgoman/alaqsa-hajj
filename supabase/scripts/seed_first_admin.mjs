@@ -29,33 +29,22 @@
 
 import { createClient } from "@supabase/supabase-js";
 import readline from "node:readline";
+import { readPermissionKeys } from "./permission-keys.mjs";
 
 const DRY = process.argv.includes("--dry-run");
 
-/* الصلاحيات التشغيليّة الأحد عشر — أول مدير يملكها كاملة، فلا
-   يبقى النظام بلا من يديره. والمستثنيان أدناه بقرارٍ لا سهو. */
-/* ⚠️ هذه القائمة **أقصر عمداً** من `ALL_PERMISSIONS` في
-   `src/utils/index.ts`: تلك تحمل اثني عشر مفتاحاً، وهذه أحد عشر.
-   الفارق `view_audit` (س٨)، و**استثناؤه هنا قرارٌ لا سهو**:
-   §٩ من `S8_IMPLEMENTATION_DESIGN.md` يقضي بأن صلاحية قراءة سجل
-   التدقيق تُمنح **لأقلّ عدد ممكن**، وحساب الإقلاع يُنشأ آلياً بلا
-   قرارٍ بشريّ في لحظته. فمن يقرأ تاريخ البيانات الحسّاسة كلّه
-   يُمنح بيدٍ لا بأداة.
-   ولا يُضاف هنا. ومن يحتاجه — ومنه اختبار ب٧/ب٨ في حملة القبول —
-   يُمنح `view_audit` صراحةً من `UsersPage` عبر `user-admin`،
-   فيُسجَّل المنح نفسه في سجلّ التدقيق بفاعلٍ مُثبَت.
-
-   ⚠️ و`manage_season_lifecycle` مستثناةٌ للسبب نفسه، وبأولى منه:
-   `view_audit` تُطلِع على تاريخٍ، وهذه **تحذف موسماً كاملاً حذفاً
-   دائماً** — بحجّاجه وغرفه ومخيّماته ومدفوعاته. فلا تُسنَد إلى
-   أداةٍ تعمل بلا قرارٍ بشريّ في لحظتها. والترحيلُ يمنحها لحساب
-   كسر الزجاج وحده، ومن سواه يأخذها بيدٍ من «الإعدادات ←
-   المستخدمون». فالقائمةُ هنا **ثلاثَ عشرةَ ناقصَ اثنتين**. */
-const ALL_PERMISSIONS = [
-  "manage_passengers", "manage_buses", "manage_camps", "manage_hotel",
-  "view_reports", "manage_users", "view_archive", "manage_flights",
-  "manage_payments", "manage_admins", "manage_portal",
-];
+/* أول مدير في نشر العميل هو سلطة الإدارة الابتدائية، لذلك يُنشأ
+   بكل صلاحيات النظام المعتمدة — ومنها سجل التدقيق ودورة حياة
+   الموسم (قرار المنتج؛ يمكن خفضها لاحقاً من إدارة المستخدمين).
+   والقائمة لا تُنسخ هنا: تُقرأ من `ALL_PERMISSIONS` في
+   `src/utils/index.ts` نفسها، فلا تنحرف عن الواجهة. */
+let ALL_PERMISSIONS;
+try {
+  ALL_PERMISSIONS = readPermissionKeys();
+} catch (e) {
+  console.error(`\n✗ تعذّرت قراءة قائمة الصلاحيات: ${e.message}`);
+  process.exit(1);
+}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const fail = (m) => { console.error(`\n✗ ${m}`); process.exit(1); };
@@ -215,7 +204,7 @@ const { data: check, error: chkErr } = await admin
   .from("user_profiles").select("id, email, name, is_active, permissions").eq("id", userId).single();
 if (chkErr || !check) fail(`تعذّر التحقّق: ${chkErr?.message}`);
 
-const granted = Object.entries(check.permissions || {}).filter(([, v]) => v === true).length;
+const granted = ALL_PERMISSIONS.filter((k) => check.permissions?.[k] === true).length;
 log("\n═══ التحقّق ═══");
 log(`  id           : ${check.id}`);
 log(`  email        : ${check.email}`);

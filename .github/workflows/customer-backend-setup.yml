@@ -15,6 +15,12 @@ on:
       vapid_subject:
         description: "Customer contact, e.g. mailto:it@customer.com"
         required: true
+      admin_login:
+        description: "First Administrator Login ID, e.g. admin@company.local (add it first in Supabase: Authentication > Users > Add user, with Auto Confirm User ticked)"
+        required: true
+      admin_name:
+        description: "First Administrator display name"
+        required: true
 
 permissions:
   contents: read
@@ -45,6 +51,41 @@ jobs:
           [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
           echo "::add-mask::$PROJECT_REF"
           echo "Required GitHub secrets are present. Database password is not needed by this setup path."
+
+      - name: "Validate First Administrator inputs"
+        id: admin
+        env:
+          ADMIN_LOGIN: ${{ inputs.admin_login }}
+          ADMIN_NAME: ${{ inputs.admin_name }}
+          LC_ALL: C.UTF-8
+        run: |
+          set -euo pipefail
+          trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"; printf '%s' "$v"; }
+          login="$(trim "$ADMIN_LOGIN")"
+          login="${login,,}"
+          name="$(trim "$ADMIN_NAME")"
+
+          if [[ "$login$name" =~ [[:cntrl:]] ]]; then
+            echo "::error::admin_login and admin_name must not contain control characters or line breaks."; exit 1
+          fi
+          if ! [[ "$login" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || (( ${#login} > 254 )); then
+            echo "::error::admin_login must be the Login ID in email form, e.g. admin@company.local — exactly as entered in Supabase Authentication > Users."; exit 1
+          fi
+          if [ -z "$name" ] || (( ${#name} > 100 )); then
+            echo "::error::admin_name must be 1 to 100 characters."; exit 1
+          fi
+
+          # The complete permission set, read from the application's own ALL_PERMISSIONS.
+          keys="$(node supabase/scripts/permission-keys.mjs)"
+
+          # Values travel to SQL only as base64 (see the bootstrap step).
+          {
+            echo "login=$login"
+            echo "login_b64=$(printf '%s' "$login" | base64 -w0)"
+            echo "name_b64=$(printf '%s' "$name" | base64 -w0)"
+            echo "keys_b64=$(printf '%s' "$keys" | base64 -w0)"
+          } >> "$GITHUB_OUTPUT"
+          echo "First Administrator: $login · permissions to grant: $(jq length <<<"$keys")"
 
       - name: "Install pinned project toolchain"
         run: |
@@ -82,11 +123,166 @@ jobs:
           done
           echo "Applied $count migration(s)."
 
-      - name: "Generate customer VAPID pair"
+      - name: "Create First Administrator with all system permissions"
+        id: bootstrap
+        env:
+          ADMIN_LOGIN: ${{ steps.admin.outputs.login }}
+          LOGIN_B64: ${{ steps.admin.outputs.login_b64 }}
+          NAME_B64: ${{ steps.admin.outputs.name_b64 }}
+          KEYS_B64: ${{ steps.admin.outputs.keys_b64 }}
+        run: |
+          set -euo pipefail
+          shopt -u patsub_replacement 2>/dev/null || true
+          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          # run_sql <query>: result rows (JSON) land in $RUNNER_TEMP/sql.out; on failure the
+          # database's own message is shown as an error.
+          run_sql() {
+            jq -n --arg query "$1" '{query:$query}' > "$RUNNER_TEMP/sql.json"
+            if ! curl --fail-with-body -sS "${auth[@]}" -H "Content-Type: application/json" \
+                 -X POST "$API/projects/$PROJECT_REF/database/query" \
+                 --data-binary @"$RUNNER_TEMP/sql.json" -o "$RUNNER_TEMP/sql.out"; then
+              msg="$(jq -r '.message // empty' "$RUNNER_TEMP/sql.out" 2>/dev/null || true)"
+              echo "::error::${msg:-$(cat "$RUNNER_TEMP/sql.out")}"
+              return 1
+            fi
+          }
+          bind() {
+            local sql="$1" v
+            for v in LOGIN_B64 NAME_B64 KEYS_B64; do
+              [[ "${!v}" =~ ^[A-Za-z0-9+/=]+$ ]] || { echo "::error::$v is not base64" >&2; return 1; }
+              sql="${sql//@$v@/${!v}}"
+            done
+            printf '%s' "$sql"
+          }
+
+          # The heredocs are quoted, so the shell expands nothing inside them.
+          # Operator input reaches SQL only as base64 (A-Z a-z 0-9 + / =), which
+          # can close neither a quoted literal nor the $bootstrap$ dollar quote.
+          bootstrap_sql="$(bind "$(cat <<'SQL'
+          do $bootstrap$
+          declare
+            v_login text := lower(convert_from(decode('@LOGIN_B64@', 'base64'), 'UTF8'));
+            v_name  text := convert_from(decode('@NAME_B64@', 'base64'), 'UTF8');
+            v_keys  text[] := array(select jsonb_array_elements_text(
+                        convert_from(decode('@KEYS_B64@', 'base64'), 'UTF8')::jsonb));
+            v_permissions jsonb;
+            v_matches   int;
+            v_id        uuid;
+            v_email     text;
+            v_confirmed timestamptz;
+            v_banned    timestamptz;
+            v_others    int;
+            v_granted   int;
+          begin
+            if cardinality(v_keys) = 0 then
+              raise exception 'FIRST_ADMIN: the permission list is empty';
+            end if;
+            select jsonb_object_agg(k, true) into v_permissions from unnest(v_keys) as k;
+
+            -- One bootstrap at a time; no other profile write can interleave before commit.
+            lock table public.user_profiles in share row exclusive mode;
+
+            select count(*) into v_matches
+              from auth.users where lower(email) = v_login and deleted_at is null;
+            if v_matches = 0 then
+              raise exception 'FIRST_ADMIN: no Supabase Auth user has Login ID %. Add it in Supabase: Authentication > Users > Add user (tick Auto Confirm User), then run this workflow again.', v_login;
+            elsif v_matches > 1 then
+              raise exception 'FIRST_ADMIN: more than one Auth user matches Login ID %. Refusing to guess.', v_login;
+            end if;
+
+            select id, lower(email), email_confirmed_at, banned_until
+              into v_id, v_email, v_confirmed, v_banned
+              from auth.users where lower(email) = v_login and deleted_at is null;
+
+            if v_confirmed is null then
+              raise exception 'FIRST_ADMIN: Auth user % is not confirmed. In Supabase Authentication > Users, delete it and add it again with Auto Confirm User ticked, then run this workflow again.', v_login;
+            end if;
+            if v_banned is not null and v_banned > now() then
+              raise exception 'FIRST_ADMIN: Auth user % is banned.', v_login;
+            end if;
+
+            -- Fresh deployment only: any profile other than this administrator means
+            -- the installation is already in use, so no bootstrap privileges are granted.
+            select count(*) into v_others from public.user_profiles where id <> v_id;
+            if v_others > 0 then
+              raise exception 'FIRST_ADMIN: this installation already has % other user profile(s). First Administrator setup runs only on a fresh deployment; manage users from Settings > Users.', v_others;
+            end if;
+
+            -- Zero profiles: create. Only this administrator: re-assert the full set (safe retry).
+            insert into public.user_profiles (id, email, name, permissions, is_active, updated_at)
+            values (v_id, v_email, v_name, v_permissions, true, now())
+            on conflict (id) do update
+              set email = excluded.email, name = excluded.name,
+                  permissions = excluded.permissions, is_active = true, updated_at = now()
+              where (user_profiles.email, user_profiles.name, user_profiles.permissions, user_profiles.is_active)
+                    is distinct from (excluded.email, excluded.name, excluded.permissions, true);
+
+            select count(*) into v_granted
+              from public.user_profiles up cross join unnest(v_keys) as k
+             where up.id = v_id and up.is_active and (up.permissions ->> k) = 'true';
+            if v_granted <> cardinality(v_keys) then
+              raise exception 'FIRST_ADMIN: verification failed: % of % permissions stored.', v_granted, cardinality(v_keys);
+            end if;
+          end
+          $bootstrap$
+          SQL
+          )")"
+
+          readback_sql="$(bind "$(cat <<'SQL'
+          select up.is_active, up.permissions,
+                 (select count(*)::int from public.user_profiles) as profile_count
+            from auth.users u
+            join public.user_profiles up on up.id = u.id
+           where lower(u.email) = lower(convert_from(decode('@LOGIN_B64@', 'base64'), 'UTF8'))
+             and u.deleted_at is null
+          SQL
+          )")"
+
+          run_sql 'select count(*)::int as n from public.user_profiles'
+          before="$(jq -r '.[0].n' "$RUNNER_TEMP/sql.out")"
+          run_sql "$bootstrap_sql"
+
+          # Independent read-back: the stored row, not the request, decides success.
+          keys="$(printf '%s' "$KEYS_B64" | base64 -d)"
+          run_sql "$readback_sql"
+          readback="$(cat "$RUNNER_TEMP/sql.out")"
+          read -r rows granted total active profiles < <(jq -r --argjson keys "$keys" '
+            (if length == 1 then .[0] else {} end) as $p
+            | [length, ($keys | map(select($p.permissions[.] == true)) | length), ($keys | length),
+               ($p.is_active == true), ($p.profile_count // 0)] | @tsv' <<<"$readback")
+          if [ "$rows" != 1 ] || [ "$active" != true ] || [ "$profiles" != 1 ] || [ "$granted" != "$total" ]; then
+            echo "::error::First Administrator verification failed: rows=$rows active=$active profiles=$profiles permissions=$granted/$total"
+            exit 1
+          fi
+
+          if [ "$before" = 0 ]; then state="created"; else state="already set up — verified"; fi
+          {
+            echo "state=$state"
+            echo "granted=$granted"
+            echo "total=$total"
+          } >> "$GITHUB_OUTPUT"
+          echo "First Administrator $ADMIN_LOGIN $state: permissions verified $granted / $total."
+
+      - name: "Prepare VAPID key pair"
         id: vapid
         shell: bash
         run: |
           set -euo pipefail
+          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          jq -n '{query:"select count(*)::int as n from public.pilgrim_push_subscriptions"}' > "$RUNNER_TEMP/subs.json"
+          subs="$(curl --fail-with-body -sS "${auth[@]}" -H "Content-Type: application/json" \
+            -X POST "$API/projects/$PROJECT_REF/database/query" \
+            --data-binary @"$RUNNER_TEMP/subs.json" | jq -r '.[0].n')"
+          [[ "$subs" =~ ^[0-9]+$ ]] || { echo "::error::Could not count push subscriptions"; exit 1; }
+
+          # Live system: devices are subscribed with the current pair. A new pair would
+          # silently break all of them, so a re-run keeps the existing pair untouched.
+          if (( subs > 0 )); then
+            { echo "rotate=false"; echo "subscriptions=$subs"; } >> "$GITHUB_OUTPUT"
+            echo "Keeping the existing VAPID pair: $subs push subscription(s) depend on it."
+            exit 0
+          fi
+
           node <<'NODE' > "$RUNNER_TEMP/vapid.txt"
           const { generateKeyPairSync } = require('node:crypto');
           const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
@@ -99,9 +295,13 @@ jobs:
           NODE
           PUBLIC_KEY="$(sed -n '1p' "$RUNNER_TEMP/vapid.txt")"
           PRIVATE_KEY="$(sed -n '2p' "$RUNNER_TEMP/vapid.txt")"
+          rm -f "$RUNNER_TEMP/vapid.txt"
           echo "::add-mask::$PRIVATE_KEY"
-          echo "public_key=$PUBLIC_KEY" >> "$GITHUB_OUTPUT"
-          echo "private_key=$PRIVATE_KEY" >> "$GITHUB_OUTPUT"
+          {
+            echo "rotate=true"
+            echo "public_key=$PUBLIC_KEY"
+            echo "private_key=$PRIVATE_KEY"
+          } >> "$GITHUB_OUTPUT"
 
       - name: "Set required Edge Function secrets"
         env:
@@ -111,9 +311,19 @@ jobs:
           VAPID_SUBJECT: ${{ inputs.vapid_subject }}
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
           VAPID_PRIVATE_KEY: ${{ steps.vapid.outputs.private_key }}
+          ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
         run: |
           set -euo pipefail
-          npm run --silent supabase -- secrets set             "ALLOWED_ORIGINS=$ALLOWED_ORIGIN"             "VERCEL_PROJECT_SLUG=$VERCEL_PROJECT"             "VERCEL_OWNER_SLUG=$VERCEL_OWNER"             "VAPID_SUBJECT=$VAPID_SUBJECT"             "VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY"             "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY"             --project-ref "$PROJECT_REF"
+          args=(
+            "ALLOWED_ORIGINS=$ALLOWED_ORIGIN"
+            "VERCEL_PROJECT_SLUG=$VERCEL_PROJECT"
+            "VERCEL_OWNER_SLUG=$VERCEL_OWNER"
+            "VAPID_SUBJECT=$VAPID_SUBJECT"
+          )
+          if [ "$ROTATE_VAPID" = "true" ]; then
+            args+=("VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY")
+          fi
+          npm run --silent supabase -- secrets set "${args[@]}" --project-ref "$PROJECT_REF"
 
       - name: "Deploy all six Edge Functions"
         run: |
@@ -139,18 +349,35 @@ jobs:
 
       - name: "Setup result"
         env:
+          ADMIN_LOGIN: ${{ steps.admin.outputs.login }}
+          ADMIN_STATE: ${{ steps.bootstrap.outputs.state }}
+          ADMIN_GRANTED: ${{ steps.bootstrap.outputs.granted }}
+          ADMIN_TOTAL: ${{ steps.bootstrap.outputs.total }}
+          ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
+          SUBSCRIPTIONS: ${{ steps.vapid.outputs.subscriptions }}
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
         run: |
           {
             echo "## Customer Backend Setup — SUCCESS"
             echo
-            echo "Database migrations and all six Edge Functions are deployed."
+            echo "Database migrations, all six Edge Functions, and the First Administrator are configured."
             echo
-            echo "### One value to copy to Vercel"
+            echo "**First Administrator:** \`$ADMIN_LOGIN\` ($ADMIN_STATE)"
             echo
-            echo "\`VITE_VAPID_PUBLIC_KEY\`"
+            echo "**Permissions verified from the database:** $ADMIN_GRANTED / $ADMIN_TOTAL"
             echo
-            echo "\`$VAPID_PUBLIC_KEY\`"
-            echo
-            echo "Use this public value only. The private VAPID key was stored in Supabase and was not printed."
+            if [ "$ROTATE_VAPID" = "true" ]; then
+              echo "### One value to copy to Vercel"
+              echo
+              echo "\`VITE_VAPID_PUBLIC_KEY\`"
+              echo
+              echo "\`$VAPID_PUBLIC_KEY\`"
+              echo
+              echo "Use this public value only. The private VAPID key was stored in Supabase and was not printed."
+            else
+              echo "### Vercel: no change"
+              echo
+              echo "The existing VAPID key pair was kept because $SUBSCRIPTIONS device(s) are subscribed to notifications."
+              echo "Leave \`VITE_VAPID_PUBLIC_KEY\` in Vercel as it is."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

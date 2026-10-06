@@ -200,17 +200,23 @@ and vendor-internal GitHub workflows.
 
 ## Deployment
 
-1. Set every value in \`.env.example\` for this customer — frontend values in
-   the customer's Vercel project, Edge Function values in the customer's
-   Supabase project secrets. The four per-customer values
-   (\`ALLOWED_ORIGINS\`, \`VERCEL_PROJECT_SLUG\`, \`VERCEL_OWNER_SLUG\`,
-   \`VAPID_SUBJECT\`) have no defaults: the functions fail closed without them.
-2. \`npm ci\` then \`npm run build\`.
-3. Apply the database: \`npm run supabase -- db push\` against the customer's
-   own Supabase project, following \`docs/runbooks/MIGRATION_WORKFLOW.md\`.
-4. Deploy the Edge Functions from this release source.
-5. Create the first administrator:
-   \`node supabase/scripts/seed_first_admin.mjs\`.
+Before the first deployment, the repository needs two GitHub secrets:
+\`SUPABASE_PROJECT_REF\` and \`SUPABASE_ACCESS_TOKEN\` — a Supabase access
+token scoped to this project with **Database: read & write**, **Edge Functions:
+read & write** and **Secrets: write**. No other secret or password is stored.
+
+1. **Supabase** — Authentication → Users → **Add user**. Enter the
+   administrator's Login ID (email form, e.g. \`admin@company.local\`) and
+   password, and tick **Auto Confirm User**.
+2. **GitHub** — Actions → **Customer Backend Setup** → Run workflow. Enter the
+   Vercel production URL, Vercel project name and owner, a contact
+   (\`mailto:…\`), and the same administrator Login ID with a display name.
+   The workflow applies the database, creates the First Administrator with
+   every system permission, configures the Edge Function secrets, deploys the
+   six Edge Functions and verifies the result. If a run fails, fix the reported
+   cause and run it again — it continues safely.
+3. **Vercel** — set \`VITE_SUPABASE_URL\`, \`VITE_SUPABASE_ANON_KEY\` and the
+   \`VITE_VAPID_PUBLIC_KEY\` shown in the workflow's summary, then deploy.
 
 Full ownership, release, recovery and handover rules:
 \`docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md\`.
