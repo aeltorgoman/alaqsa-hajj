@@ -21,6 +21,9 @@ on:
       admin_name:
         description: "First Administrator display name"
         required: true
+      season_hijri_year:
+        description: "Hijri year of the first Hajj season, e.g. 1448 (used only when the project has no season yet)"
+        required: true
 
 permissions:
   contents: read
@@ -57,6 +60,7 @@ jobs:
         env:
           ADMIN_LOGIN: ${{ inputs.admin_login }}
           ADMIN_NAME: ${{ inputs.admin_name }}
+          SEASON_HIJRI_YEAR: ${{ inputs.season_hijri_year }}
           LC_ALL: C.UTF-8
         run: |
           set -euo pipefail
@@ -75,6 +79,11 @@ jobs:
             echo "::error::admin_name must be 1 to 100 characters."; exit 1
           fi
 
+          year="$(trim "$SEASON_HIJRI_YEAR")"
+          if ! [[ "$year" =~ ^[0-9]{4}$ ]] || (( 10#$year < 1400 || 10#$year > 1600 )); then
+            echo "::error::season_hijri_year must be a Hijri year between 1400 and 1600, e.g. 1448."; exit 1
+          fi
+
           # The complete permission set, read from the application's own ALL_PERMISSIONS.
           keys="$(node supabase/scripts/permission-keys.mjs)"
 
@@ -84,6 +93,7 @@ jobs:
             echo "login_b64=$(printf '%s' "$login" | base64 -w0)"
             echo "name_b64=$(printf '%s' "$name" | base64 -w0)"
             echo "keys_b64=$(printf '%s' "$keys" | base64 -w0)"
+            echo "season_year=$((10#$year))"
           } >> "$GITHUB_OUTPUT"
           echo "First Administrator: $login · permissions to grant: $(jq length <<<"$keys")"
 
@@ -269,6 +279,108 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "First Administrator $ADMIN_LOGIN $state: permissions verified $granted / $total."
 
+      - name: "Create the first season"
+        id: season
+        env:
+          LOGIN_B64: ${{ steps.admin.outputs.login_b64 }}
+          SEASON_YEAR: ${{ steps.admin.outputs.season_year }}
+        run: |
+          set -euo pipefail
+          shopt -u patsub_replacement 2>/dev/null || true
+          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          run_sql() {
+            jq -n --arg query "$1" '{query:$query}' > "$RUNNER_TEMP/sql.json"
+            if ! curl --fail-with-body -sS "${auth[@]}" -H "Content-Type: application/json" \
+                 -X POST "$API/projects/$PROJECT_REF/database/query" \
+                 --data-binary @"$RUNNER_TEMP/sql.json" -o "$RUNNER_TEMP/sql.out"; then
+              msg="$(jq -r '.message // empty' "$RUNNER_TEMP/sql.out" 2>/dev/null || true)"
+              echo "::error::${msg:-$(cat "$RUNNER_TEMP/sql.out")}"
+              return 1
+            fi
+          }
+          # Both values were validated by the "Validate First Administrator inputs" step;
+          # re-checked here because they are placed into SQL text.
+          [[ "$SEASON_YEAR" =~ ^[0-9]{4}$ ]] || { echo "::error::invalid season year"; exit 1; }
+          [[ "$LOGIN_B64" =~ ^[A-Za-z0-9+/=]+$ ]] || { echo "::error::invalid login encoding"; exit 1; }
+
+          # The first season is customer data, not schema: the migrations create none.
+          # Zero seasons → create one open season. Exactly one open season → leave it
+          # untouched (the supplied year never overwrites it). Anything else → fail
+          # without changes: which season to resume is a human decision.
+          season_sql="$(cat <<'SQL'
+          do $season$
+          declare
+            v_year  int := @YEAR@;
+            v_total int;
+            v_open  int;
+          begin
+            -- One bootstrap at a time; no season write can interleave before commit.
+            lock table public.seasons in share row exclusive mode;
+            select count(*), count(*) filter (where closed_at is null)
+              into v_total, v_open from public.seasons;
+            if v_open > 1 then
+              raise exception 'FIRST_SEASON: % open seasons exist; exactly one is allowed. Nothing was changed.', v_open;
+            elsif v_open = 1 then
+              return;
+            elsif v_total > 0 then
+              raise exception 'FIRST_SEASON: % season(s) exist but none is open. Which season to resume needs a human decision; nothing was changed.', v_total;
+            end if;
+            insert into public.seasons (name, hijri_year)
+            values (format('موسم الحج %s هـ', v_year), v_year);
+          end
+          $season$
+          SQL
+          )"
+
+          # Read the open season as the First Administrator, through the same role and
+          # RLS policy the application uses (SeasonContext); privileged access is reset.
+          rls_sql="$(cat <<'SQL'
+          do $rls$
+          declare
+            v_uid  uuid;
+            v_seen int;
+          begin
+            select id into v_uid from auth.users
+             where lower(email) = lower(convert_from(decode('@LOGIN_B64@', 'base64'), 'UTF8'))
+               and deleted_at is null;
+            if v_uid is null then
+              raise exception 'FIRST_SEASON: the First Administrator was not found for the access check.';
+            end if;
+            perform set_config('request.jwt.claims',
+              json_build_object('sub', v_uid, 'role', 'authenticated')::text, true);
+            perform set_config('request.jwt.claim.sub', v_uid::text, true);
+            set local role authenticated;
+            select count(*) into v_seen from public.seasons where closed_at is null;
+            reset role;
+            if v_seen <> 1 then
+              raise exception 'FIRST_SEASON: the First Administrator can see % open season(s) through the application access rules; exactly 1 is required.', v_seen;
+            end if;
+          end
+          $rls$
+          SQL
+          )"
+          season_sql="${season_sql//@YEAR@/$SEASON_YEAR}"
+          rls_sql="${rls_sql//@LOGIN_B64@/$LOGIN_B64}"
+
+          run_sql 'select count(*)::int as n from public.seasons'
+          before="$(jq -r '.[0].n' "$RUNNER_TEMP/sql.out")"
+          run_sql "$season_sql"
+
+          # Independent read-back: exactly one open season, decided by the stored rows.
+          run_sql 'select hijri_year, (select count(*)::int from public.seasons where closed_at is null) as open_count from public.seasons where closed_at is null'
+          read -r open_count year < <(jq -r '[(.[0].open_count // 0), (.[0].hijri_year // "")] | @tsv' "$RUNNER_TEMP/sql.out")
+          if [ "$open_count" != 1 ] || [ "$(jq length "$RUNNER_TEMP/sql.out")" != 1 ]; then
+            echo "::error::Exactly one open season is required; found $open_count."; exit 1
+          fi
+          run_sql "$rls_sql"
+
+          if [ "$before" = 0 ]; then state="created"; else state="existing open season kept unchanged"; fi
+          if [ "$before" != 0 ] && [ "$year" != "$SEASON_YEAR" ]; then
+            echo "::notice::The existing open season (Hijri year $year) was kept; season_hijri_year $SEASON_YEAR was not applied."
+          fi
+          { echo "state=$state"; echo "year=$year"; } >> "$GITHUB_OUTPUT"
+          echo "Open season: Hijri year $year ($state). The First Administrator can read it."
+
       - name: "Prepare VAPID key pair"
         id: vapid
         shell: bash
@@ -396,6 +508,11 @@ jobs:
             -o "$RUNNER_TEMP/history.json"
           node supabase/scripts/migration-ledger.mjs verify "$RUNNER_TEMP/history.json"
 
+          jq -n '{query:"select count(*)::int as n from public.seasons where closed_at is null"}' > "$RUNNER_TEMP/open.json"
+          open="$(curl --fail-with-body -sS "${auth[@]}" -H "Content-Type: application/json" \
+            -X POST "$API/projects/$PROJECT_REF/database/query" --data-binary @"$RUNNER_TEMP/open.json" | jq -r '.[0].n')"
+          [ "$open" = 1 ] || { echo "::error::Exactly one open season is required; found ${open:-none}."; exit 1; }
+
           functions="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/functions")"
           for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send; do
             printf '%s' "$functions" | jq -e --arg slug "$slug"               'any(.[]; .slug == $slug and .status == "ACTIVE")' >/dev/null || {
@@ -409,6 +526,8 @@ jobs:
           ADMIN_STATE: ${{ steps.bootstrap.outputs.state }}
           ADMIN_GRANTED: ${{ steps.bootstrap.outputs.granted }}
           ADMIN_TOTAL: ${{ steps.bootstrap.outputs.total }}
+          SEASON_STATE: ${{ steps.season.outputs.state }}
+          SEASON_YEAR: ${{ steps.season.outputs.year }}
           ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
           SUBSCRIPTIONS: ${{ steps.vapid.outputs.subscriptions }}
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
@@ -416,11 +535,13 @@ jobs:
           {
             echo "## Customer Backend Setup — SUCCESS"
             echo
-            echo "Database migrations, all six Edge Functions, and the First Administrator are configured."
+            echo "Database migrations, all six Edge Functions, the First Administrator and the open season are configured."
             echo
             echo "**First Administrator:** \`$ADMIN_LOGIN\` ($ADMIN_STATE)"
             echo
             echo "**Permissions verified from the database:** $ADMIN_GRANTED / $ADMIN_TOTAL"
+            echo
+            echo "**Open season:** Hijri year $SEASON_YEAR ($SEASON_STATE)"
             echo
             if [ "$ROTATE_VAPID" = "true" ]; then
               echo "### One value to copy to Vercel"
