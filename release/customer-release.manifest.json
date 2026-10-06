@@ -1,7 +1,6 @@
 {
   "manifestVersion": 1,
   "productName": "Hajj Management System",
-
   "_comment": [
     "EXPLICIT CUSTOMER RELEASE ALLOWLIST.",
     "Only paths named here are copied into a Customer Release snapshot.",
@@ -10,7 +9,6 @@
     "supabase/README.md (canonical migrations / functions / config);",
     "docs/ENGINEERING_PLAYBOOK.md M-104, M-105, M-108."
   ],
-
   "files": [
     "index.html",
     "package.json",
@@ -25,24 +23,44 @@
     "supabase/config.toml",
     "supabase/scripts/seed_first_admin.mjs",
     ".github/workflows/customer-backend-setup.yml",
+    ".github/workflows/customer-first-admin.yml",
     "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
     "docs/runbooks/MIGRATION_WORKFLOW.md"
   ],
-
   "trees": [
-    { "path": "src",                  "include": ["**/*"] },
-    { "path": "public",               "include": ["**/*"] },
-    { "path": "supabase/migrations",  "include": ["*.sql"] },
-    { "path": "supabase/functions",   "include": ["**/*.ts", "**/*.json", "**/*.toml"] }
+    {
+      "path": "src",
+      "include": [
+        "**/*"
+      ]
+    },
+    {
+      "path": "public",
+      "include": [
+        "**/*"
+      ]
+    },
+    {
+      "path": "supabase/migrations",
+      "include": [
+        "*.sql"
+      ]
+    },
+    {
+      "path": "supabase/functions",
+      "include": [
+        "**/*.ts",
+        "**/*.json",
+        "**/*.toml"
+      ]
+    }
   ],
-
   "generated": [
     ".env.example",
     "README.md",
     "RELEASE.md",
     "release-manifest.json"
   ],
-
   "required": [
     "index.html",
     "package.json",
@@ -59,10 +77,10 @@
     "supabase/functions/_shared/http.ts",
     "supabase/functions/_shared/rateLimit.ts",
     ".github/workflows/customer-backend-setup.yml",
+    ".github/workflows/customer-first-admin.yml",
     ".env.example",
     "RELEASE.md"
   ],
-
   "requiredFunctions": [
     "Scan-passport",
     "pilgrim-doc",
@@ -71,7 +89,6 @@
     "user-admin",
     "whatsapp-send"
   ],
-
   "forbiddenPaths": [
     ".git",
     ".replit",
@@ -102,7 +119,6 @@
     "release",
     "scripts"
   ],
-
   "forbiddenFileGlobs": [
     "**/.env",
     "**/.env.local",
@@ -120,31 +136,69 @@
     "**/*.xlsx",
     "**/*.log"
   ],
-
   "forbiddenFileGlobExceptions": [
     ".env.example"
   ],
-
   "secretPatterns": [
-    { "name": "JWT / Supabase legacy key",      "re": "eyJ[A-Za-z0-9_-]{15,}\\.[A-Za-z0-9_-]{15,}" },
-    { "name": "Supabase publishable/secret key","re": "sb_(publishable|secret)_[A-Za-z0-9_-]{10,}" },
-    { "name": "Supabase personal access token", "re": "sbp_[a-f0-9]{30,}" },
-    { "name": "Supabase project ref URL",       "re": "https://[a-z]{20}\\.supabase\\.(co|in)" },
-    { "name": "Anthropic API key",              "re": "sk-ant-[A-Za-z0-9_-]{10,}" },
-    { "name": "GitHub token",                   "re": "(ghp_|gho_|ghs_|github_pat_)[A-Za-z0-9_]{20,}" },
-    { "name": "Meta / WhatsApp access token",   "re": "EAA[A-Za-z0-9]{60,}" },
-    { "name": "PEM private key block",          "re": "-----BEGIN [A-Z ]*PRIVATE KEY-----" },
-    { "name": "AWS access key id",              "re": "AKIA[0-9A-Z]{16}" },
-    { "name": "Google API key",                 "re": "AIza[0-9A-Za-z_-]{30,}" },
-    { "name": "Slack token",                    "re": "xox[abprs]-[A-Za-z0-9-]{10,}" },
-    { "name": "Assigned secret env value",      "re": "(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY|VAPID_PRIVATE_KEY|WHATSAPP_TOKEN|ANTHROPIC_API_KEY|SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD)\\s*[:=]\\s*[\"']?[A-Za-z0-9+/_.=-]{12,}" }
+    {
+      "name": "JWT / Supabase legacy key",
+      "re": "eyJ[A-Za-z0-9_-]{15,}\\.[A-Za-z0-9_-]{15,}"
+    },
+    {
+      "name": "Supabase publishable/secret key",
+      "re": "sb_(publishable|secret)_[A-Za-z0-9_-]{10,}"
+    },
+    {
+      "name": "Supabase personal access token",
+      "re": "sbp_[a-f0-9]{30,}"
+    },
+    {
+      "name": "Supabase project ref URL",
+      "re": "https://[a-z]{20}\\.supabase\\.(co|in)"
+    },
+    {
+      "name": "Anthropic API key",
+      "re": "sk-ant-[A-Za-z0-9_-]{10,}"
+    },
+    {
+      "name": "GitHub token",
+      "re": "(ghp_|gho_|ghs_|github_pat_)[A-Za-z0-9_]{20,}"
+    },
+    {
+      "name": "Meta / WhatsApp access token",
+      "re": "EAA[A-Za-z0-9]{60,}"
+    },
+    {
+      "name": "PEM private key block",
+      "re": "-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    },
+    {
+      "name": "AWS access key id",
+      "re": "AKIA[0-9A-Z]{16}"
+    },
+    {
+      "name": "Google API key",
+      "re": "AIza[0-9A-Za-z_-]{30,}"
+    },
+    {
+      "name": "Slack token",
+      "re": "xox[abprs]-[A-Za-z0-9-]{10,}"
+    },
+    {
+      "name": "Assigned secret env value",
+      "re": "(SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY|VAPID_PRIVATE_KEY|WHATSAPP_TOKEN|ANTHROPIC_API_KEY|SUPABASE_ACCESS_TOKEN|SUPABASE_DB_PASSWORD)\\s*[:=]\\s*[\"']?[A-Za-z0-9+/_.=-]{12,}"
+    }
   ],
-
   "forbiddenIdentifiers": [
-    { "name": "retired campaign/test name 'alaqsa'", "re": "al[-_ ]?aqsa" },
-    { "name": "vendor Vercel account slug",          "re": "aeltorgoman" }
+    {
+      "name": "retired campaign/test name 'alaqsa'",
+      "re": "al[-_ ]?aqsa"
+    },
+    {
+      "name": "vendor Vercel account slug",
+      "re": "aeltorgoman"
+    }
   ],
-
   "envExampleVariables": {
     "_frontend_comment": "Set in the customer's Vercel project (handover manual 3.2).",
     "frontend": [
