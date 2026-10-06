@@ -329,7 +329,53 @@ jobs:
           if [ "$ROTATE_VAPID" = "true" ]; then
             args+=("VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY")
           fi
+          set +e
           npm run --silent supabase -- secrets set "${args[@]}" --project-ref "$PROJECT_REF"
+          set_rc=$?
+          set -e
+
+          # Read back before deploying. The API can store the secrets and still return an
+          # error from a later step (seen: "Failed to write functions metadata fields"), so
+          # the stored state, not the status code alone, decides. Only names and SHA-256
+          # digests are returned; no secret value is read or printed.
+          curl --fail-with-body -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "$API/projects/$PROJECT_REF/secrets" -o "$RUNNER_TEMP/secrets.json" || {
+              echo "::error::Could not read back secret names: $(head -c 2000 "$RUNNER_TEMP/secrets.json" 2>/dev/null)"; exit 1; }
+          SET_RC="$set_rc" node <<'NODE'
+          const fs = require('node:fs');
+          const { createHash } = require('node:crypto');
+          const listed = new Map(JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/secrets.json`, 'utf8'))
+            .map((s) => [s.name, String(s.value ?? '').toLowerCase()]));
+          const sha256 = (v) => createHash('sha256').update(v, 'utf8').digest('hex');
+          const fail = (m) => { console.log(`::error::${m}`); process.exit(1); };
+
+          // Every secret the functions require must exist (the VAPID pair even when kept).
+          const required = ['ALLOWED_ORIGINS', 'VERCEL_PROJECT_SLUG', 'VERCEL_OWNER_SLUG',
+            'VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'];
+          const missing = required.filter((n) => !listed.has(n));
+          if (missing.length) fail(`Required Edge Function secrets are missing: ${missing.join(', ')}`);
+          if (process.env.SET_RC === '0') {
+            console.log(`All ${required.length} required Edge Function secrets are present.`);
+            process.exit(0);
+          }
+
+          // The write reported an error. Continue only if read-back proves that every value
+          // sent in this run is stored exactly. First confirm the digest scheme on a value
+          // known in advance: the platform's own SUPABASE_URL.
+          const known = `https://${process.env.PROJECT_REF}.supabase.co`;
+          if (listed.get('SUPABASE_URL') !== sha256(known)) {
+            fail('Setting secrets failed (see the error above), and the stored values cannot be verified. Run this workflow again.');
+          }
+          const sent = { ALLOWED_ORIGINS: 'ALLOWED_ORIGIN', VERCEL_PROJECT_SLUG: 'VERCEL_PROJECT',
+            VERCEL_OWNER_SLUG: 'VERCEL_OWNER', VAPID_SUBJECT: 'VAPID_SUBJECT' };
+          if (process.env.ROTATE_VAPID === 'true') {
+            for (const name of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY']) sent[name] = name;  // env name = secret name
+          }
+          const stale = Object.entries(sent).filter(([name, env]) => listed.get(name) !== sha256(process.env[env] ?? ''))
+            .map(([name]) => name);
+          if (stale.length) fail(`Setting secrets failed (see the error above). Not stored with this run's values: ${stale.join(', ')}. Run this workflow again.`);
+          console.log(`::warning::Supabase reported an error after setting secrets, but read-back verified that all ${Object.keys(sent).length} values from this run are stored exactly. Continuing.`);
+          NODE
 
       - name: "Deploy all six Edge Functions"
         run: |
