@@ -71,6 +71,7 @@ supabase/
 ├── scripts/
 │   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
 │   ├── purge_orphan_company_uploads.mjs              تنظيفُ الرفعات اليتيمة
+│   ├── migration-ledger.mjs                          مطابقة سجلّ الهجرات البعيد لـ Customer Backend Setup
 │   ├── permission-keys.mjs                           مفاتيح الصلاحيات من `ALL_PERMISSIONS` — مصدر واحد
 │   ├── seed_first_admin.mjs                          أداة طوارئ — لا مسار تثبيت
 │   └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
