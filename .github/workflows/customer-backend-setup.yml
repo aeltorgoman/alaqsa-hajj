@@ -97,30 +97,36 @@ jobs:
       - name: "Apply repository migrations"
         run: |
           set -euo pipefail
-          auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
-          history="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/database/migrations")"
-          mapfile -t applied < <(printf '%s' "$history" | jq -r '.[].version')
-
-          is_applied() {
-            local wanted="$1"
-            printf '%s\n' "${applied[@]}" | grep -Fxq "$wanted"
+          # api <method> <path> [json-file]: the response body lands in $RUNNER_TEMP/api.out;
+          # on HTTP >= 400 the body's own message is shown, not just the status code.
+          api() {
+            local code args=(-sS -o "$RUNNER_TEMP/api.out" -w '%{http_code}'
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -X "$1" "$API/projects/$PROJECT_REF$2")
+            [ -z "${3:-}" ] || args+=(-H "Content-Type: application/json" --data-binary @"$3")
+            code="$(curl "${args[@]}")" || { echo "::error::$1 $2: request failed"; return 1; }
+            if [ "$code" -ge 400 ]; then
+              local msg; msg="$(jq -r '.message // empty' "$RUNNER_TEMP/api.out" 2>/dev/null || true)"
+              echo "::error::$1 $2 returned HTTP $code: ${msg:-$(head -c 2000 "$RUNNER_TEMP/api.out")}"
+              return 1
+            fi
           }
 
+          # The API records each migration under a version it generates itself, so the
+          # history is matched by name (see supabase/scripts/migration-ledger.mjs).
+          api GET /database/migrations
+          cp "$RUNNER_TEMP/api.out" "$RUNNER_TEMP/history.json"
+          node supabase/scripts/migration-ledger.mjs plan "$RUNNER_TEMP/history.json" > "$RUNNER_TEMP/pending.txt"
+
           count=0
-          for file in $(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | sort); do
-            base="$(basename "$file" .sql)"
-            version="${base%%_*}"
-            name="${base#*_}"
-            if is_applied "$version"; then
-              echo "skip  $version"
-              continue
-            fi
-            jq -n --rawfile query "$file" --arg name "$name"               '{query:$query,name:$name}' > "$RUNNER_TEMP/migration.json"
-            curl --fail-with-body -sS               "${auth[@]}"               -H "Content-Type: application/json"               -X POST "$API/projects/$PROJECT_REF/database/migrations"               --data-binary @"$RUNNER_TEMP/migration.json" >/dev/null
-            echo "apply $version"
-            applied+=("$version")
+          while IFS= read -r base; do
+            # The full file name is the recorded name, so a re-run recognises it.
+            jq -n --rawfile query "supabase/migrations/$base.sql" --arg name "$base" \
+              '{query:$query,name:$name}' > "$RUNNER_TEMP/migration.json"
+            api POST /database/migrations "$RUNNER_TEMP/migration.json" || {
+              echo "::error::Migration $base was not applied. Fix the cause above, then run this workflow again."; exit 1; }
+            echo "apply $base"
             count=$((count + 1))
-          done
+          done < "$RUNNER_TEMP/pending.txt"
           echo "Applied $count migration(s)."
 
       - name: "Create First Administrator with all system permissions"
@@ -334,11 +340,9 @@ jobs:
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
-          history="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/database/migrations")"
-          expected="$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)"
-          actual="$(printf '%s' "$history" | jq 'length')"
-          [ "$actual" -eq "$expected" ] || {
-            echo "::error::Migration count mismatch: expected $expected, found $actual"; exit 1; }
+          curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/database/migrations" \
+            -o "$RUNNER_TEMP/history.json"
+          node supabase/scripts/migration-ledger.mjs verify "$RUNNER_TEMP/history.json"
 
           functions="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/functions")"
           for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send; do

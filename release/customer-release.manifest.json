@@ -25,6 +25,7 @@
     "supabase/config.toml",
     "supabase/scripts/seed_first_admin.mjs",
     "supabase/scripts/permission-keys.mjs",
+    "supabase/scripts/migration-ledger.mjs",
     ".github/workflows/customer-backend-setup.yml",
     "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
     "docs/runbooks/MIGRATION_WORKFLOW.md"
@@ -61,6 +62,7 @@
     "supabase/functions/_shared/rateLimit.ts",
     ".github/workflows/customer-backend-setup.yml",
     "supabase/scripts/permission-keys.mjs",
+    "supabase/scripts/migration-ledger.mjs",
     ".env.example",
     "RELEASE.md"
   ],
