@@ -71,6 +71,7 @@ supabase/
 ├── scripts/
 │   ├── cleanup_empty_financial_groups.sql            يدوي — لا يعمل تلقائياً
 │   ├── purge_orphan_company_uploads.mjs              تنظيفُ الرفعات اليتيمة
+│   ├── permission-keys.mjs                           مفاتيح الصلاحيات من `ALL_PERMISSIONS` — مصدر واحد
 │   ├── seed_first_admin.mjs                          أداة طوارئ — لا مسار تثبيت
 │   └── seed_test_seasons.sql                         بيئة اختبار — لا يعمل على قاعدة فيها بيانات
 └── functions/
@@ -372,11 +373,12 @@ psql "$DATABASE_URL" -f supabase/scripts/seed_test_seasons.sql
 الصفّ الملخّص بـ`actor_source='system'`. **ولولا هذا التعديل لفشل
 السكربت** على أي قاعدة طُبِّقت عليها س٨.
 
-**وصلاحية `view_audit` لا يمنحها الإقلاع.** قائمة الصلاحيات في
-`seed_first_admin.mjs` أقصر بمفتاح واحد من قائمة الواجهة، **وهذا
-مقصود**: قراءة سجل التدقيق تُمنح لأقلّ عدد ممكن وبيدٍ بشرية (§٩ من
-تصميم س٨). فمن يحتاجها — ومنه اختبارا ب٧ و ب٨ — يُمنحها صراحةً من
-`UsersPage` عبر `user-admin`، فيُسجَّل المنح نفسه بفاعلٍ مُثبَت.
+**وأول مدير يُمنح كل الصلاحيات — ومنها `view_audit` و`manage_season_lifecycle`.**
+هذا قرار المنتج الحالي، وهو ينسخ الاستثناء السابق الذي كان يُبقي هاتين خارج
+الإقلاع. والقائمة لا تُنسخ يدوياً: `seed_first_admin.mjs` وسير عمل
+`Customer Backend Setup` يقرآنها كلاهما عبر `scripts/permission-keys.mjs` من
+`ALL_PERMISSIONS` في `src/utils/index.ts`، فأي صلاحية تُضاف للواجهة يأخذها أول
+مدير تلقائياً. ويمكن خفض صلاحياته لاحقاً من «الإعدادات ← المستخدمون».
 
 ## متطلّب بيئي
 
