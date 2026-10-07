@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       allowed_origin:
-        description: "Vercel Production URL, e.g. https://customer.vercel.app"
+        description: "Production URL, e.g. https://customer.vercel.app (several allowed, comma-separated; the first one becomes the Supabase Site URL)"
         required: true
       vercel_project_slug:
         description: "Vercel Project Name"
@@ -61,6 +61,7 @@ jobs:
           ADMIN_LOGIN: ${{ inputs.admin_login }}
           ADMIN_NAME: ${{ inputs.admin_name }}
           SEASON_HIJRI_YEAR: ${{ inputs.season_hijri_year }}
+          ALLOWED_ORIGIN_INPUT: ${{ inputs.allowed_origin }}
           LC_ALL: C.UTF-8
         run: |
           set -euo pipefail
@@ -84,6 +85,34 @@ jobs:
             echo "::error::season_hijri_year must be a Hijri year between 1400 and 1600, e.g. 1448."; exit 1
           fi
 
+          # Browsers send Origin as exactly https://host[:port] (lowercase, no path, no trailing
+          # slash) and the Edge Functions compare it character for character, so the input is
+          # normalized here and anything that cannot match a real origin fails now.
+          origins="$(node <<'NODE'
+          const raw = process.env.ALLOWED_ORIGIN_INPUT ?? '';
+          const fail = (m) => { console.error(`::error::allowed_origin: ${m}`); process.exit(1); };
+          if (/[;|\s]/.test(raw.replace(/\s*,\s*/g, ',').trim())) {
+            fail('separate several URLs with commas only, e.g. https://hajj.company.qa,https://customer.vercel.app');
+          }
+          const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+          const ORIGIN = new RegExp(`^https://(${label}(?:\\.${label})+)(?::(\\d{1,5}))?$`);
+          const out = [];
+          for (const part of raw.split(',')) {
+            let v = part.trim();
+            if (!v) fail('empty entry; check for an extra comma');
+            if (v.endsWith('/')) v = v.slice(0, -1);
+            v = v.replace(/^https:\/\//i, 'https://').toLowerCase();
+            const m = ORIGIN.exec(v);
+            if (!m) fail(`"${part.trim()}" is not a valid https origin: use https://host only, without a path`);
+            const port = m[2] === undefined ? null : Number(m[2]);
+            if (port !== null && (port < 1 || port > 65535)) fail(`"${part.trim()}" has an invalid port`);
+            const origin = `https://${m[1]}${port === null || port === 443 ? '' : `:${port}`}`;
+            if (!out.includes(origin)) out.push(origin);
+          }
+          process.stdout.write(out.join(','));
+          NODE
+          )"
+
           # The complete permission set, read from the application's own ALL_PERMISSIONS.
           keys="$(node supabase/scripts/permission-keys.mjs)"
 
@@ -94,8 +123,26 @@ jobs:
             echo "name_b64=$(printf '%s' "$name" | base64 -w0)"
             echo "keys_b64=$(printf '%s' "$keys" | base64 -w0)"
             echo "season_year=$((10#$year))"
+            echo "origins=$origins"
+            echo "site_url=${origins%%,*}"
           } >> "$GITHUB_OUTPUT"
           echo "First Administrator: $login · permissions to grant: $(jq length <<<"$keys")"
+          echo "Allowed origins: $origins · Site URL: ${origins%%,*}"
+
+      - name: "Verify Supabase Auth settings (read-only)"
+        env:
+          SITE_URL: ${{ steps.admin.outputs.site_url }}
+        run: |
+          set -euo pipefail
+          # Read only, before any change. Writing Auth settings through the Management API needs
+          # project-admin write authority, which is never stored in GitHub: the operator sets
+          # sign-up off, anonymous sign-in off and the Site URL in the Supabase Dashboard.
+          code="$(curl -sS -o "$RUNNER_TEMP/auth.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$API/projects/$PROJECT_REF/config/auth")" || {
+              echo "::error::Could not reach the Supabase Management API to read the Auth settings. Stopped before any change; run the workflow again."; exit 1; }
+          node supabase/scripts/auth-settings.mjs check "$RUNNER_TEMP/auth.json" "$code" "$SITE_URL" || {
+            echo "::error::Stopped before any change: no migration, administrator, season, VAPID key, secret or function was touched. Fix the above and run the workflow again."
+            exit 1; }
 
       - name: "Install pinned project toolchain"
         run: |
@@ -423,7 +470,7 @@ jobs:
 
       - name: "Set required Edge Function secrets"
         env:
-          ALLOWED_ORIGIN: ${{ inputs.allowed_origin }}
+          ALLOWED_ORIGIN: ${{ steps.admin.outputs.origins }}
           VERCEL_PROJECT: ${{ inputs.vercel_project_slug }}
           VERCEL_OWNER: ${{ inputs.vercel_owner_slug }}
           VAPID_SUBJECT: ${{ inputs.vapid_subject }}
@@ -501,6 +548,8 @@ jobs:
           npm run --silent supabase -- functions deploy --project-ref "$PROJECT_REF" --use-api
 
       - name: "Verify backend deployment"
+        env:
+          SITE_URL: ${{ steps.admin.outputs.site_url }}
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
@@ -518,6 +567,11 @@ jobs:
             printf '%s' "$functions" | jq -e --arg slug "$slug"               'any(.[]; .slug == $slug and .status == "ACTIVE")' >/dev/null || {
                 echo "::error::Function $slug is not ACTIVE"; exit 1; }
           done
+          # The Auth settings may have been changed in the Dashboard while setup ran.
+          code="$(curl -sS -o "$RUNNER_TEMP/auth.json" -w '%{http_code}' "${auth[@]}" \
+            "$API/projects/$PROJECT_REF/config/auth")" || {
+              echo "::error::Could not reach the Supabase Management API to read the Auth settings."; exit 1; }
+          node supabase/scripts/auth-settings.mjs check "$RUNNER_TEMP/auth.json" "$code" "$SITE_URL"
           echo "Backend setup verified."
 
       - name: "Setup result"
@@ -528,6 +582,7 @@ jobs:
           ADMIN_TOTAL: ${{ steps.bootstrap.outputs.total }}
           SEASON_STATE: ${{ steps.season.outputs.state }}
           SEASON_YEAR: ${{ steps.season.outputs.year }}
+          SITE_URL: ${{ steps.admin.outputs.site_url }}
           ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
           SUBSCRIPTIONS: ${{ steps.vapid.outputs.subscriptions }}
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
@@ -542,6 +597,8 @@ jobs:
             echo "**Permissions verified from the database:** $ADMIN_GRANTED / $ADMIN_TOTAL"
             echo
             echo "**Open season:** Hijri year $SEASON_YEAR ($SEASON_STATE)"
+            echo
+            echo "**Supabase Auth (verified, read-only):** public sign-up off · anonymous sign-in off · Site URL \`$SITE_URL\`"
             echo
             if [ "$ROTATE_VAPID" = "true" ]; then
               echo "### One value to copy to Vercel"

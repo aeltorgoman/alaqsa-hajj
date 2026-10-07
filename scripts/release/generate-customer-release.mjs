@@ -202,23 +202,31 @@ and vendor-internal GitHub workflows.
 
 Before the first deployment, the repository needs two GitHub secrets:
 \`SUPABASE_PROJECT_REF\` and \`SUPABASE_ACCESS_TOKEN\` — a Supabase access
-token scoped to this project with **Database: read & write**, **Edge Functions:
-read & write** and **Secrets: read & write**. No other secret or password is
-stored.
+token scoped to this project with **Database**, **Migrations**, **Edge
+Functions** and **Edge Function Secrets**, all **Read-Write**, and **Auth
+Config: Read**. No other permission, secret or password is stored.
 
-1. **Supabase** — Authentication → Users → **Add user**. Enter the
+1. **Supabase** — set the two Auth settings the workflow verifies before it
+   changes anything (it reads them; it cannot change them):
+   - Authentication → Sign In / Providers → **Allow new users to sign up** →
+     Off, and **Allow anonymous sign-ins** → Off → **Save changes**.
+   - Authentication → URL Configuration → **Site URL** → the Vercel production
+     URL (the first URL entered in step 3) → **Save**.
+2. **Supabase** — Authentication → Users → **Add user**. Enter the
    administrator's Login ID (email form, e.g. \`admin@company.local\`) and
    password, and tick **Auto Confirm User**.
-2. **GitHub** — Actions → **Customer Backend Setup** → Run workflow. Enter the
+3. **GitHub** — Actions → **Customer Backend Setup** → Run workflow. Enter the
    Vercel production URL, Vercel project name and owner, a contact
    (\`mailto:…\`), the same administrator Login ID with a display name, and
-   the Hijri year of the first Hajj season (e.g. \`1448\`). The workflow applies
-   the database, creates the First Administrator with every system permission,
+   the Hijri year of the first Hajj season (e.g. \`1448\`). The workflow first
+   verifies that public sign-up and anonymous sign-in are off and that the Site
+   URL is the first Production URL, and stops without changing anything if not.
+   It then applies the database, creates the First Administrator with every system permission,
    creates the first open season (an existing open season is kept unchanged),
    configures the Edge Function secrets, deploys the six Edge Functions and
    verifies the result. If a run fails, fix the reported
    cause and run it again — it continues safely.
-3. **Vercel** — set \`VITE_SUPABASE_URL\`, \`VITE_SUPABASE_ANON_KEY\` and the
+4. **Vercel** — set \`VITE_SUPABASE_URL\`, \`VITE_SUPABASE_ANON_KEY\` and the
    \`VITE_VAPID_PUBLIC_KEY\` shown in the workflow's summary, then deploy.
 
 Full ownership, release, recovery and handover rules:
