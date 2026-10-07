@@ -202,9 +202,9 @@ and vendor-internal GitHub workflows.
 
 Before the first deployment, the repository needs two GitHub secrets:
 \`SUPABASE_PROJECT_REF\` and \`SUPABASE_ACCESS_TOKEN\` — a Supabase access
-token scoped to this project with **Database: read & write**, **Edge Functions:
-read & write** and **Secrets: read & write**. No other secret or password is
-stored.
+token scoped to this project with **Database**, **Migrations**, **Edge
+Functions**, **Edge Function Secrets** and **Auth**, all **Read-Write**. No other
+secret or password is stored.
 
 1. **Supabase** — Authentication → Users → **Add user**. Enter the
    administrator's Login ID (email form, e.g. \`admin@company.local\`) and
@@ -215,6 +215,7 @@ stored.
    the Hijri year of the first Hajj season (e.g. \`1448\`). The workflow applies
    the database, creates the First Administrator with every system permission,
    creates the first open season (an existing open season is kept unchanged),
+   turns off public sign-up and sets the Site URL to the first Production URL,
    configures the Edge Function secrets, deploys the six Edge Functions and
    verifies the result. If a run fails, fix the reported
    cause and run it again — it continues safely.
