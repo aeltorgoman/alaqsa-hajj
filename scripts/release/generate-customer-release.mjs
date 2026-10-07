@@ -232,7 +232,9 @@ Config: Read**. No other permission, secret or password is stored.
    cause and run it again — it continues safely.
 4. **Vercel** — set \`VITE_SUPABASE_URL\`, \`VITE_SUPABASE_ANON_KEY\` and the
    \`VITE_VAPID_PUBLIC_KEY\` shown in the workflow's summary, then deploy.
-5. **Application** — sign in and scan one real passport. The workflow proves
+5. **Application** — sign in and scan a test/specimen passport image (never
+   real customer or pilgrim data). Confirm the extracted fields are populated,
+   then close the form without saving the test pilgrim. The workflow proves
    only that the key exists; this proves passport scanning works.
 
 Full ownership, release, recovery and handover rules:

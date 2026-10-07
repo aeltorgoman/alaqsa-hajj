@@ -634,7 +634,7 @@ jobs:
             echo
             echo "**Supabase Auth (verified, read-only):** public sign-up off · anonymous sign-in off · Site URL \`$SITE_URL\`"
             echo
-            echo "**ANTHROPIC_API_KEY:** present in Supabase Edge Function secrets (presence only). Before handover, scan a real passport in the application to confirm passport scanning works."
+            echo "**ANTHROPIC_API_KEY:** present in Supabase Edge Function secrets (presence only). Before handover, scan a test/specimen passport image in the application (never real personal data), confirm the extracted fields are populated, and do not save the test pilgrim."
             echo
             if [ "$ROTATE_VAPID" = "true" ]; then
               echo "### One value to copy to Vercel"
