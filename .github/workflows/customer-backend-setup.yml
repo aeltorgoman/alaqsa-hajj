@@ -129,43 +129,20 @@ jobs:
           echo "First Administrator: $login · permissions to grant: $(jq length <<<"$keys")"
           echo "Allowed origins: $origins · Site URL: ${origins%%,*}"
 
-      - name: "Lock down Supabase Auth"
+      - name: "Verify Supabase Auth settings (read-only)"
         env:
           SITE_URL: ${{ steps.admin.outputs.site_url }}
         run: |
           set -euo pipefail
-          # api <method> <path> [json-file]: body in $RUNNER_TEMP/auth.out; failures say what to fix.
-          api() {
-            local code args=(-sS -o "$RUNNER_TEMP/auth.out" -w '%{http_code}'
-              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -X "$1" "$API/projects/$PROJECT_REF$2")
-            [ -z "${3:-}" ] || args+=(-H "Content-Type: application/json" --data-binary @"$3")
-            code="$(curl "${args[@]}")" || { echo "::error::$1 $2: request failed"; return 1; }
-            if [ "$code" = 403 ]; then
-              echo "::error::SUPABASE_ACCESS_TOKEN may not manage Auth settings (HTTP 403). Create the token with Auth — Read-Write, together with Database, Migrations, Edge Functions and Edge Function Secrets, then update the GitHub secret and run again."
-              return 1
-            fi
-            if [ "$code" -ge 400 ]; then
-              local msg; msg="$(jq -r '.message // empty' "$RUNNER_TEMP/auth.out" 2>/dev/null || true)"
-              echo "::error::$1 $2 returned HTTP $code: ${msg:-$(head -c 2000 "$RUNNER_TEMP/auth.out")}"
-              return 1
-            fi
-          }
-
-          # Users are created only by administrators (Dashboard or the user-admin function),
-          # never by self sign-up: the baseline of supabase/config.toml, enforced on the project.
-          jq -n --arg site "$SITE_URL" \
-            '{disable_signup: true, external_anonymous_users_enabled: false, site_url: $site}' \
-            > "$RUNNER_TEMP/auth.json"
-          api PATCH /config/auth "$RUNNER_TEMP/auth.json"
-
-          # Read back: the stored configuration, not the request, decides.
-          api GET /config/auth
-          jq -e --arg site "$SITE_URL" \
-            '.disable_signup == true and .external_anonymous_users_enabled == false and .site_url == $site' \
-            "$RUNNER_TEMP/auth.out" >/dev/null || {
-              echo "::error::Supabase Auth was not locked down: $(jq -c '{disable_signup, external_anonymous_users_enabled, site_url}' "$RUNNER_TEMP/auth.out")"
-              exit 1; }
-          echo "Supabase Auth: public sign-up off, anonymous sign-in off, Site URL $SITE_URL."
+          # Read only, before any change. Writing Auth settings through the Management API needs
+          # project-admin write authority, which is never stored in GitHub: the operator sets
+          # sign-up off, anonymous sign-in off and the Site URL in the Supabase Dashboard.
+          code="$(curl -sS -o "$RUNNER_TEMP/auth.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$API/projects/$PROJECT_REF/config/auth")" || {
+              echo "::error::Could not reach the Supabase Management API to read the Auth settings. Stopped before any change; run the workflow again."; exit 1; }
+          node supabase/scripts/auth-settings.mjs check "$RUNNER_TEMP/auth.json" "$code" "$SITE_URL" || {
+            echo "::error::Stopped before any change: no migration, administrator, season, VAPID key, secret or function was touched. Fix the above and run the workflow again."
+            exit 1; }
 
       - name: "Install pinned project toolchain"
         run: |
@@ -590,12 +567,11 @@ jobs:
             printf '%s' "$functions" | jq -e --arg slug "$slug"               'any(.[]; .slug == $slug and .status == "ACTIVE")' >/dev/null || {
                 echo "::error::Function $slug is not ACTIVE"; exit 1; }
           done
-          curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/config/auth" -o "$RUNNER_TEMP/auth.json"
-          jq -e --arg site "$SITE_URL" \
-            '.disable_signup == true and .external_anonymous_users_enabled == false and .site_url == $site' \
-            "$RUNNER_TEMP/auth.json" >/dev/null || {
-              echo "::error::Supabase Auth is not locked down: $(jq -c '{disable_signup, external_anonymous_users_enabled, site_url}' "$RUNNER_TEMP/auth.json")"
-              exit 1; }
+          # The Auth settings may have been changed in the Dashboard while setup ran.
+          code="$(curl -sS -o "$RUNNER_TEMP/auth.json" -w '%{http_code}' "${auth[@]}" \
+            "$API/projects/$PROJECT_REF/config/auth")" || {
+              echo "::error::Could not reach the Supabase Management API to read the Auth settings."; exit 1; }
+          node supabase/scripts/auth-settings.mjs check "$RUNNER_TEMP/auth.json" "$code" "$SITE_URL"
           echo "Backend setup verified."
 
       - name: "Setup result"
@@ -622,7 +598,7 @@ jobs:
             echo
             echo "**Open season:** Hijri year $SEASON_YEAR ($SEASON_STATE)"
             echo
-            echo "**Supabase Auth:** public sign-up off · Site URL \`$SITE_URL\`"
+            echo "**Supabase Auth (verified, read-only):** public sign-up off · anonymous sign-in off · Site URL \`$SITE_URL\`"
             echo
             if [ "$ROTATE_VAPID" = "true" ]; then
               echo "### One value to copy to Vercel"

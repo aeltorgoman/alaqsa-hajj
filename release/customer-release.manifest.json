@@ -26,6 +26,7 @@
     "supabase/scripts/seed_first_admin.mjs",
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
+    "supabase/scripts/auth-settings.mjs",
     ".github/workflows/customer-backend-setup.yml",
     "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
     "docs/runbooks/MIGRATION_WORKFLOW.md"
@@ -63,6 +64,7 @@
     ".github/workflows/customer-backend-setup.yml",
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
+    "supabase/scripts/auth-settings.mjs",
     ".env.example",
     "RELEASE.md"
   ],
