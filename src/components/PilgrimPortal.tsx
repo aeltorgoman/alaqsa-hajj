@@ -346,7 +346,13 @@ function PilgrimPortal() {
   const arafa = useMemo(() => getSeasonArafa(), []);
   const postHajj = !!arafa && now > arafa.getTime() + 86400000;
   const diff = arafa ? Math.max(0, arafa.getTime() - now) : 0;
-  const showCountdown = !!arafa && diff > 0;
+  /* إخفاءُ العدّاد قرارُ إعدادٍ أيضاً، لا حسابَ تاريخٍ فقط. والاصطلاحُ
+     نفسُه المعتمد في بقيّة المفاتيح (`!== false`)، فالتثبيتاتُ التي لا
+     يوجد فيها المفتاحُ بعدُ تُظهر العدّادَ كما كانت.
+     ولا يمسّ هذا `postHajj`: رسالةُ ما بعد الحجّ فرعٌ مستقلٌّ في
+     `PortalHeader`، فيبقى عملُها كما هو عند إخفاء العدّاد. */
+  const showArafaCountdown = portalSettings.arafa_countdown !== false;
+  const showCountdown = showArafaCountdown && !!arafa && diff > 0;
   const cd = { d: Math.floor(diff / 86400000), h: Math.floor(diff / 3600000) % 24, m: Math.floor(diff / 60000) % 60, s: Math.floor(diff / 1000) % 60 };
 
   /* ⚠️ الشارةُ كانت `العدد − المقروء`. والعددُ يتناقص وحدَه حين

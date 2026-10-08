@@ -13,7 +13,7 @@ export interface ReportBranding { logoUrl: string; companyName: string; tagline:
 export interface CompanyPortal {
   welcomeMessage: string; helpMessage: string;
   supportPhone: string;
-  visibility: { flights: boolean; rooms: boolean; buses: boolean; financialBalance: boolean; qrCodes: boolean; documents: boolean; notifications: boolean; pdfDownloads: boolean; roommates: boolean; lostCard: boolean };
+  visibility: { flights: boolean; rooms: boolean; buses: boolean; financialBalance: boolean; qrCodes: boolean; documents: boolean; notifications: boolean; pdfDownloads: boolean; roommates: boolean; lostCard: boolean; arafaCountdown: boolean };
 }
 export type CompanyAssetKey =
   | "logo"
