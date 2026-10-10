@@ -4,7 +4,7 @@
 
 ```
 supabase/
-├── migrations/                     59 ملفّاً · 46 منها مِرساةُ توافقٍ بلا SQL
+├── migrations/                     60 ملفّاً · 46 منها مِرساةُ توافقٍ بلا SQL
 │   ├── 20260101000000_baseline_schema.sql ← مِرساة
 │   ├── 20260702073456_add_capacity_to_buses.sql ← مِرساة
 │   ├── 20260703210244_add_arrival_time_and_date_to_flights.sql ← مِرساة
@@ -63,7 +63,8 @@ supabase/
 │   ├── 20260926092000_company_private_read_for_payments.sql
 │   ├── 20260928090000_portal_login_failure_limits.sql
 │   ├── 20260928100000_rate_limit_exceeded_revoke_client_roles.sql
-│   └── 20261010194239_mod001_hotels_foundation.sql
+│   ├── 20261010194239_mod001_hotels_foundation.sql
+│   └── 20261010203522_mod001_hotels_backfill.sql
 ├── migrations-archive/             نصُّ الترحيلات قبل التحوّل — دليلٌ لا يُشغَّل
 ├── baseline/ · baseline-candidate/ · cutover-candidate/
 ├── verification/                   فاحصاتُ التحوّل والتمرين — للقراءة والإثبات
