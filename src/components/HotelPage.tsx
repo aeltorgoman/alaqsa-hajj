@@ -100,7 +100,8 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   const [newRoomNum, setNewRoomNum] = useState("");
   const [panelCap, setPanelCap] = useState("");
   const [moveFor, setMoveFor] = useState<Passenger | null>(null);
-  const [moveSearch, setMoveSearch] = useState("");
+  /* الغرفةُ المختارة في قائمة الوجهة — تُفرَّغ مع كلّ تغييرٍ للفندق أو الدور */
+  const [moveRoomId, setMoveRoomId] = useState("");
   /* MOD-001 — وجهةُ النقل: أيُّ فندقٍ من فنادق الموسم، ثمّ دورُه وغرفُه.
      غرفُ الموسم كلُّها تُحمَّل عند فتح اللوحة (هذه الصفحة تحمل غرفَ
      فندقها وحده)، والتأكيدُ يسبق الكتابةَ الواحدة. */
@@ -434,7 +435,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
      من الأولى ثم يبحث عن الثانية، فيمرّ الحاجّ بحالة «بلا غرفة»
      بينهما. والفندقُ **المطلوب** لا يُمَسّ — يُنبَّه إليه ولا يتبدّل. */
   const openMove = (p: Passenger) => {
-    setMoveFor(p); setMoveSearch(""); setMoveHotelId(hotel.id); setMoveFloor("الكل");
+    setMoveFor(p); setMoveRoomId(""); setMoveHotelId(hotel.id); setMoveFloor("الكل");
     loadSeasonRooms();
   };
   const confirmTransfer = async () => {
@@ -454,7 +455,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
       setMoveFor(fresh && (fresh.room_id ?? null) === (p.room_id ?? null) ? fresh : null);
       return;
     }
-    setMoveFor(null); setMoveSearch("");
+    setMoveFor(null); setMoveRoomId("");
     showAlert("success", `تم نقل ${p.short_ar || makeShort(p.name_ar)} إلى ${roomLabel(dest, hotels)}`);
     setTimeout(() => showAlert(null), 2500);
   };
@@ -530,7 +531,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     setPanelType(room.type);
     setPanelCap(String(capOf(room) ?? ""));
     setPanelNotes(room.notes || "");
-    setMoveFor(null); setMoveSearch("");
+    setMoveFor(null); setMoveRoomId("");
     setShowAddPilgrim(false);
     setPSearch("");
     setEditingRoomNum(false);
@@ -988,55 +989,77 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
 
             {/* ═══ لوحة النقل — الفندقُ ثمّ الدورُ ثمّ الغرفة ═══ */}
             {moveFor && (() => {
-              const q = moveSearch.trim();
               const pool = (seasonRooms ?? rooms).filter(r => r.hotel_id === moveHotelId);
               const destFloors = [...new Set(pool.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
+              /* الوجهاتُ الممتلئة والمجالسُ والغرفُ بلا سعةٍ محدّدة لا تُعرض أصلاً
+                 (`roomFull`): القائمة لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */
               const dests = pool.filter(r => r.id !== moveFor.room_id && !roomFull(r)
-                && (moveFloor === "الكل" || r.floor === moveFloor)
-                && (!q || r.number.includes(q) || r.floor.includes(q)))
+                && (moveFloor === "الكل" || r.floor === moveFloor))
                 .sort((a, b) => (parseInt(a.floor) || 0) - (parseInt(b.floor) || 0) || (parseInt(a.number) || 0) - (parseInt(b.number) || 0) || a.number.localeCompare(b.number));
+              /* اختيارٌ لم يعد بين الوجهات (تغيّر الإشغال بعد تحديث) لا يُعرض ولا يُرسَل */
+              const chosen = dests.find(r => String(r.id) === moveRoomId) ?? null;
+              const optLabel = (r: Room) => {
+                const occ = roomPassengers(r.id).length, cap = capOf(r) ?? 0;
+                return `${r.number} · ${r.type} · ${occ}/${cap} (متاح ${cap - occ})`;
+              };
+              const byFloor = moveFloor === "الكل" && destFloors.length > 1;
+              const loadingOther = moveHotelId !== hotel.id && seasonRooms == null && !seasonRoomsError;
+              const emptyText = pool.length === 0 ? "لا توجد غرف في هذا الفندق."
+                : moveFloor !== "الكل" ? `لا غرفة فيها متّسع في الدور ${moveFloor} — اختر «كل الأدوار» أو فندقاً آخر.`
+                : "لا غرفة فيها متّسع في هذا الفندق — اختر فندقاً آخر.";
+              const lbl: React.CSSProperties = { display: "block", fontSize: 10, fontWeight: 800, color: "var(--muted)", marginBottom: 3 };
+              const ctl: React.CSSProperties = { ...inp, fontSize: 12.5, padding: "7px 9px", minHeight: 38, width: "100%", minWidth: 0 };
               return (
-                <div style={{ border: `1.5px solid ${primary}`, borderRadius: 10, padding: 8, marginBottom: 8, background: "var(--paper)" }}>
+                <div data-testid="move-panel" style={{ border: `1.5px solid ${primary}`, borderRadius: 10, padding: 8, marginBottom: 8, background: "var(--paper)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: "var(--ink)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>نقل {moveFor.short_ar || makeShort(moveFor.name_ar)} إلى</span>
-                    <button onClick={() => setMoveFor(null)} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 15, lineHeight: 1 }}>×</button>
+                    <button aria-label="إغلاق لوحة النقل" onClick={() => setMoveFor(null)} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 15, lineHeight: 1, minWidth: 28, minHeight: 28 }}>×</button>
                   </div>
-                  <div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
-                    <select aria-label="فندق الوجهة" value={moveHotelId} onChange={e => { setMoveHotelId(Number(e.target.value)); setMoveFloor("الكل"); }}
-                      style={{ ...inp, fontSize: 11, padding: "5px 7px", flex: 1, minWidth: 0 }}>
-                      {hotels.map(h => <option key={h.id} value={h.id}>{h.name}{h.id === hotel.id ? " (الحالي)" : ""}</option>)}
-                    </select>
-                    <select aria-label="دور الوجهة" value={moveFloor} onChange={e => setMoveFloor(e.target.value)}
-                      style={{ ...inp, fontSize: 11, padding: "5px 7px", width: 78, flex: "none" }}>
-                      <option value="الكل">كل الأدوار</option>
-                      {destFloors.map(f => <option key={f} value={f}>ط{f}</option>)}
-                    </select>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <label htmlFor="move-dest-hotel" style={lbl}>الفندق</label>
+                      <select id="move-dest-hotel" value={moveHotelId} onChange={e => { setMoveHotelId(Number(e.target.value)); setMoveFloor("الكل"); setMoveRoomId(""); }} style={ctl}>
+                        {hotels.map(h => <option key={h.id} value={h.id}>{h.name}{h.id === hotel.id ? " (الحالي)" : ""}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ width: 96, flex: "none" }}>
+                      <label htmlFor="move-dest-floor" style={lbl}>الدور</label>
+                      <select id="move-dest-floor" value={moveFloor} onChange={e => { setMoveFloor(e.target.value); setMoveRoomId(""); }} style={ctl}>
+                        <option value="الكل">كل الأدوار</option>
+                        {destFloors.map(f => <option key={f} value={f}>ط{f}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <input value={moveSearch} onChange={e => setMoveSearch(e.target.value)} placeholder="رقم الغرفة أو الدور..." style={{ ...inp, fontSize: 11, padding: "6px 9px", marginBottom: 6 }} />
-                  {/* الوجهات الممتلئة والمجالس لا تُعرض أصلاً: القائمة
-                      لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */}
-                  <div style={{ maxHeight: 168, overflowY: "auto" }}>
-                    {moveHotelId !== hotel.id && seasonRoomsError ? (
-                      <div style={{ padding: "10px", textAlign: "center", color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>
-                        تعذّر تحميل غرف الفنادق الأخرى.
-                        <button onClick={loadSeasonRooms} style={{ display: "block", margin: "6px auto 0", padding: "4px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>إعادة المحاولة</button>
-                      </div>
-                    ) : moveHotelId !== hotel.id && seasonRooms == null ? (
-                      <div style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>جاري تحميل الغرف...</div>
-                    ) : dests.length === 0 ? (
-                      <div style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>لا توجد غرفة فيها متّسع</div>
-                    ) : dests.slice(0, 40).map(r => (
-                      <div key={r.id} data-dest-room={r.id} onClick={() => setTransfer({ p: moveFor, dest: r })}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 7, cursor: "pointer", borderBottom: "1px solid var(--ivory)" }}
-                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
-                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
-                        <span style={{ fontSize: 12, fontWeight: 900, color: primary, flexShrink: 0 }}>{r.number}</span>
-                        <span style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, flex: 1, minWidth: 0 }}>ط{r.floor} · {r.type}</span>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)" }} dir="ltr">{roomPassengers(r.id).length}/{capOf(r)}</span>
-                      </div>
-                    ))}
-                    {dests.length > 40 && <div style={{ padding: "6px", textAlign: "center", color: "var(--muted)", fontSize: 9.5 }}>يُعرض ٤٠ من {dests.length} — ابحث لتضييق النتائج</div>}
-                  </div>
+                  <label htmlFor="move-dest-room" style={lbl}>الغرفة</label>
+                  {moveHotelId !== hotel.id && seasonRoomsError ? (
+                    <div role="alert" style={{ padding: "10px", textAlign: "center", color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>
+                      تعذّر تحميل غرف الفنادق الأخرى.
+                      <button onClick={loadSeasonRooms} style={{ display: "block", margin: "6px auto 0", padding: "6px 12px", minHeight: 32, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>إعادة المحاولة</button>
+                    </div>
+                  ) : loadingOther ? (
+                    <div role="status" style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>جاري تحميل الغرف...</div>
+                  ) : dests.length === 0 ? (
+                    <div id="move-dest-empty" data-testid="move-dest-empty" role="status" style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11, fontWeight: 700, border: "1px dashed var(--line)", borderRadius: 8 }}>{emptyText}</div>
+                  ) : (
+                    <>
+                      <select id="move-dest-room" data-testid="move-dest-room" value={chosen ? String(chosen.id) : ""}
+                        onChange={e => setMoveRoomId(e.target.value)} style={{ ...ctl, marginBottom: 6 }}>
+                        <option value="">اختر غرفة — {dests.length} متاحة</option>
+                        {byFloor
+                          ? destFloors.filter(f => dests.some(r => r.floor === f)).map(f => (
+                              <optgroup key={f} label={`الدور ${f}`}>
+                                {dests.filter(r => r.floor === f).map(r => <option key={r.id} value={r.id}>{optLabel(r)}</option>)}
+                              </optgroup>
+                            ))
+                          : dests.map(r => <option key={r.id} value={r.id}>{optLabel(r)}</option>)}
+                      </select>
+                      <button data-testid="move-continue" disabled={!chosen || readOnly}
+                        onClick={() => { if (chosen) setTransfer({ p: moveFor, dest: chosen }); }}
+                        style={{ width: "100%", minHeight: 38, padding: "8px", borderRadius: 8, border: "none", background: chosen ? primary : "var(--line)", color: chosen ? "#fff" : "var(--muted)", fontSize: 12, fontWeight: 800, cursor: chosen ? "pointer" : "not-allowed", fontFamily: "var(--font-body)" }}>
+                        متابعة النقل
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })()}
