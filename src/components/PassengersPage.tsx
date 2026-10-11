@@ -6,7 +6,8 @@ import { useSeason } from "../season/useSeason";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
-import type { Passenger, User } from "../types";
+import type { Hotel, Passenger, User } from "../types";
+import { hotelNameOf } from "../utils/hotels";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
@@ -339,6 +340,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaRooms, setMetaRooms] = useState<any[]>([]);
   const [metaCamps, setMetaCamps] = useState<any[]>([]);
   const [metaFlights, setMetaFlights] = useState<any[]>([]);
+  /* MOD-001 PR 7: فنادقُ الموسم المعروض — للفندق المطلوب في التسجيل
+     والتعديل، ولاسم الفندق الفعليّ المشتقّ من غرفة الحاجّ. */
+  const [seasonHotels, setSeasonHotels] = useState<Hotel[]>([]);
 
   useEffect(() => {
     /* `type` عمودٌ مطلوب لا زينة: سطرُ الإسناد يعرض **تصنيف الكيان
@@ -346,9 +350,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
        يُظهر التفاوت بين ما طُلب وما أُسنِد. وبغيره يصل `undefined`
        فيسكت السطر عن التصنيف بلا خطأ يُرى. */
     supabase.from("buses").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
-    supabase.from("rooms").select("id,number,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
+    supabase.from("rooms").select("id,number,type,hotel_id").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
     supabase.from("camps").select("id,name,page_type,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
     supabase.from("flights").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
+    supabase.from("hotels").select("id,season_id,city,name,address,map_url,notes,sort_order").eq("season_id", viewedSeason.id)
+      .order("sort_order", { ascending: true, nullsFirst: false }).order("id")
+      .then(({ data }: { data: Hotel[] | null }) => { if (data) setSeasonHotels(data); });
   }, [viewedSeason.id]);
 
   // استقبال scan من Dashboard
@@ -642,6 +649,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const DEFAULT_MANUAL_SERVICES = { bus: "عادي", flight: "عادي", hotel_type: "ثنائية", hotel_view: "غير مطلة", camp_mina: "عادي", camp_arafa: "عادي" };
   const [manualForm, setManualForm] = useState(DEFAULT_MANUAL_FORM);
   const [manualServices, setManualServices] = useState(DEFAULT_MANUAL_SERVICES);
+  /* `null` = لم يُختر. الفندقُ الوحيدُ في الموسم هو الاختيارُ الافتراضيّ
+     (مشتقٌّ عند العرض والحفظ، لا يُخزَّن). */
+  const [manualHotelPick, setManualHotelPick] = useState<number | null>(null);
+  const manualHotelId = manualHotelPick ?? (seasonHotels.length === 1 ? seasonHotels[0].id : null);
   const [manualSaving, setManualSaving] = useState(false);
   const [manualPassportImg, setManualPassportImg] = useState<string | null>(null);
   const [manualPassportFile, setManualPassportFile] = useState<File | null>(null);
@@ -658,6 +669,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setManualIdImg(null); setManualIdFile(null);
     setManualForm(DEFAULT_MANUAL_FORM);
     setManualServices(DEFAULT_MANUAL_SERVICES);
+    setManualHotelPick(null);
   };
 
   // مسح موحّد: يتعرف على نوع المستند (جواز / بطاقة / تصريح حج) ويتصرف تلقائيًا
@@ -885,11 +897,15 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const dupN = manualForm.national_id && passengers.some((p: Passenger) => p.national_id === manualForm.national_id);
     if (dupP) { showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return; }
     if (dupN) { showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return; }
+    /* الفندقُ المطلوب إلزاميٌّ للحاجّ الجديد، ومن فنادق موسمه — والقاعدةُ
+       تفرض الموسمَ نفسَه بالمفتاح المركّب (requested_hotel_id, season_id). */
+    if (seasonHotels.length === 0) { showAlert("warning", "لا فنادق في هذا الموسم بعد — أضف فندقاً من صفحة الفندق أولاً"); return; }
+    if (manualHotelId == null || !seasonHotels.some(h => h.id === manualHotelId)) { showAlert("warning", "يرجى اختيار الفندق المطلوب"); return; }
     if (!assertWritable()) return;
     setManualSaving(true);
     const short_ar = makeShort(manualForm.name_ar);
     const short_en = makeShort(manualForm.name_en);
-    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa, created_by: currentUser?.name || null }]).select();
+    const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa, requested_hotel_id: manualHotelId, created_by: currentUser?.name || null }]).select();
     if (error) {
       console.error("Manual save error:", error);
       showAlert("error", "فشل حفظ البيانات، يرجى المحاولة مرة أخرى");
@@ -1490,6 +1506,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
       bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
       camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
+      /* الفندقُ المطلوب يتغيّر من هنا وحده — لا يمسّه نقلٌ ولا تسكين. */
+      requested_hotel_id: p.requested_hotel_id ?? null,
       updated_by, updated_at
     }).eq("id", p.id);
     if (error) { showAlert("error", "حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return; }
@@ -2213,6 +2231,32 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               })}
             </div>
           )}
+          {profileTab === "svc" && (() => {
+            /* MOD-001 PR 7: المطلوبُ من `requested_hotel_id`، والفعليُّ مشتقٌّ
+               من الغرفة (room_id ← rooms.hotel_id) — لا عمودَ ثانٍ. والاختلافُ
+               تنبيهٌ فقط: لا يغيّر أيّاً منهما. */
+            const reqId = selected.requested_hotel_id ?? null;
+            const room = selected.room_id != null ? metaRooms.find((r: { id: number }) => r.id === selected.room_id) : undefined;
+            const actId: number | null = room?.hotel_id ?? null;
+            const reqName = reqId != null ? (hotelNameOf(seasonHotels, reqId) || `فندق #${reqId}`) : null;
+            const actName = selected.room_id == null ? null : !room ? "…" : actId != null ? (hotelNameOf(seasonHotels, actId) || `فندق #${actId}`) : "غرفة بلا فندق";
+            const mismatch = reqId != null && actId != null && reqId !== actId;
+            return (
+              <div data-testid="hotel-panel" style={{ background: mismatch ? "#FFF3E0" : "var(--ivory)", border: mismatch ? "1.5px solid #FFB74D" : "1px solid var(--line)", borderRadius: 10, padding: "8px 11px", marginBottom: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 800, marginBottom: 2 }}>الفندق المطلوب</div>
+                    <div data-testid="requested-hotel" style={{ fontSize: 12.5, fontWeight: reqName ? 900 : 700, color: reqName ? "var(--ink)" : "var(--muted)", fontStyle: reqName ? undefined : "italic" }}>{reqName ?? "غير محدد"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 800, marginBottom: 2 }}>الفندق الفعلي</div>
+                    <div data-testid="assigned-hotel" style={{ fontSize: 12.5, fontWeight: actName ? 900 : 700, color: actName ? "var(--ink)" : "var(--muted)", fontStyle: actName ? undefined : "italic" }}>{actName ?? "لم يُسكَّن بعد"}</div>
+                  </div>
+                </div>
+                {mismatch && <div data-testid="hotel-mismatch" style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: "#E65100" }}>⚠️ الحاج مسكَّن في فندق غير الفندق المطلوب</div>}
+              </div>
+            );
+          })()}
           {profileTab === "svc" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             {/* قيمة الإسناد من `allocationOf` نفسها التي يعرضها
@@ -2436,6 +2480,15 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 <div key={k as string}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l as string}</div><input style={inp} value={(editing as any)[k as string] || ""} onChange={e => setEditing({ ...editing, [k as string]: e.target.value })} /></div>
               ))}
               <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div><select style={inp} value={editing.gender} onChange={e => setEditing({ ...editing, gender: e.target.value })}><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
+              {/* سجلٌّ قديمٌ بلا فندقٍ مطلوب يبقى كما هو حتى يُختار له — فلا
+                  يُمنع تعديلُ حقلٍ آخر، ولا يُفرَّغ فندقٌ اختير من قبل. */}
+              <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الفندق المطلوب</div>
+                <select data-testid="edit-requested-hotel" style={inp} value={editing.requested_hotel_id ?? ""} onChange={e => setEditing({ ...editing, requested_hotel_id: e.target.value ? Number(e.target.value) : null })}>
+                  {editing.requested_hotel_id == null && <option value="">— غير محدد —</option>}
+                  {editing.requested_hotel_id != null && !seasonHotels.some(h => h.id === editing.requested_hotel_id) && <option value={editing.requested_hotel_id}>فندق #{editing.requested_hotel_id}</option>}
+                  {seasonHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات المطلوبة</div>
@@ -2513,6 +2566,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 <select style={inp} value={manualForm.gender} onChange={e => setManualForm(prev => ({ ...prev, gender: e.target.value }))}>
                   <option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
                 </select>
+              </div>
+              <div style={{ gridColumn: "span 2" }}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الفندق المطلوب *</div>
+                {seasonHotels.length === 0
+                  ? <div data-testid="manual-no-hotels" style={{ fontSize: 11, color: "#B71C1C", padding: "6px 0" }}>لا فنادق في هذا الموسم بعد — أضف فندقاً من صفحة الفندق أولاً</div>
+                  : <select data-testid="manual-requested-hotel" style={inp} value={manualHotelId ?? ""} onChange={e => setManualHotelPick(e.target.value ? Number(e.target.value) : null)}>
+                      {manualHotelId == null && <option value="">— اختر الفندق —</option>}
+                      {seasonHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    </select>}
               </div>
             </div>
             <div style={{ marginBottom: 12 }}>
