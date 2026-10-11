@@ -6,16 +6,20 @@
 #
 # المراحل:
 #   static        ملفّاتُ الترحيلات الثلاث بأختامها، وعددُ الترحيلات، وفاحصو المستودع
+#   scope         (بلا قاعدة) المرجعُ المُرسَل لا يحمل إلا قاعدةَ بيانات: لا واجهة،
+#                 ونسختا سيرَي العمل فيه مطابقتان لنسختَي main المسجَّلتين
 #   ledger-before السجلُّ = 58 / 20260928100000، والمعلّقُ هو الثلاث بالضبط
 #   preflight     release_preflight.sql (قراءة)
 #   fp-before     بصماتُ ما لا يُمسّ (قراءة)
 #   push          الكتابةُ الوحيدة: `supabase db push --db-url`
 #   ledger-after  السجلُّ = 61 / 20261011012258، والأصليّةُ الثمانية والخمسون كما هي
 #   postcheck     release_postcheck.sql + تطابقُ البصمات قبل وبعد
-#   price-gate    release_price_gate.sql (قراءة) — بوّابةُ ما قبل إطلاق الواجهة
+#   price-gate    الترحيلاتُ الثلاث في السجلّ + release_price_gate.sql (قراءة) —
+#                 بوّابةُ ما قبل إطلاق الواجهة، فلا تخضرّ قبل ترحيلات الإنتاج
 #
 # البيئة (من سير العمل): TARGET REF DB_USER DB_HOST DB_PORT PGPASSWORD CONFIRM
-#   LT_SECRET (loadtest وحده) OUT. وفي الاختبار المحلّيّ وحده: MOD001_LOCAL_URL.
+#   LT_SECRET (loadtest وحده) OUT. وفي الاختبار المحلّيّ وحده: MOD001_LOCAL_URL
+#   و MOD001_SCOPE_BASE (أساسُ مقارنة scope، افتراضيّاً origin/main).
 #
 # كلُّ مرحلةٍ تتّصل تُعيد فحصَ الهدف أوّلاً (release_target_guard.sh، ومعه
 # assert-not-production.sh لبيئة الاختبار)، فلا يعتمد الأمانُ على ترتيب الخطوات.
@@ -87,6 +91,26 @@ case "$phase" in
     echo "static PASS"
     ;;
 
+  scope)
+    # يُشغَّل قبل كلّ دفع: ما يُدفع من مرجعٍ يجب أن يُدمج في main لاحقاً دون أن
+    # يحمل الواجهةَ الجديدة (main يُنشر على Vercel Production تلقائيّاً).
+    cd "$ROOT"
+    base="${MOD001_SCOPE_BASE:-origin/main}"
+    git rev-parse -q --verify "$base^{commit}" >/dev/null || {
+      echo "::error::scope base $base is not available (checkout needs fetch-depth: 0)"; exit 1; }
+    echo "dispatched ref=${GITHUB_REF:-local} sha=$(git rev-parse HEAD) base=$base@$(git rev-parse --short "$base")"
+    for wf in .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml; do
+      git cat-file -e "$base:$wf" 2>/dev/null || { echo "::error::$wf is not registered on $base"; exit 1; }
+      git diff --quiet "$base" HEAD -- "$wf" || {
+        echo "::error::$wf on this ref differs from the copy registered on $base"; exit 1; }
+    done
+    mb="$(git merge-base "$base" HEAD)"
+    git diff --name-only "$mb" HEAD > "$OUT/scope-files.txt"
+    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/.+|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
+      echo "::error::this ref carries non-database changes (listed above) — dispatch only from a database-only release ref"; exit 1; fi
+    echo "scope PASS: $(wc -l < "$OUT/scope-files.txt") changed files, database-only; workflow copies match $base"
+    ;;
+
   ledger-before)
     guard
     ledger_dump "$OUT/ledger-before.txt"
@@ -155,6 +179,11 @@ case "$phase" in
 
   price-gate)
     guard
+    ledger_dump "$OUT/ledger-price-gate.txt"
+    for v in "$M1" "$M2" "$M3"; do
+      grep -qx "$v" "$OUT/ledger-price-gate.txt" || {
+        echo "::error::PRICE GATE BLOCKED: migration $v is not applied to this database"; exit 1; }
+    done
     ro_sql -f "$HERE/release_price_gate.sql"
     ;;
 

@@ -9,7 +9,11 @@
 #   ٣) ما قبل الدفع: جسمُ delete_season المختلف وبقايا MOD-001 مرفوضة
 #   ٤) دفعٌ محلّيٌّ كامل بالمراحل نفسِها ← كلُّ ما بعده يمرّ
 #   ٥) البصمات: تغيّرُ بيانٍ محميٍّ يمنع
-#   ٦) بوّابةُ الأسعار: الفرقُ والحاجُّ بلا فندقٍ يمنعان، والغائبُ صفرٌ في الطرفين يمرّ
+#   ٦) بوّابةُ الأسعار: الفرقُ والحاجُّ بلا فندقٍ يمنعان، والغائبُ صفرٌ في الطرفين يمرّ،
+#      ولا تخضرّ قبل تطبيق الترحيلات
+#   ٧) نطاقُ المرجع (بلا قاعدة): مرجعٌ يحمل واجهةً، أو سيرُ عملٍ غيرُ مسجَّل على main
+#      أو مختلفٌ عن نسخته المسجَّلة — مرفوض. (يُنشئ التزاماتٍ مؤقّتةً في
+#      worktrees منفصلة ولا يمسّ الفرعَ الحاليّ ولا يدفع شيئاً.)
 #
 #   supabase/verification/mod001/release_gate_tests.sh
 #
@@ -79,6 +83,7 @@ insert into public.passengers (name_ar, passenger_type) values ('إداري', '�
 update public.pricing_settings set amount = amount + 7 where key like 'package%';
 SQL
 expect_ok    "ledger-before at 58 with exactly the three pending" local_run ledger-before
+expect_block "price gate before the migrations are applied"      local_run price-gate
 expect_ok    "preflight at 58"                                    local_run preflight
 
 sql "insert into supabase_migrations.schema_migrations (version, name) values ('20261001000000','foreign')"
@@ -147,6 +152,32 @@ expect_block "a priced pilgrim without a requested hotel"         local_run pric
 sql "delete from public.passengers where name_ar = 'اختبار بلا فندق'"
 sql "delete from public.hotel_package_prices where hotel_id in (select id from public.hotels where name = 'فندق ثانٍ'); delete from public.hotels where name = 'فندق ثانٍ'"
 expect_ok    "back to the released state"                         local_run price-gate
+
+echo "═══ ٧) نطاقُ المرجع المُرسَل (git محلّيّ، بلا قاعدة) ═══"
+WT="$OUT/wt"; mkdir -p "$WT"
+commit_with() { # $1 = الأب، ثمّ أزواجُ <مسار>=<ملفّ محلّيّ> ← التزامٌ مؤقّت (لا فرع)
+  local parent="$1"; shift; local idx="$OUT/scope.idx" pair
+  GIT_INDEX_FILE="$idx" git read-tree "$parent"
+  for pair in "$@"; do
+    GIT_INDEX_FILE="$idx" git update-index --add --cacheinfo "100644,$(git hash-object -w "${pair#*=}"),${pair%%=*}"
+  done
+  git commit-tree "$(GIT_INDEX_FILE="$idx" git write-tree)" -p "$parent" -m "mod001 scope test" ; rm -f "$idx"
+}
+LTW=.github/workflows/mod001-loadtest-release.yml; PRW=.github/workflows/mod001-production-release.yml
+REG="$(commit_with origin/main "$LTW=$LTW" "$PRW=$PRW")"          # main بعد تسجيل سيرَي العمل وحدهما
+printf '# drift\n' | cat "$LTW" - > "$OUT/lt-drift.yml"
+printf 'export const x = 1;\n' > "$OUT/fe.ts"
+DRIFT="$(commit_with HEAD "$LTW=$OUT/lt-drift.yml")"
+FRONT="$(commit_with HEAD "src/mod001-new-frontend.ts=$OUT/fe.ts")"
+scope_at() { # $1 = الالتزام المُرسَل، $2 = الأساس
+  local d="$WT/$1"; [ -d "$d" ] || git worktree add -q --detach "$d" "$1"
+  MOD001_SCOPE_BASE="$2" OUT="$OUT" "$d/supabase/verification/mod001/release_run.sh" scope; }
+expect_ok    "database-only release ref, workflows registered on main" scope_at "$(git rev-parse HEAD)" "$REG"
+expect_block "workflows not registered on main"                   scope_at "$(git rev-parse HEAD)" origin/main
+expect_block "dispatched workflow differs from the registered copy" scope_at "$DRIFT" "$REG"
+expect_block "release ref carries frontend changes"               scope_at "$FRONT" "$REG"
+expect_block "scope base unavailable (shallow checkout)"          scope_at "$(git rev-parse HEAD)" refs/heads/no-such-base
+for d in "$WT"/*; do git worktree remove --force "$d"; done
 
 echo
 echo "release gate tests: $pass passed, $fail failed"

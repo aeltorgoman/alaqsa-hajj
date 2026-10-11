@@ -10,6 +10,9 @@
 # ⚠️ لا يُذكر هنا إلا أسرارُ LT_* (فحصٌ ذاتيٌّ أدناه). ومرجعُ الإنتاج مرفوضٌ في
 #    كلّ مرحلة (assert-not-production.sh + release_target_guard.sh).
 # ⚠️ لا تراجعَ آليّ: الإخفاقُ بعد الكتابة يُبقي الدليل، والقرارُ بشريّ.
+#   mode=check       بلا قاعدة ولا أسرار: يثبت أنّ الإرسالَ على فرع الإصدار يعمل وأنّ
+#                    المرجعَ قاعدةُ بياناتٍ وحدها (scope).
+# يُرسَل على فرع release/mod-001-db، لا على main ولا على فرع الواجهة.
 # الدليلُ التشغيليّ: docs/runbooks/MOD001_RELEASE.md
 
 name: MOD-001 release - Load Test
@@ -19,10 +22,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "push = apply PR 1-3 migrations · price-gate = read-only pre-launch price check"
+        description: "check = no database: verify dispatch ref and scope · push = apply PR 1-3 migrations · price-gate = read-only pre-launch price check"
         required: true
         type: choice
-        options: [push, price-gate]
+        options: [check, push, price-gate]
       confirm:
         description: "push: PUSH-MOD001-LOADTEST-20261011012258 · price-gate: GATE-MOD001-LOADTEST-PRICES"
         required: true
@@ -66,6 +69,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scope compares this ref with origin/main
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -73,14 +78,20 @@ jobs:
       - name: "GATE: target, authorization, LT-only secrets, toolchain"
         run: |
           set -euo pipefail
-          [ -n "${PGPASSWORD:-}" ] || { echo "::error::LT_DB_PASSWORD secret missing"; exit 1; }
-          supabase/verification/mod001/release_target_guard.sh "$TARGET" "$REF" "$DB_USER" "$DB_HOST" "$CONFIRM" "$LT_SECRET"
+          if [ "$MODE" != "check" ]; then
+            [ -n "${PGPASSWORD:-}" ] || { echo "::error::LT_DB_PASSWORD secret missing"; exit 1; }
+            supabase/verification/mod001/release_target_guard.sh "$TARGET" "$REF" "$DB_USER" "$DB_HOST" "$CONFIRM" "$LT_SECRET"
+          fi
           if grep -oE 'secrets\.[A-Z_]+' .github/workflows/mod001-loadtest-release.yml | sort -u | grep -v '^secrets\.LT_'; then
             echo "::error::this workflow references a non-LT secret"; exit 1; fi
           v="$(npm run --silent supabase -- --version)"
           [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
           command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
           "$RUN" static
+
+      - name: "GATE: dispatched ref is database-only and runs the registered workflow copy"
+        if: inputs.mode == 'check' || inputs.mode == 'push'
+        run: '"$RUN" scope'
 
       - name: "PRICE GATE (read-only)"
         if: inputs.mode == 'price-gate'
