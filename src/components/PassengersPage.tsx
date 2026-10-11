@@ -342,20 +342,42 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [metaFlights, setMetaFlights] = useState<any[]>([]);
   /* MOD-001 PR 7: فنادقُ الموسم المعروض — للفندق المطلوب في التسجيل
      والتعديل، ولاسم الفندق الفعليّ المشتقّ من غرفة الحاجّ. */
-  const [seasonHotels, setSeasonHotels] = useState<Hotel[]>([]);
+  /* الحالةُ موسومةٌ بموسمها: ردٌّ متأخّرٌ لموسمٍ سابق يُهمل (`hotelsSeq`)،
+     وما لم يصل ردُّ الموسم المعروض فهو «جارٍ» لا «صفر فنادق». والإخفاقُ
+     حالةٌ مستقلّة بإعادة محاولة — لا يُقرأ موسماً بلا فنادق فيمنع التسجيل. */
+  type HotelsLoad = { seasonId: number; hotels: Hotel[] } | { seasonId: number; error: true };
+  const [hotelsLoad, setHotelsLoad] = useState<HotelsLoad | null>(null);
+  const hotelsSeq = useRef(0);
+  const currentHotels = hotelsLoad?.seasonId === viewedSeason.id ? hotelsLoad : null;
+  const hotelsStatus: "loading" | "error" | "ready" = !currentHotels ? "loading" : "error" in currentHotels ? "error" : "ready";
+  const seasonHotels: Hotel[] = currentHotels && "hotels" in currentHotels ? currentHotels.hotels : [];
+  const loadSeasonHotels = (seasonId: number) => {
+    const seq = ++hotelsSeq.current;
+    const fail = () => { if (seq === hotelsSeq.current) setHotelsLoad({ seasonId, error: true }); };
+    supabase.from("hotels").select("id,season_id,city,name,address,map_url,notes,sort_order").eq("season_id", seasonId)
+      .order("sort_order", { ascending: true, nullsFirst: false }).order("id")
+      .then(({ data, error }: { data: Hotel[] | null; error: unknown }) => {
+        if (seq !== hotelsSeq.current) return;
+        if (error || !data) { fail(); return; }
+        setHotelsLoad({ seasonId, hotels: data });
+      }, fail);
+  };
+  const retryHotels = () => { setHotelsLoad(null); loadSeasonHotels(viewedSeason.id); };
 
   useEffect(() => {
     /* `type` عمودٌ مطلوب لا زينة: سطرُ الإسناد يعرض **تصنيف الكيان
        المُسنَد** (باص ٤ · عادي · غرفة ١٢٠١ · ثنائية)، وهو الذي
        يُظهر التفاوت بين ما طُلب وما أُسنِد. وبغيره يصل `undefined`
        فيسكت السطر عن التصنيف بلا خطأ يُرى. */
-    supabase.from("buses").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaBuses(data); });
-    supabase.from("rooms").select("id,number,type,hotel_id").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaRooms(data); });
-    supabase.from("camps").select("id,name,page_type,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaCamps(data); });
-    supabase.from("flights").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (data) setMetaFlights(data); });
-    supabase.from("hotels").select("id,season_id,city,name,address,map_url,notes,sort_order").eq("season_id", viewedSeason.id)
-      .order("sort_order", { ascending: true, nullsFirst: false }).order("id")
-      .then(({ data }: { data: Hotel[] | null }) => { if (data) setSeasonHotels(data); });
+    /* ردُّ موسمٍ سابقٍ وصل بعد التبديل لا يكتب فوق الموسم المعروض —
+       والغرفُ منها يُشتقّ الفندقُ الفعليّ في ملف الحاجّ. */
+    let live = true;
+    supabase.from("buses").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (live && data) setMetaBuses(data); });
+    supabase.from("rooms").select("id,number,type,hotel_id").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (live && data) setMetaRooms(data); });
+    supabase.from("camps").select("id,name,page_type,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (live && data) setMetaCamps(data); });
+    supabase.from("flights").select("id,name,type").eq("season_id", viewedSeason.id).then(({ data }: { data: any[] | null }) => { if (live && data) setMetaFlights(data); });
+    loadSeasonHotels(viewedSeason.id);
+    return () => { live = false; };
   }, [viewedSeason.id]);
 
   // استقبال scan من Dashboard
@@ -899,6 +921,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (dupN) { showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return; }
     /* الفندقُ المطلوب إلزاميٌّ للحاجّ الجديد، ومن فنادق موسمه — والقاعدةُ
        تفرض الموسمَ نفسَه بالمفتاح المركّب (requested_hotel_id, season_id). */
+    if (hotelsStatus === "loading") { showAlert("warning", "جاري تحميل فنادق الموسم، حاول بعد لحظة"); return; }
+    if (hotelsStatus === "error") { showAlert("warning", "تعذّر تحميل فنادق الموسم — أعد المحاولة"); return; }
     if (seasonHotels.length === 0) { showAlert("warning", "لا فنادق في هذا الموسم بعد — أضف فندقاً من صفحة الفندق أولاً"); return; }
     if (manualHotelId == null || !seasonHotels.some(h => h.id === manualHotelId)) { showAlert("warning", "يرجى اختيار الفندق المطلوب"); return; }
     if (!assertWritable()) return;
@@ -2568,7 +2592,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 </select>
               </div>
               <div style={{ gridColumn: "span 2" }}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الفندق المطلوب *</div>
-                {seasonHotels.length === 0
+                {hotelsStatus === "loading"
+                  ? <div data-testid="manual-hotels-loading" style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 0" }}>جاري تحميل الفنادق…</div>
+                  : hotelsStatus === "error"
+                  ? <div data-testid="manual-hotels-error" style={{ fontSize: 11, color: "#B71C1C", padding: "6px 0", display: "flex", gap: 8, alignItems: "center" }}>تعذّر تحميل فنادق الموسم <button type="button" onClick={retryHotels} style={{ ...btnS(), padding: "2px 10px", fontSize: 11 }}>إعادة المحاولة</button></div>
+                  : seasonHotels.length === 0
                   ? <div data-testid="manual-no-hotels" style={{ fontSize: 11, color: "#B71C1C", padding: "6px 0" }}>لا فنادق في هذا الموسم بعد — أضف فندقاً من صفحة الفندق أولاً</div>
                   : <select data-testid="manual-requested-hotel" style={inp} value={manualHotelId ?? ""} onChange={e => setManualHotelPick(e.target.value ? Number(e.target.value) : null)}>
                       {manualHotelId == null && <option value="">— اختر الفندق —</option>}
