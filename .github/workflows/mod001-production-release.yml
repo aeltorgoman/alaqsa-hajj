@@ -1,0 +1,193 @@
+# ════════════════════════════════════════════════════════════
+# MOD-001 — ترحيلاتُ PR 1–3 على الإنتاج (بعد بيئة الاختبار وحدها)
+# ════════════════════════════════════════════════════════════
+#   mode=push        يشترط تشغيلاً ناجحاً لـ«MOD-001 release - Load Test» بـmode=push
+#                    على **الالتزام نفسِه**، ثمّ البوّابات ← الكتابةُ الواحدة ← التحقّق.
+#   mode=price-gate  قراءةٌ محضة: بوّابةُ الأسعار قبل إطلاق الواجهة الجديدة. أيُّ فرقٍ
+#                    بين سعر الباقة العامّ وسعر فندق الموسم المفتوح (الغائبُ صفر)
+#                    يُفشل التشغيل — **ولا يُطلق الواجهةَ الجديدة تشغيلٌ فاشل**.
+#
+# ⚠️ بين تطبيق الترحيلات وإطلاق الواجهة الجديدة: **لا تعديلَ لأسعار الباقات**
+#    (قرار P1 «أ» من مراجعة #216). البوّابةُ تكشف أيَّ انحرافٍ ولا تُصلحه.
+# ⚠️ مرجعُ الإنتاج مثبَّت، ومستخدمُ الـpooler مشتقٌّ منه، فلا يُوجَّه إلى غيره.
+#   mode=check       بلا قاعدة ولا أسرار: فحصُ الإرسال والنطاق (scope).
+# ⚠️ يُرسَل push على فرع release/mod-001-db (قاعدةُ بياناتٍ وحدها)، لا على main.
+# ⚠️ لا تراجعَ آليّ. الدليلُ التشغيليّ: docs/runbooks/MOD001_RELEASE.md
+
+name: MOD-001 release - Production
+run-name: "MOD-001 Production ${{ inputs.mode }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = no database: verify dispatch ref and scope · push = apply PR 1-3 migrations · price-gate = read-only pre-launch price check"
+        required: true
+        type: choice
+        options: [check, push, price-gate]
+      confirm:
+        description: "push: PUSH-MOD001-PRODUCTION-20261011012258 · price-gate: GATE-MOD001-PRODUCTION-PRICES"
+        required: true
+        default: ""
+      loadtest_run_id:
+        description: "push only: run id of a SUCCESSFUL 'MOD-001 release - Load Test' push run on this same commit"
+        required: false
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mod001-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MODE: ${{ inputs.mode }}
+      TARGET: production
+      REF: zkucwcnclbfvukhdqhgc
+      DB_USER: postgres.zkucwcnclbfvukhdqhgc
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      CONFIRM: ${{ inputs.confirm }}
+      # check mode never receives the database password
+      PGPASSWORD: ${{ inputs.mode != 'check' && secrets.SUPABASE_DB_PASSWORD || '' }}
+      OUT: mod001-production-evidence
+      RUN: supabase/verification/mod001/release_run.sh
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scope compares this ref with origin/main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Runs before ANY repository script: the release toolkit on the dispatched
+      # ref must be byte-identical to the copy registered on main.
+      - name: "GATE: release toolkit equals the copy registered on main"
+        run: |
+          set -euo pipefail
+          git rev-parse -q --verify 'origin/main^{commit}' >/dev/null || { echo "::error::origin/main is not available"; exit 1; }
+          toolkit=(
+            .github/workflows/mod001-loadtest-release.yml
+            .github/workflows/mod001-production-release.yml
+            supabase/verification/mod001/release_target_guard.sh
+            supabase/verification/mod001/release_run.sh
+            supabase/verification/mod001/release_preflight.sql
+            supabase/verification/mod001/release_fingerprint.sql
+            supabase/verification/mod001/release_postcheck.sql
+            supabase/verification/mod001/release_price_gate.sql
+            supabase/verification/assert-ledger-correspondence.py
+            supabase/verification/assert-no-toplevel-data-writes.py
+            supabase/verification/assert-not-production.sh
+          )
+          for f in "${toolkit[@]}"; do
+            git cat-file -e "origin/main:$f" 2>/dev/null || { echo "::error::$f is not registered on main"; exit 1; }
+            git diff --quiet origin/main HEAD -- "$f" || { echo "::error::$f differs from the copy registered on main"; exit 1; }
+          done
+          echo "ref=$GITHUB_REF sha=$GITHUB_SHA — release toolkit matches main"
+
+      - name: "GATE: dispatched ref is database-only (check, push)"
+        if: inputs.mode == 'check' || inputs.mode == 'push'
+        run: '"$RUN" scope'
+
+      - name: "GATE: target, authorization, no Load Test identity, toolchain"
+        run: |
+          set -euo pipefail
+          if [ "$MODE" != "check" ]; then
+            [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD secret missing"; exit 1; }
+            supabase/verification/mod001/release_target_guard.sh "$TARGET" "$REF" "$DB_USER" "$DB_HOST" "$CONFIRM" ""
+          fi
+          if grep -oE 'secrets\.[A-Z_]+' .github/workflows/mod001-production-release.yml | sort -u | grep '^secrets\.LT_'; then
+            echo "::error::the Production workflow references a Load Test secret"; exit 1; fi
+          if [ "$MODE" = "push" ]; then
+            v="$(npm run --silent supabase -- --version)"
+            [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          fi
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          "$RUN" static
+
+      - name: "GATE: a successful Load Test push on this same commit"
+        if: inputs.mode == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LT_RUN: ${{ inputs.loadtest_run_id }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$LT_RUN" | grep -qE '^[0-9]+$' || { echo "::error::loadtest_run_id is missing or not a run id"; exit 1; }
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${LT_RUN}" \
+            --jq '[.path, .conclusion, .head_sha, .display_title, .event] | @tsv' > lt-run.tsv
+          IFS=$'\t' read -r path concl sha title event < lt-run.tsv
+          echo "load test run: path=$path conclusion=$concl sha=$sha title=$title event=$event"
+          [ "$path" = ".github/workflows/mod001-loadtest-release.yml" ] || { echo "::error::that run is not the MOD-001 Load Test workflow"; exit 1; }
+          [ "$concl" = "success" ]            || { echo "::error::that Load Test run did not succeed"; exit 1; }
+          [ "$title" = "MOD-001 Load Test push" ] || { echo "::error::that Load Test run was not a push run"; exit 1; }
+          [ "$event" = "workflow_dispatch" ]  || { echo "::error::unexpected trigger for that run"; exit 1; }
+          [ "$sha" = "$GITHUB_SHA" ]          || { echo "::error::that Load Test run was on $sha, this run is $GITHUB_SHA"; exit 1; }
+          echo "Load Test prerequisite satisfied."
+
+      - name: "PRICE GATE (read-only)"
+        if: inputs.mode == 'price-gate'
+        run: |
+          set -euo pipefail
+          "$RUN" price-gate
+
+      - name: "GATE: ledger 58 / exactly the three MOD-001 migrations pending"
+        if: inputs.mode == 'push'
+        run: '"$RUN" ledger-before'
+
+      - name: "GATE: preflight (read-only)"
+        if: inputs.mode == 'push'
+        run: '"$RUN" preflight'
+
+      - name: "GATE: fingerprints before (read-only)"
+        if: inputs.mode == 'push'
+        run: '"$RUN" fp-before'
+
+      # ════════════════ THE ONE AUTHORIZED PRODUCTION WRITE ════════════════
+      - name: "LIVE WRITE: canonical db push (Production)"
+        id: live_push
+        if: inputs.mode == 'push'
+        run: '"$RUN" push'
+
+      - name: "POST: ledger 61, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: '"$RUN" ledger-after'
+
+      - name: "POST: structure, backfill, prices and fingerprints"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: '"$RUN" postcheck'
+
+      - name: "POST: price gate (read-only)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: '"$RUN" price-gate'
+
+      - name: "Scan evidence for secret-like material"
+        id: scan
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rIlE 'postgres(ql)?://[^*[:space:]]+:[^@[:space:]]+@|sb_secret_|service_role' "$OUT" 2>/dev/null; then
+            echo "::error::evidence holds secret-like material"; exit 1; fi
+
+      - name: "Upload evidence (only after a clean secret scan)"
+        if: always() && steps.scan.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod001-production-${{ inputs.mode }}
+          path: ${{ env.OUT }}
+          if-no-files-found: warn
