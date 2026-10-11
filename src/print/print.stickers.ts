@@ -40,12 +40,16 @@ import { escapeCompanyHtml } from "./print.brand";
 /* حاجٌّ مُسكَّنٌ لم تُحمَّل غرفتُه أو فندقُ غرفته في `meta` — طباعتُه
    تُخرج «—» مكانَ فندقٍ موجود. فالمستدعي يمنع الطباعةَ ما دام هذا العددُ
    فوق الصفر (بياناتٌ ناقصةٌ أو فاشلةٌ أو لم تصل بعد) — لا ملصقاتٌ مضلِّلة. */
-export function stickerDataGaps(passengers: StickerPassenger[], meta: StickerMeta): number {
+export function stickerDataGaps(
+  passengers: readonly { room_id?: number | null }[],
+  rooms: readonly { id: number; hotel_id?: number | null }[],
+  hotels: readonly { id: number }[],
+): number {
   let n = 0;
   for (const p of passengers) {
     if (p.room_id == null) continue;
-    const room = meta.rooms.find(r => r.id === p.room_id);
-    if (!room || (room.hotel_id != null && !(meta.hotels ?? []).some(h => h.id === room.hotel_id))) n++;
+    const room = rooms.find(r => r.id === p.room_id);
+    if (!room || (room.hotel_id != null && !hotels.some(h => h.id === room.hotel_id))) n++;
   }
   return n;
 }

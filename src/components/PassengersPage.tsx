@@ -2419,7 +2419,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                MOD-001: الفندقُ من الغرفة والفنادق المحمَّلة — لا طباعةَ قبل اكتمالها. */
             if (hotelsStatus === "loading") { showAlert("warning", "جاري تحميل فنادق الموسم — حاول بعد لحظة."); return; }
             if (hotelsStatus === "error") { retryHotels(); showAlert("error", "تعذّر تحميل فنادق الموسم — تجري إعادة المحاولة. لم يُطبع شيء."); return; }
-            if (stickerDataGaps([selected as any], { rooms: metaRooms as any, buses: [], camps: [], hotels: seasonHotels }) > 0) {
+            if (stickerDataGaps([selected], metaRooms, seasonHotels) > 0) {
               showAlert("error", "غرفة هذا الحاج أو فندقها لم يُحمَّل بعد — أعد تحميل الصفحة. لم يُطبع شيء."); return;
             }
             printInPage(buildStickersHTML(

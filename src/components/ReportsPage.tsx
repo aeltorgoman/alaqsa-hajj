@@ -2094,7 +2094,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                  ولا ملصقاتٌ بـ«—» مكانَ فندقٍ موجود. */
               if (isLoading("rooms")) { showAlert("warning", "جاري تحميل الغرف والفنادق — حاول بعد لحظة."); return; }
               if (isFailed("rooms")) { void loadRefData(["rooms"]); showAlert("error", "تعذّر تحميل الغرف والفنادق — تجري إعادة المحاولة. لم يُطبع شيء."); return; }
-              if (stickerDataGaps(finalPassengers, { rooms, hotels, buses, camps } as any) > 0) {
+              if (stickerDataGaps(finalPassengers, rooms, hotels) > 0) {
                 void loadRefData(["rooms"]);
                 showAlert("error", "بيانات الغرف أو الفنادق غير مكتملة لبعض الحجاج — تجري إعادة التحميل. لم يُطبع شيء.");
                 return;
