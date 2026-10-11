@@ -95,7 +95,10 @@ function AdminsPage({
   const [hotels, setHotels]   = useState<Hotel[]>([]);
   const [camps, setCamps]     = useState<Camp[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
-  const [dataLoaded, setDataLoaded] = useState<number | null>(null);
+  /* الموسمُ المحمَّلُ بنجاح، والطلبُ الجاري — مرجعان لا حالة: يُقرآن
+     لحظةَ الحاجة، فلا يسبق ردٌّ قديمٌ أو فاشلٌ ردّاً ناجحاً. */
+  const loadedSeason = useRef<number | null>(null);
+  const inflight = useRef<{ season: number; req: ReturnType<typeof fetchAssignData> } | null>(null);
 
   // مودال الإضافة / التعديل
   const [showModal, setShowModal]   = useState(false);
@@ -196,29 +199,39 @@ function AdminsPage({
   /* الذاكرة مربوطة بالموسم المعروض: كان `dataLoaded` علماً أبدياً،
      فمن بدّل الموسم بلا مغادرة الصفحة ظلّ يرى غرف الموسم السابق
      ويُسنِد إليها. */
+  /* طلبٌ واحدٌ جارٍ لكلّ موسم: الصفحةُ ونافذةُ التعيين تتشاركانه */
+  const fetchShared = (seasonId: number) => {
+    if (inflight.current?.season === seasonId) return inflight.current.req;
+    const req = fetchAssignData(seasonId).finally(() => { if (inflight.current?.req === req) inflight.current = null; });
+    inflight.current = { season: seasonId, req };
+    return req;
+  };
   /* ما فشل طلبُه يُفرَّغ (لا تبقى بياناتُ موسمٍ سابق)، ولا يُعَدّ الموسمُ
-     محمَّلاً إلا إذا نجحت الطلباتُ الخمسة — فنافذةُ التعيين تعيد المحاولة. */
+     محمَّلاً إلا إذا نجحت الطلباتُ الخمسة — فنافذةُ التعيين تعيد المحاولة.
+     وردٌّ فاشلٌ لا يمحو ما حُمِّل بنجاحٍ للموسم نفسه. */
   const applyAssignData = (seasonId: number, [b, r, c, f, h]: Awaited<ReturnType<typeof fetchAssignData>>) => {
+    const failed = [b, r, c, f, h].filter(x => x.error || !x.data);
+    if (failed.length && loadedSeason.current === seasonId) return true;
     setBuses((b.data ?? []) as Bus[]);
     setRooms((r.data ?? []) as Room[]);
     setCamps((c.data ?? []) as Camp[]);
     setFlights((f.data ?? []) as Flight[]);
     setHotels((h.data ?? []) as Hotel[]);
-    const failed = [b, r, c, f, h].filter(x => x.error || !x.data);
     if (failed.length) { console.error("تعذّر تحميل بيانات التعيين", failed.map(x => x.error)); return false; }
-    setDataLoaded(seasonId);
+    loadedSeason.current = seasonId;
     return true;
   };
   const loadAssignData = async () => {
-    if (dataLoaded === viewedSeason.id) return true;
-    return applyAssignData(viewedSeason.id, await fetchAssignData(viewedSeason.id));
+    const seasonId = viewedSeason.id;
+    if (loadedSeason.current === seasonId) return true;
+    return applyAssignData(seasonId, await fetchShared(seasonId));
   };
   /* وسومُ التعيين في القائمة والطباعةُ تقرأ الغرفَ والفنادق — فتُحمَّل
      عند عرض الصفحة (ولكلّ موسمٍ يُعرض)، لا عند فتح نافذة التعيين وحدها. */
   useEffect(() => {
     let live = true;
     const seasonId = viewedSeason.id;
-    fetchAssignData(seasonId).then(res => { if (live) applyAssignData(seasonId, res); });
+    fetchShared(seasonId).then(res => { if (live) applyAssignData(seasonId, res); });
     return () => { live = false; };
   }, [viewedSeason.id]);
 
