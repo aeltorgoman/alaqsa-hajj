@@ -244,7 +244,11 @@ function HotelsPage({ passengers, setPassengers }: { passengers: Passenger[]; se
             const fill = s.beds > 0 ? Math.min(100, Math.round((s.occupants / s.beds) * 100)) : 0;
             return (
               <div key={h.id} role="button" tabIndex={0} onClick={() => openHotel(h.id)}
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openHotel(h.id); } }}
+                onKeyDown={e => {
+                  /* المفاتيحُ من أزرار البطاقة ورابطها لا تفتح الفندق — لها فعلُها */
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openHotel(h.id); }
+                }}
                 style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,.06)", display: "flex", flexDirection: "column" }}>
                 <div style={{ height: 4, background: "var(--primary)" }} />
                 <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
