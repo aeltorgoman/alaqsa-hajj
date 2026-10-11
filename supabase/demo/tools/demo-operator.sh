@@ -26,7 +26,10 @@ cd "$REPO_DIR"
 # seed_first_admin.mjs asks for an explicit "نعم" after showing its plan.
 # readline drops piped input sent before the question, so the answer is
 # written only once the prompt appears on stdout.
-env SUPABASE_URL="$DEMO_SUPABASE_URL" SUPABASE_SERVICE_ROLE_KEY="$DEMO_SERVICE_ROLE_KEY" \
+# This wrapper exists to create or refresh the operator, so it confirms
+# the upgrade of a partial or inactive operator profile for the Demo
+# project only (demo_guard above has already verified that target).
+env SUPABASE_URL="$DEMO_SUPABASE_URL" EXPECTED_PROJECT_REF="$DEMO_PROJECT_REF" CONFIRM_PROFILE_UPGRADE="$DEMO_PROJECT_REF" SUPABASE_SERVICE_ROLE_KEY="$DEMO_SERVICE_ROLE_KEY" \
   ADMIN_EMAIL="$DEMO_OPERATOR_EMAIL" ADMIN_NAME="مشغّل العرض التجريبي" ADMIN_PASSWORD="$DEMO_OPERATOR_PASSWORD" \
   node --input-type=module -e '
     import { spawn } from "node:child_process";

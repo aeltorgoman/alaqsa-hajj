@@ -25,11 +25,23 @@
    Idempotent: إعادة التشغيل تُحدِّث ولا تُكرِّر.
    Self-Healing: يُعيد إنشاء ما نقص ولا يمسّ ما هو سليم.
    لا يحذف شيئاً إطلاقاً.
+
+   ── الهدف ──────────────────────────────────────────────────────
+   `EXPECTED_PROJECT_REF` إلزاميّ، ويجب أن يطابق مرجعَ `SUPABASE_URL`
+   (https://<ref>.supabase.co)، أو `local` مع رابط حلقةٍ راجعة وحده
+   (http://127.0.0.1:<port>). والإنتاجُ مرفوضٌ دائماً. يُفحص ذلك قبل
+   طلب مفتاح الخدمة وقبل أي اتصال — `seed-target.mjs`.
+
+   ── ترقيةُ ملفٍّ قائم ──────────────────────────────────────────
+   ملفٌّ موجودٌ ينقصه شيءٌ من الصلاحيات أو معطَّلٌ لا يُرقّى إلا بتأكيدٍ
+   ثانٍ منفصل: كتابةُ مرجع المشروع، أو `CONFIRM_PROFILE_UPGRADE=<ref>`
+   حين لا طرفية.
    ═══════════════════════════════════════════════════════════════ */
 
 import { createClient } from "@supabase/supabase-js";
 import readline from "node:readline";
 import { readPermissionKeys } from "./permission-keys.mjs";
+import { checkTarget } from "./seed-target.mjs";
 
 const DRY = process.argv.includes("--dry-run");
 
@@ -112,6 +124,13 @@ async function needPassword() {
 
 log("═══ المدخلات ═══");
 const URL   = await need("SUPABASE_URL", "رابط المشروع (SUPABASE_URL): ");
+const EXPECTED = await need("EXPECTED_PROJECT_REF", "مرجع المشروع المتوقَّع (EXPECTED_PROJECT_REF): ");
+
+/* الهدفُ قبل المفتاح: لا يُطلب مفتاحٌ ولا يُفتح اتصالٌ لمشروعٍ مرفوض */
+let TARGET;
+try { TARGET = checkTarget(URL, EXPECTED); } catch (e) { fail(e.message); }
+log(`  ${"المشروع المستهدف".padEnd(26)}: ${TARGET}`);
+
 const KEY   = await need("SUPABASE_SERVICE_ROLE_KEY", "مفتاح الخدمة (لن يظهر أثناء الكتابة): ", { hidden: true });
 const EMAIL = (await need("ADMIN_EMAIL", `معرّف الدخول (بريد) [${DEFAULT_EMAIL}]: `, { fallback: DEFAULT_EMAIL })).toLowerCase();
 const NAME  = await need("ADMIN_NAME", "الاسم المعروض [المدير العام]: ", { fallback: "المدير العام" });
@@ -134,26 +153,42 @@ const authUsers = listed?.users ?? [];
 const existing  = authUsers.find((u) => (u.email || "").toLowerCase() === EMAIL) || null;
 
 const { data: profiles, error: profErr } = await admin
-  .from("user_profiles").select("id, email, name, is_active");
+  .from("user_profiles").select("id, email, name, is_active, permissions");
 if (profErr) fail(`تعذّرت قراءة user_profiles: ${profErr.message}`);
 
 const profileForEmail = (profiles ?? []).find((p) => (p.email || "").toLowerCase() === EMAIL) || null;
 const profileForId    = existing ? (profiles ?? []).find((p) => p.id === existing.id) || null : null;
 
+/* ملفٌّ قائمٌ سيرتفع: ينقصه مفتاحٌ أو هو معطَّل */
+const missingPerms = profileForId
+  ? ALL_PERMISSIONS.filter((k) => profileForId.permissions?.[k] !== true)
+  : [];
+const UPGRADE = Boolean(profileForId) && (missingPerms.length > 0 || profileForId.is_active !== true);
+
 // ── الخطّة ──────────────────────────────────────────────────
 log("\n═══ الحالة الراهنة ═══");
+log(`  المشروع المستهدف             : ${TARGET}`);
 log(`  حسابات auth.users            : ${authUsers.length}`);
 log(`  صفوف user_profiles           : ${(profiles ?? []).length}`);
 log(`  حساب بهذا البريد             : ${existing ? `نعم (${existing.id})` : "لا"}`);
 log(`  ملفّ مرتبط بالحساب           : ${profileForId ? "نعم" : "لا"}`);
 
 log("\n═══ الخطّة ═══");
+log(`  المشروع المستهدف             : ${TARGET}`);
 log(`  البريد (Login ID)            : ${EMAIL}`);
 log(`  الاسم                        : ${NAME}`);
 log(`  الصلاحيات                    : ${ALL_PERMISSIONS.length} (كاملة)`);
 log(`  حساب المصادقة                : ${existing ? "موجود — يبقى بمعرّفه" : "سيُنشأ"}`);
-log(`  ملفّ المستخدم                 : ${profileForId ? "موجود — سيُحدَّث" : "سيُنشأ"}`);
+log(`  ملفّ المستخدم                 : ${!profileForId ? "سيُنشأ" : UPGRADE ? "موجود — سيُرقّى (انظر التحذير)" : "موجود — كامل الصلاحيات، سيُحدَّث"}`);
 log(`  عمليات حذف                   : صفر — لا يحذف هذا السكربت شيئاً إطلاقاً`);
+
+if (UPGRADE) {
+  log("\n⚠️  تحذير: ترقيةُ ملفٍّ قائم");
+  log(`  هذا الحساب موجودٌ في ${TARGET}، وسيُمنح كلَّ الصلاحيات ويُفعَّل.`);
+  if (missingPerms.length) log(`  صلاحياتٌ ستُضاف (${missingPerms.length}): ${missingPerms.join(", ")}`);
+  if (profileForId.is_active !== true) log("  الحساب معطَّل حالياً — سيُفعَّل.");
+  log("  يلزم تأكيدٌ ثانٍ منفصلٌ قبل التنفيذ.");
+}
 
 /* تعارض: بريد محجوز في ملفّ يعود لحساب آخر */
 if (profileForEmail && (!existing || profileForEmail.id !== existing.id)) {
@@ -167,11 +202,24 @@ if (DRY) {
 }
 
 /* بوابة الاعتماد — §٧.٥. لا كتابة قبل تأكيد صريح. */
-const confirm = await ask('\nاكتب "نعم" للتنفيذ، أو أي شيء آخر للإلغاء: ');
+const confirm = await ask(`\nاكتب "نعم" للتنفيذ على ${TARGET}، أو أي شيء آخر للإلغاء: `);
 if (confirm !== "نعم") {
   log("أُلغي. لم تُكتب أي بيانات.");
   rl.close();
   process.exit(0);
+}
+
+/* التأكيدُ الثاني للترقية: مرجعُ المشروع نفسُه. وبلا طرفية لا سؤال
+   (لا تعلّق بانتظار إدخال) — يُقبل من البيئة وحدها أو يُرفض. */
+if (UPGRADE) {
+  const fromEnv = (process.env.CONFIRM_PROFILE_UPGRADE ?? "").trim();
+  let answer = fromEnv;
+  if (!answer) {
+    if (!isTTY) fail(`ترقيةُ ملفٍّ قائم تحتاج CONFIRM_PROFILE_UPGRADE=${TARGET} حين لا طرفية. لم تُكتب أي بيانات.`);
+    answer = await ask(`اكتب مرجع المشروع (${TARGET}) لتأكيد ترقية الملفّ القائم، أو أي شيء آخر للإلغاء: `);
+  }
+  if (answer !== TARGET) fail("لم تُؤكَّد الترقية. لم تُكتب أي بيانات.");
+  log(`  ✓ أُكِّدت الترقية على ${TARGET}`);
 }
 
 // ── التنفيذ ─────────────────────────────────────────────────

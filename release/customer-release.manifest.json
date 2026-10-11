@@ -23,7 +23,6 @@
     "vercel.json",
     ".gitignore",
     "supabase/config.toml",
-    "supabase/scripts/seed_first_admin.mjs",
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
@@ -148,7 +147,9 @@
 
   "forbiddenIdentifiers": [
     { "name": "retired campaign/test name 'alaqsa'", "re": "al[-_ ]?aqsa" },
-    { "name": "vendor Vercel account slug",          "re": "aeltorgoman" }
+    { "name": "vendor Vercel account slug",          "re": "aeltorgoman" },
+    { "name": "vendor Supabase Production project ref", "re": "zkucwcnclbfvukhdqhgc" },
+    { "name": "vendor Supabase Load Test project ref", "re": "vgqowazlzzcovcrigcjz" }
   ],
 
   "envExampleVariables": {

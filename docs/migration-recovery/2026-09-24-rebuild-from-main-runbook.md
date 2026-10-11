@@ -68,7 +68,7 @@ psql "$URL" -f supabase/scripts/seed_test_seasons.sql      # بيئةُ اختب
 
 ### ٥) أوّلُ مدير — **يلزم Node 22 أو أحدث**
 ```bash
-SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… ADMIN_EMAIL=… ADMIN_PASSWORD=… ADMIN_NAME=… \
+SUPABASE_URL=https://<ref>.supabase.co EXPECTED_PROJECT_REF=<ref> SUPABASE_SERVICE_ROLE_KEY=… ADMIN_EMAIL=… ADMIN_PASSWORD=… ADMIN_NAME=… \
   node supabase/scripts/seed_first_admin.mjs
 ```
 يسأل تأكيداً صريحاً («نعم») قبل أن يكتب شيئاً. وإن شُغِّل بلا طرفية،

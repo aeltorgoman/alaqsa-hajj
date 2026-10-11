@@ -309,6 +309,7 @@ jobs:
       - name: "A5: first admin through the approved bootstrap"
         env:
           SUPABASE_URL: https://${{ secrets.TMP_PROJECT_REF }}.supabase.co
+          EXPECTED_PROJECT_REF: ${{ secrets.TMP_PROJECT_REF }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TMP_SERVICE_ROLE_KEY }}
           ADMIN_EMAIL: ${{ secrets.TMP_ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.TMP_ADMIN_PASSWORD }}
