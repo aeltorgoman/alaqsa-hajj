@@ -48,7 +48,11 @@ export function LostCard({
             <div style={{ fontSize: 17.5, direction: "ltr", color: "#fff", marginTop: 6, fontWeight: 600 }}>{nameEn}</div>
 
             <div style={{ background: "rgba(240,200,74,.13)", border: `1.5px solid ${t.goldBright}88`, borderRadius: 15, padding: "14px 15px", marginTop: 22, fontSize: 15.5, fontWeight: 700, lineHeight: 2.1, textAlign: "right", color: "#fff" }}>
-              {(hotelName || room) && <div>الفندق: {hotelName || ""} {room ? `— غرفة ${room.number}` : ""}</div>}
+              {/* MOD-001: الفندقُ يُذكر حين يكون فعليّاً مؤكَّداً وحده؛ والغرفةُ بلا فندقٍ مؤكَّد
+                  سطرُها «الغرفة» — لا «الفندق:» فارغٌ يوهم بفندقٍ مجهول. */}
+              {hotelName
+                ? <div data-testid="lost-hotel">الفندق: {hotelName}{room ? ` — غرفة ${room.number}` : ""}</div>
+                : room && <div data-testid="lost-room">الغرفة: {room.number}</div>}
               {(minaName) && <div>مخيم منى: {minaName}{minaAddress ? ` — ${minaAddress}` : ""}</div>}
               {(arafaName) && <div>مخيم عرفات: {arafaName}{arafaAddress ? ` — ${arafaAddress}` : ""}</div>}
             </div>
