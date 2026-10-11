@@ -124,7 +124,8 @@ case "$phase" in
     done
     mb="$(git merge-base "$base" HEAD)"
     git diff --name-only "$mb" HEAD > "$OUT/scope-files.txt"
-    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/mod001/[^/]+\.(sql|sh)|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
+    # (#62 يُحدّث تأكيدَ البروفة على الفهارس — ملفٌّ واحدٌ بعينه، SQL لا يُستورَد)
+    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/mod001/[^/]+\.(sql|sh)|supabase/verification/rehearsal/assert-after-close\.sql|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
       echo "::error::this ref carries non-database changes (listed above) — dispatch only from a database-only release ref"; exit 1; fi
     echo "scope PASS: $(wc -l < "$OUT/scope-files.txt") changed files, database-only; release toolkit matches $base"
     ;;
