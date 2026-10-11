@@ -23,7 +23,8 @@ All logic lives in `supabase/verification/mod001/`. The workflows only call it.
 | Gate | Blocks when |
 |---|---|
 | `release_target_guard.sh` (+ port check in `release_run.sh`) | wrong target, malformed ref, pooler user not `postgres.<ref>`, non-pooler host, a port other than 5432/6543, the other target's or the other mode's confirmation text, Load Test ref ≠ `LT_PROJECT_REF`, Production run carrying Load Test identity, Load Test run pointed at Production |
-| `release_run.sh scope` (`check`, `push`) | the dispatched ref changes anything outside `supabase/migrations`, `supabase/verification`, `supabase/README.md`, `docs/` (i.e. it carries frontend), or its copy of either MOD-001 workflow differs from the copy registered on `main`, or `main` is not available to compare |
+| workflow step *release toolkit equals the copy registered on main* (every mode, **before any repository script runs**) | any file of the release toolkit — both workflows, the six `release_*` scripts, the three `assert-*` checkers — differs from, or is missing on, `main` |
+| `release_run.sh scope` (`check`, `push`) | the dispatched ref changes anything outside `supabase/migrations`, `supabase/verification`, `supabase/README.md`, `docs/` (i.e. it carries frontend, or `package.json`) |
 | `release_run.sh static` | migration count ≠ 61, a migration file differs from its reviewed SHA-256, a migration writes application rows at top level |
 | `release_run.sh ledger-before` | ledger ≠ 58 rows / `20260928100000`, pending set ≠ exactly the three, any unexpected ledger version |
 | `release_run.sh preflight` | not Postgres 17, any MOD-001 object already present, `delete_season` body ≠ md5 `ae4c1905cebc93286cee74d4513c90c9` (the body PR 1 patches; identical on Production, Load Test and a local rebuild at 58), a dependency missing, not exactly one open season |
@@ -46,8 +47,11 @@ gate detects drift and **blocks the launch**; it does not repair it.
 ## Why this order
 
 - `main` deploys to **Vercel Production** automatically, so `main` only ever
-  receives (a) the two workflow files and (b) database-only commits — until the
+  receives (a) the release toolkit and (b) database-only commits — until the
   frontend launch in step 11.
+- The toolkit is registered on `main` (not only the YAML) so a modified script on
+  the dispatched branch cannot vouch for itself: the workflow compares it with
+  `main` inline, before running it. `check` mode never receives the password.
 - `workflow_dispatch` — **verified, not assumed**:
   - GitHub docs (*Events that trigger workflows → workflow_dispatch*): the event
     "will only trigger a workflow run if the workflow file exists on the default
@@ -57,8 +61,8 @@ gate detects drift and **blocks the launch**; it does not repair it.
     `company-private-bucket-push.yml` on `main`, then run `36155610756` was
     dispatched on `feat/company-stamp-signature` (`head_sha b6d20f1`) and succeeded.
   - Step 3 re-proves it on this release with `mode=check` (no database, no
-    secrets), and the `scope` gate fails any push whose workflow copy differs from
-    the one on `main`, so it does not matter which copy GitHub executes.
+    password), and every run fails if its workflow or scripts differ from `main`,
+    so it does not matter which copy GitHub executes.
 - The migrations are additive and the current frontend was verified against
   them (PR 3), so Production can run on the old frontend between steps 7 and 11.
 
@@ -67,8 +71,8 @@ gate detects drift and **blocks the launch**; it does not repair it.
 | # | Step | Touches |
 |---|---|---|
 | 1 | Cut **`release/mod-001-db`** from `feature/mod-001-multi-hotel` at the commit that merged this PR (database-only). Never add frontend to it. | git |
-| 2 | **Register** the workflows: a PR to `main` containing **only** `.github/workflows/mod001-loadtest-release.yml` and `mod001-production-release.yml`, byte-identical to the release branch (as #178). Vercel rebuilds `main` with an unchanged frontend. | `main` (YAML only) |
-| 3 | **Verify dispatch:** *MOD-001 release - Load Test*, branch `release/mod-001-db`, `mode=check`. Expect the log to show `ref=refs/heads/release/mod-001-db` and `scope PASS`. No database is contacted. | nothing |
+| 2 | **Register** the release toolkit: a PR to `main` containing **only** the two `mod001-*-release.yml` workflows and the six `supabase/verification/mod001/release_*` scripts, byte-identical to the release branch (as #178 did for one workflow). No migration, no frontend; Vercel rebuilds `main` with an unchanged frontend. | `main` (toolkit only) |
+| 3 | **Verify dispatch:** *MOD-001 release - Load Test*, branch `release/mod-001-db`, `mode=check`. Expect `ref=refs/heads/release/mod-001-db … release toolkit matches main` and `scope PASS`. No database is contacted and no password is passed. | nothing |
 | 4 | **Load Test push**, same branch: `mode=push`, `confirm=PUSH-MOD001-LOADTEST-20261011012258`, `target_ref=<Load Test ref>`. Every gate green; keep the evidence; note the **run id**. | Load Test DB |
 | 5 | Check Load Test (rooms, assignment, portal, finance) through the integration Preview, which already points to Load Test. Optional `mode=price-gate`, `confirm=GATE-MOD001-LOADTEST-PRICES`. | nothing |
 | 6 | **Freeze package prices** (tell everyone with `manage_payments`). | — |

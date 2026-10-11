@@ -7,7 +7,7 @@
 # المراحل:
 #   static        ملفّاتُ الترحيلات الثلاث بأختامها، وعددُ الترحيلات، وفاحصو المستودع
 #   scope         (بلا قاعدة) المرجعُ المُرسَل لا يحمل إلا قاعدةَ بيانات: لا واجهة،
-#                 ونسختا سيرَي العمل فيه مطابقتان لنسختَي main المسجَّلتين
+#                 وعُدّةُ الإطلاق فيه (TOOLKIT) مطابقةٌ لنسختها المسجَّلة على main
 #   ledger-before السجلُّ = 58 / 20260928100000، والمعلّقُ هو الثلاث بالضبط
 #   preflight     release_preflight.sql (قراءة)
 #   fp-before     بصماتُ ما لا يُمسّ (قراءة)
@@ -42,6 +42,15 @@ readonly ROWS_AFTER=61  LATEST_AFTER="$M3"
 # جسمُ delete_season الذي كُتبت عليه ترحيلةُ PR 1 — مقروءٌ من الإنتاج وبيئة
 # الاختبار والقاعدة المحلّيّة عند 58، والثلاثةُ متطابقة.
 readonly DELETE_SEASON_MD5="ae4c1905cebc93286cee74d4513c90c9"
+# عُدّةُ الإطلاق المسجَّلة على main (والقائمةُ نفسُها مكرّرةٌ في سيرَي العمل).
+readonly TOOLKIT=(
+  .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml
+  supabase/verification/mod001/release_target_guard.sh supabase/verification/mod001/release_run.sh
+  supabase/verification/mod001/release_preflight.sql supabase/verification/mod001/release_fingerprint.sql
+  supabase/verification/mod001/release_postcheck.sql supabase/verification/mod001/release_price_gate.sql
+  supabase/verification/assert-ledger-correspondence.py supabase/verification/assert-no-toplevel-data-writes.py
+  supabase/verification/assert-not-production.sh
+)
 
 phase="${1:-}"
 
@@ -103,16 +112,18 @@ case "$phase" in
     git rev-parse -q --verify "$base^{commit}" >/dev/null || {
       echo "::error::scope base $base is not available (checkout needs fetch-depth: 0)"; exit 1; }
     echo "dispatched ref=${GITHUB_REF:-local} sha=$(git rev-parse HEAD) base=$base@$(git rev-parse --short "$base")"
-    for wf in .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml; do
-      git cat-file -e "$base:$wf" 2>/dev/null || { echo "::error::$wf is not registered on $base"; exit 1; }
-      git diff --quiet "$base" HEAD -- "$wf" || {
-        echo "::error::$wf on this ref differs from the copy registered on $base"; exit 1; }
+    # عُدّةُ الإطلاق كلُّها (لا YAML وحده) يجب أن تطابق نسختَها المسجَّلة على main،
+    # وإلّا فسكربتٌ معدَّلٌ على الفرع يستطيع تجاوزَ فحوصه.
+    for f in "${TOOLKIT[@]}"; do
+      git cat-file -e "$base:$f" 2>/dev/null || { echo "::error::$f is not registered on $base"; exit 1; }
+      git diff --quiet "$base" HEAD -- "$f" || {
+        echo "::error::$f on this ref differs from the copy registered on $base"; exit 1; }
     done
     mb="$(git merge-base "$base" HEAD)"
     git diff --name-only "$mb" HEAD > "$OUT/scope-files.txt"
     if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/.+|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
       echo "::error::this ref carries non-database changes (listed above) — dispatch only from a database-only release ref"; exit 1; fi
-    echo "scope PASS: $(wc -l < "$OUT/scope-files.txt") changed files, database-only; workflow copies match $base"
+    echo "scope PASS: $(wc -l < "$OUT/scope-files.txt") changed files, database-only; release toolkit matches $base"
     ;;
 
   ledger-before)

@@ -62,7 +62,8 @@ jobs:
       DB_HOST: ${{ inputs.db_host }}
       DB_PORT: ${{ inputs.db_port }}
       CONFIRM: ${{ inputs.confirm }}
-      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # check mode never receives the database password
+      PGPASSWORD: ${{ inputs.mode != 'check' && secrets.SUPABASE_DB_PASSWORD || '' }}
       OUT: mod001-production-evidence
       RUN: supabase/verification/mod001/release_run.sh
 
@@ -74,6 +75,27 @@ jobs:
         with:
           node-version: "20"
 
+      # Runs before ANY repository script: the release toolkit on the dispatched
+      # ref must be byte-identical to the copy registered on main.
+      - name: "GATE: release toolkit equals the copy registered on main"
+        run: |
+          set -euo pipefail
+          git rev-parse -q --verify 'origin/main^{commit}' >/dev/null || { echo "::error::origin/main is not available"; exit 1; }
+          for f in .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml
+            supabase/verification/mod001/release_target_guard.sh supabase/verification/mod001/release_run.sh
+            supabase/verification/mod001/release_preflight.sql supabase/verification/mod001/release_fingerprint.sql
+            supabase/verification/mod001/release_postcheck.sql supabase/verification/mod001/release_price_gate.sql
+            supabase/verification/assert-ledger-correspondence.py supabase/verification/assert-no-toplevel-data-writes.py
+            supabase/verification/assert-not-production.sh; do
+            git cat-file -e "origin/main:$f" 2>/dev/null || { echo "::error::$f is not registered on main"; exit 1; }
+            git diff --quiet origin/main HEAD -- "$f" || { echo "::error::$f differs from the copy registered on main"; exit 1; }
+          done
+          echo "ref=$GITHUB_REF sha=$GITHUB_SHA — release toolkit matches main"
+
+      - name: "GATE: dispatched ref is database-only (check, push)"
+        if: inputs.mode == 'check' || inputs.mode == 'push'
+        run: '"$RUN" scope'
+
       - name: "GATE: target, authorization, no Load Test identity, toolchain"
         run: |
           set -euo pipefail
@@ -83,14 +105,12 @@ jobs:
           fi
           if grep -oE 'secrets\.[A-Z_]+' .github/workflows/mod001-production-release.yml | sort -u | grep '^secrets\.LT_'; then
             echo "::error::the Production workflow references a Load Test secret"; exit 1; fi
-          v="$(npm run --silent supabase -- --version)"
-          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          if [ "$MODE" = "push" ]; then
+            v="$(npm run --silent supabase -- --version)"
+            [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          fi
           command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
           "$RUN" static
-
-      - name: "GATE: dispatched ref is database-only and runs the registered workflow copy"
-        if: inputs.mode == 'check' || inputs.mode == 'push'
-        run: '"$RUN" scope'
 
       - name: "GATE: a successful Load Test push on this same commit"
         if: inputs.mode == 'push'

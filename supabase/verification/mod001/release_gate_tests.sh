@@ -166,10 +166,14 @@ commit_with() { # $1 = الأب، ثمّ أزواجُ <مسار>=<ملفّ مح�
   git commit-tree "$(GIT_INDEX_FILE="$idx" git write-tree)" -p "$parent" -m "mod001 scope test" ; rm -f "$idx"
 }
 LTW=.github/workflows/mod001-loadtest-release.yml; PRW=.github/workflows/mod001-production-release.yml
-REG="$(commit_with origin/main "$LTW=$LTW" "$PRW=$PRW")"          # main بعد تسجيل سيرَي العمل وحدهما
+TK=(supabase/verification/mod001/release_{target_guard.sh,run.sh,preflight.sql,fingerprint.sql,postcheck.sql,price_gate.sql})
+TKP=(); for f in "$LTW" "$PRW" "${TK[@]}"; do TKP+=("$f=$f"); done
+REG="$(commit_with origin/main "${TKP[@]}")"                     # main بعد تسجيل عُدّة الإطلاق وحدها
 printf '# drift\n' | cat "$LTW" - > "$OUT/lt-drift.yml"
 printf 'export const x = 1;\n' > "$OUT/fe.ts"
 DRIFT="$(commit_with HEAD "$LTW=$OUT/lt-drift.yml")"
+sed 's/^phase="${1:-}"$/phase="${1:-}"; [ "$phase" = scope ] \&\& exit 0/' "$R" > "$OUT/run-bypass.sh"
+BYPASS="$(commit_with HEAD "$R=$OUT/run-bypass.sh")"            # سكربتٌ معدَّلٌ يتجاوز فحصَه
 FRONT="$(commit_with HEAD "src/mod001-new-frontend.ts=$OUT/fe.ts")"
 scope_at() { # $1 = الالتزام المُرسَل، $2 = الأساس
   local d="$WT/$1"; [ -d "$d" ] || git worktree add -q --detach "$d" "$1"
@@ -178,7 +182,23 @@ expect_ok    "database-only release ref, workflows registered on main" scope_at 
 expect_block "workflows not registered on main"                   scope_at "$(git rev-parse HEAD)" origin/main
 expect_block "dispatched workflow differs from the registered copy" scope_at "$DRIFT" "$REG"
 expect_block "release ref carries frontend changes"               scope_at "$FRONT" "$REG"
-expect_block "scope base unavailable (shallow checkout)"          scope_at "$(git rev-parse HEAD)" refs/heads/no-such-base
+grep -q 'exit 0' "$OUT/run-bypass.sh" || bad "bypass fixture was not built"
+# خطوةُ سير العمل نفسُها (مستخرَجةً من YAML) هي التي تسبق أيَّ سكربتٍ من المرجع:
+yaml_toolkit_step() { # $1 = ملفُّ سير العمل، $2 = الالتزام المُرسَل → يشغّل الخطوةَ في worktree له
+  local d="$WT/$2"; [ -d "$d" ] || git worktree add -q --detach "$d" "$2"
+  python3 -c 'import sys,yaml
+for st in yaml.safe_load(open(sys.argv[1]))["jobs"]["release"]["steps"]:
+    if st.get("name","").startswith("GATE: release toolkit equals"): print(st["run"])' "$1" \
+    | sed "s#origin/main#$REG#g" > "$OUT/toolkit-step.sh"
+  [ -s "$OUT/toolkit-step.sh" ] || { echo "toolkit step not found in $1"; return 1; }
+  (cd "$d" && GITHUB_REF=refs/heads/release/mod-001-db GITHUB_SHA="$2" bash "$OUT/toolkit-step.sh"); }
+for wf in "$LTW" "$PRW"; do
+  expect_ok    "$(basename "$wf"): toolkit step passes on the release ref"     yaml_toolkit_step "$wf" "$(git rev-parse HEAD)"
+  expect_block "$(basename "$wf"): toolkit step blocks a self-bypassing script" yaml_toolkit_step "$wf" "$BYPASS"
+  expect_block "$(basename "$wf"): toolkit step blocks a drifted workflow"     yaml_toolkit_step "$wf" "$DRIFT"
+done
+expect_ok    "(why it must run first: the bypassing script passes its own scope)" \
+  env MOD001_SCOPE_BASE="$REG" OUT="$OUT" "$WT/$BYPASS/$R" scope
 for d in "$WT"/*; do git worktree remove --force "$d"; done
 
 echo
