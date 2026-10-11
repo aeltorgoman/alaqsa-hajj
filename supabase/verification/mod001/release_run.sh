@@ -98,9 +98,10 @@ case "$phase" in
       [ "$got" = "$want" ] || { echo "::error::$f sha256 $got != reviewed $want"; exit 1; }
       echo "ok   $(basename "$f")  $got"
     done
-    python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest >/dev/null
-    python3 supabase/verification/assert-no-toplevel-data-writes.py "$F1" "$F2" "$F3"
-    python3 supabase/verification/assert-ledger-correspondence.py --selftest >/dev/null
+    # -I: الفاحصون من المكتبة القياسيّة وحدها، فلا يُستورَد ملفٌّ مجاورٌ من المرجع (re.py مثلاً).
+    python3 -I supabase/verification/assert-no-toplevel-data-writes.py --selftest >/dev/null
+    python3 -I supabase/verification/assert-no-toplevel-data-writes.py "$F1" "$F2" "$F3"
+    python3 -I supabase/verification/assert-ledger-correspondence.py --selftest >/dev/null
     echo "static PASS"
     ;;
 
@@ -121,7 +122,7 @@ case "$phase" in
     done
     mb="$(git merge-base "$base" HEAD)"
     git diff --name-only "$mb" HEAD > "$OUT/scope-files.txt"
-    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/.+|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
+    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/mod001/[^/]+\.(sql|sh)|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
       echo "::error::this ref carries non-database changes (listed above) — dispatch only from a database-only release ref"; exit 1; fi
     echo "scope PASS: $(wc -l < "$OUT/scope-files.txt") changed files, database-only; release toolkit matches $base"
     ;;
@@ -133,7 +134,7 @@ case "$phase" in
     echo "ledger rows=$rows latest=$latest"
     [ "$rows" -eq "$ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $ROWS_BEFORE"; exit 1; }
     [ "$latest" = "$LATEST_BEFORE" ] || { echo "::error::ledger latest $latest, expected $LATEST_BEFORE"; exit 1; }
-    python3 "$ROOT/supabase/verification/assert-ledger-correspondence.py" \
+    python3 -I "$ROOT/supabase/verification/assert-ledger-correspondence.py" \
       "$ROOT/supabase/migrations" "$OUT/ledger-before.txt" "$ROWS_BEFORE" "$LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
     grep -qF "repository versions absent from production: ['$M1', '$M2', '$M3']" "$OUT/correspondence-before.txt" || {
       cat "$OUT/correspondence-before.txt"; echo "::error::the pending set is not exactly [$M1 $M2 $M3]"; exit 1; }
@@ -161,7 +162,7 @@ case "$phase" in
     if [ -n "${MOD001_LOCAL_URL:-}" ]; then
       DB_URL="$MOD001_LOCAL_URL"
     else
-      DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['PGPASSWORD'],safe=''), os.environ['DB_HOST'], os.environ.get('DB_PORT','5432')))")"
+      DB_URL="$(python3 -I -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['PGPASSWORD'],safe=''), os.environ['DB_HOST'], os.environ.get('DB_PORT','5432')))")"
       echo "::add-mask::$DB_URL"
     fi
     set +e
@@ -176,7 +177,7 @@ case "$phase" in
   ledger-after)
     guard
     ledger_dump "$OUT/ledger-after.txt"
-    python3 "$ROOT/supabase/verification/assert-ledger-correspondence.py" \
+    python3 -I "$ROOT/supabase/verification/assert-ledger-correspondence.py" \
       "$ROOT/supabase/migrations" "$OUT/ledger-after.txt" "$ROWS_AFTER" "$LATEST_AFTER"
     grep -vxE "$M1|$M2|$M3" "$OUT/ledger-after.txt" | diff -u "$OUT/ledger-before.txt" - || {
       echo "::error::the 58 original ledger versions changed"; exit 1; }

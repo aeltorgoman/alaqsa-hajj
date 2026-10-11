@@ -178,6 +178,8 @@ DRIFT="$(commit_with HEAD "$LTW=$OUT/lt-drift.yml")"
 sed 's/^phase="${1:-}"$/phase="${1:-}"; [ "$phase" = scope ] \&\& exit 0/' "$R" > "$OUT/run-bypass.sh"; chmod +x "$OUT/run-bypass.sh"
 BYPASS="$(commit_with HEAD "$R=$OUT/run-bypass.sh")"            # سكربتٌ معدَّلٌ يتجاوز فحصَه
 FRONT="$(commit_with HEAD "src/mod001-new-frontend.ts=$OUT/fe.ts")"
+printf 'import sys\nopen("%s/planted-ran", "w").write("x")\nsys.exit(99)\n' "$OUT" > "$OUT/re.py"
+PLANT="$(commit_with HEAD "supabase/verification/re.py=$OUT/re.py")"    # وحدةٌ مجاورةٌ تظلّل re
 scope_at() { # $1 = الالتزام المُرسَل، $2 = الأساس
   local d="$WT/$1"; [ -d "$d" ] || git worktree add -q --detach "$d" "$1"
   MOD001_SCOPE_BASE="$2" OUT="$OUT" "$d/supabase/verification/mod001/release_run.sh" scope; }
@@ -185,6 +187,10 @@ expect_ok    "database-only release ref, workflows registered on main" scope_at 
 expect_reason "toolkit not registered on main" "is not registered on origin/main" scope_at "$(git rev-parse HEAD)" origin/main
 expect_reason "dispatched workflow differs from the registered copy" "mod001-loadtest-release.yml on this ref differs" scope_at "$DRIFT" "$REG"
 expect_reason "release ref carries frontend changes" "non-database changes" scope_at "$FRONT" "$REG"
+expect_reason "release ref plants a module next to the checkers" "non-database changes" scope_at "$PLANT" "$REG"
+planted_static() { rm -f "$OUT/planted-ran"; local d="$WT/$PLANT"; [ -d "$d" ] || git worktree add -q --detach "$d" "$PLANT"
+  OUT="$OUT" "$d/$R" static && [ ! -e "$OUT/planted-ran" ]; }
+expect_ok    "static ignores a planted re.py (python3 -I) and it never runs" planted_static
 expect_reason "scope base unavailable (shallow checkout)" "is not available" scope_at "$(git rev-parse HEAD)" refs/heads/no-such-base
 grep -q 'exit 0' "$OUT/run-bypass.sh" || bad "bypass fixture was not built"
 # خطوةُ سير العمل نفسُها (مستخرَجةً من YAML) هي التي تسبق أيَّ سكربتٍ من المرجع:
