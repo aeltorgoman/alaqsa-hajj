@@ -297,7 +297,8 @@ begin
     insert into public.rooms (number, floor, type) values ('102', '1', 'ثنائية');
     raise exception 'FAIL — رقمٌ مكرّرٌ في الدور مرّ' using errcode = 'P0099';
   exception when unique_violation then
-    if sqlerrm not like '%rooms_season_floor_number_uniq%' and sqlerrm not like '%rooms_hotel_floor_number_uniq%' then raise; end if;
+    if sqlerrm not like '%rooms_season_floor_number_uniq%' and sqlerrm not like '%rooms_hotel_floor_number_uniq%'
+       and sqlerrm not like '%rooms_unlinked_season_floor_number_uniq%' then raise; end if;
   end;
   -- حذفُ غرفةٍ فارغة (`deleteRoom`)
   delete from public.rooms where number = '105' and season_id = 9002;
@@ -396,8 +397,9 @@ begin
   exception when check_violation then null;
   end;
   begin
-    insert into public.hotel_package_prices (hotel_id, package_key, amount) values (v_h1, 'addon_view', 100);
-    raise exception 'FAIL — مفتاحٌ ليس باقة' using errcode = 'P0099';
+    -- (`addon_view` صار مقبولاً منذ M5 — رسمُ الإطلالة لكلّ فندق؛ وغيرُه من الإضافات لا)
+    insert into public.hotel_package_prices (hotel_id, package_key, amount) values (v_h1, 'addon_mina', 100);
+    raise exception 'FAIL — مفتاحٌ ليس باقةً ولا رسمَ إطلالة' using errcode = 'P0099';
   exception when check_violation then null;
   end;
   delete from public.hotel_package_prices where hotel_id = v_h1 and package_key = 'package_quad';
@@ -471,7 +473,8 @@ reset role;
 -- يُسقَط هنا **داخل المعاملة وحدها** (تُرجَع في آخر الملف) ليُرى ما
 -- سيكون بعد التشديد: التكرارُ داخل الفندق ممنوع، والرقمُ نفسُه في
 -- فندقين مسموح.
-drop index public.rooms_season_floor_number_uniq;
+-- (بعد #62 لم يعد قائماً أصلاً — `if exists` يُبقي الفحصَ صالحاً قبلها وبعدها)
+drop index if exists public.rooms_season_floor_number_uniq;
 do $$
 declare v_h1 bigint := current_setting('mod001.h1')::bigint; v_h2 bigint;
 begin

@@ -39,6 +39,16 @@ begin
      and pr.proname in ('assign_passenger_room', 'set_room_order', 'delete_hotel', 'mod001_may_place_passenger',
                         'mod001_single_hotel_of_season', 'rooms_fill_single_hotel', 'passengers_fill_single_requested_hotel');
   if v_n <> 0 then v_bad := v_bad || ('MOD-001 functions already exist: ' || v_n); end if;
+  -- #62 يستبدل فهرسَ رقم الغرفة على الموسم: القائمُ يجب أن يكون هو، بتعريفه
+  if not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'rooms_season_floor_number_uniq'
+                    and indexdef = 'CREATE UNIQUE INDEX rooms_season_floor_number_uniq ON public.rooms USING btree (season_id, floor, number)')
+     or exists (select 1 from pg_constraint where conname = 'rooms_season_floor_number_uniq') then
+    v_bad := v_bad || 'rooms_season_floor_number_uniq is missing, differs, or is a constraint'::text;
+  end if;
+  if to_regclass('public.rooms_unlinked_season_floor_number_uniq') is not null
+     or to_regclass('public.rooms_hotel_floor_number_uniq') is not null then
+    v_bad := v_bad || 'MOD-001 room-number indexes already exist'::text;
+  end if;
 
   -- ٣) جسمُ delete_season هو ما كُتبت عليه ترحيلةُ PR 1
   select md5(pg_get_functiondef(pr.oid)) into v_md5

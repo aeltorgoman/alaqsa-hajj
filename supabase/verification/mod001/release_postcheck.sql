@@ -34,7 +34,8 @@ begin
 
   -- ٢) الدوالّ: SECURITY DEFINER، search_path ثابت، لا anon (البوابة وحدها لها anon)
   foreach v_fn in array array[
-    'public.assign_passenger_room(bigint, bigint)', 'public.set_room_order(bigint, bigint[])',
+    'public.assign_passenger_room(bigint, bigint)', 'public.assign_passenger_room(bigint, bigint, bigint)',
+    'public.set_room_order(bigint, bigint[])',
     'public.delete_hotel(bigint)', 'public.update_active_season(text, text, text, text, text)',
     'public.update_active_season(text, text, text, text, text, text, text, text)',
     'public.get_pilgrim_portal_by_session(text)', 'public.delete_season(bigint, uuid)'] loop
@@ -49,6 +50,19 @@ begin
       v_bad := v_bad || ('anon may execute ' || v_fn);
     end if;
   end loop;
+  -- #62: النقلُ بمصدرٍ متوقَّع لـauthenticated، والتفرّدُ داخل الفندق
+  if not has_function_privilege('authenticated', 'public.assign_passenger_room(bigint, bigint, bigint)', 'EXECUTE') then
+    v_bad := v_bad || 'authenticated cannot execute assign_passenger_room(bigint, bigint, bigint)'::text;
+  end if;
+  if to_regclass('public.rooms_season_floor_number_uniq') is not null then
+    v_bad := v_bad || 'the season-wide room-number index is still present'::text;
+  end if;
+  if not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'rooms_hotel_floor_number_uniq'
+                    and indexdef = 'CREATE UNIQUE INDEX rooms_hotel_floor_number_uniq ON public.rooms USING btree (hotel_id, floor, number)')
+     or not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'rooms_unlinked_season_floor_number_uniq'
+                    and indexdef = 'CREATE UNIQUE INDEX rooms_unlinked_season_floor_number_uniq ON public.rooms USING btree (season_id, floor, number) WHERE (hotel_id IS NULL)') then
+    v_bad := v_bad || 'room-number uniqueness indexes are missing or differ'::text;
+  end if;
   if has_table_privilege('anon', 'public.hotels', 'SELECT') or has_table_privilege('authenticated', 'public.hotels', 'DELETE') then
     v_bad := v_bad || 'hotels grants are wider than intended'::text;
   end if;
@@ -92,6 +106,30 @@ begin
                           else (select hp.amount from public.hotel_package_prices hp
                                  where hp.hotel_id = pil.requested_hotel_id and hp.package_key = pil.pkg) end, 0);
   if v_n <> 0 then v_bad := v_bad || ('pilgrims whose base price changed: ' || v_n); end if;
+
+  -- ٥) M5: رسمُ الإطلالة لكلّ حاجٍّ له فندقٌ مطلوب («مطلة»، والغائبُ «مطلة»):
+  --    قاعدةُ الواجهة الحاليّة (اللقطة أو الحيّ) = رسمُ فندقه المطلوب، والغائبُ صفر
+  if not exists (select 1 from pg_constraint
+                  where conname = 'hotel_package_prices_key_vocab'
+                    and pg_get_constraintdef(oid) like '%addon_view%') then
+    v_bad := v_bad || 'hotel_package_prices_key_vocab does not admit addon_view'::text;
+  end if;
+  with pil as (
+    select p.id, p.season_id, p.requested_hotel_id,
+           (s.closed_at is not null
+            and exists (select 1 from public.season_pricing_snapshot x where x.season_id = s.id)) as use_snap
+      from public.passengers p join public.seasons s on s.id = p.season_id
+     where coalesce(p.passenger_type, '') not in ('مرافق', 'مشرف', 'إداري')
+       and p.requested_hotel_id is not null
+       and coalesce(nullif(p.hotel_view, ''), 'مطلة') = 'مطلة'
+  )
+  select count(*) into v_n from pil
+   where coalesce(case when pil.use_snap then (select sps.amount from public.season_pricing_snapshot sps
+                                                where sps.season_id = pil.season_id and sps.key = 'addon_view')
+                       else (select ps.amount from public.pricing_settings ps where ps.key = 'addon_view') end, 0)
+         <> coalesce((select hp.amount from public.hotel_package_prices hp
+                       where hp.hotel_id = pil.requested_hotel_id and hp.package_key = 'addon_view'), 0);
+  if v_n <> 0 then v_bad := v_bad || ('pilgrims whose view surcharge changed: ' || v_n); end if;
 
   raise notice 'postcheck: hotels=% prices=% rooms_linked=% pilgrims_with_hotel=%',
     (select count(*) from public.hotels), (select count(*) from public.hotel_package_prices),

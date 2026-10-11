@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 # ════════════════════════════════════════════════════════════
-# MOD-001 — مراحلُ إطلاق ترحيلات PR 1–3 (يستدعيها سيرا العمل)
+# MOD-001 — مراحلُ إطلاق ترحيلات MOD-001 الخمس (PR 1–3 و#62 وM5) (يستدعيها سيرا العمل)
 # ════════════════════════════════════════════════════════════
 #   release_run.sh <phase>
 #
 # المراحل:
-#   static        ملفّاتُ الترحيلات الثلاث بأختامها، وعددُ الترحيلات، وفاحصو المستودع
+#   static        ملفّاتُ الترحيلات الخمس بأختامها، وعددُ الترحيلات، وفاحصو المستودع
 #   scope         (بلا قاعدة) المرجعُ المُرسَل لا يحمل إلا قاعدةَ بيانات: لا واجهة،
 #                 وعُدّةُ الإطلاق فيه (TOOLKIT) مطابقةٌ لنسختها المسجَّلة على main
-#   ledger-before السجلُّ = 58 / 20260928100000، والمعلّقُ هو الثلاث بالضبط
+#   ledger-before السجلُّ = 58 / 20260928100000، والمعلّقُ هو الخمس بالضبط
 #   preflight     release_preflight.sql (قراءة)
 #   fp-before     بصماتُ ما لا يُمسّ (قراءة)
 #   push          الكتابةُ الوحيدة: `supabase db push --db-url`
-#   ledger-after  السجلُّ = 61 / 20261011012258، والأصليّةُ الثمانية والخمسون كما هي
+#   ledger-after  السجلُّ = 63 / 20261011180000، والأصليّةُ الثمانية والخمسون كما هي
 #   postcheck     release_postcheck.sql + تطابقُ البصمات قبل وبعد
-#   price-gate    الترحيلاتُ الثلاث في السجلّ + release_price_gate.sql (قراءة) —
+#   price-gate    الترحيلاتُ الخمس في السجلّ + release_price_gate.sql (قراءة) —
 #                 بوّابةُ ما قبل إطلاق الواجهة، فلا تخضرّ قبل ترحيلات الإنتاج
 #
 # البيئة (من سير العمل): TARGET REF DB_USER DB_HOST DB_PORT PGPASSWORD CONFIRM
@@ -30,15 +30,19 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 OUT="${OUT:-$ROOT/mod001-release-evidence}"
 mkdir -p "$OUT"
 
-readonly M1="20261010194239" M2="20261010203522" M3="20261011012258"
+readonly M1="20261010194239" M2="20261010203522" M3="20261011012258" M4="20261011140000" M5="20261011180000"
 readonly F1="supabase/migrations/20261010194239_mod001_hotels_foundation.sql"
 readonly F2="supabase/migrations/20261010203522_mod001_hotels_backfill.sql"
 readonly F3="supabase/migrations/20261011012258_mod001_hotel_operations.sql"
+readonly F4="supabase/migrations/20261011140000_mod001_atomic_transfer_room_uniqueness.sql"
+readonly F5="supabase/migrations/20261011180000_mod001_hotel_view_surcharge.sql"
 readonly SHA1="a3b3dfe58b7e4ecd4d8ec8ced4b73e2b4107c6b466a69415071a158e9e39570d"
 readonly SHA2="c57d25a49812e14398e480a390c592a556c0253993ae8e211048805d228eebe7"
 readonly SHA3="28ecc132627564dd200237c461177a50334dfdde815b71c1418648139bb5fb79"
+readonly SHA4="8a8b441e3c88f2fc5d479d5ab0215c2d61a68275fd8d26ad2cf6ade98cf4dfe1"
+readonly SHA5="2c7f60ee5604a3181b9985b920556f88615c831eae755a7f7198b9df7d621d4c"
 readonly ROWS_BEFORE=58 LATEST_BEFORE="20260928100000"
-readonly ROWS_AFTER=61  LATEST_AFTER="$M3"
+readonly ROWS_AFTER=63  LATEST_AFTER="$M5"
 # جسمُ delete_season الذي كُتبت عليه ترحيلةُ PR 1 — مقروءٌ من الإنتاج وبيئة
 # الاختبار والقاعدة المحلّيّة عند 58، والثلاثةُ متطابقة.
 readonly DELETE_SEASON_MD5="ae4c1905cebc93286cee74d4513c90c9"
@@ -90,8 +94,8 @@ case "$phase" in
     files=(supabase/migrations/*.sql)
     n="${#files[@]}"
     [ "$n" -eq "$ROWS_AFTER" ] || { echo "::error::expected $ROWS_AFTER repository migrations, found $n"; exit 1; }
-    [ "${files[$((n - 1))]}" = "$F3" ] || { echo "::error::the latest repository migration is not $F3"; exit 1; }
-    for pair in "$F1:$SHA1" "$F2:$SHA2" "$F3:$SHA3"; do
+    [ "${files[$((n - 1))]}" = "$F5" ] || { echo "::error::the latest repository migration is not $F5"; exit 1; }
+    for pair in "$F1:$SHA1" "$F2:$SHA2" "$F3:$SHA3" "$F4:$SHA4" "$F5:$SHA5"; do
       f="${pair%:*}"; want="${pair##*:}"
       [ -f "$f" ] || { echo "::error::$f missing"; exit 1; }
       got="$(sha256sum "$f" | cut -d' ' -f1)"
@@ -100,7 +104,7 @@ case "$phase" in
     done
     # -I: الفاحصون من المكتبة القياسيّة وحدها، فلا يُستورَد ملفٌّ مجاورٌ من المرجع (re.py مثلاً).
     python3 -I supabase/verification/assert-no-toplevel-data-writes.py --selftest >/dev/null
-    python3 -I supabase/verification/assert-no-toplevel-data-writes.py "$F1" "$F2" "$F3"
+    python3 -I supabase/verification/assert-no-toplevel-data-writes.py "$F1" "$F2" "$F3" "$F4" "$F5"
     python3 -I supabase/verification/assert-ledger-correspondence.py --selftest >/dev/null
     echo "static PASS"
     ;;
@@ -122,7 +126,8 @@ case "$phase" in
     done
     mb="$(git merge-base "$base" HEAD)"
     git diff --name-only "$mb" HEAD > "$OUT/scope-files.txt"
-    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/mod001/[^/]+\.(sql|sh)|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
+    # (#62 يُحدّث تأكيدَ البروفة على الفهارس — ملفٌّ واحدٌ بعينه، SQL لا يُستورَد)
+    if grep -vE '^(supabase/migrations/[^/]+\.sql|supabase/verification/mod001/[^/]+\.(sql|sh)|supabase/verification/rehearsal/assert-after-close\.sql|supabase/README\.md|docs/.+|\.github/workflows/mod001-(loadtest|production)-release\.yml)$' "$OUT/scope-files.txt"; then
       echo "::error::this ref carries non-database changes (listed above) — dispatch only from a database-only release ref"; exit 1; fi
     echo "scope PASS: $(wc -l < "$OUT/scope-files.txt") changed files, database-only; release toolkit matches $base"
     ;;
@@ -136,11 +141,11 @@ case "$phase" in
     [ "$latest" = "$LATEST_BEFORE" ] || { echo "::error::ledger latest $latest, expected $LATEST_BEFORE"; exit 1; }
     python3 -I "$ROOT/supabase/verification/assert-ledger-correspondence.py" \
       "$ROOT/supabase/migrations" "$OUT/ledger-before.txt" "$ROWS_BEFORE" "$LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
-    grep -qF "repository versions absent from production: ['$M1', '$M2', '$M3']" "$OUT/correspondence-before.txt" || {
-      cat "$OUT/correspondence-before.txt"; echo "::error::the pending set is not exactly [$M1 $M2 $M3]"; exit 1; }
+    grep -qF "repository versions absent from production: ['$M1', '$M2', '$M3', '$M4', '$M5']" "$OUT/correspondence-before.txt" || {
+      cat "$OUT/correspondence-before.txt"; echo "::error::the pending set is not exactly [$M1 $M2 $M3 $M4 $M5]"; exit 1; }
     grep -qF "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
       cat "$OUT/correspondence-before.txt"; echo "::error::the target carries a migration the repository does not"; exit 1; }
-    echo "ledger-before PASS: 58 rows, exactly the three MOD-001 migrations pending"
+    echo "ledger-before PASS: 58 rows, exactly the five MOD-001 migrations pending"
     ;;
 
   preflight)
@@ -179,7 +184,7 @@ case "$phase" in
     ledger_dump "$OUT/ledger-after.txt"
     python3 -I "$ROOT/supabase/verification/assert-ledger-correspondence.py" \
       "$ROOT/supabase/migrations" "$OUT/ledger-after.txt" "$ROWS_AFTER" "$LATEST_AFTER"
-    grep -vxE "$M1|$M2|$M3" "$OUT/ledger-after.txt" | diff -u "$OUT/ledger-before.txt" - || {
+    grep -vxE "$M1|$M2|$M3|$M4|$M5" "$OUT/ledger-after.txt" | diff -u "$OUT/ledger-before.txt" - || {
       echo "::error::the 58 original ledger versions changed"; exit 1; }
     echo "ledger-after PASS"
     ;;
@@ -196,7 +201,7 @@ case "$phase" in
   price-gate)
     guard
     ledger_dump "$OUT/ledger-price-gate.txt"
-    for v in "$M1" "$M2" "$M3"; do
+    for v in "$M1" "$M2" "$M3" "$M4" "$M5"; do
       grep -qx "$v" "$OUT/ledger-price-gate.txt" || {
         echo "::error::PRICE GATE BLOCKED: migration $v is not applied to this database"; exit 1; }
     done
