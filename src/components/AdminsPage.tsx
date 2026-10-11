@@ -629,6 +629,9 @@ function AdminsPage({
     camps.filter(c => c.page_type === pageType && (!assignTarget || c.gender === assignTarget.gender));
 
   const openAssign = async (p: Passenger) => {
+    /* نافذةُ التعيين تقرأ الغرفَ والفنادقَ من جديد عند كلّ فتح — غرفةٌ
+       أُضيفت أو حُذفت أو فندقٌ أُعيدت تسميتُه من شاشةٍ أخرى يظهر هنا */
+    loadedSeason.current = null;
     if (!await loadAssignData()) { showAlert("error", "تعذّر تحميل بيانات التعيين — يرجى المحاولة مرة أخرى"); return; }
     setAssign({
       bus_id:           p.bus_id           ? String(p.bus_id)           : "",

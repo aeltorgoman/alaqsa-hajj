@@ -362,9 +362,13 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     const moved = stale.length ? (await supabase.from("passengers").select("*").in("id", stale)).data ?? [] : [];
     setPassengers(prev => [...data, ...moved].reduce((list, row) => upsertPassenger(list, mapPassenger(row)), prev));
   };
+  /* أحدثُ طلبٍ وحده يُطبَّق: ردٌّ أقدم (ناجحاً أو فاشلاً) يصل متأخّراً يُهمَل */
+  const seasonRoomsSeq = useRef(0);
   const loadSeasonRooms = async () => {
+    const seq = ++seasonRoomsSeq.current;
     setSeasonRoomsError(false);
     const { data, error } = await supabase.from("rooms").select("*").eq("season_id", viewedSeason.id);
+    if (seq !== seasonRoomsSeq.current) return;
     /* فشلٌ بعد نجاحٍ سابق لا يُبقي غرفاً قديمة تُعرض كأنها الآن */
     if (error || !data) { console.error("تعذر تحميل غرف الموسم", error); setSeasonRooms(null); setSeasonRoomsError(true); return; }
     setSeasonRooms(data as Room[]);
