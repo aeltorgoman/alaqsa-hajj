@@ -4,6 +4,12 @@
 import type { Passenger } from "../../types";
 
 export type PricingMap = Record<string, { label: string; amount: number; type: string }>;
+/* MOD-001 PR 8: سعرُ الباقة الأساسيّ لكلّ فندق — `hotel_package_prices`
+   للموسم المعروض: hotel_id ← (package_key ← amount). الصفُّ الغائب صفر،
+   والصفرُ الصريحُ قيمةٌ صحيحة. */
+export type HotelPackagePrices = Map<number, Record<string, number>>;
+export type HotelPackagePriceRow = { hotel_id: number; package_key: string; amount: number | string };
+export type FinanceHotel = { id: number; name: string; sort_order: number | null };
 /* ═══ الإيصالُ أبٌ وسطورُ الدفعِ توزيعُه ═══
    إيصالٌ فرديّ → سطرٌ واحد · إيصالُ مجموعة → سطورٌ عدّة برقمٍ واحد.
    و`total_amount` مبلغٌ تاريخيٌّ **لا يُحسَب** من السطورِ الباقية. */
@@ -75,4 +81,8 @@ export type AllocTypeMaps = {
   bus:  Map<number, string>;
   camp: Map<number, string>;
   room: Map<number, string>;
+  /* MOD-001 PR 8: فندقُ الغرفة (room_id ← hotel_id) وأسماءُ فنادق الموسم —
+     لسياق «الفندق المطلوب مقابل الفعليّ» وحده؛ السعرُ من المطلوب لا من هنا. */
+  roomHotel: Map<number, number>;
+  hotelName: Map<number, string>;
 };

@@ -2,10 +2,10 @@
 // إنشاء صفحات HTML والطباعة للحسابات (بدون React ولا JSX)
 // ============================================================
 import type { Passenger } from "../../types";
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
+import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
 import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding } from "../../print";
-import { fmtAmt, financeStatus, getPriceInfo, getPackageKey, calcTotalDue, calcTotalPaid, paidFlightService, isSpecialPackage, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_LABEL, PRICING_KEYS } from "./finance.utils";
+import { fmtAmt, financeStatus, getPriceInfo, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService, SERVICE_FILTERS, serviceLabel } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
    القيمةُ ويرث النصُّ لونَ أبيه — وقد يكون أبيضَ على أبيض. فألوانُ
@@ -157,15 +157,18 @@ export function makeReceiptHTML(
 // كشف حساب الحاج الفردي - تصميم كبير للطباعة
 // ============================================================
 export function makePassengerStatementHTML(
-  p: Passenger, pricing: PricingMap, customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding
+  p: Passenger, pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[], customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding
 ): string {
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const s = p.services;
-  const priceInfo = getPriceInfo(s, pricing);
+  const priceInfo = getPriceInfo(p, pricing, hotelPrices);
+  /* الفندقُ المطلوب أساسُ سعر الباقة — يُكتب بجانبها (إلا «خاص» فسعرُه يدويّ) */
+  const reqHotel = s.hotel_type === "خاص" ? null : requestedHotelName(p, hotels);
+  const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}`;
   const pkgAmt = priceInfo.amount;
   const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
   const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
-  const totalDue  = calcTotalDue(p, pricing, customCharges);
+  const totalDue  = calcTotalDue(p, pricing, hotelPrices, customCharges);
   const totalPaid = calcTotalPaid(p.id, payments);
   const balance   = totalDue - totalPaid;
   const logoHtml  = logoOrInitial(logoUrl, companyName);
@@ -174,7 +177,7 @@ export function makePassengerStatementHTML(
   /* الدرجة التجاريّة من الخدمة المطلوبة لا من حالة الحجز — نفس مصدر `calcTotalDue` */
   const flightPaid = paidFlightService(p);
 
-  let rows = `<tr><td class="bayan">${esc(priceInfo.label)}</td><td class="debit">${fmtAmt(pkgAmt)}</td><td class="credit">—</td></tr>`;
+  let rows = `<tr><td class="bayan">${pkgLine}</td><td class="debit">${fmtAmt(pkgAmt)}</td><td class="credit">—</td></tr>`;
   if (s.hotel_view==="مطلة") rows+=`<tr class="alt"><td class="bayan">إضافة مطلة</td><td class="debit">${fmtAmt(pricing["addon_view"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if (s.camp_mina==="خاص")  rows+=`<tr><td class="bayan">خيمة خاصة - منى</td><td class="debit">${fmtAmt(pricing["addon_mina"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if (s.camp_arafa==="خاص") rows+=`<tr class="alt"><td class="bayan">خيمة خاصة - عرفة</td><td class="debit">${fmtAmt(pricing["addon_arafa"]?.amount||0)}</td><td class="credit">—</td></tr>`;
@@ -258,28 +261,30 @@ export function makePassengerStatementHTML(
 // كشف حساب المجموعة المالية
 // ============================================================
 export function makeGroupStatementHTML(
-  group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap,
+  group: FinancialGroup, gPassengers: Passenger[], pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[],
   customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding
 ): string {
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const logoHtml  = logoOrInitial(logoUrl, companyName);
   const { dateStr } = issuedStamp();
-  const gTotDue  = gPassengers.reduce((s,p) => s+calcTotalDue(p,pricing,customCharges), 0);
+  const gTotDue  = gPassengers.reduce((s,p) => s+calcTotalDue(p,pricing,hotelPrices,customCharges), 0);
   const gTotPaid = gPassengers.reduce((s,p) => s+calcTotalPaid(p.id,payments), 0);
   const gTotBal  = gTotDue - gTotPaid;
 
   const memberRows = gPassengers.map((p, i) => {
-    const due  = calcTotalDue(p,pricing,customCharges);
+    const due  = calcTotalDue(p,pricing,hotelPrices,customCharges);
     const paid = calcTotalPaid(p.id,payments);
     const bal  = due - paid;
     const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
-    const priceInfo = getPriceInfo(p.services, pricing);
+    const priceInfo = getPriceInfo(p, pricing, hotelPrices);
+    const reqHotel = p.services.hotel_type === "خاص" ? null : requestedHotelName(p, hotels);
+    const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}`;
     const payRows = pPays.map(py => `<tr style="background:#f0faf8"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:13px;padding-right:32px">دفعة — ${esc(py.payment_date)} <span style="color:#888;font-size:12px">(${esc(py.method)})</span>${py.notes?` — ${esc(py.notes)}`:""}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;font-size:13px">—</td><td style="text-align:center;border:1px solid #e8e8e8;color:#2A9D8F;font-weight:700;font-size:14px">${fmtAmt(py.amount)}</td></tr>`).join("");
     return `
     <div style="margin-bottom:20px;border:1.5px solid ${primaryColor}30;border-radius:10px;overflow:hidden;">
       <div style="background:${primaryColor}12;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${primaryColor}20">
         <div style="font-size:17px;font-weight:800;color:${primaryColor}">${i+1}. ${esc(p.short_ar||p.name_ar)}</div>
-        <div style="font-size:13px;color:#666">${esc(priceInfo.label||"")}</div>
+        <div style="font-size:13px;color:#666">${pkgLine}</div>
         <div style="display:flex;gap:16px;font-size:13px">
           <span>مطلوب: <strong style="color:${primaryColor}">${fmtAmt(due)}</strong></span>
           <span>مدفوع: <strong style="color:#2A9D8F">${fmtAmt(paid)}</strong></span>
@@ -287,7 +292,7 @@ export function makeGroupStatementHTML(
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
-        <tr style="background:${primaryColor}08"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:14px">${esc(priceInfo.label)}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#C0392B;font-weight:700;font-size:14px;width:130px">${fmtAmt(priceInfo.amount)}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;width:130px">—</td></tr>
+        <tr style="background:${primaryColor}08"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:14px">${pkgLine}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#C0392B;font-weight:700;font-size:14px;width:130px">${fmtAmt(priceInfo.amount)}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;width:130px">—</td></tr>
         ${payRows}
         <tr style="background:${primaryColor};color:#fff"><td style="padding:10px 16px;font-weight:700">الرصيد</td><td style="text-align:center;font-weight:800">${fmtAmt(due)}</td><td style="text-align:center;font-weight:800">${fmtAmt(paid)}</td></tr>
       </table>
@@ -369,7 +374,7 @@ export function printFullReport(data: FinanceRow[], pricing: PricingMap, brand: 
       return `<tr style="${idx%2===1?"background:#f5f5f5":""}">
         <td style="text-align:center;font-size:10pt;padding:0 4pt;height:${ROW_H};color:#888">${idx+1}</td>
         <td style="font-size:11pt;padding:0 6pt;height:${ROW_H}">${esc(r.p.short_ar||r.p.name_ar)}</td>
-        <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${esc(getPriceInfo(r.p.services, pricing).label.replace("باقة ",""))}</td>
+        <td style="font-size:9pt;padding:0 4pt;height:${ROW_H};color:#555">${esc(packageLabel(r.p, pricing).replace("باقة ",""))}</td>
         <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${primaryColor};font-weight:700">${fmtAmt(r.due)}</td>
         <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:#2A9D8F;font-weight:700">${fmtAmt(r.paid)}</td>
         <td style="text-align:center;font-size:11pt;padding:0 4pt;height:${ROW_H};color:${balanceColor(r.balance)};font-weight:700">${fmtAmt(r.balance)}</td>
@@ -445,21 +450,15 @@ export function printPaymentsReport(rows: PaymentReportRow[], brand: PrintBrandi
   printInPage(makeFinanceHTML("تقرير الإيصالات والدفعات", joinSections(pages), brand, chrome));
 }
 
-export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding, chrome: PrintChrome = {}) {
+export function printPackagesReport(passengers: Passenger[], pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[], brand: PrintBranding, chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
-  const rows=PRICING_KEYS.filter(k=>k.type==="package").map(pk=>{const count=passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length;const price=pricing[pk.key]?.amount||0;return[esc(pk.label),String(count),fmtAmt(price),`<strong>${fmtAmt(count*price)}</strong>`];});
-  const specialPassengers = passengers.filter(isSpecialPackage);
-  if (specialPassengers.length>0) {
-    const specialTotal = specialPassengers.reduce((s,p)=>s+(Number(p.services.custom_price)||0),0);
-    rows.push([SPECIAL_PACKAGE_LABEL,String(specialPassengers.length),"—",`<strong>${fmtAmt(specialTotal)}</strong>`]);
-  }
-  /* الإجماليُّ يُجمَع من الصفوف المعروضة نفسها — لا مسارَ حسابٍ ثانٍ،
-     ولا رقمَ في الورقة لا يُرى من أين جاء. */
-  const pkgCount = rows.reduce((n,r)=>n+Number(r[1]),0);
-  const pkgTotal = PRICING_KEYS.filter(k=>k.type==="package")
-      .reduce((sum,pk)=>sum+passengers.filter(p=>!isSpecialPackage(p)&&getPackageKey(p.services.hotel_type)===pk.key).length*(pricing[pk.key]?.amount||0),0)
-    + specialPassengers.reduce((sum,p)=>sum+(Number(p.services.custom_price)||0),0);
-  printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor,
+  /* الصفوفُ من `packageReportRows` — المصدرُ نفسُه للشاشة: صفٌّ لكلّ باقةٍ
+     في كلّ فندقٍ مطلوب. والإجماليُّ يُجمَع من الصفوف المعروضة نفسها. */
+  const data = packageReportRows(passengers, pricing, hotelPrices, hotels);
+  const rows = data.map(r => [esc(r.label), String(r.count), r.price == null ? "—" : fmtAmt(r.price), `<strong>${fmtAmt(r.total)}</strong>`]);
+  const pkgCount = data.reduce((n, r) => n + r.count, 0);
+  const pkgTotal = data.reduce((n, r) => n + r.total, 0);
+  printInPage(makeFinanceHTML("تقرير الباقات", printTable(["الباقة · الفندق المطلوب","عدد الحجاج","السعر الواحد","الإجمالي المستحق"], rows, primaryColor,
     ["الإجمالي", String(pkgCount), "—", fmtAmt(pkgTotal)]), brand, chrome));
 }
 

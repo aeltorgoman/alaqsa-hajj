@@ -4,7 +4,7 @@
 // ============================================================
 import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, GroupPayForm } from "./finance.types";
+import type { PricingMap, HotelPackagePrices, Payment, CustomCharge, FinancialGroup, GroupPayForm } from "./finance.types";
 import { calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance.utils";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
@@ -14,6 +14,7 @@ export type FinancialGroupViewProps = {
   groupPassengers: Passenger[];
   availableToAdd: Passenger[];
   pricing: PricingMap;
+  hotelPrices: HotelPackagePrices;
   chargesByPassenger: Map<number, CustomCharge[]>;
   paymentsByPassenger: Map<number, Payment[]>;
 
@@ -52,7 +53,7 @@ export type FinancialGroupViewProps = {
 };
 
 export function FinancialGroupView({
-  group, groupPassengers, availableToAdd, pricing, chargesByPassenger, paymentsByPassenger,
+  group, groupPassengers, availableToAdd, pricing, hotelPrices, chargesByPassenger, paymentsByPassenger,
   canManage,
   showAddMemberModal, showGroupPayModal, addingMemberId, groupPayForm, savingGroupPay,
   onBack, onPrintGroupStatement,
@@ -61,7 +62,7 @@ export function FinancialGroupView({
   onGroupPayFormChange, onSubmitGroupPayment,
   thStyle, tdStyle, inputStyle,
 }: FinancialGroupViewProps) {
-  const gTotDue=groupPassengers.reduce((s,p)=>s+calcTotalDue(p,pricing,chargesByPassenger),0);
+  const gTotDue=groupPassengers.reduce((s,p)=>s+calcTotalDue(p,pricing,hotelPrices,chargesByPassenger),0);
   const gTotPaid=groupPassengers.reduce((s,p)=>s+calcTotalPaid(p.id,paymentsByPassenger),0);
   const gTotBal=gTotDue-gTotPaid;
   const gSt=financeStatus(gTotDue,gTotPaid);
@@ -108,7 +109,7 @@ export function FinancialGroupView({
           </tr></thead>
           <tbody>
             {groupPassengers.map((p,i) => {
-              const due=calcTotalDue(p,pricing,chargesByPassenger),paid=calcTotalPaid(p.id,paymentsByPassenger),bal=due-paid,st=financeStatus(due,paid);
+              const due=calcTotalDue(p,pricing,hotelPrices,chargesByPassenger),paid=calcTotalPaid(p.id,paymentsByPassenger),bal=due-paid,st=financeStatus(due,paid);
               return (
                 <tr key={p.id} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}>
                   <td style={tdStyle}><span style={{ cursor:"pointer", color:"var(--text)", fontWeight:600 }} onClick={()=>onSelectPassenger(p)}>{p.short_ar||p.name_ar}</span><span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:st.bg, color:st.color, marginRight:6 }}>{st.label}</span></td>
