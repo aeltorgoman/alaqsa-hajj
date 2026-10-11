@@ -5,7 +5,7 @@
 import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, AllocTypeMaps } from "./finance.types";
-import { getPriceInfo, requestedHotelName, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
+import { getPriceInfo, viewSurcharge, requestedHotelName, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
 import { serviceContextRows } from "./finance.context";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
@@ -78,7 +78,7 @@ export function PassengerFinanceView({
   const st=financeStatus(totalDue,totalPaid);
   type AR={label:string;amount:number;isDiscount?:boolean};
   const addonRows:AR[]=[];
-  if (s.hotel_view==="مطلة") addonRows.push({label:"إضافة مطلة",amount:pricing["addon_view"]?.amount||0});
+  if (s.hotel_view==="مطلة") addonRows.push({label:reqHotel?`إضافة مطلة — ${reqHotel}`:"إضافة مطلة",amount:viewSurcharge(passenger, hotelPrices)});
   if (s.camp_mina==="خاص")  addonRows.push({label:"خيمة خاصة - منى",amount:pricing["addon_mina"]?.amount||0});
   if (s.camp_arafa==="خاص") addonRows.push({label:"خيمة خاصة - عرفة",amount:pricing["addon_arafa"]?.amount||0});
   if (s.bus==="VIP")         addonRows.push({label:"باص VIP",amount:pricing["addon_bus_vip"]?.amount||0});

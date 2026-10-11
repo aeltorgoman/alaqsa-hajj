@@ -108,8 +108,9 @@ begin
               where s.hijri_year in (1441, 1443) and hp.amount <> ps.amount) then
     raise exception 'FAIL — المقفلُ بلا لقطةٍ أو المفتوحُ لم يأخذ السعرَ الحيّ' using errcode = 'P0099';
   end if;
-  -- ولا مفتاحَ غيرَ الباقات الأربعة
-  if exists (select 1 from public.hotel_package_prices where package_key not like 'package_%') then
+  -- ولا مفتاحَ غيرَ الباقات الأربعة — و`addon_view` الذي تُضيفه M5 حين يُطبَّق
+  -- `migration up` كلَّ ما بعد PR 2 (يبرهنها release_postcheck.sql وrelease_gate_tests.sh)
+  if exists (select 1 from public.hotel_package_prices where package_key not like 'package_%' and package_key <> 'addon_view') then
     raise exception 'FAIL — صفُّ سعرٍ لغير الباقات' using errcode = 'P0099';
   end if;
   raise notice 'PASS — الأسعار: لقطةُ المقفل، وحيُّ المفتوحِ والمقفلِ بلا لقطة، والمفتاحُ الغائبُ بلا صفّ';

@@ -28,7 +28,7 @@ LOCAL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 export OUT="${OUT:-/tmp/mod001-release-gate-tests}"
 rm -rf "$OUT"; mkdir -p "$OUT"
 LT=vgqowazlzzcovcrigcjz; PROD=zkucwcnclbfvukhdqhgc; HOST=aws-1-eu-central-1.pooler.supabase.com
-PUSH_LT=PUSH-MOD001-LOADTEST-20261011140000; PUSH_PROD=PUSH-MOD001-PRODUCTION-20261011140000
+PUSH_LT=PUSH-MOD001-LOADTEST-20261011180000; PUSH_PROD=PUSH-MOD001-PRODUCTION-20261011180000
 GATE_LT=GATE-MOD001-LOADTEST-PRICES; GATE_PROD=GATE-MOD001-PRODUCTION-PRICES
 
 pass=0; fail=0
@@ -85,8 +85,10 @@ insert into public.rooms (number, floor, type) values ('1','1','رباعية');
 insert into public.passengers (name_ar, hotel_type) values ('اختبار ٣', 'رباعية'), ('اختبار ٤', null);
 insert into public.passengers (name_ar, passenger_type) values ('إداري', 'إداري');
 update public.pricing_settings set amount = amount + 7 where key like 'package%';
+-- رسمُ الإطلالة الحيّ يفترق عن لقطة 1440 (250): M5 تأخذ لكلّ موسمٍ مصدرَه
+update public.pricing_settings set amount = 300 where key = 'addon_view';
 SQL
-expect_ok    "ledger-before at 58 with exactly the four pending" local_run ledger-before
+expect_ok    "ledger-before at 58 with exactly the five pending" local_run ledger-before
 expect_block "price gate before the migrations are applied"      local_run price-gate
 expect_ok    "preflight at 58"                                    local_run preflight
 
@@ -116,9 +118,11 @@ sql "drop table public.hotels"
 
 echo "═══ ٤) دفعٌ محلّيٌّ كامل بالمراحل نفسِها ═══"
 expect_ok "fp-before"                                             local_run fp-before
-expect_ok "push (local db push of the four migrations)"          local_run push
-expect_ok "ledger-after: 62, originals untouched"                 local_run ledger-after
-expect_ok "postcheck: structure, backfill, base prices, fingerprints" local_run postcheck
+expect_ok "push (local db push of the five migrations)"          local_run push
+expect_ok "ledger-after: 63, originals untouched"                 local_run ledger-after
+expect_ok "postcheck: structure, backfill, base prices, view surcharges, fingerprints" local_run postcheck
+m5="$(sql "select string_agg(s.hijri_year || '=' || hp.amount::int, ' ' order by s.hijri_year) from public.hotel_package_prices hp join public.seasons s on s.id = hp.season_id where hp.package_key = 'addon_view'")"
+if [ "$m5" = "1440=250 1441=300" ]; then ok "M5: closed season took its snapshot view surcharge (250), open season the live one (300)"; else bad "M5 view surcharges by season: $m5"; fi
 expect_ok "price gate right after the push"                       local_run price-gate
 expect_block "ledger-before after the migrations are applied"     local_run ledger-before
 expect_block "preflight after the migrations are applied"        local_run preflight
@@ -127,6 +131,11 @@ echo "═══ ٥) البصمات ═══"
 sql "update public.pricing_settings set label = label || ' ' where key = 'addon_view'"
 expect_block "postcheck after a protected row changed"            local_run postcheck
 sql "update public.pricing_settings set label = btrim(label) where key = 'addon_view'"
+expect_ok    "postcheck after it was restored"                    local_run postcheck
+hc="$(sql "select h.id from public.hotels h join public.seasons s on s.id = h.season_id where s.hijri_year = 1440")"
+sql "begin; select set_config('app.season_maintenance','on',true); update public.hotel_package_prices set amount = amount + 1 where hotel_id = $hc and package_key = 'addon_view'; commit;" > /dev/null
+expect_reason "postcheck after a closed-season view surcharge drifted" "view surcharge changed" local_run postcheck
+sql "begin; select set_config('app.season_maintenance','on',true); update public.hotel_package_prices set amount = amount - 1 where hotel_id = $hc and package_key = 'addon_view'; commit;" > /dev/null
 expect_ok    "postcheck after it was restored"                    local_run postcheck
 
 echo "═══ ٦) بوّابةُ الأسعار (أخيراً: تُعيد إدراجَ صفّ سعرٍ فتتغيّر البصمةُ بحقّ) ═══"
@@ -147,10 +156,23 @@ expect_ok    "both restored"                                      local_run pric
 sql "update public.hotel_package_prices set amount = 0 where hotel_id = $h and package_key = 'package_quad'"
 expect_block "explicit zero in the hotel against a non-zero global" local_run price-gate
 sql "update public.hotel_package_prices set amount = (select amount from public.pricing_settings where key='package_quad') where hotel_id = $h and package_key = 'package_quad'"
+# رسمُ الإطلالة (M5): الحيُّ والفندقُ الافتراضيّ والحاجُّ «مطلة»
+sql "update public.pricing_settings set amount = amount + 1 where key = 'addon_view'"
+expect_reason "global view surcharge edited during rollout" "pilgrim price mismatch" local_run price-gate
+sql "update public.pricing_settings set amount = amount - 1 where key = 'addon_view'"
+sql "update public.hotel_package_prices set amount = 0 where hotel_id = $h and package_key = 'addon_view'"
+expect_block "explicit zero view surcharge against a non-zero global" local_run price-gate
+sql "update public.hotel_package_prices set amount = (select amount from public.pricing_settings where key='addon_view') where hotel_id = $h and package_key = 'addon_view'"
+expect_ok    "view surcharge restored"                            local_run price-gate
+# فندقٌ ثانٍ بأسعاره الخاصّة ولا حاجَّ فيه: سعرٌ خاصٌّ بالفندق مشروع، لا يوقف الإطلاق
 sql "insert into public.hotels (name) values ('فندق ثانٍ')"
-expect_block "a second open-season hotel with no prices"          local_run price-gate
-sql "insert into public.hotel_package_prices (hotel_id, package_key, amount) select h2.id, ps.key, ps.amount from public.hotels h2 join public.pricing_settings ps on ps.key like 'package%' where h2.name = 'فندق ثانٍ'"
-expect_ok    "second hotel priced like the global prices"        local_run price-gate
+sql "insert into public.hotel_package_prices (hotel_id, package_key, amount) select h2.id, k, 99 from public.hotels h2, unnest(array['package_double','addon_view']) k where h2.name = 'فندق ثانٍ'"
+expect_ok    "a second hotel with its own (different) prices and no pilgrims" local_run price-gate
+# …لكن حاجٌّ قائمٌ طلبه يتغيّر مبلغُه عند التبديل
+sql "update public.passengers set requested_hotel_id = (select id from public.hotels where name = 'فندق ثانٍ') where name_ar = 'اختبار ٤'"
+expect_reason "a pilgrim whose requested hotel prices differ from what the current frontend charges" "pilgrim price mismatch" local_run price-gate
+sql "update public.passengers set requested_hotel_id = $h where name_ar = 'اختبار ٤'"
+expect_ok    "pilgrim back on the default hotel"                  local_run price-gate
 sql "insert into public.passengers (name_ar, hotel_type) values ('اختبار بلا فندق', 'ثنائية')"
 expect_block "a priced pilgrim without a requested hotel"         local_run price-gate
 sql "delete from public.passengers where name_ar = 'اختبار بلا فندق'"
@@ -174,7 +196,7 @@ TKP=(); for f in "$LTW" "$PRW" "${TK[@]}"; do TKP+=("$f=$f"); done
 REG="$(commit_with origin/main "${TKP[@]}")"                     # main بعد تسجيل عُدّة الإطلاق وحدها
 # فرعُ الإطلاق كما يُبنى فعلاً: main المسجَّل + ملفّاتُ قاعدة البيانات وحدها (لا واجهة)
 # بالخطوة الأولى في الدليل حرفاً: 896894d (دمج PR 4) + المسارات المذكورة هناك وحدها
-DBP=(); while IFS= read -r f; do DBP+=("$f=$f"); done < <(git ls-files supabase/migrations/20261011140000_mod001_atomic_transfer_room_uniqueness.sql supabase/verification/mod001 supabase/verification/rehearsal/assert-after-close.sql supabase/README.md docs/runbooks/MOD001_RELEASE.md .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml)
+DBP=(); while IFS= read -r f; do DBP+=("$f=$f"); done < <(git ls-files supabase/migrations/20261011140000_mod001_atomic_transfer_room_uniqueness.sql supabase/migrations/20261011180000_mod001_hotel_view_surcharge.sql supabase/verification/mod001 supabase/verification/rehearsal/assert-after-close.sql supabase/README.md docs/runbooks/MOD001_RELEASE.md .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml)
 DBONLY="$(commit_with 896894d "${DBP[@]}")"
 printf '# drift\n' | cat "$LTW" - > "$OUT/lt-drift.yml"
 printf 'export const x = 1;\n' > "$OUT/fe.ts"

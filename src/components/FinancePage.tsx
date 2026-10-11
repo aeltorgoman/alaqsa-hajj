@@ -10,7 +10,7 @@ import { signedPrivateCompanyUrl } from "../utils";
 import type { Passenger, User } from "../types";
 
 import type { HotelPackagePrices, HotelPackagePriceRow, FinanceHotel, PricingMap, Payment, PaymentReceipt, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
-import { hotelPricesFromRows, packageReportRows, packageLabel, PRICING_KEYS, SERVICE_FILTERS, serviceLabel, matchesPackageFilter, matchesServiceFilter, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus, localDateISO } from "./finance/finance.utils";
+import { hotelPricesFromRows, packageReportRows, addonReportRows, VIEW_KEY, HOTEL_PRICE_KEYS, packageLabel, PRICING_KEYS, matchesPackageFilter, matchesServiceFilter, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, totalsFor, sortFinanceRows, matchesFinanceSearch, fmtAmt, financeStatus, localDateISO } from "./finance/finance.utils";
 import { FinanceListView } from "./finance/FinanceListView";
 import { CompanyBankCard } from "./finance/CompanyBankCard";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
@@ -424,7 +424,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const rows: { key:string; label:string; type:string; amount:number; updated_at:string }[] = [];
     for (const key of Object.keys(editPricing)) {
       const meta = PRICING_KEYS.find(k => k.key === key);
-      if ((pricing[key]?.type || meta?.type) === "package") continue;
+      if ((pricing[key]?.type || meta?.type) === "package" || key === VIEW_KEY) continue;
       const amount = Number(editPricing[key]);
       if (!Number.isFinite(amount) || amount < 0) {
         showAlert("error", `قيمة غير صالحة في: ${meta?.label || key}`);
@@ -443,7 +443,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const upserts: { hotel_id:number; season_id:number; package_key:string; amount:number; updated_at:string }[] = [];
     const deletes: { hotel_id:number; package_key:string }[] = [];
     for (const h of hotels) {
-      for (const pk of PRICING_KEYS.filter(k => k.type === "package")) {
+      for (const pk of HOTEL_PRICE_KEYS) {
         const raw = (editHotelPrices[`${h.id}:${pk.key}`] ?? "").trim();
         const current = hotelPrices.get(h.id)?.[pk.key];
         if (raw === "") { if (current !== undefined) deletes.push({ hotel_id: h.id, package_key: pk.key }); continue; }
@@ -854,6 +854,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     () => packageReportRows(sortedPassengers, pricing, hotelPrices, hotels),
     [sortedPassengers, pricing, hotelPrices, hotels],
   );
+  const addonRows = useMemo(
+    () => addonReportRows(sortedPassengers, pricing, hotelPrices, hotels),
+    [sortedPassengers, pricing, hotelPrices, hotels],
+  );
 
   /* ضغطةٌ على العمود نفسه تقلب الاتّجاه، وعلى عمودٍ آخر تبدأ تنازلياً
      للمبالغ (الأكبر أوّلاً هو المطلوب في التحصيل) وتصاعدياً للاسم. */
@@ -1162,20 +1166,20 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
             {/* MOD-001 PR 8: سعرُ الباقة لكلّ فندقٍ في الموسم المعروض. الحاجُّ يُسعَّر
                 بفندقه **المطلوب**؛ الحقلُ الفارغ = صفر بلا رجوعٍ إلى سعرٍ عامّ. */}
             <div style={cardBox} data-testid="hotel-package-prices">
-              <div style={cardTitle}>الباقات الأساسية — لكل فندق</div>
+              <div style={cardTitle}>الباقات الأساسية ورسم الإطلالة — لكل فندق</div>
               <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:10, lineHeight:1.8 }}>
-                يُحسب سعر باقة الحاج من فندقه المطلوب في موسم <strong>{viewedSeason.name}</strong>. الحقل الفارغ يُحسب صفراً، والصفر المكتوب سعرٌ صريح.
+                يُحسب سعر باقة الحاج ورسم إطلالته («مطلة») من فندقه المطلوب في موسم <strong>{viewedSeason.name}</strong>. الحقل الفارغ يُحسب صفراً، والصفر المكتوب سعرٌ صريح.
               </div>
               {hotels.length === 0 ? (
                 <div style={{ fontSize:12, color:"var(--danger)" }}>لا فنادق في هذا الموسم — أضف فندقاً من صفحة الفندق أولاً.</div>
               ) : hotels.map(h => (
                 <div key={h.id} style={{ marginBottom:12 }}>
                   <div style={{ fontSize:12.5, fontWeight:700, color:"var(--primary)", marginBottom:6 }}>{h.name}</div>
-                  {PRICING_KEYS.filter(k=>k.type==="package").map(k => {
+                  {HOTEL_PRICE_KEYS.map(k => {
                     const editable = canManage && seasonWritable && !hotelPricesFailed;
                     return (
                       <div key={k.key} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                        <div style={{ flex:1, fontSize:13 }}>{pricing[k.key]?.label || k.label}</div>
+                        <div style={{ flex:1, fontSize:13 }}>{k.key === VIEW_KEY ? k.label : (pricing[k.key]?.label || k.label)}</div>
                         <input type="number" min="0" data-testid={`hp-${h.id}-${k.key}`} value={editHotelPrices[`${h.id}:${k.key}`] ?? ""}
                           placeholder="غير محدد = 0"
                           readOnly={!editable} disabled={!editable}
@@ -1193,7 +1197,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                 <div style={cardTitle}>
                   {type==="addon"?"الإضافات":"الخصومات"}
                 </div>
-                {PRICING_KEYS.filter(k=>k.type===type).map(k => (
+                {PRICING_KEYS.filter(k=>k.type===type && k.key!==VIEW_KEY).map(k => (
                   <div key={k.key} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
                     <div style={{ flex:1, fontSize:13 }}>{k.label}</div>
                     <input type="number" min="0" value={editPricing[k.key]||"0"}
@@ -1535,7 +1539,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     /* الموسمُ قدرةٌ مشتركة — والحسابُ والجداولُ كما هي بالحرف.
        والخياراتُ عرضٌ لا حساب: لا صفَّ ولا إجماليَّ ولا باقةَ تمسّها. */
     const finChrome = chromeFromOptions("finance", printOpts, { season: viewedSeason });
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfRows,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
+    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfRows,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
@@ -1625,7 +1629,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ background:"var(--bg-card)", borderRadius:12, overflow:"hidden", boxShadow:"var(--shadow-sm)" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr><th style={thStyle}>الإضافة / الخصم</th><th style={{ ...thStyle, textAlign:"center" }}>عدد الحجاج</th><th style={{ ...thStyle, textAlign:"center" }}>السعر الواحد</th><th style={{ ...thStyle, textAlign:"center" }}>الإجمالي</th></tr></thead>
-              <tbody>{SERVICE_FILTERS.map((a,i)=>{const count=sortedPassengers.filter(a.check).length,price=pricing[a.key]?.amount||0,isDis=a.key==="discount_no_ticket";return(<tr key={a.key} style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{serviceLabel(a.key, pricing)}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(price)}</td><td style={{ ...tdStyle, textAlign:"center", color:isDis?"var(--danger)":"var(--em8)", fontWeight:700 }}>{isDis?`(${fmtAmt(count*price)})`:fmtAmt(count*price)}</td></tr>);})}</tbody>
+              <tbody>{addonRows.map((r,i)=>(<tr key={r.key} data-testid="addon-report-row" style={{ background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}><td style={tdStyle}>{r.label}</td><td style={{ ...tdStyle, textAlign:"center", fontWeight:700 }}>{r.count}</td><td style={{ ...tdStyle, textAlign:"center" }}>{fmtAmt(r.price)}</td><td style={{ ...tdStyle, textAlign:"center", color:r.isDiscount?"var(--danger)":"var(--em8)", fontWeight:700 }}>{r.isDiscount?`(${fmtAmt(r.total)})`:fmtAmt(r.total)}</td></tr>))}</tbody>
             </table>
           </div>
         )}
