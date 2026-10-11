@@ -173,8 +173,9 @@ TK=(supabase/verification/mod001/release_{target_guard.sh,run.sh,preflight.sql,f
 TKP=(); for f in "$LTW" "$PRW" "${TK[@]}"; do TKP+=("$f=$f"); done
 REG="$(commit_with origin/main "${TKP[@]}")"                     # main بعد تسجيل عُدّة الإطلاق وحدها
 # فرعُ الإطلاق كما يُبنى فعلاً: main المسجَّل + ملفّاتُ قاعدة البيانات وحدها (لا واجهة)
-DBP=(); while IFS= read -r f; do DBP+=("$f=$f"); done < <(git ls-files supabase/migrations/2026101*_mod001_*.sql 'supabase/verification/mod001/*.sql' 'supabase/verification/mod001/*.sh' supabase/verification/rehearsal/assert-after-close.sql supabase/README.md docs/runbooks/MOD001_RELEASE.md)
-DBONLY="$(commit_with "$REG" "${DBP[@]}")"
+# بالخطوة الأولى في الدليل حرفاً: 896894d (دمج PR 4) + المسارات المذكورة هناك وحدها
+DBP=(); while IFS= read -r f; do DBP+=("$f=$f"); done < <(git ls-files supabase/migrations/20261011140000_mod001_atomic_transfer_room_uniqueness.sql supabase/verification/mod001 supabase/verification/rehearsal/assert-after-close.sql supabase/README.md docs/runbooks/MOD001_RELEASE.md .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml)
+DBONLY="$(commit_with 896894d "${DBP[@]}")"
 printf '# drift\n' | cat "$LTW" - > "$OUT/lt-drift.yml"
 printf 'export const x = 1;\n' > "$OUT/fe.ts"
 DRIFT="$(commit_with "$DBONLY" "$LTW=$OUT/lt-drift.yml")"
