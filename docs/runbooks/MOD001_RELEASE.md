@@ -22,7 +22,7 @@ All logic lives in `supabase/verification/mod001/`. The workflows only call it.
 
 | Gate | Blocks when |
 |---|---|
-| `release_target_guard.sh` | wrong target, malformed ref, pooler user not `postgres.<ref>`, non-pooler host, the other target's or the other mode's confirmation text, Load Test ref ≠ `LT_PROJECT_REF`, Production run carrying Load Test identity, Load Test run pointed at Production |
+| `release_target_guard.sh` (+ port check in `release_run.sh`) | wrong target, malformed ref, pooler user not `postgres.<ref>`, non-pooler host, a port other than 5432/6543, the other target's or the other mode's confirmation text, Load Test ref ≠ `LT_PROJECT_REF`, Production run carrying Load Test identity, Load Test run pointed at Production |
 | `release_run.sh scope` (`check`, `push`) | the dispatched ref changes anything outside `supabase/migrations`, `supabase/verification`, `supabase/README.md`, `docs/` (i.e. it carries frontend), or its copy of either MOD-001 workflow differs from the copy registered on `main`, or `main` is not available to compare |
 | `release_run.sh static` | migration count ≠ 61, a migration file differs from its reviewed SHA-256, a migration writes application rows at top level |
 | `release_run.sh ledger-before` | ledger ≠ 58 rows / `20260928100000`, pending set ≠ exactly the three, any unexpected ledger version |

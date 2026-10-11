@@ -53,6 +53,10 @@ guard() {
     return 0
   fi
   "$HERE/release_target_guard.sh" "${TARGET:-}" "${REF:-}" "${DB_USER:-}" "${DB_HOST:-}" "${CONFIRM:-}" "${LT_SECRET:-}"
+  # المنفذُ يدخل الرابطَ نصّاً: قيمةٌ مثل `5432/postgres?hostaddr=…` تحوّل الوجهة
+  # إلى خادمٍ آخر وتكشف PGPASSWORD. منفذا الـpooler وحدهما.
+  case "${DB_PORT:-5432}" in 5432|6543) ;; *)
+    echo "::error::REFUSING: db_port must be 5432 or 6543 — nothing was touched."; exit 1;; esac
   if [ "${TARGET:-}" = "loadtest" ]; then
     ALLOWED_TMP_REF="$REF" "$ROOT/supabase/verification/assert-not-production.sh" "$REF" "postgres.$REF" >/dev/null
   fi

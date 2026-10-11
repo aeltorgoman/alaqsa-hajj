@@ -130,6 +130,7 @@ jobs:
         run: '"$RUN" price-gate'
 
       - name: "Scan evidence for secret-like material"
+        id: scan
         if: always()
         run: |
           set -euo pipefail
@@ -137,8 +138,8 @@ jobs:
           if grep -rIlE 'postgres(ql)?://[^*[:space:]]+:[^@[:space:]]+@|sb_secret_|service_role' "$OUT" 2>/dev/null; then
             echo "::error::evidence holds secret-like material"; exit 1; fi
 
-      - name: "Upload evidence"
-        if: always()
+      - name: "Upload evidence (only after a clean secret scan)"
+        if: always() && steps.scan.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: mod001-loadtest-${{ inputs.mode }}

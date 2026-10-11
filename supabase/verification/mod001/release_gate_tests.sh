@@ -62,6 +62,8 @@ expect_block "unknown mode"                                    env MODE=apply "$
 expect_block "malformed ref"                                   env MODE=push "$G" production ZKU   postgres.ZKU   $HOST $PUSH_PROD ""
 expect_block "release_run refuses before connecting (wrong target)" \
   env MODE=push TARGET=production REF=$LT DB_USER=postgres.$LT DB_HOST=$HOST CONFIRM=$PUSH_PROD "$R" ledger-before
+expect_block "release_run refuses a db_port carrying URI parameters" \
+  env MODE=push TARGET=production REF=$PROD DB_USER=postgres.$PROD DB_HOST=$HOST DB_PORT='5432/postgres?hostaddr=203.0.113.9' CONFIRM=$PUSH_PROD "$R" ledger-before
 expect_block "release_run local mode refuses a non-local URL" \
   env MOD001_LOCAL_URL="postgresql://postgres.$PROD@$HOST:5432/postgres" "$R" ledger-before
 expect_block "push refuses without fingerprint evidence" env OUT="$OUT/empty" MOD001_LOCAL_URL="$LOCAL" "$R" push
