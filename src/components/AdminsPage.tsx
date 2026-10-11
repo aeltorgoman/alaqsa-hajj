@@ -2,7 +2,8 @@ import { useState, useRef } from "react";
 import { isHajj, mapPassenger, upsertPassenger, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
-import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
+import type { Passenger, Bus, Camp, Room, Flight, User, Hotel } from "../types";
+import { roomLabel } from "../utils/hotels";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { allocWriteError } from "./allocation/useAllocation";
 import { useSeason } from "../season/useSeason";
@@ -90,6 +91,8 @@ function AdminsPage({
   // بيانات التعيين
   const [buses, setBuses]     = useState<Bus[]>([]);
   const [rooms, setRooms]     = useState<Room[]>([]);
+  /* MOD-001 — رقمُ الغرفة قد يتكرّر بين فنادق الموسم: كلُّ تسميةٍ تحمل فندقها */
+  const [hotels, setHotels]   = useState<Hotel[]>([]);
   const [camps, setCamps]     = useState<Camp[]>([]);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [dataLoaded, setDataLoaded] = useState<number | null>(null);
@@ -165,7 +168,7 @@ function AdminsPage({
         <td style="text-align:center;padding:5pt;font-size:9pt">${flight ? (flight.airline+" — "+flight.name) : "—"}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${campM ? campM.name : "—"}</td>
         <td style="text-align:center;padding:5pt;font-size:9pt">${campA ? campA.name : "—"}</td>
-        <td style="text-align:center;padding:5pt;font-size:9pt">${room ? (room.floor+"/"+(room as any).number) : "—"}</td>
+        <td style="text-align:center;padding:5pt;font-size:9pt">${room ? roomLabel(room, hotels) : "—"}</td>
       </tr>`;
     }).join("");
     const body = `<table style="width:100%;border-collapse:collapse">
@@ -195,16 +198,18 @@ function AdminsPage({
      ويُسنِد إليها. */
   const loadAssignData = async () => {
     if (dataLoaded === viewedSeason.id) return;
-    const [{ data: b }, { data: r }, { data: c }, { data: f }] = await Promise.all([
+    const [{ data: b }, { data: r }, { data: c }, { data: f }, { data: h }] = await Promise.all([
       supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
       supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("floor").order("number"),
       supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("name"),
       supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date"),
+      supabase.from("hotels").select("*").eq("season_id", viewedSeason.id).order("id"),
     ]);
     if (b) setBuses(b as Bus[]);
     if (r) setRooms(r as Room[]);
     if (c) setCamps(c as Camp[]);
     if (f) setFlights(f as Flight[]);
+    if (h) setHotels(h as Hotel[]);
     setDataLoaded(viewedSeason.id);
   };
 
@@ -621,7 +626,7 @@ function AdminsPage({
   // مساعدات عرض التعيينات
   // ============================================================
   const busName    = (p: Passenger) => buses.find(b => b.id === p.bus_id)?.name || "—";
-  const roomName   = (p: Passenger) => { const r = rooms.find(r => r.id === p.room_id); return r ? `${r.number}${r.floor ? ` (ط${r.floor})` : ""}` : "—"; };
+  const roomName   = (p: Passenger) => { const r = rooms.find(r => r.id === p.room_id); return r ? roomLabel(r, hotels) : "—"; };
   const minaName   = (p: Passenger) => camps.find(c => c.id === p.camp_mina_id)?.name  || "—";
   const arafaName  = (p: Passenger) => camps.find(c => c.id === p.camp_arafa_id)?.name || "—";
   const flightName = (p: Passenger) => flights.find(f => f.id === p.flight_id)?.name   || "—";
@@ -841,11 +846,16 @@ function AdminsPage({
               return { id: String(b.id), label: `${b.name} (${b.type}) — ${occ}/${cap}${occ >= cap ? " مكتمل" : ` · متبقٍّ ${cap - occ}`}` };
             })]} />
           <AssignSelect label="غرفة الفندق"  value={assign.room_id}          onChange={v => setAssign(a => ({ ...a, room_id: v }))}
-            options={[{ id: "", label: "— بدون —" }, ...rooms.map(r => {
-              const cap = ROOM_TYPE_CAP[r.type] || 0, occ = occupantsOf("room_id", r.id);
-              const state = cap === 0 ? "" : ` — ${occ}/${cap}${occ >= cap ? " مكتملة" : ` · متبقٍّ ${cap - occ}`}`;
-              return { id: String(r.id), label: `${r.number} — ${r.type}${r.floor ? ` (ط${r.floor})` : ""}${state}` };
-            })]} />
+            /* مجموعةٌ لكلّ فندق، والفندقُ في نصّ الخيار نفسِه أيضاً — فلا
+               تلتبس «101» في فندقٍ بـ«101» في آخر حتى في القائمة المغلقة */
+            options={[{ id: "", label: "— بدون —" }, ...[...rooms]
+              .sort((a, b) => (hotels.findIndex(x => x.id === a.hotel_id) - hotels.findIndex(x => x.id === b.hotel_id)) || 0)
+              .map(r => {
+                const cap = ROOM_TYPE_CAP[r.type] || 0, occ = occupantsOf("room_id", r.id);
+                const state = cap === 0 ? "" : ` — ${occ}/${cap}${occ >= cap ? " مكتملة" : ` · متبقٍّ ${cap - occ}`}`;
+                return { id: String(r.id), label: `${roomLabel(r, hotels)} — ${r.type}${state}`,
+                  group: hotels.find(x => x.id === r.hotel_id)?.name ?? "بلا فندق" };
+              })]} />
           {/* المخيّمات مفصولة بالجنس في صفحة المخيّمات، وكانت هنا
               مفتوحة للجميع — «خاص» وحده يقبل الجنسين */}
           <AssignSelect label="مخيم منى"     value={assign.camp_mina_id}     onChange={v => setAssign(a => ({ ...a, camp_mina_id: v }))}
@@ -991,12 +1001,19 @@ function AssignTag({ label, val, color }: { label: string; val: string; color: s
   );
 }
 
-function AssignSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { id: string; label: string }[] }) {
+function AssignSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { id: string; label: string; group?: string }[] }) {
+  /* `group` اختياريّ: الخياراتُ المجمَّعة تُعرض في optgroup بترتيب ظهورها */
+  const groups = [...new Set(options.filter(o => o.group).map(o => o.group as string))];
   return (
     <div>
       <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>{label}</label>
-      <select style={inp} value={value} onChange={e => onChange(e.target.value)}>
-        {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+      <select style={inp} value={value} onChange={e => onChange(e.target.value)} aria-label={label}>
+        {options.filter(o => !o.group).map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+        {groups.map(g => (
+          <optgroup key={g} label={g}>
+            {options.filter(o => o.group === g).map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </optgroup>
+        ))}
       </select>
     </div>
   );
