@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { isHajj, byOrder, applyReorder, mapPassenger } from "../utils/passenger";
+import { isHajj, byOrder, applyReorder, mapPassenger, upsertPassenger } from "../utils/passenger";
 import { hotelNameOf, roomLabel } from "../utils/hotels";
 import { allocWriteError } from "./allocation/useAllocation";
 import type { Dispatch, SetStateAction } from "react";
@@ -350,12 +350,16 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     if (data) setPassengers(prev => prev.map(p => p.id === pId ? mapPassenger(data) : p));
   };
   /* نزلاءُ غرفةٍ بعينها من القاعدة — بعد رفضٍ لسببها (امتلأت من شاشةٍ
-     أخرى)، فتظهر مكتملةً وتخرج من قائمة الوجهات. */
+     أخرى)، فتظهر مكتملةً وتخرج من قائمة الوجهات. القاعدةُ هي الحَكَم:
+     نزيلٌ لم تحمله الصفحةُ قطّ يُضاف، والموجودُ يُستبدل (`upsertPassenger`
+     — لا تكرار)، ومن تظنّه الصفحةُ فيها وليس فيها يُقرأ من جديد. */
   const refreshRoomOccupants = async (roomId: number) => {
     const { data } = await supabase.from("passengers").select("*").eq("room_id", roomId);
     if (!data) return;
-    const fresh = new Map(data.map(row => [row.id, mapPassenger(row)]));
-    setPassengers(prev => prev.map(p => fresh.get(p.id) ?? p));
+    const inRoom = new Set(data.map(row => row.id));
+    const stale = passengers.filter(p => p.room_id === roomId && !inRoom.has(p.id)).map(p => p.id);
+    const moved = stale.length ? (await supabase.from("passengers").select("*").in("id", stale)).data ?? [] : [];
+    setPassengers(prev => [...data, ...moved].reduce((list, row) => upsertPassenger(list, mapPassenger(row)), prev));
   };
   const loadSeasonRooms = async () => {
     const { data, error } = await supabase.from("rooms").select("*").eq("season_id", viewedSeason.id);
