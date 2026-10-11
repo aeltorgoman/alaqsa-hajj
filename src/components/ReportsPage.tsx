@@ -18,7 +18,7 @@ import { supabase } from "../supabase";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight, User, Hotel } from "../types";
 import { hotelNameOf } from "../utils/hotels";
-import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
+import { makeHTML, buildStickersHTML, stickerDataGaps, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 import { REPORTS_RESPONSIVE_CSS } from "./reports.responsive";
 
@@ -2090,6 +2090,15 @@ const getReportAirlineLogo = (airline: string): string | null => {
 
             const doPrint = () => {
               if (!finalPassengers.length) { showAlert("warning", "يرجى اختيار حاج واحد على الأقل."); return; }
+              /* MOD-001: الفندقُ يُشتقّ من الغرف والفنادق — لا طباعةَ قبل اكتمالها،
+                 ولا ملصقاتٌ بـ«—» مكانَ فندقٍ موجود. */
+              if (isLoading("rooms")) { showAlert("warning", "جاري تحميل الغرف والفنادق — حاول بعد لحظة."); return; }
+              if (isFailed("rooms")) { void loadRefData(["rooms"]); showAlert("error", "تعذّر تحميل الغرف والفنادق — تجري إعادة المحاولة. لم يُطبع شيء."); return; }
+              if (stickerDataGaps(finalPassengers, { rooms, hotels, buses, camps } as any) > 0) {
+                void loadRefData(["rooms"]);
+                showAlert("error", "بيانات الغرف أو الفنادق غير مكتملة لبعض الحجاج — تجري إعادة التحميل. لم يُطبع شيء.");
+                return;
+              }
               const now = new Date().toLocaleDateString("ar-EG");
               const newDates: Record<number, string> = { ...printDates };
               for (const p of finalPassengers) newDates[p.id] = now;

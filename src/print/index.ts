@@ -23,7 +23,7 @@ export { sectionLogoHtml, renderNamesTable, makeTwoLogoSectionHTML, joinSections
 export type { PrintOptions } from "./print.output";
 export { printInPage, downloadPDF } from "./print.output";
 export type { StickerConfig, StickerPassenger, StickerMeta, StickerTypes } from "./print.stickers";
-export { buildStickerPageHTML, buildHandTagPageHTML, buildLongTagPageHTML, buildStickersHTML } from "./print.stickers";
+export { buildStickerPageHTML, buildHandTagPageHTML, buildLongTagPageHTML, buildStickersHTML, stickerDataGaps } from "./print.stickers";
 export type { Manifest, CampPageType } from "./print.manifests";
 export { busTitle, busRiders, busManifest,
          BUSES_DOC_TITLE, campsDocTitle, FLIGHTS_DOC_TITLE,

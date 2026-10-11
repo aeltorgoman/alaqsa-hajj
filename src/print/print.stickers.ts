@@ -35,13 +35,29 @@ export interface StickerMeta {
   buses: { id: number; name?: string }[];
   camps: { id: number; name?: string }[];
 }
+import { escapeCompanyHtml } from "./print.brand";
+
+/* حاجٌّ مُسكَّنٌ لم تُحمَّل غرفتُه أو فندقُ غرفته في `meta` — طباعتُه
+   تُخرج «—» مكانَ فندقٍ موجود. فالمستدعي يمنع الطباعةَ ما دام هذا العددُ
+   فوق الصفر (بياناتٌ ناقصةٌ أو فاشلةٌ أو لم تصل بعد) — لا ملصقاتٌ مضلِّلة. */
+export function stickerDataGaps(passengers: StickerPassenger[], meta: StickerMeta): number {
+  let n = 0;
+  for (const p of passengers) {
+    if (p.room_id == null) continue;
+    const room = meta.rooms.find(r => r.id === p.room_id);
+    if (!room || (room.hotel_id != null && !(meta.hotels ?? []).some(h => h.id === room.hotel_id))) n++;
+  }
+  return n;
+}
+
 /* الفندقُ الفعليّ للحاجّ — من غرفته وحدها. بلا غرفة، أو غرفةٌ لم تُربط
    بفندق، أو فندقٌ غيرُ محمَّل ← لا فندق (يُطبع «—»)، ولا يُخمَّن. */
 export function stickerHotelOf(p: StickerPassenger, meta: StickerMeta): { name: string; address: string } | null {
   const room = meta.rooms.find(r => r.id === p.room_id);
   if (!room || room.hotel_id == null) return null;
   const h = (meta.hotels ?? []).find(x => x.id === room.hotel_id);
-  return h ? { name: h.name, address: h.address || "" } : null;
+  /* الاسمُ والعنوانُ نصٌّ يكتبه الموظّف ويُحقن في HTML المطبوع — يُهرَّبان */
+  return h ? { name: escapeCompanyHtml(h.name), address: escapeCompanyHtml(h.address || "") } : null;
 }
 
 export interface StickerTypes { sticker?: boolean; hand_tag?: boolean; long_tag?: boolean }

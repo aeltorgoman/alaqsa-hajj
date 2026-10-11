@@ -703,7 +703,7 @@ export {
   makeHTML, makeFinanceHTML,
   sectionLogoHtml, renderNamesTable, makeTwoLogoSectionHTML, joinSections, makeFlightSectionHTML,
   printInPage, downloadPDF,
-  buildStickerPageHTML, buildHandTagPageHTML, buildLongTagPageHTML, buildStickersHTML,
+  buildStickerPageHTML, buildHandTagPageHTML, buildLongTagPageHTML, buildStickersHTML, stickerDataGaps,
 } from "../print";
 
 

@@ -14,7 +14,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { DocImage } from "./DocImage";
-import { wantsService, type ServiceKey, itemsLabel, makeShort, buildStickersHTML, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { wantsService, type ServiceKey, itemsLabel, makeShort, buildStickersHTML, stickerDataGaps, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 import { hasIssue, isIssueKey, type IssueKey } from "../utils/readiness";
 import { useSeasonPhases } from "./Seasontimeline";
 /* المقارنة بالاسم تسكن مع المودال: كلاهما يخدم نفس السؤال، ونسخة
@@ -2415,7 +2415,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             <button onClick={async () => { void requestDeleteP(selected); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
           </div>
           <button onClick={() => {
-            /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير */
+            /* طباعة الاستيكرات الـ3 عبر الدالة الموحّدة المشتركة مع صفحة التقارير.
+               MOD-001: الفندقُ من الغرفة والفنادق المحمَّلة — لا طباعةَ قبل اكتمالها. */
+            if (hotelsStatus === "loading") { showAlert("warning", "جاري تحميل فنادق الموسم — حاول بعد لحظة."); return; }
+            if (hotelsStatus === "error") { retryHotels(); showAlert("error", "تعذّر تحميل فنادق الموسم — تجري إعادة المحاولة. لم يُطبع شيء."); return; }
+            if (stickerDataGaps([selected as any], { rooms: metaRooms as any, buses: [], camps: [], hotels: seasonHotels }) > 0) {
+              showAlert("error", "غرفة هذا الحاج أو فندقها لم يُحمَّل بعد — أعد تحميل الصفحة. لم يُطبع شيء."); return;
+            }
             printInPage(buildStickersHTML(
               [selected as any],
               { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName,
