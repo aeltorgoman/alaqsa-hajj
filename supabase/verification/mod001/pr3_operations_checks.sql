@@ -457,6 +457,63 @@ begin
 end $$;
 reset role;
 
+-- ═══ ز٢) غرفةٌ بلا فندقٍ مربوط في موسمٍ بفندقين (مراجعة #217) ═══════
+-- الحشوُ المؤقّتُ لا يملأ مع فندقين، فتبقى الغرفةُ بلا فندق. والبوابةُ تقول
+-- ذلك صراحةً ولا تزعم «مُسنَداً» بفندقٍ فارغ، ولا تخمّن فندقاً.
+insert into public.rooms (id, season_id, number, floor, type) overriding system value
+  values (7206, 9102, '301', '3', 'ثنائية');
+update public.passengers set room_id = 7206 where id = 6202;
+do $$ begin
+  if (select hotel_id from public.rooms where id = 7206) is not null then
+    raise exception 'FAIL — التهيئة: الغرفةُ رُبطت بفندق' using errcode = 'P0099';
+  end if;
+end $$;
+set local role anon;
+do $$
+declare j jsonb := public.get_pilgrim_portal_by_session(current_setting('mod001.tok2'))::jsonb;
+begin
+  if j -> 'accommodation' ->> 'status' <> 'assigned_unlinked'
+     or jsonb_typeof(j -> 'accommodation' -> 'hotel') <> 'null'
+     or j -> 'accommodation' -> 'room' ->> 'number' <> '301'
+     or j -> 'accommodation' -> 'requested_hotel' ->> 'name' <> 'فندق ألف'
+     or (j -> 'accommodation' -> 'requested_hotel') ? 'address'
+     or j -> 'season' ->> 'hotel_name' is not null then
+    raise exception 'FAIL — غرفةٌ بلا فندق لم تُمثَّل صراحةً: %', j -> 'accommodation' using errcode = 'P0099';
+  end if;
+  raise notice 'PASS — غرفةٌ بلا فندقٍ مربوط: assigned_unlinked بالغرفة، بلا فندقٍ مُخمَّن، والمطلوبُ اسماً وحده';
+end $$;
+reset role;
+update public.passengers set room_id = null where id = 6202;
+
+-- ═══ ز٣) التوافقُ القديمُ لا يحكم على `accommodation` ═════════════
+-- موسمٌ بفندقٍ واحد: `season.hotel_*` تُبقي سلوكَ اليوم، و`accommodation`
+-- مستقلٌّ عنها: لا فندقَ مؤكَّداً قبل الإسناد.
+delete from public.rooms where id = 7206;
+update public.passengers set requested_hotel_id = 8201 where id = 6204;
+update public.passengers set room_id = null where id in (6201, 6203, 6205);
+delete from public.rooms where hotel_id = 8202;
+delete from public.hotels where id = 8202;
+do $$ begin
+  if (select count(*) from public.hotels where season_id = 9102) <> 1 then
+    raise exception 'FAIL — التهيئة: الموسمُ ليس بفندقٍ واحد' using errcode = 'P0099';
+  end if;
+end $$;
+set local role anon;
+do $$
+declare j jsonb := public.get_pilgrim_portal_by_session(current_setting('mod001.tok2'))::jsonb;
+begin
+  if j -> 'season' ->> 'hotel_name' is distinct from 'فندق ألف' then
+    raise exception 'FAIL — season.hotel_* فقدت سلوكَ اليوم' using errcode = 'P0099';
+  end if;
+  if j -> 'accommodation' ->> 'status' <> 'requested' or jsonb_typeof(j -> 'accommodation' -> 'hotel') <> 'null' then
+    raise exception 'FAIL — season.hotel_* تسرّبت إلى accommodation: %', j -> 'accommodation' using errcode = 'P0099';
+  end if;
+  raise notice 'PASS — season.hotel_* القديمة لا تحكم على accommodation: المطلوبُ يبقى «مطلوباً» بلا فندقٍ مؤكَّد';
+end $$;
+reset role;
+-- يعود الفندقُ الثاني: فحصُ (ح) يحتاج موسماً بفندقين
+insert into public.hotels (id, season_id, name) overriding system value values (8202, 9102, 'فندق باء');
+
 -- ═══ ح) الإعداداتُ الجديدة (5 مُعامِلات)، والقديمةُ مع فندقين ═══════
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b6","role":"authenticated"}', true) as jwt \gset

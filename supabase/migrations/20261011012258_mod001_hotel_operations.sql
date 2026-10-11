@@ -241,7 +241,13 @@ grant execute on function public.delete_hotel(bigint) to authenticated, service_
 --                          والغرفة (رقم · دور · نوع).
 --   status = 'requested' ← لا غرفة: اسمُ الفندق المطلوب **وحده** — لا عنوانَ
 --                          ولا رابطَ يُفهم منهما سكنٌ مؤكَّد.
+--   status = 'assigned_unlinked' ← للحاجّ غرفةٌ لم تُربط بفندقٍ بعد: الغرفةُ،
+--                          والفندقُ فارغ، والمطلوبُ باسمه إن وُجد. لا يُخمَّن فندق.
 --   status = 'none'      ← لا هذا ولا ذاك.
+-- متطلَّبُ الواجهة (D8): قبل الإسناد يُوسَم الفندقُ المطلوبُ «مطلوباً» لا سكناً
+-- مؤكَّداً، ولا عنوانَ ولا رابطَ له. وبعد الإسناد يُعرض فندقُ الغرفة الفعليّ
+-- (`accommodation.hotel`) لا المطلوب. والواجهةُ الجديدةُ تقرأ `accommodation`
+-- وحده؛ و`season.hotel_*` للواجهة الحاليّة فقط ولا يحكم على `accommodation`.
 -- القديم باقٍ كلُّه بأسمائه. و`season.hotel_*` لواجهة البوابة الحالية:
 --   مُسنَدٌ ← فندقُ غرفته · لا غرفة والموسمُ بفندقٍ واحد ← ذلك الفندق (كما
 --   تعرضه اليوم) · لا فنادقَ في الموسم ← أعمدةُ الموسم القديمة (كما اليوم) ·
@@ -291,7 +297,10 @@ begin
     select sh.* into v_sh from public.hotels sh where sh.season_id = v_p.season_id;
   end if;
 
-  v_status := case when v_p.room_id is not null then 'assigned'
+  -- غرفةٌ بلا فندقٍ مربوط (غرفةٌ قديمةٌ في موسمٍ صار متعدّدَ الفنادق قبل
+  -- التشديد) حالةٌ صريحةٌ لا «مُسنَد» بفندقٍ فارغ (مراجعة #217).
+  v_status := case when v_p.room_id is not null and v_has_ah then 'assigned'
+                   when v_p.room_id is not null then 'assigned_unlinked'
                    when v_rh_name is not null then 'requested'
                    else 'none' end;
 
@@ -327,7 +336,8 @@ begin
                  'name', v_ah.name, 'address', v_ah.address, 'map_url', v_ah.map_url, 'city', v_ah.city) end,
       'room', (select json_build_object('number', r.number, 'floor', r.floor, 'type', r.type)
                  from public.rooms r where r.id = v_p.room_id),
-      'requested_hotel', case when v_status = 'requested' then json_build_object('name', v_rh_name) end
+      'requested_hotel', case when v_status in ('requested', 'assigned_unlinked') and v_rh_name is not null
+                              then json_build_object('name', v_rh_name) end
     ),
 
     'roommates', case
@@ -407,6 +417,9 @@ begin
   return v_result;
 end;
 $$;
+
+comment on function public.get_pilgrim_portal_by_session(text) is
+  'بوابة الحاجّ بالجلسة. MOD-001: accommodation.status = assigned | assigned_unlinked | requested | none. D8: قبل الإسناد يُوسَم المطلوبُ مطلوباً (اسمٌ بلا عنوانٍ ولا رابط)، وبعده يُعرض فندقُ الغرفة الفعليّ. season.hotel_* للواجهة الحاليّة وحدها ولا يحكم على accommodation.';
 
 -- ── ٥) إعداداتُ الموسم ────────────────────────────────────────
 -- أ) الجديدة للواجهة الجديدة: بلا الفندق — الفنادقُ تُدار من صفحتها.
