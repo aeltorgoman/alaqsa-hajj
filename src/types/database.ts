@@ -1255,11 +1255,19 @@ export type Database = {
           passenger_id: number
         }[]
       }
-      assign_passenger_room: {
-        /* MOD-001: `p_room_id` = null يُخرج الحاجّ من غرفته */
-        Args: { p_passenger_id: number; p_room_id: number | null }
-        Returns: Json
-      }
+      assign_passenger_room:
+        /* MOD-001: `p_room_id` = null يُخرج الحاجّ من غرفته.
+           #62: النسخةُ الثالثة تشترط ذرّيّاً أن تكون غرفتُه الآن
+           `p_expected_room_id` (و null = بلا غرفة)، وإلا رُفضت بتلميح
+           `mod001_stale_source` ولا كتابة. */
+        | {
+            Args: { p_passenger_id: number; p_room_id: number | null }
+            Returns: Json
+          }
+        | {
+            Args: { p_passenger_id: number; p_room_id: number | null; p_expected_room_id: number | null }
+            Returns: Json
+          }
       cancel_payment_receipt: {
         Args: { p_reason: string; p_receipt_id: number }
         Returns: Database["public"]["Tables"]["payment_receipts"]["Row"]

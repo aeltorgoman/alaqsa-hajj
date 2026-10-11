@@ -102,10 +102,12 @@ with
     -- ب١٢ — عزلُ الحاويات: الفهارسُ الفريدةُ موسميّة، فالاسمُ يتكرّر بين موسمين
     union all
     select 'container_uniqueness_is_season_scoped', 'true',
-           (select (count(*) = 4)::text from pg_indexes
+           -- MOD-001 #62: الغرفةُ فريدةٌ داخل فندقها (والفندقُ موسميّ)، والغرفُ بلا فندق على موسمها
+           (select (count(*) = 5)::text from pg_indexes
              where schemaname = 'public'
                and indexname in ('buses_season_name_uniq','camps_season_page_gender_name_uniq',
-                                 'flights_operational_identity_uniq','rooms_season_floor_number_uniq'))
+                                 'flights_operational_identity_uniq','rooms_hotel_floor_number_uniq',
+                                 'rooms_unlinked_season_floor_number_uniq'))
     union all
     select 'no_container_lost_its_season', '0',
            (select (

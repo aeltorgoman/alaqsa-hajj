@@ -28,7 +28,7 @@ LOCAL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 export OUT="${OUT:-/tmp/mod001-release-gate-tests}"
 rm -rf "$OUT"; mkdir -p "$OUT"
 LT=vgqowazlzzcovcrigcjz; PROD=zkucwcnclbfvukhdqhgc; HOST=aws-1-eu-central-1.pooler.supabase.com
-PUSH_LT=PUSH-MOD001-LOADTEST-20261011012258; PUSH_PROD=PUSH-MOD001-PRODUCTION-20261011012258
+PUSH_LT=PUSH-MOD001-LOADTEST-20261011140000; PUSH_PROD=PUSH-MOD001-PRODUCTION-20261011140000
 GATE_LT=GATE-MOD001-LOADTEST-PRICES; GATE_PROD=GATE-MOD001-PRODUCTION-PRICES
 
 pass=0; fail=0
@@ -86,7 +86,7 @@ insert into public.passengers (name_ar, hotel_type) values ('اختبار ٣', '
 insert into public.passengers (name_ar, passenger_type) values ('إداري', 'إداري');
 update public.pricing_settings set amount = amount + 7 where key like 'package%';
 SQL
-expect_ok    "ledger-before at 58 with exactly the three pending" local_run ledger-before
+expect_ok    "ledger-before at 58 with exactly the four pending" local_run ledger-before
 expect_block "price gate before the migrations are applied"      local_run price-gate
 expect_ok    "preflight at 58"                                    local_run preflight
 
@@ -116,8 +116,8 @@ sql "drop table public.hotels"
 
 echo "═══ ٤) دفعٌ محلّيٌّ كامل بالمراحل نفسِها ═══"
 expect_ok "fp-before"                                             local_run fp-before
-expect_ok "push (local db push of the three migrations)"          local_run push
-expect_ok "ledger-after: 61, originals untouched"                 local_run ledger-after
+expect_ok "push (local db push of the four migrations)"          local_run push
+expect_ok "ledger-after: 62, originals untouched"                 local_run ledger-after
 expect_ok "postcheck: structure, backfill, base prices, fingerprints" local_run postcheck
 expect_ok "price gate right after the push"                       local_run price-gate
 expect_block "ledger-before after the migrations are applied"     local_run ledger-before
