@@ -36,6 +36,7 @@ export function mapPassenger(p: PassengerRow): Passenger {
   hajj_permit_url: p.hajj_permit_url || "", flight_ticket_url: p.flight_ticket_url || "",
   bus_id: p.bus_id || null, camp_mina_id: p.camp_mina_id || null,
   camp_arafa_id: p.camp_arafa_id || null, room_id: p.room_id || null,
+  requested_hotel_id: p.requested_hotel_id ?? null,
   family_id: p.family_id || null,
   flight_id: p.flight_id || null, flight_class: p.flight_class || undefined,
   return_flight_id: p.return_flight_id || null,

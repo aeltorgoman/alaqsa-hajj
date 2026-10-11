@@ -59,10 +59,10 @@ export interface CompanyProfile {
 /* ═══ بياناتُ الموسم الرئيسة ═══
    ما يملكه صفُّ الموسم نفسُه. تُقرأ من `useSeason()` — من
    `viewedSeason` في المطبوعات والأرشيف، ومن `activeSeason` في
-   التحرير. والسنةُ هويّةٌ لا تُعدَّل بهذا الباب. */
+   التحرير. والسنةُ هويّةٌ لا تُعدَّل بهذا الباب.
+   MOD-001: لا فندقَ هنا — الفنادقُ صفوفُ `hotels` تُدار من صفحتها. */
 export interface SeasonMasterData {
   name: string;
-  hotelName: string; hotelAddress: string; hotelUrl: string;
   minaAddress: string; minaUrl: string;
   arafaAddress: string; arafaUrl: string;
 }

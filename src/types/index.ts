@@ -34,6 +34,9 @@ export interface Passenger {
   passenger_type?: "حاج" | "مرافق" | "مشرف" | "إداري";
   bus_id?: number | null;
   room_id?: number | null;
+  /* MOD-001 — الفندقُ **المطلوب** (أساسُ تسعير الباقة). المُسنَدُ لا
+     يُخزَّن هنا: يُقرأ من الغرفة (`room_id → rooms.hotel_id`). */
+  requested_hotel_id?: number | null;
   camp_mina_id?: number | null;
   camp_arafa_id?: number | null;
   flight_id?: number | null;
@@ -106,6 +109,22 @@ export interface Room {
   capacity?: number | null;
   notes?: string | null;
   season_id?: number | null;
+  /* MOD-001 — فندقُ الغرفة. فارغٌ في صفٍّ قديمٍ لم يُربط بعد. */
+  hotel_id?: number | null;
+}
+
+/* MOD-001 — فندقٌ من فنادق الموسم. الاسمُ فريدٌ في الموسم، والحذفُ
+   لا يمرّ إلا بـ`delete_hotel` (غرفُه الفارغة معه، ويرفض المشغول والمطلوب). */
+export interface Hotel {
+  id: number;
+  season_id: number;
+  city: string;
+  name: string;
+  address: string | null;
+  map_url: string | null;
+  notes: string | null;
+  sort_order: number | null;
+  created_at?: string;
 }
 
 export interface Flight {
