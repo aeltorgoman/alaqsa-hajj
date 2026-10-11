@@ -9,7 +9,7 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
          campsReportDocument, campReportDocument,
          flightReportDocument, flightsReportDocument,
          docFileKind, docImageBody, docFailedBody, loadPdfPageRenderer,
-         hotelReportDocument, initialPrintOptions, chromeFromOptions,
+         hotelReportDocument, initialPrintOptions, chromeFromOptions, esc,
          compactHeaderHTML, chromeMetaHTML, pageStampHTML, PAGE_MARGIN_REPORT,
          type PrintReportKey, type PrintOptionsState } from "../print";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
@@ -18,6 +18,7 @@ import { supabase } from "../supabase";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import type { Passenger, Bus, Camp, Room, Flight, User, Hotel } from "../types";
 import { hotelNameOf } from "../utils/hotels";
+import { computeHotelOccupancy, UNLINKED_LABEL, type OccupancyRow } from "../utils/hotelOccupancy";
 import { makeHTML, buildStickersHTML, stickerDataGaps, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 import { REPORTS_RESPONSIVE_CSS } from "./reports.responsive";
@@ -285,6 +286,9 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
   // تقرير الفندق — فلتر الطباعة
   const [hotelPrintFilter, setHotelPrintFilter] = useState<"all" | "type">("all");
   const [hotelPrintType, setHotelPrintType] = useState<string>("");
+  /* MOD-001: نطاقُ الفندق — كلُّ الفنادق، أو فندقٌ بعينه، أو الغرفُ التي
+     لم تُربط بفندق. يحكم البطاقاتِ والمؤشّراتِ والطباعةَ وExcel معاً. */
+  const [hotelScope, setHotelScope] = useState<"all" | "unlinked" | number>("all");
   const floorItems = useMemo(() => [...new Set(rooms.map(r => floorKey(r)))]
     .sort((a, b) => {
       if (a === "بدون طابق") return 1;
@@ -736,6 +740,8 @@ const getReportAirlineLogo = (airline: string): string | null => {
      التقريرُ شاملاً لم يُكتب شيء. */
   const hotelScopeCaption = (): string | null => {
     const parts: string[] = [];
+    if (hotelScope === "unlinked") parts.push(`الفندق: ${UNLINKED_LABEL}`);
+    else if (hotelScope !== "all") parts.push(`الفندق: ${hotelNameOf(hotels, hotelScope) ?? `#${hotelScope}`}`);
     if (hotelPrintFilter === "type" && hotelPrintType) parts.push(`النوع: ${hotelPrintType}`);
     const allFloors = floorItems.length > 0 && floorItems.every(f => selectedFloors.has(f.id));
     if (!allFloors) parts.push(`الطوابق: ${floorItems.filter(f => selectedFloors.has(f.id)).map(f => f.label).join("، ") || "—"}`);
@@ -744,8 +750,52 @@ const getReportAirlineLogo = (airline: string): string | null => {
 
   const getFilteredRooms = () => {
     let r = rooms.filter(rm => selectedFloors.has(floorKey(rm)));
+    if (hotelScope === "unlinked") r = r.filter(rm => rm.hotel_id == null);
+    else if (hotelScope !== "all") r = r.filter(rm => rm.hotel_id === hotelScope);
     if (hotelPrintFilter === "type") r = r.filter(rm => rm.type === hotelPrintType);
     return r;
+  };
+
+  /* ═══ الإشغال حسب الفندق ═══ — على كلّ غرف الموسم (لا يتأثّر بفلتر الطابق
+     والنوع)، ونطاقُ الفندق يختار الصفوف. مجموعُ الموسم يُعرض دائماً. */
+  const occupancy = useMemo(() => computeHotelOccupancy(rooms, hotels, passengers), [rooms, hotels, passengers]);
+  const hasUnlinkedRooms = rooms.some(r => r.hotel_id == null);
+  const showHotelScope = hotels.length > 1 || hasUnlinkedRooms;
+  const occupancyRows = (): OccupancyRow[] => {
+    const scoped = hotelScope === "all" ? [...occupancy.hotels, ...(occupancy.unlinked ? [occupancy.unlinked] : [])]
+      : hotelScope === "unlinked" ? (occupancy.unlinked ? [occupancy.unlinked] : [])
+      : occupancy.hotels.filter(r => r.hotelId === hotelScope);
+    return [...scoped, occupancy.season];
+  };
+  const OCC_HEADERS = ["الفندق", "الغرف", "الأسرّة", "الحجاج الساكنون", "إداريون ساكنون", "الشاغر", "نسبة الإشغال",
+    "غرف بلا سعة محدّدة", "طلبوا الفندق", "سُكنوا فيه", "في فندق آخر", "في غرفة بلا فندق", "بلا غرفة", "ساكنون من طلبٍ آخر"];
+  const occupancyCells = (r: OccupancyRow): (string | number)[] => {
+    const isLinked = r.key.startsWith("hotel:") || r.key === "season";
+    return [r.label, r.rooms, r.capacity, r.pilgrims, r.staff, r.available,
+      r.occupancyPct == null ? "—" : `${r.occupancyPct}%`, r.uncappedRooms,
+      isLinked ? r.requested : "—", isLinked ? r.requestedHousedHere : "—", isLinked ? r.requestedHousedElsewhere : "—",
+      isLinked ? r.requestedInUnlinked : "—", isLinked ? r.requestedUnassigned : "—", r.key === "unlinked" ? "—" : r.housedFromOther];
+  };
+  const occupancyNotes = (): string[] => [
+    `إجمالي الحجاج: ${occupancy.pilgrimsTotal}`,
+    `بلا غرفة: ${occupancy.pilgrimsUnassigned}`,
+    `بلا فندق مطلوب: ${occupancy.pilgrimsNoRequest}`,
+    `ساكنون في فندق غير المطلوب: ${occupancy.pilgrimsMismatched}`,
+    ...(occupancy.pilgrimsUnknownRoom ? [`غرفتهم غير محمَّلة: ${occupancy.pilgrimsUnknownRoom}`] : []),
+    ...(occupancy.season.overCapacity ? [`زيادة على السعة: ${occupancy.season.overCapacity}`] : []),
+  ];
+  const occupancyReady = !isLoading("rooms") && !isFailed("rooms");
+  const printOccupancy = () => {
+    if (!occupancyReady) { showAlert("warning", "بيانات الغرف والفنادق لم تكتمل — لم يُطبع شيء."); return; }
+    const th = OCC_HEADERS.map(h => `<th style="padding:6px 5px;border:1px solid #ddd;background:#f3ece6;font-size:11px">${h}</th>`).join("");
+    const tr = occupancyRows().map(r => `<tr${r.key === "season" ? ' style="font-weight:800;background:#faf6f2"' : ""}>${occupancyCells(r).map(c =>
+      `<td style="padding:5px;border:1px solid #ddd;text-align:center;font-size:11.5px">${esc(String(c))}</td>`).join("")}</tr>`).join("");
+    const notes = occupancyNotes().map(n => `<span style="margin-left:14px">${esc(n)}</span>`).join("");
+    printInPage(makeHTML("الإشغال حسب الفندق",
+      `<table style="width:100%;border-collapse:collapse;direction:rtl"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>
+       <div style="margin-top:10px;font-size:12px;font-weight:700">${notes}</div>
+       <div style="margin-top:6px;font-size:10.5px;color:#666">الأسرّة والشاغر ونسبة الإشغال للغرف ذات السعة المحدّدة. المطلوب من الفندق المطلوب للحاج، والفعلي من غرفته.</div>`,
+      branding, { landscape: true, chrome: { season: viewedSeason, pageNumbers: true, scope: hotelScopeCaption() } }));
   };
 
   /* حالةُ الغرفة — بالسعة المعتمَدة (`roomCapacity`) لا بجدولٍ محلّيّ.
@@ -836,6 +886,15 @@ const getReportAirlineLogo = (airline: string): string | null => {
 
     const subtitle = hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "";
     XLSX.utils.book_append_sheet(wb, ws, safeSheetName(`تقرير الفندق${subtitle}`));
+    /* MOD-001: الإشغال حسب الفندق بنطاقه — المصدرُ نفسُه للشاشة والطباعة */
+    if (occupancyReady) {
+      const occWs = XLSX.utils.aoa_to_sheet([
+        ...(hotelScopeCaption() ? [[`النطاق: ${hotelScopeCaption()}`]] : []),
+        OCC_HEADERS, ...occupancyRows().map(occupancyCells), [], ...occupancyNotes().map(n => [n]),
+      ]);
+      occWs["!cols"] = OCC_HEADERS.map((_, i) => ({ wch: i === 0 ? 24 : 12 }));
+      XLSX.utils.book_append_sheet(wb, occWs, safeSheetName("الإشغال حسب الفندق"));
+    }
 
     const guests = passengers.filter(p => p.room_id && filtered.some(r => r.id === p.room_id));
     const majlisCount = filtered.filter(r => r.type === "مجلس").length;
@@ -1832,6 +1891,45 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 );
               })()}
 
+              {/* MOD-001 — الإشغال حسب الفندق، والمطلوب مقابل الفعلي */}
+              <div data-testid="occupancy-section" style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", marginBottom: 16, boxShadow: "0 2px 8px rgba(92,24,48,.05)" }}>
+                <div style={{ padding: "11px 16px", background: "linear-gradient(135deg, #8B3A6B, #5C1830)", color: "#fff", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  الإشغال حسب الفندق
+                  {occupancyReady && <button onClick={printOccupancy} style={{ marginRight: "auto", padding: "4px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,.5)", background: "transparent", color: "#fff", fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>طباعة الملخص</button>}
+                </div>
+                <div style={{ padding: 12 }}>
+                  {isLoading("rooms") ? (
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>جاري تحميل الغرف والفنادق…</div>
+                  ) : isFailed("rooms") ? (
+                    <div data-testid="occupancy-error" style={{ fontSize: 12, color: "var(--danger)", display: "flex", gap: 8, alignItems: "center" }}>
+                      تعذّر تحميل الغرف والفنادق — لا تُعرض أرقامٌ ناقصة.
+                      <button onClick={() => { void loadRefData(["rooms"]); }} style={{ padding: "3px 10px", borderRadius: 7, border: "1px solid var(--danger)", background: "transparent", color: "var(--danger)", cursor: "pointer", fontFamily: "inherit" }}>إعادة المحاولة</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ overflowX: "auto" }}>
+                        <table data-testid="occupancy-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
+                          <thead><tr>{OCC_HEADERS.map(h => <th key={h} style={{ padding: "7px 6px", background: "var(--ivory2)", border: "1px solid var(--line)", fontWeight: 800, whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {occupancyRows().map(r => (
+                              <tr key={r.key} data-row={r.key} style={{ background: r.key === "season" ? "var(--ivory)" : undefined, fontWeight: r.key === "season" ? 800 : 600 }}>
+                                {occupancyCells(r).map((c, i) => <td key={i} style={{ padding: "6px", border: "1px solid var(--line)", textAlign: i === 0 ? "right" : "center", whiteSpace: "nowrap" }}>{c}</td>)}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div data-testid="occupancy-notes" style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: 11.5, fontWeight: 700, color: "var(--ink)" }}>
+                        {occupancyNotes().map(n => <span key={n}>{n}</span>)}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.8 }}>
+                        الأسرّة والشاغر ونسبة الإشغال للغرف ذات السعة المحدّدة. «المطلوب» من الفندق المطلوب للحاج، و«الفعلي» من غرفته. الملخص على كل غرف الموسم ولا يتأثّر بفلتر الطابق والنوع.
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
               {/* نطاق التقرير — كارت برأس عنابي */}
               <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden", marginBottom: 16, boxShadow: "0 2px 8px rgba(92,24,48,.05)" }}>
                 <div style={{ padding: "11px 16px", background: "linear-gradient(135deg, #8B3A6B, #5C1830)", color: "#fff", fontSize: 13, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
@@ -1839,6 +1937,18 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   نطاق التقرير
                 </div>
                 <div style={{ padding: 14 }}>
+                  {showHotelScope && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)", marginBottom: 6 }}>الفندق</div>
+                      <select data-testid="hotel-scope" value={String(hotelScope)}
+                        onChange={e => setHotelScope(e.target.value === "all" || e.target.value === "unlinked" ? e.target.value : Number(e.target.value))}
+                        style={{ width: "100%", padding: "8px 10px", borderRadius: 9, border: "1.5px solid var(--line)", background: "var(--ivory)", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700 }}>
+                        <option value="all">كل الفنادق</option>
+                        {hotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+                        {hasUnlinkedRooms && <option value="unlinked">{UNLINKED_LABEL}</option>}
+                      </select>
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                     {[["all", "كل الغرف"], ["type", "نوع معين"]].map(([val, label]) => (
                       <div key={val} onClick={() => setHotelPrintFilter(val as "all" | "type")}
