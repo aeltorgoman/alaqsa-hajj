@@ -11,7 +11,7 @@ import {
 } from "../utils/pushClient";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
 import { setupPortalManifest } from "../utils/portalManifest";
-import type { PortalData, Ann } from "./portal/portal.types";
+import type { PortalData, Ann, PortalAccommodation } from "./portal/portal.types";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
 import { getSeasonArafa, civilDate } from "./portal/portal.dates";
 import { readSession, clearPortalLocalState } from "./portal/portal.session";
@@ -360,14 +360,23 @@ function PilgrimPortal() {
      المخزَّن يكتبه الموظّف كاملاً في الغالب («فندق دار الإيمان»)،
      وكان العرضُ يسبقه بكلمةٍ ثابتة فيخرج «فندق فندق دار الإيمان».
      فنسبق فقط إن لم يبدأ الاسمُ بها — ولا تُمسّ القيمةُ المخزَّنة. */
-  const hotelName = (season?.hotel_name || "").trim();
-  const hotelTitle = hotelName
-    /* ⚠️ ولا `\b` هنا: حدُّ الكلمة في JS مبنيٌّ على [A-Za-z0-9_]،
-       فالحرفُ العربيّ غيرُ كلمةٍ عنده ولا يقع بعده حدّ — فكان
-       الشرطُ يفشل دائماً وتُضاف «فندق» ولو كانت موجودة. فالفصلُ
-       بفراغٍ صريحٍ أو نهايةِ النصّ. */
-    ? (/^(فندق|نزل|برج|دار)(\s|$)/.test(hotelName) ? hotelName : `فندق ${hotelName}`)
-    : "سكني في مكة";
+  /* ⚠️ ولا `\b` هنا: حدُّ الكلمة في JS مبنيٌّ على [A-Za-z0-9_]،
+     فالحرفُ العربيّ غيرُ كلمةٍ عنده ولا يقع بعده حدّ — فكان
+     الشرطُ يفشل دائماً وتُضاف «فندق» ولو كانت موجودة. فالفصلُ
+     بفراغٍ صريحٍ أو نهايةِ النصّ. */
+  const hotelTitleOf = (name: string | null | undefined) => {
+    const n = (name || "").trim();
+    return n ? (/^(فندق|نزل|برج|دار)(\s|$)/.test(n) ? n : `فندق ${n}`) : "";
+  };
+  /* ═══ السكن — MOD-001: من `accommodation` وحده ═══
+     لا رجوعَ إلى `season.hotel_*`. الفندقُ الفعليُّ (اسمٌ وعنوانٌ ورابط)
+     لا يُعرض إلا حين تكون الغرفةُ في فندقٍ مربوط (`assigned`). والمطلوبُ
+     اسمٌ موسومٌ «مطلوباً» بلا عنوانٍ ولا خريطة. وخادمٌ أقدمُ لا يرسل
+     `accommodation`: تُعرض الغرفةُ وحدها بلا فندق — فلا يُوهَم بسكنٍ مؤكَّد. */
+  const accommodation: PortalAccommodation = data?.accommodation ?? {
+    status: data?.room ? "assigned_unlinked" : "none", hotel: null, room: data?.room ?? null, requested_hotel: null,
+  };
+  const actualHotelName = accommodation.status === "assigned" ? (accommodation.hotel?.name || "").trim() : "";
   const minaName = (data?.pilgrim?.camp_mina_name || data?.pilgrim?.camp_mina || "").trim();
   const arafaName = (data?.pilgrim?.camp_arafa_name || data?.pilgrim?.camp_arafa || "").trim();
 
@@ -487,8 +496,8 @@ function PilgrimPortal() {
         country={cfg?.country}
         nameArPilgrim={p.name_ar}
         nameEn={p.name_en}
-        hotelName={season?.hotel_name}
-        room={data.room}
+        hotelName={actualHotelName ? hotelTitleOf(actualHotelName) : null}
+        room={accommodation.room}
         minaName={minaName}
         minaAddress={season?.mina_address}
         arafaName={arafaName}
@@ -539,10 +548,8 @@ function PilgrimPortal() {
           <StayTab
             t={t}
             showRooms={showRooms} showRoommates={showRoommates}
-            hotelTitle={hotelTitle} hotelName={hotelName}
+            accommodation={accommodation} hotelTitleOf={hotelTitleOf}
             hotelType={p.hotel_type} hotelView={p.hotel_view}
-            room={data.room}
-            hotel_address={season?.hotel_address} hotel_url={season?.hotel_url}
             minaName={minaName} camp_mina_address={season?.mina_address} camp_mina_url={season?.mina_url}
             arafaName={arafaName} camp_arafa_address={season?.arafa_address} camp_arafa_url={season?.arafa_url}
             family={data.family} roommates={data.roommates}
