@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { isHajj, mapPassenger, upsertPassenger, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -196,22 +196,26 @@ function AdminsPage({
   /* الذاكرة مربوطة بالموسم المعروض: كان `dataLoaded` علماً أبدياً،
      فمن بدّل الموسم بلا مغادرة الصفحة ظلّ يرى غرف الموسم السابق
      ويُسنِد إليها. */
+  const applyAssignData = (seasonId: number, [b, r, c, f, h]: Awaited<ReturnType<typeof fetchAssignData>>) => {
+    if (b.data) setBuses(b.data as Bus[]);
+    if (r.data) setRooms(r.data as Room[]);
+    if (c.data) setCamps(c.data as Camp[]);
+    if (f.data) setFlights(f.data as Flight[]);
+    if (h.data) setHotels(h.data as Hotel[]);
+    setDataLoaded(seasonId);
+  };
   const loadAssignData = async () => {
     if (dataLoaded === viewedSeason.id) return;
-    const [{ data: b }, { data: r }, { data: c }, { data: f }, { data: h }] = await Promise.all([
-      supabase.from("buses").select("*").eq("season_id", viewedSeason.id).order("created_at"),
-      supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).order("floor").order("number"),
-      supabase.from("camps").select("*").eq("season_id", viewedSeason.id).order("name"),
-      supabase.from("flights").select("*").eq("season_id", viewedSeason.id).order("date"),
-      supabase.from("hotels").select("*").eq("season_id", viewedSeason.id).order("id"),
-    ]);
-    if (b) setBuses(b as Bus[]);
-    if (r) setRooms(r as Room[]);
-    if (c) setCamps(c as Camp[]);
-    if (f) setFlights(f as Flight[]);
-    if (h) setHotels(h as Hotel[]);
-    setDataLoaded(viewedSeason.id);
+    applyAssignData(viewedSeason.id, await fetchAssignData(viewedSeason.id));
   };
+  /* وسومُ التعيين في القائمة والطباعةُ تقرأ الغرفَ والفنادق — فتُحمَّل
+     عند عرض الصفحة (ولكلّ موسمٍ يُعرض)، لا عند فتح نافذة التعيين وحدها. */
+  useEffect(() => {
+    let live = true;
+    const seasonId = viewedSeason.id;
+    fetchAssignData(seasonId).then(res => { if (live) applyAssignData(seasonId, res); });
+    return () => { live = false; };
+  }, [viewedSeason.id]);
 
   // ============================================================
   // مسح جواز
@@ -999,6 +1003,17 @@ function AssignTag({ label, val, color }: { label: string; val: string; color: s
       <span style={{ opacity: 0.7 }}>{label}:</span> {val}
     </span>
   );
+}
+
+/* بياناتُ التعيين لموسمٍ واحد — مصدرٌ واحدٌ لنافذة التعيين ولعرض الصفحة */
+function fetchAssignData(seasonId: number) {
+  return Promise.all([
+    supabase.from("buses").select("*").eq("season_id", seasonId).order("created_at"),
+    supabase.from("rooms").select("*").eq("season_id", seasonId).order("floor").order("number"),
+    supabase.from("camps").select("*").eq("season_id", seasonId).order("name"),
+    supabase.from("flights").select("*").eq("season_id", seasonId).order("date"),
+    supabase.from("hotels").select("*").eq("season_id", seasonId).order("id"),
+  ]);
 }
 
 function AssignSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { id: string; label: string; group?: string }[] }) {
