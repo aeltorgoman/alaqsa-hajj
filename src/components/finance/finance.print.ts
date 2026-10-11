@@ -13,6 +13,10 @@ import { fmtAmt, financeStatus, getPriceInfo, packageLabel, requestedHotelName, 
 const PRINT_DANGER  = "#C0392B";
 const PRINT_SUCCESS = "#2A9D8F";
 const balanceColor = (balance: number) => (balance > 0 ? PRINT_DANGER : PRINT_SUCCESS);
+/* صفرُ الباقة الناتجُ عن نقص الإعداد يُقال في الورقة كما يُقال على الشاشة */
+const zeroReason = (pi: { noHotel?: boolean; missingPrice?: boolean }) =>
+  pi.noHotel ? ` <span style="color:${PRINT_DANGER}">(لا فندق مطلوب — السعر صفر)</span>`
+  : pi.missingPrice ? ` <span style="color:${PRINT_DANGER}">(لا سعر لهذه الباقة في الفندق — صفر)</span>` : "";
 /* `financeStatus` تُرجِع ألوانَ السمة للشاشة — وهي المصدرُ نفسه للتسمية،
    فلا حسابَ ثانٍ هنا: التسميةُ منها، واللونُ يُترجَم للطباعة. */
 const PRINT_STATUS_COLOR: Record<string, string> = {
@@ -164,7 +168,7 @@ export function makePassengerStatementHTML(
   const priceInfo = getPriceInfo(p, pricing, hotelPrices);
   /* الفندقُ المطلوب أساسُ سعر الباقة — يُكتب بجانبها (إلا «خاص» فسعرُه يدويّ) */
   const reqHotel = s.hotel_type === "خاص" ? null : requestedHotelName(p, hotels);
-  const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}`;
+  const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}${zeroReason(priceInfo)}`;
   const pkgAmt = priceInfo.amount;
   const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
   const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
@@ -278,7 +282,7 @@ export function makeGroupStatementHTML(
     const pPays = [...payments.filter(py=>py.passenger_id===p.id)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
     const priceInfo = getPriceInfo(p, pricing, hotelPrices);
     const reqHotel = p.services.hotel_type === "خاص" ? null : requestedHotelName(p, hotels);
-    const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}`;
+    const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}${zeroReason(priceInfo)}`;
     const payRows = pPays.map(py => `<tr style="background:#f0faf8"><td style="padding:8px 16px;border:1px solid #e8e8e8;font-size:13px;padding-right:32px">دفعة — ${esc(py.payment_date)} <span style="color:#888;font-size:12px">(${esc(py.method)})</span>${py.notes?` — ${esc(py.notes)}`:""}</td><td style="text-align:center;border:1px solid #e8e8e8;color:#888;font-size:13px">—</td><td style="text-align:center;border:1px solid #e8e8e8;color:#2A9D8F;font-weight:700;font-size:14px">${fmtAmt(py.amount)}</td></tr>`).join("");
     return `
     <div style="margin-bottom:20px;border:1.5px solid ${primaryColor}30;border-radius:10px;overflow:hidden;">

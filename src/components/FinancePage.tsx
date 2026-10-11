@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import { isHajj, byOrder } from "../utils/passenger";
@@ -87,6 +87,11 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      ما نُسخ من لقطته عند ترحيلة التعبئة. */
   const [hotelPrices, setHotelPrices]       = useState<HotelPackagePrices>(new Map());
   const [hotels, setHotels]                 = useState<FinanceHotel[]>([]);
+  /* آخرُ تحميلٍ لأسعار الفنادق أو للفنادق فشل: المبالغُ غيرُ موثوقة ويُقفل
+     محرّرُ الباقات — لا يُحفظ فوق قيمٍ لم تُقرأ. */
+  const [hotelPricesFailed, setHotelPricesFailed] = useState(false);
+  /* تحميلاتٌ متداخلة (حفظٌ + أحداثٌ لحظيّة): لا يُطبَّق إلا ردُّ آخرها */
+  const loadSeq = useRef(0);
   const [payments, setPayments]             = useState<Payment[]>([]);
   const [receipts, setReceipts]             = useState<PaymentReceipt[]>([]);
   const [customCharges, setCustomCharges]   = useState<CustomCharge[]>([]);
@@ -212,7 +217,9 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     return false;
   }
 
-  async function loadFinanceData(silent = false) {
+  /** يُرجع `true` إن حُمّل كلُّ شيء، `false` إن فشل جزء، و`null` إن سبقه تحميلٌ أحدث. */
+  async function loadFinanceData(silent = false): Promise<boolean | null> {
+    const seq = ++loadSeq.current;
     if (silent) setRefreshing(true); else setLoading(true);
     /* الموسم المقفل يقرأ لقطته، والمفتوح يقرأ الحيّ. والحيّ يُجلب في
        الحالتين: محرّر الأسعار في تبويب الإعدادات يعرض الإعداد الحاليّ
@@ -246,6 +253,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       supabase.from("camps").select("id,type"),
       supabase.from("rooms").select("id,type,hotel_id").eq("season_id", viewedSeason.id),
     ]);
+    /* ردٌّ أقدمُ وصل بعد أحدث — لا يكتب فوقه (التحميلُ الأحدث يُنهي حالةَ التحميل) */
+    if (seq !== loadSeq.current) return null;
     const toTypeMap = (rows: { id:number; type:string|null }[] | null) => {
       const m = new Map<number, string>();
       (rows ?? []).forEach(r => { if (r.type) m.set(r.id, r.type); });
@@ -311,6 +320,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       setEditHotelPrices(eh);
     }
     if (hRes.data && !hRes.error) setHotels(hRes.data as FinanceHotel[]);
+    setHotelPricesFailed(!!(hpRes.error || !hpRes.data || hRes.error || !hRes.data));
     if (pyRes.data && !pyRes.error) setPayments(pyRes.data as unknown as Payment[]);
     if (rcRes.data && !rcRes.error) setReceipts(rcRes.data as PaymentReceipt[]);
     if (ccRes.data && !ccRes.error) setCustomCharges(ccRes.data as CustomCharge[]);
@@ -328,6 +338,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
 
     setLoading(false);
     setRefreshing(false);
+    return failed.length === 0;
   }
 
   /* خرائط مُجهّزة مسبقاً لتفادي تكرار البحث داخل المصفوفات */
@@ -407,6 +418,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   async function savePricing() {
     if (!assertWritable()) return;
     if (!requireManage()) return;
+    if (hotelPricesFailed) { showAlert("error", "تعذّر تحميل أسعار باقات الفنادق — أعد تحميل الصفحة قبل الحفظ. لم يُحفظ شيء."); return; }
     /* الإضافاتُ والخصمُ → `pricing_settings` كما كانت. ومفاتيحُ الباقات
        فيه لم تعد مصدرَ سعر (MOD-001 PR 8) فلا تُكتب من هنا. */
     const rows: { key:string; label:string; type:string; amount:number; updated_at:string }[] = [];
@@ -458,8 +470,14 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       if (error) failed.push("الإضافات والخصومات");
     }
     setSavingPricing(false);
-    await loadFinanceData(true);
-    if (failed.length > 0) { showAlert("error", `تعذّر حفظ: ${failed.join("، ")}. القيمُ المعروضة الآن هي المحفوظة فعلاً.`); return; }
+    /* إعادةُ التحميل تُظهر ما حُفظ فعلاً. وإن فشلت قيل ذلك صراحةً: الحقولُ
+       عندئذٍ ليست بالضرورة ما في القاعدة. (`null` = تحميلٌ أحدثُ سيُظهره.) */
+    const reloaded = await loadFinanceData(true);
+    const reloadNote = reloaded === false
+      ? " وتعذّرت إعادة تحميل القيم المحفوظة — أعد تحميل الصفحة قبل أي تعديل."
+      : " القيمُ المعروضة الآن هي المحفوظة فعلاً.";
+    if (failed.length > 0) { showAlert("error", `تعذّر حفظ: ${failed.join("، ")}.${reloadNote}`); return; }
+    if (reloaded === false) { showAlert("warning", `تم حفظ الأسعار،${reloadNote.replace(" و", " لكن ")}`); return; }
     showAlert("success","تم حفظ الأسعار بنجاح");
   }
 
@@ -1051,7 +1069,15 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      الوحيدة الصامتة هي `live` — وهي الحالة العادية للموسم المفتوح.
      ولقطةٌ مفقودة تُقال صراحةً: التسعير المعروض هو الحاليّ لا تسعير
      ذلك الموسم، والأرقام تتحرّك بتحرّكه. */
-  const pricingNotice = pricingSource === "live" ? null : (() => {
+  /* فشلُ تحميل أسعار الفنادق يُقال في كلّ شاشةٍ ماليّة — مبالغُ الباقات
+     عندئذٍ ليست موثوقة، والمحرّرُ مقفل. */
+  const hotelPricesNotice = hotelPricesFailed ? (
+    <div data-testid="hotel-prices-failed" style={{ marginBottom:14, padding:"9px 13px", borderRadius:9, fontSize:12.5, fontWeight:700, lineHeight:1.7, background:"var(--danger-bg)", color:"var(--danger)", border:"1px solid var(--danger)" }}>
+      تعذّر تحميل أسعار باقات الفنادق لهذا الموسم. مبالغ الباقات المعروضة غير موثوقة ولا يُعتمد عليها، وتعديل الأسعار موقوف حتى يُعاد التحميل.
+      <button onClick={() => { void loadFinanceData(true); }} style={{ marginRight:8, padding:"2px 10px", borderRadius:7, border:"1px solid var(--danger)", background:"transparent", color:"var(--danger)", cursor:"pointer", fontFamily:"var(--font-body)", fontSize:12 }}>إعادة المحاولة</button>
+    </div>
+  ) : null;
+  const snapshotNotice = pricingSource === "live" ? null : (() => {
     const missing = pricingSource !== "snapshot";
     return (
       <div style={{
@@ -1074,6 +1100,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       </div>
     );
   })();
+  const pricingNotice = <>{hotelPricesNotice}{snapshotNotice}</>;
 
   if (subView === "settings") {
     /* ═══ إعدادات الحسابات — سطحٌ واحدٌ، وثلاثةُ مُلّاكِ بياناتٍ ═══
@@ -1145,7 +1172,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
                 <div key={h.id} style={{ marginBottom:12 }}>
                   <div style={{ fontSize:12.5, fontWeight:700, color:"var(--primary)", marginBottom:6 }}>{h.name}</div>
                   {PRICING_KEYS.filter(k=>k.type==="package").map(k => {
-                    const editable = canManage && seasonWritable;
+                    const editable = canManage && seasonWritable && !hotelPricesFailed;
                     return (
                       <div key={k.key} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
                         <div style={{ flex:1, fontSize:13 }}>{pricing[k.key]?.label || k.label}</div>

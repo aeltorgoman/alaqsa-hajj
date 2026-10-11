@@ -37,8 +37,11 @@ export function serviceContextRows(p: Passenger, maps: AllocTypeMaps): ServiceCo
   const reqId = p.requested_hotel_id ?? null;
   const actId = p.room_id != null ? maps.roomHotel.get(p.room_id) : undefined;
   const hotelName = (id: number) => maps.hotelName.get(id) ?? `فندق #${id}`;
+  /* غرفةٌ مُسنَدةٌ لم يُعرف فندقُها (غرفةٌ بلا فندق، أو سياقٌ لم يُحمَّل)
+     ليست «لم يُسكَّن» — يُقال ما يُعرف فقط. */
+  const actual = p.room_id == null ? "لم يُسكَّن بعد" : actId != null ? hotelName(actId) : "فندق الغرفة غير معروف";
   if (reqId == null && s.hotel_type !== "خاص") {
-    rows.push({ service: "الفندق", wanted: "غير محدد", actual: actId != null ? hotelName(actId) : "لم يُسكَّن بعد", mismatch: true });
+    rows.push({ service: "الفندق", wanted: "غير محدد", actual, mismatch: true });
   } else if (reqId != null && actId != null && actId !== reqId) {
     rows.push({ service: "الفندق", wanted: hotelName(reqId), actual: hotelName(actId), mismatch: true });
   }
