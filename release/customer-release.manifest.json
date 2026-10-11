@@ -24,6 +24,7 @@
     ".gitignore",
     "supabase/config.toml",
     "supabase/scripts/seed_first_admin.mjs",
+    "supabase/scripts/seed-target.mjs",
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
