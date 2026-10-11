@@ -17,6 +17,13 @@ export const PRICING_KEYS = [
   { key: "discount_no_ticket", label: "خصم بدون تذكرة",    type: "discount" },
 ];
 
+/* MOD-001: ما يُسعَّر لكلّ فندقٍ في `hotel_package_prices` — الباقاتُ الأربع
+   ورسمُ الإطلالة (M5). وبقيّةُ الإضافات والخصمُ عامّةٌ في `pricing_settings`. */
+export const HOTEL_PRICE_KEYS = [
+  ...PRICING_KEYS.filter(k => k.type === "package"),
+  { key: "addon_view", label: "رسم الإطلالة (مطلة)", type: "addon" },
+];
+
 /* تهريبُ الرموز الخاصّة — تطبيقٌ واحدٌ في النظام.
    كان هنا تطبيقٌ ثانٍ بـ`split/join` يطابق المشتركَ حرفاً، فصار
    إعادةَ تصديرٍ فلا تطبيقان يفترقان يوماً بإصلاحٍ في أحدهما. */
@@ -91,6 +98,46 @@ export function getPriceInfo(p: Passenger, pricing: PricingMap, hotelPrices: Hot
   return { label, amount };
 }
 
+/* رسمُ الإطلالة — MOD-001 M5: «مطلة» تُضيف رسمَ **الفندق المطلوب**
+   (`hotel_package_prices.addon_view`)، و«غير مطلة» صفر. لا فندقٌ مطلوب أو
+   لا صفّ ← صفر بلا رجوعٍ إلى السعر العامّ، والصفرُ الصريحُ صحيح. والغرفةُ
+   المُسنَدة لا تدخل: النقلُ لا يحرّك مالاً. */
+export const VIEW_KEY = "addon_view";
+export function viewSurcharge(p: Passenger, hotelPrices: HotelPackagePrices): number {
+  if (p.services.hotel_view !== "مطلة") return 0;
+  const hotelId = p.requested_hotel_id ?? null;
+  if (hotelId == null) return 0;
+  return hotelPrices.get(hotelId)?.[VIEW_KEY] ?? 0;
+}
+
+/* ملخّص الإضافات: صفٌّ لكلّ إضافةٍ بسعرها العامّ، والإطلالةُ صفٌّ لكلّ فندقٍ
+   مطلوب برسمه — مصدرٌ واحدٌ للشاشة والطباعة، والمجموعُ من الصفوف نفسها. */
+export type AddonReportRow = { key: string; label: string; count: number; price: number; total: number; isDiscount: boolean };
+export function addonReportRows(passengers: Passenger[], pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[]): AddonReportRow[] {
+  const rows: AddonReportRow[] = [];
+  for (const a of SERVICE_FILTERS) {
+    const ps = passengers.filter(a.check);
+    const isDiscount = a.key === "discount_no_ticket";
+    if (a.key !== VIEW_KEY) {
+      const price = pricing[a.key]?.amount || 0;
+      rows.push({ key: a.key, label: serviceLabel(a.key, pricing), count: ps.length, price, total: ps.length * price, isDiscount });
+      continue;
+    }
+    const groups = new Map<number | null, Passenger[]>();
+    ps.forEach(p => { const h = p.requested_hotel_id ?? null; groups.set(h, [...(groups.get(h) ?? []), p]); });
+    const order = (id: number | null) => { const i = hotels.findIndex(h => h.id === id); return id == null ? Number.MAX_SAFE_INTEGER : i < 0 ? hotels.length : i; };
+    const keys = [...groups.keys()].sort((x, y) => order(x) - order(y));
+    if (keys.length === 0) keys.push(null);
+    for (const h of keys) {
+      const g = groups.get(h) ?? [];
+      const price = h == null ? 0 : (hotelPrices.get(h)?.[VIEW_KEY] ?? 0);
+      const name = h == null ? "بلا فندق مطلوب" : (hotels.find(x => x.id === h)?.name ?? `فندق #${h}`);
+      rows.push({ key: `${VIEW_KEY}:${h ?? "none"}`, label: `${serviceLabel(VIEW_KEY, pricing)} · ${name}`, count: g.length, price, total: g.length * price, isDiscount });
+    }
+  }
+  return rows;
+}
+
 /* تقرير الباقات: صفٌّ لكلّ (باقة × فندقٍ مطلوب) بسعره الواحد، و«خاص»
    مجموعُ أسعاره اليدويّة — مصدرٌ واحدٌ للشاشة والطباعة، والإجماليُّ
    يُجمَع من الصفوف نفسها فيطابق `calcTotalDue` في الأساس. */
@@ -129,7 +176,7 @@ export function paymentsFor(passengerId: number, src: PaymentSource): Payment[] 
 export function calcTotalDue(p: Passenger, pricing: PricingMap, hotelPrices: HotelPackagePrices, custom: ChargeSource): number {
   const s = p.services;
   let total = getPriceInfo(p, pricing, hotelPrices).amount;
-  if (s.hotel_view === "مطلة") total += pricing["addon_view"]?.amount    || 0;
+  total += viewSurcharge(p, hotelPrices);
   if (s.camp_mina === "خاص")  total += pricing["addon_mina"]?.amount    || 0;
   if (s.camp_arafa === "خاص") total += pricing["addon_arafa"]?.amount   || 0;
   if (s.bus === "VIP")         total += pricing["addon_bus_vip"]?.amount || 0;

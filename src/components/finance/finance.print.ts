@@ -5,7 +5,7 @@ import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
 import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding } from "../../print";
-import { fmtAmt, financeStatus, getPriceInfo, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService, SERVICE_FILTERS, serviceLabel } from "./finance.utils";
+import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
    القيمةُ ويرث النصُّ لونَ أبيه — وقد يكون أبيضَ على أبيض. فألوانُ
@@ -182,7 +182,7 @@ export function makePassengerStatementHTML(
   const flightPaid = paidFlightService(p);
 
   let rows = `<tr><td class="bayan">${pkgLine}</td><td class="debit">${fmtAmt(pkgAmt)}</td><td class="credit">—</td></tr>`;
-  if (s.hotel_view==="مطلة") rows+=`<tr class="alt"><td class="bayan">إضافة مطلة</td><td class="debit">${fmtAmt(pricing["addon_view"]?.amount||0)}</td><td class="credit">—</td></tr>`;
+  if (s.hotel_view==="مطلة") rows+=`<tr class="alt"><td class="bayan">إضافة مطلة</td><td class="debit">${fmtAmt(viewSurcharge(p, hotelPrices))}</td><td class="credit">—</td></tr>`;
   if (s.camp_mina==="خاص")  rows+=`<tr><td class="bayan">خيمة خاصة - منى</td><td class="debit">${fmtAmt(pricing["addon_mina"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if (s.camp_arafa==="خاص") rows+=`<tr class="alt"><td class="bayan">خيمة خاصة - عرفة</td><td class="debit">${fmtAmt(pricing["addon_arafa"]?.amount||0)}</td><td class="credit">—</td></tr>`;
   if (s.bus==="VIP")         rows+=`<tr><td class="bayan">باص VIP</td><td class="debit">${fmtAmt(pricing["addon_bus_vip"]?.amount||0)}</td><td class="credit">—</td></tr>`;
@@ -466,15 +466,14 @@ export function printPackagesReport(passengers: Passenger[], pricing: PricingMap
     ["الإجمالي", String(pkgCount), "—", fmtAmt(pkgTotal)]), brand, chrome));
 }
 
-export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, brand: PrintBranding, chrome: PrintChrome = {}) {
+export function printAddonsReport(passengers: Passenger[], pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[], brand: PrintBranding, chrome: PrintChrome = {}) {
   const { primaryColor } = safeBranding(brand);
-  /* المصدر المشترك نفسه الذي يغذّي فلترَ الخدمات والشاشة — لا قائمةٌ ثالثة */
-  const checks=SERVICE_FILTERS;
-  const amounts=checks.map(a=>{const count=passengers.filter(a.check).length;const price=pricing[a.key]?.amount||0;const isDis=a.key==="discount_no_ticket";return{a,count,price,isDis,sum:count*price};});
-  const rows=amounts.map(({a,count,price,isDis,sum})=>[esc(serviceLabel(a.key, pricing)),String(count),fmtAmt(price),isDis?`(${fmtAmt(sum)})`:fmtAmt(sum)]);
+  /* `addonReportRows` — المصدرُ نفسُه للشاشة: الإطلالةُ صفٌّ لكلّ فندقٍ مطلوب برسمه */
+  const data = addonReportRows(passengers, pricing, hotelPrices, hotels);
+  const rows = data.map(r => [esc(r.label), String(r.count), fmtAmt(r.price), r.isDiscount ? `(${fmtAmt(r.total)})` : fmtAmt(r.total)]);
   /* صافي الإضافات: الإضافاتُ تُجمَع والخصمُ يُطرَح — كما في `calcTotalDue` */
-  const addonNet=amounts.reduce((n,x)=>n+(x.isDis?-x.sum:x.sum),0);
-  const addonCount=amounts.reduce((n,x)=>n+x.count,0);
+  const addonNet = data.reduce((n, r) => n + (r.isDiscount ? -r.total : r.total), 0);
+  const addonCount = data.reduce((n, r) => n + r.count, 0);
   printInPage(makeFinanceHTML("ملخص الإضافات", printTable(["الإضافة / الخصم","عدد الحجاج","السعر الواحد","الإجمالي"], rows, primaryColor,
     ["الصافي", String(addonCount), "—", fmtAmt(addonNet)]), brand, chrome));
 }

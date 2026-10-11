@@ -397,8 +397,9 @@ begin
   exception when check_violation then null;
   end;
   begin
-    insert into public.hotel_package_prices (hotel_id, package_key, amount) values (v_h1, 'addon_view', 100);
-    raise exception 'FAIL — مفتاحٌ ليس باقة' using errcode = 'P0099';
+    -- (`addon_view` صار مقبولاً منذ M5 — رسمُ الإطلالة لكلّ فندق؛ وغيرُه من الإضافات لا)
+    insert into public.hotel_package_prices (hotel_id, package_key, amount) values (v_h1, 'addon_mina', 100);
+    raise exception 'FAIL — مفتاحٌ ليس باقةً ولا رسمَ إطلالة' using errcode = 'P0099';
   exception when check_violation then null;
   end;
   delete from public.hotel_package_prices where hotel_id = v_h1 and package_key = 'package_quad';

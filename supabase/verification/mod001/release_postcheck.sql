@@ -107,6 +107,30 @@ begin
                                  where hp.hotel_id = pil.requested_hotel_id and hp.package_key = pil.pkg) end, 0);
   if v_n <> 0 then v_bad := v_bad || ('pilgrims whose base price changed: ' || v_n); end if;
 
+  -- ٥) M5: رسمُ الإطلالة لكلّ حاجٍّ له فندقٌ مطلوب («مطلة»، والغائبُ «مطلة»):
+  --    قاعدةُ الواجهة الحاليّة (اللقطة أو الحيّ) = رسمُ فندقه المطلوب، والغائبُ صفر
+  if not exists (select 1 from pg_constraint
+                  where conname = 'hotel_package_prices_key_vocab'
+                    and pg_get_constraintdef(oid) like '%addon_view%') then
+    v_bad := v_bad || 'hotel_package_prices_key_vocab does not admit addon_view'::text;
+  end if;
+  with pil as (
+    select p.id, p.season_id, p.requested_hotel_id,
+           (s.closed_at is not null
+            and exists (select 1 from public.season_pricing_snapshot x where x.season_id = s.id)) as use_snap
+      from public.passengers p join public.seasons s on s.id = p.season_id
+     where coalesce(p.passenger_type, '') not in ('مرافق', 'مشرف', 'إداري')
+       and p.requested_hotel_id is not null
+       and coalesce(nullif(p.hotel_view, ''), 'مطلة') = 'مطلة'
+  )
+  select count(*) into v_n from pil
+   where coalesce(case when pil.use_snap then (select sps.amount from public.season_pricing_snapshot sps
+                                                where sps.season_id = pil.season_id and sps.key = 'addon_view')
+                       else (select ps.amount from public.pricing_settings ps where ps.key = 'addon_view') end, 0)
+         <> coalesce((select hp.amount from public.hotel_package_prices hp
+                       where hp.hotel_id = pil.requested_hotel_id and hp.package_key = 'addon_view'), 0);
+  if v_n <> 0 then v_bad := v_bad || ('pilgrims whose view surcharge changed: ' || v_n); end if;
+
   raise notice 'postcheck: hotels=% prices=% rooms_linked=% pilgrims_with_hotel=%',
     (select count(*) from public.hotels), (select count(*) from public.hotel_package_prices),
     (select count(*) from public.rooms where hotel_id is not null),
