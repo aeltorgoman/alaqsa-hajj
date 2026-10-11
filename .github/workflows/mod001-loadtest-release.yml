@@ -1,0 +1,135 @@
+# ════════════════════════════════════════════════════════════
+# MOD-001 — ترحيلاتُ PR 1–3 على بيئة الاختبار (Alaqsa Load Test) أوّلاً
+# ════════════════════════════════════════════════════════════
+# يطبّق الترحيلات الثلاث نفسَها التي ستُطبَّق على الإنتاج، بالبوّابات نفسِها،
+# على مشروع الاختبار وحده. ونجاحُه (mode=push) **شرطٌ** لسير عمل الإنتاج.
+#
+#   mode=push        البوّابات ← الكتابةُ الواحدة (`db push`) ← التحقّق
+#   mode=price-gate  قراءةٌ محضة: بوّابةُ الأسعار قبل إطلاق الواجهة الجديدة
+#
+# ⚠️ لا يُذكر هنا إلا أسرارُ LT_* (فحصٌ ذاتيٌّ أدناه). ومرجعُ الإنتاج مرفوضٌ في
+#    كلّ مرحلة (assert-not-production.sh + release_target_guard.sh).
+# ⚠️ لا تراجعَ آليّ: الإخفاقُ بعد الكتابة يُبقي الدليل، والقرارُ بشريّ.
+# الدليلُ التشغيليّ: docs/runbooks/MOD001_RELEASE.md
+
+name: MOD-001 release - Load Test
+run-name: "MOD-001 Load Test ${{ inputs.mode }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "push = apply PR 1-3 migrations · price-gate = read-only pre-launch price check"
+        required: true
+        type: choice
+        options: [push, price-gate]
+      confirm:
+        description: "push: PUSH-MOD001-LOADTEST-20261011012258 · price-gate: GATE-MOD001-LOADTEST-PRICES"
+        required: true
+        default: ""
+      target_ref:
+        description: "Load Test project ref (NOT a secret; must equal the LT_PROJECT_REF secret)"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mod001-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MODE: ${{ inputs.mode }}
+      TARGET: loadtest
+      REF: ${{ inputs.target_ref }}
+      DB_USER: postgres.${{ inputs.target_ref }}
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      CONFIRM: ${{ inputs.confirm }}
+      LT_SECRET: ${{ secrets.LT_PROJECT_REF }}
+      PGPASSWORD: ${{ secrets.LT_DB_PASSWORD }}
+      OUT: mod001-loadtest-evidence
+      RUN: supabase/verification/mod001/release_run.sh
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: target, authorization, LT-only secrets, toolchain"
+        run: |
+          set -euo pipefail
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::LT_DB_PASSWORD secret missing"; exit 1; }
+          supabase/verification/mod001/release_target_guard.sh "$TARGET" "$REF" "$DB_USER" "$DB_HOST" "$CONFIRM" "$LT_SECRET"
+          if grep -oE 'secrets\.[A-Z_]+' .github/workflows/mod001-loadtest-release.yml | sort -u | grep -v '^secrets\.LT_'; then
+            echo "::error::this workflow references a non-LT secret"; exit 1; fi
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          "$RUN" static
+
+      - name: "PRICE GATE (read-only)"
+        if: inputs.mode == 'price-gate'
+        run: |
+          set -euo pipefail
+          "$RUN" price-gate
+
+      - name: "GATE: ledger 58 / exactly the three MOD-001 migrations pending"
+        if: inputs.mode == 'push'
+        run: '"$RUN" ledger-before'
+
+      - name: "GATE: preflight (read-only)"
+        if: inputs.mode == 'push'
+        run: '"$RUN" preflight'
+
+      - name: "GATE: fingerprints before (read-only)"
+        if: inputs.mode == 'push'
+        run: '"$RUN" fp-before'
+
+      # ════════════════ THE ONE AUTHORIZED WRITE ════════════════
+      - name: "LIVE WRITE: canonical db push (Load Test)"
+        id: live_push
+        if: inputs.mode == 'push'
+        run: '"$RUN" push'
+
+      - name: "POST: ledger 61, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: '"$RUN" ledger-after'
+
+      - name: "POST: structure, backfill, prices and fingerprints"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: '"$RUN" postcheck'
+
+      - name: "POST: price gate (read-only)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: '"$RUN" price-gate'
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rIlE 'postgres(ql)?://[^*[:space:]]+:[^@[:space:]]+@|sb_secret_|service_role' "$OUT" 2>/dev/null; then
+            echo "::error::evidence holds secret-like material"; exit 1; fi
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod001-loadtest-${{ inputs.mode }}
+          path: ${{ env.OUT }}
+          if-no-files-found: warn
