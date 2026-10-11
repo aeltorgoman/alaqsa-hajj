@@ -1,6 +1,6 @@
 # Runbook — MOD-001 database release (multi-hotel)
 
-Applies the three reviewed MOD-001 migrations **to Alaqsa Load Test first, then to
+Applies the four reviewed MOD-001 migrations **to Alaqsa Load Test first, then to
 Production**, through two gated `workflow_dispatch` workflows dispatched on a
 **database-only release branch**. The new frontend stays on the integration branch
 until the very end. Nothing runs automatically. Every step that connects re-checks
@@ -11,8 +11,9 @@ the target first.
 | 1 | `20261010194239_mod001_hotels_foundation.sql` | hotels, hotel package prices, columns, guards (additive) |
 | 2 | `20261010203522_mod001_hotels_backfill.sql` | one hotel per existing season; links rooms and pilgrims; copies effective package prices |
 | 3 | `20261011012258_mod001_hotel_operations.sql` | room assignment, ordering, hotel deletion, portal and settings functions |
+| 4 | `20261011140000_mod001_atomic_transfer_room_uniqueness.sql` | #62: atomic expected-source transfer (`assign_passenger_room(p, room, expected_room)`); room numbers unique per hotel (season-wide index replaced; rooms without a hotel stay unique per season) |
 
-The current frontend keeps working after all three (verified against the real
+The current frontend keeps working after all four (verified against the real
 PostgREST surface). **The new frontend reaches `main` (= Vercel Production) only
 in step 11, after the Production push and a green price gate.**
 
@@ -25,13 +26,13 @@ All logic lives in `supabase/verification/mod001/`. The workflows only call it.
 | `release_target_guard.sh` (+ port check in `release_run.sh`) | wrong target, malformed ref, pooler user not `postgres.<ref>`, non-pooler host, a port other than 5432/6543, the other target's or the other mode's confirmation text, Load Test ref ≠ `LT_PROJECT_REF`, Production run carrying Load Test identity, Load Test run pointed at Production |
 | workflow step *release toolkit equals the copy registered on main* (every mode, **before any repository script runs**) | any file of the release toolkit — both workflows, the six `release_*` scripts, the three `assert-*` checkers — differs from, or is missing on, `main` |
 | `release_run.sh scope` (`check`, `push`) | the dispatched ref changes anything outside `supabase/migrations`, `supabase/verification/mod001/*.sql|*.sh`, `supabase/README.md`, `docs/` (i.e. it carries frontend, `package.json`, `supabase/config.toml` or any other importable file) |
-| `release_run.sh static` | migration count ≠ 61, a migration file differs from its reviewed SHA-256, a migration writes application rows at top level |
-| `release_run.sh ledger-before` | ledger ≠ 58 rows / `20260928100000`, pending set ≠ exactly the three, any unexpected ledger version |
+| `release_run.sh static` | migration count ≠ 62, a migration file differs from its reviewed SHA-256, a migration writes application rows at top level |
+| `release_run.sh ledger-before` | ledger ≠ 58 rows / `20260928100000`, pending set ≠ exactly the four, any unexpected ledger version |
 | `release_run.sh preflight` | not Postgres 17, any MOD-001 object already present, `delete_season` body ≠ md5 `ae4c1905cebc93286cee74d4513c90c9` (the body PR 1 patches; identical on Production, Load Test and a local rebuild at 58), a dependency missing, not exactly one open season |
 | `release_run.sh push` | no `fingerprint-before` evidence |
-| `release_run.sh ledger-after` | ledger ≠ 61 / `20261011012258`, any of the 58 originals changed |
+| `release_run.sh ledger-after` | ledger ≠ 62 / `20261011140000`, any of the 58 originals changed |
 | `release_run.sh postcheck` | structure, RLS, grants, definer/search_path, backfill completeness, any pilgrim's base package price changed, **any protected fingerprint changed** (passengers, rooms, payments, receipts, custom charges, pricing settings, snapshots, seasons, financial groups, user profiles) |
-| `release_run.sh price-gate` | any of the three migrations missing from the target's ledger (so it can never be green before the Production push), or, for the open season: any hotel whose package price ≠ the global package price (**missing = 0 on both sides**), or any priced pilgrim without a requested hotel |
+| `release_run.sh price-gate` | any of the four migrations missing from the target's ledger (so it can never be green before the Production push), or, for the open season: any hotel whose package price ≠ the global package price (**missing = 0 on both sides**), or any priced pilgrim without a requested hotel |
 | Production `push` only | no successful **Load Test `push`** run on the **same commit** (checked through the Actions API) |
 
 Local proof of every block: `supabase/verification/mod001/release_gate_tests.sh`
@@ -70,13 +71,13 @@ gate detects drift and **blocks the launch**; it does not repair it.
 
 | # | Step | Touches |
 |---|---|---|
-| 1 | Cut **`release/mod-001-db`** from `feature/mod-001-multi-hotel` at the commit that merged this PR (database-only). Never add frontend to it. | git |
+| 1 | Build **`release/mod-001-db`** without any frontend: start from `896894d` (the PR 4 merge — database-only), then bring in **only** #62's database files from the integration branch: `git checkout <#62 merge commit> -- supabase/migrations/20261011140000_mod001_atomic_transfer_room_uniqueness.sql supabase/verification/mod001 supabase/verification/rehearsal/assert-after-close.sql supabase/README.md docs/runbooks/MOD001_RELEASE.md .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml`, and commit. (The workflows must be the updated ones: every run compares them with the copies registered on `main` in step 2. The gate tests build exactly this ref.) The integration branch itself now carries the PR 5–6 frontend and is refused by the `scope` gate. | git |
 | 2 | **Register** the release toolkit: a PR to `main` containing **only** the two `mod001-*-release.yml` workflows and the six `supabase/verification/mod001/release_*` scripts, byte-identical to the release branch (as #178 did for one workflow). No migration, no frontend; Vercel rebuilds `main` with an unchanged frontend. | `main` (toolkit only) |
 | 3 | **Verify dispatch:** *MOD-001 release - Load Test*, branch `release/mod-001-db`, `mode=check`. Expect `ref=refs/heads/release/mod-001-db … release toolkit matches main` and `scope PASS`. No database is contacted and no password is passed. | nothing |
-| 4 | **Load Test push**, same branch: `mode=push`, `confirm=PUSH-MOD001-LOADTEST-20261011012258`, `target_ref=<Load Test ref>`. Every gate green; keep the evidence; note the **run id**. | Load Test DB |
+| 4 | **Load Test push**, same branch: `mode=push`, `confirm=PUSH-MOD001-LOADTEST-20261011140000`, `target_ref=<Load Test ref>`. Every gate green; keep the evidence; note the **run id**. | Load Test DB |
 | 5 | Check Load Test (rooms, assignment, portal, finance) through the integration Preview, which already points to Load Test. Optional `mode=price-gate`, `confirm=GATE-MOD001-LOADTEST-PRICES`. | nothing |
 | 6 | **Freeze package prices** (tell everyone with `manage_payments`). | — |
-| 7 | **Production push**, branch `release/mod-001-db` (**same commit** as step 4): `mode=push`, `confirm=PUSH-MOD001-PRODUCTION-20261011012258`, `loadtest_run_id=<step 4>`. Every gate green. | Production DB |
+| 7 | **Production push**, branch `release/mod-001-db` (**same commit** as step 4): `mode=push`, `confirm=PUSH-MOD001-PRODUCTION-20261011140000`, `loadtest_run_id=<step 4>`. Every gate green. | Production DB |
 | 8 | **Smoke-test the current Production frontend** (rooms, assignment, registration, finance totals, portal): it must behave exactly as before. | — |
 | 9 | Merge `release/mod-001-db` into `main` so `main` matches the Production ledger again (database-only, the `scope` gate already proved it). Frontend on Production is unchanged. | `main` (DB files only) |
 | 10 | Frontend MOD-001 PRs land on `feature/mod-001-multi-hotel` only; its Preview stays on Load Test until full acceptance. | Preview only |

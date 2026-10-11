@@ -34,7 +34,8 @@ begin
 
   -- ٢) الدوالّ: SECURITY DEFINER، search_path ثابت، لا anon (البوابة وحدها لها anon)
   foreach v_fn in array array[
-    'public.assign_passenger_room(bigint, bigint)', 'public.set_room_order(bigint, bigint[])',
+    'public.assign_passenger_room(bigint, bigint)', 'public.assign_passenger_room(bigint, bigint, bigint)',
+    'public.set_room_order(bigint, bigint[])',
     'public.delete_hotel(bigint)', 'public.update_active_season(text, text, text, text, text)',
     'public.update_active_season(text, text, text, text, text, text, text, text)',
     'public.get_pilgrim_portal_by_session(text)', 'public.delete_season(bigint, uuid)'] loop
@@ -49,6 +50,19 @@ begin
       v_bad := v_bad || ('anon may execute ' || v_fn);
     end if;
   end loop;
+  -- #62: النقلُ بمصدرٍ متوقَّع لـauthenticated، والتفرّدُ داخل الفندق
+  if not has_function_privilege('authenticated', 'public.assign_passenger_room(bigint, bigint, bigint)', 'EXECUTE') then
+    v_bad := v_bad || 'authenticated cannot execute assign_passenger_room(bigint, bigint, bigint)'::text;
+  end if;
+  if to_regclass('public.rooms_season_floor_number_uniq') is not null then
+    v_bad := v_bad || 'the season-wide room-number index is still present'::text;
+  end if;
+  if not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'rooms_hotel_floor_number_uniq'
+                    and indexdef = 'CREATE UNIQUE INDEX rooms_hotel_floor_number_uniq ON public.rooms USING btree (hotel_id, floor, number)')
+     or not exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'rooms_unlinked_season_floor_number_uniq'
+                    and indexdef = 'CREATE UNIQUE INDEX rooms_unlinked_season_floor_number_uniq ON public.rooms USING btree (season_id, floor, number) WHERE (hotel_id IS NULL)') then
+    v_bad := v_bad || 'room-number uniqueness indexes are missing or differ'::text;
+  end if;
   if has_table_privilege('anon', 'public.hotels', 'SELECT') or has_table_privilege('authenticated', 'public.hotels', 'DELETE') then
     v_bad := v_bad || 'hotels grants are wider than intended'::text;
   end if;

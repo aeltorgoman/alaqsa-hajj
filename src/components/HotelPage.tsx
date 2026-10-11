@@ -346,9 +346,12 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
 
   /* الحاجُّ كما هو في القاعدة الآن — بعد كتابةٍ رُفضت، فلا تعرض الشاشةُ
      إسناداً لم يقع ولا تُخفي إسناداً قائماً. */
-  const refreshPassenger = async (pId: number) => {
+  const refreshPassenger = async (pId: number): Promise<Passenger | null> => {
     const { data } = await supabase.from("passengers").select("*").eq("id", pId).maybeSingle();
-    if (data) setPassengers(prev => prev.map(p => p.id === pId ? mapPassenger(data) : p));
+    if (!data) return null;
+    const fresh = mapPassenger(data);
+    setPassengers(prev => prev.map(p => p.id === pId ? fresh : p));
+    return fresh;
   };
   /* نزلاءُ غرفةٍ بعينها من القاعدة — بعد رفضٍ لسببها (امتلأت من شاشةٍ
      أخرى)، فتظهر مكتملةً وتخرج من قائمة الوجهات. القاعدةُ هي الحَكَم:
@@ -378,9 +381,19 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
      في أمرٍ واحد — لا يمرّ الحاجّ بحالة «بلا غرفة» بين غرفتين. وتحكم
      القاعدةُ بالصلاحية (manage_hotel، أو صلاحيةُ الشخص) والسعةِ والموسم.
      رسالتُها العربية تُعرض كما هي، ثمّ يُقرأ الحاجّ من جديد. */
-  const placePassenger = async (pId: number, roomId: number | null, failMessage: string) => {
+  /* `expected` (#62): الغرفةُ التي أكّدها الموظّف مصدراً — تفحصها القاعدةُ تحت
+     قفل صفّ الحاجّ نفسِه، فلا يكتب نقلٌ فوق نقلٍ متزامن. */
+  const placePassenger = async (pId: number, roomId: number | null, failMessage: string,
+                                expected?: { room: number | null; name: string }) => {
     if (!assertWritable()) return false;
-    const { error } = await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId });
+    const { error } = expected
+      ? await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId, p_expected_room_id: expected.room })
+      : await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId });
+    if (error && expected && error.hint === "mod001_stale_source") {
+      showAlert("warning", `تغيّر مكان ${expected.name} منذ فتح التأكيد — لم يُنقل. راجع مكانه الحالي وأعد النقل.`);
+      await refreshPassenger(pId);
+      return false;
+    }
     if (error) {
       console.error(failMessage, error);
       showAlert("error", allocWriteError(failMessage, error.message));
@@ -428,23 +441,19 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     if (!transfer || transferring) return;
     const { p, dest } = transfer;
     setTransferring(true);
-    /* المصدرُ الذي أكّده الموظّف يجب أن يكون مكانَ الحاجّ الآن: إن نقله
-       موظّفٌ آخر والنافذةُ مفتوحة، فالنقلُ يُلغى ويُطلب تأكيدٌ جديد —
-       وإلا نُقل من الغرفة الجديدة وهو يظنّ أنه ينقل من القديمة. */
-    const { data: now, error: readErr } = await supabase.from("passengers").select("room_id").eq("id", p.id).maybeSingle();
-    if (readErr || !now || (now.room_id ?? null) !== (p.room_id ?? null)) {
-      setTransferring(false); setTransfer(null);
-      await refreshPassenger(p.id);
-      setMoveFor(null);
-      showAlert("warning", readErr || !now
-        ? "تعذّر التحقق من مكان الحاج الآن — لم يُنقل. أعد المحاولة."
-        : `تغيّر مكان ${p.short_ar || makeShort(p.name_ar)} منذ فتح التأكيد — لم يُنقل. راجع مكانه الحالي وأعد النقل.`);
-      return;
-    }
-    const ok = await placePassenger(p.id, dest.id, "تعذّر نقل الحاج — بقي في غرفته");
+    /* المصدرُ الذي أكّده الموظّف يُرسَل مع النقل، والقاعدةُ ترفض ذرّيّاً إن
+       كان الحاجّ قد نُقل منذ فتح التأكيد — فلا يُنقل من غرفةٍ لم يرها. */
+    const ok = await placePassenger(p.id, dest.id, "تعذّر نقل الحاج — بقي في غرفته",
+      { room: p.room_id ?? null, name: p.short_ar || makeShort(p.name_ar) });
     setTransferring(false);
     setTransfer(null);
-    if (!ok) { await Promise.all([refreshRoomOccupants(dest.id), loadSeasonRooms()]); return; }
+    if (!ok) {
+      /* لوحةُ النقل تحمل لقطةً من الحاجّ: إن تغيّرت غرفتُه أُغلقت (نُقل من هذه
+         الغرفة)، وإلا حُدّثت — فلا يُرسَل المصدرُ القديمُ نفسُه في المحاولة التالية */
+      const [fresh] = await Promise.all([refreshPassenger(p.id), refreshRoomOccupants(dest.id), loadSeasonRooms()]);
+      setMoveFor(fresh && (fresh.room_id ?? null) === (p.room_id ?? null) ? fresh : null);
+      return;
+    }
     setMoveFor(null); setMoveSearch("");
     showAlert("success", `تم نقل ${p.short_ar || makeShort(p.name_ar)} إلى ${roomLabel(dest, hotels)}`);
     setTimeout(() => showAlert(null), 2500);

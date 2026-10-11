@@ -28,7 +28,7 @@ LOCAL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 export OUT="${OUT:-/tmp/mod001-release-gate-tests}"
 rm -rf "$OUT"; mkdir -p "$OUT"
 LT=vgqowazlzzcovcrigcjz; PROD=zkucwcnclbfvukhdqhgc; HOST=aws-1-eu-central-1.pooler.supabase.com
-PUSH_LT=PUSH-MOD001-LOADTEST-20261011012258; PUSH_PROD=PUSH-MOD001-PRODUCTION-20261011012258
+PUSH_LT=PUSH-MOD001-LOADTEST-20261011140000; PUSH_PROD=PUSH-MOD001-PRODUCTION-20261011140000
 GATE_LT=GATE-MOD001-LOADTEST-PRICES; GATE_PROD=GATE-MOD001-PRODUCTION-PRICES
 
 pass=0; fail=0
@@ -86,7 +86,7 @@ insert into public.passengers (name_ar, hotel_type) values ('اختبار ٣', '
 insert into public.passengers (name_ar, passenger_type) values ('إداري', 'إداري');
 update public.pricing_settings set amount = amount + 7 where key like 'package%';
 SQL
-expect_ok    "ledger-before at 58 with exactly the three pending" local_run ledger-before
+expect_ok    "ledger-before at 58 with exactly the four pending" local_run ledger-before
 expect_block "price gate before the migrations are applied"      local_run price-gate
 expect_ok    "preflight at 58"                                    local_run preflight
 
@@ -116,8 +116,8 @@ sql "drop table public.hotels"
 
 echo "═══ ٤) دفعٌ محلّيٌّ كامل بالمراحل نفسِها ═══"
 expect_ok "fp-before"                                             local_run fp-before
-expect_ok "push (local db push of the three migrations)"          local_run push
-expect_ok "ledger-after: 61, originals untouched"                 local_run ledger-after
+expect_ok "push (local db push of the four migrations)"          local_run push
+expect_ok "ledger-after: 62, originals untouched"                 local_run ledger-after
 expect_ok "postcheck: structure, backfill, base prices, fingerprints" local_run postcheck
 expect_ok "price gate right after the push"                       local_run price-gate
 expect_block "ledger-before after the migrations are applied"     local_run ledger-before
@@ -172,18 +172,23 @@ LTW=.github/workflows/mod001-loadtest-release.yml; PRW=.github/workflows/mod001-
 TK=(supabase/verification/mod001/release_{target_guard.sh,run.sh,preflight.sql,fingerprint.sql,postcheck.sql,price_gate.sql})
 TKP=(); for f in "$LTW" "$PRW" "${TK[@]}"; do TKP+=("$f=$f"); done
 REG="$(commit_with origin/main "${TKP[@]}")"                     # main بعد تسجيل عُدّة الإطلاق وحدها
+# فرعُ الإطلاق كما يُبنى فعلاً: main المسجَّل + ملفّاتُ قاعدة البيانات وحدها (لا واجهة)
+# بالخطوة الأولى في الدليل حرفاً: 896894d (دمج PR 4) + المسارات المذكورة هناك وحدها
+DBP=(); while IFS= read -r f; do DBP+=("$f=$f"); done < <(git ls-files supabase/migrations/20261011140000_mod001_atomic_transfer_room_uniqueness.sql supabase/verification/mod001 supabase/verification/rehearsal/assert-after-close.sql supabase/README.md docs/runbooks/MOD001_RELEASE.md .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml)
+DBONLY="$(commit_with 896894d "${DBP[@]}")"
 printf '# drift\n' | cat "$LTW" - > "$OUT/lt-drift.yml"
 printf 'export const x = 1;\n' > "$OUT/fe.ts"
-DRIFT="$(commit_with HEAD "$LTW=$OUT/lt-drift.yml")"
+DRIFT="$(commit_with "$DBONLY" "$LTW=$OUT/lt-drift.yml")"
 sed 's/^phase="${1:-}"$/phase="${1:-}"; [ "$phase" = scope ] \&\& exit 0/' "$R" > "$OUT/run-bypass.sh"; chmod +x "$OUT/run-bypass.sh"
-BYPASS="$(commit_with HEAD "$R=$OUT/run-bypass.sh")"            # سكربتٌ معدَّلٌ يتجاوز فحصَه
-FRONT="$(commit_with HEAD "src/mod001-new-frontend.ts=$OUT/fe.ts")"
+BYPASS="$(commit_with "$DBONLY" "$R=$OUT/run-bypass.sh")"            # سكربتٌ معدَّلٌ يتجاوز فحصَه
+FRONT="$(commit_with "$DBONLY" "src/mod001-new-frontend.ts=$OUT/fe.ts")"
 printf 'import sys\nopen("%s/planted-ran", "w").write("x")\nsys.exit(99)\n' "$OUT" > "$OUT/re.py"
-PLANT="$(commit_with HEAD "supabase/verification/re.py=$OUT/re.py")"    # وحدةٌ مجاورةٌ تظلّل re
+PLANT="$(commit_with "$DBONLY" "supabase/verification/re.py=$OUT/re.py")"    # وحدةٌ مجاورةٌ تظلّل re
 scope_at() { # $1 = الالتزام المُرسَل، $2 = الأساس
   local d="$WT/$1"; [ -d "$d" ] || git worktree add -q --detach "$d" "$1"
   MOD001_SCOPE_BASE="$2" OUT="$OUT" "$d/supabase/verification/mod001/release_run.sh" scope; }
-expect_ok    "database-only release ref, workflows registered on main" scope_at "$(git rev-parse HEAD)" "$REG"
+expect_ok    "database-only release ref, workflows registered on main" scope_at "$DBONLY" "$REG"
+expect_reason "the integration branch itself (carries the frontend) is refused" "non-database changes" scope_at "$(git rev-parse HEAD)" "$REG"
 expect_reason "toolkit not registered on main" "is not registered on origin/main" scope_at "$(git rev-parse HEAD)" origin/main
 expect_reason "dispatched workflow differs from the registered copy" "mod001-loadtest-release.yml on this ref differs" scope_at "$DRIFT" "$REG"
 expect_reason "release ref carries frontend changes" "non-database changes" scope_at "$FRONT" "$REG"
@@ -203,7 +208,7 @@ for st in yaml.safe_load(open(sys.argv[1]))["jobs"]["release"]["steps"]:
   [ -s "$OUT/toolkit-step.sh" ] || { echo "toolkit step not found in $1"; return 1; }
   (cd "$d" && GITHUB_REF=refs/heads/release/mod-001-db GITHUB_SHA="$2" bash "$OUT/toolkit-step.sh"); }
 for wf in "$LTW" "$PRW"; do
-  expect_ok    "$(basename "$wf"): toolkit step passes on the release ref"     yaml_toolkit_step "$wf" "$(git rev-parse HEAD)"
+  expect_ok    "$(basename "$wf"): toolkit step passes on the release ref"     yaml_toolkit_step "$wf" "$DBONLY"
   expect_reason "$(basename "$wf"): toolkit step blocks a self-bypassing script" "release_run.sh differs from the copy registered on main" yaml_toolkit_step "$wf" "$BYPASS"
   expect_reason "$(basename "$wf"): toolkit step blocks a drifted workflow" "mod001-loadtest-release.yml differs from the copy registered on main" yaml_toolkit_step "$wf" "$DRIFT"
 done
