@@ -16,7 +16,8 @@ import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
-import type { Passenger, Bus, Camp, Room, Flight, User } from "../types";
+import type { Passenger, Bus, Camp, Room, Flight, User, Hotel } from "../types";
+import { hotelNameOf } from "../utils/hotels";
 import { makeHTML, buildStickersHTML, printInPage, freezeHeaderRow, addSummarySheet, styleTitleRow, styleHeaderRow, safeSheetName, ROOM_COLORS, HOTEL_ROOM_TYPES, roomCapacity, btnP, btnS, DOC_TTL, signedDocUrl, fetchDocumentBytes } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
 import { REPORTS_RESPONSIVE_CSS } from "./reports.responsive";
@@ -223,6 +224,19 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
   const [buses, setBuses] = useState<Bus[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  /* MOD-001: فنادقُ الموسم — لاسم الفندق الفعليّ لكلّ غرفة (غرفة ← فندق) */
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  /* اسمُ فندق الغرفة الفعليّ حين يكون للموسم أكثرُ من فندق — فالرقمُ وحده
+     يلتبس. وموسمُ الفندق الواحد لا يتغيّر مطبوعُه. والغرفةُ بلا فندقٍ مربوط
+     لا يُخترع لها فندق. */
+  const multiHotel = hotels.length > 1;
+  const roomHotelName = (room: Room | undefined | null): string | null =>
+    multiHotel && room ? hotelNameOf(hotels, room.hotel_id) : null;
+  const roomWithHotel = (room: Room | undefined | null): string => {
+    if (!room) return "";
+    const h = roomHotelName(room);
+    return h ? `${room.number} — ${h}` : String(room.number);
+  };
   const [flights, setFlights] = useState<Flight[]>([]);
   /* ── حالةُ كلّ مرجعٍ على حدة ──────────────────────────────────
      كانت رايةٌ واحدة (`refDataError`) ترتفع إن سقط أيُّ استعلامٍ من
@@ -390,7 +404,7 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
     { key: "flight_ret", label: "رحلة الإياب", group: "خدمات", get: (p: Passenger) => flights.find(f => f.id === p.return_flight_id)?.name || "" },
     { key: "hotel_type", label: "نوع الغرفة", group: "خدمات", get: (p: Passenger) => p.services?.hotel_type },
     { key: "hotel_view", label: "إطلالة الغرفة", group: "خدمات", get: (p: Passenger) => p.services?.hotel_view },
-    { key: "room_number", label: "رقم الغرفة", group: "خدمات", get: (p: Passenger) => rooms.find(r => r.id === p.room_id)?.number || "" },
+    { key: "room_number", label: "رقم الغرفة", group: "خدمات", get: (p: Passenger) => roomWithHotel(rooms.find(r => r.id === p.room_id)) },
     { key: "camp_mina", label: "منى (نوع)", group: "خدمات", get: (p: Passenger) => p.services?.camp_mina },
     { key: "camp_mina_name", label: "مخيم منى", group: "خدمات", get: (p: Passenger) => camps.find(c => c.id === p.camp_mina_id)?.name || "" },
     { key: "camp_arafa", label: "عرفة (نوع)", group: "خدمات", get: (p: Passenger) => p.services?.camp_arafa },
@@ -440,8 +454,13 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
       mark("camps", true);
     })());
     if (want.has("rooms")) jobs.push((async () => {
-      const { data, error } = await supabase.from("rooms").select("*").eq("season_id", sid).order("number");
-      if (error || !data) { mark("rooms", false); return; }
+      /* الغرفُ وفنادقُها معاً: اسمُ الفندق جزءٌ من هويّة الغرفة حين يتكرّر الرقم */
+      const [{ data, error }, hRes] = await Promise.all([
+        supabase.from("rooms").select("*").eq("season_id", sid).order("number"),
+        supabase.from("hotels").select("*").eq("season_id", sid).order("sort_order", { nullsFirst: false }).order("id"),
+      ]);
+      if (error || !data || hRes.error || !hRes.data) { mark("rooms", false); return; }
+      setHotels(hRes.data as Hotel[]);
       setRooms(data as Room[]);
       setSelectedFloors(new Set((data as Room[]).map(x => x.floor ? String(x.floor) : "بدون طابق")));
       mark("rooms", true);
@@ -753,6 +772,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
       showPattern: opts?.showPattern ?? true,
       subtitle: hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "",
       chrome: { season: viewedSeason, pageNumbers: true, scope: hotelScopeCaption() },
+      hotelOf: multiHotel ? roomHotelName : undefined,
     });
 
   const exportHotelXLSX = () => {
@@ -777,7 +797,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
       const headerRow: (string | number | null)[] = [];
       rowRooms.forEach(room => {
         if (room) {
-          headerRow.push(`غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""} (${room.type})`);
+          headerRow.push(`${roomHotelName(room) ? `${roomHotelName(room)} · ` : ""}غرفة ${room.number}${room.floor ? ` — ط${room.floor}` : ""} (${room.type})`);
           headerRow.push(""); // دمج
         } else {
           headerRow.push(""); headerRow.push("");
@@ -2078,10 +2098,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
               printInPage(buildStickersHTML(
                 finalPassengers as any,
                 { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName,
-                /* الموسمُ المعروض — لا الحملة. فاستيكرُ موسمٍ مؤرشفٍ يحمل اسمَه وفندقَه هو. */
-                season_name: viewedSeason.name, hotel_name: viewedSeason.hotel_name || "", hotel_address: viewedSeason.hotel_address || "",
+                /* الموسمُ المعروض — لا الحملة. والفندقُ من غرفة الحاجّ الفعليّة (MOD-001)، لا من الموسم. */
+                season_name: viewedSeason.name,
                 admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
-                { rooms: rooms as any, buses: buses as any, camps: camps as any },
+                { rooms: rooms as any, buses: buses as any, camps: camps as any, hotels },
                 { sticker: stkTypes.sticker, hand_tag: stkTypes.hand_tag, long_tag: stkTypes.long_tag }
               ));
             };
@@ -2276,7 +2296,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       .replace("{الاسم}", passengers[0].short_ar || passengers[0].name_ar)
                       .replace("{الباص}", buses.find(b => b.id === passengers[0]?.bus_id)?.name || "—")
                       .replace("{الرحلة}", flightNameFor(passengers[0]))
-                      .replace("{الغرفة}", rooms.find(r => r.id === passengers[0]?.room_id)?.number || "—")
+                      .replace("{الغرفة}", roomWithHotel(rooms.find(r => r.id === passengers[0]?.room_id)) || "—")
                       .replace("{منى}", camps.find(c => c.id === passengers[0]?.camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === passengers[0]?.camp_arafa_id)?.name || "—")
                     }
@@ -2326,7 +2346,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       .replace("{الاسم}", p.short_ar || p.name_ar)
                       .replace("{الباص}", buses.find(b => b.id === p.bus_id)?.name || "—")
                       .replace("{الرحلة}", flightNameFor(p))
-                      .replace("{الغرفة}", rooms.find(r => r.id === p.room_id)?.number || "—")
+                      .replace("{الغرفة}", roomWithHotel(rooms.find(r => r.id === p.room_id)) || "—")
                       .replace("{منى}", camps.find(c => c.id === p.camp_mina_id)?.name || "—")
                       .replace("{عرفة}", camps.find(c => c.id === p.camp_arafa_id)?.name || "—");
                     const ok = await waSendText(p, text);

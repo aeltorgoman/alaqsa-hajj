@@ -184,6 +184,7 @@ const CARD_METRICS: Record<"portrait" | "landscape", CardMetrics> = {
 export function hotelRoomCard(
   room: Room, occupants: { short_ar?: string; name_ar: string }[], fontSize: number, showPattern: boolean,
   orientation: "portrait" | "landscape" = "portrait",
+  hotelName: string | null = null,
 ): string {
   const { idxWidth, namePad } = CARD_METRICS[orientation];
   const type = (room.type || "").trim();
@@ -207,7 +208,7 @@ export function hotelRoomCard(
   const cardBg = showPattern ? "rgba(255,255,255,0.4)" : "#ffffff";
   return `<div style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
         <div style="background:${clr};color:#ffffff;padding:5px 7px;flex-shrink:0;text-align:center;font-size:${headerFs}px;font-weight:800;line-height:1.3">
-          غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
+          ${hotelName ? `${escapeCompanyHtml(hotelName)} · ` : ""}غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
           <div style="font-size:${Math.max(9, headerFs - 4)}px;font-weight:700;opacity:.92;margin-top:1px">${roomTypeBadge(room, occupants.length)}</div>
         </div>
         <table style="margin:0;width:100%;table-layout:fixed;border-collapse:collapse;flex:1;font-family:'Cairo',sans-serif;background:transparent">
@@ -221,6 +222,10 @@ export type HotelReportOptions = {
   showPattern?: boolean;
   subtitle?: string;
   chrome?: PrintChrome;
+  /* MOD-001: كشفٌ يجمع غرفَ أكثرَ من فندق (صفحة التقارير) يُسمّي فندقَ كلّ
+     غرفةٍ الفعليّ في رأس بطاقتها — فالرقمُ نفسُه قد يتكرّر بين فندقين.
+     وصفحةُ الفندق الواحد لا تمرّره فلا يتغيّر مطبوعُها. */
+  hotelOf?: (room: Room) => string | null;
 };
 
 /** مستندُ الفندق كاملاً — المصدرُ الوحيد لصفحةِ الفندق وصفحةِ التقارير. */
@@ -230,7 +235,7 @@ export function hotelReportDocument(
   branding: PrintBranding,
   options: HotelReportOptions = {},
 ): string {
-  const { landscape = false, showPattern = true, subtitle = "", chrome = {} } = options;
+  const { landscape = false, showPattern = true, subtitle = "", chrome = {}, hotelOf } = options;
   const COLS = landscape ? 5 : 4;
   const ROWS = landscape ? 3 : 4;
   const PER_PAGE = COLS * ROWS;
@@ -307,7 +312,7 @@ export function hotelReportDocument(
       const padded: (Room | null)[] = [...pageRooms];
       while (padded.length < PER_PAGE) padded.push(null);
       const cells = padded.map(room =>
-        room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern, landscape ? "landscape" : "portrait")
+        room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern, landscape ? "landscape" : "portrait", hotelOf?.(room) ?? null)
              : `<div style="background:transparent"></div>`
       ).join("");
       const stamp = chrome.pageNumbers ? pageStampHTML(pi + 1, pages.length) : "";

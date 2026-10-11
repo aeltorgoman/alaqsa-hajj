@@ -7,16 +7,15 @@
 // ============================================================
 // مولّد مطبوعات الشنط الموحّد — مصدر واحد لملف الحاج وصفحة التقارير
 // ============================================================
-/* ⚠️ `season_name` و`hotel_*` تأتي من **الموسم المعروض** لا من
-   إعدادات الحملة: استيكرُ موسمٍ مؤرشفٍ يحمل فندقَ ذلك الموسم
-   واسمَه، لا فندقَ الموسم الجاري. والمستدعي هو من يضمن ذلك. */
+/* ⚠️ `season_name` يأتي من **الموسم المعروض** لا من إعدادات الحملة.
+   والفندقُ لم يعد في الإعداد (MOD-001): يُشتقّ لكلّ حاجٍّ من غرفته
+   (`room_id → rooms.hotel_id → hotels`) في `meta` — لا فندقَ موسمٍ
+   ولا فندقَ مطلوبٍ غيرَ مؤكَّد. */
 export interface StickerConfig {
   color_primary?: string;
   color_accent?: string;
   name_ar?: string;
   season_name?: string;
-  hotel_name?: string;
-  hotel_address?: string;
   admin_phone?: string;
   logo_url?: string;
 }
@@ -30,10 +29,21 @@ export interface StickerPassenger {
   room_id?: number | null; bus_id?: number | null; camp_mina_id?: number | null;
 }
 export interface StickerMeta {
-  rooms: { id: number; number?: string; floor?: string | number }[];
+  rooms: { id: number; number?: string; floor?: string | number; hotel_id?: number | null }[];
+  /* فنادقُ الموسم المعروض — اسمُ الفندق الفعليّ وعنوانُه للغرفة المُسنَدة */
+  hotels?: { id: number; name: string; address?: string | null }[];
   buses: { id: number; name?: string }[];
   camps: { id: number; name?: string }[];
 }
+/* الفندقُ الفعليّ للحاجّ — من غرفته وحدها. بلا غرفة، أو غرفةٌ لم تُربط
+   بفندق، أو فندقٌ غيرُ محمَّل ← لا فندق (يُطبع «—»)، ولا يُخمَّن. */
+export function stickerHotelOf(p: StickerPassenger, meta: StickerMeta): { name: string; address: string } | null {
+  const room = meta.rooms.find(r => r.id === p.room_id);
+  if (!room || room.hotel_id == null) return null;
+  const h = (meta.hotels ?? []).find(x => x.id === room.hotel_id);
+  return h ? { name: h.name, address: h.address || "" } : null;
+}
+
 export interface StickerTypes { sticker?: boolean; hand_tag?: boolean; long_tag?: boolean }
 
 /* بناء صفحة الاستيكر العريض (3 استيكرات رأسياً في A4) */
@@ -48,6 +58,7 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const busName   = bus?.name || "";
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
   const shortName = p.short_ar || p.name_ar || "";
+  const hotel     = stickerHotelOf(p, meta);
   const NUMFONT   = "'El Messiri',Cairo,serif";
   const logoImgEl = cfg.logo_url
     ? `<img src="${cfg.logo_url}" style="height:100%;max-height:48mm;width:auto;max-width:46mm;object-fit:contain;flex-shrink:0;display:block;" />`
@@ -82,8 +93,8 @@ export function buildStickerPageHTML(p: StickerPassenger, cfg: StickerConfig, me
           </div>` : ""}
           <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;${p.phone ? "" : "padding-top:5pt;border-top:1pt dashed #E8D5C4;"}">
             <span style="font-size:9pt;font-weight:800;color:#8a6a10;flex-shrink:0;font-family:Cairo,sans-serif;">الفندق</span>
-            <span style="font-size:11.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${cfg.hotel_name || NONE}</span>
-            ${cfg.hotel_address ? `<span style="color:${accentColor};font-size:10pt;">•</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${cfg.hotel_address}</span>` : ""}
+            <span style="font-size:11.5pt;font-weight:800;color:#241318;font-family:Cairo,sans-serif;">${hotel?.name || NONE}</span>
+            ${hotel?.address ? `<span style="color:${accentColor};font-size:10pt;">•</span><span style="font-size:9.5pt;font-weight:700;color:#555;font-family:Cairo,sans-serif;">${hotel.address}</span>` : ""}
           </div>
         </div>
       </div>
@@ -116,8 +127,9 @@ export function buildHandTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
   const busName   = bus?.name || "";
   const handShort = p.short_ar || p.name_ar || "";
-  const hotelName = cfg.hotel_name || NONE;
-  const hotelAddr = cfg.hotel_address || "";
+  const handHotel = stickerHotelOf(p, meta);
+  const hotelName = handHotel?.name || NONE;
+  const hotelAddr = handHotel?.address || "";
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
   const NUMFONT_H = "'El Messiri',Cairo,serif";
   const phoneLines = String(cfg.admin_phone || "").split(/[،,\/|]+/).map(t => t.trim()).filter(Boolean);
@@ -174,7 +186,7 @@ export function buildLongTagPageHTML(p: StickerPassenger, cfg: StickerConfig, me
   const roomFloor = room?.floor ? `الدور ${room.floor}` : "";
   const busName   = bus?.name || "";
   const shortName = p.short_ar || p.name_ar || "";
-  const hotelName = cfg.hotel_name || NONE;
+  const hotelName = stickerHotelOf(p, meta)?.name || NONE;
   const minaName  = meta.camps.find(c => c.id === p.camp_mina_id)?.name || "";
   const logoEl = cfg.logo_url
     ? `<img src="${cfg.logo_url}" style="width:90pt;height:90pt;object-fit:contain;border-radius:50%;border:2.5px solid #F0C84A;background:rgba(240,200,74,.12);" />`

@@ -2419,10 +2419,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             printInPage(buildStickersHTML(
               [selected as any],
               { color_primary: reportBranding.primaryColor, color_accent: reportBranding.accentColor, name_ar: reportBranding.companyName,
-                /* الموسمُ المعروض — لا الحملة. فاستيكرُ موسمٍ مؤرشفٍ يحمل اسمَه وفندقَه هو. */
-                season_name: viewedSeason.name, hotel_name: viewedSeason.hotel_name || "", hotel_address: viewedSeason.hotel_address || "",
+                /* الموسمُ المعروض — لا الحملة. والفندقُ من غرفة الحاجّ الفعليّة (MOD-001)، لا من الموسم. */
+                season_name: viewedSeason.name,
                 admin_phone: companyPortal.supportPhone, logo_url: reportBranding.logoUrl },
-              { rooms: metaRooms as any, buses: metaBuses as any, camps: metaCamps as any },
+              { rooms: metaRooms as any, buses: metaBuses as any, camps: metaCamps as any, hotels: seasonHotels },
               { sticker: true, hand_tag: true, long_tag: true }
             ));
           }} style={{ width: "100%", marginTop: 8, padding: "9px 0", borderRadius: 9, border: "none", background: "var(--paper)", borderTop: "1px dashed var(--line)", color: "var(--ink)", fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
