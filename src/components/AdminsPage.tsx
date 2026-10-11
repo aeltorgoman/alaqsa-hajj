@@ -196,17 +196,22 @@ function AdminsPage({
   /* الذاكرة مربوطة بالموسم المعروض: كان `dataLoaded` علماً أبدياً،
      فمن بدّل الموسم بلا مغادرة الصفحة ظلّ يرى غرف الموسم السابق
      ويُسنِد إليها. */
+  /* ما فشل طلبُه يُفرَّغ (لا تبقى بياناتُ موسمٍ سابق)، ولا يُعَدّ الموسمُ
+     محمَّلاً إلا إذا نجحت الطلباتُ الخمسة — فنافذةُ التعيين تعيد المحاولة. */
   const applyAssignData = (seasonId: number, [b, r, c, f, h]: Awaited<ReturnType<typeof fetchAssignData>>) => {
-    if (b.data) setBuses(b.data as Bus[]);
-    if (r.data) setRooms(r.data as Room[]);
-    if (c.data) setCamps(c.data as Camp[]);
-    if (f.data) setFlights(f.data as Flight[]);
-    if (h.data) setHotels(h.data as Hotel[]);
+    setBuses((b.data ?? []) as Bus[]);
+    setRooms((r.data ?? []) as Room[]);
+    setCamps((c.data ?? []) as Camp[]);
+    setFlights((f.data ?? []) as Flight[]);
+    setHotels((h.data ?? []) as Hotel[]);
+    const failed = [b, r, c, f, h].filter(x => x.error || !x.data);
+    if (failed.length) { console.error("تعذّر تحميل بيانات التعيين", failed.map(x => x.error)); return false; }
     setDataLoaded(seasonId);
+    return true;
   };
   const loadAssignData = async () => {
-    if (dataLoaded === viewedSeason.id) return;
-    applyAssignData(viewedSeason.id, await fetchAssignData(viewedSeason.id));
+    if (dataLoaded === viewedSeason.id) return true;
+    return applyAssignData(viewedSeason.id, await fetchAssignData(viewedSeason.id));
   };
   /* وسومُ التعيين في القائمة والطباعةُ تقرأ الغرفَ والفنادق — فتُحمَّل
      عند عرض الصفحة (ولكلّ موسمٍ يُعرض)، لا عند فتح نافذة التعيين وحدها. */
@@ -611,7 +616,7 @@ function AdminsPage({
     camps.filter(c => c.page_type === pageType && (!assignTarget || c.gender === assignTarget.gender));
 
   const openAssign = async (p: Passenger) => {
-    await loadAssignData();
+    if (!await loadAssignData()) { showAlert("error", "تعذّر تحميل بيانات التعيين — يرجى المحاولة مرة أخرى"); return; }
     setAssign({
       bus_id:           p.bus_id           ? String(p.bus_id)           : "",
       room_id:          p.room_id          ? String(p.room_id)          : "",

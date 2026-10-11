@@ -421,6 +421,19 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     if (!transfer || transferring) return;
     const { p, dest } = transfer;
     setTransferring(true);
+    /* المصدرُ الذي أكّده الموظّف يجب أن يكون مكانَ الحاجّ الآن: إن نقله
+       موظّفٌ آخر والنافذةُ مفتوحة، فالنقلُ يُلغى ويُطلب تأكيدٌ جديد —
+       وإلا نُقل من الغرفة الجديدة وهو يظنّ أنه ينقل من القديمة. */
+    const { data: now, error: readErr } = await supabase.from("passengers").select("room_id").eq("id", p.id).maybeSingle();
+    if (readErr || !now || (now.room_id ?? null) !== (p.room_id ?? null)) {
+      setTransferring(false); setTransfer(null);
+      await refreshPassenger(p.id);
+      setMoveFor(null);
+      showAlert("warning", readErr || !now
+        ? "تعذّر التحقق من مكان الحاج الآن — لم يُنقل. أعد المحاولة."
+        : `تغيّر مكان ${p.short_ar || makeShort(p.name_ar)} منذ فتح التأكيد — لم يُنقل. راجع مكانه الحالي وأعد النقل.`);
+      return;
+    }
     const ok = await placePassenger(p.id, dest.id, "تعذّر نقل الحاج — بقي في غرفته");
     setTransferring(false);
     setTransfer(null);
