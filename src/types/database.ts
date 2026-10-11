@@ -494,6 +494,82 @@ export type Database = {
           },
         ]
       }
+      hotel_package_prices: {
+        Row: {
+          amount: number
+          hotel_id: number
+          package_key: string
+          season_id: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          hotel_id: number
+          package_key: string
+          season_id?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          hotel_id?: number
+          package_key?: string
+          season_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotel_package_prices_hotel_season_fkey"
+            columns: ["hotel_id", "season_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id", "season_id"]
+          },
+        ]
+      }
+      hotels: {
+        Row: {
+          address: string | null
+          city: string
+          created_at: string
+          id: number
+          map_url: string | null
+          name: string
+          notes: string | null
+          season_id: number
+          sort_order: number | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string
+          created_at?: string
+          id?: never
+          map_url?: string | null
+          name: string
+          notes?: string | null
+          season_id?: number
+          sort_order?: number | null
+        }
+        Update: {
+          address?: string | null
+          city?: string
+          created_at?: string
+          id?: never
+          map_url?: string | null
+          name?: string
+          notes?: string | null
+          season_id?: number
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotels_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_deliveries: {
         Row: {
           announcement_id: number
@@ -577,6 +653,7 @@ export type Database = {
           passport_url: string | null
           phone: string | null
           photo_url: string | null
+          requested_hotel_id: number | null
           return_flight_id: number | null
           room_id: number | null
           room_sort_order: number | null
@@ -625,6 +702,7 @@ export type Database = {
           passport_url?: string | null
           phone?: string | null
           photo_url?: string | null
+          requested_hotel_id?: number | null
           return_flight_id?: number | null
           room_id?: number | null
           room_sort_order?: number | null
@@ -673,6 +751,7 @@ export type Database = {
           passport_url?: string | null
           phone?: string | null
           photo_url?: string | null
+          requested_hotel_id?: number | null
           return_flight_id?: number | null
           room_id?: number | null
           room_sort_order?: number | null
@@ -685,6 +764,13 @@ export type Database = {
           wants_flight?: boolean | null
         }
         Relationships: [
+          {
+            foreignKeyName: "passengers_requested_hotel_season_fkey"
+            columns: ["requested_hotel_id", "season_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id", "season_id"]
+          },
           {
             foreignKeyName: "passengers_bus_id_fkey"
             columns: ["bus_id"]
@@ -954,6 +1040,7 @@ export type Database = {
           capacity: number | null
           created_at: string | null
           floor: string | null
+          hotel_id: number | null
           id: number
           notes: string | null
           number: string | null
@@ -964,6 +1051,7 @@ export type Database = {
           capacity?: number | null
           created_at?: string | null
           floor?: string | null
+          hotel_id?: number | null
           id?: never
           notes?: string | null
           number?: string | null
@@ -974,6 +1062,7 @@ export type Database = {
           capacity?: number | null
           created_at?: string | null
           floor?: string | null
+          hotel_id?: number | null
           id?: never
           notes?: string | null
           number?: string | null
@@ -981,6 +1070,13 @@ export type Database = {
           type?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "rooms_hotel_season_fkey"
+            columns: ["hotel_id", "season_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id", "season_id"]
+          },
           {
             foreignKeyName: "rooms_season_id_fkey"
             columns: ["season_id"]
@@ -1159,6 +1255,11 @@ export type Database = {
           passenger_id: number
         }[]
       }
+      assign_passenger_room: {
+        /* MOD-001: `p_room_id` = null يُخرج الحاجّ من غرفته */
+        Args: { p_passenger_id: number; p_room_id: number | null }
+        Returns: Json
+      }
       cancel_payment_receipt: {
         Args: { p_reason: string; p_receipt_id: number }
         Returns: Database["public"]["Tables"]["payment_receipts"]["Row"]
@@ -1186,6 +1287,10 @@ export type Database = {
         Args: { p_passenger_id: number }
         Returns: Json
       }
+      set_room_order: {
+        Args: { p_passenger_ids: number[]; p_room_id: number }
+        Returns: number
+      }
       set_season_receipt_start: {
         Args: { p_season_id: number; p_start: number }
         Returns: number
@@ -1212,6 +1317,7 @@ export type Database = {
         Args: { p_day: number; p_doc: string; p_month: number; p_year: number }
         Returns: Json
       }
+      delete_hotel: { Args: { p_hotel_id: number }; Returns: Json }
       delete_season: {
         Args: { p_actor: string; p_season_id: number }
         Returns: undefined
@@ -1266,22 +1372,35 @@ export type Database = {
         Args: { p_endpoint: string; p_token: string }
         Returns: boolean
       }
-      update_active_season: {
+      update_active_season:
         /* كما في `update_portal_settings`: المولّدُ يكتب الوسائطَ غيرَ
            قابلةٍ للعدم، والدالّةُ تقبل NULL في حقول الأماكن فعلاً —
-           وهي الطريقةُ التي يُفرَّغ بها حقلٌ اختياريّ. */
-        Args: {
-          p_arafa_address: string | null
-          p_arafa_url: string | null
-          p_hotel_address: string | null
-          p_hotel_name: string | null
-          p_hotel_url: string | null
-          p_mina_address: string | null
-          p_mina_url: string | null
-          p_name: string
-        }
-        Returns: Database["public"]["Tables"]["seasons"]["Row"]
-      }
+           وهي الطريقةُ التي يُفرَّغ بها حقلٌ اختياريّ.
+           MOD-001: نسختان — القديمةُ بحقول الفندق للواجهة الحالية،
+           والجديدةُ بلاها (الفنادقُ تُدار من صفحتها). */
+        | {
+            Args: {
+              p_arafa_address: string | null
+              p_arafa_url: string | null
+              p_hotel_address: string | null
+              p_hotel_name: string | null
+              p_hotel_url: string | null
+              p_mina_address: string | null
+              p_mina_url: string | null
+              p_name: string
+            }
+            Returns: Database["public"]["Tables"]["seasons"]["Row"]
+          }
+        | {
+            Args: {
+              p_arafa_address: string | null
+              p_arafa_url: string | null
+              p_mina_address: string | null
+              p_mina_url: string | null
+              p_name: string
+            }
+            Returns: Database["public"]["Tables"]["seasons"]["Row"]
+          }
       update_portal_settings: {
         /* المولّدُ يكتب وسائطَ الدوالّ غيرَ قابلةٍ للعدم دائماً، ودالّتُنا
            تقبل NULL في حقول النصّ فعلاً (وهي الطريقةُ التي يُفرَّغ بها

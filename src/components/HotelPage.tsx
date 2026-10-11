@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
+import { isHajj, byOrder, applyReorder } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
-import type { Passenger, Room } from "../types";
+import type { Hotel, Passenger, Room } from "../types";
 import { useCompanyBranding } from "../company/CompanyContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
@@ -20,11 +20,17 @@ const ROOM_TYPES = HOTEL_ROOM_TYPES as readonly Room["type"][];
    مجلس. والآن الحالة من الإشغال والسعة، والنوع يُقرأ من النوع. */
 type RoomStatus = "مكتملة" | "قيد التسكين" | "جاهزة" | "مجلس" | "تجاوز" | "غير محدّدة";
 
-function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
+/* MOD-001 — الصفحةُ نفسُها، محصورةً في فندقٍ واحد: غرفُه وأدوارُه
+   ونزلاؤه ومؤشّراتُه. تُركَّب من `HotelsPage` بمفتاح الفندق، فتبدأ
+   حالتُها (الدورُ المختار والتصفيةُ واللوحة) من جديد لكلّ فندق. */
+function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
+  passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>;
+  hotel: Hotel; hotels: Hotel[]; onBack: () => void;
+}) {
   const primary = useCompanyBranding().primaryColor;
   const { alert, showAlert } = useAlert();
 
-  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
 
   /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية */
@@ -97,13 +103,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل شبكة فارغة تبدو كـ«لا يوجد غرف» */
-    supabase.from("rooms").select("*").eq("season_id", viewedSeason.id)
+    supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).eq("hotel_id", hotel.id)
       .then(({ data, error }) => {
         if (error || !data) { console.error("تعذر تحميل الغرف", error); setRoomsError(true); }
         else { setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); setRoomsError(false); }
         setRoomsLoading(false);
       });
-  }, [viewedSeason.id]);
+  }, [viewedSeason.id, hotel.id]);
 
   const floors = useMemo(
     () => [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)),
@@ -212,11 +218,20 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     });
   }, [rooms, filterFloor, filterStatus, filterType, search, passengers]);
 
-  // KPIs
+  /* الفندقُ المطلوب: بلا طلبٍ مع فندقٍ وحيد = هذا الفندق (كما تملؤه
+     القاعدة)، ومع أكثرَ من فندقٍ لا يُنسب إلى أحدها. */
+  const requestedHere = (p: Passenger) =>
+    p.requested_hotel_id === hotel.id || (p.requested_hotel_id == null && hotels.length === 1);
+  const requestedName = (p: Passenger) =>
+    p.requested_hotel_id == null ? null : hotels.find(h => h.id === p.requested_hotel_id)?.name ?? null;
+
+  // KPIs — محصورةٌ في هذا الفندق: المُسكَّنون في غرفه، والمنتظرون ممّن طلبوه
+  const hotelRoomIds = new Set(rooms.map(r => r.id));
   const totalRooms = rooms.length;
-  const withRoom = hajj.filter(p => p.room_id).length;
-  const noRoom = hajj.length - withRoom;
-  const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
+  const withRoom = hajj.filter(p => p.room_id != null && hotelRoomIds.has(p.room_id)).length;
+  const noRoom = hajj.filter(p => !p.room_id && requestedHere(p)).length;
+  const hajjHere = withRoom + noRoom;
+  const pct = hajjHere > 0 ? Math.round(withRoom / hajjHere * 100) : 0;
   /* أَسِرّة لا غرف: «غرف متاحة» كانت تعدّ الغرف التي فيها متّسع،
      فتُقرأ «غرفٌ فارغة» وهي ليست كذلك. والسرير هو القيد الحقيقيّ. */
   const freeBeds = rooms.reduce((n, r) => {
@@ -227,7 +242,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const hotelCards: StatCardData[] = [
     { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
-    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajj.length} حاج · ${pct}٪`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajjHere} حاج · ${pct}٪`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
     /* الرقم الذي يقول «هل انتهى عمل اليوم؟» — كان يُستنبط ذهنياً */
     { label: "حجاج بدون غرفة", num: String(noRoom), sub: noRoom === 0 ? "اكتمل التسكين" : "بانتظار التسكين", tone: noRoom === 0 ? "success" : "warning", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/>` },
     { label: "أَسِرّة شاغرة", num: String(freeBeds), sub: "سرير متاح للتسكين", tone: "info", featured: true, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
@@ -240,9 +255,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const takenNumber = (floor: string, number: string, ignoreId?: number) =>
     rooms.some(r => r.id !== ignoreId && r.floor === floor && r.number === number);
 
-  /* رسالةٌ واحدة لخطأ القاعدة نفسه، فلا يرى الموظّف نصّ بوستجرس */
+  /* رسالةٌ واحدة لخطأ القاعدة نفسه، فلا يرى الموظّف نصّ بوستجرس.
+     الرقمُ فريدٌ في الدور داخل الفندق (`rooms_hotel_floor_number_uniq`).
+     والفهرسُ القديمُ على الموسم باقٍ حتى ترحيلة التشديد، فيرفض الرقمَ
+     نفسَه في فندقٍ آخر — يُقال ذلك صراحةً، ويزول وحدَه حين يسقط الفهرس. */
   const roomWriteError = (msg?: string) =>
-    msg && /duplicate key|rooms_season_floor_number_uniq/i.test(msg)
+    msg && /rooms_season_floor_number_uniq/i.test(msg)
+      ? "رقم الغرفة مستخدم في الدور نفسه في فندقٍ آخر هذا الموسم — قاعدة البيانات لا تسمح بعدُ بتكرار الرقم بين الفنادق"
+      : msg && /duplicate key|rooms_hotel_floor_number_uniq/i.test(msg)
       ? "رقم الغرفة مستخدم في هذا الدور بالفعل"
       : msg || "حدث خطأ أثناء الحفظ";
 
@@ -262,7 +282,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (capError(addType, addCap)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     if (takenNumber(addFloor.trim(), addNum.trim())) { showAlert("error", `الغرفة ${addNum.trim()} موجودة في الدور ${addFloor.trim()} بالفعل`); return; }
     const cap = formCapacity(addType, addCap);
-    const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }]).select();
+    const { data, error } = await supabase.from("rooms").insert([{ hotel_id: hotel.id, number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }]).select();
     if (error) { showAlert("error", roomWriteError(error.message)); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number)));
     setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes(""); setAddCap("");
@@ -276,7 +296,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!rangeFloor.trim() || isNaN(from) || isNaN(to) || from > to) { showAlert("error", "يرجى إدخال نطاق صحيح ودور صحيح"); return; }
     if (capError(rangeType, rangeCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     const rCap = formCapacity(rangeType, rangeCap);
-    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType, capacity: rCap }));
+    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ hotel_id: hotel.id, number: String(from + i), floor: rangeFloor.trim(), type: rangeType, capacity: rCap }));
     /* الدفعة كاملةً أو لا شيء: إدراجٌ جزئيّ يترك الموظّف أمام نطاقٍ
        نصفه موجود ونصفه لا، ولا يعرف أيّهما. */
     const clash = entries.filter(e => takenNumber(e.floor, e.number)).map(e => e.number);
@@ -295,10 +315,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (isNaN(numFloors)||isNaN(rPerFloor)||isNaN(startNum)||isNaN(floorStart)||numFloors<1||rPerFloor<1) { showAlert("error", "يرجى تعبئة جميع الحقول بشكل صحيح"); return; }
     if (capError(tplType, tplCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     const tCap = formCapacity(tplType, tplCap);
-    const entries: {number:string;floor:string;type:Room["type"];capacity:number|null}[] = [];
+    const entries: {hotel_id:number;number:string;floor:string;type:Room["type"];capacity:number|null}[] = [];
     for (let f = 0; f < numFloors; f++) {
       for (let r = 0; r < rPerFloor; r++) {
-        entries.push({ number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType, capacity: tCap });
+        entries.push({ hotel_id: hotel.id, number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType, capacity: tCap });
       }
     }
     const tclash = entries.filter(e => takenNumber(e.floor, e.number)).map(e => `${e.floor}/${e.number}`);
@@ -312,7 +332,9 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const removeFromRoom = async (pId: number) => {
     if (!assertWritable()) return;
-    if (!await writeOk(supabase.from("passengers").update({ room_id: null }).eq("id", pId), "تعذر إخراج الحاج من الغرفة")) return;
+    /* MOD-001: الإسنادُ والإخراجُ والنقلُ بدالّةٍ واحدةٍ تكتب `room_id` وحده،
+       وتحكم بالصلاحية نفسِها في القاعدة (manage_hotel، أو صلاحيةُ الشخص). */
+    if (!await writeOk(supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: null }), "تعذر إخراج الحاج من الغرفة")) return;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } : p));
     showAlert("success", "تمت الإزالة من الغرفة"); setTimeout(() => showAlert(null), 2000);
   };
@@ -329,7 +351,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         : `الغرفة ${room.number} مكتملة (${roomPassengers(room.id).length}/${cap})`);
       return false;
     }
-    if (!await writeOk(supabase.from("passengers").update({ room_id: room.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return false;
+    if (!await writeOk(supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: room.id }), "تعذر إضافة الحاج إلى الغرفة")) return false;
     setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: room.id } : p));
     return true;
   };
@@ -360,7 +382,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const next = [...list];
     next.splice(to, 0, ...next.splice(from, 1));
     setPassengers(prev => applyReorder(prev, "room_sort_order", next));
-    await writeAllOk(reorderUpdates("room_sort_order", next), "تعذّر حفظ ترتيب الغرفة");
+    /* دفعةٌ واحدةٌ ذرّيّة بدل تحديثٍ لكلّ نزيل — القيمُ نفسُها (i+1)×10 */
+    await writeOk(supabase.rpc("set_room_order", { p_room_id: roomId, p_passenger_ids: next.map(p => p.id) }), "تعذّر حفظ ترتيب الغرفة");
   };
 
   const deleteRoom = async (room: Room) => {
@@ -434,14 +457,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const reportBranding = useReportBranding();
   const printRooms = (landscape: boolean) => {
     if (filteredRooms.length === 0) { showAlert("warning", "لا توجد غرف ضمن التصفية الحالية"); return; }
-    const scope: string[] = [];
+    const scope: string[] = [`الفندق: ${hotel.name}`];
     if (filterFloor !== "الكل") scope.push(`الطابق: ${filterFloor}`);
     if (filterType) scope.push(`النوع: ${filterType}`);
     if (filterStatus !== "الكل") scope.push(`الحالة: ${filterStatus}`);
     printInPage(hotelReportDocument(filteredRooms, passengers, reportBranding, {
       landscape,
       subtitle: filterType ? ` — ${filterType}` : "",
-      chrome: { season: viewedSeason, pageNumbers: true, scope: scope.length ? scope.join(" · ") : null },
+      chrome: { season: viewedSeason, pageNumbers: true, scope: scope.join(" · ") },
     }));
   };
 
@@ -456,6 +479,24 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
       {/* ===== المحتوى الرئيسي ===== */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+
+        {/* الفندقُ المفتوح — والعودةُ إلى قائمة الفنادق */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px 0", flexShrink: 0, minWidth: 0 }}>
+          <button onClick={onBack} title="العودة إلى الفنادق"
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            الفنادق
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 900, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hotel.name}</div>
+            {(hotel.address || hotel.map_url) && (
+              <div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {hotel.address && <span>{hotel.address}</span>}
+                {hotel.map_url && <a href={hotel.map_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>الموقع على الخريطة</a>}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* كروت KPI — موحّدة مع باقي الصفحات */}
         <StatsRow cards={hotelCards} />
@@ -542,6 +583,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           {!roomsLoading && roomsError && (
             <div style={{ textAlign: "center", padding: "3rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
               تعذر تحميل الغرف — يرجى التحقق من الاتصال وتحديث الصفحة
+            </div>
+          )}
+          {!roomsLoading && !roomsError && rooms.length === 0 && (
+            <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--muted)", fontSize: 12.5, fontWeight: 700, lineHeight: 1.9 }}>
+              لا توجد غرف في هذا الفندق بعد.
+              {!readOnly && <div><button onClick={() => setShowAddRoom(true)} style={{ ...btnP, marginTop: 8 }}>أضف أول غرفة</button></div>}
             </div>
           )}
           {!roomsLoading && !roomsError && floors.filter(f => filterFloor === "الكل" || f === filterFloor).map(floor => {
@@ -900,7 +947,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                  لا اختيار تلقائيّ ولا إسناد — ترتيبُ عرضٍ فقط. */
               const famIds = new Set(roomPassengers(selectedRoom.id).map(o => o.family_id).filter(Boolean) as string[]);
               const kin = pool.filter(x => x.family_id && famIds.has(x.family_id));
-              const rest = pool.filter(x => !(x.family_id && famIds.has(x.family_id)));
+              /* ثمّ من طلبوا هذا الفندق، ثمّ البقيّة — ترتيبُ عرضٍ لا منع:
+                 الموظّف يملك أن يُسكِن في غير المطلوب، ويرى ذلك وسماً. */
+              const others = pool.filter(x => !(x.family_id && famIds.has(x.family_id)));
+              const rest = [...others.filter(requestedHere), ...others.filter(x => !requestedHere(x))];
               const CAP = 25;
               const full = roomFull(selectedRoom);
 
@@ -914,6 +964,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     {isHajj(x) && x.services?.hotel_type && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>{x.services.hotel_type}</span>}
                     {isHajj(x) && x.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
                     {!isHajj(x) && <span style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99 }}>{x.passenger_type}</span>}
+                    {isHajj(x) && !requestedHere(x) && requestedName(x) && <span title={`الفندق المطلوب: ${requestedName(x)}`} style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99, maxWidth: 84, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>مطلوب: {requestedName(x)}</span>}
                   </div>
                 </div>
               );
