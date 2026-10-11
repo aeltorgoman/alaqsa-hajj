@@ -107,6 +107,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   const [moveHotelId, setMoveHotelId] = useState<number>(hotel.id);
   const [moveFloor, setMoveFloor] = useState("الكل");
   const [seasonRooms, setSeasonRooms] = useState<Room[] | null>(null);
+  const [seasonRoomsError, setSeasonRoomsError] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
@@ -362,8 +363,9 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     setPassengers(prev => [...data, ...moved].reduce((list, row) => upsertPassenger(list, mapPassenger(row)), prev));
   };
   const loadSeasonRooms = async () => {
+    setSeasonRoomsError(false);
     const { data, error } = await supabase.from("rooms").select("*").eq("season_id", viewedSeason.id);
-    if (error || !data) { console.error("تعذر تحميل غرف الموسم", error); return; }
+    if (error || !data) { console.error("تعذر تحميل غرف الموسم", error); setSeasonRoomsError(true); return; }
     setSeasonRooms(data as Room[]);
   };
 
@@ -1000,7 +1002,12 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
                   {/* الوجهات الممتلئة والمجالس لا تُعرض أصلاً: القائمة
                       لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */}
                   <div style={{ maxHeight: 168, overflowY: "auto" }}>
-                    {moveHotelId !== hotel.id && seasonRooms == null ? (
+                    {moveHotelId !== hotel.id && seasonRooms == null && seasonRoomsError ? (
+                      <div style={{ padding: "10px", textAlign: "center", color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>
+                        تعذّر تحميل غرف الفنادق الأخرى.
+                        <button onClick={loadSeasonRooms} style={{ display: "block", margin: "6px auto 0", padding: "4px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>إعادة المحاولة</button>
+                      </div>
+                    ) : moveHotelId !== hotel.id && seasonRooms == null ? (
                       <div style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>جاري تحميل الغرف...</div>
                     ) : dests.length === 0 ? (
                       <div style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>لا توجد غرفة فيها متّسع</div>
