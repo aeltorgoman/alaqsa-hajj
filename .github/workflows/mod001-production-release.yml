@@ -81,12 +81,20 @@ jobs:
         run: |
           set -euo pipefail
           git rev-parse -q --verify 'origin/main^{commit}' >/dev/null || { echo "::error::origin/main is not available"; exit 1; }
-          for f in .github/workflows/mod001-loadtest-release.yml .github/workflows/mod001-production-release.yml
-            supabase/verification/mod001/release_target_guard.sh supabase/verification/mod001/release_run.sh
-            supabase/verification/mod001/release_preflight.sql supabase/verification/mod001/release_fingerprint.sql
-            supabase/verification/mod001/release_postcheck.sql supabase/verification/mod001/release_price_gate.sql
-            supabase/verification/assert-ledger-correspondence.py supabase/verification/assert-no-toplevel-data-writes.py
-            supabase/verification/assert-not-production.sh; do
+          toolkit=(
+            .github/workflows/mod001-loadtest-release.yml
+            .github/workflows/mod001-production-release.yml
+            supabase/verification/mod001/release_target_guard.sh
+            supabase/verification/mod001/release_run.sh
+            supabase/verification/mod001/release_preflight.sql
+            supabase/verification/mod001/release_fingerprint.sql
+            supabase/verification/mod001/release_postcheck.sql
+            supabase/verification/mod001/release_price_gate.sql
+            supabase/verification/assert-ledger-correspondence.py
+            supabase/verification/assert-no-toplevel-data-writes.py
+            supabase/verification/assert-not-production.sh
+          )
+          for f in "${toolkit[@]}"; do
             git cat-file -e "origin/main:$f" 2>/dev/null || { echo "::error::$f is not registered on main"; exit 1; }
             git diff --quiet origin/main HEAD -- "$f" || { echo "::error::$f differs from the copy registered on main"; exit 1; }
           done

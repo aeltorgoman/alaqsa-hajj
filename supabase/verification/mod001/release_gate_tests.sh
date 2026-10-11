@@ -35,6 +35,8 @@ pass=0; fail=0
 ok()  { echo "PASS — $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL — $1"; fail=$((fail + 1)); }
 expect_ok()    { local d="$1"; shift; if "$@" > "$OUT/last.log" 2>&1; then ok "$d"; else bad "$d (blocked unexpectedly)"; tail -3 "$OUT/last.log"; fi; }
+expect_reason() { local d="$1" re="$2"; shift 2; if "$@" > "$OUT/last.log" 2>&1; then bad "$d (was NOT blocked)"; tail -3 "$OUT/last.log"
+  elif grep -qE "$re" "$OUT/last.log"; then ok "$d → blocked: $(grep -m1 -oE "$re" "$OUT/last.log")"; else bad "$d (blocked for another reason)"; tail -3 "$OUT/last.log"; fi; }
 expect_block() { local d="$1"; shift; if "$@" > "$OUT/last.log" 2>&1; then bad "$d (was NOT blocked)"; tail -3 "$OUT/last.log"; else ok "$d → blocked: $(grep -m1 -oE '(REFUSING|BLOCKED|FAILED|error)[^—]{0,90}' "$OUT/last.log" | head -1)"; fi; }
 sql() { psql "$LOCAL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
 local_run() { MOD001_LOCAL_URL="$LOCAL" "$R" "$@"; }
@@ -161,7 +163,8 @@ commit_with() { # $1 = الأب، ثمّ أزواجُ <مسار>=<ملفّ مح�
   local parent="$1"; shift; local idx="$OUT/scope.idx" pair
   GIT_INDEX_FILE="$idx" git read-tree "$parent"
   for pair in "$@"; do
-    GIT_INDEX_FILE="$idx" git update-index --add --cacheinfo "100644,$(git hash-object -w "${pair#*=}"),${pair%%=*}"
+    local mode=100644; [ -x "${pair#*=}" ] && mode=100755
+    GIT_INDEX_FILE="$idx" git update-index --add --cacheinfo "$mode,$(git hash-object -w "${pair#*=}"),${pair%%=*}"
   done
   git commit-tree "$(GIT_INDEX_FILE="$idx" git write-tree)" -p "$parent" -m "mod001 scope test" ; rm -f "$idx"
 }
@@ -172,16 +175,17 @@ REG="$(commit_with origin/main "${TKP[@]}")"                     # main بعد �
 printf '# drift\n' | cat "$LTW" - > "$OUT/lt-drift.yml"
 printf 'export const x = 1;\n' > "$OUT/fe.ts"
 DRIFT="$(commit_with HEAD "$LTW=$OUT/lt-drift.yml")"
-sed 's/^phase="${1:-}"$/phase="${1:-}"; [ "$phase" = scope ] \&\& exit 0/' "$R" > "$OUT/run-bypass.sh"
+sed 's/^phase="${1:-}"$/phase="${1:-}"; [ "$phase" = scope ] \&\& exit 0/' "$R" > "$OUT/run-bypass.sh"; chmod +x "$OUT/run-bypass.sh"
 BYPASS="$(commit_with HEAD "$R=$OUT/run-bypass.sh")"            # سكربتٌ معدَّلٌ يتجاوز فحصَه
 FRONT="$(commit_with HEAD "src/mod001-new-frontend.ts=$OUT/fe.ts")"
 scope_at() { # $1 = الالتزام المُرسَل، $2 = الأساس
   local d="$WT/$1"; [ -d "$d" ] || git worktree add -q --detach "$d" "$1"
   MOD001_SCOPE_BASE="$2" OUT="$OUT" "$d/supabase/verification/mod001/release_run.sh" scope; }
 expect_ok    "database-only release ref, workflows registered on main" scope_at "$(git rev-parse HEAD)" "$REG"
-expect_block "workflows not registered on main"                   scope_at "$(git rev-parse HEAD)" origin/main
-expect_block "dispatched workflow differs from the registered copy" scope_at "$DRIFT" "$REG"
-expect_block "release ref carries frontend changes"               scope_at "$FRONT" "$REG"
+expect_reason "toolkit not registered on main" "is not registered on origin/main" scope_at "$(git rev-parse HEAD)" origin/main
+expect_reason "dispatched workflow differs from the registered copy" "mod001-loadtest-release.yml on this ref differs" scope_at "$DRIFT" "$REG"
+expect_reason "release ref carries frontend changes" "non-database changes" scope_at "$FRONT" "$REG"
+expect_reason "scope base unavailable (shallow checkout)" "is not available" scope_at "$(git rev-parse HEAD)" refs/heads/no-such-base
 grep -q 'exit 0' "$OUT/run-bypass.sh" || bad "bypass fixture was not built"
 # خطوةُ سير العمل نفسُها (مستخرَجةً من YAML) هي التي تسبق أيَّ سكربتٍ من المرجع:
 yaml_toolkit_step() { # $1 = ملفُّ سير العمل، $2 = الالتزام المُرسَل → يشغّل الخطوةَ في worktree له
@@ -194,8 +198,8 @@ for st in yaml.safe_load(open(sys.argv[1]))["jobs"]["release"]["steps"]:
   (cd "$d" && GITHUB_REF=refs/heads/release/mod-001-db GITHUB_SHA="$2" bash "$OUT/toolkit-step.sh"); }
 for wf in "$LTW" "$PRW"; do
   expect_ok    "$(basename "$wf"): toolkit step passes on the release ref"     yaml_toolkit_step "$wf" "$(git rev-parse HEAD)"
-  expect_block "$(basename "$wf"): toolkit step blocks a self-bypassing script" yaml_toolkit_step "$wf" "$BYPASS"
-  expect_block "$(basename "$wf"): toolkit step blocks a drifted workflow"     yaml_toolkit_step "$wf" "$DRIFT"
+  expect_reason "$(basename "$wf"): toolkit step blocks a self-bypassing script" "release_run.sh differs from the copy registered on main" yaml_toolkit_step "$wf" "$BYPASS"
+  expect_reason "$(basename "$wf"): toolkit step blocks a drifted workflow" "mod001-loadtest-release.yml differs from the copy registered on main" yaml_toolkit_step "$wf" "$DRIFT"
 done
 expect_ok    "(why it must run first: the bypassing script passes its own scope)" \
   env MOD001_SCOPE_BASE="$REG" OUT="$OUT" "$WT/$BYPASS/$R" scope
