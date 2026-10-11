@@ -189,7 +189,8 @@ vendor's Master repository. It carries no Master development history.
 - The canonical Supabase migrations required to build a fresh customer database.
 - The Supabase Edge Functions and \`supabase/config.toml\`.
 - \`package-lock.json\` and the pinned Supabase CLI version.
-- The first-administrator bootstrap script.
+- The **Customer Backend Setup** workflow, which creates the first administrator
+  (Deployment, step 3).
 - The operational documentation required for this release.
 
 ## What it deliberately does not contain
