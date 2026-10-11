@@ -61,6 +61,24 @@
 
 **إن تعذّر الدخول بحساب الطوارئ نفسه** — فالمسار الثاني على **الإنتاج**: إعادة ضبط كلمة المرور من لوحة Auth في Supabase، ولا يقع إلا بيد صاحب المشروع. أمّا أداة الإقلاع `supabase/scripts/seed_first_admin.mjs` فترفض مشروع الإنتاج صراحةً، وتبقى **أداة طوارئ** (لا مسار تثبيت) لمشروعٍ آخر — كالاستعادة إلى مشروعٍ جديد — بمفتاح خدمته ومرجعه المتوقَّع (`EXPECTED_PROJECT_REF`).
 
+**وإن لم تكفِ إعادةُ ضبط كلمة المرور** — لأن المشكلة في **ملفّ** حساب الطوارئ لا في كلمته: الملفّ معطَّل، أو محذوف، أو نُزعت منه `manage_users` (وهي الصلاحية التي تفتح إدارة المستخدمين وتشترطها دالةُ `user-admin`) — فالعلاج من **SQL Editor** في لوحة Supabase للإنتاج، بيد صاحب المشروع وحده. وهو تغييرٌ يدويٌّ على الإنتاج، فهو **حادثةٌ** تُسجَّل هنا بتاريخها وسببها، ويقيّدها `record_audit` تلقائياً بمصدر `system`:
+
+```sql
+-- ١) المعرّف من Authentication ← Users (حساب الطوارئ). وإن حُذف الحساب نفسه
+--    فأنشئه أوّلاً من Authentication ← Add user (Auto Confirm) ثم خذ معرّفه.
+-- ٢) أعِد الملفّ مفعَّلاً بأدنى ما يفتح إدارة المستخدمين، لا أكثر:
+insert into public.user_profiles (id, email, name, permissions, is_active)
+values ('<auth-user-id>', 'breakglass@system.local', 'حساب الطوارئ',
+        '{"manage_users": true, "manage_admins": true}'::jsonb, true)
+on conflict (id) do update
+  set is_active = true,
+      permissions = coalesce(public.user_profiles.permissions, '{}'::jsonb)
+                    || '{"manage_users": true, "manage_admins": true}'::jsonb,
+      updated_at = now();
+```
+
+ثم أكمل من الخطوة ١ في الجدول أعلاه: ادخل بحساب الطوارئ، وأعِد بقيّة الصلاحيات والحسابات من **الإعدادات ← المستخدمون**.
+
 ---
 
 ## ٥. تحذير تشغيليّ — الخروج العامّ
