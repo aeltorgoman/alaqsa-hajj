@@ -32,6 +32,20 @@ export function serviceContextRows(p: Passenger, maps: AllocTypeMaps): ServiceCo
   add("مخيّم عرفة", "خاص",  s.camp_arafa === "خاص",  p.camp_arafa_id,  maps.camp.get(p.camp_arafa_id ?? -1));
   add("الغرفة",     s.hotel_type, s.hotel_type === "خاص", p.room_id,   maps.room.get(p.room_id ?? -1));
 
+  /* الفندق: سعرُ الباقة من **المطلوب** وحده. فيُقال الفعليُّ حين يخالفه —
+     والحاجُّ بلا فندقٍ مطلوب يُقال أيضاً، لأن باقته تُحسب صفراً. */
+  const reqId = p.requested_hotel_id ?? null;
+  const actId = p.room_id != null ? maps.roomHotel.get(p.room_id) : undefined;
+  const hotelName = (id: number) => maps.hotelName.get(id) ?? `فندق #${id}`;
+  /* غرفةٌ مُسنَدةٌ لم يُعرف فندقُها (غرفةٌ بلا فندق، أو سياقٌ لم يُحمَّل)
+     ليست «لم يُسكَّن» — يُقال ما يُعرف فقط. */
+  const actual = p.room_id == null ? "لم يُسكَّن بعد" : actId != null ? hotelName(actId) : "فندق الغرفة غير معروف";
+  if (reqId == null && s.hotel_type !== "خاص") {
+    rows.push({ service: "الفندق", wanted: "غير محدد", actual, mismatch: true });
+  } else if (reqId != null && actId != null && actId !== reqId) {
+    rows.push({ service: "الفندق", wanted: hotelName(reqId), actual: hotelName(actId), mismatch: true });
+  }
+
   /* الطيران: `Flight.type` اتّجاهٌ لا درجة، فلا تفاوتَ درجةٍ يُقاس.
      والمقصود هنا حالُ الحجز وحدها — والمبلغ مستقلٌّ عنها تماماً. */
   const fp = paidFlightService(p);
