@@ -365,7 +365,8 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   const loadSeasonRooms = async () => {
     setSeasonRoomsError(false);
     const { data, error } = await supabase.from("rooms").select("*").eq("season_id", viewedSeason.id);
-    if (error || !data) { console.error("تعذر تحميل غرف الموسم", error); setSeasonRoomsError(true); return; }
+    /* فشلٌ بعد نجاحٍ سابق لا يُبقي غرفاً قديمة تُعرض كأنها الآن */
+    if (error || !data) { console.error("تعذر تحميل غرف الموسم", error); setSeasonRooms(null); setSeasonRoomsError(true); return; }
     setSeasonRooms(data as Room[]);
   };
 
@@ -1002,7 +1003,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
                   {/* الوجهات الممتلئة والمجالس لا تُعرض أصلاً: القائمة
                       لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */}
                   <div style={{ maxHeight: 168, overflowY: "auto" }}>
-                    {moveHotelId !== hotel.id && seasonRooms == null && seasonRoomsError ? (
+                    {moveHotelId !== hotel.id && seasonRoomsError ? (
                       <div style={{ padding: "10px", textAlign: "center", color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>
                         تعذّر تحميل غرف الفنادق الأخرى.
                         <button onClick={loadSeasonRooms} style={{ display: "block", margin: "6px auto 0", padding: "4px 10px", borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>إعادة المحاولة</button>
