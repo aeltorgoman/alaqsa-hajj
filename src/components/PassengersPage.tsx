@@ -1837,7 +1837,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 <tr style={{ background: "linear-gradient(180deg, var(--primary), var(--primary-dark))", color: "var(--text-inverse)" }}>
                   <th style={{ padding: "10px 10px", textAlign: "center", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>م</th>
                   <th style={{ padding: "9px 10px", textAlign: "center", fontWeight: 800, fontSize: 11, width: 36 }}>حالة</th>
-                  {COLS.map(col => <th key={col.key} style={{ padding: "9px 12px", whiteSpace: "nowrap", textAlign: "right", fontSize: 11, fontWeight: 800 }}>{col.label}</th>)}
+                  {COLS.map(col => <th key={col.key} style={{ padding: "9px 8px", whiteSpace: "nowrap", textAlign: "right", fontSize: 11, fontWeight: 800 }}>{col.label}</th>)}
                   <th style={{ padding: "10px 10px", textAlign: "center", fontWeight: 800, fontSize: 11 }}>إجراءات</th>
                 </tr>
               </thead>
@@ -1944,7 +1944,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                       );
                     })()}
                     {COLS.map(col => (
-                      <td key={col.key} style={{ padding: "7px 12px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", whiteSpace: "nowrap", fontSize: 12, color: col.key === "name_ar" ? "var(--primary)" : "var(--ink)", fontWeight: col.key === "name_ar" ? 900 : 700 }}>
+                      <td key={col.key} style={{ padding: "7px 8px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", whiteSpace: col.key === "name_ar" ? "normal" : "nowrap", maxWidth: col.key === "name_ar" ? 150 : undefined, fontSize: 12, color: col.key === "name_ar" ? "var(--primary)" : "var(--ink)", fontWeight: col.key === "name_ar" ? 900 : 700 }}>
                         {/* باجات ملونة للباص والطيران */}
                         {(col.key === "bus" || col.key === "flight") ? (() => {
                           const val = getVal(p, col.key, col.get);
@@ -2130,10 +2130,11 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        /* عرضُ الملفّ: ٢٨٠ والسايدبار مفتوح؛ وحين يُطوى يتّسع الملفّ
-           بنسبةٍ من الشاشة حتى سقفٍ ٤٤٠ — لا يتجاوز ما حرّره الطيّ
-           (٢٢٠ − ٥٦ = ١٦٤)، فلا يضيق الجدولُ عمّا كان عليه. */
-        <div style={{ width: sidebarCompact ? "clamp(280px, 26vw, 440px)" : 280, transition: "width .2s ease", overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
+        /* عرضُ الملفّ يُبقي الجدولَ كاملاً بجواره بلا تمريرٍ أفقيّ من ١٣٦٦
+           فما فوق: السايدبار مفتوحاً ٢٦٠ تحت ١٤٤٠ و٢٨٠ فوقها؛ ومطويّاً
+           يأخذ ما يفضل عن الجدول (≈٩٦٠) بين ٢٨٠ و٤٤٠. والأرقامُ بوحدات
+           الصفحة قبل `zoom: 0.9` أعلاه. */
+        <div style={{ width: sidebarCompact ? "clamp(280px, calc(100vw - 960px), 440px)" : "clamp(260px, calc(100vw - 1160px), 280px)", transition: "width .2s ease", overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
           {/* ═══ شريط طابور العمل ═══
               غرفة العمليات تنطوي عند فتح الملفّ (والمساحة مقصودة)،
               فيبقى من المهمّة سطرٌ واحد: أيّ بندٍ نعالج، وأين نحن
