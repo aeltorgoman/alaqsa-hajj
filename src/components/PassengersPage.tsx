@@ -310,7 +310,7 @@ function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
   return ids;
 }
 
-function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
+function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose, sidebarCompact }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void; sidebarCompact?: boolean }) {
   const reportBranding = useReportBranding();
   const companyPortal = useCompanyPortal();
   const { alert: alertState, showAlert } = useAlert();
@@ -2130,7 +2130,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        <div style={{ width: 280, overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
+        /* عرضُ الملفّ: ٢٨٠ والسايدبار مفتوح؛ وحين يُطوى يتّسع الملفّ
+           بنسبةٍ من الشاشة حتى سقفٍ ٤٤٠ — لا يتجاوز ما حرّره الطيّ
+           (٢٢٠ − ٥٦ = ١٦٤)، فلا يضيق الجدولُ عمّا كان عليه. */
+        <div style={{ width: sidebarCompact ? "clamp(280px, 26vw, 440px)" : 280, transition: "width .2s ease", overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
           {/* ═══ شريط طابور العمل ═══
               غرفة العمليات تنطوي عند فتح الملفّ (والمساحة مقصودة)،
               فيبقى من المهمّة سطرٌ واحد: أيّ بندٍ نعالج، وأين نحن
@@ -2184,8 +2187,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30, fontFamily: "Cairo, sans-serif" }}>{selected.name_ar}</div>
                 <div style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".05em", marginTop: 2 }}>{selected.name_en}</div>
                 <div style={{ display: "flex", gap: 5, marginTop: 9, flexWrap: "wrap" }}>
-                  {selected.nat && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(212,160,23,.28)", border: "1px solid rgba(212,160,23,.5)", color: "#F3D98B" }}>{selected.nat}</span>}
-                  {selected.gender && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>{selected.gender}</span>}
                   {selected.passport && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>جواز {selected.passport}</span>}
                 </div>
                 <div style={{ background: "rgba(0,0,0,.3)", margin: "9px -14px 0", padding: "8px 14px 10px" }}>
