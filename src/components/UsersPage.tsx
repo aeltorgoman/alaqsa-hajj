@@ -425,9 +425,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
     setSeasonMsg("");
     const res = await companyService.updateActiveSeason({
       name: seasonForm.name.trim(),
-      hotel_name: seasonForm.hotelName.trim() || null,
-      hotel_address: seasonForm.hotelAddress.trim() || null,
-      hotel_url: seasonForm.hotelUrl.trim() || null,
       mina_address: seasonForm.minaAddress.trim() || null,
       mina_url: seasonForm.minaUrl.trim() || null,
       arafa_address: seasonForm.arafaAddress.trim() || null,
@@ -942,37 +939,6 @@ function UsersPage({ currentUser }: { currentUser: User }) {
                 </div>
                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.8 }}>
                   الاسم نصّ حرّ يظهر كما تكتبه. والسنة الهجرية هي هوية الموسم — تُحدَّد عند إنشائه ولا تتغيّر.
-                </div>
-              </div>
-            </div>
-
-            <div style={card}>
-              <div style={cardHead}>
-                <div style={cardIcon}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-5h6v5"/></svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>الفندق</div>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>فندق هذا الموسم — يظهر في البوابة والمطبوعات وبطاقة الطوارئ</div>
-                </div>
-              </div>
-              <div style={cardBody}>
-                <div style={{ display: "grid", gap: 10 }}>
-                  <div>
-                    <label style={fieldLabel}>اسم الفندق</label>
-                    <input style={inp} value={seasonForm.hotelName} disabled={!canWrite}
-                      onChange={e => setSeasonForm(f => ({ ...f, hotelName: e.target.value }))} placeholder="أبراج الصفوة" />
-                  </div>
-                  <div>
-                    <label style={fieldLabel}>عنوان الفندق</label>
-                    <input style={inp} value={seasonForm.hotelAddress} disabled={!canWrite}
-                      onChange={e => setSeasonForm(f => ({ ...f, hotelAddress: e.target.value }))} placeholder="شارع أجياد، أمام الحرم المكي" />
-                  </div>
-                  <div>
-                    <label style={fieldLabel}>رابط الفندق على الخريطة</label>
-                    <input style={{ ...inp, direction: "ltr" }} value={seasonForm.hotelUrl} disabled={!canWrite}
-                      onChange={e => setSeasonForm(f => ({ ...f, hotelUrl: e.target.value }))} placeholder="https://maps.google.com/..." />
-                  </div>
                 </div>
               </div>
             </div>

@@ -4,8 +4,8 @@
 // ============================================================
 import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
-import type { PricingMap, Payment, CustomCharge, FinancialGroup, AllocTypeMaps } from "./finance.types";
-import { getPriceInfo, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
+import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, AllocTypeMaps } from "./finance.types";
+import { getPriceInfo, viewSurcharge, requestedHotelName, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
 import { serviceContextRows } from "./finance.context";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
@@ -13,6 +13,9 @@ export type PassengerFinanceViewProps = {
   // بيانات الحاج
   passenger: Passenger;
   pricing: PricingMap;
+  /* أسعارُ الباقات لكلّ فندق (MOD-001 PR 8) وفنادقُ الموسم لاسم المطلوب */
+  hotelPrices: HotelPackagePrices;
+  hotels: FinanceHotel[];
   passengerPayments: Payment[];
   passengerCharges: CustomCharge[];
   group: FinancialGroup | null;
@@ -56,7 +59,7 @@ export type PassengerFinanceViewProps = {
 };
 
 export function PassengerFinanceView({
-  passenger, pricing, passengerPayments, passengerCharges, group, groups, allocTypes,
+  passenger, pricing, hotelPrices, hotels, passengerPayments, passengerCharges, group, groups, allocTypes,
   canManage,
   editingCustomPrice, customPriceInput, savingCustomPrice,
   onBack, onPrintStatement,
@@ -66,15 +69,16 @@ export function PassengerFinanceView({
   tdStyle,
 }: PassengerFinanceViewProps) {
   const s=passenger.services;
-  const priceInfo = getPriceInfo(s, pricing), pkgAmt = priceInfo.amount;
+  const priceInfo = getPriceInfo(passenger, pricing, hotelPrices), pkgAmt = priceInfo.amount;
   const isSpecial = s.hotel_type === "خاص";
+  const reqHotel = isSpecial ? null : requestedHotelName(passenger, hotels);
   const pPayments=[...paymentsFor(passenger.id, passengerPayments)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
   const pCustom=chargesFor(passenger.id, passengerCharges);
-  const totalDue=calcTotalDue(passenger,pricing,passengerCharges), totalPaid=calcTotalPaid(passenger.id,passengerPayments), balance=totalDue-totalPaid;
+  const totalDue=calcTotalDue(passenger,pricing,hotelPrices,passengerCharges), totalPaid=calcTotalPaid(passenger.id,passengerPayments), balance=totalDue-totalPaid;
   const st=financeStatus(totalDue,totalPaid);
   type AR={label:string;amount:number;isDiscount?:boolean};
   const addonRows:AR[]=[];
-  if (s.hotel_view==="مطلة") addonRows.push({label:"إضافة مطلة",amount:pricing["addon_view"]?.amount||0});
+  if (s.hotel_view==="مطلة") addonRows.push({label:reqHotel?`إضافة مطلة — ${reqHotel}`:"إضافة مطلة",amount:viewSurcharge(passenger, hotelPrices)});
   if (s.camp_mina==="خاص")  addonRows.push({label:"خيمة خاصة - منى",amount:pricing["addon_mina"]?.amount||0});
   if (s.camp_arafa==="خاص") addonRows.push({label:"خيمة خاصة - عرفة",amount:pricing["addon_arafa"]?.amount||0});
   if (s.bus==="VIP")         addonRows.push({label:"باص VIP",amount:pricing["addon_bus_vip"]?.amount||0});
@@ -120,7 +124,13 @@ export function PassengerFinanceView({
           <tbody>
             <tr>
               <td style={tdStyle}>
-                {priceInfo.label}
+                {priceInfo.label}{reqHotel && <span data-testid="pkg-hotel" style={{ color:"var(--text-muted)" }}> — {reqHotel}</span>}
+                {priceInfo.noHotel && (
+                  <span data-testid="pkg-no-hotel" style={{ fontSize:10, padding:"1px 6px", borderRadius:99, marginRight:6, background:"var(--danger-bg)", color:"var(--danger)" }}>لا فندق مطلوب — السعر صفر</span>
+                )}
+                {priceInfo.missingPrice && (
+                  <span data-testid="pkg-missing-price" style={{ fontSize:10, padding:"1px 6px", borderRadius:99, marginRight:6, background:"var(--warning-bg)", color:"var(--warning)" }}>لا سعر لهذه الباقة في الفندق — صفر</span>
+                )}
                 {priceInfo.unpriced && (
                   <span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, marginRight:6, background:"var(--danger-bg)", color:"var(--danger)" }}>يلزم مراجعة الحساب</span>
                 )}

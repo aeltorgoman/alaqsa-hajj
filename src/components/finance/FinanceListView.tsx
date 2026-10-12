@@ -5,7 +5,7 @@
 import type { CSSProperties } from "react";
 import type { Passenger } from "../../types";
 import type { PricingMap, FinancialGroup, FinanceFilterStatus, FinanceTotals, FinanceSortKey, FinanceSortDir } from "./finance.types";
-import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_VALUE, SPECIAL_PACKAGE_LABEL, getPriceInfo, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
+import { PRICING_KEYS, SERVICE_FILTERS, serviceLabel, SPECIAL_PACKAGE_VALUE, SPECIAL_PACKAGE_LABEL, packageLabel, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
 export type FinanceListViewProps = {
@@ -194,7 +194,7 @@ export function FinanceListView({
                       <tr key={p.id} onClick={()=>onSelectPassenger(p)} style={{ cursor:"pointer", background:i%2===0?"var(--bg-card)":"var(--bg-2)" }}>
                         <td style={{ ...tdStyle, textAlign:"center", color:"var(--text-muted)", fontSize:12 }}>{i+1}</td>
                         <td style={tdStyle}><div style={{ display:"flex", alignItems:"center", gap:6 }}>{p.short_ar||p.name_ar}{pGroup&&<span style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"rgba(125,31,60,0.1)", color:"var(--em7)", cursor:"pointer" }} onClick={e=>{e.stopPropagation();onSelectGroup(pGroup);}}>{pGroup.name}</span>}</div></td>
-                        <td style={{ ...tdStyle, fontSize:11, color:"var(--text-muted)" }}>{getPriceInfo(s, pricing).label||"—"}</td>
+                        <td style={{ ...tdStyle, fontSize:11, color:"var(--text-muted)" }}>{packageLabel(p, pricing)||"—"}</td>
                         <td style={tdStyle}><div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>{badges.map(b=><span key={b} style={{ fontSize:10, padding:"1px 6px", borderRadius:99, background:"var(--warning-bg)", color:"var(--warning)" }}>{b}</span>)}</div></td>
                         <td style={{ ...tdStyle, textAlign:"center", color:"var(--text)", fontWeight:700 }}>{fmtAmt(t.due)}</td>
                         <td style={{ ...tdStyle, textAlign:"center", color:"var(--success)", fontWeight:700 }}>{fmtAmt(t.paid)}</td>

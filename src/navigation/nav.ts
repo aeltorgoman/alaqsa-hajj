@@ -51,7 +51,7 @@ export const NAV_ICON = ICONS;
 export const NAV_PAGES: Record<PageId, NavPage> = {
   dash:       { id: "dash", path: "/",       label: "الرئيسية",       sub: "",                                     perm: "",                  icon: ICONS.home },
   passengers: { id: "passengers", path: "/pilgrims", label: "الحجاج",         sub: "إدارة بيانات الحجاج",                  perm: "manage_passengers", icon: ICONS.people },
-  hotel:      { id: "hotel", path: "/hotel",      label: "الفندق",         sub: "غرف وإقامة الحجاج",                    perm: "manage_hotel",      icon: ICONS.hotel },
+  hotel:      { id: "hotel", path: "/hotel",      label: "الفنادق",        sub: "فنادق الموسم وغرفها وإقامة الحجاج",                    perm: "manage_hotel",      icon: ICONS.hotel },
   flights:    { id: "flights", path: "/flights",    label: "الطيران",        sub: "رحلات وتذاكر الحجاج",                  perm: "manage_flights",    icon: ICONS.plane },
   buses:      { id: "buses", path: "/buses",      label: "الباصات",        sub: "توزيع الحجاج على الحافلات",            perm: "manage_buses",      icon: ICONS.bus },
   mina:       { id: "mina", path: "/mina",       label: "مخيمات منى",     sub: "توزيع الحجاج في منى",                  perm: "manage_camps",      icon: ICONS.tent },

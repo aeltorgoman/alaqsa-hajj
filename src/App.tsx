@@ -18,7 +18,7 @@ import { PassengersPage } from "./components/PassengersPage";
 import { BusesPage } from "./components/BusesPage";
 import { FlightsPage } from "./components/FlightsPage";
 import { CampsPage } from "./components/CampsPage";
-import { HotelPage } from "./components/HotelPage";
+import { HotelsPage } from "./components/HotelsPage";
 import { ReportsPage } from "./components/ReportsPage";
 import { SeasonManagerPage } from "./components/SeasonManagerPage";
 import { UsersPage } from "./components/UsersPage";
@@ -197,7 +197,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: User; onLogout: () =
       case "flights":    return <FlightsPage passengers={passengers} setPassengers={setPassengers} />;
       case "mina":       return <CampsPage pageType="منى" passengers={passengers} setPassengers={setPassengers} />;
       case "arafa":      return <CampsPage pageType="عرفة" passengers={passengers} setPassengers={setPassengers} />;
-      case "hotel":      return <HotelPage passengers={passengers} setPassengers={setPassengers} />;
+      case "hotel":      return <HotelsPage passengers={passengers} setPassengers={setPassengers} />;
       case "reports":    return <ReportsPage passengers={passengers} resetKey={reportsResetKey} currentUser={currentUser!} />;
       case "archive":    return <SeasonManagerPage currentUser={currentUser} />;
       case "users":      return <UsersPage currentUser={currentUser} />;

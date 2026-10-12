@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
+import { isHajj, byOrder, applyReorder, mapPassenger, upsertPassenger } from "../utils/passenger";
+import { hotelNameOf, roomLabel } from "../utils/hotels";
+import { allocWriteError } from "./allocation/useAllocation";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
-import type { Passenger, Room } from "../types";
+import type { Hotel, Passenger, Room } from "../types";
 import { useCompanyBranding } from "../company/CompanyContext";
 import { AlertModal, useAlert } from "./AlertModal";
 import { StatsRow, type StatCardData } from "./StatCard";
@@ -20,11 +22,17 @@ const ROOM_TYPES = HOTEL_ROOM_TYPES as readonly Room["type"][];
    مجلس. والآن الحالة من الإشغال والسعة، والنوع يُقرأ من النوع. */
 type RoomStatus = "مكتملة" | "قيد التسكين" | "جاهزة" | "مجلس" | "تجاوز" | "غير محدّدة";
 
-function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>> }) {
+/* MOD-001 — الصفحةُ نفسُها، محصورةً في فندقٍ واحد: غرفُه وأدوارُه
+   ونزلاؤه ومؤشّراتُه. تُركَّب من `HotelsPage` بمفتاح الفندق، فتبدأ
+   حالتُها (الدورُ المختار والتصفيةُ واللوحة) من جديد لكلّ فندق. */
+function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
+  passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>;
+  hotel: Hotel; hotels: Hotel[]; onBack: () => void;
+}) {
   const primary = useCompanyBranding().primaryColor;
   const { alert, showAlert } = useAlert();
 
-  const { writeOk, writeAllOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
+  const { writeOk, assertWritable, readOnly } = useSeasonWrite(showAlert);
   const { viewedSeason } = useSeason();
 
   /* التعطيل البصري لمداخل الكتابة — طبقة تجربة لا حماية */
@@ -39,18 +47,22 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [search, setSearch] = useState("");
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [showAddPilgrim, setShowAddPilgrim] = useState(false);
+  /* تأكيدُ النقل المعلَّق — قبل مستمع Escape الذي يغلقه أوّلاً */
+  const [transfer, setTransfer] = useState<{ p: Passenger; dest: Room } | null>(null);
+  const [transferring, setTransferring] = useState(false);
 
   /* إغلاق المودالات بمفتاح Escape */
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (transfer) { if (!transferring) setTransfer(null); return; }
       if (showAddPilgrim) { setShowAddPilgrim(false); return; }
       if (showAddRoom) { setShowAddRoom(false); return; }
       if (selectedRoom) { setSelectedRoom(null); return; }
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [selectedRoom, showAddRoom, showAddPilgrim]);
+  }, [selectedRoom, showAddRoom, showAddPilgrim, transfer, transferring]);
   const [pSearch, setPSearch] = useState("");
   /* ترتيب الأسماء داخل الغرفة — عرضٌ تشغيلي لكشف الفندق، وليس
      إسناد أسرّة: الرقم موضع في القائمة لا سرير بعينه. ولم يكن
@@ -88,7 +100,16 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const [newRoomNum, setNewRoomNum] = useState("");
   const [panelCap, setPanelCap] = useState("");
   const [moveFor, setMoveFor] = useState<Passenger | null>(null);
-  const [moveSearch, setMoveSearch] = useState("");
+  /* الغرفةُ المختارة في قائمة الوجهة — تُفرَّغ مع كلّ تغييرٍ للفندق أو الدور */
+  const [moveRoomId, setMoveRoomId] = useState("");
+  /* MOD-001 — وجهةُ النقل: أيُّ فندقٍ من فنادق الموسم، ثمّ دورُه وغرفُه.
+     غرفُ الموسم كلُّها تُحمَّل عند فتح اللوحة (هذه الصفحة تحمل غرفَ
+     فندقها وحده)، والتأكيدُ يسبق الكتابةَ الواحدة. */
+  const [moveHotelId, setMoveHotelId] = useState<number>(hotel.id);
+  const [moveFloor, setMoveFloor] = useState("الكل");
+  const [seasonRooms, setSeasonRooms] = useState<Room[] | null>(null);
+  const [seasonRoomsError, setSeasonRoomsError] = useState(false);
+
   const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
@@ -97,13 +118,13 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل شبكة فارغة تبدو كـ«لا يوجد غرف» */
-    supabase.from("rooms").select("*").eq("season_id", viewedSeason.id)
+    supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).eq("hotel_id", hotel.id)
       .then(({ data, error }) => {
         if (error || !data) { console.error("تعذر تحميل الغرف", error); setRoomsError(true); }
         else { setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); setRoomsError(false); }
         setRoomsLoading(false);
       });
-  }, [viewedSeason.id]);
+  }, [viewedSeason.id, hotel.id]);
 
   const floors = useMemo(
     () => [...new Set(rooms.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)),
@@ -212,11 +233,20 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     });
   }, [rooms, filterFloor, filterStatus, filterType, search, passengers]);
 
-  // KPIs
+  /* الفندقُ المطلوب: بلا طلبٍ مع فندقٍ وحيد = هذا الفندق (كما تملؤه
+     القاعدة)، ومع أكثرَ من فندقٍ لا يُنسب إلى أحدها. */
+  const requestedHere = (p: Passenger) =>
+    p.requested_hotel_id === hotel.id || (p.requested_hotel_id == null && hotels.length === 1);
+  const requestedName = (p: Passenger) =>
+    p.requested_hotel_id == null ? null : hotels.find(h => h.id === p.requested_hotel_id)?.name ?? null;
+
+  // KPIs — محصورةٌ في هذا الفندق: المُسكَّنون في غرفه، والمنتظرون ممّن طلبوه
+  const hotelRoomIds = new Set(rooms.map(r => r.id));
   const totalRooms = rooms.length;
-  const withRoom = hajj.filter(p => p.room_id).length;
-  const noRoom = hajj.length - withRoom;
-  const pct = hajj.length > 0 ? Math.round(withRoom / hajj.length * 100) : 0;
+  const withRoom = hajj.filter(p => p.room_id != null && hotelRoomIds.has(p.room_id)).length;
+  const noRoom = hajj.filter(p => !p.room_id && requestedHere(p)).length;
+  const hajjHere = withRoom + noRoom;
+  const pct = hajjHere > 0 ? Math.round(withRoom / hajjHere * 100) : 0;
   /* أَسِرّة لا غرف: «غرف متاحة» كانت تعدّ الغرف التي فيها متّسع،
      فتُقرأ «غرفٌ فارغة» وهي ليست كذلك. والسرير هو القيد الحقيقيّ. */
   const freeBeds = rooms.reduce((n, r) => {
@@ -227,7 +257,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const hotelCards: StatCardData[] = [
     { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
-    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajj.length} حاج · ${pct}٪`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
+    { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajjHere} حاج · ${pct}٪`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
     /* الرقم الذي يقول «هل انتهى عمل اليوم؟» — كان يُستنبط ذهنياً */
     { label: "حجاج بدون غرفة", num: String(noRoom), sub: noRoom === 0 ? "اكتمل التسكين" : "بانتظار التسكين", tone: noRoom === 0 ? "success" : "warning", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/>` },
     { label: "أَسِرّة شاغرة", num: String(freeBeds), sub: "سرير متاح للتسكين", tone: "info", featured: true, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
@@ -240,9 +270,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const takenNumber = (floor: string, number: string, ignoreId?: number) =>
     rooms.some(r => r.id !== ignoreId && r.floor === floor && r.number === number);
 
-  /* رسالةٌ واحدة لخطأ القاعدة نفسه، فلا يرى الموظّف نصّ بوستجرس */
+  /* رسالةٌ واحدة لخطأ القاعدة نفسه، فلا يرى الموظّف نصّ بوستجرس.
+     الرقمُ فريدٌ في الدور داخل الفندق (`rooms_hotel_floor_number_uniq`).
+     والفهرسُ القديمُ على الموسم باقٍ حتى ترحيلة التشديد، فيرفض الرقمَ
+     نفسَه في فندقٍ آخر — يُقال ذلك صراحةً، ويزول وحدَه حين يسقط الفهرس. */
   const roomWriteError = (msg?: string) =>
-    msg && /duplicate key|rooms_season_floor_number_uniq/i.test(msg)
+    msg && /rooms_season_floor_number_uniq/i.test(msg)
+      ? "رقم الغرفة مستخدم في الدور نفسه في فندقٍ آخر هذا الموسم — قاعدة البيانات لا تسمح بعدُ بتكرار الرقم بين الفنادق"
+      : msg && /duplicate key|rooms_hotel_floor_number_uniq/i.test(msg)
       ? "رقم الغرفة مستخدم في هذا الدور بالفعل"
       : msg || "حدث خطأ أثناء الحفظ";
 
@@ -262,7 +297,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (capError(addType, addCap)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     if (takenNumber(addFloor.trim(), addNum.trim())) { showAlert("error", `الغرفة ${addNum.trim()} موجودة في الدور ${addFloor.trim()} بالفعل`); return; }
     const cap = formCapacity(addType, addCap);
-    const { data, error } = await supabase.from("rooms").insert([{ number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }]).select();
+    const { data, error } = await supabase.from("rooms").insert([{ hotel_id: hotel.id, number: addNum.trim(), floor: addFloor.trim(), type: addType, capacity: cap, notes: addNotes.trim() || null }]).select();
     if (error) { showAlert("error", roomWriteError(error.message)); return; }
     setRooms(prev => [...prev, ...(data as Room[])].sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number)));
     setAddNum(""); setAddFloor(""); setAddType("ثنائية"); setAddNotes(""); setAddCap("");
@@ -276,7 +311,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (!rangeFloor.trim() || isNaN(from) || isNaN(to) || from > to) { showAlert("error", "يرجى إدخال نطاق صحيح ودور صحيح"); return; }
     if (capError(rangeType, rangeCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     const rCap = formCapacity(rangeType, rangeCap);
-    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ number: String(from + i), floor: rangeFloor.trim(), type: rangeType, capacity: rCap }));
+    const entries = Array.from({ length: to - from + 1 }, (_, i) => ({ hotel_id: hotel.id, number: String(from + i), floor: rangeFloor.trim(), type: rangeType, capacity: rCap }));
     /* الدفعة كاملةً أو لا شيء: إدراجٌ جزئيّ يترك الموظّف أمام نطاقٍ
        نصفه موجود ونصفه لا، ولا يعرف أيّهما. */
     const clash = entries.filter(e => takenNumber(e.floor, e.number)).map(e => e.number);
@@ -295,10 +330,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (isNaN(numFloors)||isNaN(rPerFloor)||isNaN(startNum)||isNaN(floorStart)||numFloors<1||rPerFloor<1) { showAlert("error", "يرجى تعبئة جميع الحقول بشكل صحيح"); return; }
     if (capError(tplType, tplCap)) { showAlert("error", "غرف «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
     const tCap = formCapacity(tplType, tplCap);
-    const entries: {number:string;floor:string;type:Room["type"];capacity:number|null}[] = [];
+    const entries: {hotel_id:number;number:string;floor:string;type:Room["type"];capacity:number|null}[] = [];
     for (let f = 0; f < numFloors; f++) {
       for (let r = 0; r < rPerFloor; r++) {
-        entries.push({ number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType, capacity: tCap });
+        entries.push({ hotel_id: hotel.id, number: String(startNum + f * rPerFloor + r), floor: String(floorStart + f), type: tplType, capacity: tCap });
       }
     }
     const tclash = entries.filter(e => takenNumber(e.floor, e.number)).map(e => `${e.floor}/${e.number}`);
@@ -310,10 +345,68 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     showAlert("success", `تمت إضافة ${entries.length} غرفة`);
   };
 
+  /* الحاجُّ كما هو في القاعدة الآن — بعد كتابةٍ رُفضت، فلا تعرض الشاشةُ
+     إسناداً لم يقع ولا تُخفي إسناداً قائماً. */
+  const refreshPassenger = async (pId: number): Promise<Passenger | null> => {
+    const { data } = await supabase.from("passengers").select("*").eq("id", pId).maybeSingle();
+    if (!data) return null;
+    const fresh = mapPassenger(data);
+    setPassengers(prev => prev.map(p => p.id === pId ? fresh : p));
+    return fresh;
+  };
+  /* نزلاءُ غرفةٍ بعينها من القاعدة — بعد رفضٍ لسببها (امتلأت من شاشةٍ
+     أخرى)، فتظهر مكتملةً وتخرج من قائمة الوجهات. القاعدةُ هي الحَكَم:
+     نزيلٌ لم تحمله الصفحةُ قطّ يُضاف، والموجودُ يُستبدل (`upsertPassenger`
+     — لا تكرار)، ومن تظنّه الصفحةُ فيها وليس فيها يُقرأ من جديد. */
+  const refreshRoomOccupants = async (roomId: number) => {
+    const { data } = await supabase.from("passengers").select("*").eq("room_id", roomId);
+    if (!data) return;
+    const inRoom = new Set(data.map(row => row.id));
+    const stale = passengers.filter(p => p.room_id === roomId && !inRoom.has(p.id)).map(p => p.id);
+    const moved = stale.length ? (await supabase.from("passengers").select("*").in("id", stale)).data ?? [] : [];
+    setPassengers(prev => [...data, ...moved].reduce((list, row) => upsertPassenger(list, mapPassenger(row)), prev));
+  };
+  /* أحدثُ طلبٍ وحده يُطبَّق: ردٌّ أقدم (ناجحاً أو فاشلاً) يصل متأخّراً يُهمَل */
+  const seasonRoomsSeq = useRef(0);
+  const loadSeasonRooms = async () => {
+    const seq = ++seasonRoomsSeq.current;
+    setSeasonRoomsError(false);
+    const { data, error } = await supabase.from("rooms").select("*").eq("season_id", viewedSeason.id);
+    if (seq !== seasonRoomsSeq.current) return;
+    /* فشلٌ بعد نجاحٍ سابق لا يُبقي غرفاً قديمة تُعرض كأنها الآن */
+    if (error || !data) { console.error("تعذر تحميل غرف الموسم", error); setSeasonRooms(null); setSeasonRoomsError(true); return; }
+    setSeasonRooms(data as Room[]);
+  };
+
+  /* MOD-001: الإسنادُ والإخراجُ والنقلُ بدالّةٍ واحدةٍ تكتب `room_id` وحده
+     في أمرٍ واحد — لا يمرّ الحاجّ بحالة «بلا غرفة» بين غرفتين. وتحكم
+     القاعدةُ بالصلاحية (manage_hotel، أو صلاحيةُ الشخص) والسعةِ والموسم.
+     رسالتُها العربية تُعرض كما هي، ثمّ يُقرأ الحاجّ من جديد. */
+  /* `expected` (#62): الغرفةُ التي أكّدها الموظّف مصدراً — تفحصها القاعدةُ تحت
+     قفل صفّ الحاجّ نفسِه، فلا يكتب نقلٌ فوق نقلٍ متزامن. */
+  const placePassenger = async (pId: number, roomId: number | null, failMessage: string,
+                                expected?: { room: number | null; name: string }) => {
+    if (!assertWritable()) return false;
+    const { error } = expected
+      ? await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId, p_expected_room_id: expected.room })
+      : await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId });
+    if (error && expected && error.hint === "mod001_stale_source") {
+      showAlert("warning", `تغيّر مكان ${expected.name} منذ فتح التأكيد — لم يُنقل. راجع مكانه الحالي وأعد النقل.`);
+      await refreshPassenger(pId);
+      return false;
+    }
+    if (error) {
+      console.error(failMessage, error);
+      showAlert("error", allocWriteError(failMessage, error.message));
+      await refreshPassenger(pId);
+      return false;
+    }
+    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: roomId } : p));
+    return true;
+  };
+
   const removeFromRoom = async (pId: number) => {
-    if (!assertWritable()) return;
-    if (!await writeOk(supabase.from("passengers").update({ room_id: null }).eq("id", pId), "تعذر إخراج الحاج من الغرفة")) return;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: null } : p));
+    if (!await placePassenger(pId, null, "تعذر إخراج الحاج من الغرفة")) return;
     showAlert("success", "تمت الإزالة من الغرفة"); setTimeout(() => showAlert(null), 2000);
   };
 
@@ -329,9 +422,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         : `الغرفة ${room.number} مكتملة (${roomPassengers(room.id).length}/${cap})`);
       return false;
     }
-    if (!await writeOk(supabase.from("passengers").update({ room_id: room.id }).eq("id", pId), "تعذر إضافة الحاج إلى الغرفة")) return false;
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: room.id } : p));
-    return true;
+    return placePassenger(pId, room.id, "تعذر إضافة الحاج إلى الغرفة");
   };
 
   const addToRoom = async (pId: number) => {
@@ -339,16 +430,34 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     if (await assignToRoom(pId, selectedRoom)) setPSearch("");
   };
 
-  /* النقل المباشر: عمليةٌ واحدة تكتب `room_id` وحده. كان الموظّف
-     يُخرج من الأولى ثم يبحث عن الثانية، فيمرّ الحاجّ بحالة «بلا
-     غرفة» بينهما. والخدمة المطلوبة لا تُمَسّ في أيّ من المسارين. */
-  const moveToRoom = async (p: Passenger, dest: Room) => {
-    if (dest.id === p.room_id) return;
-    if (await assignToRoom(p.id, dest)) {
-      setMoveFor(null); setMoveSearch("");
-      showAlert("success", `تم نقل ${p.short_ar || makeShort(p.name_ar)} إلى الغرفة ${dest.number}`);
-      setTimeout(() => showAlert(null), 2500);
+  /* النقل المباشر — في الفندق نفسه أو إلى غيره: عمليةٌ واحدة تكتب
+     `room_id` وحده، بعد تأكيدٍ يسمّي المصدر والوجهة. كان الموظّف يُخرج
+     من الأولى ثم يبحث عن الثانية، فيمرّ الحاجّ بحالة «بلا غرفة»
+     بينهما. والفندقُ **المطلوب** لا يُمَسّ — يُنبَّه إليه ولا يتبدّل. */
+  const openMove = (p: Passenger) => {
+    setMoveFor(p); setMoveRoomId(""); setMoveHotelId(hotel.id); setMoveFloor("الكل");
+    loadSeasonRooms();
+  };
+  const confirmTransfer = async () => {
+    if (!transfer || transferring) return;
+    const { p, dest } = transfer;
+    setTransferring(true);
+    /* المصدرُ الذي أكّده الموظّف يُرسَل مع النقل، والقاعدةُ ترفض ذرّيّاً إن
+       كان الحاجّ قد نُقل منذ فتح التأكيد — فلا يُنقل من غرفةٍ لم يرها. */
+    const ok = await placePassenger(p.id, dest.id, "تعذّر نقل الحاج — بقي في غرفته",
+      { room: p.room_id ?? null, name: p.short_ar || makeShort(p.name_ar) });
+    setTransferring(false);
+    setTransfer(null);
+    if (!ok) {
+      /* لوحةُ النقل تحمل لقطةً من الحاجّ: إن تغيّرت غرفتُه أُغلقت (نُقل من هذه
+         الغرفة)، وإلا حُدّثت — فلا يُرسَل المصدرُ القديمُ نفسُه في المحاولة التالية */
+      const [fresh] = await Promise.all([refreshPassenger(p.id), refreshRoomOccupants(dest.id), loadSeasonRooms()]);
+      setMoveFor(fresh && (fresh.room_id ?? null) === (p.room_id ?? null) ? fresh : null);
+      return;
     }
+    setMoveFor(null); setMoveRoomId("");
+    showAlert("success", `تم نقل ${p.short_ar || makeShort(p.name_ar)} إلى ${roomLabel(dest, hotels)}`);
+    setTimeout(() => showAlert(null), 2500);
   };
 
   const reorderRoom = async (roomId: number, fromId: number, toId: number) => {
@@ -360,7 +469,8 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const next = [...list];
     next.splice(to, 0, ...next.splice(from, 1));
     setPassengers(prev => applyReorder(prev, "room_sort_order", next));
-    await writeAllOk(reorderUpdates("room_sort_order", next), "تعذّر حفظ ترتيب الغرفة");
+    /* دفعةٌ واحدةٌ ذرّيّة بدل تحديثٍ لكلّ نزيل — القيمُ نفسُها (i+1)×10 */
+    await writeOk(supabase.rpc("set_room_order", { p_room_id: roomId, p_passenger_ids: next.map(p => p.id) }), "تعذّر حفظ ترتيب الغرفة");
   };
 
   const deleteRoom = async (room: Room) => {
@@ -421,7 +531,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     setPanelType(room.type);
     setPanelCap(String(capOf(room) ?? ""));
     setPanelNotes(room.notes || "");
-    setMoveFor(null); setMoveSearch("");
+    setMoveFor(null); setMoveRoomId("");
     setShowAddPilgrim(false);
     setPSearch("");
     setEditingRoomNum(false);
@@ -434,14 +544,14 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const reportBranding = useReportBranding();
   const printRooms = (landscape: boolean) => {
     if (filteredRooms.length === 0) { showAlert("warning", "لا توجد غرف ضمن التصفية الحالية"); return; }
-    const scope: string[] = [];
+    const scope: string[] = [`الفندق: ${hotel.name}`];
     if (filterFloor !== "الكل") scope.push(`الطابق: ${filterFloor}`);
     if (filterType) scope.push(`النوع: ${filterType}`);
     if (filterStatus !== "الكل") scope.push(`الحالة: ${filterStatus}`);
     printInPage(hotelReportDocument(filteredRooms, passengers, reportBranding, {
       landscape,
       subtitle: filterType ? ` — ${filterType}` : "",
-      chrome: { season: viewedSeason, pageNumbers: true, scope: scope.length ? scope.join(" · ") : null },
+      chrome: { season: viewedSeason, pageNumbers: true, scope: scope.join(" · ") },
     }));
   };
 
@@ -456,6 +566,24 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
       {/* ===== المحتوى الرئيسي ===== */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+
+        {/* الفندقُ المفتوح — والعودةُ إلى قائمة الفنادق */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px 0", flexShrink: 0, minWidth: 0 }}>
+          <button onClick={onBack} title="العودة إلى الفنادق"
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            الفنادق
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 900, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{hotel.name}</div>
+            {(hotel.address || hotel.map_url) && (
+              <div style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 700, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {hotel.address && <span>{hotel.address}</span>}
+                {hotel.map_url && <a href={hotel.map_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>الموقع على الخريطة</a>}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* كروت KPI — موحّدة مع باقي الصفحات */}
         <StatsRow cards={hotelCards} />
@@ -542,6 +670,12 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           {!roomsLoading && roomsError && (
             <div style={{ textAlign: "center", padding: "3rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
               تعذر تحميل الغرف — يرجى التحقق من الاتصال وتحديث الصفحة
+            </div>
+          )}
+          {!roomsLoading && !roomsError && rooms.length === 0 && (
+            <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--muted)", fontSize: 12.5, fontWeight: 700, lineHeight: 1.9 }}>
+              لا توجد غرف في هذا الفندق بعد.
+              {!readOnly && <div><button onClick={() => setShowAddRoom(true)} style={{ ...btnP, marginTop: 8 }}>أضف أول غرفة</button></div>}
             </div>
           )}
           {!roomsLoading && !roomsError && floors.filter(f => filterFloor === "الكل" || f === filterFloor).map(floor => {
@@ -844,7 +978,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                       {!want && kinFree === 0 && <span>—</span>}
                     </div>
                   </div>
-                  <button disabled={readOnly} onClick={() => { setMoveFor(p); setMoveSearch(""); }} title="نقل إلى غرفة أخرى"
+                  <button disabled={readOnly} onClick={() => openMove(p)} title="نقل إلى غرفة أخرى — في هذا الفندق أو غيره"
                     style={{ ...roOff, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", cursor: "pointer", fontSize: 9.5, fontWeight: 800, fontFamily: "var(--font-body)", flexShrink: 0 }}>نقل</button>
                   <button disabled={readOnly} onClick={() => removeFromRoom(p.id)} title="إزالة من الغرفة"
                     style={{ ...roOff, width: 24, height: 24, borderRadius: 6, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>×</button>
@@ -853,34 +987,79 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               })
             )}
 
-            {/* ═══ لوحة النقل ═══ */}
+            {/* ═══ لوحة النقل — الفندقُ ثمّ الدورُ ثمّ الغرفة ═══ */}
             {moveFor && (() => {
-              const q = moveSearch.trim();
-              const dests = rooms.filter(r => r.id !== selectedRoom.id && !roomFull(r) && (!q || r.number.includes(q) || r.floor.includes(q)));
+              const pool = (seasonRooms ?? rooms).filter(r => r.hotel_id === moveHotelId);
+              const destFloors = [...new Set(pool.map(r => r.floor))].sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b));
+              /* الوجهاتُ الممتلئة والمجالسُ والغرفُ بلا سعةٍ محدّدة لا تُعرض أصلاً
+                 (`roomFull`): القائمة لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */
+              const dests = pool.filter(r => r.id !== moveFor.room_id && !roomFull(r)
+                && (moveFloor === "الكل" || r.floor === moveFloor))
+                .sort((a, b) => (parseInt(a.floor) || 0) - (parseInt(b.floor) || 0) || (parseInt(a.number) || 0) - (parseInt(b.number) || 0) || a.number.localeCompare(b.number));
+              /* اختيارٌ لم يعد بين الوجهات (تغيّر الإشغال بعد تحديث) لا يُعرض ولا يُرسَل */
+              const chosen = dests.find(r => String(r.id) === moveRoomId) ?? null;
+              const optLabel = (r: Room) => {
+                const occ = roomPassengers(r.id).length, cap = capOf(r) ?? 0;
+                return `${r.number} · ${r.type} · ${occ}/${cap} (متاح ${cap - occ})`;
+              };
+              const byFloor = moveFloor === "الكل" && destFloors.length > 1;
+              const loadingOther = moveHotelId !== hotel.id && seasonRooms == null && !seasonRoomsError;
+              const emptyText = pool.length === 0 ? "لا توجد غرف في هذا الفندق."
+                : moveFloor !== "الكل" ? `لا غرفة فيها متّسع في الدور ${moveFloor} — اختر «كل الأدوار» أو فندقاً آخر.`
+                : "لا غرفة فيها متّسع في هذا الفندق — اختر فندقاً آخر.";
+              const lbl: React.CSSProperties = { display: "block", fontSize: 10, fontWeight: 800, color: "var(--muted)", marginBottom: 3 };
+              const ctl: React.CSSProperties = { ...inp, fontSize: 12.5, padding: "7px 9px", minHeight: 38, width: "100%", minWidth: 0 };
               return (
-                <div style={{ border: `1.5px solid ${primary}`, borderRadius: 10, padding: 8, marginBottom: 8, background: "var(--paper)" }}>
+                <div data-testid="move-panel" style={{ border: `1.5px solid ${primary}`, borderRadius: 10, padding: 8, marginBottom: 8, background: "var(--paper)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: "var(--ink)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>نقل {moveFor.short_ar || makeShort(moveFor.name_ar)} إلى</span>
-                    <button onClick={() => setMoveFor(null)} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 15, lineHeight: 1 }}>×</button>
+                    <button aria-label="إغلاق لوحة النقل" onClick={() => setMoveFor(null)} style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--muted)", fontSize: 15, lineHeight: 1, minWidth: 28, minHeight: 28 }}>×</button>
                   </div>
-                  <input value={moveSearch} onChange={e => setMoveSearch(e.target.value)} placeholder="رقم الغرفة أو الدور..." style={{ ...inp, fontSize: 11, padding: "6px 9px", marginBottom: 6 }} />
-                  {/* الوجهات الممتلئة والمجالس لا تُعرض أصلاً: القائمة
-                      لا تعرض ما سيُرفض. والقاعدة تحرس ما تفلت منه. */}
-                  <div style={{ maxHeight: 168, overflowY: "auto" }}>
-                    {dests.length === 0 ? (
-                      <div style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>لا توجد غرفة فيها متّسع</div>
-                    ) : dests.slice(0, 40).map(r => (
-                      <div key={r.id} onClick={() => moveToRoom(moveFor, r)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 7, cursor: "pointer", borderBottom: "1px solid var(--ivory)" }}
-                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = "var(--ivory)"}
-                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = ""}>
-                        <span style={{ fontSize: 12, fontWeight: 900, color: primary, flexShrink: 0 }}>{r.number}</span>
-                        <span style={{ fontSize: 9.5, color: "var(--muted)", fontWeight: 700, flex: 1, minWidth: 0 }}>ط{r.floor} · {r.type}</span>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)" }} dir="ltr">{roomPassengers(r.id).length}/{capOf(r)}</span>
-                      </div>
-                    ))}
-                    {dests.length > 40 && <div style={{ padding: "6px", textAlign: "center", color: "var(--muted)", fontSize: 9.5 }}>يُعرض ٤٠ من {dests.length} — ابحث لتضييق النتائج</div>}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <label htmlFor="move-dest-hotel" style={lbl}>الفندق</label>
+                      <select id="move-dest-hotel" value={moveHotelId} onChange={e => { setMoveHotelId(Number(e.target.value)); setMoveFloor("الكل"); setMoveRoomId(""); }} style={ctl}>
+                        {hotels.map(h => <option key={h.id} value={h.id}>{h.name}{h.id === hotel.id ? " (الحالي)" : ""}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ width: 96, flex: "none" }}>
+                      <label htmlFor="move-dest-floor" style={lbl}>الدور</label>
+                      <select id="move-dest-floor" value={moveFloor} onChange={e => { setMoveFloor(e.target.value); setMoveRoomId(""); }} style={ctl}>
+                        <option value="الكل">كل الأدوار</option>
+                        {destFloors.map(f => <option key={f} value={f}>ط{f}</option>)}
+                      </select>
+                    </div>
                   </div>
+                  <label htmlFor="move-dest-room" style={lbl}>الغرفة</label>
+                  {moveHotelId !== hotel.id && seasonRoomsError ? (
+                    <div role="alert" style={{ padding: "10px", textAlign: "center", color: "var(--danger)", fontSize: 11, fontWeight: 700 }}>
+                      تعذّر تحميل غرف الفنادق الأخرى.
+                      <button onClick={loadSeasonRooms} style={{ display: "block", margin: "6px auto 0", padding: "6px 12px", minHeight: 32, borderRadius: 7, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", fontSize: 10.5, fontWeight: 800, cursor: "pointer", fontFamily: "var(--font-body)" }}>إعادة المحاولة</button>
+                    </div>
+                  ) : loadingOther ? (
+                    <div role="status" style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11 }}>جاري تحميل الغرف...</div>
+                  ) : dests.length === 0 ? (
+                    <div id="move-dest-empty" data-testid="move-dest-empty" role="status" style={{ padding: "10px", textAlign: "center", color: "var(--muted)", fontSize: 11, fontWeight: 700, border: "1px dashed var(--line)", borderRadius: 8 }}>{emptyText}</div>
+                  ) : (
+                    <>
+                      <select id="move-dest-room" data-testid="move-dest-room" value={chosen ? String(chosen.id) : ""}
+                        onChange={e => setMoveRoomId(e.target.value)} style={{ ...ctl, marginBottom: 6 }}>
+                        <option value="">اختر غرفة — {dests.length} متاحة</option>
+                        {byFloor
+                          ? destFloors.filter(f => dests.some(r => r.floor === f)).map(f => (
+                              <optgroup key={f} label={`الدور ${f}`}>
+                                {dests.filter(r => r.floor === f).map(r => <option key={r.id} value={r.id}>{optLabel(r)}</option>)}
+                              </optgroup>
+                            ))
+                          : dests.map(r => <option key={r.id} value={r.id}>{optLabel(r)}</option>)}
+                      </select>
+                      <button data-testid="move-continue" disabled={!chosen || readOnly}
+                        onClick={() => { if (chosen) setTransfer({ p: moveFor, dest: chosen }); }}
+                        style={{ width: "100%", minHeight: 38, padding: "8px", borderRadius: 8, border: "none", background: chosen ? primary : "var(--line)", color: chosen ? "#fff" : "var(--muted)", fontSize: 12, fontWeight: 800, cursor: chosen ? "pointer" : "not-allowed", fontFamily: "var(--font-body)" }}>
+                        متابعة النقل
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })()}
@@ -900,7 +1079,10 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                  لا اختيار تلقائيّ ولا إسناد — ترتيبُ عرضٍ فقط. */
               const famIds = new Set(roomPassengers(selectedRoom.id).map(o => o.family_id).filter(Boolean) as string[]);
               const kin = pool.filter(x => x.family_id && famIds.has(x.family_id));
-              const rest = pool.filter(x => !(x.family_id && famIds.has(x.family_id)));
+              /* ثمّ من طلبوا هذا الفندق، ثمّ البقيّة — ترتيبُ عرضٍ لا منع:
+                 الموظّف يملك أن يُسكِن في غير المطلوب، ويرى ذلك وسماً. */
+              const others = pool.filter(x => !(x.family_id && famIds.has(x.family_id)));
+              const rest = [...others.filter(requestedHere), ...others.filter(x => !requestedHere(x))];
               const CAP = 25;
               const full = roomFull(selectedRoom);
 
@@ -914,6 +1096,7 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     {isHajj(x) && x.services?.hotel_type && <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,.1)", padding: "1px 5px", borderRadius: 99 }}>{x.services.hotel_type}</span>}
                     {isHajj(x) && x.services?.hotel_view === "مطلة" && <span style={{ fontSize: 9, fontWeight: 700, color: "#0284c7", background: "rgba(2,132,199,.1)", padding: "1px 5px", borderRadius: 99 }}>مطل</span>}
                     {!isHajj(x) && <span style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99 }}>{x.passenger_type}</span>}
+                    {isHajj(x) && !requestedHere(x) && requestedName(x) && <span title={`الفندق المطلوب: ${requestedName(x)}`} style={{ fontSize: 9, fontWeight: 800, color: "var(--warning)", background: "var(--warning-bg)", padding: "1px 5px", borderRadius: 99, maxWidth: 84, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>مطلوب: {requestedName(x)}</span>}
                   </div>
                 </div>
               );
@@ -969,6 +1152,47 @@ function HotelPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           </div>
         </div>
       )}
+
+      {/* ===== تأكيد النقل — المصدرُ والوجهةُ قبل الكتابة الواحدة ===== */}
+      {transfer && (() => {
+        const { p, dest } = transfer;
+        const src = (seasonRooms ?? rooms).find(r => r.id === p.room_id) ?? null;
+        const destHotel = hotelNameOf(hotels, dest.hotel_id);
+        const reqName = hotelNameOf(hotels, p.requested_hotel_id);
+        const mismatch = isHajj(p) && p.requested_hotel_id != null && dest.hotel_id !== p.requested_hotel_id;
+        const row = (label: string, value: string) => (
+          <div style={{ display: "flex", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--ivory)", fontSize: 12, textAlign: "right" }}>
+            <span style={{ color: "var(--muted)", fontWeight: 700, width: 64, flexShrink: 0 }}>{label}</span>
+            <span style={{ color: "var(--ink)", fontWeight: 800, minWidth: 0, wordBreak: "break-word" }}>{value}</span>
+          </div>
+        );
+        return (
+          <div role="dialog" aria-label="تأكيد النقل" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}
+            onClick={e => { if (e.target === e.currentTarget && !transferring) setTransfer(null); }}>
+            <div style={{ background: "var(--paper)", borderRadius: 16, padding: 24, width: 360, maxWidth: "92vw", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 10, textAlign: "center" }}>تأكيد نقل الحاج</div>
+              {row("الحاج", p.short_ar || makeShort(p.name_ar))}
+              {row("من", src ? roomLabel(src, hotels) : "بلا غرفة")}
+              {row("إلى", roomLabel(dest, hotels))}
+              {mismatch && (
+                <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 9, background: "var(--warning-bg)", border: "1px solid var(--warning)", color: "var(--warning)", fontSize: 11.5, fontWeight: 800, lineHeight: 1.7 }}>
+                  ⚠️ الفندق المطلوب لهذا الحاج هو «{reqName ?? "—"}»، والوجهة في «{destHotel ?? "—"}». سيبقى الفندق المطلوب كما هو — النقل لا يغيّره.
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button disabled={transferring} onClick={confirmTransfer}
+                  style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: primary, color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", opacity: transferring ? 0.6 : 1 }}>
+                  {transferring ? "جاري النقل..." : "تأكيد النقل"}
+                </button>
+                <button disabled={transferring} onClick={() => setTransfer(null)}
+                  style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ===== مودال تأكيد الحذف ===== */}
       {confirmDelete && (

@@ -181,12 +181,12 @@ export const companyService = {
      وحده يُعدَّل، والمؤرشفُ لا يُمَسّ.
 
      و`hijri_year` ليست في التوقيع — هويّةُ الموسم لا تُبدَّل من
-     شاشةِ تحرير بياناته. */
+     شاشةِ تحرير بياناته.
+
+     MOD-001: النسخةُ ذاتُ الوسائط الخمسة — بلا الفندق. الفنادقُ تُدار
+     من صفحتها، ولا تمسّ هذه الدالّةُ أعمدةَ `hotel_*` ولا جدولَ `hotels`. */
   async updateActiveSeason(values: {
     name: string;
-    hotel_name: string | null;
-    hotel_address: string | null;
-    hotel_url: string | null;
     mina_address: string | null;
     mina_url: string | null;
     arafa_address: string | null;
@@ -194,9 +194,6 @@ export const companyService = {
   }): Promise<SaveResult<SeasonRow>> {
     const { data, error } = await supabase.rpc("update_active_season", {
       p_name: values.name,
-      p_hotel_name: values.hotel_name,
-      p_hotel_address: values.hotel_address,
-      p_hotel_url: values.hotel_url,
       p_mina_address: values.mina_address,
       p_mina_url: values.mina_url,
       p_arafa_address: values.arafa_address,
@@ -214,13 +211,11 @@ export const companyService = {
    والأرشيف، وبـ`activeSeason` في التحرير. */
 export function seasonMasterData(season: {
   name: string;
-  hotel_name?: string | null; hotel_address?: string | null; hotel_url?: string | null;
   mina_address?: string | null; mina_url?: string | null;
   arafa_address?: string | null; arafa_url?: string | null;
 }): SeasonMasterData {
   return {
     name: season.name || "",
-    hotelName: season.hotel_name || "", hotelAddress: season.hotel_address || "", hotelUrl: season.hotel_url || "",
     minaAddress: season.mina_address || "", minaUrl: season.mina_url || "",
     arafaAddress: season.arafa_address || "", arafaUrl: season.arafa_url || "",
   };
