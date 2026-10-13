@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FocusEvent, PointerEvent } from "react";
 
 const COMPACT_KEY = "hajj_sidebar_compact";
 /* تحت هذا العرض يصير السايدبار درجاً — الجوّال. اللوحيُّ (≈768) وما
@@ -20,6 +21,51 @@ export function useSidebarPrefs() {
     });
   }, []);
   return { compact, toggleCompact };
+}
+
+/* صفحاتٌ تُعرض والسايدبار أيقوناتٌ (٥٦) يتّسع مؤقّتاً فوقها ولا يزيحها.
+   التفضيلُ المحفوظ لا يُمسّ: يعود كما كان في سائر الصفحات. */
+const OPEN_DELAY = 150;
+const CLOSE_DELAY = 250;
+
+/** اتّساعُ السايدبار المؤقّت فوق المحتوى: تحويمٌ بتأخير، وتركيزُ لوحة
+    المفاتيح، وEscape، والنقرُ خارجه يغلقه — ولا يغيّر مقاسَ الصفحة. */
+export function useSidebarPeek(enabled: boolean) {
+  const [peek, setPeek] = useState(false);
+  /* الخروجُ من الصفحة بغير السايدبار (زرّ الرجوع مثلاً) لا يُبقيه مفتوحاً للعودة */
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+  if (wasEnabled !== enabled) { setWasEnabled(enabled); setPeek(false); }
+  const timer = useRef<number | undefined>(undefined);
+  const open = enabled && peek;
+
+  const set = useCallback((next: boolean, delay = 0) => {
+    window.clearTimeout(timer.current);
+    if (delay) timer.current = window.setTimeout(() => setPeek(next), delay);
+    else setPeek(next);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") set(false); };
+    /* اللمس: لا تحويم — يُفتح بزرّ التوسيع ويُغلق بلمسةٍ خارجه */
+    const onDown = (e: globalThis.PointerEvent) => { if (!(e.target as Element | null)?.closest?.("[data-sidebar-rail]")) set(false); };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
+  }, [open, set]);
+
+  const handlers = {
+    /* الفأرةُ وحدها تحوّم؛ اللمسُ يولّد أحداثَ فأرةٍ مقلَّدة تُغلقه فور فتحه */
+    onPointerEnter: (e: PointerEvent<HTMLDivElement>) => { if (e.pointerType === "mouse") set(true, OPEN_DELAY); },
+    onPointerLeave: (e: PointerEvent<HTMLDivElement>) => { if (e.pointerType === "mouse") set(false, CLOSE_DELAY); },
+    /* تركيزُ لوحة المفاتيح وحده يفتح — لا نقرةُ الفأرة على زرّ التوسيع */
+    onFocus: (e: FocusEvent<HTMLDivElement>) => { if (e.target.matches(":focus-visible")) set(true); },
+    onBlur: (e: FocusEvent<HTMLDivElement>) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) set(false); },
+  };
+
+  return { open, handlers, toggle: () => set(!peek), close: () => set(false) };
 }
 
 function matchQuery(q: string): boolean {

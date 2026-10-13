@@ -310,6 +310,11 @@ function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
   return ids;
 }
 
+/* اللوحة الجانبية — غرفة العمليات أو ملفّ الحاج مكانها — عرضٌ واحد يتبع
+   الشاشة وحدها، فلا يتحرّك الجدول بفتح الملفّ أو إغلاقه. يتّسع بين ١٣٦٦
+   و١٤٨٠ دون أن يفيض الجدول الأصليّ (بوحدات الصفحة قبل `zoom: 0.9`). */
+const SIDE_PANEL_WIDTH = "clamp(270px, calc(100vw - 1100px), 380px)";
+
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const reportBranding = useReportBranding();
   const companyPortal = useCompanyPortal();
@@ -2026,8 +2031,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             normal:   { color: "var(--primary)", bg: "var(--ivory2)" },
           };
 
+          /* الملفّ يحلّ محلّها في المساحة نفسها وبالعرض نفسه */
+          if (selected && !editing) return null;
           return (
-            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)" }}>
+            <div style={{ width: SIDE_PANEL_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--paper)", overflow: "hidden", position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)" }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-light))", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -2130,7 +2137,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        <div style={{ width: 280, overflowY: "auto", padding: 12, flexShrink: 0, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
+        <div style={{ width: SIDE_PANEL_WIDTH, flexShrink: 0, overflowY: "auto", padding: 12, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
           {/* ═══ شريط طابور العمل ═══
               غرفة العمليات تنطوي عند فتح الملفّ (والمساحة مقصودة)،
               فيبقى من المهمّة سطرٌ واحد: أيّ بندٍ نعالج، وأين نحن
@@ -2183,11 +2190,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 </div>
                 <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30, fontFamily: "Cairo, sans-serif" }}>{selected.name_ar}</div>
                 <div style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".05em", marginTop: 2 }}>{selected.name_en}</div>
-                <div style={{ display: "flex", gap: 5, marginTop: 9, flexWrap: "wrap" }}>
-                  {selected.nat && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(212,160,23,.28)", border: "1px solid rgba(212,160,23,.5)", color: "#F3D98B" }}>{selected.nat}</span>}
-                  {selected.gender && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>{selected.gender}</span>}
-                  {selected.passport && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>جواز {selected.passport}</span>}
-                </div>
                 <div style={{ background: "rgba(0,0,0,.3)", margin: "9px -14px 0", padding: "8px 14px 10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 800, marginBottom: 5 }}>
                     {/* كان يقول «اكتمال الملف ٦٧٪» وهو يعدّ المرفوعات
