@@ -14,7 +14,7 @@ import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { StatCard, type StatCardData } from "./StatCard";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
 import { DocImage } from "./DocImage";
-import { wantsService, type ServiceKey, itemsLabel, makeShort, buildStickersHTML, stickerDataGaps, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
+import { wantsService, type ServiceKey, itemsLabel, makeShort, buildStickersHTML, stickerDataGaps, scanDocument, uploadDoc, removeDoc, DocumentScanError, downloadFile, getStoragePath, useSignedDoc, storedDocAsFile, storedDocMime, isExpired, isExpiringSoon, makeHTML, printInPage, freezeHeaderRow, addSummarySheet, timeAgo, inp, btnP, btnS } from "../utils";
 import { hasIssue, isIssueKey, type IssueKey } from "../utils/readiness";
 import { useSeasonPhases } from "./Seasontimeline";
 /* المقارنة بالاسم تسكن مع المودال: كلاهما يخدم نفس السؤال، ونسخة
@@ -340,6 +340,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
+  /* تدويرُ صورة الجواز المحفوظة في نافذة التعديل — يبدأ صفراً مع كلّ فتح */
+  const [editPassportTurns, setEditPassportTurns] = useState(0);
+  const [editWasOpen, setEditWasOpen] = useState(false);
+  if (!!editing !== editWasOpen) { setEditWasOpen(!!editing); setEditPassportTurns(0); }
   /* `null` = لم يختر الموظّف بعد، فيُشتقّ من المرحلة. اشتقاقٌ لا
      أثرٌ جانبيّ: لا setState داخل effect ولا وميضُ تبويبٍ خاطئ. */
   const [opsTabPick, setOpsTabPick] = useState<"reg" | "dist" | "travel" | null>(null);
@@ -1584,6 +1588,32 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const updatedP = { ...p, updated_by, updated_at };
     setPassengers(prev => prev.map(x => x.id === p.id ? updatedP : x));
     setEditing(null); setSelected(updatedP);
+    if (editPassportTurns % 4 !== 0) await persistPassportRotation(updatedP, editPassportTurns);
+  };
+
+  /* تدويرُ جوازٍ محفوظ — بعد نجاح حفظ الحقول، وبالضمانات نفسها لكلّ
+     استبدالٍ في هذه الصفحة: يُرفع **كائنٌ جديد** مدوَّراً، ثم يُحفظ مرجعه،
+     ولا يُحذف القديم إلا بعد نجاح الحفظ؛ وإن فشل حُذف الجديد وبقي القديم
+     ومرجعه كما كانا. الأصلُ لا يُعدَّل في مكانه أبداً، والـPDF لا يُدوَّر. */
+  const persistPassportRotation = async (p: Passenger, turns: number) => {
+    const oldKey = (p as { passport_url?: string | null }).passport_url;
+    if (!oldKey || storedDocMime(oldKey) === "application/pdf") return;
+    let newKey: string | null = null;
+    try {
+      newKey = await uploadDoc(await storedDocAsFile(oldKey), p.id, "passport_doc", turns);
+    } catch (e) {
+      console.error("تعذّر تجهيز صورة الجواز المحفوظة لتدويرها", e);
+    }
+    if (!newKey) { showAlert("warning", "حُفظت البيانات، وتعذّر حفظ تدوير صورة الجواز — بقيت كما كانت"); return; }
+    const updates = { passport_url: newKey } as Partial<Passenger>;
+    if (!await writeOk(supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id),
+      "حُفظت البيانات، وتعذّر حفظ تدوير صورة الجواز — بقيت كما كانت")) {
+      await discardUnsavedDocs(p, updates);
+      return;
+    }
+    setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, ...updates } : x));
+    setSelected(cur => cur && cur.id === p.id ? { ...cur, ...updates } : cur);
+    await purgeSupersededDocs(p, updates);
   };
 
   return (
@@ -2545,9 +2575,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         <button onClick={() => setShowLinkFamily(false)} style={{ ...btnS(), width: "100%", marginTop: 10 }}>إلغاء</button>
       </Modal>
 
-      <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج" maxWidth={460}>
+      <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج" maxWidth={900}>
         {editing && (
-          <>
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 400px", minWidth: 0 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
               {[["الاسم بالعربي", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["المختصر عربي", "short_ar"], ["المختصر إنجليزي", "short_en"], ["رقم الجواز", "passport"], ["الرقم الشخصي", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"]].map(([l, k]) => (
                 <div key={k as string}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l as string}</div><input style={inp} value={(editing as any)[k as string] || ""} onChange={e => setEditing({ ...editing, [k as string]: e.target.value })} /></div>
@@ -2579,7 +2610,19 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <button onClick={() => saveEdit(editing)} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ</button>
               <button onClick={() => setEditing(null)} style={btnS()}>إلغاء</button>
             </div>
-          </>
+          </div>
+          {/* صورة الجواز المحفوظة — للمراجعة أثناء التعديل؛ التدويرُ يُحفظ
+              مع «حفظ» ولا يُمسّ الملفّ قبله */}
+          <div style={{ flex: "1 1 340px", height: 460, minWidth: 0 }}>
+            <DocumentViewer active="passport" docs={[{
+              key: "passport", label: "جواز السفر",
+              file: null, stored: (editing as { passport_url?: string | null }).passport_url ?? null,
+              version: editing.id, turns: editPassportTurns,
+              onRotate: d => setEditPassportTurns(t => t + d),
+              emptyText: "لا تتوفر صورة جواز",
+            }]} />
+          </div>
+          </div>
         )}
       </Modal>
 
