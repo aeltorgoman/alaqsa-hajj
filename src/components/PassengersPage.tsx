@@ -310,6 +310,11 @@ function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
   return ids;
 }
 
+/* اللوحة الجانبية — غرفة العمليات أو ملفّ الحاج مكانها — عرضٌ واحد يتبع
+   الشاشة وحدها، فلا يتحرّك الجدول بفتح الملفّ أو إغلاقه. يتّسع بين ١٣٦٦
+   و١٤٤٠ دون أن يفيض الجدول الأصليّ (بوحدات الصفحة قبل `zoom: 0.9`). */
+const SIDE_PANEL_WIDTH = "clamp(270px, calc(100vw - 1100px), 340px)";
+
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const reportBranding = useReportBranding();
   const companyPortal = useCompanyPortal();
@@ -1630,10 +1635,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       })()}
       <div style={{ flex: 1, display: "flex", alignItems: "flex-start" }}>
 
-        {/* ══ المحتوى الرئيسي ══
-            والملفّ مفتوحٌ لا ينضغط الجدولُ دون عرضه: يضيق الملفّ أوّلاً
-            (حتى ٢٦٠)، ولا يفيض الجدولُ تحته. */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: selected && !editing ? "auto" : 0 }}>
+        {/* ══ المحتوى الرئيسي ══ */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <PassengersStats passengers={passengers} />
 
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
@@ -2028,8 +2031,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             normal:   { color: "var(--primary)", bg: "var(--ivory2)" },
           };
 
+          /* الملفّ يحلّ محلّها في المساحة نفسها وبالعرض نفسه */
+          if (selected && !editing) return null;
           return (
-            <div style={{ width: selected ? 0 : 280, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--paper)", overflow: "hidden", transition: "width .2s ease", position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)" }}>
+            <div style={{ width: SIDE_PANEL_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", background: "var(--paper)", overflow: "hidden", position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)" }}>
               {/* هيدر */}
               <div style={{ background: "linear-gradient(135deg, var(--primary), var(--primary-light))", padding: "12px 14px", flexShrink: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -2132,8 +2137,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         })()}
       </div>
       {selected && !editing && (
-        /* عرضُ الملفّ ما يفضل عن الجدول بين ٢٦٠ و٤٤٠، وما زاد فللجدول. */
-        <div style={{ flex: "0 1 440px", minWidth: 260, maxWidth: 440, overflowY: "auto", padding: 12, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
+        <div style={{ width: SIDE_PANEL_WIDTH, flexShrink: 0, overflowY: "auto", padding: 12, position: "sticky", top: 0, height: "100vh", order: -1, borderLeft: "1px solid var(--line)", background: "var(--paper)" }}>
           {/* ═══ شريط طابور العمل ═══
               غرفة العمليات تنطوي عند فتح الملفّ (والمساحة مقصودة)،
               فيبقى من المهمّة سطرٌ واحد: أيّ بندٍ نعالج، وأين نحن
