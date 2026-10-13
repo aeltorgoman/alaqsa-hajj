@@ -102,7 +102,7 @@ export function ScanStatusBar({ scanning, error, onRetry }: { scanning: string |
 
 const FIELDS_CSS = `
 .regf-sec{border:none;margin:0 0 14px;padding:0;min-width:0}
-.regf-legend{font-size:11.5px;font-weight:800;color:var(--primary);margin-bottom:8px;padding:0}
+.regf-legend{width:100%;text-align:start;font-size:11.5px;font-weight:800;color:var(--primary);margin-bottom:8px;padding:0}
 .regf-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
 .regf-field{display:flex;flex-direction:column;min-width:0}
 .regf-label{font-size:10.5px;color:var(--text-muted);margin-bottom:3px}

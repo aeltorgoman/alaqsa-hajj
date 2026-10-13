@@ -102,7 +102,7 @@ export function RegistrationShell({ show, title, subtitle, dirty, onDiscard, vie
 
 const SHELL_CSS = `
 .regs-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
-.regs{width:min(1080px,100%);height:min(780px,100%);display:flex;flex-direction:column;background:var(--bg-card);border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);border:.5px solid var(--border);overflow:hidden;outline:none}
+.regs{text-align:start;width:min(1080px,100%);height:min(780px,100%);display:flex;flex-direction:column;background:var(--bg-card);border-radius:var(--radius-lg);box-shadow:var(--shadow-xl);border:.5px solid var(--border);overflow:hidden;outline:none}
 .regs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:.5px solid var(--border);flex-shrink:0}
 .regs-title{font-size:14px;font-weight:700;color:var(--text)}
 .regs-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
