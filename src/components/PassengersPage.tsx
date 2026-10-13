@@ -312,8 +312,8 @@ function duplicatePhoneIds(hajj: Passenger[]): Set<number> {
 
 /* اللوحة الجانبية — غرفة العمليات أو ملفّ الحاج مكانها — عرضٌ واحد يتبع
    الشاشة وحدها، فلا يتحرّك الجدول بفتح الملفّ أو إغلاقه. يتّسع بين ١٣٦٦
-   و١٤٤٠ دون أن يفيض الجدول الأصليّ (بوحدات الصفحة قبل `zoom: 0.9`). */
-const SIDE_PANEL_WIDTH = "clamp(270px, calc(100vw - 1100px), 340px)";
+   و١٤٨٠ دون أن يفيض الجدول الأصليّ (بوحدات الصفحة قبل `zoom: 0.9`). */
+const SIDE_PANEL_WIDTH = "clamp(270px, calc(100vw - 1100px), 380px)";
 
 function PassengersPage({ passengers, setPassengers, currentUser, globalShowManual, onGlobalManualClose }: { passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>; currentUser?: User; globalShowManual?: boolean; onGlobalManualClose?: () => void }) {
   const reportBranding = useReportBranding();
@@ -2190,9 +2190,6 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 </div>
                 <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.35, paddingLeft: 30, fontFamily: "Cairo, sans-serif" }}>{selected.name_ar}</div>
                 <div style={{ fontSize: 9.5, opacity: .55, letterSpacing: ".05em", marginTop: 2 }}>{selected.name_en}</div>
-                <div style={{ display: "flex", gap: 5, marginTop: 9, flexWrap: "wrap" }}>
-                  {selected.passport && <span style={{ fontSize: 9.5, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "rgba(255,255,255,.13)", border: "1px solid rgba(255,255,255,.2)" }}>جواز {selected.passport}</span>}
-                </div>
                 <div style={{ background: "rgba(0,0,0,.3)", margin: "9px -14px 0", padding: "8px 14px 10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 800, marginBottom: 5 }}>
                     {/* كان يقول «اكتمال الملف ٦٧٪» وهو يعدّ المرفوعات
