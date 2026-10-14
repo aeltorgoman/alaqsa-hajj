@@ -391,6 +391,25 @@ export async function fetchDocumentBytes(value: string): Promise<Uint8Array> {
   return bytes;
 }
 
+const STORED_DOC_MIME: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", pdf: "application/pdf",
+};
+
+/** نوعُ المستند المخزَّن من امتداد مفتاحه — للعرض وإعادة الرفع. */
+export function storedDocMime(value: string | null | undefined): string {
+  const ext = docKey(value).toLowerCase().split(".").pop() ?? "";
+  return STORED_DOC_MIME[ext] ?? "";
+}
+
+/** مستندٌ مخزَّن كملفّ — عبر `fetchDocumentBytes` وبوّاباتها الثلاث.
+    يُستعمل لإعادة رفع صورةٍ محفوظة بعد تدويرها: الأصلُ لا يُعدَّل في
+    مكانه أبداً، بل يُرفع كائنٌ جديد ويُحذف القديم بعد نجاح الحفظ. */
+export async function storedDocAsFile(value: string): Promise<File> {
+  const bytes = await fetchDocumentBytes(value);
+  const name = docKey(value).split("/").pop() || "document";
+  return new File([bytes as BlobPart], name, { type: storedDocMime(value) || "application/octet-stream" });
+}
+
 /* ── بوابة الحاج — س٦ / الخطوة ٤ ──
    `publicDocUrl` انتهت. الحاجّ المجهول لا يبني رابطاً بنفسه بعد
    اليوم، ولا يملك ما يبنيه به أصلاً: البوابة لم تعد تستلم مفاتيح
@@ -520,7 +539,17 @@ export async function downloadFile(value: string) {
 /** الاسم القديم — يبقى للمستدعين، وصار واجهةً لـ docKey. */
 export const getStoragePath = docKey;
 
-export function compressImage(file: File): Promise<Blob> {
+/** ربعُ دورة باتجاه عقارب الساعة — 0 إلى 3. أيّ عددٍ صحيح يُطبَّع إليها. */
+export function normalizeQuarterTurns(turns: number): 0 | 1 | 2 | 3 {
+  return ((((Math.round(turns) % 4) + 4) % 4) as 0 | 1 | 2 | 3);
+}
+
+/* `quarterTurns` يدوّر الصورة في **الترميز نفسه** — لا ترميزَ ثانٍ
+   فوق الأوّل. والصفرُ (الافتراضيّ) هو المسارُ القائم حرفاً بحرف.
+   واتجاهُ الكاميرا (EXIF) يطبّقه المتصفّح عند فكّ الصورة قبل الرسم،
+   فالتدويرُ اليدويّ يُضاف فوق صورةٍ معتدلةٍ أصلاً — كما تُعرض. */
+export function compressImage(file: File, quarterTurns = 0): Promise<Blob> {
+  const turns = normalizeQuarterTurns(quarterTurns);
   return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) { resolve(file); return; }
     const isPng = file.type === "image/png";
@@ -535,7 +564,8 @@ export function compressImage(file: File): Promise<Blob> {
         else { width = width * maxDim / height; height = maxDim; }
       }
       const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
+      const sideways = turns % 2 === 1;
+      canvas.width = sideways ? height : width; canvas.height = sideways ? width : height;
       const ctx = canvas.getContext("2d");
       if (ctx && !isPng) {
         /* لون صريح لا متغيّر CSS: canvas لا يفسّر var() ويتجاهل القيمة
@@ -543,9 +573,15 @@ export function compressImage(file: File): Promise<Blob> {
            سوداء. ولو فُسِّر المتغيّر لتبع مظهر الواجهة — و‑‑text-inverse
            أسود في الثيم الداكن — والمطلوب أبيض دائماً تحت الشفافية. */
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
-      ctx?.drawImage(img, 0, 0, width, height);
+      if (ctx && turns) {
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(turns * Math.PI / 2);
+        ctx.drawImage(img, -width / 2, -height / 2, width, height);
+      } else {
+        ctx?.drawImage(img, 0, 0, width, height);
+      }
       canvas.toBlob(b => resolve(b || file), outputType, outputQuality);
     };
     img.onerror = () => resolve(file);
@@ -553,8 +589,10 @@ export function compressImage(file: File): Promise<Blob> {
   });
 }
 
-export async function uploadDoc(file: File, passengerId: number, docType: string): Promise<string | null> {
-  const compressed = await compressImage(file);
+export async function uploadDoc(file: File, passengerId: number, docType: string, quarterTurns = 0): Promise<string | null> {
+  /* ملفّ PDF يُرفع كما هو: `compressImage` لا تلمس غير الصور، فالتدويرُ
+     لا يصل إليه أصلاً. */
+  const compressed = await compressImage(file, quarterTurns);
   const isPng = file.type === "image/png";
   const ext = file.type === "application/pdf" ? "pdf" : isPng ? "png" : "jpg";
   const contentType = file.type === "application/pdf" ? "application/pdf" : isPng ? "image/png" : "image/jpeg";

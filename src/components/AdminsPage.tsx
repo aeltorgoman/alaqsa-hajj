@@ -10,7 +10,11 @@ import { useSeason } from "../season/useSeason";
 import { Avatar } from "./Avatar";
 import { Modal } from "./Modal";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
-import { inp, btnP, btnS, makeShort, scanDocument, DocumentScanError, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc } from "../utils";
+import { inp, btnP, btnS, makeShort, scanDocument, uploadDoc, removeDoc, docKey, downloadFile, ROOM_TYPE_CAP, makeHTML, printInPage, useSignedDoc, storedDocAsFile, storedDocMime } from "../utils";
+import { useDocSlots, type DocSlotKey } from "./registration/useDocSlots";
+import { DocumentViewer } from "./registration/DocumentViewer";
+import { RegistrationShell } from "./registration/RegistrationShell";
+import { FieldSection, IdentityFields, ScanStatusBar } from "./registration/RegistrationFields";
 import { useReportBranding } from "../company/CompanyContext";
 
 // ============================================================
@@ -106,14 +110,13 @@ function AdminsPage({
   const [form, setForm]             = useState({ ...DEFAULT_FORM });
   const [saving, setSaving]         = useState(false);
 
-  // مسح المستندات
-  const [scanning, setScanning]         = useState(false);
-  const [passportImg, setPassportImg]   = useState<string | null>(null);
-  const [passportFile, setPassportFile] = useState<File | null>(null);
-  const [idImg, setIdImg]               = useState<string | null>(null);
-  const [idFile, setIdFile]             = useState<File | null>(null);
-  const passportInputRef = useRef<HTMLInputElement>(null);
-  const idInputRef       = useRef<HTMLInputElement>(null);
+  /* ما فُتحت عليه النافذة — المقارنةُ به تقول إن كان فيها ما يضيع بإغلاقها */
+  const [initialForm, setInitialForm] = useState({ ...DEFAULT_FORM });
+
+  // مسح المستندات — لكلّ مستندٍ حالتُه وقراءتُه، ولا تملأ قراءةٌ متأخّرة نافذةً لاحقة
+  const docs = useDocSlots();
+  const [activeDoc, setActiveDoc] = useState<DocSlotKey>("passport");
+  const scanning = docs.scanning;
 
   // مودال التعيين
   const [assignTarget, setAssignTarget] = useState<Passenger | null>(null);
@@ -238,41 +241,26 @@ function AdminsPage({
   // ============================================================
   // مسح جواز
   // ============================================================
-  /* القراءة تستغرق ثوانٍ، وكانت الصورة تظهر فور اختيار الملف
-     والحقول فارغة — فيقرأ المستخدم المشهد على أنه «انتهى ولم يقرأ».
-     فصار المؤشّر على الصورة نفسها: ضبابٌ وطبقةٌ ودوّار، وهو نمط
-     صفحة الحجاج نفسه لا نمط موازٍ. والخطأ يُعلَن ولا يُبتلع. */
-  const handleScanPassport = async (file: File) => {
-    setScanning(true);
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      setPassportImg(ev.target?.result as string);
-      setPassportFile(file);
-      try {
-        const parsed = await scanDocument(file, "passport");
-        setForm(prev => ({
-          ...prev,
-          name_en:    parsed.name_en    || prev.name_en,
-          short_en:   parsed.name_en    ? makeShort(parsed.name_en)  : prev.short_en,
-          name_ar:    parsed.name_ar    || prev.name_ar,
-          short_ar:   parsed.name_ar    ? makeShort(parsed.name_ar)  : prev.short_ar,
-          passport:   parsed.passport   || prev.passport,
-          national_id:parsed.national_id|| prev.national_id,
-          nat:        parsed.nationality|| prev.nat,
-          dob:        parsed.dob        || prev.dob,
-          expiry:     parsed.expiry     || prev.expiry,
-          gender:     parsed.gender     || prev.gender,
-        }));
-      } catch (e) {
-        console.error("تعذّرت قراءة جواز الإداري", e);
-        showAlert("error", e instanceof DocumentScanError ? e.message : "تعذّرت قراءة الجواز — أدخل البيانات يدوياً");
-      } finally {
-        setScanning(false);
-      }
-    };
-    /* فشل القراءة من القرص لا يترك المؤشّر دائراً */
-    reader.onerror = () => { setScanning(false); showAlert("error", "تعذّرت قراءة الملف"); };
-    reader.readAsDataURL(file);
+  /* القراءة تستغرق ثوانٍ: المعاينةُ تظهر فوراً ومعها مؤشّرُ القراءة في
+     العارض وفي رأس الحقول، والحفظُ معطَّلٌ حتى تنتهي. والخطأ يُعلَن في
+     النافذة نفسها ولا يمسّ ما أُدخل. */
+  const handleScanPassport = (file: File) => {
+    setActiveDoc("passport");
+    void docs.scan("passport", file, f => scanDocument(f, "passport"), parsed => {
+      setForm(prev => ({
+        ...prev,
+        name_en:    parsed.name_en    || prev.name_en,
+        short_en:   parsed.name_en    ? makeShort(parsed.name_en)  : prev.short_en,
+        name_ar:    parsed.name_ar    || prev.name_ar,
+        short_ar:   parsed.name_ar    ? makeShort(parsed.name_ar)  : prev.short_ar,
+        passport:   parsed.passport   || prev.passport,
+        national_id:parsed.national_id|| prev.national_id,
+        nat:        parsed.nationality|| prev.nat,
+        dob:        parsed.dob        || prev.dob,
+        expiry:     parsed.expiry     || prev.expiry,
+        gender:     parsed.gender     || prev.gender,
+      }));
+    }, "تعذّرت قراءة الجواز — أدخل البيانات يدوياً");
   };
 
   // ============================================================
@@ -288,39 +276,26 @@ function AdminsPage({
      بدل `id_expiry`، فتخرج الصلاحية فارغة دائماً.)
      أما استكمال بطاقة إداري قائم فمسار آخر لا يلمس بياناته
      الأساسية: مودال المستندات أدناه. */
-  const handleScanId = async (file: File) => {
-    setScanning(true);
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      setIdImg(ev.target?.result as string);
-      setIdFile(file);
-      try {
-        const parsed = await scanDocument(file, "auto");
-        if (parsed.doc_type !== "idcard") {
-          showAlert("warning", "المستند لا يبدو بطاقة شخصية — راجع الملف أو استعمل زرّ مسح الجواز");
-          return;
-        }
-        setForm(prev => ({
-          ...prev,
-          name_ar:     parsed.name_ar     || prev.name_ar,
-          short_ar:    parsed.name_ar     ? makeShort(parsed.name_ar) : prev.short_ar,
-          name_en:     parsed.name_en     || prev.name_en,
-          short_en:    parsed.name_en     ? makeShort(parsed.name_en) : prev.short_en,
-          national_id: parsed.national_id || prev.national_id,
-          id_expiry:   parsed.id_expiry   || prev.id_expiry,
-          nat:         parsed.nationality || prev.nat,
-          dob:         parsed.dob         || prev.dob,
-          gender:      parsed.gender      || prev.gender,
-        }));
-      } catch (e) {
-        console.error("تعذّرت قراءة بطاقة الإداري", e);
-        showAlert("error", e instanceof DocumentScanError ? e.message : "تعذّرت قراءة البطاقة — أدخل البيانات يدوياً");
-      } finally {
-        setScanning(false);
+  const handleScanId = (file: File) => {
+    setActiveDoc("idcard");
+    void docs.scan("idcard", file, f => scanDocument(f, "auto"), parsed => {
+      if (parsed.doc_type !== "idcard") {
+        showAlert("warning", "المستند لا يبدو بطاقة شخصية — راجع الملف أو استعمل زرّ مسح الجواز");
+        return;
       }
-    };
-    reader.onerror = () => { setScanning(false); showAlert("error", "تعذّرت قراءة الملف"); };
-    reader.readAsDataURL(file);
+      setForm(prev => ({
+        ...prev,
+        name_ar:     parsed.name_ar     || prev.name_ar,
+        short_ar:    parsed.name_ar     ? makeShort(parsed.name_ar) : prev.short_ar,
+        name_en:     parsed.name_en     || prev.name_en,
+        short_en:    parsed.name_en     ? makeShort(parsed.name_en) : prev.short_en,
+        national_id: parsed.national_id || prev.national_id,
+        id_expiry:   parsed.id_expiry   || prev.id_expiry,
+        nat:         parsed.nationality || prev.nat,
+        dob:         parsed.dob         || prev.dob,
+        gender:      parsed.gender      || prev.gender,
+      }));
+    }, "تعذّرت قراءة البطاقة — أدخل البيانات يدوياً");
   };
 
   // ============================================================
@@ -328,9 +303,9 @@ function AdminsPage({
   // ============================================================
   const resetModal = () => {
     setForm({ ...DEFAULT_FORM });
-    setPassportImg(null); setPassportFile(null);
-    setIdImg(null); setIdFile(null);
-    setScanning(false);
+    setInitialForm({ ...DEFAULT_FORM });
+    docs.reset();
+    setActiveDoc("passport");
     setEditTarget(null);
   };
 
@@ -338,16 +313,23 @@ function AdminsPage({
   const openEdit = (p: Passenger) => {
     resetModal();
     setEditTarget(p);
-    setForm({
+    const values = {
       name_ar: p.name_ar || "", name_en: p.name_en || "",
       short_ar: p.short_ar || "", short_en: p.short_en || "",
       passport: p.passport || "", national_id: p.national_id || "",
       nat: p.nat || "قطري", dob: p.dob || "", expiry: p.expiry || "",
       id_expiry: p.id_expiry || "", gender: p.gender || "ذكر", phone: p.phone || "",
       passenger_type: (p.passenger_type as AdminType) || "مشرف",
-    });
+    };
+    setForm(values);
+    setInitialForm(values);
+    /* المستندان المحفوظان يُعرضان للمراجعة — ولا يُمسّان إلا باستبدالٍ
+       أو تدويرٍ يُحفظ صراحةً */
+    docs.reset({ passport: p.passport_url ?? null, idcard: p.national_id_url ?? null });
     setShowModal(true);
   };
+  const closeModal = () => { setShowModal(false); resetModal(); };
+  const modalDirty = docs.docsDirty || (Object.keys(form) as (keyof typeof form)[]).some(k => form[k] !== initialForm[k]);
 
   // ============================================================
   // حفظ الإداري
@@ -386,10 +368,25 @@ function AdminsPage({
     /* الجواز والبطاقة المرفوعان من مودال الإنشاء/التعديل يمرّان بنفس
        ضمانات مودال المستندات: حفظ مُتحقَّق منه، وتنظيف الكائن إن فشل
        الحفظ، وحذف القديم بعد نجاح الجديد لا قبله. */
+    /* والتدويرُ يمرّ من هنا نفسه: ملفٌّ جديد يُرفع مدوَّراً، ومستندٌ
+       محفوظٌ دُوِّر يُقرأ ويُرفع **كائناً جديداً** — الأصلُ لا يُعدَّل في
+       مكانه، ولا يُحذف إلا بعد نجاح حفظ مرجع البديل. */
+    const docSource = async (slot: typeof docs.slots.passport): Promise<File | null> => {
+      if (slot.file) return slot.file;
+      if (!slot.turns || !slot.stored || storedDocMime(slot.stored) === "application/pdf") return null;
+      try { return await storedDocAsFile(slot.stored); }
+      catch (e) {
+        console.error("تعذّر تجهيز المستند المحفوظ لتدويره", e);
+        showAlert("warning", "تعذّر حفظ تدوير المستند المحفوظ — بقي كما كان");
+        return null;
+      }
+    };
     const commitScannedDocs = async (id: number, prev: Passenger | null): Promise<Record<string, string>> => {
       const uploaded: Record<string, string> = {};
-      if (passportFile) { const k = await uploadDoc(passportFile, id, "passport_doc"); if (k) uploaded.passport_url = k; }
-      if (idFile)       { const k = await uploadDoc(idFile,       id, "idcard");       if (k) uploaded.national_id_url = k; }
+      const passportSrc = await docSource(docs.slots.passport);
+      const idSrc = await docSource(docs.slots.idcard);
+      if (passportSrc) { const k = await uploadDoc(passportSrc, id, "passport_doc", docs.slots.passport.turns); if (k) uploaded.passport_url = k; }
+      if (idSrc)       { const k = await uploadDoc(idSrc,       id, "idcard",       docs.slots.idcard.turns);   if (k) uploaded.national_id_url = k; }
       const keys = Object.keys(uploaded);
       if (!keys.length) return {};
       if (!await writeOk(
@@ -440,8 +437,7 @@ function AdminsPage({
         setPassengers(prev => upsertPassenger(prev, newP));
         showAlert("success", "تمت إضافة الإداري بنجاح");
       }
-      setShowModal(false);
-      resetModal();
+      closeModal();
     } catch {
       showAlert("error", "حدث خطأ أثناء الحفظ");
     } finally {
@@ -747,116 +743,64 @@ function AdminsPage({
       {/* ============================================================ */}
       {/* مودال الإضافة / التعديل */}
       {/* ============================================================ */}
-      <Modal show={showModal} onClose={() => { if (!scanning) { setShowModal(false); resetModal(); } }} title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري"} maxWidth={(passportImg || idImg) ? 820 : 500}>
-        {/* المؤشّر على رأس المودال ومستقلّ عن الصورة عن قصد: كان
-            معلّقاً بظهور المعاينة، والمعاينة لا تظهر إلا بعد أن تنتهي
-            `FileReader` من قراءة الملف — ثوانٍ في صور الهاتف الكبيرة.
-            فكانت أطول لحظة انتظار هي بالضبط اللحظة التي لا مؤشّر
-            فيها. الآن يظهر مع أوّل نقرة ويبقى حتى نجاح أو خطأ. */}
-        {scanning && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--warning-bg)", border: "1px solid var(--warning)", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
-            <div style={{ width: 20, height: 20, border: "2.5px solid var(--line)", borderTopColor: "var(--warning)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite", flexShrink: 0 }} />
-            <div>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--warning)" }}>جارٍ قراءة المستند…</div>
-              <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>قد تستغرق القراءة بضع ثوانٍ — لا تغلق النافذة</div>
-            </div>
+      <RegistrationShell
+        show={showModal}
+        title={editTarget ? "تعديل بيانات الإداري" : "إضافة إداري"}
+        subtitle={editTarget ? "المستندات المحفوظة معروضة للمراجعة — الاستبدال والتدوير يُحفظان مع التعديل" : "ارفع الجواز أو البطاقة لقراءة البيانات تلقائياً، أو أدخلها يدوياً"}
+        dirty={modalDirty}
+        onDiscard={closeModal}
+        busy={saving}
+        status={(() => {
+          const s = docs.slots[activeDoc];
+          const other = docs.slots[activeDoc === "passport" ? "idcard" : "passport"];
+          const scanningLabel = docs.slots.passport.status === "scanning" ? "جارٍ قراءة الجواز…" : docs.slots.idcard.status === "scanning" ? "جارٍ قراءة البطاقة…" : null;
+          const failed = s.status === "failed" ? s : other.status === "failed" ? other : null;
+          const failedKey: DocSlotKey = failed === s ? activeDoc : (activeDoc === "passport" ? "idcard" : "passport");
+          return (scanningLabel || failed) ? (
+            <ScanStatusBar scanning={scanningLabel} error={failed?.error ?? null}
+              onRetry={failed?.file ? () => (failedKey === "passport" ? handleScanPassport : handleScanId)(failed.file!) : undefined} />
+          ) : null;
+        })()}
+        primary={{
+          label: saving ? "جاري الحفظ..." : scanning ? "جارٍ القراءة…" : (editTarget ? "حفظ التعديل" : "إضافة"),
+          onClick: saveAdmin,
+          disabled: saving || scanning,
+        }}
+        viewer={
+          <DocumentViewer active={activeDoc} onActiveChange={k => setActiveDoc(k as DocSlotKey)} docs={([
+            ["passport", "جواز السفر", "لا توجد صورة جواز", "رفع صورة الجواز", handleScanPassport],
+            ["idcard", "البطاقة", "لا توجد صورة بطاقة", "رفع صورة البطاقة", handleScanId],
+          ] as const).map(([key, label, emptyText, uploadLabel, scanFn]) => {
+            const slot = docs.slots[key];
+            return {
+              key, label, emptyText, uploadLabel,
+              file: slot.file, stored: slot.stored, version: slot.version, turns: slot.turns, status: slot.status,
+              onRotate: (d: 1 | -1) => docs.rotate(key, d),
+              /* الإنشاء: الملفّ يُقرأ كما كان. التعديل: استبدالٌ بلا قراءة —
+                 فلا تُكتب بيانات الإداري المحفوظة بما قرأه المستند. */
+              onReplace: editTarget ? (f: File) => docs.setFile(key, f) : scanFn,
+              accept: editTarget ? "image/*,application/pdf" : "image/*",
+            };
+          })} />
+        }
+      >
+        <IdentityFields form={form} onChange={(k, v) => setForm(prev => ({ ...prev, [k]: v }))} />
+        <FieldSection title="بيانات التسجيل">
+          <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginBottom: 6 }}>نوع الإداري</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {ADMIN_TYPES.map(t => {
+              const [bg, clr] = TYPE_COLORS[t];
+              const sel = form.passenger_type === t;
+              return (
+                <button type="button" key={t} aria-pressed={sel} onClick={() => setForm(f => ({ ...f, passenger_type: t }))}
+                  style={{ flex: 1, padding: "7px", borderRadius: 8, border: `1.5px solid ${sel ? clr : "var(--border)"}`, background: sel ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: sel ? clr : "var(--text-muted)", fontWeight: sel ? 700 : 400, fontFamily: "inherit" }}>
+                  {t}
+                </button>
+              );
+            })}
           </div>
-        )}
-        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-          {/* البيانات */}
-          <div style={{ flex: 1 }}>
-            {/* أزرار المسح */}
-            {!editTarget && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px", borderRadius: 8, border: "1.5px dashed var(--border)", cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-                  {scanning ? "جاري المسح..." : "مسح جواز السفر"}
-                  <input ref={passportInputRef} type="file" accept="image/*" style={{ display: "none" }} disabled={scanning} onChange={e => { const f = e.target.files?.[0]; if (f) handleScanPassport(f); e.target.value = ""; }} />
-                </label>
-                <label style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px", borderRadius: 8, border: "1.5px dashed var(--border)", cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                  {scanning ? "جاري المسح..." : "مسح البطاقة"}
-                  <input ref={idInputRef} type="file" accept="image/*" style={{ display: "none" }} disabled={scanning} onChange={e => { const f = e.target.files?.[0]; if (f) handleScanId(f); e.target.value = ""; }} />
-                </label>
-              </div>
-            )}
-
-            {/* نوع الإداري */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 6 }}>نوع الإداري</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {ADMIN_TYPES.map(t => {
-                  const [bg, clr] = TYPE_COLORS[t];
-                  const sel = form.passenger_type === t;
-                  return (
-                    <div key={t} onClick={() => setForm(f => ({ ...f, passenger_type: t }))}
-                      style={{ flex: 1, padding: "7px", borderRadius: 8, border: `1.5px solid ${sel ? clr : "var(--border)"}`, background: sel ? bg : "transparent", cursor: "pointer", textAlign: "center", fontSize: 12, color: sel ? clr : "var(--text-muted)", fontWeight: sel ? 700 : 400 }}>
-                      {t}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* الحقول */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-              {([
-                ["الاسم بالعربي *", "name_ar"],
-                ["الاسم بالإنجليزي", "name_en"],
-                ["المختصر عربي", "short_ar"],
-                ["المختصر إنجليزي", "short_en"],
-                ["رقم الجواز", "passport"],
-                ["رقم البطاقة", "national_id"],
-                ["الجنسية", "nat"],
-                ["رقم الهاتف", "phone"],
-                ["تاريخ الميلاد", "dob"],
-                ["انتهاء الجواز", "expiry"],
-                ["انتهاء البطاقة", "id_expiry"],
-              ] as [string, string][]).map(([label, key]) => (
-                <div key={key}>
-                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{label}</div>
-                  <input style={inp} value={(form as any)[key]} onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))} />
-                </div>
-              ))}
-              <div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div>
-                <select style={inp} value={form.gender} onChange={e => setForm(prev => ({ ...prev, gender: e.target.value }))}>
-                  <option value="ذكر">ذكر</option>
-                  <option value="أنثى">أنثى</option>
-                </select>
-              </div>
-            </div>
-
-            {/* أزرار الحفظ */}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={saveAdmin} disabled={saving || scanning} style={{ ...btnP({ flex: 1, opacity: (saving || scanning) ? 0.6 : 1 }) }}>
-                {saving ? "جاري الحفظ..." : scanning ? "جارٍ القراءة…" : (editTarget ? "حفظ التعديل" : "إضافة")}
-              </button>
-              <button onClick={() => { setShowModal(false); resetModal(); }} style={btnS()}>إلغاء</button>
-            </div>
-          </div>
-
-          {/* صور المستندات */}
-          {(passportImg || idImg) && (
-            <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {([["صورة الجواز", passportImg], ["صورة البطاقة", idImg]] as [string, string | null][]).map(([label, src]) => src && (
-                <div key={label}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--em7)", marginBottom: 6 }}>{label}</div>
-                  <div style={{ position: "relative", borderRadius: 8, overflow: "hidden" }}>
-                    <img src={src} alt={label} style={{ width: "100%", display: "block", border: "1px solid var(--border)", borderRadius: 8, filter: scanning ? "blur(2px)" : "none", transition: "filter 0.3s" }} />
-                    {scanning && (
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(125,31,60,0.15)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        <div style={{ width: 36, height: 36, border: "3px solid rgba(255,255,255,0.35)", borderTopColor: "var(--em7)", borderRadius: "50%", animation: "hajjSpin 0.8s linear infinite" }} />
-                        <span style={{ fontSize: 12, color: "var(--em7)", fontWeight: 600, background: "rgba(255,255,255,0.9)", padding: "4px 10px", borderRadius: 99 }}>جاري القراءة...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Modal>
+        </FieldSection>
+      </RegistrationShell>
 
       {/* ============================================================ */}
       {/* مودال التعيين */}

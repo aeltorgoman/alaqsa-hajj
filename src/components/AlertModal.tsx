@@ -190,6 +190,7 @@ function ConfirmModal({
 
   return (
     <div
+      data-confirm-dialog
       onClick={onCancel}
       style={{
         position: "fixed", inset: 0, zIndex: 10000,
