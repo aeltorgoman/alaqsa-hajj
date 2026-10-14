@@ -36,32 +36,68 @@ export function FieldSection({ title, children }: { title: string; children: Rea
   );
 }
 
-export function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+export function Field({ label, children, wide, review }: { label: string; children: ReactNode; wide?: boolean; review?: ReactNode }) {
   return (
-    <label className="regf-field" style={wide ? { gridColumn: "1 / -1" } : undefined}>
-      <span className="regf-label">{label}</span>
-      {children}
-    </label>
+    <div className={"regf-field" + (review ? " regf-review" : "")} style={wide ? { gridColumn: "1 / -1" } : undefined}>
+      <label className="regf-field-in">
+        <span className="regf-label">{label}</span>
+        {children}
+      </label>
+      {review}
+    </div>
+  );
+}
+
+/* ── مراجعة الاختلاف (التعديل فقط) ──
+   قراءةُ المستند البديل **اقتراحٌ** لا كتابة: الحقلُ يبقى على قيمته
+   المحفوظة حتى يقبل المستخدم القيمة المقترحة صراحةً أو يُبقي الحالية.
+   تمييزٌ ذهبيّ خفيف — والأحمر للأخطاء وحدها. */
+export type FieldProposal = { value: string };
+
+function ReviewBox({ label, proposed, current, onAccept, onKeep }: { label: string; proposed: string; current: string; onAccept: () => void; onKeep: () => void }) {
+  return (
+    <div className="regf-prop" role="group" aria-label={`قيمة مقترحة لـ ${label}`}>
+      <div className="regf-prop-row"><span className="regf-prop-k">المقترحة</span><b className="regf-prop-v">{proposed}</b></div>
+      <div className="regf-prop-row"><span className="regf-prop-k">الحالية</span><span className="regf-prop-v">{current || "— فارغة —"}</span></div>
+      <div className="regf-prop-actions">
+        <button type="button" className="regf-prop-btn ok" onClick={onAccept}>قبول المقترحة</button>
+        <button type="button" className="regf-prop-btn" onClick={onKeep}>إبقاء الحالية</button>
+      </div>
+    </div>
   );
 }
 
 /** الحقول المشتركة بين الحاجّ والإداري — بأسمائها ومواضعها في القاعدة كما هي. */
-export function IdentityFields<F extends IdentityForm>({ form, onChange, phoneLabel = "رقم الهاتف" }: {
+export function IdentityFields<F extends IdentityForm>({ form, onChange, phoneLabel = "رقم الهاتف", labels, proposals, onResolve }: {
   form: F;
   onChange: (key: keyof IdentityForm, value: string) => void;
   phoneLabel?: string;
+  /** تسمياتٌ تخصّ نافذةً بعينها (تبقى تسميات التعديل كما كانت) */
+  labels?: Partial<Record<keyof IdentityForm, string>>;
+  /** قيمٌ مقترحة من مستندٍ بديل — لا تُكتب في النموذج إلا بالقبول */
+  proposals?: Partial<Record<keyof IdentityForm, FieldProposal>>;
+  onResolve?: (key: keyof IdentityForm, accept: boolean) => void;
 }) {
-  const text = ([label, key]: [string, TextKey]) => (
-    <Field key={key} label={label}>
-      <input style={inp} value={form[key] ?? ""} onChange={e => onChange(key, e.target.value)} />
-    </Field>
-  );
+  const review = (key: keyof IdentityForm, label: string) => {
+    const p = proposals?.[key];
+    return p && onResolve
+      ? <ReviewBox label={label} proposed={p.value} current={form[key] ?? ""} onAccept={() => onResolve(key, true)} onKeep={() => onResolve(key, false)} />
+      : undefined;
+  };
+  const text = ([fallback, key]: [string, TextKey]) => {
+    const label = labels?.[key] ?? fallback;
+    return (
+      <Field key={key} label={label} review={review(key, label)}>
+        <input style={inp} value={form[key] ?? ""} onChange={e => onChange(key, e.target.value)} />
+      </Field>
+    );
+  };
   return (
     <>
       <FieldSection title="البيانات الشخصية">
         <div className="regf-grid">
           {PERSONAL.map(text)}
-          <Field label="الجنس">
+          <Field label="الجنس" review={review("gender", "الجنس")}>
             <select style={inp} value={form.gender} onChange={e => onChange("gender", e.target.value)}>
               <option value="ذكر">ذكر</option>
               <option value="أنثى">أنثى</option>
@@ -105,6 +141,16 @@ const FIELDS_CSS = `
 .regf-legend{width:100%;text-align:start;font-size:11.5px;font-weight:800;color:var(--primary);margin-bottom:8px;padding:0}
 .regf-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
 .regf-field{display:flex;flex-direction:column;min-width:0}
+.regf-field-in{display:flex;flex-direction:column;min-width:0}
+.regf-review{background:rgba(212,160,23,.07);border:1px solid rgba(201,168,76,.55);border-radius:10px;padding:6px 8px}
+.regf-prop{margin-top:6px;font-size:11px}
+.regf-prop-row{display:flex;gap:6px;align-items:baseline;line-height:1.6}
+.regf-prop-k{color:var(--text-muted);min-width:46px;font-size:10.5px}
+.regf-prop-v{color:var(--ink);word-break:break-word}
+.regf-prop-actions{display:flex;gap:6px;margin-top:5px}
+.regf-prop-btn{flex:1;padding:4px 6px;border-radius:7px;border:1px solid var(--line);background:var(--paper,#fff);color:var(--ink);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.regf-prop-btn.ok{border-color:#B8902F;color:#7a5a0f;background:rgba(212,160,23,.12)}
+.regf-prop-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
 .regf-label{font-size:10.5px;color:var(--text-muted);margin-bottom:3px}
 .regf-scan{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--primary)}
 .regf-scan.err{color:#B71C1C}
