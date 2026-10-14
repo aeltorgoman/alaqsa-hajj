@@ -23,7 +23,7 @@ import { PermitConfirmModal } from "./PermitConfirmModal";
 import { useDocSlots, type DocSlotKey } from "./registration/useDocSlots";
 import { DocumentViewer } from "./registration/DocumentViewer";
 import { RegistrationShell } from "./registration/RegistrationShell";
-import { FieldSection, IdentityFields, ScanStatusBar, type IdentityForm } from "./registration/RegistrationFields";
+import { FieldSection, IdentityFields, ScanStatusBar, type IdentityForm, type FieldProposal } from "./registration/RegistrationFields";
 import { namesClearlyDiffer, type PermitConfirmState } from "./permitMatch";
 
 const PERMIT_FIELD = "hajj_permit_url";
@@ -346,8 +346,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [editOriginal, setEditOriginal] = useState<Passenger | null>(null);
   const editDocs = useDocSlots();
   const [editActiveDoc, setEditActiveDoc] = useState<DocSlotKey>("passport");
-  type EditProposal = { value: string; source: DocSlotKey };
-  const [editProposals, setEditProposals] = useState<Partial<Record<keyof IdentityForm, EditProposal>>>({});
+  /* المقترحُ محفوظٌ لكلّ حقلٍ **ولكلّ مستند**: قراءةُ البطاقة لا تمحو
+     اقتراحَ الجواز للحقل نفسه، فيظهر الخلافُ بينهما ولا يضيع أحدهما صامتاً */
+  type EditProposals = Partial<Record<keyof IdentityForm, Partial<Record<DocSlotKey, string>>>>;
+  const [editProposals, setEditProposals] = useState<EditProposals>({});
   const [editSaving, setEditSaving] = useState(false);
   const openEdit = (p: Passenger) => {
     setEditing(p);
@@ -1583,18 +1585,26 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   /* ── مستندٌ بديل في التعديل: يُقرأ بوضعه المعتاد، ونتيجتُه **اقتراحات** ──
      الجواز يقترح بياناته، والبطاقة رقمَها وصلاحيتها (وضعا الإضافة نفسيهما).
      القيمة الفارغة لا تُقترح (لا مسحَ لمحفوظ)، وما يطابق الحالي لا يظهر. */
+  /* يُسقط اقتراحات مستندٍ واحد من كلّ الحقول، ويُبقي ما اقترحه الآخر */
+  const withoutSource = (prev: EditProposals, source: DocSlotKey): EditProposals => {
+    const next: EditProposals = {};
+    for (const [k, bySource] of Object.entries(prev) as [keyof IdentityForm, Partial<Record<DocSlotKey, string>>][]) {
+      const rest = { ...bySource }; delete rest[source];
+      if (Object.keys(rest).length) next[k] = rest;
+    }
+    return next;
+  };
   const proposeFromDoc = (source: DocSlotKey, values: Partial<Record<keyof IdentityForm, string>>) => {
     setEditProposals(prev => {
-      const next = Object.fromEntries(Object.entries(prev).filter(([, v]) => v?.source !== source)) as typeof prev;
+      const next = withoutSource(prev, source);
       for (const [k, v] of Object.entries(values) as [keyof IdentityForm, string][]) {
-        if (v && v.trim()) next[k] = { value: v.trim(), source };
+        if (v && v.trim()) next[k] = { ...next[k], [source]: v.trim() };
       }
       return next;
     });
   };
   /* قراءةٌ جديدة تُسقط اقتراحات المستند السابق من النوع نفسه — قبل أن تبدأ */
-  const dropProposals = (source: DocSlotKey) =>
-    setEditProposals(prev => Object.fromEntries(Object.entries(prev).filter(([, v]) => v?.source !== source)) as typeof prev);
+  const dropProposals = (source: DocSlotKey) => setEditProposals(prev => withoutSource(prev, source));
   const scanEditPassport = (file: File) => {
     setEditActiveDoc("passport");
     dropProposals("passport");
@@ -1618,14 +1628,28 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     dob: e.dob ?? "", expiry: e.expiry ?? "", id_expiry: e.id_expiry ?? "", gender: e.gender ?? "", phone: e.phone ?? "",
   });
   const normVal = (v: string) => v.trim().replace(/\s+/g, " ").toUpperCase();
-  /* المعروضُ للمراجعة: ما يختلف فعلاً عن قيمة النموذج الآن */
-  const visibleProposals = editing
-    ? Object.fromEntries(Object.entries(editProposals).filter(([k, v]) => v && normVal(v.value) !== normVal(editForm(editing)[k as keyof IdentityForm])))
-    : {};
+  /* المعروضُ للمراجعة: ما يختلف فعلاً عن قيمة النموذج الآن. ومستندان
+     اقترحا القيمةَ نفسها خيارٌ واحد؛ وقيمتان مختلفتان خياران بمصدرَيهما. */
+  const SOURCE_LABEL: Record<DocSlotKey, string> = { passport: "الجواز", idcard: "البطاقة" };
+  const visibleProposals: Partial<Record<keyof IdentityForm, FieldProposal>> = {};
+  if (editing) {
+    const current = editForm(editing);
+    for (const [k, bySource] of Object.entries(editProposals) as [keyof IdentityForm, Partial<Record<DocSlotKey, string>>][]) {
+      const options: FieldProposal["options"] = [];
+      for (const src of ["passport", "idcard"] as const) {
+        const v = bySource[src];
+        if (!v || normVal(v) === normVal(current[k])) continue;
+        const same = options.find(o => normVal(o.value) === normVal(v));
+        if (same) same.source = `${same.source} و${SOURCE_LABEL[src]}`;
+        else options.push({ source: SOURCE_LABEL[src], value: v });
+      }
+      if (options.length) visibleProposals[k] = { options };
+    }
+  }
   const pendingDiffs = Object.keys(visibleProposals).length;
-  const resolveProposal = (key: keyof IdentityForm, accept: boolean) => {
-    const prop = editProposals[key];
-    if (accept && prop && editing) setEditing({ ...editing, [key]: prop.value });
+  /* القبولُ والإبقاءُ يحسمان الحقلَ كلّه — من المستندين معاً */
+  const resolveProposal = (key: keyof IdentityForm, value: string | null) => {
+    if (value !== null && editing) setEditing({ ...editing, [key]: value });
     setEditProposals(prev => { const next = { ...prev }; delete next[key]; return next; });
   };
   const EDIT_KEYS = ["name_ar", "name_en", "short_ar", "short_en", "passport", "national_id", "nat", "dob", "expiry", "id_expiry", "gender", "phone", "requested_hotel_id"] as const;
@@ -1635,12 +1659,16 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   /* ── حفظ التعديل ──
      الترتيب مقصود، وكتابتان منفصلتان ليستا ذرّيتين:
-       ١) التحقّق: لا اختلافاتٍ معلّقة، ولا رقمَ جوازٍ أو بطاقةٍ تغيّر إلى رقم حاجٍّ آخر.
+       ١) التحقّق: لا اختلافاتٍ معلّقة، ولا رقمَ جوازٍ أو بطاقةٍ **تغيّر** إلى رقم
+          حاجٍّ آخر — في القائمة المحمَّلة، ثم باستعلامٍ في الموسم نفسه: القائمةُ قد
+          تكون ناقصة (حدُّ الصفوف، أو تعديلُ زميلٍ لم يصل بعد)، ولا قيدَ في القاعدة.
        ٢) رفعُ المستندات البديلة/المدوَّرة **أوّلاً** — كائناتٌ جديدة لا يشير إليها شيءٌ بعد.
-          أيُّ رفعٍ يفشل: يُحذف ما رُفع، ولا يُكتب شيء.
-       ٣) **تحديثٌ واحد** للصفّ يحمل الحقول ومراجعَ المستندات معاً — ذرّيٌّ على مستوى الصفّ.
-          فشله: يُحذف المرفوع الجديد، ويبقى الصفّ ومستنداته القديمة كما كانت.
-       ٤) بعد النجاح وحده يُحذف القديم. */
+       ٣) **تحديثٌ واحد** للصفّ يحمل الحقول ومراجعَ المستندات معاً، ويُعيد الصفَّ
+          المحدَّث: نجاحُ الطلب وحده لا يُثبت أنّ صفّ هذا الحاجّ تغيّر (صلاحيةٌ تحجبه
+          تُرجع نجاحاً بلا صفوف)، فلا يُعدّ حفظاً إلا بعودة صفّه بعينه.
+       ٤) بعد ثبوت الحفظ وحده: الحالةُ المحلية، ثم حذفُ القديم.
+     وأيُّ فشلٍ أو استثناءٍ قبل الثبوت = لم يُحفظ شيء: يُحذف المرفوعُ الجديد بأفضل جهد،
+     ويبقى الصفُّ ومراجعُه القديمة كما كانت، والنافذةُ مفتوحةً لإعادة المحاولة. */
   const saveEdit = async (p: Passenger) => {
     if (!assertWritable()) return;
     if (editSaving || editDocs.scanning) return;
@@ -1651,20 +1679,46 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     }
     const orig = editOriginal ?? p;
     const passportNow = (p.passport ?? "").trim(), idNow = (p.national_id ?? "").trim();
-    if (passportNow && passportNow !== (orig.passport ?? "").trim() && passengers.some(x => x.id !== p.id && (x.passport ?? "").trim() === passportNow)) {
+    const passportChanged = !!passportNow && passportNow !== (orig.passport ?? "").trim();
+    const idChanged = !!idNow && idNow !== (orig.national_id ?? "").trim();
+    if (passportChanged && passengers.some(x => x.id !== p.id && (x.passport ?? "").trim() === passportNow)) {
       showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return;
     }
-    if (idNow && idNow !== (orig.national_id ?? "").trim() && passengers.some(x => x.id !== p.id && (x.national_id ?? "").trim() === idNow)) {
+    if (idChanged && passengers.some(x => x.id !== p.id && (x.national_id ?? "").trim() === idNow)) {
       showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return;
     }
     setEditSaving(true);
     const uploaded: string[] = [];
-    const discard = async () => {
+    let committed = false;
+    /* تنظيفٌ بأفضل جهد: كلُّ حذفٍ وحده، ولا يُسقط استثناؤه ما بعده */
+    const discardUploaded = async () => {
       let failed = false;
-      for (const key of uploaded) if (!await removeDoc(key)) failed = true;
-      if (failed) showAlert("warning", "تعذّر حذف الملف المرفوع — أبلغ المسؤول التقني.");
+      for (const key of uploaded) {
+        try { if (!await removeDoc(key)) failed = true; }
+        catch (e) { failed = true; console.error("تعذّر حذف الملف المرفوع غير المحفوظ — كائن يتيم", { key, error: e }); }
+      }
+      if (failed) showAlert("warning", "تعذّر حذف ملفٍّ مرفوعٍ لم يُحفظ — أبلغ المسؤول التقني.");
     };
+    const notSaved = async (message: string) => { await discardUploaded(); showAlert("error", message); };
     try {
+      /* (١) التكرار في الموسم نفسه — لا عبر المواسم */
+      const takenInSeason = async (column: "passport" | "national_id", value: string): Promise<boolean | null> => {
+        const { data, error } = await supabase.from("passengers").select("id")
+          .eq("season_id", viewedSeason.id).eq(column, value).neq("id", p.id).limit(1);
+        if (error || !data) return null;
+        return data.length > 0;
+      };
+      for (const [changed, column, value, dupMessage, label] of [
+        [passportChanged, "passport", passportNow, "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر", "رقم الجواز"],
+        [idChanged, "national_id", idNow, "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر", "رقم البطاقة"],
+      ] as const) {
+        if (!changed) continue;
+        const taken = await takenInSeason(column, value);
+        if (taken === null) { showAlert("error", `تعذّر التحقق من عدم تكرار ${label} — لم يُحفظ أي تغيير، حاول مرة أخرى`); return; }
+        if (taken) { showAlert("warning", dupMessage); return; }
+      }
+
+      /* (٢) الرفع أوّلاً */
       const docUpdates: { passport_url?: string; national_id_url?: string } = {};
       for (const [slotKey, field, docType] of [["passport", "passport_url", "passport_doc"], ["idcard", "national_id_url", "idcard"]] as const) {
         const slot = editDocs.slots[slotKey];
@@ -1673,19 +1727,20 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           try { src = await storedDocAsFile(slot.stored); }
           catch (e) {
             console.error("تعذّر تجهيز المستند المحفوظ لتدويره", e);
-            await discard();
-            showAlert("error", "تعذّر تجهيز صورة المستند المحفوظ للتدوير — لم يُحفظ أي تغيير"); return;
+            await notSaved("تعذّر تجهيز صورة المستند المحفوظ للتدوير — لم يُحفظ أي تغيير"); return;
           }
         }
         if (!src) continue;
         const key = await uploadDoc(src, p.id, docType, slot.turns);
-        if (!key) { await discard(); showAlert("error", "فشل رفع المستند — لم يُحفظ أي تغيير، يرجى المحاولة مرة أخرى"); return; }
+        if (!key) { await notSaved("فشل رفع المستند — لم يُحفظ أي تغيير، يرجى المحاولة مرة أخرى"); return; }
         uploaded.push(key);
         docUpdates[field] = key;
       }
+
+      /* (٣) تحديثٌ واحد، وبرهانُه عودةُ صفّ هذا الحاجّ */
       const updated_at = new Date().toISOString();
       const updated_by = currentUser?.name || null;
-      const { error } = await supabase.from("passengers").update({
+      const { data: rows, error } = await supabase.from("passengers").update({
         name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
         passport: p.passport, national_id: p.national_id, nat: p.nat,
         dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
@@ -1697,16 +1752,27 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         requested_hotel_id: p.requested_hotel_id ?? null,
         ...docUpdates,
         updated_by, updated_at
-      }).eq("id", p.id);
-      if (error) {
-        await discard();
-        showAlert("error", "حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return;
+      }).eq("id", p.id).select("id");
+      if (error || !rows || rows.length !== 1 || rows[0].id !== p.id) {
+        if (!error) console.error("حفظ التعديل لم يمسّ صفّ الحاجّ", { id: p.id, rows });
+        await notSaved("حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return;
       }
+      committed = true;
+
+      /* (٤) بعد ثبوت الحفظ وحده */
       const updatedP = { ...p, ...docUpdates, updated_by, updated_at };
       setPassengers(prev => prev.map(x => x.id === p.id ? updatedP : x));
       closeEdit(); setSelected(updatedP);
-      /* المستندُ القديم — بعد نجاح حفظ مرجع البديل وحده */
+      /* المستندُ القديم — بعد ثبوت مرجع البديل وحده */
       if (Object.keys(docUpdates).length) await purgeSupersededDocs(p, docUpdates as Partial<Passenger>);
+    } catch (e) {
+      console.error("استثناءٌ أثناء حفظ تعديل الحاجّ", { id: p.id, committed, error: e });
+      if (committed) {
+        /* الصفُّ حُفظ وثبت — ما فشل بعده تنظيفٌ لا حفظ */
+        showAlert("warning", "حُفظت التعديلات، وتعذّر حذف المستند القديم من التخزين — أبلغ المسؤول التقني.");
+      } else {
+        await notSaved("حدث خطأ غير متوقَّع — لم يُحفظ أي تغيير، يرجى المحاولة مرة أخرى");
+      }
     } finally {
       setEditSaving(false);
     }

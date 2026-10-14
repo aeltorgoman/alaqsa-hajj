@@ -52,15 +52,30 @@ export function Field({ label, children, wide, review }: { label: string; childr
    قراءةُ المستند البديل **اقتراحٌ** لا كتابة: الحقلُ يبقى على قيمته
    المحفوظة حتى يقبل المستخدم القيمة المقترحة صراحةً أو يُبقي الحالية.
    تمييزٌ ذهبيّ خفيف — والأحمر للأخطاء وحدها. */
-export type FieldProposal = { value: string };
+/* وإن اقترح المستندان قيمتين مختلفتين للحقل نفسه (رقم البطاقة من الجواز
+   ومن البطاقة) تظهران معاً بمصدرَيهما — لا تحلّ إحداهما محلّ الأخرى صامتةً،
+   والاختيار للمستخدم. */
+export type FieldProposal = { options: { source: string; value: string }[] };
 
-function ReviewBox({ label, proposed, current, onAccept, onKeep }: { label: string; proposed: string; current: string; onAccept: () => void; onKeep: () => void }) {
+function ReviewBox({ label, proposal, current, onAccept, onKeep }: { label: string; proposal: FieldProposal; current: string; onAccept: (value: string) => void; onKeep: () => void }) {
+  const single = proposal.options.length === 1;
   return (
     <div className="regf-prop" role="group" aria-label={`قيمة مقترحة لـ ${label}`}>
-      <div className="regf-prop-row"><span className="regf-prop-k">المقترحة</span><b className="regf-prop-v">{proposed}</b></div>
+      {single
+        ? <div className="regf-prop-row"><span className="regf-prop-k">المقترحة</span><b className="regf-prop-v">{proposal.options[0].value}</b></div>
+        : <>
+            <div className="regf-prop-note">المستندان يقترحان قيمتين مختلفتين — اختر إحداهما أو أبقِ الحالية</div>
+            {proposal.options.map(o => (
+              <div key={o.source} className="regf-prop-row"><span className="regf-prop-k">{o.source}</span><b className="regf-prop-v">{o.value}</b></div>
+            ))}
+          </>}
       <div className="regf-prop-row"><span className="regf-prop-k">الحالية</span><span className="regf-prop-v">{current || "— فارغة —"}</span></div>
       <div className="regf-prop-actions">
-        <button type="button" className="regf-prop-btn ok" onClick={onAccept}>قبول المقترحة</button>
+        {single
+          ? <button type="button" className="regf-prop-btn ok" onClick={() => onAccept(proposal.options[0].value)}>قبول المقترحة</button>
+          : proposal.options.map(o => (
+              <button key={o.source} type="button" className="regf-prop-btn ok" onClick={() => onAccept(o.value)}>قبول قيمة {o.source}</button>
+            ))}
         <button type="button" className="regf-prop-btn" onClick={onKeep}>إبقاء الحالية</button>
       </div>
     </div>
@@ -76,12 +91,13 @@ export function IdentityFields<F extends IdentityForm>({ form, onChange, phoneLa
   labels?: Partial<Record<keyof IdentityForm, string>>;
   /** قيمٌ مقترحة من مستندٍ بديل — لا تُكتب في النموذج إلا بالقبول */
   proposals?: Partial<Record<keyof IdentityForm, FieldProposal>>;
-  onResolve?: (key: keyof IdentityForm, accept: boolean) => void;
+  /** `value` = القيمة المقبولة؛ `null` = إبقاء الحالية */
+  onResolve?: (key: keyof IdentityForm, value: string | null) => void;
 }) {
   const review = (key: keyof IdentityForm, label: string) => {
     const p = proposals?.[key];
     return p && onResolve
-      ? <ReviewBox label={label} proposed={p.value} current={form[key] ?? ""} onAccept={() => onResolve(key, true)} onKeep={() => onResolve(key, false)} />
+      ? <ReviewBox label={label} proposal={p} current={form[key] ?? ""} onAccept={v => onResolve(key, v)} onKeep={() => onResolve(key, null)} />
       : undefined;
   };
   const text = ([fallback, key]: [string, TextKey]) => {
@@ -145,9 +161,10 @@ const FIELDS_CSS = `
 .regf-review{background:rgba(212,160,23,.07);border:1px solid rgba(201,168,76,.55);border-radius:10px;padding:6px 8px}
 .regf-prop{margin-top:6px;font-size:11px}
 .regf-prop-row{display:flex;gap:6px;align-items:baseline;line-height:1.6}
-.regf-prop-k{color:var(--text-muted);min-width:46px;font-size:10.5px}
+.regf-prop-k{color:var(--text-muted);min-width:46px;font-size:10.5px;white-space:nowrap}
 .regf-prop-v{color:var(--ink);word-break:break-word}
-.regf-prop-actions{display:flex;gap:6px;margin-top:5px}
+.regf-prop-actions{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+.regf-prop-note{font-size:10.5px;color:#7a5a0f;font-weight:700;margin-bottom:2px}
 .regf-prop-btn{flex:1;padding:4px 6px;border-radius:7px;border:1px solid var(--line);background:var(--paper,#fff);color:var(--ink);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer}
 .regf-prop-btn.ok{border-color:#B8902F;color:#7a5a0f;background:rgba(212,160,23,.12)}
 .regf-prop-btn:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
