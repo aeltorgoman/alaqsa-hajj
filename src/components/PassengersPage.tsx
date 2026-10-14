@@ -23,7 +23,7 @@ import { PermitConfirmModal } from "./PermitConfirmModal";
 import { useDocSlots, type DocSlotKey } from "./registration/useDocSlots";
 import { DocumentViewer } from "./registration/DocumentViewer";
 import { RegistrationShell } from "./registration/RegistrationShell";
-import { FieldSection, IdentityFields, ScanStatusBar } from "./registration/RegistrationFields";
+import { FieldSection, IdentityFields, ScanStatusBar, type IdentityForm } from "./registration/RegistrationFields";
 import { namesClearlyDiffer, type PermitConfirmState } from "./permitMatch";
 
 const PERMIT_FIELD = "hajj_permit_url";
@@ -340,10 +340,23 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
   const [editing, setEditing] = useState<Passenger | null>(null);
-  /* تدويرُ صورة الجواز المحفوظة في نافذة التعديل — يبدأ صفراً مع كلّ فتح */
-  const [editPassportTurns, setEditPassportTurns] = useState(0);
-  const [editWasOpen, setEditWasOpen] = useState(false);
-  if (!!editing !== editWasOpen) { setEditWasOpen(!!editing); setEditPassportTurns(0); }
+  /* نافذة التعديل — ما فُتحت عليه (للمقارنة والتحقّق)، ومستنداها،
+     والقيمُ المقترحة من مستندٍ بديل. المقترحُ لا يدخل النموذج إلا
+     بقبولٍ صريح، فالقيمُ المحفوظة باقية حتى يقرّر المستخدم. */
+  const [editOriginal, setEditOriginal] = useState<Passenger | null>(null);
+  const editDocs = useDocSlots();
+  const [editActiveDoc, setEditActiveDoc] = useState<DocSlotKey>("passport");
+  type EditProposal = { value: string; source: DocSlotKey };
+  const [editProposals, setEditProposals] = useState<Partial<Record<keyof IdentityForm, EditProposal>>>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const openEdit = (p: Passenger) => {
+    setEditing(p);
+    setEditOriginal(p);
+    editDocs.reset({ passport: p.passport_url ?? null, idcard: p.national_id_url ?? null });
+    setEditActiveDoc("passport");
+    setEditProposals({});
+  };
+  const closeEdit = () => { setEditing(null); setEditOriginal(null); editDocs.reset(); setEditProposals({}); };
   /* `null` = لم يختر الموظّف بعد، فيُشتقّ من المرحلة. اشتقاقٌ لا
      أثرٌ جانبيّ: لا setState داخل effect ولا وميضُ تبويبٍ خاطئ. */
   const [opsTabPick, setOpsTabPick] = useState<"reg" | "dist" | "travel" | null>(null);
@@ -1105,11 +1118,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       /* نافذة الإضافة تملك Escape وسؤالَ الإغلاق بنفسها — لا سؤالَ ثانٍ
          هنا، ولا يُغلق ما خلفها (ملفّ الحاجّ) */
       if (showManual) return;
-      if (editing) {
-        const ok = await confirmAction("هل تريد الإغلاق؟ ستفقد التعديلات غير المحفوظة.", { title: "إغلاق النموذج" });
-        if (ok) setEditing(null);
-        return;
-      }
+      /* نافذة التعديل كذلك تملك Escape وسؤالَ الإغلاق بنفسها */
+      if (editing) return;
       if (selected) { setSelected(null); return; }
     };
     document.addEventListener("keydown", h);
@@ -1570,50 +1580,136 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     if (!newNum || newNum < 1) return;
     await reorderHajj(ordered => moveWithin(ordered, p.id, newNum - 1));
   };
+  /* ── مستندٌ بديل في التعديل: يُقرأ بوضعه المعتاد، ونتيجتُه **اقتراحات** ──
+     الجواز يقترح بياناته، والبطاقة رقمَها وصلاحيتها (وضعا الإضافة نفسيهما).
+     القيمة الفارغة لا تُقترح (لا مسحَ لمحفوظ)، وما يطابق الحالي لا يظهر. */
+  const proposeFromDoc = (source: DocSlotKey, values: Partial<Record<keyof IdentityForm, string>>) => {
+    setEditProposals(prev => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([, v]) => v?.source !== source)) as typeof prev;
+      for (const [k, v] of Object.entries(values) as [keyof IdentityForm, string][]) {
+        if (v && v.trim()) next[k] = { value: v.trim(), source };
+      }
+      return next;
+    });
+  };
+  /* قراءةٌ جديدة تُسقط اقتراحات المستند السابق من النوع نفسه — قبل أن تبدأ */
+  const dropProposals = (source: DocSlotKey) =>
+    setEditProposals(prev => Object.fromEntries(Object.entries(prev).filter(([, v]) => v?.source !== source)) as typeof prev);
+  const scanEditPassport = (file: File) => {
+    setEditActiveDoc("passport");
+    dropProposals("passport");
+    void editDocs.scan("passport", file, f => scanDocument(f, "passport"), parsed => proposeFromDoc("passport", {
+      name_en: parsed.name_en, short_en: parsed.name_en ? makeShort(parsed.name_en) : "",
+      name_ar: parsed.name_ar, short_ar: parsed.name_ar ? makeShort(parsed.name_ar) : "",
+      passport: parsed.passport, national_id: parsed.national_id, nat: parsed.nationality,
+      dob: parsed.dob, expiry: parsed.expiry, gender: parsed.gender,
+    }), "تعذّرت قراءة الجواز — البيانات المحفوظة لم تتغيّر، ويمكنك التعديل يدوياً");
+  };
+  const scanEditId = (file: File) => {
+    setEditActiveDoc("idcard");
+    dropProposals("idcard");
+    void editDocs.scan("idcard", file, f => scanDocument(f, "idcard"), parsed => proposeFromDoc("idcard", {
+      national_id: parsed.national_id, id_expiry: parsed.id_expiry,
+    }), "تعذّرت قراءة البطاقة — البيانات المحفوظة لم تتغيّر، ويمكنك التعديل يدوياً");
+  };
+  const editForm = (e: Passenger): IdentityForm => ({
+    name_ar: e.name_ar ?? "", name_en: e.name_en ?? "", short_ar: e.short_ar ?? "", short_en: e.short_en ?? "",
+    passport: e.passport ?? "", national_id: e.national_id ?? "", nat: e.nat ?? "",
+    dob: e.dob ?? "", expiry: e.expiry ?? "", id_expiry: e.id_expiry ?? "", gender: e.gender ?? "", phone: e.phone ?? "",
+  });
+  const normVal = (v: string) => v.trim().replace(/\s+/g, " ").toUpperCase();
+  /* المعروضُ للمراجعة: ما يختلف فعلاً عن قيمة النموذج الآن */
+  const visibleProposals = editing
+    ? Object.fromEntries(Object.entries(editProposals).filter(([k, v]) => v && normVal(v.value) !== normVal(editForm(editing)[k as keyof IdentityForm])))
+    : {};
+  const pendingDiffs = Object.keys(visibleProposals).length;
+  const resolveProposal = (key: keyof IdentityForm, accept: boolean) => {
+    const prop = editProposals[key];
+    if (accept && prop && editing) setEditing({ ...editing, [key]: prop.value });
+    setEditProposals(prev => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const EDIT_KEYS = ["name_ar", "name_en", "short_ar", "short_en", "passport", "national_id", "nat", "dob", "expiry", "id_expiry", "gender", "phone", "requested_hotel_id"] as const;
+  const editDirty = !!editing && !!editOriginal && (editDocs.docsDirty
+    || EDIT_KEYS.some(k => (editing[k] ?? "") !== (editOriginal[k] ?? ""))
+    || JSON.stringify(editing.services ?? {}) !== JSON.stringify(editOriginal.services ?? {}));
+
+  /* ── حفظ التعديل ──
+     الترتيب مقصود، وكتابتان منفصلتان ليستا ذرّيتين:
+       ١) التحقّق: لا اختلافاتٍ معلّقة، ولا رقمَ جوازٍ أو بطاقةٍ تغيّر إلى رقم حاجٍّ آخر.
+       ٢) رفعُ المستندات البديلة/المدوَّرة **أوّلاً** — كائناتٌ جديدة لا يشير إليها شيءٌ بعد.
+          أيُّ رفعٍ يفشل: يُحذف ما رُفع، ولا يُكتب شيء.
+       ٣) **تحديثٌ واحد** للصفّ يحمل الحقول ومراجعَ المستندات معاً — ذرّيٌّ على مستوى الصفّ.
+          فشله: يُحذف المرفوع الجديد، ويبقى الصفّ ومستنداته القديمة كما كانت.
+       ٤) بعد النجاح وحده يُحذف القديم. */
   const saveEdit = async (p: Passenger) => {
     if (!assertWritable()) return;
-    const updated_at = new Date().toISOString();
-    const updated_by = currentUser?.name || null;
-    const { error } = await supabase.from("passengers").update({
-      name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
-      passport: p.passport, national_id: p.national_id, nat: p.nat,
-      dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
-      bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
-      camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
-      /* الفندقُ المطلوب يتغيّر من هنا وحده — لا يمسّه نقلٌ ولا تسكين. */
-      requested_hotel_id: p.requested_hotel_id ?? null,
-      updated_by, updated_at
-    }).eq("id", p.id);
-    if (error) { showAlert("error", "حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return; }
-    const updatedP = { ...p, updated_by, updated_at };
-    setPassengers(prev => prev.map(x => x.id === p.id ? updatedP : x));
-    setEditing(null); setSelected(updatedP);
-    if (editPassportTurns % 4 !== 0) await persistPassportRotation(updatedP, editPassportTurns);
-  };
-
-  /* تدويرُ جوازٍ محفوظ — بعد نجاح حفظ الحقول، وبالضمانات نفسها لكلّ
-     استبدالٍ في هذه الصفحة: يُرفع **كائنٌ جديد** مدوَّراً، ثم يُحفظ مرجعه،
-     ولا يُحذف القديم إلا بعد نجاح الحفظ؛ وإن فشل حُذف الجديد وبقي القديم
-     ومرجعه كما كانا. الأصلُ لا يُعدَّل في مكانه أبداً، والـPDF لا يُدوَّر. */
-  const persistPassportRotation = async (p: Passenger, turns: number) => {
-    const oldKey = (p as { passport_url?: string | null }).passport_url;
-    if (!oldKey || storedDocMime(oldKey) === "application/pdf") return;
-    let newKey: string | null = null;
-    try {
-      newKey = await uploadDoc(await storedDocAsFile(oldKey), p.id, "passport_doc", turns);
-    } catch (e) {
-      console.error("تعذّر تجهيز صورة الجواز المحفوظة لتدويرها", e);
-    }
-    if (!newKey) { showAlert("warning", "حُفظت البيانات، وتعذّر حفظ تدوير صورة الجواز — بقيت كما كانت"); return; }
-    const updates = { passport_url: newKey } as Partial<Passenger>;
-    if (!await writeOk(supabase.from("passengers").update(updates as TablesUpdate<"passengers">).eq("id", p.id),
-      "حُفظت البيانات، وتعذّر حفظ تدوير صورة الجواز — بقيت كما كانت")) {
-      await discardUnsavedDocs(p, updates);
+    if (editSaving || editDocs.scanning) return;
+    if (pendingDiffs > 0) {
+      showAlert("warning", `قيمٌ مقترحة من المستند البديل لم تُراجع (${pendingDiffs}) — اقبل المقترحة أو أبقِ الحالية لكلّ حقلٍ مميَّز قبل الحفظ`);
+      document.querySelector(".regs .regf-review")?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
-    setPassengers(prev => prev.map(x => x.id === p.id ? { ...x, ...updates } : x));
-    setSelected(cur => cur && cur.id === p.id ? { ...cur, ...updates } : cur);
-    await purgeSupersededDocs(p, updates);
+    const orig = editOriginal ?? p;
+    const passportNow = (p.passport ?? "").trim(), idNow = (p.national_id ?? "").trim();
+    if (passportNow && passportNow !== (orig.passport ?? "").trim() && passengers.some(x => x.id !== p.id && (x.passport ?? "").trim() === passportNow)) {
+      showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return;
+    }
+    if (idNow && idNow !== (orig.national_id ?? "").trim() && passengers.some(x => x.id !== p.id && (x.national_id ?? "").trim() === idNow)) {
+      showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return;
+    }
+    setEditSaving(true);
+    const uploaded: string[] = [];
+    const discard = async () => {
+      let failed = false;
+      for (const key of uploaded) if (!await removeDoc(key)) failed = true;
+      if (failed) showAlert("warning", "تعذّر حذف الملف المرفوع — أبلغ المسؤول التقني.");
+    };
+    try {
+      const docUpdates: { passport_url?: string; national_id_url?: string } = {};
+      for (const [slotKey, field, docType] of [["passport", "passport_url", "passport_doc"], ["idcard", "national_id_url", "idcard"]] as const) {
+        const slot = editDocs.slots[slotKey];
+        let src: File | null = slot.file;
+        if (!src && slot.turns && slot.stored && storedDocMime(slot.stored) !== "application/pdf") {
+          try { src = await storedDocAsFile(slot.stored); }
+          catch (e) {
+            console.error("تعذّر تجهيز المستند المحفوظ لتدويره", e);
+            await discard();
+            showAlert("error", "تعذّر تجهيز صورة المستند المحفوظ للتدوير — لم يُحفظ أي تغيير"); return;
+          }
+        }
+        if (!src) continue;
+        const key = await uploadDoc(src, p.id, docType, slot.turns);
+        if (!key) { await discard(); showAlert("error", "فشل رفع المستند — لم يُحفظ أي تغيير، يرجى المحاولة مرة أخرى"); return; }
+        uploaded.push(key);
+        docUpdates[field] = key;
+      }
+      const updated_at = new Date().toISOString();
+      const updated_by = currentUser?.name || null;
+      const { error } = await supabase.from("passengers").update({
+        name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
+        passport: p.passport, national_id: p.national_id, nat: p.nat,
+        dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
+        /* صلاحيةُ البطاقة صارت حقلاً في النافذة — تُراجَع من البطاقة البديلة */
+        id_expiry: p.id_expiry ?? null,
+        bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
+        camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
+        /* الفندقُ المطلوب يتغيّر من هنا وحده — لا يمسّه نقلٌ ولا تسكين. */
+        requested_hotel_id: p.requested_hotel_id ?? null,
+        ...docUpdates,
+        updated_by, updated_at
+      }).eq("id", p.id);
+      if (error) {
+        await discard();
+        showAlert("error", "حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return;
+      }
+      const updatedP = { ...p, ...docUpdates, updated_by, updated_at };
+      setPassengers(prev => prev.map(x => x.id === p.id ? updatedP : x));
+      closeEdit(); setSelected(updatedP);
+      /* المستندُ القديم — بعد نجاح حفظ مرجع البديل وحده */
+      if (Object.keys(docUpdates).length) await purgeSupersededDocs(p, docUpdates as Partial<Passenger>);
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   return (
@@ -1893,7 +1989,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                       </div>
                     </div>
-                    <div onClick={e => { e.stopPropagation(); setEditing(p); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
+                    <div onClick={e => { e.stopPropagation(); openEdit(p); }} style={{ ...roOff, width: 28, height: 28, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--muted)", transition: "var(--transition)" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "var(--ivory2)"; e.currentTarget.style.color = "var(--em7)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2057,7 +2153,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     ))}
                     <td style={{ padding: "5px 10px", borderBottom: "1px solid var(--line)", borderLeft: "0.5px solid var(--line)", textAlign: "center" }}>
                       <div style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-                        <button disabled={readOnly} onClick={e => { e.stopPropagation(); setEditing(p); }} title="تعديل"
+                        <button disabled={readOnly} onClick={e => { e.stopPropagation(); openEdit(p); }} title="تعديل"
                           style={{ ...roOff, width: 30, height: 30, borderRadius: 9, border: "none", background: "#BBDEFB", cursor: "pointer", color: "#0D47A1", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}
                           onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#0D47A1"; b.style.color = "#fff"; b.style.transform = "scale(1.08)"; }}
                           onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "#BBDEFB"; b.style.color = "#0D47A1"; b.style.transform = "scale(1)"; }}>
@@ -2484,7 +2580,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
             </div>
           )}
           <div style={{ display: "flex", gap: 6 }}>
-            <button disabled={readOnly} onClick={() => setEditing(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), ...roOff, flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
+            <button disabled={readOnly} onClick={() => openEdit(selected)} style={{ ...btnP({ background: "var(--male-bg)", color: "var(--info)" }), ...roOff, flex: 1 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> تعديل</button>
             <button onClick={async () => { void requestDeleteP(selected); }} style={{ ...roOff, background: "var(--female-bg)", border: "none", padding: "7px 12px", borderRadius: 8, fontSize: 11, cursor: "pointer", color: "var(--danger)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
           </div>
           <button onClick={() => {
@@ -2575,15 +2671,61 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         <button onClick={() => setShowLinkFamily(false)} style={{ ...btnS(), width: "100%", marginTop: 10 }}>إلغاء</button>
       </Modal>
 
-      <Modal show={!!editing} onClose={() => setEditing(null)} title="تعديل بيانات الحاج" maxWidth={900}>
+      <RegistrationShell
+        show={!!editing}
+        title="تعديل بيانات الحاج"
+        subtitle="المستندات المحفوظة معروضة — استبدال الجواز أو البطاقة يقرؤه ويعرض الاختلافات لتراجعها قبل الحفظ"
+        dirty={editDirty}
+        onDiscard={closeEdit}
+        busy={editSaving}
+        status={(() => {
+          const scanningLabel = editDocs.slots.passport.status === "scanning" ? "جارٍ قراءة الجواز…" : editDocs.slots.idcard.status === "scanning" ? "جارٍ قراءة البطاقة…" : null;
+          const failedKey: DocSlotKey | null = editDocs.slots[editActiveDoc].status === "failed" ? editActiveDoc
+            : (["passport", "idcard"] as const).find(k => editDocs.slots[k].status === "failed") ?? null;
+          const failed = failedKey ? editDocs.slots[failedKey] : null;
+          if (scanningLabel || failed) return (
+            <ScanStatusBar scanning={scanningLabel} error={failed?.error ?? null}
+              onRetry={failedKey && failed?.file ? () => (failedKey === "passport" ? scanEditPassport : scanEditId)(failed.file!) : undefined} />
+          );
+          return pendingDiffs > 0 ? (
+            <div role="status" style={{ fontSize: 12, color: "#7a5a0f", fontWeight: 700 }}>
+              {pendingDiffs} {pendingDiffs === 1 ? "قيمة مقترحة" : "قيم مقترحة"} من المستند البديل — راجع الحقول المميَّزة: اقبل المقترحة أو أبقِ الحالية
+            </div>
+          ) : null;
+        })()}
+        primary={{
+          label: editSaving ? "جاري الحفظ..." : editDocs.scanning ? "جارٍ القراءة…" : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ التعديلات</>,
+          onClick: () => { if (editing) void saveEdit(editing); },
+          disabled: editSaving || editDocs.scanning,
+        }}
+        viewer={
+          <DocumentViewer active={editActiveDoc} onActiveChange={k => setEditActiveDoc(k as DocSlotKey)} docs={([
+            ["passport", "جواز السفر", "لا تتوفر صورة جواز", "رفع صورة الجواز", scanEditPassport],
+            ["idcard", "البطاقة الشخصية", "لا تتوفر صورة بطاقة", "رفع صورة البطاقة", scanEditId],
+          ] as const).map(([key, label, emptyText, uploadLabel, scanFn]) => {
+            const slot = editDocs.slots[key];
+            return {
+              key, label, emptyText, uploadLabel,
+              file: slot.file, stored: slot.stored, version: slot.version, turns: slot.turns, status: slot.status,
+              onRotate: (d: 1 | -1) => editDocs.rotate(key, d),
+              onReplace: scanFn, accept: "image/*,application/pdf",
+            };
+          })} />
+        }
+      >
         {editing && (
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 400px", minWidth: 0 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-              {[["الاسم بالعربي", "name_ar"], ["الاسم بالإنجليزي", "name_en"], ["المختصر عربي", "short_ar"], ["المختصر إنجليزي", "short_en"], ["رقم الجواز", "passport"], ["الرقم الشخصي", "national_id"], ["الجنسية", "nat"], ["التليفون", "phone"], ["تاريخ الميلاد", "dob"], ["انتهاء الجواز", "expiry"]].map(([l, k]) => (
-                <div key={k as string}><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{l as string}</div><input style={inp} value={(editing as any)[k as string] || ""} onChange={e => setEditing({ ...editing, [k as string]: e.target.value })} /></div>
-              ))}
-              <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الجنس</div><select style={inp} value={editing.gender} onChange={e => setEditing({ ...editing, gender: e.target.value })}><option value="ذكر">ذكر</option><option value="أنثى">أنثى</option></select></div>
+          <>
+            <IdentityFields form={editForm(editing)} phoneLabel="التليفون"
+              labels={{ name_ar: "الاسم بالعربي", national_id: "الرقم الشخصي" }}
+              proposals={visibleProposals}
+              onResolve={resolveProposal}
+              onChange={(k, v) => {
+                setEditing({ ...editing, [k]: v });
+                /* تعديلٌ يدويّ قرارٌ صريح — يُسقط المقترحَ على الحقل نفسه */
+                setEditProposals(prev => { if (!prev[k]) return prev; const next = { ...prev }; delete next[k]; return next; });
+              }} />
+            <FieldSection title="بيانات التسجيل">
+              <div className="regf-grid" style={{ marginBottom: 12 }}>
               {/* سجلٌّ قديمٌ بلا فندقٍ مطلوب يبقى كما هو حتى يُختار له — فلا
                   يُمنع تعديلُ حقلٍ آخر، ولا يُفرَّغ فندقٌ اختير من قبل. */}
               <div><div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>الفندق المطلوب</div>
@@ -2593,7 +2735,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                   {seasonHotels.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                 </select>
               </div>
-            </div>
+              </div>
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 500, marginBottom: 8 }}>الخدمات المطلوبة</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -2606,25 +2748,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                 ))}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => saveEdit(editing)} style={{ ...btnP(), flex: 1 }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ</button>
-              <button onClick={() => setEditing(null)} style={btnS()}>إلغاء</button>
-            </div>
-          </div>
-          {/* صورة الجواز المحفوظة — للمراجعة أثناء التعديل؛ التدويرُ يُحفظ
-              مع «حفظ» ولا يُمسّ الملفّ قبله */}
-          <div style={{ flex: "1 1 340px", height: 460, minWidth: 0 }}>
-            <DocumentViewer active="passport" docs={[{
-              key: "passport", label: "جواز السفر",
-              file: null, stored: (editing as { passport_url?: string | null }).passport_url ?? null,
-              version: editing.id, turns: editPassportTurns,
-              onRotate: d => setEditPassportTurns(t => t + d),
-              emptyText: "لا تتوفر صورة جواز",
-            }]} />
-          </div>
-          </div>
+            </FieldSection>
+          </>
         )}
-      </Modal>
+      </RegistrationShell>
 
       {/* مودال الإضافة اليدوية */}
       {/* مودال عارض المستند */}
