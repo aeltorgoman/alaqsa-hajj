@@ -351,6 +351,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   type EditProposals = Partial<Record<keyof IdentityForm, Partial<Record<DocSlotKey, string>>>>;
   const [editProposals, setEditProposals] = useState<EditProposals>({});
   const [editSaving, setEditSaving] = useState(false);
+  /* حجّاجٌ لم تُعرف نتيجةُ حفظ تعديلهم (انقطاعٌ أو خطأ خادم بعد الإرسال):
+     لا حفظَ آخر لهم في هذه الجلسة — القائمةُ المحلية قد لا تطابق القاعدة
+     حتى تُحدَّث الصفحة. */
+  const [unresolvedSaves, setUnresolvedSaves] = useState<number[]>([]);
   const openEdit = (p: Passenger) => {
     setEditing(p);
     setEditOriginal(p);
@@ -1653,6 +1657,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     setEditProposals(prev => { const next = { ...prev }; delete next[key]; return next; });
   };
   const EDIT_KEYS = ["name_ar", "name_en", "short_ar", "short_en", "passport", "national_id", "nat", "dob", "expiry", "id_expiry", "gender", "phone", "requested_hotel_id"] as const;
+  const editUnresolved = !!editing && unresolvedSaves.includes(editing.id);
   const editDirty = !!editing && !!editOriginal && (editDocs.docsDirty
     || EDIT_KEYS.some(k => (editing[k] ?? "") !== (editOriginal[k] ?? ""))
     || JSON.stringify(editing.services ?? {}) !== JSON.stringify(editOriginal.services ?? {}));
@@ -1667,11 +1672,21 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           المحدَّث: نجاحُ الطلب وحده لا يُثبت أنّ صفّ هذا الحاجّ تغيّر (صلاحيةٌ تحجبه
           تُرجع نجاحاً بلا صفوف)، فلا يُعدّ حفظاً إلا بعودة صفّه بعينه.
        ٤) بعد ثبوت الحفظ وحده: الحالةُ المحلية، ثم حذفُ القديم.
-     وأيُّ فشلٍ أو استثناءٍ قبل الثبوت = لم يُحفظ شيء: يُحذف المرفوعُ الجديد بأفضل جهد،
-     ويبقى الصفُّ ومراجعُه القديمة كما كانت، والنافذةُ مفتوحةً لإعادة المحاولة. */
+     ونتيجةُ التحديث ثلاث:
+       • ثبوت: عاد صفُّه بعينه.
+       • رفضٌ قاطع: ردٌّ 4xx (القاعدة تراجعت عن المعاملة أو لم تصلها) أو نجاحٌ بلا
+         صفوف — لم يُحفظ شيء: يُحذف المرفوعُ الجديد بأفضل جهد، والنافذةُ لإعادة المحاولة.
+       • مجهولة: انقطاع، مهلة، 5xx، استثناء — **ليست فشلاً**: الطلبُ ربما نُفّذ.
+         يُقرأ الصفُّ: إن حمل `updated_at` هذا الحفظ ومراجعَه الجديدة فهو ثبوت.
+         وإلا (المراجعُ القديمة، أو غيرُهما، أو تعذّرت القراءة) فهي معلّقة: المراجعُ
+         القديمة لا تُثبت الفشل — طلبٌ عالقٌ في الطريق قد يُنفَّذ بعد القراءة —
+         فلا يُحذف جديدٌ ولا قديم (يتيمٌ محتمل أهونُ من مرجعٍ مكسور)، ولا إعادةَ
+         محاولةٍ تلقائية، ولا حفظَ آخر لهذا الحاجّ حتى تُحدَّث الصفحة. */
+  const UNRESOLVED_SAVE_MSG = "تعذّر التأكد من نتيجة الحفظ (انقطاع الاتصال أو خطأ في الخادم) — قد تكون التعديلات حُفظت وقد لا تكون، ولم يُحذف أي مستند. لا تُعِد الحفظ الآن: بعد عودة الاتصال حدّث الصفحة وافتح ملف الحاج للتحقق من بياناته ومستنداته.";
   const saveEdit = async (p: Passenger) => {
     if (!assertWritable()) return;
     if (editSaving || editDocs.scanning) return;
+    if (unresolvedSaves.includes(p.id)) { showAlert("warning", UNRESOLVED_SAVE_MSG); return; }
     if (pendingDiffs > 0) {
       showAlert("warning", `قيمٌ مقترحة من المستند البديل لم تُراجع (${pendingDiffs}) — اقبل المقترحة أو أبقِ الحالية لكلّ حقلٍ مميَّز قبل الحفظ`);
       document.querySelector(".regs .regf-review")?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1700,6 +1715,12 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (failed) showAlert("warning", "تعذّر حذف ملفٍّ مرفوعٍ لم يُحفظ — أبلغ المسؤول التقني.");
     };
     const notSaved = async (message: string) => { await discardUploaded(); showAlert("error", message); };
+    let updateSent = false;
+    /* النتيجةُ مجهولة: المرفوعُ والقديمُ يبقيان، والنافذةُ مفتوحةٌ بلا حفظٍ آخر */
+    const markUnresolved = () => {
+      setUnresolvedSaves(prev => prev.includes(p.id) ? prev : [...prev, p.id]);
+      showAlert("warning", UNRESOLVED_SAVE_MSG);
+    };
     try {
       /* (١) التكرار في الموسم نفسه — لا عبر المواسم */
       const takenInSeason = async (column: "passport" | "national_id", value: string): Promise<boolean | null> => {
@@ -1740,23 +1761,49 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       /* (٣) تحديثٌ واحد، وبرهانُه عودةُ صفّ هذا الحاجّ */
       const updated_at = new Date().toISOString();
       const updated_by = currentUser?.name || null;
-      const { data: rows, error } = await supabase.from("passengers").update({
-        name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
-        passport: p.passport, national_id: p.national_id, nat: p.nat,
-        dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
-        /* صلاحيةُ البطاقة صارت حقلاً في النافذة — تُراجَع من البطاقة البديلة */
-        id_expiry: p.id_expiry ?? null,
-        bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
-        camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
-        /* الفندقُ المطلوب يتغيّر من هنا وحده — لا يمسّه نقلٌ ولا تسكين. */
-        requested_hotel_id: p.requested_hotel_id ?? null,
-        ...docUpdates,
-        updated_by, updated_at
-      }).eq("id", p.id).select("id");
-      if (error || !rows || rows.length !== 1 || rows[0].id !== p.id) {
-        if (!error) console.error("حفظ التعديل لم يمسّ صفّ الحاجّ", { id: p.id, rows });
-        await notSaved("حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return;
+      updateSent = true;
+      let outcome: "committed" | "rejected" | "unknown";
+      try {
+        const { data: rows, error, status } = await supabase.from("passengers").update({
+          name_ar: p.name_ar, name_en: p.name_en, short_ar: p.short_ar, short_en: p.short_en,
+          passport: p.passport, national_id: p.national_id, nat: p.nat,
+          dob: p.dob, expiry: p.expiry, gender: p.gender, phone: p.phone,
+          /* صلاحيةُ البطاقة صارت حقلاً في النافذة — تُراجَع من البطاقة البديلة */
+          id_expiry: p.id_expiry ?? null,
+          bus: p.services?.bus, flight: p.services?.flight, hotel_type: p.services?.hotel_type, hotel_view: p.services?.hotel_view,
+          camp_mina: p.services?.camp_mina, camp_arafa: p.services?.camp_arafa,
+          /* الفندقُ المطلوب يتغيّر من هنا وحده — لا يمسّه نقلٌ ولا تسكين. */
+          requested_hotel_id: p.requested_hotel_id ?? null,
+          ...docUpdates,
+          updated_by, updated_at
+        }).eq("id", p.id).select("id");
+        if (!error && rows?.length === 1 && rows[0].id === p.id) outcome = "committed";
+        else if (!error && rows?.length === 0) outcome = "rejected";
+        /* 408 مهلةٌ لا رفض: لا يُعرف أوصل الطلبُ أم لا */
+        else if (error && status >= 400 && status < 500 && status !== 408) outcome = "rejected";
+        else outcome = "unknown";
+        if (outcome !== "committed") console.error("حفظ تعديل الحاجّ لم يثبت", { id: p.id, outcome, status, error, rows });
+      } catch (e) {
+        console.error("استثناءٌ أثناء طلب تحديث الحاجّ — النتيجة مجهولة", { id: p.id, error: e });
+        outcome = "unknown";
       }
+      if (outcome === "unknown") {
+        /* قراءةٌ للتحقّق — الثبوتُ وحده يُستنتج منها، لا الفشل */
+        try {
+          const { data: row, error } = await supabase.from("passengers")
+            .select("passport_url, national_id_url, updated_at").eq("id", p.id).maybeSingle();
+          if (!error && row && Date.parse(row.updated_at ?? "") === Date.parse(updated_at)
+            && Object.entries(docUpdates).every(([field, key]) => (row as Record<string, unknown>)[field] === key)) {
+            outcome = "committed";
+          } else {
+            console.error("قراءة التحقّق لم تُثبت الحفظ — النتيجة معلّقة", { id: p.id, row, error, expected: { updated_at, ...docUpdates } });
+          }
+        } catch (e) {
+          console.error("تعذّرت قراءة التحقّق — النتيجة معلّقة", { id: p.id, error: e });
+        }
+      }
+      if (outcome === "rejected") { await notSaved("حدث خطأ أثناء حفظ التعديلات، يرجى المحاولة مرة أخرى"); return; }
+      if (outcome === "unknown") { markUnresolved(); return; }
       committed = true;
 
       /* (٤) بعد ثبوت الحفظ وحده */
@@ -1770,6 +1817,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       if (committed) {
         /* الصفُّ حُفظ وثبت — ما فشل بعده تنظيفٌ لا حفظ */
         showAlert("warning", "حُفظت التعديلات، وتعذّر حذف المستند القديم من التخزين — أبلغ المسؤول التقني.");
+      } else if (updateSent) {
+        /* أُرسل التحديث ولم يثبت: لا يُعدّ فشلاً ولا يُحذف شيء */
+        markUnresolved();
       } else {
         await notSaved("حدث خطأ غير متوقَّع — لم يُحفظ أي تغيير، يرجى المحاولة مرة أخرى");
       }
@@ -2745,6 +2795,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         onDiscard={closeEdit}
         busy={editSaving}
         status={(() => {
+          if (editUnresolved) return (
+            <div role="alert" style={{ fontSize: 12, color: "#B71C1C", fontWeight: 700 }}>{UNRESOLVED_SAVE_MSG}</div>
+          );
           const scanningLabel = editDocs.slots.passport.status === "scanning" ? "جارٍ قراءة الجواز…" : editDocs.slots.idcard.status === "scanning" ? "جارٍ قراءة البطاقة…" : null;
           const failedKey: DocSlotKey | null = editDocs.slots[editActiveDoc].status === "failed" ? editActiveDoc
             : (["passport", "idcard"] as const).find(k => editDocs.slots[k].status === "failed") ?? null;
@@ -2760,9 +2813,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           ) : null;
         })()}
         primary={{
-          label: editSaving ? "جاري الحفظ..." : editDocs.scanning ? "جارٍ القراءة…" : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ التعديلات</>,
+          label: editSaving ? "جاري الحفظ..." : editUnresolved ? "الحفظ معلَّق — حدّث الصفحة" : editDocs.scanning ? "جارٍ القراءة…" : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> حفظ التعديلات</>,
           onClick: () => { if (editing) void saveEdit(editing); },
-          disabled: editSaving || editDocs.scanning,
+          disabled: editSaving || editDocs.scanning || editUnresolved,
         }}
         viewer={
           <DocumentViewer active={editActiveDoc} onActiveChange={k => setEditActiveDoc(k as DocSlotKey)} docs={([
