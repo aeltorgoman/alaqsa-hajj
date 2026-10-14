@@ -18,29 +18,6 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
-  /* جذبٌ مغناطيسيّ نحو المؤشّر، بموضعه نسبةً إلى الزرّ: الأيقونةُ تتبعه بوضوح
-     (حتى ٨px) والزرُّ نفسه بقدرٍ مكبوح (حتى ٣px). لأجهزة المرور والمؤشّر الدقيق
-     وحدها، ويتوقّف مع تقليل الحركة؛ لا يمسّ اللمس ولا التركيز بالكيبورد.
-     القياسُ والمرورُ على غلافٍ ثابت لا يتحرّك — فلا تُخرج حركةُ الزرّ (ولا
-     رفعتُه) المؤشّرَ منه عند الحافّة. ويكتب متغيّرات CSS مباشرةً: بلا إعادة رسم. */
-  const magnetic = {
-    onPointerMove: (e: React.PointerEvent<HTMLSpanElement>) => {
-      if (e.pointerType !== "mouse" || !window.matchMedia("(hover: hover) and (pointer: fine)").matches
-        || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      const el = e.currentTarget, r = el.getBoundingClientRect();
-      /* -1 … 1 من المركز */
-      const dx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
-      const dy = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
-      el.style.setProperty("--mx", `${(dx * 3).toFixed(2)}px`);
-      el.style.setProperty("--my", `${(dy * 2).toFixed(2)}px`);
-      el.style.setProperty("--ix", `${(dx * 8).toFixed(2)}px`);
-      el.style.setProperty("--iy", `${(dy * 8).toFixed(2)}px`);
-    },
-    onPointerLeave: (e: React.PointerEvent<HTMLSpanElement>) => {
-      for (const v of ["--mx", "--my", "--ix", "--iy"]) e.currentTarget.style.removeProperty(v);
-    },
-  };
-
   return (
     <div style={{ display: "flex", flex: 1 }}>
 
@@ -51,7 +28,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
 
           {/* مسح مستند — أساسي: تدرّج لون الثيم مع لمعةٍ عند المرور فقط */}
-          <span className="dqa-slot" {...magnetic}>
+          <span className="dqa-slot">
             <button type="button" className="dqa dqa-primary" onClick={() => scanInputRef.current?.click()}>
               <span className="dqa-icon">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -59,6 +36,7 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
                   <path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
                   <line x1="7" y1="12" x2="17" y2="12"/>
                 </svg>
+                <span className="dqa-beam" aria-hidden="true" />
               </span>
               <span className="dqa-text">
                 <span className="dqa-title">مسح مستند</span>
@@ -74,11 +52,12 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
           }} />
 
           {/* إضافة يدوي — ثانوي: عاجيّ بإطارٍ ذهبي، بلا لمعة */}
-          <span className="dqa-slot" {...magnetic}>
+          <span className="dqa-slot">
             <button type="button" className="dqa dqa-secondary" onClick={() => { onAddManual ? onAddManual() : navTo("passengers"); }}>
               <span className="dqa-icon">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <g className="dqa-doc"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></g>
+                  <g className="dqa-plus"><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></g>
                 </svg>
               </span>
               <span className="dqa-text">
@@ -119,37 +98,70 @@ function Dashboard({ passengers, setPage, currentUser, onAddManual, onScan }: {
   );
 }
 
-/* أزرار الإجراءات السريعة — حركةٌ عند التفاعل وحده، لا حركةَ مستمرّة */
+/* أزرار الإجراءات السريعة — Scanner Motion V2
+   الحالةُ «النشطة» واحدةٌ بثلاثة مداخل: المرورُ بالفأرة (لأجهزة المرور والمؤشّر
+   الدقيق وحدها — فلا تعلق على اللمس)، والتركيزُ بالكيبورد، والضغطُ باللمس.
+   المرورُ على غلافٍ ثابت (.dqa-slot) لا يتحرّك مع الزرّ، فلا ارتعاشَ عند الحافّة.
+   الحركاتُ متوقّفةٌ وغيرُ مرئية خارج الحالة النشطة، وتظهر وتختفي بتلاشٍ ناعم؛
+   وكلُّها محصورةٌ داخل الزرّ وإطار الأيقونة. */
+const on = (cls: string, tail: string, body: string) =>
+  `@media (hover:hover) and (pointer:fine){.dqa-slot:hover ${cls}${tail}{${body}}}\n${cls}:focus-visible${tail},${cls}:active${tail}{${body}}\n`;
 const QUICK_ACTION_CSS = `
-.dqa-slot{--mx:0px;--my:0px;--ix:0px;--iy:0px;--lift:0px;display:flex;min-width:0}
-.dqa{position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;width:100%;padding:13px 16px;border-radius:12px;cursor:pointer;font-family:inherit;text-align:start;
-  transform:translate3d(var(--mx),calc(var(--my) + var(--lift)),0);transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .25s ease,border-color .25s ease}
-.dqa-slot:hover{--lift:-2px}
-.dqa-slot:active{--lift:0px}
-.dqa:active{transition-duration:.1s}
+.dqa-slot{display:flex;min-width:0}
+.dqa{--lift:0px;position:relative;overflow:hidden;isolation:isolate;display:flex;align-items:center;gap:11px;width:100%;padding:13px 16px;border-radius:12px;cursor:pointer;font-family:inherit;text-align:start;
+  transform:translateY(var(--lift));transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .3s ease,border-color .3s ease}
+.dqa > *{position:relative;z-index:1}
 .dqa:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.dqa-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  transform:translate3d(var(--ix),var(--iy),0);transition:transform .35s cubic-bezier(.2,.7,.3,1)}
+${on(".dqa", "", "--lift:-2px")}
+.dqa:active{--lift:0px;transform:scale(.985);transition-duration:.12s}
+.dqa-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;transition:background-color .3s ease,box-shadow .3s ease}
 .dqa-text{display:flex;flex-direction:column;min-width:0}
 .dqa-title{font-size:13.5px;font-weight:700;line-height:1.2}
 .dqa-sub{font-size:10.5px;margin-top:2px}
+
+/* ── مسح مستند: تدرّجٌ بورديّ متحرّك + موجةُ ضوء + شعاعُ مسحٍ في الأيقونة ── */
 .dqa-primary{border:1px solid rgba(255,255,255,.08);color:var(--text-inverse);
   background:linear-gradient(135deg,var(--primary-light) 0%,var(--primary) 55%,var(--primary-dark) 100%);
   box-shadow:0 4px 12px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.12)}
-.dqa-slot:hover .dqa-primary{box-shadow:0 8px 20px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.16)}
+.dqa-primary::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  /* بلاطةٌ تبدأ وتنتهي باللون نفسه، وتتحرّك بعرضها تماماً: تدفّقٌ بلا حوافّ */
+  background:linear-gradient(90deg,var(--primary-dark) 0%,var(--primary) 25%,var(--primary-light) 50%,var(--primary) 75%,var(--primary-dark) 100%) 0 0/200% 100% repeat-x;
+  opacity:0;transition:opacity .5s ease;animation:dqa-flow 4s linear infinite paused}
+.dqa-primary::after{content:"";position:absolute;inset:-1px;z-index:2;pointer-events:none;
+  background:linear-gradient(100deg,transparent 28%,rgba(255,236,190,.12) 40%,rgba(255,255,255,.36) 50%,rgba(255,236,190,.12) 60%,transparent 72%);
+  transform:translateX(115%);opacity:0;transition:opacity .45s ease;animation:dqa-wave 2.6s cubic-bezier(.45,.05,.35,1) infinite paused}
 .dqa-primary .dqa-icon{background:rgba(255,255,255,.15)}
-/* اللمعة: مسحةٌ واحدة عند المرور، وتعود مخفيّةً بلا حركة عند الخروج */
-.dqa-primary::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.18) 50%,transparent 65%);
-  transform:translateX(110%);opacity:0}
-.dqa-slot:hover .dqa-primary::after{transform:translateX(-110%);opacity:1;transition:transform .8s ease,opacity .2s ease}
-.dqa-secondary{color:var(--ink);background:var(--ivory);border:1px solid var(--accent);
-  box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.dqa-slot:hover .dqa-secondary{border-color:var(--accent-dark);box-shadow:0 6px 16px rgba(0,0,0,.1)}
+.dqa-primary .dqa-icon svg{transition:transform .35s ease,filter .35s ease}
+/* الشعاع: ستارةُ ضوءٍ ذهبيّ يقودها خطٌّ ساطع، تمسح إطارَ الأيقونة ذهاباً وإياباً */
+.dqa-beam{position:absolute;left:3px;right:3px;top:-10px;height:14px;z-index:2;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(231,205,138,0) 0%,rgba(231,205,138,.30) 70%,rgba(255,244,214,.95) 86%,#fff 90%,rgba(255,244,214,0) 100%);
+  filter:drop-shadow(0 0 4px rgba(255,230,170,.9));
+  opacity:0;transition:opacity .35s ease;animation:dqa-beam 1.4s ease-in-out infinite alternate paused}
+${on(".dqa-primary", "", "box-shadow:0 8px 22px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.18)")}
+${on(".dqa-primary", "::before", "opacity:1;animation-play-state:running")}
+${on(".dqa-primary", "::after", "opacity:1;animation-play-state:running")}
+${on(".dqa-primary", " .dqa-beam", "opacity:1;animation-play-state:running")}
+${on(".dqa-primary", " .dqa-icon", "background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(231,205,138,.45)")}
+${on(".dqa-primary", " .dqa-icon svg", "transform:scale(1.06);filter:drop-shadow(0 0 3px rgba(231,205,138,.7))")}
+@keyframes dqa-flow{from{background-position:0 0}to{background-position:200% 0}}
+@keyframes dqa-wave{0%{transform:translateX(115%)}70%,100%{transform:translateX(-115%)}}
+@keyframes dqa-beam{from{transform:translateY(0)}to{transform:translateY(38px)}}
+
+/* ── إضافة يدوي: عاجيّ بإطارٍ ذهبي، والمستندُ والزائد يتحرّكان مرّةً — بلا وهجٍ ولا حركةٍ مستمرّة ── */
+.dqa-secondary{color:var(--ink);background:var(--ivory);border:1px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.06)}
 .dqa-secondary .dqa-icon{background:rgba(200,162,75,.14)}
+.dqa-doc,.dqa-plus{transform-box:fill-box;transform-origin:center;transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+${on(".dqa-secondary", "", "border-color:var(--accent-dark);box-shadow:0 6px 16px rgba(0,0,0,.1)")}
+${on(".dqa-secondary", " .dqa-icon", "background:rgba(200,162,75,.24)")}
+${on(".dqa-secondary", " .dqa-doc", "transform:translateY(-1.5px) rotate(-7deg)")}
+${on(".dqa-secondary", " .dqa-plus", "transform:rotate(90deg) scale(1.2)")}
+
+/* تقليلُ الحركة: لا حركةَ إطلاقاً — تبقى إشاراتُ الحالة الثابتة (اللون والإطار والظلّ) */
 @media (prefers-reduced-motion:reduce){
-  .dqa,.dqa-icon{transform:none;transition:box-shadow .01s,border-color .01s}
-  .dqa-primary::after{display:none}
+  .dqa,.dqa:active{transform:none;transition:box-shadow .01s,border-color .01s}
+  .dqa *,.dqa::before,.dqa::after{animation:none !important;transition:none !important}
+  .dqa-primary::after,.dqa-beam{display:none}
+  .dqa .dqa-icon svg,.dqa .dqa-doc,.dqa .dqa-plus{transform:none !important;filter:none !important}
 }
 `;
 
