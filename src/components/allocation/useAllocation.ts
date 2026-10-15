@@ -42,6 +42,18 @@ export function allocWriteError(fallback: string, msg?: string): string {
 // تنفّذ ولا تسأل: المنادي فحص قواعده قبل أن يدعوها، والقاعدة هي
 // الحدّ الأخير. وترجع true عند النجاح فقط، فلا تُحدَّث الحالة
 // المحليّة على كتابةٍ لم تقع.
+//
+// ⚠️ برهانُ الكتابة صفُّ الحاجّ نفسُه عائداً من القاعدة: سياسةُ
+// `passengers_update` تحجب الصفَّ عمّن لا يملك صلاحيّته (حاجٌّ بلا
+// `manage_passengers`، أو إداريٌّ بلا `manage_admins`)، فيمرّ الطلب
+// بلا خطأ ولا يمسّ شيئاً. فالنجاحُ عودةُ صفّه بعينه، وصفرُ صفوفٍ فشل.
+
+/* نتيجة النقل المشروط: «stale» = لم يعد الحاجّ في الحاوية المتوقَّعة
+   (غيّره غيرُك) — لم يُكتب شيء، وحُدِّثت الحالة المحليّة بقيمته الفعليّة */
+export type MoveOutcome = "ok" | "stale" | "failed";
+
+const NO_ROWS = "لم يتغيّر شيء في قاعدة البيانات — قد لا تملك صلاحية تعديل هذا المسافر.";
+
 export function useAllocationWrites({
   column, orderColumn, setPassengers, readOnly, showAlert, onBlocked,
 }: {
@@ -57,66 +69,127 @@ export function useAllocationWrites({
     return true;
   }, [readOnly, onBlocked]);
 
+  /* كتابةٌ واحدة ببرهانها. `expectFrom` (اختياريّ) شرطٌ على القيمة الحاليّة
+     داخل الطلب نفسه: لا يُكتب إلا إن كان الحاجّ حيث يُظَنّ — `null` = غير موزَّع. */
+  const writeOne = useCallback(async (passengerId: number, value: number | null, expectFrom?: number | null) => {
+    let q = supabase.from("passengers")
+      .update({ [column]: value } as TablesUpdate<"passengers">).eq("id", passengerId);
+    if (expectFrom !== undefined) q = expectFrom === null ? q.is(column, null) : q.eq(column, expectFrom);
+    const { data, error } = await q.select("id");
+    if (error) return { ok: false as const, message: error.message };
+    if (!data || data.length !== 1 || data[0].id !== passengerId) return { ok: false as const, noRows: true };
+    return { ok: true as const };
+  }, [column]);
+
+  /* القيمة الفعليّة في القاعدة — لتمييز «تغيّر من مكانٍ آخر» من «حجبته الصلاحية» */
+  const readCurrent = useCallback(async (passengerId: number): Promise<{ found: boolean; value: number | null }> => {
+    const { data, error } = await supabase.from("passengers").select(column).eq("id", passengerId).maybeSingle();
+    if (error || !data) return { found: false, value: null };
+    return { found: true, value: (data as Record<string, number | null>)[column] ?? null };
+  }, [column]);
+
   /* إسناد واحد */
   const assign = useCallback(async (passengerId: number, containerId: number, fallback: string): Promise<boolean> => {
     if (!guard()) return false;
-    const { error } = await supabase.from("passengers")
-      .update({ [column]: containerId } as TablesUpdate<"passengers">).eq("id", passengerId);
-    if (error) { console.error(fallback, error); showAlert("error", allocWriteError(fallback, error.message)); return false; }
+    const r = await writeOne(passengerId, containerId);
+    if (!r.ok) {
+      console.error(fallback, r);
+      showAlert("error", r.noRows ? `${fallback}: ${NO_ROWS}` : allocWriteError(fallback, r.message));
+      return false;
+    }
     setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: containerId } : p));
     return true;
-  }, [column, guard, setPassengers, showAlert]);
+  }, [column, guard, setPassengers, showAlert, writeOne]);
+
+  /* نقلٌ مشروط: من `expectFrom` إلى `containerId` في طلبٍ واحد — لا إخراجَ ثم
+     إسناد. فإن لم يعد الحاجّ حيث يُظَنّ لم يُكتب شيء، وتُحدَّث الحالة المحليّة
+     بقيمته الفعليّة، ويقرّر المنادي ما يقول («stale»). */
+  const move = useCallback(async (passengerId: number, expectFrom: number | null, containerId: number, fallback: string): Promise<MoveOutcome> => {
+    if (!guard()) return "failed";
+    const r = await writeOne(passengerId, containerId, expectFrom);
+    if (r.ok) {
+      setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: containerId } : p));
+      return "ok";
+    }
+    if (r.noRows) {
+      const cur = await readCurrent(passengerId);
+      if (cur.found && cur.value !== expectFrom) {
+        setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: cur.value } : p));
+        return "stale";
+      }
+    }
+    console.error(fallback, r);
+    showAlert("error", r.noRows ? `${fallback}: ${NO_ROWS}` : allocWriteError(fallback, r.message));
+    return "failed";
+  }, [column, guard, readCurrent, setPassengers, showAlert, writeOne]);
 
   /* إسناد دفعة — واحداً بعد واحد لا على التوازي: السقف في القاعدة
      يقفل صفّ الحاوية، وعشرون طلباً متوازياً على قفلٍ واحد يطيل
      الانتظار بلا فائدة. والتسلسل يجعل الرفض دقيقاً: نعرف من دخل
-     ومن ردّته السعة. */
-  const assignMany = useCallback(async (passengerIds: number[], containerId: number, fallback: string): Promise<number> => {
+     ومن ردّته السعة. و`expectFrom` (اختياريّ) كما في `move`. */
+  const assignMany = useCallback(async (passengerIds: number[], containerId: number, fallback: string, expectFrom?: number | null): Promise<number> => {
     if (!guard()) return 0;
     const done: number[] = [];
-    let firstError: string | undefined;
+    let failure: string | undefined;
     for (const id of passengerIds) {
-      const { error } = await supabase.from("passengers")
-        .update({ [column]: containerId } as TablesUpdate<"passengers">).eq("id", id);
-      if (error) { console.error(fallback, error); firstError = error.message; break; }
+      const r = await writeOne(id, containerId, expectFrom);
+      if (!r.ok) {
+        console.error(fallback, r);
+        failure = r.noRows
+          ? (expectFrom !== undefined ? `${fallback}: تغيّر توزيع أحد المسافرين من مكانٍ آخر، أو ${NO_ROWS}` : `${fallback}: ${NO_ROWS}`)
+          : allocWriteError(fallback, r.message);
+        break;
+      }
       done.push(id);
     }
     if (done.length) {
       const set = new Set(done);
       setPassengers(prev => prev.map(p => set.has(p.id) ? { ...p, [column]: containerId } : p));
     }
-    if (firstError) showAlert("error", allocWriteError(fallback, firstError));
+    if (failure) showAlert("error", failure);
     return done.length;
-  }, [column, guard, setPassengers, showAlert]);
+  }, [column, guard, setPassengers, showAlert, writeOne]);
 
   /* إخراج — لا يُفحص سقفٌ عند إخلاء مقعد */
   const unassign = useCallback(async (passengerId: number, fallback: string): Promise<boolean> => {
     if (!guard()) return false;
-    const { error } = await supabase.from("passengers")
-      .update({ [column]: null } as TablesUpdate<"passengers">).eq("id", passengerId);
-    if (error) { console.error(fallback, error); showAlert("error", allocWriteError(fallback, error.message)); return false; }
+    const r = await writeOne(passengerId, null);
+    if (!r.ok) {
+      console.error(fallback, r);
+      showAlert("error", r.noRows ? `${fallback}: ${NO_ROWS}` : allocWriteError(fallback, r.message));
+      return false;
+    }
     setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: null } : p));
     return true;
-  }, [column, guard, setPassengers, showAlert]);
+  }, [column, guard, setPassengers, showAlert, writeOne]);
 
   /* الترتيب يكتب في عمود الحاوية وحده — `bus_sort_order` للباص،
      و`camp_mina_sort_order` لمنى، و`camp_arafa_sort_order` لعرفة.
      كانت الكتابة في `sort_order` العام فتسحق ترتيب كل حاويةٍ أخرى،
-     إذ يبدأ كلٌّ ترقيمه من ١. والعمود يأتي من المنادي فلا يُخطأ. */
+     إذ يبدأ كلٌّ ترقيمه من ١. والعمود يأتي من المنادي فلا يُخطأ.
+     والعرضُ تفاؤليّ (السحب يستجيب فوراً)، وما رفضته القاعدة — خطأً أو
+     صفراً من الصفوف — يُعاد إلى قيمته الفعليّة مقروءةً منها. */
   const reorder = useCallback(async (ordered: { id: number }[], fallback: string): Promise<boolean> => {
     if (!guard()) return false;
     setPassengers(prev => applyReorder(prev, orderColumn, ordered));
-    const results = await Promise.all(reorderUpdates(orderColumn, ordered));
-    const failed = results.filter(r => r.error);
-    if (failed.length) {
-      console.error(fallback, failed.map(f => f.error));
+    const results = await Promise.all(reorderUpdates(orderColumn, ordered).map(q => q.select("id")));
+    const failedIds = ordered
+      .filter((item, i) => { const r = results[i]; return !!r.error || !r.data || r.data.length !== 1 || r.data[0].id !== item.id; })
+      .map(item => item.id);
+    if (!failedIds.length) return true;
+    console.error(fallback, { failedIds, errors: results.filter(r => r.error).map(r => r.error) });
+    const { data: actual, error } = await supabase.from("passengers").select(`id, ${orderColumn}`).in("id", failedIds);
+    if (!error && actual) {
+      const back = new Map((actual as unknown as Record<string, number | null>[]).map(row => [row.id as number, row[orderColumn] ?? null]));
+      setPassengers(prev => prev.map(p => back.has(p.id) ? { ...p, [orderColumn]: back.get(p.id) } : p));
       showAlert("error", fallback);
-      return false;
+    } else {
+      showAlert("error", `${fallback} — حدّث الصفحة لعرض الترتيب المحفوظ فعلاً`);
     }
-    return true;
+    return false;
   }, [guard, orderColumn, setPassengers, showAlert]);
 
-  return { assign, assignMany, unassign, reorder };
+  return { assign, move, assignMany, unassign, reorder };
 }
 
 // ═══════════════════════════════════════════════════════════
