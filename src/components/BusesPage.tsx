@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { isHajj } from "../utils/passenger";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
@@ -31,6 +31,15 @@ const BusIcon = () => (
     <circle cx="7" cy="18" r="2" /><circle cx="15" cy="18" r="2" />
   </svg>
 );
+
+/* السعة عددٌ صحيحٌ موجب كما كُتب بالضبط — `parseInt` كان يقبل «12.5» على أنها
+   12 و«1e2» على أنها 1 بصمت. */
+const parseCapacity = (raw: string): number | null => {
+  const t = raw.trim();
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isSafeInteger(n) && n >= 1 ? n : null;
+};
 
 const paxLabel = (n: number) => n === 1 ? "مسافر واحد" : n === 2 ? "مسافران" : n <= 10 ? `${n} مسافرين` : `${n} مسافراً`;
 const seatsLabel = (n: number) => n === 1 ? "مقعد واحد متبقٍ" : n === 2 ? "مقعدان متبقيان" : n <= 10 ? `${n} مقاعد متبقية` : `${n} مقعداً متبقياً`;
@@ -90,6 +99,13 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
 
   const sel = useContainerSelection();
   const selectedBus = buses.find(b => b.id === sel.selectedId) || null;
+  /* محرّرا الاسم والسعة يخصّان الباصَ المفتوح وحده: يُصفَّران عند كل فتحٍ
+     وإغلاق، فلا تُحفظ مسوّدةُ باصٍ على باصٍ آخر. */
+  const openBus = (id: number) => { setEditingName(false); setEditingCap(false); sel.open(id); };
+  /* مستقرٌّ عمداً: المودال يعيد تركيزه على نفسه كلّما تغيّر `onClose`،
+     ودالّةٌ جديدةٌ في كل رسمٍ كانت تسرق التركيز من حقل الاسم فتغلقه. */
+  const { close: selClose } = sel;
+  const closeBus = useCallback(() => { setEditingName(false); setEditingCap(false); selClose(); }, [selClose]);
 
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل «لا يوجد باصات بعد» على بيانات لم تصل */
@@ -151,7 +167,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const blocked = seatBlock(bus, 1);
     if (blocked) { showAlert("warning", blocked); return; }
     if (!await confirmMismatch(bus, [p])) return;
-    await writes.assign(pId, bus.id, "تعذر إضافة المسافر إلى الباص");
+    /* «إضافة» لغير الموزَّع وحده — إن وزّعه غيرُك في الأثناء لا يُنقل صامتاً */
+    const r = await writes.move(pId, null, bus.id, "تعذر إضافة المسافر إلى الباص");
+    if (r === "stale") showAlert("warning", `«${p.short_ar || p.name_ar}» وُزّع على باصٍ آخر من مكانٍ آخر — لم يُضَف، وحُدِّثت البيانات.`);
   };
 
   const addPicked = async (bus: Bus) => {
@@ -160,10 +178,15 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const blocked = seatBlock(bus, chosen.length);
     if (blocked) { showAlert("warning", blocked); return; }
     if (!await confirmMismatch(bus, chosen)) return;
-    const done = await writes.assignMany(chosen.map(p => p.id), bus.id, "تعذر إضافة بعض المسافرين إلى الباص");
+    const done = await writes.assignMany(chosen.map(p => p.id), bus.id, "تعذر إضافة بعض المسافرين إلى الباص", null);
     if (done === chosen.length) sel.setPicked(new Set());
     else sel.setPicked(new Set(chosen.slice(done).map(p => p.id)));
   };
+
+  /* النقل طلبٌ واحدٌ مشروطٌ بالباص الحاليّ — لا إخراجَ ثم إسناد، ولا كتابةَ
+     فوق نقلٍ أجراه غيرُك في الأثناء */
+  const staleMove = (p: Passenger) => showAlert("warning",
+    `«${p.short_ar || p.name_ar}» لم يعد في الباص المعروض — غيّر توزيعَه غيرُك في الأثناء. لم يُنقل، وحُدِّثت البيانات.`);
 
   const moveP = async (p: Passenger, toId: string) => {
     if (!toId) return;
@@ -172,7 +195,28 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const blocked = seatBlock(target, 1);
     if (blocked) { showAlert("warning", blocked); return; }
     if (!await confirmMismatch(target, [p])) return;
-    await writes.assign(p.id, target.id, "تعذر نقل المسافر إلى الباص الآخر");
+    const r = await writes.move(p.id, p.bus_id ?? null, target.id, "تعذر نقل المسافر إلى الباص الآخر");
+    if (r === "stale") staleMove(p);
+  };
+
+  /* قبولُ اقتراح: غير الموزَّع يُضاف، والموزَّعُ على باصٍ آخر يُنقل بعد تأكيدٍ
+     صريحٍ يسمّي الحاجّ والباصين — ثم تأكيدُ VIP كما هو، منفصلاً. */
+  const acceptSuggestion = async (bus: Bus, pId: number) => {
+    const p = passengers.find(x => x.id === pId);
+    if (!p) return;
+    if (p.bus_id == null) { await addOne(bus, pId); return; }
+    if (p.bus_id === bus.id) return;
+    const from = buses.find(b => b.id === p.bus_id);
+    const blocked = seatBlock(bus, 1);
+    if (blocked) { showAlert("warning", blocked); return; }
+    const name = p.short_ar || p.name_ar;
+    if (!await confirmAction(
+      `نقل «${name}» من باص «${from?.name ?? "آخر"}» إلى باص «${bus.name}»؟`,
+      { title: "تأكيد النقل", confirmLabel: "نقل", cancelLabel: "إلغاء" },
+    )) return;
+    if (!await confirmMismatch(bus, [p])) return;
+    const r = await writes.move(p.id, p.bus_id, bus.id, "تعذر نقل المسافر إلى الباص");
+    if (r === "stale") staleMove(p);
   };
 
   const drag = useAllocationDrag({
@@ -186,10 +230,10 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const addBus = async () => {
     if (!assertWritable()) return;
     const name = busName.trim();
-    const cap = parseInt(busCapacity, 10);
+    const cap = parseCapacity(busCapacity);
     if (!name) { setNameError("يرجى إدخال اسم الباص"); return; }
     if (buses.some(b => b.name.trim() === name)) { setNameError(`يوجد باص بالاسم "${name}" بالفعل`); return; }
-    if (!Number.isFinite(cap) || cap < 1) { setNameError("السعة يجب أن تكون عدداً أكبر من صفر"); return; }
+    if (cap === null) { setNameError("السعة يجب أن تكون عدداً صحيحاً أكبر من صفر"); return; }
     setNameError("");
     const { data, error } = await supabase.from("buses").insert([{ name, type: busType, capacity: cap }]).select();
     if (error) {
@@ -210,7 +254,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
     const { error } = await supabase.from("buses").delete().eq("id", bus.id);
     if (error) { console.error("فشل حذف الباص", error); showAlert("error", allocWriteError("فشل حذف الباص، يرجى المحاولة مرة أخرى", error.message)); return; }
     setBuses(prev => prev.filter(b => b.id !== bus.id));
-    sel.close();
+    closeBus();
   };
 
   const renameBus = async (bus: Bus, name: string) => {
@@ -227,9 +271,9 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   /* السعة تُعدَّل، ولا تنزل تحت الإشغال — هنا وفي القاعدة */
   const saveCapacity = async (bus: Bus) => {
     if (!assertWritable()) return;
-    const cap = parseInt(capDraft, 10);
+    const cap = parseCapacity(capDraft);
     const occ = riders(bus.id).length;
-    if (!Number.isFinite(cap) || cap < 1) { showAlert("warning", "السعة يجب أن تكون عدداً أكبر من صفر"); return; }
+    if (cap === null) { showAlert("warning", "السعة يجب أن تكون عدداً صحيحاً أكبر من صفر"); return; }
     if (cap < occ) { showAlert("warning", `الباص «${bus.name}» يضمّ ${paxLabel(occ)}، فلا تُخفَّض سعته إلى ${cap}. أخرِج المسافرين أولاً.`); return; }
     const { error } = await supabase.from("buses").update({ capacity: cap }).eq("id", bus.id);
     if (error) { console.error("تعذر تعديل سعة الباص", error); showAlert("error", allocWriteError("تعذر تعديل سعة الباص", error.message)); return; }
@@ -269,11 +313,23 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
           s.kin ? x.family_id === p.family_id : s.room ? x.room_id === p.room_id : x.camp_mina_id === p.camp_mina_id);
         const name = withWhom?.short_ar || withWhom?.name_ar?.split(" ").slice(0, 2).join(" ") || "";
         const why = [s.kin && "صلة قرابة", s.room && "نفس الغرفة", s.mina && "نفس خيمة منى"].filter(Boolean).join(" · ");
+        const short = p.short_ar || p.name_ar;
+        const current = p.bus_id != null ? buses.find(b => b.id === p.bus_id) : null;
+        const moving = p.bus_id != null;
         return {
           id: p.id,
-          name: p.short_ar || p.name_ar,
+          name: short,
           tone: (s.kin ? "kin" : s.room ? "room" : "other") as SuggestionItem["tone"],
           reason: <>{why}{name ? <span style={{ color: "var(--primary)", fontWeight: 800 }}> مع {name}</span> : null}</>,
+          status: (
+            <span style={{ fontSize: 9, fontWeight: 800, padding: "1px 7px", borderRadius: 99, flexShrink: 0, whiteSpace: "nowrap",
+              background: moving ? "var(--info-bg)" : "var(--warning-bg)", color: moving ? "var(--info)" : "var(--warning)" }}>
+              {moving ? `في باص ${current?.name ?? "آخر"}` : "غير موزع"}
+            </span>
+          ),
+          action: moving
+            ? { label: "نقل", ariaLabel: `نقل ${short} من باص ${current?.name ?? "آخر"} إلى باص ${bus.name}` }
+            : { label: "إضافة", ariaLabel: `إضافة ${short} إلى باص ${bus.name}` },
         };
       });
   };
@@ -325,7 +381,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               const occ = riders(bus.id).length;
               const left = bus.capacity - occ;
               return (
-                <AllocationCard key={bus.id} selected={sel.selectedId === bus.id} onClick={() => sel.open(bus.id)}
+                <AllocationCard key={bus.id} selected={sel.selectedId === bus.id} onClick={() => openBus(bus.id)}
                   icon={<BusIcon />} title={`باص ${bus.name}`} badge={bus.type === "VIP" ? vipBadge(true) : undefined}
                   occ={occ} cap={bus.capacity} emptyHint="＋ إضافة مسافر"
                   capacityNote={left > 0 ? seatsLabel(left) : left === 0 ? "مكتمل" : `تجاوز السعة بـ ${-left}`} />
@@ -359,14 +415,18 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
         const blockedReason = readOnly ? "موسم للعرض فقط" : left <= 0 ? "الباص مكتمل" : undefined;
 
         return (
-          <AllocationDialog onClose={sel.close} icon={<BusIcon />}
+          <AllocationDialog onClose={closeBus} icon={<BusIcon />}
             title={editingName ? (
               <input defaultValue={bus.name} autoFocus aria-label="اسم الباص"
                 onBlur={e => renameBus(bus, e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") renameBus(bus, (e.target as HTMLInputElement).value); if (e.key === "Escape") setEditingName(false); }}
                 style={{ width: 140, fontSize: 18, fontWeight: 900, padding: "2px 8px", borderRadius: 8, border: "none", outline: "none", fontFamily: "var(--font-body)" }} />
             ) : (
-              <span onDoubleClick={() => !readOnly && setEditingName(true)} title="انقر نقرتين لتعديل الاسم">باص {bus.name}</span>
+              /* النقرتان كما هما، ولوحةُ المفاتيح تبلغه أيضاً: Tab ثم Enter أو F2 */
+              <span onDoubleClick={() => !readOnly && setEditingName(true)} title="انقر نقرتين لتعديل الاسم"
+                role={readOnly ? undefined : "button"} tabIndex={readOnly ? undefined : 0}
+                aria-label={readOnly ? undefined : `باص ${bus.name} — تعديل الاسم`}
+                onKeyDown={e => { if (!readOnly && (e.key === "Enter" || e.key === "F2")) { e.preventDefault(); setEditingName(true); } }}>باص {bus.name}</span>
             )}
             badges={bus.type === "VIP" ? vipBadge(true) : undefined}
             meta={
@@ -447,7 +507,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                     ))}
                 </div>
                 <SuggestionStrip items={busSuggestions(bus)} blockedReason={blockedReason}
-                  onAccept={pId => void addOne(bus, pId)}
+                  onAccept={pId => void acceptSuggestion(bus, pId)}
                   onDismiss={pId => setDismissed(prev => new Set([...prev, pId]))} />
               </>
             }
