@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import type { User } from "../types";
 import { NAV_LAYOUT, NAV_PAGES, NAV_ICON, canAccessPage, isPlainLeftClick, pathForPage, type PageId } from "../navigation/nav";
 import { useSeason } from "../season/useSeason";
@@ -65,7 +66,32 @@ function SeasonContextCard({ compact, canOpen, onOpen }: { compact: boolean; can
   );
 }
 
+/* السايدبار ملتصقٌ بارتفاع الشاشة، لكنه يبدأ تحت البانر (والشريط الموسميّ)،
+   فيقع أسفلُه — وفيه زرّ الطيّ — تحت حافّة الشاشة حتى يُمرَّر. الحشوةُ
+   السفلية تساوي ما خرج منه عن الشاشة: ينتهي عمودُ القائمة عند حافّتها دائماً،
+   والخلفيةُ تبقى بطول السايدبار. تُكتب على العنصر مباشرةً — بلا إعادة رسم. */
+function useFitToViewport() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    let raf = 0;
+    const fit = () => {
+      raf = 0;
+      const el = ref.current; if (!el) return;
+      const r = el.getBoundingClientRect();
+      const hidden = Math.max(0, r.bottom - window.innerHeight);
+      el.style.paddingBottom = hidden ? `${Math.min(hidden, r.height)}px` : "";
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(fit); };
+    fit();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => { window.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  return ref;
+}
+
 function Sidebar({ page, setPage, count, currentUser, onReportsClick, compact, onToggleCompact, drawer, onNavigate }: Props) {
+  const rootRef = useFitToViewport();
   const go = (id: PageId) => {
     setPage(id);
     if (id === "reports") onReportsClick?.();
@@ -73,7 +99,7 @@ function Sidebar({ page, setPage, count, currentUser, onReportsClick, compact, o
   };
 
   return (
-    <div style={{ width: drawer ? "min(280px, 86vw)" : compact ? 56 : "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative", transition: "width .2s ease" }}>
+    <div ref={rootRef} style={{ boxSizing: "border-box", width: drawer ? "min(280px, 86vw)" : compact ? 56 : "var(--sidebar-width)", background: "var(--bg-sidebar)", borderLeft: "0.5px solid var(--border-sidebar)", display: "flex", flexDirection: "column", flexShrink: 0, height: "100%", overflow: "hidden", position: "relative", transition: "width .2s ease" }}>
       <div className="sidebar-pattern" />
       <nav aria-label="التنقّل الرئيسي" style={{ position: "relative", zIndex: 2, flex: 1, overflowY: "auto", overflowX: "hidden", padding: compact ? "8px 6px" : "8px 12px" }}>
         <SeasonContextCard compact={compact} canOpen={canAccessPage(currentUser, "archive")} onOpen={() => go("archive")} />

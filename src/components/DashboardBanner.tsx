@@ -291,7 +291,8 @@ function DashboardBanner({ setPage, currentUser, onLogout, onOpenNav }: {
         </div>
         <div>
           <div style={{ fontSize: 12, color: "rgba(212,160,23,.9)", fontWeight: 700, letterSpacing: "0.1em", marginBottom: 4 }}>نظام إدارة الحج</div>
-          <div style={{ fontFamily: "var(--font-heading)", fontSize: 34, fontWeight: 900, color: "#fff", lineHeight: 1, marginBottom: 5, textShadow: "0 2px 8px rgba(0,0,0,.5)" }}>{identity.nameAr}</div>
+          {/* اسمُ الحملة بخط El Messiri وأكبر بنحو ٢٣٪ (٣٤ → ٤٢)، ويصغر على العرض الضيّق */}
+          <div style={{ fontFamily: "'El Messiri', var(--font-heading)", fontSize: "clamp(28px, 3.4vw, 42px)", fontWeight: 700, color: "#fff", lineHeight: 1.15, marginBottom: 5, textShadow: "0 2px 10px rgba(0,0,0,.55)" }}>{identity.nameAr}</div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", lineHeight: 1.4 }}>{identity.tagline}</div>
         </div>
       </div>
