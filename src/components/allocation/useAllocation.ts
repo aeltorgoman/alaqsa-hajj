@@ -167,26 +167,53 @@ export function useAllocationWrites({
      و`camp_mina_sort_order` لمنى، و`camp_arafa_sort_order` لعرفة.
      كانت الكتابة في `sort_order` العام فتسحق ترتيب كل حاويةٍ أخرى،
      إذ يبدأ كلٌّ ترقيمه من ١. والعمود يأتي من المنادي فلا يُخطأ.
-     والعرضُ تفاؤليّ (السحب يستجيب فوراً)، وما رفضته القاعدة — خطأً أو
-     صفراً من الصفوف — يُعاد إلى قيمته الفعليّة مقروءةً منها. */
+     والعرضُ تفاؤليّ (السحب يستجيب فوراً)، أمّا الكتابة فطابور:
+     كلُّ ترتيبٍ ينتظر سابقه حتى ينتهي، فلا يصل طلبٌ قديمٌ إلى القاعدة بعد
+     طلبٍ أحدث فيسحقه. ولكلّ ترتيبٍ رقم، ولكلّ صفٍّ آخرُ رقمٍ رتّبه: ما رفضته
+     القاعدة يُعاد إلى قيمته الفعليّة المقروءة منها — إلا صفّاً رتّبه ترتيبٌ
+     أحدث، فذاك يحكمه الأحدث. والقيمة المقروءة تُقارَن بالمقصودة: طلبٌ انقطع
+     ردُّه بعد أن حُفظ ليس فشلاً. */
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const generation = useRef(0);
+  const rowGeneration = useRef(new Map<number, number>());
+
   const reorder = useCallback(async (ordered: { id: number }[], fallback: string): Promise<boolean> => {
     if (!guard()) return false;
+    const gen = ++generation.current;
+    for (const item of ordered) rowGeneration.current.set(item.id, gen);
     setPassengers(prev => applyReorder(prev, orderColumn, ordered));
-    const results = await Promise.all(reorderUpdates(orderColumn, ordered).map(q => q.select("id")));
-    const failedIds = ordered
-      .filter((item, i) => { const r = results[i]; return !!r.error || !r.data || r.data.length !== 1 || r.data[0].id !== item.id; })
-      .map(item => item.id);
-    if (!failedIds.length) return true;
-    console.error(fallback, { failedIds, errors: results.filter(r => r.error).map(r => r.error) });
-    const { data: actual, error } = await supabase.from("passengers").select(`id, ${orderColumn}`).in("id", failedIds);
-    if (!error && actual) {
-      const back = new Map((actual as unknown as Record<string, number | null>[]).map(row => [row.id as number, row[orderColumn] ?? null]));
-      setPassengers(prev => prev.map(p => back.has(p.id) ? { ...p, [orderColumn]: back.get(p.id) } : p));
-      showAlert("error", fallback);
-    } else {
-      showAlert("error", `${fallback} — حدّث الصفحة لعرض الترتيب المحفوظ فعلاً`);
-    }
-    return false;
+    const intended = new Map(ordered.map((item, i) => [item.id, (i + 1) * 10]));
+    const isLatest = (id: number) => rowGeneration.current.get(id) === gen;
+
+    const run = queue.current.then(async (): Promise<boolean> => {
+      const results = await Promise.all(reorderUpdates(orderColumn, ordered).map(q => q.select("id")));
+      const failedIds = ordered
+        .filter((item, i) => { const r = results[i]; return !!r.error || !r.data || r.data.length !== 1 || r.data[0].id !== item.id; })
+        .map(item => item.id);
+      if (!failedIds.length) return true;
+
+      const { data: actual, error } = await supabase.from("passengers").select(`id, ${orderColumn}`).in("id", failedIds);
+      if (error || !actual) {
+        console.error(fallback, { failedIds, errors: results.filter(r => r.error).map(r => r.error), readError: error });
+        if (failedIds.some(isLatest)) showAlert("error", `${fallback} — حدّث الصفحة لعرض الترتيب المحفوظ فعلاً`);
+        return false;
+      }
+      const stored = new Map((actual as unknown as Record<string, number | null>[]).map(row => [row.id as number, row[orderColumn] ?? null]));
+      /* صفوفٌ لم تبلغ قيمتَها المقصودة فعلاً — ما سواها حُفظ وإن ضاع ردُّه */
+      const wrong = failedIds.filter(id => stored.get(id) !== intended.get(id));
+      const revert = wrong.filter(id => isLatest(id) && stored.has(id));
+      if (revert.length) {
+        const ids = new Set(revert);
+        setPassengers(prev => prev.map(p => ids.has(p.id) ? { ...p, [orderColumn]: stored.get(p.id) } : p));
+      }
+      if (!wrong.length) return true;
+      console.error(fallback, { wrong, stored: Object.fromEntries(stored), errors: results.filter(r => r.error).map(r => r.error) });
+      /* ما تخطّاه ترتيبٌ أحدث لا يُعلَن فشلُه — الأحدثُ يحكمه ويُعلن عن نفسه */
+      if (wrong.some(isLatest)) showAlert("error", fallback);
+      return false;
+    });
+    queue.current = run.catch(() => undefined);
+    return run;
   }, [guard, orderColumn, setPassengers, showAlert]);
 
   return { assign, move, assignMany, unassign, reorder };
