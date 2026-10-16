@@ -298,6 +298,12 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     showAlert("warning", `«${p.short_ar || p.name_ar}» لم يعد في المخيّم المعروض — غيّر توزيعَه غيرُك في الأثناء. لم يُنقل، وحُدِّثت البيانات.`);
   }
 
+  /* الإخراج مشروطٌ بالمخيّم المعروض كذلك — لا يُخرَج من مخيّمٍ نُقل إليه في الأثناء */
+  const removeP = async (p: Passenger, camp: Camp) => {
+    const r = await writes.unassign(p.id, camp.id, "تعذر إزالة المسافر من المخيم");
+    if (r === "stale") showAlert("warning", `«${p.short_ar || p.name_ar}» لم يعد في المخيّم المعروض — غيّر توزيعَه غيرُك في الأثناء. لم يُزَل، وحُدِّثت البيانات.`);
+  };
+
   /* قبولُ اقتراحٍ في منى: غير الموزَّع يُضاف، والموزَّعُ على مخيّمٍ آخر يُنقل بعد
      تأكيدٍ صريحٍ يسمّي النازل والمخيّمين — ثم تأكيدُ عادي/خاص كما هو، منفصلاً. */
   const acceptSuggestion = async (camp: Camp, pId: number) => {
@@ -729,7 +735,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                                 {others.map(c => <option key={c.id} value={c.id}>{c.name} ({c.capacity == null ? "بلا سعة" : `${remainingOf(c)} متاح`})</option>)}
                               </select>
                             )}
-                            <button disabled={readOnly} onClick={() => void writes.unassign(p.id, "تعذر إزالة المسافر من المخيم")}
+                            <button disabled={readOnly} onClick={() => void removeP(p, camp)}
                               aria-label={`إزالة ${p.short_ar || p.name_ar} من المخيم`} title="إزالة من المخيم"
                               style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--danger)", background: "var(--paper)", cursor: "pointer", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                               <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>
