@@ -21,6 +21,7 @@ import {
 import {
   allocWriteError, matchesPassenger, useAllocationDrag, useAllocationWrites, useContainerSelection,
 } from "./allocation/useAllocation";
+import { deleteContainer, deleteFeedback, updateContainer, updateFeedback, useInFlight, type Feedback } from "./allocation/containerWrites";
 
 /* أيقونة الباص — الفرق الأول الذي تراه العين بين الباص والمخيّم،
    والتمييز بها لا بلوحةِ ألوانٍ خاصّةٍ بالصفحة */
@@ -233,7 +234,18 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   // ══════════════════════════════════════════════════════════
   // الحاوية — إنشاء وتعديل وحذف
   // ══════════════════════════════════════════════════════════
-  const addBus = async () => {
+  /* طلبٌ جارٍ واحدٌ لكلّ عمليّة — النقرة المكرّرة لا تُرسَل */
+  const inFlight = useInFlight();
+
+  /* ما لم يقع كما أُريد: تُعرض الحقيقة وتُحدَّث الحالة منها */
+  const applyFeedback = (bus: Bus, fb: Feedback) => {
+    if (fb.apply?.kind === "remove") { setBuses(prev => prev.filter(b => b.id !== bus.id)); closeBus(); }
+    else if (fb.apply?.kind === "merge") { const row = fb.apply.row as Partial<Bus>; setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, ...row } : b)); setEditingName(false); setEditingCap(false); }
+    showAlert(fb.type, fb.message);
+  };
+  const busLabel = (bus: Bus) => `الباص «${bus.name}»`;
+
+  const addBus = () => inFlight("add", async () => {
     if (!assertWritable()) return;
     const name = busName.trim();
     const cap = parseCapacity(busCapacity);
@@ -251,41 +263,45 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
       setBuses(prev => [...prev, data[0] as Bus]);
       setBusName(""); setBusType("عادي"); setBusCapacity("50"); setShowAdd(false);
     }
-  };
+  });
 
-  const deleteBus = async (bus: Bus) => {
+  /* الحذف ببرهان: لا يُزال الباص من الشاشة إلا إن حُذف فعلاً أو تبيّن أنه
+     لم يعد موجوداً */
+  const deleteBus = (bus: Bus) => inFlight(`delete:${bus.id}`, async () => {
     if (!assertWritable()) return;
     /* القاعدة ترفضه بالمفتاح الأجنبي كذلك — وهذا يشرح قبل المحاولة */
     if (riders(bus.id).length > 0) { showAlert("warning", `الباص «${bus.name}» يضمّ ${paxLabel(riders(bus.id).length)} — أخرِجهم قبل حذفه.`); return; }
-    const { error } = await supabase.from("buses").delete().eq("id", bus.id);
-    if (error) { console.error("فشل حذف الباص", error); showAlert("error", allocWriteError("فشل حذف الباص، يرجى المحاولة مرة أخرى", error.message)); return; }
-    setBuses(prev => prev.filter(b => b.id !== bus.id));
-    closeBus();
-  };
+    const r = await deleteContainer("buses", bus.id);
+    if (r.kind === "ok") { setBuses(prev => prev.filter(b => b.id !== bus.id)); closeBus(); return; }
+    console.error("فشل حذف الباص", r);
+    applyFeedback(bus, deleteFeedback(r, busLabel(bus), "فشل حذف الباص", allocWriteError));
+  });
 
-  const renameBus = async (bus: Bus, name: string) => {
+  /* التعديل ببرهان: صفٌّ واحدٌ عائدٌ من القاعدة، وإلا قيل لماذا */
+  const renameBus = (bus: Bus, name: string) => inFlight(`rename:${bus.id}`, async () => {
     if (!assertWritable()) return;
     const next = name.trim();
     if (!next || next === bus.name) { setEditingName(false); return; }
     if (buses.some(b => b.id !== bus.id && b.name.trim() === next)) { showAlert("warning", `يوجد باص بالاسم "${next}" بالفعل`); return; }
-    const { error } = await supabase.from("buses").update({ name: next }).eq("id", bus.id);
-    if (error) { console.error("تعذر تعديل اسم الباص", error); showAlert("error", allocWriteError("تعذر تعديل اسم الباص", error.message)); return; }
+    const r = await updateContainer("buses", bus.id, { name: next });
+    if (r.kind !== "ok") { console.error("تعذر تعديل اسم الباص", r); applyFeedback(bus, updateFeedback(r, busLabel(bus), "تعذر تعديل اسم الباص", allocWriteError)); return; }
     setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, name: next } : b));
     setEditingName(false);
-  };
+  });
 
-  /* السعة تُعدَّل، ولا تنزل تحت الإشغال — هنا وفي القاعدة */
-  const saveCapacity = async (bus: Bus) => {
+  /* السعة تُعدَّل، ولا تنزل تحت الإشغال — هنا وفي القاعدة. والكتابة مشروطة
+     بالسعة التي رآها الموظّف: لا يُكتب فوق سعةٍ غيّرها غيرُه في الأثناء */
+  const saveCapacity = (bus: Bus) => inFlight(`capacity:${bus.id}`, async () => {
     if (!assertWritable()) return;
     const cap = parseCapacity(capDraft);
     const occ = riders(bus.id).length;
     if (cap === null) { showAlert("warning", "السعة يجب أن تكون عدداً صحيحاً أكبر من صفر"); return; }
     if (cap < occ) { showAlert("warning", `الباص «${bus.name}» يضمّ ${paxLabel(occ)}، فلا تُخفَّض سعته إلى ${cap}. أخرِج المسافرين أولاً.`); return; }
-    const { error } = await supabase.from("buses").update({ capacity: cap }).eq("id", bus.id);
-    if (error) { console.error("تعذر تعديل سعة الباص", error); showAlert("error", allocWriteError("تعذر تعديل سعة الباص", error.message)); return; }
+    const r = await updateContainer("buses", bus.id, { capacity: cap }, { capacity: bus.capacity });
+    if (r.kind !== "ok") { console.error("تعذر تعديل سعة الباص", r); applyFeedback(bus, updateFeedback(r, busLabel(bus), "تعذر تعديل سعة الباص", allocWriteError)); return; }
     setBuses(prev => prev.map(b => b.id === bus.id ? { ...b, capacity: cap } : b));
     setEditingCap(false);
-  };
+  });
 
   // ══════════════════════════════════════════════════════════
   // الاقتراحات الذكيّة — قرابة، ثم غرفة، ثم خيمة منى
