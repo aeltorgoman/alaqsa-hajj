@@ -188,6 +188,12 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   const staleMove = (p: Passenger) => showAlert("warning",
     `«${p.short_ar || p.name_ar}» لم يعد في الباص المعروض — غيّر توزيعَه غيرُك في الأثناء. لم يُنقل، وحُدِّثت البيانات.`);
 
+  /* الإخراج مشروطٌ بالباص المعروض كذلك — لا يُخرَج من باصٍ نُقل إليه في الأثناء */
+  const removeP = async (p: Passenger, bus: Bus) => {
+    const r = await writes.unassign(p.id, bus.id, "تعذر إزالة المسافر من الباص");
+    if (r === "stale") showAlert("warning", `«${p.short_ar || p.name_ar}» لم يعد في الباص المعروض — غيّر توزيعَه غيرُك في الأثناء. لم يُزَل، وحُدِّثت البيانات.`);
+  };
+
   const moveP = async (p: Passenger, toId: string) => {
     if (!toId) return;
     const target = buses.find(b => b.id === parseInt(toId, 10));
@@ -497,7 +503,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
                                 {others.map(b => <option key={b.id} value={b.id}>{b.name} ({remainingOf(b)} متاح)</option>)}
                               </select>
                             )}
-                            <button disabled={readOnly} onClick={() => void writes.unassign(p.id, "تعذر إزالة المسافر من الباص")}
+                            <button disabled={readOnly} onClick={() => void removeP(p, bus)}
                               aria-label={`إزالة ${p.short_ar || p.name_ar} من الباص`} title="إزالة من الباص"
                               style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--danger)", background: "var(--paper)", cursor: "pointer", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                               <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>

@@ -208,29 +208,42 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   // ══════════════════════════════════════════════════════════
   // مسارات الكتابة — كلّها تمرّ بالحدود الصلبة ثم تحذير الأسرة
   // ══════════════════════════════════════════════════════════
+  /* الحدود الصلبة ثم تحذير الأسرة — قبل أي كتابة */
+  const precheck = async (f: Flight, chosen: Passenger[]): Promise<boolean> => {
+    const opt = optOutBlock(chosen);
+    if (opt) { showAlert("warning", opt); return false; }
+    const blocked = seatBlock(f, chosen.length);
+    if (blocked) { showAlert("warning", blocked); return false; }
+    return confirmFamily(f, chosen);
+  };
+
+  /* الدرجة المحجوزة تتبع المدفوعة — والقاعدة ترفض غير ذلك */
+  const markClass = (ids: Set<number>) =>
+    setPassengers(prev => prev.map(x => ids.has(x.id) ? { ...x, flight_class: paidClass(x) } : x));
+
+  /* الإضافة لمن لا رحلة له في هذا الاتجاه وحده، شرطاً في الطلب نفسه: من
+     حُجز على رحلةٍ أخرى من مكانٍ آخر في الأثناء لا يُنقل صامتاً */
   const assignMany = async (f: Flight, chosen: Passenger[]) => {
     if (!chosen.length) return 0;
-    const opt = optOutBlock(chosen);
-    if (opt) { showAlert("warning", opt); return 0; }
-    const blocked = seatBlock(f, chosen.length);
-    if (blocked) { showAlert("warning", blocked); return 0; }
-    if (!await confirmFamily(f, chosen)) return 0;
-    /* الدرجة المحجوزة تتبع المدفوعة — والقاعدة ترفض غير ذلك */
-    const done = await writesFor(f).assignMany(chosen.map(p => p.id), f.id, "تعذر إضافة بعض المسافرين إلى الرحلة");
-    if (done) {
-      const ids = new Set(chosen.slice(0, done).map(p => p.id));
-      setPassengers(prev => prev.map(x => ids.has(x.id) ? { ...x, flight_class: paidClass(x) } : x));
-    }
+    if (!await precheck(f, chosen)) return 0;
+    const done = await writesFor(f).assignMany(chosen.map(p => p.id), f.id, "تعذر إضافة بعض المسافرين إلى الرحلة", null);
+    if (done) markClass(new Set(chosen.slice(0, done).map(p => p.id)));
     return done;
   };
 
   const addOne = async (f: Flight, pId: number) => {
     const p = passengers.find(x => x.id === pId);
-    if (p) await assignMany(f, [p]);
+    if (!p || !await precheck(f, [p])) return;
+    const r = await writesFor(f).move(p.id, null, f.id, "تعذر إضافة المسافر إلى الرحلة");
+    if (r === "ok") markClass(new Set([p.id]));
+    else if (r === "stale") showAlert("warning", `«${p.short_ar || p.name_ar}» حُجز على رحلة ${f.type} أخرى من مكانٍ آخر — لم يُضَف، وحُدِّثت البيانات.`);
   };
 
   const addPicked = async (f: Flight) => {
-    const chosen = passengers.filter(p => picked.has(p.id));
+    /* من حُجز في الأثناء (إضافةٌ فرديّة أو تحديثٌ لحظيّ) يبقى في التحديد وقد
+       خرج من القائمة — لا يُرسَل، وإلا ردّه الشرط فأوقف إضافة الباقين */
+    const leg = legOf(f.type);
+    const chosen = passengers.filter(p => picked.has(p.id) && p[leg] == null);
     const done = await assignMany(f, chosen);
     if (done === chosen.length) setPicked(new Set());
     else setPicked(new Set(chosen.slice(done).map(p => p.id)));
@@ -245,7 +258,18 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     const blocked = seatBlock(target, 1);
     if (blocked) { showAlert("warning", blocked); return; }
     if (!await confirmFamily(target, [p])) return;
-    await writesFor(target).assign(p.id, target.id, "تعذر نقل المسافر إلى الرحلة الأخرى");
+    /* نقلٌ مشروطٌ بالرحلة المعروضة — لا كتابةَ فوق نقلٍ أجراه غيرُك في الأثناء */
+    const r = await writesFor(target).move(p.id, from.id, target.id, "تعذر نقل المسافر إلى الرحلة الأخرى");
+    if (r === "stale") staleOn(p, "لم يُنقل");
+  };
+
+  const staleOn = (p: Passenger, what: string) => showAlert("warning",
+    `«${p.short_ar || p.name_ar}» لم يعد على الرحلة المعروضة — غيّر حجزَه غيرُك في الأثناء. ${what}، وحُدِّثت البيانات.`);
+
+  /* الإخراج مشروطٌ بالرحلة المعروضة كذلك — لا يُلغى حجزٌ على رحلةٍ نُقل إليها في الأثناء */
+  const removeP = async (f: Flight, p: Passenger) => {
+    const r = await writesFor(f).unassign(p.id, f.id, "تعذر إزالة المسافر من الرحلة");
+    if (r === "stale") staleOn(p, "لم يُزَل");
   };
 
   // ══════════════════════════════════════════════════════════
@@ -709,7 +733,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                                 {others.map(x => <option key={x.id} value={x.id}>{x.name} ({x.capacity == null ? "بلا مقاعد" : `${remainingOf(x)} متاح`})</option>)}
                               </select>
                             )}
-                            <button disabled={readOnly} onClick={() => void writesFor(f).unassign(p.id, "تعذر إزالة المسافر من الرحلة")}
+                            <button disabled={readOnly} onClick={() => void removeP(f, p)}
                               aria-label={`إزالة ${p.short_ar || p.name_ar} من الرحلة`} title="إزالة من الرحلة"
                               style={{ ...roOff, width: 24, height: 24, borderRadius: 7, border: "1px solid var(--danger)", background: "var(--paper)", cursor: "pointer", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                               <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>

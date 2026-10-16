@@ -48,9 +48,11 @@ export function allocWriteError(fallback: string, msg?: string): string {
 // `manage_passengers`، أو إداريٌّ بلا `manage_admins`)، فيمرّ الطلب
 // بلا خطأ ولا يمسّ شيئاً. فالنجاحُ عودةُ صفّه بعينه، وصفرُ صفوفٍ فشل.
 
-/* نتيجة النقل المشروط: «stale» = لم يعد الحاجّ في الحاوية المتوقَّعة
-   (غيّره غيرُك) — لم يُكتب شيء، وحُدِّثت الحالة المحليّة بقيمته الفعليّة */
-export type MoveOutcome = "ok" | "stale" | "failed";
+/* نتيجة الكتابة المشروطة: «stale» = لم يعد الحاجّ في الحاوية المتوقَّعة
+   (غيّره غيرُك) — لم يُكتب شيء، وحُدِّثت الحالة المحليّة بقيمته الفعليّة.
+   «busy» = كتابةٌ سابقة للحاجّ نفسه من هذه الصفحة لم تنتهِ بعد (نقرةٌ
+   مكرّرة) — لم يُرسَل طلبٌ ثانٍ، ولا رسالة. */
+export type MoveOutcome = "ok" | "stale" | "failed" | "busy";
 
 const NO_ROWS = "لم يتغيّر شيء في قاعدة البيانات — قد لا تملك صلاحية تعديل هذا المسافر.";
 
@@ -69,12 +71,12 @@ export function useAllocationWrites({
     return true;
   }, [readOnly, onBlocked]);
 
-  /* كتابةٌ واحدة ببرهانها. `expectFrom` (اختياريّ) شرطٌ على القيمة الحاليّة
-     داخل الطلب نفسه: لا يُكتب إلا إن كان الحاجّ حيث يُظَنّ — `null` = غير موزَّع. */
-  const writeOne = useCallback(async (passengerId: number, value: number | null, expectFrom?: number | null) => {
+  /* كتابةٌ واحدة ببرهانها. `expectFrom` شرطٌ على القيمة الحاليّة داخل الطلب
+     نفسه: لا يُكتب إلا إن كان الحاجّ حيث يُظَنّ — `null` = غير موزَّع. */
+  const writeOne = useCallback(async (passengerId: number, value: number | null, expectFrom: number | null) => {
     let q = supabase.from("passengers")
       .update({ [column]: value } as TablesUpdate<"passengers">).eq("id", passengerId);
-    if (expectFrom !== undefined) q = expectFrom === null ? q.is(column, null) : q.eq(column, expectFrom);
+    q = expectFrom === null ? q.is(column, null) : q.eq(column, expectFrom);
     const { data, error } = await q.select("id");
     if (error) return { ok: false as const, message: error.message };
     if (!data || data.length !== 1 || data[0].id !== passengerId) return { ok: false as const, noRows: true };
@@ -88,80 +90,103 @@ export function useAllocationWrites({
     return { found: true, value: (data as Record<string, number | null>)[column] ?? null };
   }, [column]);
 
-  /* إسناد واحد */
-  const assign = useCallback(async (passengerId: number, containerId: number, fallback: string): Promise<boolean> => {
-    if (!guard()) return false;
-    const r = await writeOne(passengerId, containerId);
-    if (!r.ok) {
+  /* لا كتابتان معاً للحاجّ نفسه من هذه الصفحة. النقرةُ الثانية قبل انتهاء
+     الأولى كانت تُرسَل فتعود بصفر صفوف (الأولى غيّرت القيمة) فتبدو «غيّره
+     غيرُك» — وما غيّره إلا نحن. فتُحجَز الأرقامُ طوال الطلب وتُتجاهَل
+     المكرّرة. ولا يُستنتَج نجاحُنا من مطابقة القيمة للهدف: قد تكون كتابةَ
+     غيرِنا، فتبقى «stale». */
+  const inFlight = useRef(new Set<number>());
+  const claim = useCallback((ids: number[]) => {
+    if (ids.some(id => inFlight.current.has(id))) return false;
+    for (const id of ids) inFlight.current.add(id);
+    return true;
+  }, []);
+  const release = useCallback((ids: number[]) => { for (const id of ids) inFlight.current.delete(id); }, []);
+
+  /* كتابةٌ مشروطة لحاجٍّ واحد: من `expectFrom` إلى `value` في طلبٍ واحد —
+     لا إخراجَ ثم إسناد. فإن لم يعد الحاجّ حيث يُظَنّ لم يُكتب شيء، وتُحدَّث
+     الحالة المحليّة بقيمته الفعليّة، ويقرّر المنادي ما يقول («stale»). */
+  const writeIf = useCallback(async (passengerId: number, expectFrom: number | null, value: number | null, fallback: string): Promise<MoveOutcome> => {
+    if (!guard()) return "failed";
+    if (!claim([passengerId])) return "busy";
+    try {
+      const r = await writeOne(passengerId, value, expectFrom);
+      if (r.ok) {
+        setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: value } : p));
+        return "ok";
+      }
+      if (r.noRows) {
+        const cur = await readCurrent(passengerId);
+        if (cur.found && cur.value !== expectFrom) {
+          setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: cur.value } : p));
+          return "stale";
+        }
+      }
       console.error(fallback, r);
       showAlert("error", r.noRows ? `${fallback}: ${NO_ROWS}` : allocWriteError(fallback, r.message));
-      return false;
+      return "failed";
+    } finally {
+      release([passengerId]);
     }
-    setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: containerId } : p));
-    return true;
-  }, [column, guard, setPassengers, showAlert, writeOne]);
+  }, [claim, column, guard, readCurrent, release, setPassengers, showAlert, writeOne]);
 
-  /* نقلٌ مشروط: من `expectFrom` إلى `containerId` في طلبٍ واحد — لا إخراجَ ثم
-     إسناد. فإن لم يعد الحاجّ حيث يُظَنّ لم يُكتب شيء، وتُحدَّث الحالة المحليّة
-     بقيمته الفعليّة، ويقرّر المنادي ما يقول («stale»). */
-  const move = useCallback(async (passengerId: number, expectFrom: number | null, containerId: number, fallback: string): Promise<MoveOutcome> => {
-    if (!guard()) return "failed";
-    const r = await writeOne(passengerId, containerId, expectFrom);
-    if (r.ok) {
-      setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: containerId } : p));
-      return "ok";
-    }
-    if (r.noRows) {
-      const cur = await readCurrent(passengerId);
-      if (cur.found && cur.value !== expectFrom) {
-        setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: cur.value } : p));
-        return "stale";
-      }
-    }
-    console.error(fallback, r);
-    showAlert("error", r.noRows ? `${fallback}: ${NO_ROWS}` : allocWriteError(fallback, r.message));
-    return "failed";
-  }, [column, guard, readCurrent, setPassengers, showAlert, writeOne]);
+  /* نقلٌ أو إسنادٌ مشروط — `expectFrom = null` إسنادُ غيرِ الموزَّع وحده */
+  const move = useCallback((passengerId: number, expectFrom: number | null, containerId: number, fallback: string): Promise<MoveOutcome> =>
+    writeIf(passengerId, expectFrom, containerId, fallback), [writeIf]);
 
   /* إسناد دفعة — واحداً بعد واحد لا على التوازي: السقف في القاعدة
      يقفل صفّ الحاوية، وعشرون طلباً متوازياً على قفلٍ واحد يطيل
      الانتظار بلا فائدة. والتسلسل يجعل الرفض دقيقاً: نعرف من دخل
-     ومن ردّته السعة. و`expectFrom` (اختياريّ) كما في `move`. */
-  const assignMany = useCallback(async (passengerIds: number[], containerId: number, fallback: string, expectFrom?: number | null): Promise<number> => {
+     ومن ردّته السعة. و`expectFrom` شرطٌ على كلّ صفّ كما في `move` —
+     إلزاميّ، فلا إسنادَ دفعةٍ يكتب فوق توزيعٍ لم يره الموظّف. */
+  const assignMany = useCallback(async (passengerIds: number[], containerId: number, fallback: string, expectFrom: number | null): Promise<number> => {
     if (!guard()) return 0;
-    const done: number[] = [];
-    let failure: string | undefined;
-    for (const id of passengerIds) {
-      const r = await writeOne(id, containerId, expectFrom);
-      if (!r.ok) {
-        console.error(fallback, r);
-        failure = r.noRows
-          ? (expectFrom !== undefined ? `${fallback}: تغيّر توزيع أحد المسافرين من مكانٍ آخر، أو ${NO_ROWS}` : `${fallback}: ${NO_ROWS}`)
-          : allocWriteError(fallback, r.message);
-        break;
+    /* دفعةٌ تتقاطع مع كتابةٍ جارية: إن كانت كلُّها جاريةً فهي تكرارٌ (نقرةٌ
+       مزدوجة) يُتجاهَل صامتاً، وإن تقاطعت ببعضها فلا يُرسَل شيء ويُقال لماذا
+       — لا تُبتلَع إضافةُ الباقين بلا تفسير. */
+    if (!claim(passengerIds)) {
+      const busy = passengerIds.filter(id => inFlight.current.has(id)).length;
+      if (busy < passengerIds.length) {
+        showAlert("warning", `${fallback}: عمليةٌ سابقة على ${busy === 1 ? "أحد المختارين" : `${busy} من المختارين`} ما زالت جارية — لم يُرسَل شيء. انتظر انتهاءها ثم أعد المحاولة.`);
       }
-      done.push(id);
+      return 0;
     }
-    if (done.length) {
-      const set = new Set(done);
-      setPassengers(prev => prev.map(p => set.has(p.id) ? { ...p, [column]: containerId } : p));
+    try {
+      const done: number[] = [];
+      let failure: string | undefined;
+      for (const id of passengerIds) {
+        const r = await writeOne(id, containerId, expectFrom);
+        if (!r.ok) {
+          console.error(fallback, r);
+          if (r.noRows) {
+            /* من تغيّر توزيعه تُحدَّث حالته المحليّة بقيمته الفعليّة */
+            const cur = await readCurrent(id);
+            if (cur.found && cur.value !== expectFrom) {
+              setPassengers(prev => prev.map(p => p.id === id ? { ...p, [column]: cur.value } : p));
+            }
+            failure = `${fallback}: تغيّر توزيع أحد المسافرين من مكانٍ آخر، أو ${NO_ROWS}`;
+          } else {
+            failure = allocWriteError(fallback, r.message);
+          }
+          break;
+        }
+        done.push(id);
+      }
+      if (done.length) {
+        const set = new Set(done);
+        setPassengers(prev => prev.map(p => set.has(p.id) ? { ...p, [column]: containerId } : p));
+      }
+      if (failure) showAlert("error", failure);
+      return done.length;
+    } finally {
+      release(passengerIds);
     }
-    if (failure) showAlert("error", failure);
-    return done.length;
-  }, [column, guard, setPassengers, showAlert, writeOne]);
+  }, [claim, column, guard, readCurrent, release, setPassengers, showAlert, writeOne]);
 
-  /* إخراج — لا يُفحص سقفٌ عند إخلاء مقعد */
-  const unassign = useCallback(async (passengerId: number, fallback: string): Promise<boolean> => {
-    if (!guard()) return false;
-    const r = await writeOne(passengerId, null);
-    if (!r.ok) {
-      console.error(fallback, r);
-      showAlert("error", r.noRows ? `${fallback}: ${NO_ROWS}` : allocWriteError(fallback, r.message));
-      return false;
-    }
-    setPassengers(prev => prev.map(p => p.id === passengerId ? { ...p, [column]: null } : p));
-    return true;
-  }, [column, guard, setPassengers, showAlert, writeOne]);
+  /* إخراجٌ مشروط بالحاوية المعروضة — لا يُفحص سقفٌ عند إخلاء مقعد، لكن لا
+     يُخرَج حاجٌّ نقله غيرُك إلى حاويةٍ أخرى في الأثناء («stale»). */
+  const unassign = useCallback((passengerId: number, expectFrom: number, fallback: string): Promise<MoveOutcome> =>
+    writeIf(passengerId, expectFrom, null, fallback), [writeIf]);
 
   /* الترتيب يكتب في عمود الحاوية وحده — `bus_sort_order` للباص،
      و`camp_mina_sort_order` لمنى، و`camp_arafa_sort_order` لعرفة.
@@ -216,7 +241,7 @@ export function useAllocationWrites({
     return run;
   }, [guard, orderColumn, setPassengers, showAlert]);
 
-  return { assign, move, assignMany, unassign, reorder };
+  return { move, assignMany, unassign, reorder };
 }
 
 // ═══════════════════════════════════════════════════════════
