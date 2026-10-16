@@ -141,7 +141,16 @@ export function useAllocationWrites({
      إلزاميّ، فلا إسنادَ دفعةٍ يكتب فوق توزيعٍ لم يره الموظّف. */
   const assignMany = useCallback(async (passengerIds: number[], containerId: number, fallback: string, expectFrom: number | null): Promise<number> => {
     if (!guard()) return 0;
-    if (!claim(passengerIds)) return 0;   // دفعةٌ مكرّرة والأولى جارية
+    /* دفعةٌ تتقاطع مع كتابةٍ جارية: إن كانت كلُّها جاريةً فهي تكرارٌ (نقرةٌ
+       مزدوجة) يُتجاهَل صامتاً، وإن تقاطعت ببعضها فلا يُرسَل شيء ويُقال لماذا
+       — لا تُبتلَع إضافةُ الباقين بلا تفسير. */
+    if (!claim(passengerIds)) {
+      const busy = passengerIds.filter(id => inFlight.current.has(id)).length;
+      if (busy < passengerIds.length) {
+        showAlert("warning", `${fallback}: عمليةٌ سابقة على ${busy === 1 ? "أحد المختارين" : `${busy} من المختارين`} ما زالت جارية — لم يُرسَل شيء. انتظر انتهاءها ثم أعد المحاولة.`);
+      }
+      return 0;
+    }
     try {
       const done: number[] = [];
       let failure: string | undefined;

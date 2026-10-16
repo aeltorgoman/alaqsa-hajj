@@ -240,7 +240,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   };
 
   const addPicked = async (f: Flight) => {
-    const chosen = passengers.filter(p => picked.has(p.id));
+    /* من حُجز في الأثناء (إضافةٌ فرديّة أو تحديثٌ لحظيّ) يبقى في التحديد وقد
+       خرج من القائمة — لا يُرسَل، وإلا ردّه الشرط فأوقف إضافة الباقين */
+    const leg = legOf(f.type);
+    const chosen = passengers.filter(p => picked.has(p.id) && p[leg] == null);
     const done = await assignMany(f, chosen);
     if (done === chosen.length) setPicked(new Set());
     else setPicked(new Set(chosen.slice(done).map(p => p.id)));
