@@ -379,9 +379,12 @@ export function SuggestionStrip({ items, onAccept, onDismiss, blockedReason }: {
 // والباص يسع خمسين — قائمةٌ بهذا الطول في عمودٍ بهذا الضيق، إلى
 // جانب منتقٍ، غيرُ قابلةٍ للاستعمال.
 export function AllocationDialog({
-  onClose, icon, title, badges, meta, actions, roster, picker, labelledBy = "alloc-dialog-title",
+  onClose, onEscape, icon, title, badges, meta, actions, roster, picker, labelledBy = "alloc-dialog-title",
 }: {
   onClose: () => void;
+  /* Escape يُعرض أوّلاً على الصفحة: إن ألغت به تعديلاً جارياً (true) بقي
+     المودال مفتوحاً — أيّاً كان موضع البؤرة داخله، لا داخل الحقل وحده */
+  onEscape?: () => boolean;
   icon: React.ReactNode;
   title: React.ReactNode;
   badges?: React.ReactNode;
@@ -393,13 +396,27 @@ export function AllocationDialog({
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
+  /* أحدثُ `onClose` في مرجع: كان المستمع يُعاد تسجيله والبؤرةُ تُسحب إلى
+     المودال كلّما تغيّرت هويّة `onClose` — أي مع كلّ رسمٍ في صفحةٍ تبنيها
+     من جديد — فيفقد حقلُ الكتابة بؤرته بعد أوّل حرف */
+  const onCloseRef = useRef(onClose);
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => { onCloseRef.current = onClose; onEscapeRef.current = onEscape; }, [onClose, onEscape]);
+
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      /* تعديلٌ أُلغي: تعود البؤرة إلى المودال (كان الحقل نفسه قد زال) فتغلقه
+         Escape التالية */
+      if (onEscapeRef.current?.()) { cardRef.current?.focus(); return; }
+      onCloseRef.current();
+    };
     document.addEventListener("keydown", h);
-    /* البؤرة تدخل المودال فلا تبقى خلف الحجاب */
-    cardRef.current?.focus();
     return () => document.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, []);
+
+  /* البؤرة تدخل المودال مرّةً عند فتحه فلا تبقى خلف الحجاب — لا عند كلّ رسم */
+  useEffect(() => { cardRef.current?.focus(); }, []);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
