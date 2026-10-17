@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { isHajj, byOrder, applyReorder, mapPassenger, upsertPassenger } from "../utils/passenger";
 import { hotelNameOf, roomLabel } from "../utils/hotels";
 import { allocWriteError } from "./allocation/useAllocation";
+import { useInFlight, updateContainer, deleteContainer, updateFeedback, deleteFeedback, type Feedback } from "./allocation/containerWrites";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
 import type { Hotel, Passenger, Room } from "../types";
@@ -50,19 +51,22 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   /* تأكيدُ النقل المعلَّق — قبل مستمع Escape الذي يغلقه أوّلاً */
   const [transfer, setTransfer] = useState<{ p: Passenger; dest: Room } | null>(null);
   const [transferring, setTransferring] = useState(false);
+  /* الحذفُ جارٍ: التأكيدُ يبقى مفتوحاً وزرّاه معطّلان حتى يُعرف ما وقع */
+  const [deletingRoom, setDeletingRoom] = useState(false);
 
   /* إغلاق المودالات بمفتاح Escape */
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (transfer) { if (!transferring) setTransfer(null); return; }
+      if (deletingRoom) return;
       if (showAddPilgrim) { setShowAddPilgrim(false); return; }
       if (showAddRoom) { setShowAddRoom(false); return; }
       if (selectedRoom) { setSelectedRoom(null); return; }
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [selectedRoom, showAddRoom, showAddPilgrim, transfer, transferring]);
+  }, [selectedRoom, showAddRoom, showAddPilgrim, transfer, transferring, deletingRoom]);
   const [pSearch, setPSearch] = useState("");
   /* ترتيب الأسماء داخل الغرفة — عرضٌ تشغيلي لكشف الفندق، وليس
      إسناد أسرّة: الرقم موضع في القائمة لا سرير بعينه. ولم يكن
@@ -358,13 +362,14 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
      أخرى)، فتظهر مكتملةً وتخرج من قائمة الوجهات. القاعدةُ هي الحَكَم:
      نزيلٌ لم تحمله الصفحةُ قطّ يُضاف، والموجودُ يُستبدل (`upsertPassenger`
      — لا تكرار)، ومن تظنّه الصفحةُ فيها وليس فيها يُقرأ من جديد. */
-  const refreshRoomOccupants = async (roomId: number) => {
+  const refreshRoomOccupants = async (roomId: number): Promise<boolean> => {
     const { data } = await supabase.from("passengers").select("*").eq("room_id", roomId);
-    if (!data) return;
+    if (!data) return false;
     const inRoom = new Set(data.map(row => row.id));
     const stale = passengers.filter(p => p.room_id === roomId && !inRoom.has(p.id)).map(p => p.id);
     const moved = stale.length ? (await supabase.from("passengers").select("*").in("id", stale)).data ?? [] : [];
     setPassengers(prev => [...data, ...moved].reduce((list, row) => upsertPassenger(list, mapPassenger(row)), prev));
+    return true;
   };
   /* أحدثُ طلبٍ وحده يُطبَّق: ردٌّ أقدم (ناجحاً أو فاشلاً) يصل متأخّراً يُهمَل */
   const seasonRoomsSeq = useRef(0);
@@ -382,31 +387,35 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
      في أمرٍ واحد — لا يمرّ الحاجّ بحالة «بلا غرفة» بين غرفتين. وتحكم
      القاعدةُ بالصلاحية (manage_hotel، أو صلاحيةُ الشخص) والسعةِ والموسم.
      رسالتُها العربية تُعرض كما هي، ثمّ يُقرأ الحاجّ من جديد. */
-  /* `expected` (#62): الغرفةُ التي أكّدها الموظّف مصدراً — تفحصها القاعدةُ تحت
-     قفل صفّ الحاجّ نفسِه، فلا يكتب نقلٌ فوق نقلٍ متزامن. */
+  /* `expected` (#62): الغرفةُ التي رآها الموظّف مصدراً — `null` = بلا غرفة.
+     تفحصها القاعدةُ تحت قفل صفّ الحاجّ نفسِه في كلّ كتابة: الإسنادُ الأوّل
+     والإخراجُ والنقل. فلا يُسنَد حاجٌّ أسنده غيرُك في الأثناء، ولا يُخرَج من
+     غرفةٍ نُقل إليها ولم يرها الموظّف. وطلبٌ واحدٌ جارٍ لكلّ حاجّ. */
+  const placing = useInFlight();
   const placePassenger = async (pId: number, roomId: number | null, failMessage: string,
-                                expected?: { room: number | null; name: string }) => {
+                                expected: { room: number | null; name: string; stale: string }) => {
     if (!assertWritable()) return false;
-    const { error } = expected
-      ? await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId, p_expected_room_id: expected.room })
-      : await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId });
-    if (error && expected && error.hint === "mod001_stale_source") {
-      showAlert("warning", `تغيّر مكان ${expected.name} منذ فتح التأكيد — لم يُنقل. راجع مكانه الحالي وأعد النقل.`);
-      await refreshPassenger(pId);
-      return false;
-    }
-    if (error) {
-      console.error(failMessage, error);
-      showAlert("error", allocWriteError(failMessage, error.message));
-      await refreshPassenger(pId);
-      return false;
-    }
-    setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: roomId } : p));
-    return true;
+    let ok = false;
+    await placing(`place:${pId}`, async () => {
+      const { error } = await supabase.rpc("assign_passenger_room", { p_passenger_id: pId, p_room_id: roomId, p_expected_room_id: expected.room });
+      if (!error) {
+        setPassengers(prev => prev.map(p => p.id === pId ? { ...p, room_id: roomId } : p));
+        ok = true;
+        return;
+      }
+      if (error.hint === "mod001_stale_source") showAlert("warning", `تغيّر مكان ${expected.name} من شاشةٍ أخرى — ${expected.stale}. عُرض مكانه الحالي.`);
+      else { console.error(failMessage, error); showAlert("error", allocWriteError(failMessage, error.message)); }
+      /* القاعدةُ هي الحَكَم: الحاجُّ وغرفتا العملية كما هي الآن (امتلأت أو تغيّر نزلاؤها) */
+      await Promise.all([refreshPassenger(pId),
+        ...[...new Set([expected.room, roomId])].filter((r): r is number => r != null).map(refreshRoomOccupants)]);
+    });
+    return ok;
   };
+  const nameOf = (p: Passenger) => p.short_ar || makeShort(p.name_ar);
 
-  const removeFromRoom = async (pId: number) => {
-    if (!await placePassenger(pId, null, "تعذر إخراج الحاج من الغرفة")) return;
+  const removeFromRoom = async (p: Passenger) => {
+    if (!await placePassenger(p.id, null, "تعذر إخراج الحاج من الغرفة",
+      { room: p.room_id ?? null, name: nameOf(p), stale: "لم يُخرَج" })) return;
     showAlert("success", "تمت الإزالة من الغرفة"); setTimeout(() => showAlert(null), 2000);
   };
 
@@ -422,7 +431,10 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
         : `الغرفة ${room.number} مكتملة (${roomPassengers(room.id).length}/${cap})`);
       return false;
     }
-    return placePassenger(pId, room.id, "تعذر إضافة الحاج إلى الغرفة");
+    const p = passengers.find(x => x.id === pId);
+    if (!p) return false;
+    return placePassenger(pId, room.id, "تعذر إضافة الحاج إلى الغرفة",
+      { room: p.room_id ?? null, name: nameOf(p), stale: "لم يُسنَد" });
   };
 
   const addToRoom = async (pId: number) => {
@@ -445,7 +457,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     /* المصدرُ الذي أكّده الموظّف يُرسَل مع النقل، والقاعدةُ ترفض ذرّيّاً إن
        كان الحاجّ قد نُقل منذ فتح التأكيد — فلا يُنقل من غرفةٍ لم يرها. */
     const ok = await placePassenger(p.id, dest.id, "تعذّر نقل الحاج — بقي في غرفته",
-      { room: p.room_id ?? null, name: p.short_ar || makeShort(p.name_ar) });
+      { room: p.room_id ?? null, name: nameOf(p), stale: "لم يُنقل" });
     setTransferring(false);
     setTransfer(null);
     if (!ok) {
@@ -460,49 +472,110 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     setTimeout(() => showAlert(null), 2500);
   };
 
-  const reorderRoom = async (roomId: number, fromId: number, toId: number) => {
-    if (fromId === toId) return;
+  /* السحبُ يُعرض فوراً، والحفظُ واحدٌ جارٍ لكلّ غرفة: سحبٌ أثناء حفظٍ لم
+     ينتهِ يُهمَل فلا يتسابق طلبان على ترتيب الغرفة نفسِها. وإن رُفض الحفظ
+     (تغيّر نزلاءُ الغرفة من شاشةٍ أخرى، أو انقطع الاتصال) لا يبقى على
+     الشاشة ترتيبٌ لم يُحفظ: يُقرأ نزلاءُ الغرفة من القاعدة، وإن تعذّرت
+     القراءةُ عاد الترتيبُ الذي كان قبل السحب. */
+  const ordering = useInFlight();
+  const reorderRoom = (roomId: number, fromId: number, toId: number) => ordering(`order:${roomId}`, async () => {
+    if (fromId === toId || !assertWritable()) return;
     const list = roomPassengers(roomId);
     const from = list.findIndex(p => p.id === fromId);
     const to   = list.findIndex(p => p.id === toId);
     if (from === -1 || to === -1) return;
     const next = [...list];
     next.splice(to, 0, ...next.splice(from, 1));
+    const before = new Map(list.map(p => [p.id, p.room_sort_order]));
     setPassengers(prev => applyReorder(prev, "room_sort_order", next));
     /* دفعةٌ واحدةٌ ذرّيّة بدل تحديثٍ لكلّ نزيل — القيمُ نفسُها (i+1)×10 */
-    await writeOk(supabase.rpc("set_room_order", { p_room_id: roomId, p_passenger_ids: next.map(p => p.id) }), "تعذّر حفظ ترتيب الغرفة");
+    const { error } = await supabase.rpc("set_room_order", { p_room_id: roomId, p_passenger_ids: next.map(p => p.id) });
+    if (!error) return;
+    console.error("تعذّر حفظ ترتيب الغرفة", error);
+    showAlert("error", allocWriteError("تعذّر حفظ ترتيب الغرفة", error.message));
+    if (!await refreshRoomOccupants(roomId))
+      setPassengers(prev => prev.map(p => before.has(p.id) ? { ...p, room_sort_order: before.get(p.id) ?? null } : p));
+  });
+
+  /* نتيجةُ كتابةٍ على غرفةٍ لم تتمّ: حُذفت من مكانٍ آخر فتُزال، أو غيّرها
+     غيرُك فتُعرض قيمتُها الفعليّة — في الشبكة واللوحة معاً */
+  const roomLabelOf = (room: Room) => `الغرفة «${room.number}»`;
+  const applyRoomFeedback = (room: Room, fb: Feedback) => {
+    if (fb.apply?.kind === "remove") {
+      setRooms(prev => prev.filter(r => r.id !== room.id));
+      setSelectedRoom(prev => prev?.id === room.id ? null : prev);
+      setConfirmDelete(prev => prev?.id === room.id ? null : prev);
+    } else if (fb.apply?.kind === "merge") {
+      const row = fb.apply.row as Partial<Room>;
+      const merged = { ...room, ...row };
+      setRooms(prev => prev.map(r => r.id === room.id ? { ...r, ...row } : r));
+      setSelectedRoom(prev => prev?.id === room.id ? { ...prev, ...row } : prev);
+      setPanelType(merged.type); setPanelCap(String(capOf(merged) ?? ""));
+    }
+    showAlert(fb.type, fb.message);
   };
 
-  const deleteRoom = async (room: Room) => {
-    if (!assertWritable()) return;
+  /* الحذف ببرهان: لا تُزال الغرفة إلا إن حُذفت فعلاً أو تبيّن أنها لم تعد
+     موجودة. يرجع true حين لم تعد الغرفةُ قائمة — فيُغلق التأكيد. */
+  const roomWrites = useInFlight();
+  const deleteRoom = async (room: Room): Promise<boolean> => {
+    if (!assertWritable()) return false;
     const occ = roomPassengers(room.id);
-    if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها نزلاء"); return; }
-    if (!await writeOk(supabase.from("rooms").delete().eq("id", room.id), "تعذر حذف الغرفة")) return;
-    setRooms(prev => prev.filter(r => r.id !== room.id));
-    setSelectedRoom(null);
-    showAlert("success", "تم حذف الغرفة"); setTimeout(() => showAlert(null), 2500);
+    if (occ.length > 0) { showAlert("error", "لا يمكن حذف غرفة بها نزلاء"); return false; }
+    let gone = false;
+    await roomWrites(`room:${room.id}`, async () => {
+      const r = await deleteContainer("rooms", room.id);
+      if (r.kind === "ok") {
+        setRooms(prev => prev.filter(x => x.id !== room.id));
+        setSelectedRoom(null);
+        gone = true;
+        showAlert("success", "تم حذف الغرفة"); setTimeout(() => showAlert(null), 2500);
+        return;
+      }
+      console.error("تعذر حذف الغرفة", r);
+      const fb = deleteFeedback(r, roomLabelOf(room), "تعذر حذف الغرفة", allocWriteError, true);
+      gone = fb.apply?.kind === "remove";
+      applyRoomFeedback(room, fb);
+      /* أُسند إليها نزلاءُ من شاشةٍ أخرى: يظهرون في اللوحة فيُفهم الرفض */
+      if (r.kind === "inUse") await refreshRoomOccupants(room.id);
+    });
+    return gone;
   };
 
   /* تغيير النوع/السعة لا ينزل تحت عدد الساكنين. كانت رباعيةٌ فيها
-     أربعة تصير فرديّة بضغطة، فتُقرأ ٤/١ بلا أن يُخرَج أحد. */
-  const saveRoomCapacity = async (type: Room["type"], rawCap: string) => {
-    if (!selectedRoom || !assertWritable()) return;
-    const occ = roomPassengers(selectedRoom.id).length;
-    const nextCap = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : parseInt(rawCap, 10);
-    if (!isFixedCapType(type) && !(nextCap > 0)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
-    if (nextCap < occ) {
-      showAlert("error", `الغرفة تضمّ ${occ} نزيلاً، فلا تُخفَّض سعتها إلى ${nextCap}. أخرِج النزلاء أولاً.`);
-      return;
-    }
-    const payload = { type, capacity: isFixedCapType(type) ? null : nextCap };
-    const { error } = await supabase.from("rooms").update(payload).eq("id", selectedRoom.id).select();
-    if (error) { showAlert("error", error.message || "تعذر تعديل نوع الغرفة"); return; }
-    /* القاعدة تفرض سعة النوع القياسيّ، فتُقرأ منها لا تُخمَّن */
-    const applied = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : nextCap;
-    setPanelType(type); setPanelCap(String(applied));
-    setRooms(prev => prev.map(r => r.id === selectedRoom.id ? { ...r, type, capacity: applied } : r));
-    setSelectedRoom(prev => prev ? { ...prev, type, capacity: applied } : prev);
-    showAlert("success", "تم تحديث الغرفة"); setTimeout(() => showAlert(null), 2000);
+     أربعة تصير فرديّة بضغطة، فتُقرأ ٤/١ بلا أن يُخرَج أحد. والكتابةُ
+     مشروطةٌ بالنوع والسعة اللذين رآهما الموظّف، والقاعدةُ تفرض حدَّ
+     الإشغال تحت قفل الغرفة. فإن رُفضت لا تبقى اللوحةُ على قيمةٍ لم تُحفظ. */
+  const saveRoomCapacity = (type: Room["type"], rawCap: string) => {
+    const room = selectedRoom;
+    if (!room) return;
+    return roomWrites(`room:${room.id}`, async () => {
+      if (!assertWritable()) return;
+      const occ = roomPassengers(room.id).length;
+      const nextCap = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : parseInt(rawCap, 10);
+      if (!isFixedCapType(type) && !(nextCap > 0)) { showAlert("error", "غرفة «خاص» تحتاج سعة صريحة أكبر من صفر"); return; }
+      if (nextCap < occ) {
+        showAlert("error", `الغرفة تضمّ ${occ} نزيلاً، فلا تُخفَّض سعتها إلى ${nextCap}. أخرِج النزلاء أولاً.`);
+        return;
+      }
+      const payload = { type, capacity: isFixedCapType(type) ? null : nextCap };
+      const r = await updateContainer("rooms", room.id, payload, { type: room.type, capacity: room.capacity ?? null });
+      if (r.kind !== "ok") {
+        console.error("تعذر تعديل نوع الغرفة", r);
+        applyRoomFeedback(room, updateFeedback(r, roomLabelOf(room), "تعذر تعديل نوع الغرفة", allocWriteError, true));
+        /* رفضٌ بحدّ الإشغال (أُسند إليها نزيلٌ من شاشةٍ أخرى) أو بغيره: اللوحةُ
+           تعود إلى ما في الغرفة الآن، ونزلاؤها كما هم في القاعدة */
+        if (r.kind !== "gone" && r.kind !== "stale") { setPanelType(room.type); setPanelCap(String(capOf(room) ?? "")); }
+        if (r.kind !== "gone") await refreshRoomOccupants(room.id);
+        return;
+      }
+      /* القاعدة تفرض سعة النوع القياسيّ، و`ROOM_TYPE_CAP` نسختُها في الواجهة */
+      const applied = isFixedCapType(type) ? ROOM_TYPE_CAP_UI[type] : nextCap;
+      setPanelType(type); setPanelCap(String(applied));
+      setRooms(prev => prev.map(r => r.id === room.id ? { ...r, type, capacity: applied } : r));
+      setSelectedRoom(prev => prev?.id === room.id ? { ...prev, type, capacity: applied } : prev);
+      showAlert("success", "تم تحديث الغرفة"); setTimeout(() => showAlert(null), 2000);
+    });
   };
   const saveRoomType = (type: Room["type"]) => saveRoomCapacity(type, panelCap);
 
@@ -980,7 +1053,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
                   </div>
                   <button disabled={readOnly} onClick={() => openMove(p)} title="نقل إلى غرفة أخرى — في هذا الفندق أو غيره"
                     style={{ ...roOff, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--primary)", cursor: "pointer", fontSize: 9.5, fontWeight: 800, fontFamily: "var(--font-body)", flexShrink: 0 }}>نقل</button>
-                  <button disabled={readOnly} onClick={() => removeFromRoom(p.id)} title="إزالة من الغرفة"
+                  <button disabled={readOnly} onClick={() => removeFromRoom(p)} title="إزالة من الغرفة"
                     style={{ ...roOff, width: 24, height: 24, borderRadius: 6, border: "1px solid #fce8e8", background: "#fff0f0", color: "#C62828", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>×</button>
                 </div>
                 );
@@ -1204,12 +1277,19 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
             <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 8 }}>حذف الغرفة {confirmDelete.number}؟</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 22, lineHeight: 1.6 }}>هذا الإجراء لا يمكن التراجع عنه. سيتم حذف الغرفة نهائياً من النظام.</div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => { deleteRoom(confirmDelete); setConfirmDelete(null); }}
-                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: "#C62828", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
-                نعم، احذف
+              <button disabled={deletingRoom} aria-busy={deletingRoom}
+                onClick={async () => {
+                  if (deletingRoom) return;
+                  setDeletingRoom(true);
+                  const gone = await deleteRoom(confirmDelete);
+                  setDeletingRoom(false);
+                  if (gone) setConfirmDelete(null);
+                }}
+                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: "#C62828", color: "white", fontSize: 13, fontWeight: 700, cursor: deletingRoom ? "wait" : "pointer", opacity: deletingRoom ? 0.7 : 1, fontFamily: "var(--font-body)" }}>
+                {deletingRoom ? "جارٍ الحذف…" : "نعم، احذف"}
               </button>
-              <button onClick={() => setConfirmDelete(null)}
-                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
+              <button disabled={deletingRoom} onClick={() => setConfirmDelete(null)}
+                style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)", fontSize: 13, fontWeight: 600, cursor: deletingRoom ? "not-allowed" : "pointer", opacity: deletingRoom ? 0.6 : 1, fontFamily: "var(--font-body)" }}>
                 إلغاء
               </button>
             </div>
