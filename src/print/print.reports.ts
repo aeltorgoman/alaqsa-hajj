@@ -289,13 +289,22 @@ export function hotelReportDocument(
   const { w, h } = SHEET_MM[landscape ? "landscape" : "portrait"];
   /* ترويسةُ الهويّة وحواشيها تتكرّران على كلّ ورقةٍ — فالورقةُ الثانية
      تُقرأ وحدها، ولأنّهما داخلَ الورقة لا خارجَها فلا تُقسَّمان عنها. */
-  /* الملخّصُ في شريط العنوان، بخطٍّ أصغر على السطر نفسه — لا يرفع الشريط */
-  const sum = summary ? hotelPrintSummary(rooms, passengers) : null;
-  const summaryHTML = sum
-    ? `<span class="hotel-summary" data-hotel-summary> · الغرف: ${sum.rooms} · الحجاج المسكَّنون: ${sum.housed} · الأسرّة الشاغرة: ${sum.freeBeds}</span>`
-    : "";
-  const headerHTML = compactHeaderHTML(branding, `تقرير الفندق${subtitle}`, summaryHTML);
+  const headerHTML = compactHeaderHTML(branding, `تقرير الفندق${subtitle}`);
   const metaHTML = chromeMetaHTML(chrome);
+  /* ═══ الملخّصُ الإحصائيّ — الورقةُ الأولى وحدها ═══
+     ثلاثةُ مؤشّراتٍ في صفٍّ أفقيٍّ مضغوط، يشارك سطرَ البيانات (الموسم
+     والنطاق) صفَّه بدل أن يزيد سطراً. والأرقامُ للكشف المطبوع كلِّه ولو
+     امتدّ أوراقاً. والشبكةُ بعده كما هي: الغرفُ في الورقة وأسماؤها وبطاقاتُها
+     لا تتغيّر — إنّما تنقص الأولى بضعةَ مليمترات من فراغ الصفوف. */
+  const sum = summary ? hotelPrintSummary(rooms, passengers) : null;
+  const { primaryColor } = safeBranding(branding);
+  const kpi = (n: number, label: string) =>
+    `<div class="hs-kpi"><span class="hs-num">${n}</span><span class="hs-lbl">${label}</span></div>`;
+  const firstSheetBar = sum
+    ? `<div class="hs-row" data-hotel-summary>${metaHTML}<div class="hs-strip">` +
+      kpi(sum.rooms, "إجمالي الغرف") + kpi(sum.housed, "الحجاج المسكَّنون") + kpi(sum.freeBeds, "الأسرّة الشاغرة") +
+      `</div></div>`
+    : metaHTML;
   const { companyName, tagline, footerText } = safeBranding(branding);
   const footerLine = footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير الفندق${subtitle}`;
 
@@ -326,7 +335,13 @@ export function hotelReportDocument(
       .hotel-print-page .page-stamp { margin-top: 3pt; }
       .hotel-foot { text-align: center; color: #aaa; font-size: 7pt; margin-top: 2pt;
                     border-top: 0.5pt solid #eee; padding-top: 3pt; }${sum ? `
-      .hotel-summary { font-size: 8.5pt; font-weight: 700; opacity: .92; white-space: nowrap; }` : ""}
+      .hs-row { display: flex; align-items: center; justify-content: ${metaHTML ? "space-between" : "center"}; gap: 8pt; margin: 0 0 5pt; }
+      .hs-row .doc-meta { margin: 0; justify-content: flex-start; }
+      .hs-strip { display: flex; gap: 5pt; flex-shrink: 0; }
+      .hs-kpi { display: flex; align-items: baseline; gap: 4pt; padding: 1.5pt 7pt; background: #fff;
+                border: 0.75pt solid ${primaryColor}55; border-inline-start: 2.5pt solid ${primaryColor}; border-radius: 4pt; }
+      .hs-num { font-size: 13pt; font-weight: 800; color: ${primaryColor}; line-height: 1.15; }
+      .hs-lbl { font-size: 8pt; font-weight: 700; color: #555; white-space: nowrap; }` : ""}
     </style>` +
     pages.map((pageRooms, pi) => {
       /* أكبرُ سعةٍ معتمَدةٍ في الصفحة تحدّد الخطّ — لا أكبرُ إشغال */
@@ -343,7 +358,7 @@ export function hotelReportDocument(
          تضيف حرفاً مرئيّاً إلى تقريرٍ قُبل شكلُه. */
       const pageFloor = pageRooms.length ? floorKeyOf(pageRooms[0]) : "";
       /* ورقةٌ واحدةٌ كاملة: هويّةٌ وعنوانٌ وحواشٍ وشبكةٌ وترقيمٌ وتذييل */
-      return `<div class="hotel-print-page" data-floor="${escapeCompanyHtml(pageFloor)}">${headerHTML}${metaHTML}` +
+      return `<div class="hotel-print-page" data-floor="${escapeCompanyHtml(pageFloor)}">${headerHTML}${pi === 0 ? firstSheetBar : metaHTML}` +
              `<div class="hotel-page">${cells}</div>${stamp}` +
              `<div class="hotel-foot">${footerLine}</div></div>`;
     }).join("");
