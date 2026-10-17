@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { isHajj, byOrder, applyReorder, mapPassenger, upsertPassenger } from "../utils/passenger";
 import { hotelNameOf, roomLabel } from "../utils/hotels";
 import { allocWriteError } from "./allocation/useAllocation";
+import { HotelSearch, type SearchRoom } from "./hotels/HotelSearch";
+import { matchesHotelSearch } from "./hotels/hotelSearchMatch";
 import { useInFlight, updateContainer, deleteContainer, updateFeedback, deleteFeedback, type Feedback } from "./allocation/containerWrites";
 import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../supabase";
@@ -26,9 +28,13 @@ type RoomStatus = "مكتملة" | "قيد التسكين" | "جاهزة" | "م�
 /* MOD-001 — الصفحةُ نفسُها، محصورةً في فندقٍ واحد: غرفُه وأدوارُه
    ونزلاؤه ومؤشّراتُه. تُركَّب من `HotelsPage` بمفتاح الفندق، فتبدأ
    حالتُها (الدورُ المختار والتصفيةُ واللوحة) من جديد لكلّ فندق. */
-function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
+function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRooms: seasonRoomIndex = [], onOpenRoom }: {
   passengers: Passenger[]; setPassengers: Dispatch<SetStateAction<Passenger[]>>;
   hotel: Hotel; hotels: Hotel[]; onBack: () => void;
+  /* غرفُ الموسم كلُّه (من صفحة الفنادق) — للبحث عن حاجٍّ في فندقٍ آخر */
+  seasonRooms?: SearchRoom[];
+  /* فتحُ غرفةٍ في فندقٍ آخر من نتيجة بحث */
+  onOpenRoom?: (hotelId: number, roomId: number | null) => void;
 }) {
   const primary = useCompanyBranding().primaryColor;
   const { alert, showAlert } = useAlert();
@@ -53,11 +59,16 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   const [transferring, setTransferring] = useState(false);
   /* الحذفُ جارٍ: التأكيدُ يبقى مفتوحاً وزرّاه معطّلان حتى يُعرف ما وقع */
   const [deletingRoom, setDeletingRoom] = useState(false);
+  /* اختيارُ اتّجاه الورقة — زرٌّ واحد للطباعة يفتحه */
+  const [printMenu, setPrintMenu] = useState(false);
+  /* «غرف بها أسرّة متاحة» — تصفيةٌ تجتمع مع الدور والنوع والحالة والبحث */
+  const [onlyFree, setOnlyFree] = useState(false);
 
   /* إغلاق المودالات بمفتاح Escape */
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (printMenu) { setPrintMenu(false); return; }
       if (transfer) { if (!transferring) setTransfer(null); return; }
       if (deletingRoom) return;
       if (showAddPilgrim) { setShowAddPilgrim(false); return; }
@@ -66,7 +77,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
-  }, [selectedRoom, showAddRoom, showAddPilgrim, transfer, transferring, deletingRoom]);
+  }, [selectedRoom, showAddRoom, showAddPilgrim, transfer, transferring, deletingRoom, printMenu]);
   const [pSearch, setPSearch] = useState("");
   /* ترتيب الأسماء داخل الغرفة — عرضٌ تشغيلي لكشف الفندق، وليس
      إسناد أسرّة: الرقم موضع في القائمة لا سرير بعينه. ولم يكن
@@ -115,17 +126,33 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   const [seasonRoomsError, setSeasonRoomsError] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
-  const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
-  const [tipBelow, setTipBelow] = useState(false);
-  const gridRef = useRef<HTMLDivElement>(null);
 
+  const floorInitialized = useRef(false);
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل شبكة فارغة تبدو كـ«لا يوجد غرف» */
     supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).eq("hotel_id", hotel.id)
       .then(({ data, error }) => {
         if (error || !data) { console.error("تعذر تحميل الغرف", error); setRoomsError(true); }
-        else { setRooms((data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number))); setRoomsError(false); }
+        else {
+          const sorted = (data as Room[]).sort((a,b) => (parseInt(a.floor)||0) - (parseInt(b.floor)||0) || (parseInt(a.number)||0) - (parseInt(b.number)||0) || a.number.localeCompare(b.number));
+          setRooms(sorted); setRoomsError(false);
+          /* غرفةٌ جاء بها العنوانُ من البحث (`&room=`): دورُها، ولوحتُها مفتوحة.
+             يُقرأ مرّةً ويُزال من العنوان، فالتحديثُ لا يعيد فتحها. */
+          const params = new URLSearchParams(window.location.search);
+          if (params.has("room")) {
+            const target = sorted.find(r => r.id === Number(params.get("room")));
+            params.delete("room");
+            window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params}`);
+            if (target) {
+              floorInitialized.current = true;
+              setFilterFloor(target.floor);
+              setSelectedRoom(target); setPanelType(target.type); setPanelCap(String(roomCapacity(target) ?? ""));
+              setPanelNotes(target.notes || ""); setNewRoomNum(target.number);
+              setTimeout(() => document.querySelector(`[data-room-id="${target.id}"]`)?.scrollIntoView({ block: "nearest" }), 60);
+            }
+          }
+        }
         setRoomsLoading(false);
       });
   }, [viewedSeason.id, hotel.id]);
@@ -138,7 +165,6 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   /* التعيين الأولي لأول طابق — مرة واحدة عند وصول الغرف لا كلما تغيّرت.
      كان داخل الـ useMemo أعلاه، فيعيد الضبط بعد كل تعديل على الغرف
      ويُلغي اختيار المستخدم لـ«الكل» بلا سبب ظاهر. */
-  const floorInitialized = useRef(false);
   useEffect(() => {
     if (!floorInitialized.current && floors.length > 0) {
       floorInitialized.current = true;
@@ -228,14 +254,16 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
       if (filterFloor !== "الكل" && r.floor !== filterFloor) return false;
       if (filterStatus !== "الكل" && getStatus(r) !== filterStatus) return false;
       if (filterType && r.type !== filterType) return false;
-      if (search) {
+      /* سريرٌ متاح فعلاً: لا الممتلئة ولا المجلس ولا غيرُ محدّدة السعة (`roomFull`) */
+      if (onlyFree && roomFull(r)) return false;
+      if (search.trim()) {
         const q = search.trim();
         if (r.number.includes(q)) return true;
-        return roomPassengers(r.id).some(p => p.name_ar.includes(q) || (p.short_ar || "").includes(q));
+        return roomPassengers(r.id).some(p => matchesHotelSearch(p, q));
       }
       return true;
     });
-  }, [rooms, filterFloor, filterStatus, filterType, search, passengers]);
+  }, [rooms, filterFloor, filterStatus, filterType, search, passengers, onlyFree]);
 
   /* الفندقُ المطلوب: بلا طلبٍ مع فندقٍ وحيد = هذا الفندق (كما تملؤه
      القاعدة)، ومع أكثرَ من فندقٍ لا يُنسب إلى أحدها. */
@@ -252,19 +280,24 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
   const hajjHere = withRoom + noRoom;
   const pct = hajjHere > 0 ? Math.round(withRoom / hajjHere * 100) : 0;
   /* أَسِرّة لا غرف: «غرف متاحة» كانت تعدّ الغرف التي فيها متّسع،
-     فتُقرأ «غرفٌ فارغة» وهي ليست كذلك. والسرير هو القيد الحقيقيّ. */
-  const freeBeds = rooms.reduce((n, r) => {
-    const cap = capOf(r);
-    if (cap == null || cap === 0) return n;
-    return n + Math.max(0, cap - roomPassengers(r.id).length);
-  }, 0);
+     فتُقرأ «غرفٌ فارغة» وهي ليست كذلك. والسرير هو القيد الحقيقيّ.
+     الأسرّةُ في غرف النوم ذات السعة المحدّدة وحدها — المجلسُ (سعة ٠)
+     وغيرُ المحدّدة خارجها. والمشغولُ يُعدّ حتى السعة، فالمشغولُ +
+     الشاغرُ = الإجمالي، والتجاوزُ تقوله حالةُ الغرفة لا نسبةٌ فوق ١٠٠٪.
+     وهي أسرّةٌ لا حجّاج: المنتظرون بلا غرفة يعدّهم كارتُهم. */
+  const bedRooms = rooms.filter(r => (capOf(r) ?? 0) > 0);
+  const totalBeds = bedRooms.reduce((n, r) => n + (capOf(r) ?? 0), 0);
+  const usedBeds = bedRooms.reduce((n, r) => n + Math.min(capOf(r) ?? 0, roomPassengers(r.id).length), 0);
+  const freeBeds = totalBeds - usedBeds;
+  const bedPct = totalBeds > 0 ? Math.round(usedBeds / totalBeds * 100) : 0;
+  const fullRooms = bedRooms.filter(r => roomPassengers(r.id).length >= (capOf(r) ?? 0)).length;
 
   const hotelCards: StatCardData[] = [
-    { label: "إجمالي الغرف", num: String(totalRooms), sub: "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
+    { label: "إجمالي الغرف", num: String(totalRooms), sub: bedRooms.length > 0 ? `${fullRooms} مكتملة · ${bedRooms.length - fullRooms} بها أسرّة متاحة` : "غرفة مسجلة", tone: "brand", icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
     { label: "حجاج موزعين", num: String(withRoom), sub: `من ${hajjHere} حاج · ${pct}٪`, tone: "success", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>` },
     /* الرقم الذي يقول «هل انتهى عمل اليوم؟» — كان يُستنبط ذهنياً */
     { label: "حجاج بدون غرفة", num: String(noRoom), sub: noRoom === 0 ? "اكتمل التسكين" : "بانتظار التسكين", tone: noRoom === 0 ? "success" : "warning", icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/>` },
-    { label: "أَسِرّة شاغرة", num: String(freeBeds), sub: "سرير متاح للتسكين", tone: "info", featured: true, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
+    { label: "أَسِرّة شاغرة", num: String(freeBeds), sub: totalBeds > 0 ? `مشغول ${usedBeds} من ${totalBeds} · إشغال ${bedPct}٪` : "لا أسرّة بسعةٍ محدّدة", tone: "info", featured: true, icon: `<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>` },
   ];
 
   /* رقم الغرفة لا يتكرّر في الدور الواحد. الفحص هنا يمنع الضغطة،
@@ -612,6 +645,24 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     setNewRoomNum(room.number);
   };
 
+  /* فتحُ غرفةٍ بعينها من البحث: تُرفع التصفيةُ التي قد تخفيها، ويُختار
+     دورُها، وتُفتح لوحتُها وتُعرض في الشبكة */
+  const scrollToRoom = (id: number) =>
+    setTimeout(() => document.querySelector(`[data-room-id="${id}"]`)?.scrollIntoView({ block: "nearest" }), 60);
+  const focusRoom = (room: Room) => {
+    setFilterFloor(room.floor); setFilterType(null); setFilterStatus("الكل"); setOnlyFree(false);
+    openPanel(room);
+    scrollToRoom(room.id);
+  };
+  /* نتيجةُ البحث: غرفةٌ هنا تُفتح، وفي فندقٍ آخر تُفتح هناك */
+  const openFromSearch = (hotelId: number, roomId: number | null) => {
+    if (hotelId !== hotel.id) { onOpenRoom?.(hotelId, roomId); return; }
+    const room = roomId != null ? rooms.find(r => r.id === roomId) : undefined;
+    if (room) focusRoom(room);
+  };
+  /* غرفُ هذا الفندق كما هي الآن، وغرفُ الفنادق الأخرى من صفحة الفنادق */
+  const searchRooms: SearchRoom[] = [...rooms, ...seasonRoomIndex.filter(r => r.hotel_id !== hotel.id)];
+
   /* الطباعةُ من صفحة الفندق — بالمصدر المشترك وبنطاق ما يراه الموظّف
      على الشاشة الآن (الدور والنوع). فالورقةُ لا تختلف بباب طُبعت منه. */
   const reportBranding = useReportBranding();
@@ -621,6 +672,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
     if (filterFloor !== "الكل") scope.push(`الطابق: ${filterFloor}`);
     if (filterType) scope.push(`النوع: ${filterType}`);
     if (filterStatus !== "الكل") scope.push(`الحالة: ${filterStatus}`);
+    if (onlyFree) scope.push("غرف بها أسرّة متاحة");
     printInPage(hotelReportDocument(filteredRooms, passengers, reportBranding, {
       landscape,
       subtitle: filterType ? ` — ${filterType}` : "",
@@ -687,12 +739,18 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
             );
           })}
           <div style={{ flex:1 }} />
-          {/* بحث */}
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ابحث..." style={{ ...inp, width:130, flex:"none" }} />
+          {/* بحثٌ موحّد: يصفّي الشبكة، ويسمّي مكانَ الحاجّ ويقود إليه ولو في فندقٍ آخر */}
+          <HotelSearch value={search} onChange={setSearch} passengers={passengers} rooms={searchRooms} hotels={hotels}
+            currentHotelId={hotel.id} onOpen={openFromSearch} placeholder="ابحث بالاسم أو الجواز أو رقم الغرفة" width={230} />
           {/* فلتر الحالة */}
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width:"auto" }}>
             {["الكل","جاهزة","قيد التسكين","مكتملة","تجاوز","مجلس"].map(s => <option key={s}>{s}</option>)}
           </select>
+          <button type="button" aria-pressed={onlyFree} onClick={() => setOnlyFree(v => !v)} data-filter-free
+            style={{ display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:8,border: onlyFree ? "1.5px solid var(--success)" : "1px solid var(--line)",background: onlyFree ? "var(--success)" : "var(--paper)",color: onlyFree ? "#fff" : "var(--ink)",fontFamily:"var(--font-body)",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+            غرف بها أسرّة متاحة
+          </button>
           {/* إضافة */}
           <button disabled={readOnly} onClick={() => setShowAddRoom(true)} style={{ ...btnP, ...roOff, display:"flex",alignItems:"center",gap:5,flexShrink:0 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -700,17 +758,30 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
           </button>
         </div>
 
-        {/* بابُ الفندق إلى المطبوع — وباتّجاهَي الورقة كصفحة التقارير
-            بالضبط، وبالمستند المشترك نفسه لا بنسخةٍ ثانية. */}
-        <div style={{ display:"flex", gap:6, padding:"6px 12px 0", flexShrink:0, flexWrap:"wrap" }}>
-          {([[false, "طباعة بالطول", "ستّ عشرة غرفة في الورقة"],
-             [true,  "طباعة بالعرض", "خمس عشرة غرفة في الورقة — أسماء أوسع"]] as [boolean, string, string][]).map(([land, lbl, tip]) => (
-            <button key={lbl} onClick={() => printRooms(land)} title={tip}
-              style={{ display:"inline-flex",alignItems:"center",gap:5,background:"var(--paper)",border:"1px solid var(--line)",color:"var(--ink)",padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"var(--font-body)" }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              {lbl} ({filteredRooms.length})
-            </button>
-          ))}
+        {/* بابُ الفندق إلى المطبوع — زرٌّ واحد يسأل عن اتّجاه الورقة، ثمّ
+            المستندُ المشترك نفسه (`printRooms`) لا نسخةٌ ثانية. */}
+        <div style={{ display:"flex", gap:6, padding:"6px 12px 0", flexShrink:0, flexWrap:"wrap", position:"relative" }}>
+          <button type="button" aria-haspopup="menu" aria-expanded={printMenu} onClick={() => setPrintMenu(v => !v)}
+            style={{ display:"inline-flex",alignItems:"center",gap:5,background:"var(--paper)",border:"1px solid var(--line)",color:"var(--ink)",padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"var(--font-body)" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            طباعة كشف الغرف ({filteredRooms.length})
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {printMenu && <>
+            <div onClick={() => setPrintMenu(false)} style={{ position:"fixed", inset:0, zIndex:70 }} />
+            <div role="menu" aria-label="اتّجاه الورقة"
+              style={{ position:"absolute", top:"calc(100% + 4px)", insetInlineStart:12, zIndex:71, background:"var(--paper)", border:"1px solid var(--line)", borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,.14)", padding:4, minWidth:220 }}>
+              {([[false, "بالطول", "ستّ عشرة غرفة في الورقة"],
+                 [true,  "بالعرض", "خمس عشرة غرفة في الورقة — أسماء أوسع"]] as [boolean, string, string][]).map(([land, lbl, tip]) => (
+                <button key={lbl} type="button" role="menuitem" onClick={() => { setPrintMenu(false); printRooms(land); }}
+                  style={{ display:"block", width:"100%", textAlign:"right", padding:"8px 10px", border:"none", borderRadius:7, background:"transparent", cursor:"pointer", fontFamily:"var(--font-body)", color:"var(--ink)" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "var(--ivory)")} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  <span style={{ display:"block", fontSize:12.5, fontWeight:800 }}>{lbl}</span>
+                  <span style={{ display:"block", fontSize:10.5, fontWeight:700, color:"var(--muted)" }}>{tip}</span>
+                </button>
+              ))}
+            </div>
+          </>}
         </div>
 
         {/* Row 2: أزرار الأدوار */}
@@ -738,7 +809,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
         </div>
 
         {/* Rooms Grid */}
-        <div ref={gridRef} style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
           {roomsLoading && <div style={{ textAlign: "center", padding: "3rem", color: "var(--muted)", fontSize: 12 }}>جاري التحميل...</div>}
           {!roomsLoading && roomsError && (
             <div style={{ textAlign: "center", padding: "3rem", color: "var(--danger)", fontWeight: 700, fontSize: 13 }}>
@@ -749,6 +820,14 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
             <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--muted)", fontSize: 12.5, fontWeight: 700, lineHeight: 1.9 }}>
               لا توجد غرف في هذا الفندق بعد.
               {!readOnly && <div><button onClick={() => setShowAddRoom(true)} style={{ ...btnP, marginTop: 8 }}>أضف أول غرفة</button></div>}
+            </div>
+          )}
+          {/* تصفيةٌ لا تطابق شيئاً — لا شبكةٌ فارغةٌ تبدو كأنّ الفندق بلا غرف */}
+          {!roomsLoading && !roomsError && rooms.length > 0 && !filteredRooms.some(r => filterFloor === "الكل" || r.floor === filterFloor) && (
+            <div data-rooms-empty style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--muted)", fontSize: 12.5, fontWeight: 700, lineHeight: 1.9 }}>
+              {onlyFree ? "لا توجد غرف بها أسرّة متاحة ضمن التصفية الحالية." : "لا توجد غرف تطابق التصفية الحالية."}
+              <div><button onClick={() => { setOnlyFree(false); setFilterStatus("الكل"); setFilterType(null); setFilterFloor("الكل"); setSearch(""); }}
+                style={{ ...btnS, marginTop: 8 }}>عرض كل الغرف</button></div>
             </div>
           )}
           {!roomsLoading && !roomsError && floors.filter(f => filterFloor === "الكل" || f === filterFloor).map(floor => {
@@ -783,47 +862,24 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
                     const isSelected = selectedRoom?.id === room.id;
                     const isMajlis = room.type === "مجلس";
 
-                    const visibleOcc = occ.slice(0, 2);
-                    const extraCount = occ.length - 2;
-                    const isExpanded = expandedCardId === room.id;
                     const isHovered = hoveredCardId === room.id;
                     const isEmpty = occ.length === 0 && !isMajlis;
 
                     return (
                       <div key={room.id} style={{ position: "relative" }}>
-                        {/* Tooltip عند الـ hover */}
-                        {/* التلميح كان يفتح لأعلى دائماً، فبطاقاتُ الصفّ
-                            الأول تختفي تحت شريط البحث والفلاتر. الآن
-                            يقيس الموضع: إن ضاق ما فوق البطاقة فُتح
-                            أسفلها. و`zIndex` أعلى من الأشرطة اللاصقة. */}
-                        {isHovered && !isSelected && (
-                          <div style={{ position: "absolute", ...(tipBelow ? { top: "calc(100% + 8px)" } : { bottom: "calc(100% + 8px)" }), right: "50%", transform: "translateX(50%)", zIndex: 60, background: "var(--ink)", color: "white", borderRadius: 10, padding: "8px 12px", minWidth: 140, boxShadow: "0 4px 16px rgba(0,0,0,.25)", pointerEvents: "none" }}>
-                            <div style={{ fontSize: 13, fontWeight: 900, marginBottom: 4 }}>{room.number}</div>
-                            {occ.map(p => (
-                              <div key={p.id} style={{ fontSize: 11, fontWeight: 600, opacity: .85, marginBottom: 1 }}>{p.short_ar || makeShort(p.name_ar)}</div>
-                            ))}
-                            {isEmpty && <div style={{ fontSize: 11, opacity: .7 }}>لا يوجد حجاج</div>}
-                            <div style={{ fontSize: 10, opacity: .6, marginTop: 4, borderTop: "1px solid rgba(255,255,255,.15)", paddingTop: 4 }}>الدور {room.floor}</div>
-                            {/* سهم صغير في الأسفل */}
-                            <div style={{ position: "absolute", ...(tipBelow ? { top: -6 } : { bottom: -6 }), right: "50%", transform: "translateX(50%)", width: 10, height: 10, background: "var(--ink)", clipPath: tipBelow ? "polygon(50% 0,100% 100%,0 100%)" : "polygon(0 0,100% 0,50% 100%)" }} />
-                          </div>
-                        )}
-
                         {/* الكارت */}
-                        <div onClick={() => openPanel(room)}
-                          onMouseEnter={e => {
-                            /* المساحة المتاحة فوق البطاقة داخل منطقة
-                               التمرير: أقلّ من ارتفاع التلميح تقريباً
-                               يعني أنه سيُقصّ، فيُفتح أسفلها. */
-                            const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                            const top = gridRef.current?.getBoundingClientRect().top ?? 0;
-                            setTipBelow(r.top - top < 150);
-                            setHoveredCardId(room.id);
-                          }}
+                        {/* الأسماءُ كلُّها في البطاقة — لا تلميحٌ عند المرور ولا «+N»:
+                            البطاقةُ تطول بقدر نزلائها، وبطاقاتُ الصفّ الواحد
+                            تتساوى طولاً فتبقى الشبكةُ منتظمة. */}
+                        <div role="button" tabIndex={0} data-room-id={room.id}
+                          aria-label={`الغرفة ${room.number} — ${room.type} — ${isMajlis ? "مجلس" : `${occ.length} من ${capOf(room) ?? "—"}`}`}
+                          onClick={() => openPanel(room)}
+                          onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openPanel(room); } }}
+                          onMouseEnter={() => setHoveredCardId(room.id)}
                           onMouseLeave={() => setHoveredCardId(null)}
                           style={{
                             background: status === "مكتملة" ? "#f3f4f6" : "var(--paper)", borderRadius: 12, cursor: "pointer",
-                            transition: "all .18s", position: "relative", height: 130,
+                            transition: "all .18s", position: "relative", minHeight: 130, height: "100%", boxSizing: "border-box",
                             display: "flex", flexDirection: "column", overflow: "hidden",
                             border: isSelected ? `2.5px solid var(--primary)` : "1px solid var(--line)",
                             boxShadow: isSelected ? `0 4px 16px rgba(125,31,60,.25)` : isHovered ? "0 4px 14px rgba(0,0,0,.1)" : "0 1px 4px rgba(0,0,0,.06)",
@@ -863,26 +919,14 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack }: {
                                   </div>
                                 </div>
                               ) : (
-                                <>
-                                  {visibleOcc.map(p => (
-                                    <div key={p.id} style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 3 }}>
-                                      <div style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || makeShort(p.name_ar)}</span>
-                                    </div>
+                                <ul data-room-occupants style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                                  {occ.map(p => (
+                                    <li key={p.id} style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, lineHeight: 1.35, display: "flex", alignItems: "flex-start", gap: 4 }}>
+                                      <span aria-hidden style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 6 }} />
+                                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.short_ar || makeShort(p.name_ar)}</span>
+                                    </li>
                                   ))}
-                                  {extraCount > 0 && (
-                                    <div onClick={e => { e.stopPropagation(); setExpandedCardId(isExpanded ? null : room.id); }}
-                                      style={{ fontSize: 10, fontWeight: 800, color, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 2, padding: "1px 6px", borderRadius: 99, background: `${color}12`, width: "fit-content" }}>
-                                      {isExpanded ? "▲ أقل" : `+${extraCount}`}
-                                    </div>
-                                  )}
-                                  {isExpanded && occ.slice(2).map(p => (
-                                    <div key={p.id} style={{ fontSize: 10, color: "var(--ink)", fontWeight: 600, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 3 }}>
-                                      <div style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{p.short_ar || makeShort(p.name_ar)}</span>
-                                    </div>
-                                  ))}
-                                </>
+                                </ul>
                               )}
                             </div>
 
