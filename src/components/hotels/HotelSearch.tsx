@@ -4,7 +4,8 @@
 // قراءةٌ فقط: الحجّاجُ والغرفُ ممّا حمّلته الصفحةُ لموسمها المعروض، فلا
 // يرى البحثُ موسماً آخر ولا يكتب شيئاً. والنتيجةُ تسمّي المكانَ (الفندق ·
 // الدور · الغرفة) وتقود إليه؛ ومن لا غرفة له يُقال ذلك صراحةً، ويُفتح
-// فندقُه المطلوب إن وُجد.
+// فندقُه المطلوب على غرفه ذات الأسرّة المتاحة — والتسكينُ بعدها من لوحة
+// الغرفة كما هو، لا مسارَ إسنادٍ جديد.
 import { useState } from "react";
 import type { Hotel, Passenger, Room } from "../../types";
 import { matchesHotelSearch } from "./hotelSearchMatch";
@@ -14,17 +15,15 @@ export type SearchRoom = Pick<Room, "id" | "hotel_id" | "number" | "floor" | "ty
 
 const LIMIT = 8;
 
-export function HotelSearch({ passengers, rooms, hotels, onOpen, value, onChange, currentHotelId, placeholder = "ابحث بالاسم أو الجواز أو رقم الغرفة", width = 260 }: {
+export function HotelSearch({ passengers, rooms, hotels, onOpen, value, onChange, placeholder = "ابحث بالاسم أو الجواز أو رقم الغرفة", width = 260 }: {
   passengers: Passenger[];
   rooms: SearchRoom[];
   hotels: Hotel[];
-  /* `roomId = null`: الفندقُ وحده (حاجٌّ بلا غرفة طلب هذا الفندق) */
-  onOpen: (hotelId: number, roomId: number | null) => void;
+  /* `roomId = null` و`waitingPaxId`: حاجٌّ بلا غرفة — فندقُه المطلوب، على أسرّته المتاحة */
+  onOpen: (hotelId: number, roomId: number | null, waitingPaxId?: number) => void;
   /* متحكَّمٌ به حين تصفّي الصفحةُ شبكتَها بالنصّ نفسِه */
   value?: string;
   onChange?: (v: string) => void;
-  /* داخل صفحة فندق: حاجٌّ بلا غرفة طلب هذا الفندق لا وجهةَ له هنا */
-  currentHotelId?: number;
   placeholder?: string;
   width?: number | string;
 }) {
@@ -41,10 +40,10 @@ export function HotelSearch({ passengers, rooms, hotels, onOpen, value, onChange
   const roomHits = t ? rooms.filter(r => r.number === t || (t.length >= 2 && r.number.includes(t))) : [];
   const shown = open && t.length > 0;
 
-  const choose = (hotelId: number | null | undefined, roomId: number | null) => {
+  const choose = (hotelId: number | null | undefined, roomId: number | null, waitingPaxId?: number) => {
     if (hotelId == null) return;
     setOpen(false);
-    onOpen(hotelId, roomId);
+    onOpen(hotelId, roomId, waitingPaxId);
   };
 
   const row = { display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px", border: "none", borderBottom: "1px solid var(--ivory)", background: "transparent", textAlign: "right" as const, fontFamily: "var(--font-body)", cursor: "pointer", color: "var(--ink)" };
@@ -81,11 +80,11 @@ export function HotelSearch({ passengers, rooms, hotels, onOpen, value, onChange
             const req = p.requested_hotel_id ?? (hotels.length === 1 ? hotels[0].id : null);
             /* مُسكَّنٌ في غرفةٍ لم تصل قائمتَها (أُنشئت للتوّ في شاشةٍ أخرى): لا يُقال «بدون غرفة» */
             const unknownRoom = p.room_id != null && !room;
-            const target = room ? room.hotel_id : unknownRoom || req === currentHotelId ? null : req;
+            const target = room ? room.hotel_id : unknownRoom ? null : req;
             return (
               <button key={`p${p.id}`} type="button" role="option" aria-selected={false} data-search-pax={p.id}
                 disabled={target == null} style={{ ...row, cursor: target == null ? "default" : "pointer" }}
-                onClick={() => choose(target, room ? room.id : null)}>
+                onClick={() => (room ? choose(target, room.id) : choose(target, null, p.id))}>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 12, fontWeight: 700, wordBreak: "break-word" }}>{p.short_ar || makeShort(p.name_ar)}</span>
                   {room
@@ -93,7 +92,7 @@ export function HotelSearch({ passengers, rooms, hotels, onOpen, value, onChange
                     : unknownRoom
                     ? <span style={where} data-search-where>مُسكَّن — حدّث الصفحة لعرض غرفته</span>
                     : <span style={{ ...where, color: "var(--warning)" }} data-search-where>
-                        بدون غرفة{hotelName(req) ? ` · مطلوب: ${hotelName(req)}` : ""}
+                        بدون غرفة{hotelName(req) ? ` · مطلوب: ${hotelName(req)} — عرض الأسرّة المتاحة` : ""}
                       </span>}
                 </span>
                 {p.passport && <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 700, flexShrink: 0 }} dir="ltr">{p.passport}</span>}

@@ -20,6 +20,10 @@ import { useReportBranding } from "../company/CompanyContext";
 
 const ROOM_TYPES = HOTEL_ROOM_TYPES as readonly Room["type"][];
 
+/* حاجٌّ بلا غرفة من البحث — الخطوةُ التالية بمسار التسكين القائم */
+const waitingHint = (p: Passenger) =>
+  `${p.short_ar || makeShort(p.name_ar)} بدون غرفة — المعروضُ الآن غرفُ الفندق التي بها أسرّة متاحة. افتح غرفةً ثمّ «إضافة نزيل للغرفة».`;
+
 /* حالات الغرفة — «مجلس» **نوع** لا حالة. كانت تُشتقّ من `cap === 0`
    فتبتلع «أخرى» وكل نوعٍ لا تعرفه الخريطة، فتصف غرفةً عاديةً بأنها
    مجلس. والآن الحالة من الإشغال والسعة، والنوع يُقرأ من النوع. */
@@ -33,8 +37,8 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
   hotel: Hotel; hotels: Hotel[]; onBack: () => void;
   /* غرفُ الموسم كلُّه (من صفحة الفنادق) — للبحث عن حاجٍّ في فندقٍ آخر */
   seasonRooms?: SearchRoom[];
-  /* فتحُ غرفةٍ في فندقٍ آخر من نتيجة بحث */
-  onOpenRoom?: (hotelId: number, roomId: number | null) => void;
+  /* فتحُ غرفةٍ (أو فندقٍ لحاجٍّ بلا غرفة) في فندقٍ آخر من نتيجة بحث */
+  onOpenRoom?: (hotelId: number, roomId: number | null, waitingPaxId?: number) => void;
 }) {
   const primary = useCompanyBranding().primaryColor;
   const { alert, showAlert } = useAlert();
@@ -61,8 +65,14 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
   const [deletingRoom, setDeletingRoom] = useState(false);
   /* اختيارُ اتّجاه الورقة — زرٌّ واحد للطباعة يفتحه */
   const [printMenu, setPrintMenu] = useState(false);
+  /* حاجٌّ بلا غرفة اختير من البحث (هنا، أو من صفحة الفنادق بـ`&waiting=`):
+     تُعرض أسرّةُ الفندق المتاحة وسطرٌ يقول الخطوةَ التالية حتى يُسكَّن أو يُغلق */
+  const [waitingPaxId, setWaitingPaxId] = useState<number | null>(() => {
+    const v = Number(new URLSearchParams(window.location.search).get("waiting"));
+    return Number.isInteger(v) && v > 0 ? v : null;
+  });
   /* «غرف بها أسرّة متاحة» — تصفيةٌ تجتمع مع الدور والنوع والحالة والبحث */
-  const [onlyFree, setOnlyFree] = useState(false);
+  const [onlyFree, setOnlyFree] = useState(waitingPaxId != null);
 
   /* إغلاق المودالات بمفتاح Escape */
   useEffect(() => {
@@ -128,7 +138,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
   const [confirmDelete, setConfirmDelete] = useState<typeof selectedRoom | null>(null);
   const [hoveredCardId, setHoveredCardId] = useState<number | null>(null);
 
-  const floorInitialized = useRef(false);
+  const floorInitialized = useRef(waitingPaxId != null);
   useEffect(() => {
     /* الفشل يُبلَّغ عنه بدل شبكة فارغة تبدو كـ«لا يوجد غرف» */
     supabase.from("rooms").select("*").eq("season_id", viewedSeason.id).eq("hotel_id", hotel.id)
@@ -140,6 +150,11 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
           /* غرفةٌ جاء بها العنوانُ من البحث (`&room=`): دورُها، ولوحتُها مفتوحة.
              يُقرأ مرّةً ويُزال من العنوان، فالتحديثُ لا يعيد فتحها. */
           const params = new URLSearchParams(window.location.search);
+          /* `&waiting=` قُرئ عند التركيب (`waitingPaxId`) — يُزال فلا يعود بالتحديث */
+          if (params.has("waiting")) {
+            params.delete("waiting");
+            window.history.replaceState(window.history.state, "", `${window.location.pathname}?${params}`);
+          }
           if (params.has("room")) {
             const target = sorted.find(r => r.id === Number(params.get("room")));
             params.delete("room");
@@ -650,15 +665,27 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
   const scrollToRoom = (id: number) =>
     setTimeout(() => document.querySelector(`[data-room-id="${id}"]`)?.scrollIntoView({ block: "nearest" }), 60);
   const focusRoom = (room: Room) => {
+    /* والنصُّ كذلك: الغرفةُ المختارة تظهر في شبكتها أيّاً كان ما طابقه البحث */
+    setSearch("");
     setFilterFloor(room.floor); setFilterType(null); setFilterStatus("الكل"); setOnlyFree(false);
     openPanel(room);
     scrollToRoom(room.id);
   };
+  /* حاجٌّ بلا غرفة طلب هذا الفندق: تُعرض غرفُه ذاتُ الأسرّة المتاحة، والتسكينُ
+     بعدها من لوحة الغرفة («إضافة نزيل للغرفة») كما هو — لا إسنادَ من البحث */
+  const showWaiting = (p: Passenger) => {
+    setSearch(""); setFilterFloor("الكل"); setFilterType(null); setFilterStatus("الكل"); setOnlyFree(true);
+    setSelectedRoom(null);
+    setWaitingPaxId(p.id);
+  };
+  const waitingPax = waitingPaxId != null ? passengers.find(x => x.id === waitingPaxId && !x.room_id) ?? null : null;
   /* نتيجةُ البحث: غرفةٌ هنا تُفتح، وفي فندقٍ آخر تُفتح هناك */
-  const openFromSearch = (hotelId: number, roomId: number | null) => {
-    if (hotelId !== hotel.id) { onOpenRoom?.(hotelId, roomId); return; }
+  const openFromSearch = (hotelId: number, roomId: number | null, waitingPaxId?: number) => {
+    if (hotelId !== hotel.id) { onOpenRoom?.(hotelId, roomId, waitingPaxId); return; }
     const room = roomId != null ? rooms.find(r => r.id === roomId) : undefined;
-    if (room) focusRoom(room);
+    if (room) { focusRoom(room); return; }
+    const p = waitingPaxId != null ? passengers.find(x => x.id === waitingPaxId) : undefined;
+    if (p && !p.room_id) showWaiting(p);
   };
   /* غرفُ هذا الفندق كما هي الآن، وغرفُ الفنادق الأخرى من صفحة الفنادق */
   const searchRooms: SearchRoom[] = [...rooms, ...seasonRoomIndex.filter(r => r.hotel_id !== hotel.id)];
@@ -741,7 +768,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
           <div style={{ flex:1 }} />
           {/* بحثٌ موحّد: يصفّي الشبكة، ويسمّي مكانَ الحاجّ ويقود إليه ولو في فندقٍ آخر */}
           <HotelSearch value={search} onChange={setSearch} passengers={passengers} rooms={searchRooms} hotels={hotels}
-            currentHotelId={hotel.id} onOpen={openFromSearch} placeholder="ابحث بالاسم أو الجواز أو رقم الغرفة" width={230} />
+            onOpen={openFromSearch} placeholder="ابحث بالاسم أو الجواز أو رقم الغرفة" width={230} />
           {/* فلتر الحالة */}
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ ...inp, width:"auto" }}>
             {["الكل","جاهزة","قيد التسكين","مكتملة","تجاوز","مجلس"].map(s => <option key={s}>{s}</option>)}
@@ -807,6 +834,14 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
             );
           })}
         </div>
+
+        {waitingPax && (
+          <div role="status" data-waiting-hint style={{ margin: "6px 12px 0", padding: "7px 10px", borderRadius: 9, background: "var(--info-bg, var(--ivory))", border: "1px solid var(--info, var(--line))", color: "var(--info, var(--ink))", fontSize: 11.5, fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span style={{ flex: 1, minWidth: 0 }}>{waitingHint(waitingPax)}</span>
+            <button type="button" aria-label="إغلاق" onClick={() => setWaitingPaxId(null)}
+              style={{ border: "none", background: "transparent", color: "inherit", cursor: "pointer", fontSize: 15, lineHeight: 1, minWidth: 24, minHeight: 24 }}>×</button>
+          </div>
+        )}
 
         {/* Rooms Grid */}
         <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>

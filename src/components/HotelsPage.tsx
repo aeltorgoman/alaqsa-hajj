@@ -96,9 +96,11 @@ function HotelsPage({ passengers, setPassengers }: { passengers: Passenger[]; se
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  /* `roomId`: من البحث — صفحةُ الفندق تفتح الغرفةَ في دورها (`&room=`) */
-  const openHotel = (id: number, roomId: number | null = null) => {
-    window.history.pushState(null, "", `${window.location.pathname}?hotel=${id}${roomId != null ? `&room=${roomId}` : ""}`);
+  /* من البحث: `roomId` — صفحةُ الفندق تفتح الغرفةَ في دورها (`&room=`)؛
+     `waitingPaxId` — حاجٌّ بلا غرفة: الفندقُ على غرفه ذات الأسرّة المتاحة (`&waiting=`) */
+  const openHotel = (id: number, roomId: number | null = null, waitingPaxId?: number) => {
+    const extra = roomId != null ? `&room=${roomId}` : waitingPaxId != null ? `&waiting=${waitingPaxId}` : "";
+    window.history.pushState(null, "", `${window.location.pathname}?hotel=${id}${extra}`);
     setOpenId(id);
   };
   const closeHotel = () => {
