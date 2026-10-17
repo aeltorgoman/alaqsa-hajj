@@ -21,6 +21,7 @@ import {
 import {
   allocWriteError, matchesPassenger, useAllocationDrag, useAllocationWrites, useContainerReorder, useContainerSelection,
 } from "./allocation/useAllocation";
+import { deleteContainer, deleteFeedback, useInFlight } from "./allocation/containerWrites";
 
 /* مفاتيح الأعمدة والخدمة — حرفيّة لا string عام، فالفهرسة بها آمنة
    نوعياً. ومنى وعرفة يفترقان هنا وحدهما: عمودُ إسنادٍ وعمودُ ترتيبٍ
@@ -333,7 +334,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   // ══════════════════════════════════════════════════════════
   // الحاوية — إنشاء وتعديل وحذف
   // ══════════════════════════════════════════════════════════
-  const addCamp = async () => {
+  /* طلبٌ جارٍ واحدٌ لكلّ عمليّة — النقرة المكرّرة لا تُرسَل */
+  const inFlight = useInFlight();
+
+  const addCamp = () => inFlight("add", async () => {
     if (!assertWritable()) return;
     const name = campName.trim();
     const cap = parseCapacity(campCapacity);
@@ -356,22 +360,26 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       setCamps(prev => [...prev, data[0] as Camp]);
       setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setCampCapacity(""); setShowAdd(false);
     }
-  };
+  });
 
-  const deleteCamp = async (camp: Camp) => {
+  /* الحذف ببرهان: لا يُزال المخيّم من الشاشة إلا إن حُذف فعلاً أو تبيّن أنه
+     لم يعد موجوداً */
+  const deleteCamp = (camp: Camp) => inFlight(`delete:${camp.id}`, async () => {
     if (!assertWritable()) return;
     if (dwellers(camp.id).length > 0) { showAlert("warning", `المخيّم «${camp.name}» يضمّ ${paxLabel(dwellers(camp.id).length)} — أخرِجهم قبل حذفه.`); return; }
-    const { error } = await supabase.from("camps").delete().eq("id", camp.id);
-    if (error) { console.error("فشل حذف المخيم", error); showAlert("error", allocWriteError("فشل حذف المخيم، يرجى المحاولة مرة أخرى", error.message)); return; }
-    setCamps(prev => prev.filter(c => c.id !== camp.id));
-    closeCamp();
-  };
+    const r = await deleteContainer("camps", camp.id);
+    if (r.kind === "ok") { setCamps(prev => prev.filter(c => c.id !== camp.id)); closeCamp(); return; }
+    console.error("فشل حذف المخيم", r);
+    const fb = deleteFeedback(r, `المخيّم «${camp.name}»`, "فشل حذف المخيم", allocWriteError);
+    if (fb.apply?.kind === "remove") { setCamps(prev => prev.filter(c => c.id !== camp.id)); closeCamp(); }
+    showAlert(fb.type, fb.message);
+  });
 
   /* تحديثٌ لم يمسّ صفّ المخيّم: حُذف من مكانٍ آخر أو حجبته الصلاحية — لا نجاح */
   const campGone = (camp: Camp, what: string) =>
     `${what}: لم يتغيّر شيء — قد يكون المخيّم «${camp.name}» حُذف من مكانٍ آخر أو لا تملك صلاحية تعديله. حدّث الصفحة.`;
 
-  const renameCamp = async (camp: Camp, name: string) => {
+  const renameCamp = (camp: Camp, name: string) => inFlight(`rename:${camp.id}`, async () => {
     if (!assertWritable()) return;
     const next = name.trim();
     if (!next || next === camp.name) { setEditingName(false); return; }
@@ -383,9 +391,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!data || data.length !== 1) { showAlert("error", campGone(camp, "تعذر تعديل اسم المخيم")); return; }
     setCamps(prev => prev.map(c => c.id === camp.id ? { ...c, name: next } : c));
     setEditingName(false);
-  };
+  });
 
-  const saveCapacity = async (camp: Camp) => {
+  const saveCapacity = (camp: Camp) => inFlight(`capacity:${camp.id}`, async () => {
     if (!assertWritable()) return;
     const cap = parseCapacity(capDraft);
     const occ = dwellers(camp.id).length;
@@ -396,7 +404,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!data || data.length !== 1) { showAlert("error", campGone(camp, "تعذر تعديل سعة المخيم")); return; }
     setCamps(prev => prev.map(c => c.id === camp.id ? { ...c, capacity: cap } : c));
     setEditingCap(false);
-  };
+  });
 
   // ══════════════════════════════════════════════════════════
   // الاقتراحات الذكيّة — منى وحدها

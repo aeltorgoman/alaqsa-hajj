@@ -18,6 +18,7 @@ import {
   DialogAction, PassengerPicker, RosterHeader, type PickerItem,
 } from "./allocation/AllocationUI";
 import { allocWriteError, matchesPassenger, useAllocationWrites } from "./allocation/useAllocation";
+import { deleteContainer, deleteFeedback, updateContainer, updateFeedback, useInFlight, type Feedback } from "./allocation/containerWrites";
 
 /* الاتجاه والعمود — رحلة الذهاب تسكن `flight_id`، والإياب
    `return_flight_id`. والقاعدة تحرس المطابقة الآن فلا تبقى اتفاقاً
@@ -328,7 +329,25 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     flights.some(x => x.id !== ignoreId && x.type === f.type
       && x.name.trim() === f.name.trim() && (x.date || "").trim() === f.date.trim() && (x.time || "").trim() === f.time.trim());
 
-  const addFlight = async () => {
+  /* طلبٌ جارٍ واحدٌ لكلّ عمليّة — النقرة المكرّرة لا تُرسَل */
+  const inFlight = useInFlight();
+
+  /* ما لم يقع كما أُريد: تُعرض الحقيقة وتُحدَّث الحالة منها */
+  const applyFeedback = (f: Flight, fb: Feedback) => {
+    if (fb.apply?.kind === "remove") {
+      setFlights(prev => prev.filter(x => x.id !== f.id));
+      if (openFlightId === f.id) closeDialog();
+      setEditFlightModal(null);
+    } else if (fb.apply?.kind === "merge") {
+      const row = fb.apply.row as Partial<Flight>;
+      setFlights(prev => prev.map(x => x.id === f.id ? { ...x, ...row } : x));
+      setEditFlightModal(null); setEditingCap(false);
+    }
+    showAlert(fb.type, fb.message);
+  };
+  const flightLabel = (f: Flight) => `الرحلة «${f.name}»`;
+
+  const addFlight = () => inFlight("add", async () => {
     if (!assertWritable()) return;
     const f = { ...addForm, name: addForm.name.trim(), airline: addForm.airline.trim(), from_airport: addForm.from_airport.trim(), to_airport: addForm.to_airport.trim() };
     const cap = parseInt(addForm.capacity, 10);
@@ -348,14 +367,14 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       setAddForm({ name: "", type: "ذهاب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "", capacity: "" });
       setShowAdd(false);
     }
-  };
+  });
 
   const openEditFlight = (f: Flight) => {
     setEditFlightModal(f);
     setEditForm({ name: f.name, type: f.type, airline: f.airline || "", date: f.date || "", time: f.time || "", arrival_time: f.arrival_time || "", arrival_date: f.arrival_date || "", from_airport: f.from_airport || "", to_airport: f.to_airport || "", capacity: f.capacity != null ? String(f.capacity) : "" });
   };
 
-  const saveEditFlight = async () => {
+  const saveEditFlight = () => inFlight("edit", async () => {
     if (!editFlightModal || !assertWritable()) return;
     const occ = occOf(editFlightModal);
     const cap = editForm.capacity.trim() === "" ? null : parseInt(editForm.capacity, 10);
@@ -366,40 +385,55 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (identityClash({ name: editForm.name, type: editForm.type, date: editForm.date, time: editForm.time }, editFlightModal.id)) {
       showAlert("warning", "رحلة بهذه الهويّة (الاتجاه والرقم والتاريخ والوقت) موجودة بالفعل"); return;
     }
+    const orig = editFlightModal;
     const upd = {
       name: editForm.name.trim(), type: editForm.type, airline: editForm.airline.trim(),
       date: editForm.date, time: editForm.time, arrival_time: editForm.arrival_time, arrival_date: editForm.arrival_date,
       from_airport: editForm.from_airport.trim(), to_airport: editForm.to_airport.trim(), capacity: cap,
     };
-    const { error } = await supabase.from("flights").update(upd).eq("id", editFlightModal.id);
-    if (error) { console.error("تعذر حفظ تعديلات الرحلة", error); showAlert("error", allocWriteError("تعذر حفظ تعديلات الرحلة", error.message)); return; }
-    setFlights(prev => prev.map(f => f.id === editFlightModal.id ? { ...f, ...upd } as Flight : f));
+    /* لا يُكتب إلا ما غيّره الموظّف، وكلُّ حقلٍ منه مشروطٌ بقيمته حين فُتح
+       النموذج: فلا تمحو نسخةٌ قديمة ما غيّره غيرُه في حقلٍ آخر، ولا يُكتب
+       فوق حقلٍ غيّره غيرُه هو نفسه */
+    const before = orig as unknown as Record<string, unknown>;
+    const patch: Record<string, unknown> = {};
+    const expect: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(upd)) {
+      const was = before[k] ?? null;
+      if (v === (was ?? (k === "capacity" ? null : ""))) continue;
+      patch[k] = v; expect[k] = was;
+    }
+    if (!Object.keys(patch).length) { setEditFlightModal(null); return; }
+    const r = await updateContainer("flights", orig.id, patch, expect);
+    if (r.kind !== "ok") { console.error("تعذر حفظ تعديلات الرحلة", r); applyFeedback(orig, updateFeedback(r, flightLabel(orig), "تعذر حفظ تعديلات الرحلة", allocWriteError, true)); return; }
+    setFlights(prev => prev.map(f => f.id === orig.id ? { ...f, ...patch } as Flight : f));
     setEditFlightModal(null);
-  };
+  });
 
-  const saveCapacity = async (f: Flight) => {
+  const saveCapacity = (f: Flight) => inFlight(`capacity:${f.id}`, async () => {
     if (!assertWritable()) return;
     const cap = parseInt(capDraft, 10);
     const occ = occOf(f);
     if (!Number.isFinite(cap) || cap < 1) { showAlert("warning", "عدد المقاعد يجب أن يكون أكبر من صفر"); return; }
     if (cap < occ) { showAlert("warning", `الرحلة «${f.name}» تضمّ ${paxLabel(occ)}، فلا تُخفَّض مقاعد الحملة إلى ${cap}. أخرِج المسافرين أولاً.`); return; }
-    const { error } = await supabase.from("flights").update({ capacity: cap }).eq("id", f.id);
-    if (error) { console.error("تعذر تعديل مقاعد الرحلة", error); showAlert("error", allocWriteError("تعذر تعديل مقاعد الرحلة", error.message)); return; }
+    /* مشروطةٌ بالمقاعد التي رآها الموظّف — لا يُكتب فوق عددٍ غيّره غيرُه */
+    const r = await updateContainer("flights", f.id, { capacity: cap }, { capacity: f.capacity ?? null });
+    if (r.kind !== "ok") { console.error("تعذر تعديل مقاعد الرحلة", r); applyFeedback(f, updateFeedback(r, flightLabel(f), "تعذر تعديل مقاعد الرحلة", allocWriteError, true)); return; }
     setFlights(prev => prev.map(x => x.id === f.id ? { ...x, capacity: cap } : x));
     setEditingCap(false);
-  };
+  });
 
-  const deleteFlight = async (f: Flight) => {
+  const deleteFlight = (f: Flight) => inFlight(`delete:${f.id}`, async () => {
     if (!assertWritable()) return;
     /* القاعدة ترفضه بالمفتاح الأجنبي كذلك — وهذا يشرح قبل المحاولة.
        والعدّ على الساقين معاً لا على ساقٍ واحدة كما كان. */
     const occ = passengers.filter(p => p.flight_id === f.id || p.return_flight_id === f.id).length;
     if (occ > 0) { showAlert("warning", `الرحلة «${f.name}» تضمّ ${paxLabel(occ)} — أخرِجهم قبل حذفها.`); return; }
-    const { error } = await supabase.from("flights").delete().eq("id", f.id);
-    if (error) { console.error("تعذر حذف الرحلة", error); showAlert("error", allocWriteError("تعذر حذف الرحلة", error.message)); return; }
+    /* لا تُزال من الشاشة إلا إن حُذفت فعلاً أو تبيّن أنها لم تعد موجودة */
+    const r = await deleteContainer("flights", f.id);
+    if (r.kind !== "ok") { console.error("تعذر حذف الرحلة", r); applyFeedback(f, deleteFeedback(r, flightLabel(f), "تعذر حذف الرحلة", allocWriteError, true)); return; }
     setFlights(prev => prev.filter(x => x.id !== f.id));
     if (openFlightId === f.id) closeDialog();
-  };
+  });
 
   // ══════════════════════════════════════════════════════════
   // الطباعة — بلا تغيير في المحتوى، والترتيب هو ترتيب الكشوف
