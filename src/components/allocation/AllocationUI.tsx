@@ -379,9 +379,12 @@ export function SuggestionStrip({ items, onAccept, onDismiss, blockedReason }: {
 // والباص يسع خمسين — قائمةٌ بهذا الطول في عمودٍ بهذا الضيق، إلى
 // جانب منتقٍ، غيرُ قابلةٍ للاستعمال.
 export function AllocationDialog({
-  onClose, icon, title, badges, meta, actions, roster, picker, labelledBy = "alloc-dialog-title",
+  onClose, onEscape, icon, title, badges, meta, actions, roster, picker, labelledBy = "alloc-dialog-title",
 }: {
   onClose: () => void;
+  /* Escape يُعرض أوّلاً على الصفحة: إن ألغت به تعديلاً جارياً (true) بقي
+     المودال مفتوحاً — أيّاً كان موضع البؤرة داخله، لا داخل الحقل وحده */
+  onEscape?: () => boolean;
   icon: React.ReactNode;
   title: React.ReactNode;
   badges?: React.ReactNode;
@@ -397,10 +400,17 @@ export function AllocationDialog({
      المودال كلّما تغيّرت هويّة `onClose` — أي مع كلّ رسمٍ في صفحةٍ تبنيها
      من جديد — فيفقد حقلُ الكتابة بؤرته بعد أوّل حرف */
   const onCloseRef = useRef(onClose);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => { onCloseRef.current = onClose; onEscapeRef.current = onEscape; }, [onClose, onEscape]);
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      /* تعديلٌ أُلغي: تعود البؤرة إلى المودال (كان الحقل نفسه قد زال) فتغلقه
+         Escape التالية */
+      if (onEscapeRef.current?.()) { cardRef.current?.focus(); return; }
+      onCloseRef.current();
+    };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, []);

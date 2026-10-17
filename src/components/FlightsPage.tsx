@@ -130,8 +130,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
   const [flightSearch, setFlightSearch] = useState("");
 
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", type: "ذهاب" as "ذهاب" | "إياب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "", capacity: "" });
+  const [addForm, setAddForm] = useState(emptyFlightForm);
   const [formError, setFormError] = useState("");
+  /* كلُّ جلسة «رحلة جديدة» تبدأ بنموذجٍ فارغ: الإلغاء والإغلاق يمحوان
+     المسودّة، والفتح يبدأ من الفراغ — فلا تعود بياناتٌ أُلغيت */
+  const openAdd = () => { setAddForm(emptyFlightForm()); setFormError(""); setShowAdd(true); };
+  const closeAdd = () => { setShowAdd(false); setFormError(""); setAddForm(emptyFlightForm()); };
 
   const [openFlightId, setOpenFlightId] = useState<number | null>(null);
   const [pSearch, setPSearch] = useState("");
@@ -378,8 +382,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
     if (error) { console.error("فشل إضافة الرحلة", error); showAlert("error", allocWriteError("فشل إضافة الرحلة، يرجى المحاولة مرة أخرى", error.message)); return; }
     if (data?.[0]) {
       setFlights(prev => [...prev, data[0] as Flight]);
-      setAddForm({ name: "", type: "ذهاب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "", capacity: "" });
-      setShowAdd(false);
+      closeAdd();
     }
   });
 
@@ -659,7 +662,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       <FlightsStats flights={flights} passengers={passengers} />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12, flexWrap: "wrap" }}>
-        <button disabled={readOnly} onClick={() => setShowAdd(true)}
+        <button disabled={readOnly} onClick={openAdd}
           style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--primary)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
           <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> رحلة جديدة
         </button>
@@ -718,6 +721,9 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
         return (
           <AllocationDialog onClose={closeDialog} icon={<PlaneIcon size={16} />}
+            /* Escape الأولى تلغي تعديل المقاعد وحده — من الحقل أو من «حفظ/إلغاء»
+               أو من أيّ موضعٍ في المودال — والتالية تغلقه */
+            onEscape={() => { if (!editingCap) return false; setEditingCap(false); return true; }}
             title={<span dir="ltr">{f.name}</span>}
             badges={<>{dirBadge(f.type, true)}{f.airline && <span style={{ fontSize: 10, fontWeight: 700, opacity: .9 }}>{f.airline}</span>}</>}
             meta={
@@ -731,8 +737,6 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
                   {editingCap ? (
                     <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
                       <input value={capDraft} onChange={e => setCapDraft(e.target.value)} type="number" min="1" step="1" inputMode="numeric" autoFocus aria-label="مقاعد الحملة"
-                        /* Escape يلغي تعديل المقاعد وحده — لا يصل إلى مستمع المودال فيغلقه */
-                        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setEditingCap(false); } }}
                         style={{ width: 60, padding: "2px 6px", borderRadius: 6, border: "none", outline: "none", background: "var(--paper)", color: "var(--ink)", fontSize: 11, fontFamily: "var(--font-body)" }} />
                       <button onClick={() => saveCapacity(f)} style={{ fontSize: 10, fontWeight: 900, padding: "2px 8px", borderRadius: 6, border: "none", background: "var(--paper)", color: "var(--primary)", cursor: "pointer", fontFamily: "var(--font-body)" }}>حفظ</button>
                       <button onClick={() => setEditingCap(false)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: "1px solid color-mix(in srgb, var(--text-inverse) 35%, transparent)", background: "transparent", color: "var(--text-inverse)", cursor: "pointer", fontFamily: "var(--font-body)" }}>إلغاء</button>
@@ -854,12 +858,12 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
       })()}
 
       {/* ═══ إضافة رحلة ═══ */}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setFormError(""); }} title="إضافة رحلة جديدة" maxWidth={520}>
+      <Modal show={showAdd} onClose={closeAdd} title="إضافة رحلة جديدة" maxWidth={520}>
         <FlightForm form={addForm} setForm={setAddForm} occupied={0} />
         {formError && <div role="alert" style={{ fontSize: 11, color: "var(--danger)", marginBottom: 10 }}>{formError}</div>}
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={addFlight} style={{ ...btnP(), flex: 1 }}>إضافة</button>
-          <button onClick={() => { setShowAdd(false); setFormError(""); }} style={btnS()}>إلغاء</button>
+          <button onClick={closeAdd} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
 
@@ -877,6 +881,10 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
 
 /* نموذجُ الرحلة — مشتركٌ بين الإضافة والتعديل، فلا يفترق الحقلان */
 type FlightFormState = { name: string; type: "ذهاب" | "إياب"; airline: string; date: string; time: string; arrival_time: string; arrival_date: string; from_airport: string; to_airport: string; capacity: string };
+
+function emptyFlightForm(): FlightFormState {
+  return { name: "", type: "ذهاب", airline: "", date: "", time: "", arrival_time: "", arrival_date: "", from_airport: "", to_airport: "", capacity: "" };
+}
 
 function FlightForm({ form, setForm, occupied }: { form: FlightFormState; setForm: Dispatch<SetStateAction<FlightFormState>>; occupied: number }) {
   const set = (k: keyof FlightFormState) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, [k]: e.target.value }));
