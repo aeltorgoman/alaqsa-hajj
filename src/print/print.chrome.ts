@@ -53,7 +53,8 @@ export function seasonLabel(season: PrintSeason): string {
 /* ═══ الترويسة ═══ */
 /** ترويسةُ المطبوع بحسب نمطها — والنمطُ `"full"` يُبنى في القشرة
  *  نفسها لأنّه يحتاج `headerUrl` ونقشتَها، فلا يُكرَّر هنا. */
-export function compactHeaderHTML(b: PrintBranding, title: string): string {
+/** `titleExtraHtml`: إضافةٌ في شريط العنوان نفسه (مُهرَّبةٌ عند مناديها) — لا سطرَ جديد. */
+export function compactHeaderHTML(b: PrintBranding, title: string, titleExtraHtml = ""): string {
   const { companyName, tagline, logoUrl } = safeBranding(b);
   const logoHtml = logoOrInitial(logoUrl, companyName);
   return `<div class="doc-header doc-header-compact">
@@ -65,7 +66,7 @@ export function compactHeaderHTML(b: PrintBranding, title: string): string {
     </div>
   </div>
 </div>
-  <div class="doc-title-bar">${escapeCompanyHtml(title)}</div>`;
+  <div class="doc-title-bar">${escapeCompanyHtml(title)}${titleExtraHtml}</div>`;
 }
 
 /* ═══ سطرُ البيانات المرافقة ═══ */

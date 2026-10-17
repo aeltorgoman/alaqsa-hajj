@@ -15,6 +15,7 @@
    يفترق مدخلان. وهيئةُ `FlightsPage` هي المرجع، ولا تُغيَّر. */
 import type { Passenger, Bus, Camp, Flight, Room } from "../types";
 import { roomCapacity } from "../utils/room";
+import { isHajj } from "../utils/passenger";
 import { chromeMetaHTML, pageStampHTML, seasonLabel, compactHeaderHTML,
          type PrintChrome, type PrintSeason } from "./print.chrome";
 import type { PrintBranding } from "./print.brand";
@@ -226,7 +227,23 @@ export type HotelReportOptions = {
      غرفةٍ الفعليّ في رأس بطاقتها — فالرقمُ نفسُه قد يتكرّر بين فندقين.
      وصفحةُ الفندق الواحد لا تمرّره فلا يتغيّر مطبوعُها. */
   hotelOf?: (room: Room) => string | null;
+  /* «إظهار الملخص الإحصائي» — مطفأٌ افتراضاً. أرقامُ الغرف المطبوعة وحدها */
+  summary?: boolean;
 };
+
+/** ملخّصُ ما في الكشف: الغرفُ المطبوعة، والحجّاجُ المسكَّنون فيها، والأسرّةُ
+ *  الشاغرة فيها (غرفُ النوم ذاتُ السعة المحدّدة — المجلسُ خارجها، كمؤشّرات
+ *  صفحة الفندق). يُصدَّر ليُختبَر ويُطابَق بالحساب نفسه. */
+export function hotelPrintSummary(rooms: Room[], passengers: Passenger[]) {
+  const ids = new Set(rooms.map(r => r.id));
+  const housed = passengers.filter(p => p.room_id != null && ids.has(p.room_id) && isHajj(p)).length;
+  const freeBeds = rooms.reduce((n, r) => {
+    const cap = roomCapacity(r) ?? 0;
+    if (cap <= 0) return n;
+    return n + Math.max(0, cap - passengers.filter(p => p.room_id === r.id).length);
+  }, 0);
+  return { rooms: rooms.length, housed, freeBeds };
+}
 
 /** مستندُ الفندق كاملاً — المصدرُ الوحيد لصفحةِ الفندق وصفحةِ التقارير. */
 export function hotelReportDocument(
@@ -235,7 +252,7 @@ export function hotelReportDocument(
   branding: PrintBranding,
   options: HotelReportOptions = {},
 ): string {
-  const { landscape = false, showPattern = true, subtitle = "", chrome = {}, hotelOf } = options;
+  const { landscape = false, showPattern = true, subtitle = "", chrome = {}, hotelOf, summary = false } = options;
   const COLS = landscape ? 5 : 4;
   const ROWS = landscape ? 3 : 4;
   const PER_PAGE = COLS * ROWS;
@@ -272,7 +289,12 @@ export function hotelReportDocument(
   const { w, h } = SHEET_MM[landscape ? "landscape" : "portrait"];
   /* ترويسةُ الهويّة وحواشيها تتكرّران على كلّ ورقةٍ — فالورقةُ الثانية
      تُقرأ وحدها، ولأنّهما داخلَ الورقة لا خارجَها فلا تُقسَّمان عنها. */
-  const headerHTML = compactHeaderHTML(branding, `تقرير الفندق${subtitle}`);
+  /* الملخّصُ في شريط العنوان، بخطٍّ أصغر على السطر نفسه — لا يرفع الشريط */
+  const sum = summary ? hotelPrintSummary(rooms, passengers) : null;
+  const summaryHTML = sum
+    ? `<span class="hotel-summary" data-hotel-summary> · الغرف: ${sum.rooms} · الحجاج المسكَّنون: ${sum.housed} · الأسرّة الشاغرة: ${sum.freeBeds}</span>`
+    : "";
+  const headerHTML = compactHeaderHTML(branding, `تقرير الفندق${subtitle}`, summaryHTML);
   const metaHTML = chromeMetaHTML(chrome);
   const { companyName, tagline, footerText } = safeBranding(branding);
   const footerLine = footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير الفندق${subtitle}`;
@@ -303,7 +325,8 @@ export function hotelReportDocument(
       .hotel-print-page .doc-header { margin-bottom: 2px; }
       .hotel-print-page .page-stamp { margin-top: 3pt; }
       .hotel-foot { text-align: center; color: #aaa; font-size: 7pt; margin-top: 2pt;
-                    border-top: 0.5pt solid #eee; padding-top: 3pt; }
+                    border-top: 0.5pt solid #eee; padding-top: 3pt; }${sum ? `
+      .hotel-summary { font-size: 8.5pt; font-weight: 700; opacity: .92; white-space: nowrap; }` : ""}
     </style>` +
     pages.map((pageRooms, pi) => {
       /* أكبرُ سعةٍ معتمَدةٍ في الصفحة تحدّد الخطّ — لا أكبرُ إشغال */

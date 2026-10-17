@@ -15,7 +15,8 @@ import { HOTEL_ROOM_TYPES, isFixedCapType, roomCapacity, makeShort, ROOM_TYPE_CA
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 /* المستندُ نفسه الذي تطبعه صفحةُ التقارير — لا نسخةَ ثانية للفندق */
-import { hotelReportDocument, printInPage } from "../print";
+import { hotelReportDocument, printInPage, initialPrintOptions, chromeFromOptions, type PrintOptionsState } from "../print";
+import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { useReportBranding } from "../company/CompanyContext";
 
 const ROOM_TYPES = HOTEL_ROOM_TYPES as readonly Room["type"][];
@@ -65,6 +66,8 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
   const [deletingRoom, setDeletingRoom] = useState(false);
   /* اختيارُ اتّجاه الورقة — زرٌّ واحد للطباعة يفتحه */
   const [printMenu, setPrintMenu] = useState(false);
+  /* «خيارات الطباعة» المشتركة — مواصفةُ `hotel` نفسُها في صفحة التقارير */
+  const [printOpts, setPrintOpts] = useState<PrintOptionsState>(() => initialPrintOptions("hotel"));
   /* حاجٌّ بلا غرفة اختير من البحث (هنا، أو من صفحة الفنادق بـ`&waiting=`):
      تُعرض أسرّةُ الفندق المتاحة وسطرٌ يقول الخطوةَ التالية حتى يُسكَّن أو يُغلق */
   const [waitingPaxId, setWaitingPaxId] = useState<number | null>(() => {
@@ -703,7 +706,8 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
     printInPage(hotelReportDocument(filteredRooms, passengers, reportBranding, {
       landscape,
       subtitle: filterType ? ` — ${filterType}` : "",
-      chrome: { season: viewedSeason, pageNumbers: true, scope: scope.join(" · ") },
+      chrome: chromeFromOptions("hotel", printOpts, { season: viewedSeason, scope: scope.join(" · ") }),
+      summary: printOpts.summary,
     }));
   };
 
@@ -794,6 +798,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
             طباعة كشف الغرف ({filteredRooms.length})
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
+          <PrintOptionsMenu report="hotel" value={printOpts} onChange={setPrintOpts} />
           {printMenu && <>
             <div onClick={() => setPrintMenu(false)} style={{ position:"fixed", inset:0, zIndex:70 }} />
             <div role="menu" aria-label="اتّجاه الورقة"
