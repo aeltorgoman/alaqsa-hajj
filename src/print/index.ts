@@ -33,7 +33,7 @@ export { busTitle, busRiders, busManifest,
 export { flightSection, flightReportDocument, flightsReportDocument,
          busSection, busReportDocument, busesReportDocument,
          campSection, campReportDocument, campsReportDocument,
-         hotelReportDocument, hotelRoomCard, roomTypeBadge } from "./print.reports";
+         hotelReportDocument, hotelPrintSummary, hotelRoomCard, roomTypeBadge } from "./print.reports";
 export type { HotelReportOptions } from "./print.reports";
 export type { DocKind } from "./print.docs";
 export { docFileKind, docImageBody, docFailedBody } from "./print.docs";

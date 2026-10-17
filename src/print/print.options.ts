@@ -21,8 +21,9 @@
       إلا حيث له معنًى. */
 import type { PrintChrome, HeaderMode, PrintSeason } from "./print.chrome";
 
-/** الخياراتُ الخمسة المعتمَدة — ولا سادسَ لها. */
-export type PrintOptionKey = "header" | "season" | "issuedAt" | "pageNumbers" | "scope";
+/** الخياراتُ الخمسة المعتمَدة للحواشي، وسادسٌ خاصٌّ بكشف الفندق:
+ *  `summary` سطرُ أرقامٍ عن الغرف المطبوعة — لا يُعرَض على غيره. */
+export type PrintOptionKey = "header" | "season" | "issuedAt" | "pageNumbers" | "scope" | "summary";
 
 export type PrintOptionsState = Record<PrintOptionKey, boolean>;
 
@@ -37,7 +38,7 @@ export type PrintOptionsSpec = {
 };
 
 const OFF: PrintOptionsState = {
-  header: false, season: false, issuedAt: false, pageNumbers: false, scope: false,
+  header: false, season: false, issuedAt: false, pageNumbers: false, scope: false, summary: false,
 };
 const state = (on: Partial<PrintOptionsState>): PrintOptionsState => ({ ...OFF, ...on });
 
@@ -48,10 +49,10 @@ export const PRINT_OPTION_LABEL: Record<PrintOptionKey, string> = {
   issuedAt:    "إظهار تاريخ الطباعة",
   pageNumbers: "إظهار أرقام الصفحات",
   scope:       "إظهار نطاق / فلاتر التقرير",
+  summary:     "إظهار الملخص الإحصائي",
 };
 
 /* ═══ مواصفاتُ التقارير ═══
-   ولا فندقَ هنا: مطبوعُه أُقفل بشكله المقبول، فلا خيارَ يُعرَض عليه.
    ولا مطبوعاتِ شنطٍ ولا إيصالَ دفعة — لكلٍّ هندستُه المعتمَدة. */
 
 /** الكشوفُ التشغيليّة: الموسمُ في سطر العنوان، ولا ترقيمَ ولا ترويسةَ افتراضاً. */
@@ -102,6 +103,16 @@ export const PRINT_SPECS = {
     available: ["header", "season", "issuedAt"],
     defaults: state({ header: true, season: true, issuedAt: true }),
     headerMode: "full",
+  } as PrintOptionsSpec,
+  /* كشفُ الفندق — من صفحة الفندق وصفحة التقارير بالمواصفة نفسها. الافتراضُ
+     هو مطبوعُه المقبول بحرفه: الموسمُ والنطاقُ والترقيم، بلا تاريخ ولا ملخّص.
+     ولا خيارَ للترويسة: هويّتُه وشريطُ عنوانه جزءٌ من هندسة الورقة الذرّيّة
+     (ستّ عشرة غرفةً أو خمسَ عشرة)، فلا تُطفأ. والملخّصُ يُكتب في شريط
+     العنوان نفسه، فلا يزيد الورقةَ سطراً ولا يُنقص غرفةً ولا يصغّر اسماً. */
+  hotel: {
+    available: ["season", "issuedAt", "pageNumbers", "scope", "summary"],
+    defaults: state({ season: true, pageNumbers: true, scope: true }),
+    headerMode: "compact",
   } as PrintOptionsSpec,
   /* المستندات: مظهرُها المقبول بلا ترويسةٍ ولا حواشٍ — فكلُّها مطفأة */
   documents: {

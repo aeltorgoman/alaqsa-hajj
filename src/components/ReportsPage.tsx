@@ -821,8 +821,9 @@ const getReportAirlineLogo = (airline: string): string | null => {
       landscape: opts?.landscape ?? false,
       showPattern: opts?.showPattern ?? true,
       subtitle: hotelPrintFilter === "type" ? ` — ${hotelPrintType}` : "",
-      chrome: { season: viewedSeason, pageNumbers: true, scope: hotelScopeCaption() },
+      chrome: chromeFor("hotel", { season: viewedSeason, scope: hotelScopeCaption() }),
       hotelOf: multiHotel ? roomHotelName : undefined,
+      summary: optsFor("hotel").summary,
     });
 
   const exportHotelXLSX = () => {
@@ -1993,6 +1994,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                   مساران في الواجهة يعنيان الشيءَ نفسه. */}
               <ExportButtons
                 onExcel={exportHotelXLSX}
+                options={optionsMenu("hotel")}
                 printActions={
                   <>
                     <button onClick={() => printInPage(getHotelHTML({ landscape: false }))} style={printBtnStyle} title="ستّ عشرة غرفة في الورقة">

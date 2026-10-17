@@ -19,8 +19,9 @@ import { useSeasonWrite } from "../season/useSeasonWrite";
 import { AlertModal, ConfirmModal, useAlert, useConfirm } from "./AlertModal";
 import { Modal } from "./Modal";
 import { HotelPage } from "./HotelPage";
+import { HotelSearch } from "./hotels/HotelSearch";
 
-type RoomLite = Pick<Room, "id" | "hotel_id" | "type" | "capacity">;
+type RoomLite = Pick<Room, "id" | "hotel_id" | "type" | "capacity" | "number" | "floor">;
 type HotelForm = { name: string; address: string; map_url: string; notes: string };
 const EMPTY_FORM: HotelForm = { name: "", address: "", map_url: "", notes: "" };
 
@@ -65,7 +66,7 @@ function HotelsPage({ passengers, setPassengers }: { passengers: Passenger[]; se
     let live = true;
     Promise.all([
       supabase.from("hotels").select("*").eq("season_id", viewedSeason.id),
-      supabase.from("rooms").select("id, hotel_id, type, capacity").eq("season_id", viewedSeason.id),
+      supabase.from("rooms").select("id, hotel_id, type, capacity, number, floor").eq("season_id", viewedSeason.id),
     ]).then(([h, r]) => {
       if (!live) return;
       if (h.error || r.error || !h.data || !r.data) {
@@ -95,8 +96,11 @@ function HotelsPage({ passengers, setPassengers }: { passengers: Passenger[]; se
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const openHotel = (id: number) => {
-    window.history.pushState(null, "", `${window.location.pathname}?hotel=${id}`);
+  /* من البحث: `roomId` — صفحةُ الفندق تفتح الغرفةَ في دورها (`&room=`)؛
+     `waitingPaxId` — حاجٌّ بلا غرفة: الفندقُ على غرفه ذات الأسرّة المتاحة (`&waiting=`) */
+  const openHotel = (id: number, roomId: number | null = null, waitingPaxId?: number) => {
+    const extra = roomId != null ? `&room=${roomId}` : waitingPaxId != null ? `&waiting=${waitingPaxId}` : "";
+    window.history.pushState(null, "", `${window.location.pathname}?hotel=${id}${extra}`);
     setOpenId(id);
   };
   const closeHotel = () => {
@@ -193,7 +197,7 @@ function HotelsPage({ passengers, setPassengers }: { passengers: Passenger[]; se
 
   if (openHotelRow) {
     return <HotelPage key={openHotelRow.id} hotel={openHotelRow} hotels={hotels} onBack={closeHotel}
-      passengers={passengers} setPassengers={setPassengers} />;
+      passengers={passengers} setPassengers={setPassengers} seasonRooms={rooms} onOpenRoom={openHotel} />;
   }
 
   const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
@@ -212,6 +216,7 @@ function HotelsPage({ passengers, setPassengers }: { passengers: Passenger[]; se
           <div style={{ fontSize: 16, fontWeight: 900, color: "var(--ink)" }}>فنادق الموسم</div>
           <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>اختر فندقاً لإدارة غرفه وتسكين حجّاجه</div>
         </div>
+        {hotels.length > 0 && <HotelSearch passengers={passengers} rooms={rooms} hotels={hotels} onOpen={openHotel} width={280} />}
         <button disabled={readOnly} onClick={startAdd} style={{ ...btnP, ...roOff, display: "flex", alignItems: "center", gap: 5 }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           إضافة فندق
