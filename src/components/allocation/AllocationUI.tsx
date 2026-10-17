@@ -393,13 +393,20 @@ export function AllocationDialog({
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
+  /* أحدثُ `onClose` في مرجع: كان المستمع يُعاد تسجيله والبؤرةُ تُسحب إلى
+     المودال كلّما تغيّرت هويّة `onClose` — أي مع كلّ رسمٍ في صفحةٍ تبنيها
+     من جديد — فيفقد حقلُ الكتابة بؤرته بعد أوّل حرف */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
     document.addEventListener("keydown", h);
-    /* البؤرة تدخل المودال فلا تبقى خلف الحجاب */
-    cardRef.current?.focus();
     return () => document.removeEventListener("keydown", h);
-  }, [onClose]);
+  }, []);
+
+  /* البؤرة تدخل المودال مرّةً عند فتحه فلا تبقى خلف الحجاب — لا عند كلّ رسم */
+  useEffect(() => { cardRef.current?.focus(); }, []);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }}>
