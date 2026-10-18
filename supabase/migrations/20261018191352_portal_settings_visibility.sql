@@ -152,18 +152,21 @@ begin
       using errcode = '42501';
   end if;
 
-  /* M1 — لا يُحفظ إلا ما تعرفه البوابة، وبنوعه */
-  if jsonb_typeof(v_in) <> 'object' then
+  /* M1 — لا يُحفظ إلا ما تعرفه البوابة، وبنوعه. والمقارناتُ آمنةٌ من NULL
+     (`is distinct from`، و`coalesce(…, false)`): مقارنةٌ مجهولةُ النتيجة لا
+     تُسقط الرفض أبداً — فـ`null` في JSON لمفتاحٍ معروفٍ مرفوضٌ كأيّ نوعٍ خاطئ.
+     والرفضُ استثناءٌ قبل التحديث: لا يُحفظ شيءٌ من الطلب، ولا جزءٌ منه. */
+  if jsonb_typeof(v_in) is distinct from 'object' then
     raise exception 'إعداداتُ البوابة غير صالحة.' using errcode = '22023';
   end if;
   foreach v_key in array array['flights','rooms','buses','documents','roommates','lost_card','arafat_countdown'] loop
-    if v_in ? v_key and jsonb_typeof(v_in -> v_key) <> 'boolean' then
+    if v_in ? v_key and jsonb_typeof(v_in -> v_key) is distinct from 'boolean' then
       raise exception 'قيمةُ الإعداد % غير صالحة.', v_key using errcode = '22023';
     end if;
   end loop;
   if v_in ? 'photo_visibility'
-     and (jsonb_typeof(v_in -> 'photo_visibility') <> 'string'
-          or v_in ->> 'photo_visibility' not in ('all', 'men', 'women', 'none')) then
+     and (jsonb_typeof(v_in -> 'photo_visibility') is distinct from 'string'
+          or not coalesce(v_in ->> 'photo_visibility' in ('all', 'men', 'women', 'none'), false)) then
     raise exception 'قيمةُ إعداد ظهور الصورة غير صالحة.' using errcode = '22023';
   end if;
   select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) into v_clean
@@ -459,6 +462,12 @@ begin
      or public._portal_photo_visible('{"photo_visibility":"men"}', 'أنثى') or not public._portal_photo_visible('{"photo_visibility":"women"}', 'أنثى')
      or public._portal_photo_visible('{"photo_visibility":"bogus"}', 'ذكر') then
     raise exception '_portal_photo_visible لا تطابق القاعدة.' using errcode = 'P0001';
+  end if;
+
+  -- التحقّقُ الآمنُ من NULL في الجسد المطبَّق فعلاً
+  if position('jsonb_typeof(v_in -> v_key) is distinct from ''boolean''' in (select prosrc from pg_proc where oid = 'public.update_portal_settings(jsonb, text, text, text, text, text)'::regprocedure)) = 0
+     or position('jsonb_typeof(v_in -> ''photo_visibility'') is distinct from ''string''' in (select prosrc from pg_proc where oid = 'public.update_portal_settings(jsonb, text, text, text, text, text)'::regprocedure)) = 0 then
+    raise exception 'تحقّقُ أنواع إعدادات البوابة ليس آمناً من NULL.' using errcode = 'P0001';
   end if;
 
   -- الحارسُ في الجسد المطبَّق فعلاً

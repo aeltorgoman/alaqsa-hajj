@@ -141,9 +141,44 @@ r=$(anon 10.30.0.9 "select count(*) from public.pilgrim_sessions where last_seen
 echo "═══ M1 — الحفظ: المفاتيحُ الثمانية وأنواعُها ═══"
 r=$(save '{"flights":false,"notifications":false,"pdf_downloads":false,"financial_balance":true,"evil":"x","photo_visibility":"men"}')
 [ "$(q "select '$r'::jsonb = '{\"flights\":false,\"photo_visibility\":\"men\"}'::jsonb")" = "t" ] && ok "M1 obsolete/unknown keys (notifications, pdf_downloads, …) dropped; known kept" || bad "M1 sanitize ($r)"
-for bad_json in '{"photo_visibility":"bogus"}' '{"flights":"yes"}' '{"documents":1}' '["flights"]' '{"photo_visibility":true}'; do
-  r=$(save "$bad_json"); echo "$r" | grep -qE "غير صالحة|22023" || bad "M1 accepted invalid $bad_json ($r)"
-done; ok "M1 wrong types / unknown photo value / non-object rejected (22023)"
+# رفضٌ بـ22023 تحديداً (VERBOSITY verbose يطبع الرمز)
+saveV() { psql "$LOCAL" -X -q -At -v VERBOSITY=verbose -c "begin; set local role authenticated; do \$x\$ begin perform set_config('request.jwt.claims','{\"sub\":\"$U_PORTAL\",\"role\":\"authenticated\"}',true); end \$x\$; select (update_portal_settings($1)).portal_settings::text; commit;" 2>&1; }
+rejected() { echo "$1" | grep -q "ERROR:  22023"; }
+miss=""
+for bad_json in '{"photo_visibility":"bogus"}' '{"photo_visibility":""}' '{"photo_visibility":"ALL"}' '{"photo_visibility":" all"}' '{"photo_visibility":true}' '{"photo_visibility":["all"]}' \
+                '{"flights":"yes"}' '{"flights":"true"}' '{"documents":1}' '{"documents":0}' '{"roommates":[]}' '{"lost_card":{}}' '["flights"]' '"x"' 'null' '42'; do
+  r=$(saveV "'$bad_json'::jsonb, null, null, null, null, null"); rejected "$r" || miss="$miss $bad_json"
+done
+[ -z "$miss" ] && ok "M1 wrong types / unknown or mis-cased photo value / non-object (incl. top-level JSON null) rejected with 22023" || bad "M1 accepted invalid:$miss"
+miss=""
+for k in flights rooms buses documents roommates lost_card arafat_countdown photo_visibility; do
+  r=$(saveV "'{\"$k\":null}'::jsonb, null, null, null, null, null"); rejected "$r" || miss="$miss $k"
+done
+[ -z "$miss" ] && ok "M1 JSON null rejected (22023) for every one of the eight typed keys" || bad "M1 JSON null accepted for:$miss"
+
+# لا حفظَ جزئيّ: طلبٌ فيه مفتاحٌ صالحٌ وآخرُ null (ورسالةٌ جديدة) يُرفض كلُّه
+save '{"flights":true,"documents":true,"photo_visibility":"all"}' > /dev/null
+staff $U_PORTAL "select update_portal_settings('{\"flights\":true,\"documents\":true,\"photo_visibility\":\"all\"}'::jsonb,'قبل',null,'مدير','111',null)" > /dev/null
+before=$(q "select json_build_array(portal_settings, portal_welcome_message, admin_name, admin_phone)::text from public.company_config where id = 1")
+st_before=$(anon 10.30.0.9 "select portal_settings_stamp()")
+for bad_mix in '{"flights":false,"documents":null}' '{"flights":false,"photo_visibility":null}' '{"documents":false,"photo_visibility":"bogus"}' '{"rooms":false,"lost_card":"no"}'; do
+  r=$(saveV "'$bad_mix'::jsonb, 'بعد', 'مساعدة', 'مخترِق', '999', '999'"); rejected "$r" || bad "M1 mixed payload accepted $bad_mix ($r)"
+done
+after=$(q "select json_build_array(portal_settings, portal_welcome_message, admin_name, admin_phone)::text from public.company_config where id = 1")
+[ "$before" = "$after" ] && [ "$(anon 10.30.0.9 "select portal_settings_stamp()")" = "$st_before" ] \
+  && ok "M1 a rejected request saves nothing: valid keys in it, the messages and admin fields all unchanged; stamp unchanged" || bad "M1 partial save ($before → $after)"
+r=$(pf "$TM" "->'pilgrim'->>'has_hajj_permit'"); [ "$r" = "true" ] && ok "M1 after the rejected 'documents:false' attempts, documents stay visible (nothing applied)" || bad "M1 partial docs ($r)"
+
+# حجبُ الخادم يصمد أمام قيمةٍ null مخزَّنةٍ مباشرةً (لا تصل من الدالّة بعد اليوم)
+q "update public.company_config set portal_settings = '{\"documents\":false,\"roommates\":false,\"photo_visibility\":null}' where id = 1" > /dev/null
+r=$(pf "$TM" "::text")
+echo "$r" | grep -q '"has_photo" : false' && echo "$r" | grep -q '"has_hajj_permit" : false' && ! echo "$r" | grep -q "رفيق الغرفة السري" \
+  && [ "$(allowed 5721 photo)$(allowed 5721 hajj_permit)$(allowed 5721 flight_ticket)" = "fff" ] \
+  && ok "M1 stored photo_visibility=null → photo hidden (fail-closed); documents/roommates hidden in payload and guard" || bad "M1 stored-null enforcement"
+q "update public.company_config set portal_settings = '{\"documents\":null,\"roommates\":null}' where id = 1" > /dev/null
+r=$(pf "$TM" "->'config'->'portal_settings'"); [ "$(q "select ('$r'::jsonb ->> 'documents') = 'true' and ('$r'::jsonb ->> 'roommates') = 'true' and ('$r'::jsonb ->> 'photo_visibility') = 'none'")" = "t" ] \
+  && ok "M1 stored null booleans read as the documented default (shown), never as an error; photo stays hidden" || bad "M1 stored-null defaults ($r)"
+save '{}' > /dev/null
 r=$(anon 10.30.0.9 "select update_portal_settings('{}'::jsonb,null,null,null,null,null)"); echo "$r" | grep -qi "permission denied" && ok "M1 anon cannot save settings" || bad "M1 anon save ($r)"
 r=$(staff $U_STAFF "select update_portal_settings('{}'::jsonb,null,null,null,null,null)"); echo "$r" | grep -q "صلاحية" && ok "M1 staff without manage_portal → 42501" || bad "M1 staff save ($r)"
 r=$(staff $U_PORTAL "update public.company_config set name_ar = 'مخترَق' where id = 1 returning id"); n=$(q "select name_ar from public.company_config where id = 1")
