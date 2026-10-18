@@ -11,6 +11,8 @@ import {
   type PushState,
 } from "../utils/pushClient";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
+import { effectivePortalSettings } from "../company/portalSettings";
+import { PORTAL_LOGIN_MESSAGES, normalizeDoc, isValidDoc, isValidDob } from "./portal/portal.login";
 import { setupPortalManifest } from "../utils/portalManifest";
 import type { PortalData, PortalAccommodation } from "./portal/portal.types";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
@@ -150,6 +152,40 @@ function PilgrimPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, !!data]);
 
+  /* ═══ M1 — مزامنةُ الإعدادات مع بوابةٍ مفتوحة ═══
+     بصمةُ الإعدادات (`portal_settings_stamp`) تُسأل كلَّ ٢٠ ثانية ما دامت
+     الصفحةُ ظاهرةً والجهازُ متّصلاً — سؤالٌ خفيفٌ لا يمسّ الجلسة. فإن خالفت
+     بصمةَ الملفّ المعروض جُلب الملفُّ كلُّه: الخادمُ هو من يحجب. وعند عودة
+     الاتّصال أو ظهور الصفحة يُسأل فوراً. وخادمٌ بلا الدالّة: يبقى التحديثُ
+     الدوريّ وحده كما كان. والغايةُ وصولُ التغيير خلال ٣٠ ثانية: ٢٠ للدورة
+     وما بقي هامشٌ للشبكة. */
+  const shownStamp = useRef<string | null | undefined>(undefined);
+  const dataStamp = data?.config?.settings_stamp;
+  useEffect(() => { shownStamp.current = dataStamp; }, [dataStamp]);
+  useEffect(() => {
+    if (!session) return;
+    let busy = false;
+    const check = async () => {
+      if (busy || document.visibilityState !== "visible" || !navigator.onLine) return;
+      busy = true;
+      try {
+        const { data: stamp, error } = await portalSupabase.rpc("portal_settings_stamp");
+        if (!error && typeof stamp === "string" && stamp !== shownStamp.current) await refreshPortal();
+      } catch { /* الشبكة: المحاولةُ التالية */ }
+      busy = false;
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") void check(); };
+    const onOnline = () => { void check(); };
+    const id = setInterval(check, 20000);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [session, refreshPortal]);
+
   /* ─── فتحُ التنبيهات من عامل الخدمة — **بلا شرط الدخول** ───
      ضغطةُ التنبيه على نافذةٍ مفتوحةٍ لم يدخل صاحبُها بعدُ كانت تضيع:
      مستمعُ الرسائل كان داخل أثرٍ يبدأ بـ `if (!data) return`، فلا
@@ -271,24 +307,17 @@ function PilgrimPortal() {
   const season = data?.season;
   const t = buildTheme(cfg);
   const portalLogo = cfg?.assets?.logo || null;
-  const portalSettings = cfg?.portal_settings || {};
-  const showFlights = portalSettings.flights !== false;
-  const showRooms = portalSettings.rooms !== false;
-  const showBuses = portalSettings.buses !== false;
-  const showNotifications = portalSettings.notifications !== false;
-  const showPdfDownloads = portalSettings.pdf_downloads !== false;
-  /* ⚠️ لا ناقضَ من `features` بعد اليوم: كانت ثلاثةُ مفاتيحَ فيها
-     تُبطل ما يُشعله المديرُ في صفحة البوابة، ولا واجهةَ تكتبها
-     ليُطفئ الناقض. فالمرجعُ `portal_settings` وحدها. */
-  const showRoommates = portalSettings.roommates !== false;
-  const showLost = portalSettings.lost_card !== false;
-  const showDocs = portalSettings.documents !== false;
-
-  useEffect(() => {
-    /* التنبيهاتُ مُطفأة والعنوانُ عليها: يُصحَّح العنوانُ أيضاً بلا
-       إدخالٍ في التاريخ، فلا يبقى عنوانٌ يَعِد بشاشةٍ لا تُعرض */
-    if (!showNotifications && tab === "alerts") resetToRoot();
-  }, [showNotifications, tab, resetToRoot]);
+  /* M1 — الإعداداتُ الثمانية بافتراضاتها. الخادمُ يرسلها كذلك ويحجب الحسّاسَ
+     بنفسه (المستندات، والصورة، وأسماء رفقاء الغرفة)؛ وهنا العرضُ وحده.
+     ⚠️ لا ناقضَ من `features`: المرجعُ `portal_settings` وحدها. والتنبيهاتُ
+     ليست إعداداً: تبويبُها ظاهرٌ دائماً، مستقلّاً عن تفعيل الدفع. */
+  const portalSettings = effectivePortalSettings(cfg?.portal_settings);
+  const showFlights = portalSettings.flights;
+  const showRooms = portalSettings.rooms;
+  const showBuses = portalSettings.buses;
+  const showRoommates = portalSettings.roommates;
+  const showLost = portalSettings.lost_card;
+  const showDocs = portalSettings.documents;
 
   /* صورة الحاجّ: رابط موقّع قصير العمر يُطلب عند العرض — والخطّاف
      قبل أي عودة مبكّرة كي لا يتغيّر ترتيب الخطّافات بين عرض وآخر */
@@ -350,7 +379,8 @@ function PilgrimPortal() {
   const arafa = useMemo(() => getSeasonArafa(), []);
   const postHajj = !!arafa && now > arafa.getTime() + 86400000;
   const diff = arafa ? Math.max(0, arafa.getTime() - now) : 0;
-  const showCountdown = !!arafa && diff > 0;
+  /* M1 — والإدارةُ تخفيه (الافتراضُ ظاهر): لا يُعرض ولا يحجز مكاناً */
+  const showCountdown = portalSettings.arafat_countdown && !!arafa && diff > 0;
   const cd = { d: Math.floor(diff / 86400000), h: Math.floor(diff / 3600000) % 24, m: Math.floor(diff / 60000) % 60, s: Math.floor(diff / 1000) % 60 };
 
   /* ⚠️ الشارةُ كانت `العدد − المقروء`. والعددُ يتناقص وحدَه حين
@@ -385,13 +415,23 @@ function PilgrimPortal() {
   const arafaName = (data?.pilgrim?.camp_arafa_name || data?.pilgrim?.camp_arafa || "").trim();
 
 
+  /* M3 — الإرسالُ مرّةً واحدة: «دخول» وزرُّ Go قد يصلان معاً قبل أن تُعرض
+     حالةُ التحميل، فالحارسُ مرجعٌ لا حالة. */
+  const loggingIn = useRef(false);
+
   async function login() {
+    if (loggingIn.current) return;
     setLoginError("");
     if (!doc.trim()) { setLoginError("يرجى إدخال رقم الجواز أو البطاقة."); return; }
-    const dNum = Number(day), mNum = Number(month), yNum = Number(year);
-    if (!day || !month || !year || dNum < 1 || dNum > 31 || mNum < 1 || mNum > 12 || yNum < 1900 || yNum > new Date().getFullYear()) {
+    if (!day || !month || !year || !isValidDob(day, month, year)) {
       setLoginError("يرجى إدخال تاريخ الميلاد كاملاً وبشكل صحيح."); return;
     }
+    /* M2 — الوثيقةُ بالصيغة التي تقارنها القاعدة. والشكلُ الفاسدُ لا يطابق
+       أحداً: يُردّ بالرسالة نفسِها بلا شبكة. */
+    const docN = normalizeDoc(doc);
+    if (!isValidDoc(docN)) { setLoginError(PORTAL_LOGIN_MESSAGES.invalid); return; }
+    const dNum = Number(day), mNum = Number(month), yNum = Number(year);
+    loggingIn.current = true;
     setLoading(true);
     try {
       /* H4 — خروجُ من سبق على هذا الجهاز يُتمّ أوّلاً: لا يتجاوزه دخولٌ جديد */
@@ -400,12 +440,16 @@ function PilgrimPortal() {
          يُرسل ولا يُحفظ: هذه هي الدالة الوحيدة في النظام كلّه التي
          تقبل «وثيقة + ميلاد» (§٨.١) */
       const { data: issued, error } = await portalSupabase.rpc("create_pilgrim_session", {
-        p_doc: doc.trim(), p_day: dNum, p_month: mNum, p_year: yNum,
+        p_doc: docN, p_day: dNum, p_month: mNum, p_year: yNum,
       });
       const s = issued as unknown as (PortalSession & { rate_limited?: boolean }) | null;
 
-      if (error || !s) {
-        setLoginError("البيانات غير صحيحة. تأكد من رقم الجواز أو البطاقة وتاريخ الميلاد.");
+      /* M3 — خطأُ الطلب عطلٌ لا رفض: الرفضُ ردٌّ ناجحٌ فارغ (null) لكلّ
+         سبب، فلا يُعرف منه هل الوثيقةُ موجودة. */
+      if (error) {
+        setLoginError(PORTAL_LOGIN_MESSAGES.network);
+      } else if (!s) {
+        setLoginError(PORTAL_LOGIN_MESSAGES.invalid);
       } else if (s.rate_limited) {
         setLoginError("تجاوزت عدد المحاولات المسموح. يرجى المحاولة بعد قليل.");
       } else {
@@ -417,7 +461,7 @@ function PilgrimPortal() {
           "get_pilgrim_portal_by_session", { p_token: s.token });
         if (!res) {
           localStorage.removeItem(PORTAL_SESSION_KEY);
-          setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى.");
+          setLoginError(PORTAL_LOGIN_MESSAGES.network);
         } else {
           /* H4 — هذا الجهاز لهذا الحاجّ؟ وإلّا فُكَّ عن سابقه وأُلغي اشتراكُه،
              فيفعّل الداخلُ تنبيهاتِه بنفسه. قبل أن يُقرأ حالُ التنبيهات. */
@@ -430,8 +474,9 @@ function PilgrimPortal() {
           setDoc(""); setDay(""); setMonth(""); setYear("");
         }
       }
-    } catch { setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى."); }
+    } catch { setLoginError(PORTAL_LOGIN_MESSAGES.network); }
     setLoading(false);
+    loggingIn.current = false;
   }
 
   async function logout() {
@@ -485,16 +530,17 @@ function PilgrimPortal() {
 
   const p = data.pilgrim;
 
-  if (docView) {
+  /* إعدادٌ تغيّر والشاشةُ مفتوحةٌ على ما أُخفي: لا تُعرض */
+  if (docView && showDocs) {
     return (
       <DocumentViewer
-        t={t} doc={docView} showDownload={showPdfDownloads}
+        t={t} doc={docView} showDownload={showDocs}
         bannerH={bannerH} banner={banner} onClose={() => setDocView(null)}
       />
     );
   }
 
-  if (lostOpen) {
+  if (lostOpen && showLost) {
     return (
       <LostCard
         t={t}
@@ -574,7 +620,6 @@ function PilgrimPortal() {
 
       <PortalNav
         t={t} tab={tab} setTab={navigate}
-        showNotifications={showNotifications}
         unread={unread}
         announcements={data.announcements}
         seenAlerts={seenAlerts} setSeenAlerts={setSeenAlerts}

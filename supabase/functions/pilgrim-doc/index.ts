@@ -166,6 +166,19 @@ Deno.serve(async (req: Request) => {
   const row = rows?.[0] as Record<string, unknown> | undefined;
   if (!row || row.season_id !== activeSeason) return fail(req, 404, NOT_AVAILABLE);
 
+  /* M1 — ما أخفته إعداداتُ البوابة لا يُوقَّع ولو طُلب مباشرة: المستنداتُ
+     بـ«المستندات»، والصورةُ بظهورها لجنس الحاجّ. والقاعدةُ صاحبةُ الحكم
+     (`pilgrim_doc_allowed`) — وأيُّ عطلٍ فيها، ومنه غيابُها قبل ترحيلتها،
+     رفضٌ (fail-closed). والردُّ هو «غير متاح» نفسُه: لا يُعرف منه السبب. */
+  const { data: allowed, error: allowErr } = await admin.rpc("pilgrim_doc_allowed", {
+    p_pilgrim_id: pilgrimId, p_doc_type: docType,
+  });
+  if (allowErr) {
+    console.error("تعذّر فحص إعدادات البوابة للمستند", { pilgrimId, docType, allowErr });
+    return fail(req, 404, NOT_AVAILABLE);
+  }
+  if (allowed !== true) return fail(req, 404, NOT_AVAILABLE);
+
   const key = docKey(row[column] as string | null);
   if (!key) return fail(req, 404, NOT_AVAILABLE);
 

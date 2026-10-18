@@ -5,6 +5,7 @@ import { isPrivateCompanyAssetKey } from "./types";
 import { supabase } from "../supabase";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "./safety";
 import { classifyPostgrestError, type SaveResult } from "./saveResult";
+import { effectivePortalSettings, type PortalSettings } from "./portalSettings";
 
 type ConfigRow = Database["public"]["Tables"]["company_config"]["Row"];
 type PublicConfigRow = Database["public"]["Views"]["company_profile_public"]["Row"];
@@ -56,6 +57,7 @@ export function normalizeCompanyProfile(config: AppConfig | ConfigRow | PublicCo
      البوابة فلا يظهر شيء، ولا واجهةَ تكتب `features` أصلاً ليُطفئ
      الناقض. فصار لظهور أقسام البوابة مصدرٌ واحد. */
   const portal = (raw.portal_settings && typeof raw.portal_settings === "object" && !Array.isArray(raw.portal_settings) ? raw.portal_settings : {}) as Record<string, unknown>;
+  const settings = effectivePortalSettings(portal);
   /* ⚠️ لا مرتدَّ إلى `company_config.logo_url` ولا إلى
      `banner_image_url` بعد اليوم: `company_assets` هي مرجعُ الأصول
      وحدها، والعمودان يسقطان في ترحيل التنظيف. وصفُّ `logo` مقروءٌ
@@ -77,12 +79,13 @@ export function normalizeCompanyProfile(config: AppConfig | ConfigRow | PublicCo
       welcomeMessage: text(raw.portal_welcome_message), helpMessage: text(raw.portal_help_message),
       supportPhone: raw.admin_phone || "",
       visibility: {
-        flights: enabled(portal.flights), rooms: enabled(portal.rooms), buses: enabled(portal.buses),
+        flights: settings.flights, rooms: settings.rooms, buses: settings.buses,
         financialBalance: enabled(portal.financial_balance, false), qrCodes: enabled(portal.qr_codes),
-        documents: enabled(portal.documents),
-        notifications: enabled(portal.notifications), pdfDownloads: enabled(portal.pdf_downloads),
-        roommates: enabled(portal.roommates),
-        lostCard: enabled(portal.lost_card),
+        documents: settings.documents,
+        roommates: settings.roommates,
+        lostCard: settings.lost_card,
+        arafatCountdown: settings.arafat_countdown,
+        photoVisibility: settings.photo_visibility,
       },
     },
     assets,
@@ -154,7 +157,7 @@ export const companyService = {
      وحدها تملك التفويض، فلا يستطيع `manage_portal` أن يصل إلى عمودٍ
      آخر مهما صيغ الطلب. والصفُّ المعاد برهانُ الأثر. */
   async updatePortalSettings(values: {
-    portal_settings: Record<string, boolean>;
+    portal_settings: PortalSettings;
     portal_welcome_message: string | null;
     portal_help_message: string | null;
     admin_name: string | null;

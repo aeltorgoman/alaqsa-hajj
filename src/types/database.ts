@@ -1341,6 +1341,10 @@ export type Database = {
         Args: { p_announcement_id: number; p_token: string }
         Returns: boolean
       }
+      /* M1 — لـservice_role (pilgrim-doc) وحده */
+      pilgrim_doc_allowed: { Args: { p_doc_type: string; p_pilgrim_id: number }; Returns: boolean }
+      /* M1 — بصمةُ إعدادات البوابة (md5) للمزامنة */
+      portal_settings_stamp: { Args: never; Returns: string }
       push_enabled_passengers: {
         Args: never
         Returns: {
