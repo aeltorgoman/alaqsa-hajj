@@ -11,7 +11,9 @@
 #   H1 الوثيقةُ الفارغة/الفراغيّة لا تفتح جلسة · والاعتمادُ الصالحُ وحدُّ المحاولات كما هما
 #   H2 التنبيهاتُ بجمهورها (all/bus/camp_mina/camp_arafa/custom) · المجهولُ لا أحد + سجلّ
 #   H3 لا تنبيهاتٍ بلا جلسة (anon/authenticated مباشرةً) · والإدارةُ تعمل كما هي
+#   H2 announcement_audience (جمهورُ الدفع): المجهولُ لا أحد + سجلّ
 #   H4 claim_pilgrim_push_device · فكُّ جهازٍ واحد لا يمسّ أجهزةً أخرى
+#   H4 release_pilgrim_session بالبصمة: تُبطل وتفكّ هذا الجهاز وحده · والبصمةُ لا تفتح البوابة
 #
 # ⚠️ يرفض أيَّ قاعدةٍ غيرِ محلّيّة، ويحذف كلَّ ما يكتبه.
 set -uo pipefail
@@ -27,6 +29,7 @@ bad() { echo "FAIL — $1"; fail=$((fail + 1)); }
 q()   { psql "$LOCAL" -X -q -At -v ON_ERROR_STOP=1 -c "$1"; }
 # anon كما يناديه المتصفّح؛ $1 = عنوان المصدر كما تُلحقه البوّابة
 anon() { psql "$LOCAL" -X -q -At -c "begin; set local role anon; do \$x\$ begin perform set_config('request.headers', '{\"x-forwarded-for\":\"$1\"}', true); end \$x\$; $2; commit;" 2>&1; }
+svc()  { psql "$LOCAL" -X -q -At -c "begin; set local role service_role; $1; commit;" 2>&1; }
 staff() { psql "$LOCAL" -X -q -At -c "begin; set local role authenticated; do \$x\$ begin perform set_config('request.jwt.claims','{\"sub\":\"$1\",\"role\":\"authenticated\"}',true); end \$x\$; $2; commit;" 2>&1; }
 
 if [ "$(q "select count(*) from public.seasons where id in (9701, 9702)")" != "0" ]; then
@@ -96,6 +99,17 @@ echo "$log" | grep -q "unknown target_type hidden (fail-closed), season 9701, an
 log=$(psql "$LOCAL" -X -q -At -c "begin; set local role anon; select (get_pilgrim_portal_by_session('$TA') is not null); commit;" 2>&1)
 [ "$log" = "t" ] && ok "H2 the diagnostic does not reach a default client (client_min_messages = notice)" || bad "H2 log leaked to client ($log)"
 
+# وجمهورُ الدفع (`announcement_audience` كما تناديها send-pilgrim-push بـservice_role)
+r=$(svc "select count(*) from announcement_audience('flight','{1}')"); [ "$r" = "0" ] && ok "H2 push: unknown type → no recipients (fail-closed)" || bad "H2 push unknown type → $r recipient(s)"
+r=$(svc "select count(x.*) from public.announcements a cross join lateral announcement_audience(a.target_type, a.target_ids) x where a.id = 4707"); [ "$r" = "0" ] && ok "H2 push: the stored unknown-type announcement 4707 reaches nobody" || bad "H2 push 4707 → $r"
+r=$(svc "select string_agg(n::text, ',' order by n) from (select (select count(*) from announcement_audience('all','{}') x join public.passengers p on p.id = x.passenger_id where p.season_id = 9701) n
+         union all select count(*) from announcement_audience('bus','{6701}') union all select count(*) from announcement_audience('camp_mina','{6801}')
+         union all select count(*) from announcement_audience('camp_arafa','{6802}') union all select count(*) from announcement_audience('custom','{5702}')
+         union all select count(*) from announcement_audience(null,'{}') x join public.passengers p on p.id = x.passenger_id where p.season_id = 9701) t")
+[ "$r" = "1,1,1,1,4,4" ] && ok "H2 push: known types unchanged (all/null=4 · bus · camp_mina · camp_arafa · custom = 1 each)" || bad "H2 push known types ($r)"
+log=$(psql "$LOCAL" -X -q -At -c "set client_min_messages = log; begin; set local role service_role; select count(*) from announcement_audience('flight','{1}'); commit;" 2>&1)
+echo "$log" | grep -q "announcement_audience: unknown target_type flight" && ok "H2 push: unknown type logged (RAISE LOG)" || bad "H2 push log ($log)"
+r=$(anon 10.20.0.9 "select count(*) from announcement_audience('all','{}')"); echo "$r" | grep -qi "permission denied" && ok "H2 push: anon still cannot call announcement_audience" || bad "H2 audience anon ($r)"
 echo "═══ H3 — لا تنبيهاتٍ بلا جلسة ═══"
 r=$(anon 10.20.0.9 "select get_portal_announcements()")
 echo "$r" | grep -qi "permission denied" && ok "H3 anon direct call to get_portal_announcements() → permission denied" || bad "H3 anon ($r)"
@@ -139,6 +153,29 @@ r=$(claim "$TB" https://push.example/old-season)
 [ "$r" = "held" ] || [ "$r" = "released" ] && ok "H4 binding of a closed-season pilgrim: $r (no error surfaces to the client)" || bad "H4 closed-season binding ($r)"
 r=$(anon 10.20.0.2 "select count(*) from public.pilgrim_push_subscriptions" 2>&1); echo "$r" | grep -qi "permission denied" && ok "H4 anon still cannot read subscriptions" || bad "H4 anon read ($r)"
 
+
+echo "═══ H4 — الخروجُ بالبصمة (release_pilgrim_session) ═══"
+h() { printf %s "$1" | sha256sum | cut -d' ' -f1; }   # كما يحسبها المتصفّح (crypto.subtle · UTF-8 · سداسيّ)
+rel() { anon 10.20.0.2 "select release_pilgrim_session('$1','$2')"; }
+alive() { q "select count(*) from public.pilgrim_sessions where token_hash = extensions.digest('$1','sha256') and revoked_at is null"; }
+TC=$(tok 8 "'PA000001'" 15 3 1960); TD=$(tok 8 "'PB000002'" 2 2 1962)
+reg "$TC" https://push.example/dev-shared; reg "$TD" https://push.example/dev-b-phone
+HC=$(h "$TC"); HD=$(h "$TD")
+[ "$(q "select count(*) from public.pilgrim_sessions where token_hash = decode('$HC','hex')")" = "1" ] && ok "H4 the client-side sha256 hex equals the stored token_hash" || bad "H4 hash mismatch"
+r=$(anon 10.20.0.2 "select get_pilgrim_portal_by_session('$HC')"); [ -z "$r" ] && ok "H4 the stored hash cannot open the portal (get_pilgrim_portal_by_session(hash) → null)" || bad "H4 hash opens portal"
+r=$(claim "$HC" https://push.example/dev-shared); [ "$r" = "no_session" ] && [ "$(owner https://push.example/dev-shared)" = "5701" ] && ok "H4 the hash cannot claim/release a device either" || bad "H4 hash claim ($r)"
+r=$(rel "$HD" https://push.example/dev-a-phone)
+[ "$r" = "t" ] && [ "$(alive "$TD")" = "0" ] && [ "$(owner https://push.example/dev-a-phone)" = "5701" ] && [ "$(owner https://push.example/dev-b-phone)" = "5702" ] \
+  && ok "H4 release revokes the session but never deletes another pilgrim's endpoint (nor an endpoint not named)" || bad "H4 release scope ($r)"
+r=$(rel "$HC" https://push.example/dev-shared)
+[ "$r" = "t" ] && [ "$(alive "$TC")" = "0" ] && [ "$(owner https://push.example/dev-shared)" = "none" ] && [ "$(owner https://push.example/dev-a-phone)" = "5701" ] \
+  && ok "H4 release: session revoked + this device unbound, in one call; the pilgrim's other device kept" || bad "H4 release ($r)"
+r=$(anon 10.20.0.2 "select get_pilgrim_portal_by_session('$TC')"); [ -z "$r" ] && ok "H4 the released token no longer opens the portal" || bad "H4 released token still valid"
+r=$(rel "$HC" https://push.example/dev-shared); [ "$r" = "t" ] && ok "H4 release is idempotent (a retried pending logout succeeds)" || bad "H4 idempotent ($r)"
+r=$(rel 0000000000000000000000000000000000000000000000000000000000000000 https://push.example/dev-a-phone)
+[ "$r" = "t" ] && [ "$(owner https://push.example/dev-a-phone)" = "5701" ] && ok "H4 unknown hash → true, nothing touched" || bad "H4 unknown hash ($r)"
+r=$(rel "abc" x)$(rel "${HC^^}" x)$(rel "$TA" x); [ "$r" = "fff" ] && [ "$(alive "$TA")" = "1" ] && ok "H4 malformed hash (short/uppercase/raw token) → false" || bad "H4 malformed ($r)"
+r=$(staff $U_PORTAL "select release_pilgrim_session('$HC','x')"); echo "$r" | grep -qi "permission denied" && ok "H4 release is not callable by authenticated staff" || bad "H4 staff release ($r)"
 q "$FIX
    delete from public.notification_deliveries where passenger_id between 5701 and 5709;
    delete from public.pilgrim_push_subscriptions where passenger_id between 5701 and 5709;

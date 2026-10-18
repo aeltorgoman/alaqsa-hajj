@@ -12,8 +12,10 @@
 --     `announcement_audience`: all · bus · camp_mina · camp_arafa · custom.
 --     ونوعٌ لا يُعرف ← لا أحد (fail-closed)، ويُسجَّل `RAISE LOG` بمعرّفات
 --     التنبيهات وحدها. والجسدُ منقولٌ بحرفه من 20261011012258 عدا ذلك.
---     ⚠️ `announcement_audience` (الدفع) لا تُمسّ هنا: نوعٌ مجهولٌ يبقى فيها
---     «الكلّ» — وتوحيدُها قرارٌ مستقلّ. والأنواعُ المعروفة تتطابق في الدالّتين.
+--     و`announcement_audience` (جمهورُ الدفع في `send-pilgrim-push`) كانت تعدّ
+--     النوعَ المجهول «الكلّ» (`else true`): تنبيهٌ لا يظهر في البوابة يُدفع إلى
+--     كلّ جهاز. الآن `all` صريحةٌ والمجهولُ لا أحد، ويُسجَّل `RAISE LOG` بنوعه
+--     وحده. والأنواعُ المعروفة كما هي حرفاً — فالبوابةُ والدفعُ جمهورٌ واحد.
 --
 -- H3) `get_portal_announcements()` بلا وسيط: كانت تُنفَّذ من `anon` بلا
 --     جلسة، فتُعيد تنبيهات الموسم النشط كلَّها — الموجَّهةَ منها — لكلّ من
@@ -222,6 +224,42 @@ $$;
 comment on function public.get_pilgrim_portal_by_session(text) is
   'بوابة الحاجّ بالجلسة. MOD-001: accommodation.status = assigned | assigned_unlinked | requested | none. D8: قبل الإسناد يُوسَم المطلوبُ مطلوباً (اسمٌ بلا عنوانٍ ولا رابط)، وبعده يُعرض فندقُ الغرفة الفعليّ. season.hotel_* للواجهة الحاليّة وحدها ولا يحكم على accommodation. H2: announcements بجمهورها (all/bus/camp_mina/camp_arafa/custom)، والنوعُ المجهول لا يُعرض لأحد ويُسجَّل RAISE LOG بالمعرّفات.';
 
+-- ── H2) جمهورُ الدفع: المجهولُ لا أحد ──────────────────────────────
+-- التوقيعُ والنوعُ المُرجَع والمِنَحُ كما هي (CREATE OR REPLACE)، واللغةُ
+-- plpgsql لأجل `RAISE LOG` وحده. والشرطُ حرفاً كما في خطّ الأساس عدا الفرع
+-- الأخير. ولا فحصَ صلاحيةٍ جديد هنا (خارج H2).
+create or replace function public.announcement_audience(p_target_type text, p_target_ids bigint[])
+returns table(passenger_id bigint)
+language plpgsql
+stable
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+begin
+  if coalesce(p_target_type, 'all') not in ('all', 'bus', 'camp_mina', 'camp_arafa', 'custom') then
+    raise log 'announcement_audience: unknown target_type % — no recipients (fail-closed)', p_target_type;
+    return;
+  end if;
+  return query
+  select p.id from passengers p
+  where (
+      p.season_id is null
+      or p.season_id = (select s.id from seasons s where s.closed_at is null order by s.id desc limit 1)
+    )
+    and case coalesce(p_target_type, 'all')
+          when 'all'        then true
+          when 'bus'        then p.bus_id        = any(p_target_ids)
+          when 'camp_mina'  then p.camp_mina_id  = any(p_target_ids)
+          when 'camp_arafa' then p.camp_arafa_id = any(p_target_ids)
+          when 'custom'     then p.id            = any(p_target_ids)
+          else false
+        end;
+end;
+$$;
+
+comment on function public.announcement_audience(text, bigint[]) is
+  'جمهورُ تنبيهٍ للدفع: all · bus · camp_mina · camp_arafa · custom في الموسم المفتوح. H2: النوعُ المجهول لا أحد (fail-closed) ويُسجَّل RAISE LOG.';
+
 -- ── H3) لا تنبيهاتٍ بلا جلسة ──────────────────────────────────────
 revoke execute on function public.get_portal_announcements() from anon;
 
@@ -233,6 +271,7 @@ do $post$
 declare
   v_portal constant regprocedure := 'public.get_pilgrim_portal_by_session(text)'::regprocedure;
   v_anns   constant regprocedure := 'public.get_portal_announcements()'::regprocedure;
+  v_aud    constant regprocedure := 'public.announcement_audience(text, bigint[])'::regprocedure;
   v_src text;
 begin
   if not exists (select 1 from pg_proc p where p.oid = v_portal and p.prosecdef
@@ -256,6 +295,16 @@ begin
   if has_function_privilege('anon', v_anns, 'EXECUTE')
      or has_function_privilege('authenticated', v_anns, 'EXECUTE') then
     raise exception 'get_portal_announcements ما زالت قابلةً للتنفيذ من anon أو authenticated.' using errcode = 'P0001';
+  end if;
+  -- جمهورُ الدفع: المجهولُ لا أحد، والمِنَحُ كما كانت
+  if exists (select 1 from public.announcement_audience('__unknown_type__', '{}'::bigint[])) then
+    raise exception 'announcement_audience ما زالت تعدّ النوعَ المجهول جمهوراً.' using errcode = 'P0001';
+  end if;
+  if not exists (select 1 from pg_proc p where p.oid = v_aud and p.prosecdef
+                  and p.proconfig @> array['search_path=public, pg_temp'])
+     or has_function_privilege('anon', v_aud, 'EXECUTE')
+     or not has_function_privilege('authenticated', v_aud, 'EXECUTE') then
+    raise exception 'announcement_audience: الحمايةُ أو المِنَحُ تغيّرت.' using errcode = 'P0001';
   end if;
   -- تشخيصٌ عند التطبيق: تنبيهاتٌ قائمةٌ بنوعٍ مجهول ستُخفى عن الجميع
   raise notice 'تنبيهاتٌ بنوع جمهورٍ مجهول (ستُخفى عن البوابة): %',

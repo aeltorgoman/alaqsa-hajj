@@ -7,7 +7,7 @@ import { portalSupabase } from "../portalSupabase";
 import {
   getPushState, enablePush, disablePush, markNotificationRead,
   registerServiceWorker, resubscribeIfNeeded,
-  logoutDevice, finishPendingLogout, claimDevicePushAfterLogin,
+  logoutDevice, finishPendingLogout, claimDevicePushAfterLogin, retryPendingClaim,
   type PushState,
 } from "../utils/pushClient";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
@@ -112,6 +112,8 @@ function PilgrimPortal() {
     if (!error && res) {
       setData(res as unknown as PortalData);
       localStorage.setItem("portal_data", JSON.stringify(res));
+      /* H4 — حكمُ جهازٍ تعذّر عند الدخول يُعاد ما دامت الجلسةُ صالحة */
+      void retryPendingClaim(token);
       return;
     }
     if (!error) {
@@ -392,6 +394,8 @@ function PilgrimPortal() {
     }
     setLoading(true);
     try {
+      /* H4 — خروجُ من سبق على هذا الجهاز يُتمّ أوّلاً: لا يتجاوزه دخولٌ جديد */
+      await finishPendingLogout();
       /* خطوة ١ — إثبات الهوية **مرّة واحدة**. ما يُدخله الحاجّ
          يُرسل ولا يُحفظ: هذه هي الدالة الوحيدة في النظام كلّه التي
          تقبل «وثيقة + ميلاد» (§٨.١) */

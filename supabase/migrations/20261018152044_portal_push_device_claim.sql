@@ -21,8 +21,19 @@
 -- والداخلُ الجديد يفعّل تنبيهاتِه بنفسه (`register_pilgrim_push`) — لا نقلَ
 -- تلقائيّاً لاشتراك غيره. والعميلُ يُلغي اشتراكَ المتصفّح في كلّ حالٍ غير 'own'.
 --
+-- `release_pilgrim_session(token_hash, endpoint)` — الخروجُ الصريح في معاملةٍ
+-- واحدة: يُبطل الجلسةَ ويفكّ **هذا الجهاز وحده** عن حاجّها. وتُنادى ببصمة
+-- الرمز (sha256 بالسداسيّ) لا بالرمز: فإن تعذّر الخروجُ لانقطاع الشبكة حفظ
+-- الجهازُ البصمةَ ليُتمّه لاحقاً — والبصمةُ لا تفتح البوابة (`get_pilgrim_
+-- portal_by_session` تطلب الرمزَ نفسَه)، فلا يجد من يستعمل الجهازَ بعده
+-- جلسةً صالحةً في تخزينه. وأقصى ما تتيحه البصمةُ: إتمامُ هذا الخروج نفسِه.
+--   · لا جلسةَ بهذه البصمة ← true (لا شيء يُفعل؛ متكرّرةٌ بلا أثر)
+--   · تعذّر فكُّ الجهاز (حارسُ موسمٍ مقفل) ← تُبطَل الجلسةُ ويُسجَّل، true
+--   · بصمةٌ مشوّهة ← false
+--
 -- ولا تمسّ هذه الترحيلةُ `register_pilgrim_push` ولا `unregister_pilgrim_push`
--- ولا `revoke_pilgrim_session`: الخروجُ الصريحُ يناديها كما هي.
+-- ولا `revoke_pilgrim_session`: باقيةٌ كما هي، ويناديها العميلُ الجديد احتياطاً
+-- إن لم تكن هذه الترحيلةُ قد طُبّقت بعد (M-51).
 --
 -- ⚠️ لا يُمسّ صفّ عند التطبيق. دالّةٌ جديدةٌ لـanon وحده (مسارُ الجلسة).
 -- التراجع: ترحيلةٌ لاحقةٌ تُسقطها بعد أن لا يناديها عميلٌ منشور (M-44، M-51).
@@ -79,20 +90,67 @@ alter function public.claim_pilgrim_push_device(text, text) owner to postgres;
 revoke all on function public.claim_pilgrim_push_device(text, text) from public, authenticated;
 grant execute on function public.claim_pilgrim_push_device(text, text) to anon, service_role;
 
+create function public.release_pilgrim_session(p_token_hash text, p_endpoint text)
+returns boolean
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  v_hash bytea;
+  v_pid  bigint;
+begin
+  if p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64}$' then
+    return false;
+  end if;
+  v_hash := decode(p_token_hash, 'hex');
+
+  update public.pilgrim_sessions
+     set revoked_at = coalesce(revoked_at, now())
+   where token_hash = v_hash
+  returning passenger_id into v_pid;
+  if v_pid is null then
+    return true;
+  end if;
+
+  if p_endpoint is not null and length(trim(p_endpoint)) > 0 then
+    begin
+      delete from public.pilgrim_push_subscriptions
+       where endpoint = p_endpoint
+         and passenger_id = v_pid;
+    exception when others then
+      raise log 'release_pilgrim_session: device binding kept (%), session revoked', sqlstate;
+    end;
+  end if;
+  return true;
+end;
+$$;
+
+comment on function public.release_pilgrim_session(text, text) is
+  'H4 — الخروجُ الصريح ببصمة الرمز (sha256 سداسيّ): يُبطل الجلسة ويفكّ هذا الجهاز وحده عن حاجّها، في معاملةٍ واحدة. البصمةُ لا تفتح البوابة. متكرّرةٌ بلا أثر.';
+
+alter function public.release_pilgrim_session(text, text) owner to postgres;
+revoke all on function public.release_pilgrim_session(text, text) from public, authenticated;
+grant execute on function public.release_pilgrim_session(text, text) to anon, service_role;
+
 -- ── شروطٌ لاحقة على ما تملكه هذه الترحيلة وحده (S-38) ─────────────
 do $post$
 declare
-  v_fn constant regprocedure := 'public.claim_pilgrim_push_device(text, text)'::regprocedure;
+  v_fn  regprocedure := 'public.claim_pilgrim_push_device(text, text)'::regprocedure;
+  v_fns regprocedure[] := array['public.claim_pilgrim_push_device(text, text)'::regprocedure,
+                                'public.release_pilgrim_session(text, text)'::regprocedure];
 begin
+  foreach v_fn in array v_fns loop
   if not exists (select 1 from pg_proc p where p.oid = v_fn and p.prosecdef
                   and p.proconfig @> array['search_path=public, pg_temp']) then
-    raise exception 'claim_pilgrim_push_device ليست SECURITY DEFINER بـsearch_path ثابت.' using errcode = 'P0001';
+    raise exception '% ليست SECURITY DEFINER بـsearch_path ثابت.', v_fn using errcode = 'P0001';
   end if;
   if not has_function_privilege('anon', v_fn, 'EXECUTE') then
-    raise exception 'claim_pilgrim_push_device لا تُنفَّذ من anon.' using errcode = 'P0001';
+    raise exception '% لا تُنفَّذ من anon.', v_fn using errcode = 'P0001';
   end if;
   if has_function_privilege('authenticated', v_fn, 'EXECUTE') then
-    raise exception 'claim_pilgrim_push_device قابلةٌ للتنفيذ من authenticated.' using errcode = 'P0001';
+    raise exception '% قابلةٌ للتنفيذ من authenticated.', v_fn using errcode = 'P0001';
   end if;
+  end loop;
 end
 $post$;
