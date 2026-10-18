@@ -33,7 +33,7 @@ export interface AppConfig {
   commercial_registration?: string | null;
   portal_welcome_message?: string | null;
   portal_help_message?: string | null;
-  portal_settings?: Record<string, boolean> | null;
+  portal_settings?: Record<string, boolean | string> | null;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {

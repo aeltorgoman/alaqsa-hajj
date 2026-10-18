@@ -12,21 +12,20 @@ type Props = {
   t: PortalTheme;
   tab: TabId;
   setTab: (id: TabId) => void;
-  showNotifications: boolean;
   unread: number;
   announcements: Ann[];
   seenAlerts: number;
   setSeenAlerts: (n: number) => void;
 };
 
-export function PortalNav({ t, tab, setTab, showNotifications, unread, announcements, seenAlerts, setSeenAlerts }: Props) {
+export function PortalNav({ t, tab, setTab, unread, announcements, seenAlerts, setSeenAlerts }: Props) {
   return (
       <div style={{ position: "fixed", bottom: 0, right: 0, left: 0, background: "#fff", borderTop: `1px solid ${LINE}`, boxShadow: "0 -5px 24px rgba(93,16,41,.1)", display: "flex", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 50 }}>
         {[
           { id: "trip", label: "رحلتي", icon: ICONS.plane },
           { id: "stay", label: "سكني", icon: ICONS.home },
           { id: "alerts", label: "التنبيهات", icon: ICONS.bell },
-        ].filter(item => item.id !== "alerts" || showNotifications).map(item => {
+        ].map(item => {
           const on = tab === item.id;
           return (
             <button key={item.id} onClick={() => { setTab(item.id as TabId); if (item.id === "alerts") { const top = announcements.reduce((m, a) => Math.max(m, a.id), seenAlerts); setSeenAlerts(top); localStorage.setItem("portal_seen_alerts", String(top)); } }}

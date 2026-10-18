@@ -1,4 +1,5 @@
 import type { Json } from "../types/database";
+import type { PhotoVisibility } from "./portalSettings";
 
 /* ⚠️ لا `seasonLabel` هنا. اسمُ الموسم يملكه `seasons.name` وحده،
    ويُقرأ من `useSeason()` لا من هويّة الشركة. وبقاؤه في هذا العقد
@@ -13,7 +14,7 @@ export interface ReportBranding { logoUrl: string; companyName: string; tagline:
 export interface CompanyPortal {
   welcomeMessage: string; helpMessage: string;
   supportPhone: string;
-  visibility: { flights: boolean; rooms: boolean; buses: boolean; financialBalance: boolean; qrCodes: boolean; documents: boolean; notifications: boolean; pdfDownloads: boolean; roommates: boolean; lostCard: boolean };
+  visibility: { flights: boolean; rooms: boolean; buses: boolean; financialBalance: boolean; qrCodes: boolean; documents: boolean; roommates: boolean; lostCard: boolean; arafatCountdown: boolean; photoVisibility: PhotoVisibility };
 }
 export type CompanyAssetKey =
   | "logo"

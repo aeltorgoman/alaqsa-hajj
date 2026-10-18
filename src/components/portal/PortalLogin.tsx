@@ -5,9 +5,10 @@
 
    ⚠️ منقولةٌ حرفاً بحرف من المرحلة الأولى: كلُّ نصٍّ عربيّ وكلُّ
    نمطٍ ورقمٍ كما كان. */
-import type { CSSProperties } from "react";
+import { useRef, type CSSProperties } from "react";
 import { Icon, ICONS } from "./PortalIcons";
 import { MONTHS_AR, STAR_PATTERN, type PortalTheme } from "./portal.theme";
+import { dobDigits, isValidDay, isValidMonth } from "./portal.login";
 
 type Props = {
   t: PortalTheme;
@@ -32,6 +33,11 @@ export function PortalLogin({
 }: Props) {
   const inpStyle: CSSProperties = { padding: "16px 8px", borderRadius: 14, border: "1.5px solid rgba(255,255,255,.32)", background: "rgba(255,255,255,.12)", color: "#fff", fontSize: 17, fontWeight: 700, fontFamily: t.font, outline: "none", textAlign: "center", boxSizing: "border-box" };
   const yearNow = new Date().getFullYear();
+  /* M2 — الكتابةُ: رقمان صالحان في اليوم أو الشهر ينقلان إلى الحقل التالي،
+     والفاسدُ لا ينقل؛ ورقمٌ واحدٌ يُقبل عند مغادرة الحقل (٥ ← 05)؛ و«دخول»
+     أو Go في حقل السنة يُرسل — والأبُ يمنع الإرسالَ المزدوج. */
+  const monthRef = useRef<HTMLInputElement>(null);
+  const yearRef = useRef<HTMLInputElement>(null);
   return (
 
       <div dir="rtl" style={{ minHeight: "100dvh", background: `linear-gradient(168deg,${t.brand} 0%,${t.brandDeep} 85%)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: t.font, color: "#fff", position: "relative" }}>
@@ -85,13 +91,27 @@ export function PortalLogin({
           ) : (
             <div style={{ display: "flex", gap: 9 }}>
               {[
-                { v: day, set: setDay, ph: "اليوم", max: 2 },
-                { v: month, set: setMonth, ph: "الشهر", max: 2 },
-                { v: year, set: setYear, ph: "السنة", max: 4 },
+                { v: day, set: setDay, ph: "اليوم", max: 2, valid: isValidDay, next: monthRef, ref: undefined },
+                { v: month, set: setMonth, ph: "الشهر", max: 2, valid: isValidMonth, next: yearRef, ref: monthRef },
+                { v: year, set: setYear, ph: "السنة", max: 4, valid: null, next: null, ref: yearRef },
               ].map((f, i) => (
                 <div key={i} style={{ flex: i === 2 ? 1.4 : 1 }}>
-                  <input inputMode="numeric" pattern="[0-9]*" value={f.v} maxLength={f.max}
-                    onChange={e => f.set(e.target.value.replace(/[^0-9]/g, ""))}
+                  <input ref={f.ref} inputMode="numeric" pattern="[0-9]*" value={f.v} maxLength={f.max}
+                    enterKeyHint={f.next ? "next" : "go"}
+                    onChange={e => {
+                      const v = dobDigits(e.target.value, f.max);
+                      f.set(v);
+                      if (f.next && v.length === 2 && f.valid?.(v)) f.next.current?.focus();
+                    }}
+                    /* قيمةُ الحقل نفسُه لا الحالة: الانتقالُ من `onChange` يُطلق المغادرةَ
+                       قبل أن تُعرض القيمةُ الجديدة، فالحالةُ هنا ما زالت الرقمَ الأوّل */
+                    onBlur={e => { const v = dobDigits(e.currentTarget.value, f.max); if (f.valid && v.length === 1 && f.valid(v)) f.set(`0${v}`); }}
+                    onKeyDown={e => {
+                      if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                      e.preventDefault();
+                      if (f.next) { if (f.valid?.(f.v)) f.next.current?.focus(); }
+                      else onSubmit();
+                    }}
                     placeholder={f.ph}
                     style={{ ...inpStyle, width: "100%", direction: "ltr", letterSpacing: 2 }} />
                 </div>

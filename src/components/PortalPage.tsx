@@ -8,6 +8,7 @@ import { createWriteHelpers } from "../utils/write";
 import { useSeason } from "../season/useSeason";
 import { companyService } from "../company/companyService";
 import { isSaved, saveErrorText } from "../company/saveResult";
+import { effectivePortalSettings, type PhotoVisibility, type PortalFlagKey, type PortalSettings } from "../company/portalSettings";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -259,7 +260,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [adminName, setAdminName] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
   const [adminWa, setAdminWa] = useState("");
-  const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({});
+  const [portalSettings, setPortalSettings] = useState<PortalSettings>(() => effectivePortalSettings(null));
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [helpMessage, setHelpMessage] = useState("");
   const [savingCfg, setSavingCfg] = useState(false);
@@ -279,7 +280,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         setAdminName(data.admin_name || "");
         setAdminPhone(data.admin_phone || "");
         setAdminWa(data.admin_whatsapp || "");
-        setPortalSettings((data.portal_settings as Record<string, boolean>) || {});
+        setPortalSettings(effectivePortalSettings(data.portal_settings));
         setWelcomeMessage(data.portal_welcome_message || "");
         setHelpMessage(data.portal_help_message || "");
       }
@@ -316,15 +317,23 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
   const portalUrl = `${window.location.origin}/hajj`;
 
-  const TOGGLES = [
+  /* M1 — الإعداداتُ الثمانية بترتيبها. التنبيهاتُ ليست إعداداً: تظهر للحاجّ
+     دائماً مستقلّةً عن تفعيل الدفع، والتنزيلُ يتبع «المستندات». */
+  const TOGGLES: ({ key: PortalFlagKey; label: string; desc: string } | { key: "photo_visibility"; label: string; desc: string })[] = [
     { key: "flights", label: "معلومات الرحلات", desc: "إظهار بيانات رحلة الذهاب والعودة" },
     { key: "rooms", label: "معلومات الغرفة", desc: "إظهار رقم الغرفة والدور والنوع" },
     { key: "buses", label: "معلومات الباص", desc: "إظهار بيانات باص الحاج" },
-    { key: "documents", label: "المستندات", desc: "عرض تصريح الحج وتذكرة الطيران" },
-    { key: "pdf_downloads", label: "تنزيل الملفات", desc: "إظهار زر تنزيل المستند المفتوح" },
-    { key: "notifications", label: "التنبيهات", desc: "إظهار تبويب التنبيهات وخيارات التفعيل" },
-    { key: "roommates", label: "رفقاء الغرفة", desc: "إظهار أسماء زملاء الغرفة" },
+    { key: "documents", label: "المستندات", desc: "عرض تصريح الحج وتذكرة الطيران وتنزيلهما" },
+    { key: "roommates", label: "رفقاء الغرفة", desc: "إظهار أسماء زملاء الغرفة في الفندق" },
     { key: "lost_card", label: "بطاقة أنا تائه", desc: "إظهار بطاقة تعريف الطوارئ" },
+    { key: "photo_visibility", label: "صورة الحاج", desc: "عند الإخفاء تظهر الأيقونة بدل الصورة" },
+    { key: "arafat_countdown", label: "عدّاد يوم عرفة", desc: "إظهار العدّ التنازلي للوقوف بعرفات" },
+  ];
+  const PHOTO_OPTIONS: { key: PhotoVisibility; label: string }[] = [
+    { key: "all", label: "الجميع" },
+    { key: "men", label: "الرجال فقط" },
+    { key: "women", label: "النساء فقط" },
+    { key: "none", label: "إخفاء الكل" },
   ];
 
   const annCard = (a: Announcement, kind: "live" | "scheduled" | "ended") => {
@@ -548,14 +557,34 @@ function PortalPage({ currentUser }: { currentUser: User }) {
             <div><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>رسالة المساعدة</div><textarea value={helpMessage} onChange={e => setHelpMessage(e.target.value)} style={{ ...inp, width: "100%", boxSizing: "border-box", minHeight: 64 }} /></div>
           </div>
           {TOGGLES.map((t, i) => {
-            const on = portalSettings[t.key] !== false;
+            if (t.key === "photo_visibility") return (
+              <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: i < TOGGLES.length - 1 ? "1px dashed var(--border)" : "none", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>{t.label}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>{t.desc}</div>
+                </div>
+                <div role="radiogroup" aria-label={t.label} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {PHOTO_OPTIONS.map(o => {
+                    const sel = portalSettings.photo_visibility === o.key;
+                    return (
+                      <button key={o.key} role="radio" aria-checked={sel} onClick={() => setPortalSettings(f => ({ ...f, photo_visibility: o.key }))}
+                        style={{ border: sel ? "2px solid var(--primary)" : "1px solid var(--border)", background: sel ? "var(--primary)" : "var(--bg-card)", color: sel ? "var(--text-inverse)" : "var(--text-main)", borderRadius: 99, fontSize: 11.5, fontWeight: 800, padding: "5px 13px", cursor: "pointer", fontFamily: "inherit" }}>
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+            const key = t.key;
+            const on = portalSettings[key];
             return (
               <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: i < TOGGLES.length - 1 ? "1px dashed var(--border)" : "none" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)" }}>{t.label}</div>
                   <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 2 }}>{t.desc}</div>
                 </div>
-                <div onClick={() => setPortalSettings(f => ({ ...f, [t.key]: !(f[t.key] !== false) }))}
+                <div role="switch" aria-checked={on} aria-label={t.label} onClick={() => setPortalSettings(f => ({ ...f, [key]: !f[key] }))}
                   style={{ width: 42, height: 23, borderRadius: 99, background: on ? "var(--primary)" : "var(--border)", position: "relative", cursor: "pointer", transition: "background .2s", flexShrink: 0 }}>
                   <div style={{ position: "absolute", top: 2.5, insetInlineStart: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "inset-inline-start .2s", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }} />
                 </div>
