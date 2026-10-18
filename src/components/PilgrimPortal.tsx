@@ -7,11 +7,12 @@ import { portalSupabase } from "../portalSupabase";
 import {
   getPushState, enablePush, disablePush, markNotificationRead,
   registerServiceWorker, resubscribeIfNeeded,
+  logoutDevice, finishPendingLogout, claimDevicePushAfterLogin, retryPendingClaim,
   type PushState,
 } from "../utils/pushClient";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
 import { setupPortalManifest } from "../utils/portalManifest";
-import type { PortalData, Ann, PortalAccommodation } from "./portal/portal.types";
+import type { PortalData, PortalAccommodation } from "./portal/portal.types";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
 import { getSeasonArafa, civilDate } from "./portal/portal.dates";
 import { readSession, clearPortalLocalState } from "./portal/portal.session";
@@ -111,6 +112,8 @@ function PilgrimPortal() {
     if (!error && res) {
       setData(res as unknown as PortalData);
       localStorage.setItem("portal_data", JSON.stringify(res));
+      /* H4 — حكمُ جهازٍ تعذّر عند الدخول يُعاد ما دامت الجلسةُ صالحة */
+      void retryPendingClaim(token);
       return;
     }
     if (!error) {
@@ -123,11 +126,12 @@ function PilgrimPortal() {
       resetToRoot();
       return;
     }
-    /* عطلٌ عابر: تبقى الجلسة، وتُحدَّث التنبيهات وحدها كما كان —
-       إسقاط مضبوط خلف دالة SECURITY DEFINER (س٤ / §٣.٦) */
-    const { data: anns } = await portalSupabase.rpc("get_portal_announcements");
-    if (anns) setData(d => d ? { ...d, announcements: anns as unknown as Ann[] } : d);
+    /* عطلٌ عابر: تبقى الجلسة والملفُّ المحفوظ كما هما. ولا إسقاطَ إلى
+       تنبيهاتٍ بلا جلسة (H3): التنبيهاتُ من مسار الجلسة وحده، بجمهورها. */
   }, [resetToRoot]);
+
+  /* H4 — خروجٌ صريحٌ سابقٌ لم يكتمل على الخادم (انقطاع شبكة): يُتمّ بصمت */
+  useEffect(() => { void finishPendingLogout(); }, []);
 
   /* الدخولُ جلب الملفّ لتوّه — فلا يُعاد جلبه فوراً حين تتغيّر الجلسة */
   const skipNextRefresh = useRef(false);
@@ -390,6 +394,8 @@ function PilgrimPortal() {
     }
     setLoading(true);
     try {
+      /* H4 — خروجُ من سبق على هذا الجهاز يُتمّ أوّلاً: لا يتجاوزه دخولٌ جديد */
+      await finishPendingLogout();
       /* خطوة ١ — إثبات الهوية **مرّة واحدة**. ما يُدخله الحاجّ
          يُرسل ولا يُحفظ: هذه هي الدالة الوحيدة في النظام كلّه التي
          تقبل «وثيقة + ميلاد» (§٨.١) */
@@ -413,6 +419,9 @@ function PilgrimPortal() {
           localStorage.removeItem(PORTAL_SESSION_KEY);
           setLoginError("تعذر الاتصال، يرجى المحاولة مرة أخرى.");
         } else {
+          /* H4 — هذا الجهاز لهذا الحاجّ؟ وإلّا فُكَّ عن سابقه وأُلغي اشتراكُه،
+             فيفعّل الداخلُ تنبيهاتِه بنفسه. قبل أن يُقرأ حالُ التنبيهات. */
+          await claimDevicePushAfterLogin(s.token);
           skipNextRefresh.current = true;
           setSession(s.token);
           setData(res as unknown as PortalData);
@@ -428,17 +437,15 @@ function PilgrimPortal() {
   async function logout() {
     /* الإبطال في الخادم أولاً ما دامت الشبكة تسمح — فالخروج قبل س٧
        كان مسحاً محلّياً بلا أثر، والرمز يبقى صالحاً لمن يقرأ التخزين.
-       ثم التنظيف المحلّي **دائماً**، نجح الإبطال أو فشل: لا يُترك
-       جهازٌ يبدو داخلاً لأن الشبكة كانت منقطعة. */
+       H4: ومعه فكُّ **هذا الجهاز وحده** من التنبيهات قبل الإبطال، وما تعذّر
+       يُتمّ عند الفتح التالي (`logoutDevice`). ثم التنظيف المحلّي **دائماً**،
+       نجح ما على الخادم أو فشل: لا يُترك جهازٌ يبدو داخلاً. */
     const token = session;
-    if (token) {
-      try {
-        await portalSupabase.rpc("revoke_pilgrim_session", { p_token: token });
-      } catch {
-        /* منقطع أو مرفوض — التنظيف المحلّي لا ينتظر */
-      }
-    }
+    if (token) await logoutDevice(token);
     clearPortalLocalState();
+    /* الداخلُ التالي على هذا الجهاز يرى عرضَ التفعيل من جديد */
+    localStorage.removeItem("portal_push_dismissed");
+    setPushDismissed(false); setPushState("available");
     setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
     setSession(null); setDocView(null);
     /* والعنوانُ إلى الجذر بلا إدخالٍ في التاريخ — كي لا يعيد زرُّ
