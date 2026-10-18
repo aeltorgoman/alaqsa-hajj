@@ -197,6 +197,99 @@ export async function disablePush(): Promise<boolean> {
   }
 }
 
+/* ═══ H4 — الجهازُ عند الخروج الصريح وعند الدخول ═══
+   الاشتراكُ مربوطٌ بالجهاز (endpoint) لا بالجلسة. فالخروجُ الصريحُ يفكّ
+   **هذا الجهاز وحده** قبل إبطال الجلسة، والدخولُ لا ينقل اشتراكَ غيره
+   إلى الداخل. وانتهاءُ الجلسة طبيعيّاً وإغلاقُ المتصفّح لا يمسّان شيئاً. */
+
+const PENDING_LOGOUT_KEY = "portal_pending_logout";
+type PendingLogout = { token: string; endpoint?: string };
+
+async function currentSubscription(): Promise<PushSubscription | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(SW_PATH);
+    return reg ? await reg.pushManager.getSubscription() : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ok: نفّذ · rejected: ردّ الخادم بالرفض (الجلسةُ لم تعد صالحة) — لا فائدة
+   من الإعادة · failed: لم يصل الردّ أو عطلٌ في الخادم — يُعاد لاحقاً */
+async function portalCall(fn: "unregister_pilgrim_push" | "revoke_pilgrim_session",
+                          args: { p_token: string; p_endpoint?: string }): Promise<"ok" | "rejected" | "failed"> {
+  try {
+    const { data, error } = fn === "unregister_pilgrim_push"
+      ? await portalSupabase.rpc(fn, { p_token: args.p_token, p_endpoint: args.p_endpoint ?? "" })
+      : await portalSupabase.rpc(fn, { p_token: args.p_token });
+    if (error) return "failed";
+    return data === true ? "ok" : "rejected";
+  } catch {
+    return "failed";
+  }
+}
+
+/* الخطوتان على الخادم بترتيبهما: فكُّ الجهاز ما دامت الجلسةُ صالحة (فهو
+   يحتاجها)، ثمّ إبطالُها. وما تعذّر يبقى معلَّقاً ليُتمَّ لاحقاً. */
+async function settleLogout(p: PendingLogout): Promise<PendingLogout | null> {
+  if (p.endpoint) {
+    const r = await portalCall("unregister_pilgrim_push", { p_token: p.token, p_endpoint: p.endpoint });
+    if (r === "failed") return p;
+  }
+  const r = await portalCall("revoke_pilgrim_session", { p_token: p.token });
+  return r === "failed" ? { token: p.token } : null;
+}
+
+/** الخروجُ الصريح: المتصفّحُ أوّلاً (فلا يعرض الجهازُ بعدها تنبيهاً)، ثمّ فكُّ
+ *  صفِّ هذا الجهاز وحده على الخادم، ثمّ إبطالُ الجلسة. وما تعذّر لانقطاع
+ *  الشبكة يُحفظ ويُتمّ عند فتح البوابة التالي — لا يُترك لتنظيف 410 وحده.
+ *  لا ترمي أبداً: التنظيفُ المحلّيّ بعدها لا ينتظر نجاحها. */
+export async function logoutDevice(token: string): Promise<void> {
+  const sub = await currentSubscription();
+  const endpoint = sub?.endpoint || localStorage.getItem("portal_push_endpoint") || undefined;
+  if (sub) await sub.unsubscribe().catch(() => undefined);
+  localStorage.removeItem("portal_push_endpoint");
+  const left = await settleLogout({ token, endpoint });
+  try {
+    if (left) localStorage.setItem(PENDING_LOGOUT_KEY, JSON.stringify(left));
+    else localStorage.removeItem(PENDING_LOGOUT_KEY);
+  } catch { /* التخزين غير متاح */ }
+}
+
+/** خروجٌ لم يكتمل على الخادم في مرّةٍ سابقة — يُتمّ بصمت عند فتح البوابة. */
+export async function finishPendingLogout(): Promise<void> {
+  let p: PendingLogout | null;
+  try { p = JSON.parse(localStorage.getItem(PENDING_LOGOUT_KEY) || "null"); } catch { p = null; }
+  if (!p || typeof p.token !== "string" || !p.token) { localStorage.removeItem(PENDING_LOGOUT_KEY); return; }
+  const left = await settleLogout(p);
+  if (left) localStorage.setItem(PENDING_LOGOUT_KEY, JSON.stringify(left));
+  else localStorage.removeItem(PENDING_LOGOUT_KEY);
+}
+
+/** بعد كلّ دخولٍ ناجح: لمن هذا الجهاز؟ لحاجّ هذه الجلسة نفسِه (عاد بعد انتهاء
+ *  جلسته) ← يبقى كما هو. وإلّا ← يُفكّ صفُّ الحاجّ السابق لهذا الجهاز وحده
+ *  على الخادم، ويُلغى اشتراكُ المتصفّح، فيفعّل الداخلُ تنبيهاتِه بنفسه.
+ *  وعند تعذّر الحكم (شبكة، أو خادمٌ أقدم بلا الدالّة) يُلغى اشتراكُ المتصفّح
+ *  أيضاً: لا تنبيهاتِ غيره على شاشته في أيّ حال. */
+export async function claimDevicePushAfterLogin(token: string): Promise<void> {
+  const sub = await currentSubscription();
+  if (!sub) { localStorage.removeItem("portal_push_endpoint"); return; }
+  let verdict: string | null = null;
+  try {
+    const { data, error } = await portalSupabase.rpc("claim_pilgrim_push_device", {
+      p_token: token, p_endpoint: sub.endpoint,
+    });
+    if (!error && typeof data === "string") verdict = data;
+  } catch { verdict = null; }
+  if (verdict === "own") {
+    localStorage.setItem("portal_push_endpoint", sub.endpoint);
+    return;
+  }
+  await sub.unsubscribe().catch(() => undefined);
+  localStorage.removeItem("portal_push_endpoint");
+}
+
 /* ─── إعادة التسجيل عند انتهاء صلاحية الاشتراك ─── */
 
 export async function resubscribeIfNeeded(): Promise<void> {

@@ -1374,6 +1374,8 @@ export type Database = {
         Returns: number
       }
       revoke_pilgrim_session: { Args: { p_token: string }; Returns: boolean }
+      /* H4 — own | released | none | held | no_session */
+      claim_pilgrim_push_device: { Args: { p_endpoint: string; p_token: string }; Returns: string }
       room_type_capacity: { Args: { p_type: string }; Returns: number }
       set_audit_actor: { Args: { p_actor: string }; Returns: undefined }
       unregister_pilgrim_push: {
