@@ -26,6 +26,18 @@ export const PORTAL_FLAG_KEYS: readonly PortalFlagKey[] = [
 
 export const PHOTO_VISIBILITY_VALUES: readonly PhotoVisibility[] = ["all", "men", "women", "none"];
 
+/* نسخةُ `_portal_photo_visible`: الصورةُ مخفيّةٌ ما لم يسمح الوضعُ بجنس الحاجّ.
+   الخادمُ يحجبها بعد ترحيلته (has_photo = false، و`pilgrim-doc` يرفض)، وهذه
+   تحجبها في الواجهة أيضاً — فلا تظهر ولا يُطلب رابطُها أمام خادمٍ لم يُرحَّل بعد. */
+export function photoVisibleFor(settings: PortalSettings, gender: string | null | undefined): boolean {
+  switch (settings.photo_visibility) {
+    case "all": return true;
+    case "men": return gender === "ذكر";
+    case "women": return gender === "أنثى";
+    default: return false;
+  }
+}
+
 export function effectivePortalSettings(raw: unknown): PortalSettings {
   const s = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
   const flag = (k: PortalFlagKey) => s[k] !== false;

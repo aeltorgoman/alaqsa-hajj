@@ -118,7 +118,16 @@ for m in all men women none; do
   am=$(allowed 5721 photo); af=$(allowed 5723 photo)
   case $m in all) e="true true t t";; men) e="true false t f";; women) e="false true f t";; none) e="false false f f";; esac
   [ "$hm $hf $am $af" = "$e" ] && ok "M1 photo_visibility=$m → man/woman has_photo & guard = $hm/$hf $am/$af" || bad "M1 photo $m → $hm $hf $am $af (expected $e)"
+  # ولا مفتاحُ الصورة ولا رابطُها في الردّ بأيّ وضع — الردُّ يحمل has_photo وحده
+  leak=$(pf "$TM" "::text")$(pf "$TF" "::text"); echo "$leak" | grep -qE "5721\.jpg|5723\.jpg|photo_url|/storage/" && bad "M1 photo $m: photo key/URL in the portal payload"
 done
+ok "M1 no photo key, path or URL in the portal payload in any of the four modes"
+# البلاغ بعينه: الإدارةُ تحفظ «إخفاء الكل» من مسارها (update_portal_settings) والحاجُّ داخلٌ قبلها
+save '{"photo_visibility":"all"}' > /dev/null
+[ "$(pf "$TM" "->'pilgrim'->>'has_photo'")" = "true" ] || bad "M1 report: photo not shown under «all»"
+save '{"photo_visibility":"none"}' > /dev/null
+r=$(pf "$TM" "->'pilgrim'->>'has_photo'")$(pf "$TF" "->'pilgrim'->>'has_photo'")$(allowed 5721 photo)$(allowed 5723 photo)
+[ "$r" = "falsefalseff" ] && ok "M1 reported case: «Hide all» saved by the admin RPC → the same open session gets has_photo=false for both genders and pilgrim-doc refuses" || bad "M1 reported case ($r)"
 r=$(allowed 5721 passport_scan)$(allowed 99999999 photo); [ "$r" = "ff" ] && ok "M1 guard: unknown doc type / unknown pilgrim → false" || bad "M1 guard unknown ($r)"
 
 echo "═══ M1 — رفقاء الغرفة ═══"

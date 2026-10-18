@@ -11,7 +11,7 @@ import {
   type PushState,
 } from "../utils/pushClient";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safety";
-import { effectivePortalSettings } from "../company/portalSettings";
+import { effectivePortalSettings, photoVisibleFor } from "../company/portalSettings";
 import { PORTAL_LOGIN_MESSAGES, normalizeDoc, isValidDoc, isValidDob } from "./portal/portal.login";
 import { setupPortalManifest } from "../utils/portalManifest";
 import type { PortalData, PortalAccommodation } from "./portal/portal.types";
@@ -171,6 +171,9 @@ function PilgrimPortal() {
       try {
         const { data: stamp, error } = await portalSupabase.rpc("portal_settings_stamp");
         if (!error && typeof stamp === "string" && stamp !== shownStamp.current) await refreshPortal();
+        /* خادمٌ بلا الدالّة بعد (PGRST202): الملفُّ كلُّه بالإيقاع نفسه، فلا يتأخّر
+           إعدادٌ عن الثلاثين ثانية في نافذة النشر */
+        else if (error?.code === "PGRST202") await refreshPortal();
       } catch { /* الشبكة: المحاولةُ التالية */ }
       busy = false;
     };
@@ -321,7 +324,11 @@ function PilgrimPortal() {
 
   /* صورة الحاجّ: رابط موقّع قصير العمر يُطلب عند العرض — والخطّاف
      قبل أي عودة مبكّرة كي لا يتغيّر ترتيب الخطّافات بين عرض وآخر */
-  const photoUrl = usePortalDoc(session, "photo", data?.pilgrim?.has_photo === true);
+  /* M1 — والإعدادُ شرطٌ هنا أيضاً لا `has_photo` وحده: خادمٌ لم تُطبَّق عليه
+     ترحيلةُ M1 يرسل has_photo = true مهما اختارت الإدارة، فكانت «إخفاء الكل»
+     لا تُخفي شيئاً. والرابطُ لا يُطلب أصلاً لصورةٍ مخفيّة. */
+  const showPhoto = data?.pilgrim?.has_photo === true && photoVisibleFor(portalSettings, data?.pilgrim?.gender);
+  const photoUrl = usePortalDoc(session, "photo", showPhoto);
 
   /* ═══ الرحلةُ المعروضة — واحدةٌ تخصّ المرحلة، لا رحلتان ═══
      المفهومُ المعتمَد باقٍ بحرفه. المتغيّرُ هو **ما الذي يقلبه**:
@@ -570,7 +577,7 @@ function PilgrimPortal() {
         logoUrl={portalLogo}
         nameAr={cfg?.name_ar || "بوابة الحاج"}
         seasonName={season?.name}
-        hasPhoto={p.has_photo}
+        hasPhoto={showPhoto}
         photoUrl={photoUrl}
         gender={p.gender}
         displayName={p.short_ar || p.name_ar}
