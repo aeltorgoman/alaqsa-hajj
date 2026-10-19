@@ -183,58 +183,78 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     if (!body.trim()) { showAlert("warning", "يرجى كتابة نص التنبيه."); return; }
     if (targetKind !== "all" && targetIds.length === 0) { showAlert("warning", "يرجى اختيار جهة واحدة على الأقل، أو تحديد جميع الحجاج."); return; }
     const show = when === "now" ? new Date() : new Date(showAt);
+    /* L3 — موعدٌ مجدوَلٌ ممسوحٌ أو فاسد لا يُرسَل، ولا يتحوّل نشراً فوريّاً من
+       تلقاء نفسه: `new Date("")` تاريخٌ غير صالح، و`toISOString` عليه ترمي بعد
+       أن صار الزرّ «جارٍ الإرسال…» فيبقى عالقاً بلا حفظ. فالفحصُ قبل كلّ شيء. */
+    if (Number.isNaN(show.getTime())) {
+      showAlert("warning", "يرجى اختيار تاريخ ووقت صحيحين لموعد الظهور، أو اختيار «الآن» للنشر الفوري.");
+      return;
+    }
     let expires: Date | null = null;
     const dur = DURATIONS.find(d => d.key === duration)!;
     if (dur.key === "custom") expires = new Date(expiresAt);
     else if (dur.ms > 0) expires = new Date(show.getTime() + dur.ms);
-    if (expires && expires <= show) { showAlert("warning", "وقت الانتهاء يجب أن يكون بعد وقت الظهور."); return; }
-    setSending(true);
-    const { data: created, error } = await supabase.from("announcements").insert({
-      title: title.trim() || null,
-      body: body.trim(), priority,
-      /* «الآن» تعني ساعة القاعدة لا ساعة المتصفّح.
-         العمود افتراضه `now()`، فإسقاطه يجعل الخادم يختم الوقت.
-         وإرسال ساعة الجهاز كان يضع `show_at` في المستقبل كلّما
-         تقدّمت ساعة الموظّف — فيصل الدفع إلى الحاجّ فوراً، وتُرشِّح
-         البوابة الإعلانَ بـ`show_at <= now()` فلا يجده في قائمته
-         حتى يمرّ الفارق. أمّا الموعد المجدوَل فيبقى كما اختاره
-         الموظّف: هو وقتٌ مقصود لا لحظة إرسال. */
-      ...(when === "now" ? {} : { show_at: show.toISOString() }),
-      expires_at: expires ? expires.toISOString() : null,
-      created_by: currentUser.name,
-      target_type: targetKind,
-      target_ids: targetKind === "all" ? [] : targetIds,
-    }).select("id").single();
-    if (error || !created) {
-      setSending(false);
-      showAlert("error", "تعذر إرسال التنبيه، يرجى المحاولة مرة أخرى.");
+    /* والوقتُ المحدَّد للانتهاء مثلُه: ممسوحاً كان يرمي الخطأَ نفسَه */
+    if (expires && Number.isNaN(expires.getTime())) {
+      showAlert("warning", "يرجى اختيار تاريخ ووقت صحيحين لانتهاء التنبيه.");
       return;
     }
-
-    /* التنبيه محفوظ الآن ولن يضيع، ودفعه إلى الأجهزة طبقة إضافية فوقه */
-    let pushNote = "";
-    if (when === "now") {
-      try {
-        const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
-          body: { announcement_id: created.id },
-        });
-        if (fnErr || (res as { error?: unknown })?.error) {
-          pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
-        } else {
-          const r = res as { sent: number; disabled: number };
-          pushNote = ` وصل إلى ${r.sent} من الأجهزة المفعّلة.`;
-          if (r.disabled > 0) pushNote += ` و${r.disabled} من الحجاج غير مفعّلين، وسيرونه عند فتح البوابة.`;
-        }
-      } catch {
-        pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
+    if (expires && expires <= show) { showAlert("warning", "وقت الانتهاء يجب أن يكون بعد وقت الظهور."); return; }
+    setSending(true);
+    /* الزرّ لا يبقى «جارٍ الإرسال…» مهما حدث بعد هذا السطر */
+    try {
+      const { data: created, error } = await supabase.from("announcements").insert({
+        title: title.trim() || null,
+        body: body.trim(), priority,
+        /* «الآن» تعني ساعة القاعدة لا ساعة المتصفّح.
+           العمود افتراضه `now()`، فإسقاطه يجعل الخادم يختم الوقت.
+           وإرسال ساعة الجهاز كان يضع `show_at` في المستقبل كلّما
+           تقدّمت ساعة الموظّف — فيصل الدفع إلى الحاجّ فوراً، وتُرشِّح
+           البوابة الإعلانَ بـ`show_at <= now()` فلا يجده في قائمته
+           حتى يمرّ الفارق. أمّا الموعد المجدوَل فيبقى كما اختاره
+           الموظّف: هو وقتٌ مقصود لا لحظة إرسال. */
+        ...(when === "now" ? {} : { show_at: show.toISOString() }),
+        expires_at: expires ? expires.toISOString() : null,
+        created_by: currentUser.name,
+        target_type: targetKind,
+        target_ids: targetKind === "all" ? [] : targetIds,
+      }).select("id").single();
+      if (error || !created) {
+        setSending(false);
+        showAlert("error", "تعذر إرسال التنبيه، يرجى المحاولة مرة أخرى.");
+        return;
       }
-    }
 
-    setSending(false);
-    showAlert("success", (when === "now" ? "تم إرسال التنبيه." : "تمت جدولة التنبيه بنجاح.") + pushNote);
-    setTitle(""); setBody(""); setPriority("عام"); setWhen("now"); setDuration("24h");
-    setTargetKind("all"); setTargetIds([]);
-    load();
+      /* التنبيه محفوظ الآن ولن يضيع، ودفعه إلى الأجهزة طبقة إضافية فوقه */
+      let pushNote = "";
+      if (when === "now") {
+        try {
+          const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
+            body: { announcement_id: created.id },
+          });
+          if (fnErr || (res as { error?: unknown })?.error) {
+            pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
+          } else {
+            const r = res as { sent: number; disabled: number };
+            pushNote = ` وصل إلى ${r.sent} من الأجهزة المفعّلة.`;
+            if (r.disabled > 0) pushNote += ` و${r.disabled} من الحجاج غير مفعّلين، وسيرونه عند فتح البوابة.`;
+          }
+        } catch {
+          pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
+        }
+      }
+
+      setSending(false);
+      showAlert("success", (when === "now" ? "تم إرسال التنبيه." : "تمت جدولة التنبيه بنجاح.") + pushNote);
+      setTitle(""); setBody(""); setPriority("عام"); setWhen("now"); setDuration("24h");
+      setTargetKind("all"); setTargetIds([]);
+      load();
+    } catch (e) {
+      console.error("تعذر إرسال التنبيه", e);
+      showAlert("error", "تعذر إرسال التنبيه، يرجى المحاولة مرة أخرى.");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function endNow(a: Announcement) {
