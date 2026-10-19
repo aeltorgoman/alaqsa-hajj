@@ -240,7 +240,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       }
 
       /* التنبيه محفوظ الآن ولن يضيع، ودفعه إلى الأجهزة طبقة إضافية فوقه */
-      const pushNote = when === "now" ? await pushToDevices(created.id) : "";
+      const pushNote = when === "now" ? (await pushToDevices(created.id)).note : "";
 
       setSending(false);
       showAlert("success", (when === "now" ? "تم إرسال التنبيه." : "تمت جدولة التنبيه بنجاح.") + pushNote);
@@ -257,29 +257,30 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
   /* دفعُ تنبيهٍ إلى الأجهزة وملاحظتُه للموظّف. الدالةُ لا تعيد الإرسال إلى من
      وصله، فاستدعاؤها ثانيةً يستأنف المعلَّق وحده (M6). */
-  async function pushToDevices(id: number): Promise<string> {
+  async function pushToDevices(id: number): Promise<{ note: string; done: boolean }> {
+    const failed = { note: " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.", done: false };
     try {
       const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
         body: { announcement_id: id },
       });
-      if (fnErr || (res as { error?: unknown })?.error) {
-        return " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
-      }
+      if (fnErr || (res as { error?: unknown })?.error) return failed;
       const r = res as { sent: number; disabled: number; pending?: number };
       let note = ` وصل إلى ${r.sent} من الأجهزة المفعّلة.`;
       if (r.disabled > 0) note += ` و${r.disabled} من الحجاج غير مفعّلين، وسيرونه عند فتح البوابة.`;
       if ((r.pending ?? 0) > 0) note += ` ولم يكتمل الإرسال إلى ${r.pending} بعد؛ يمكن استكماله من قائمة التنبيهات.`;
-      return note;
+      return { note, done: (r.pending ?? 0) === 0 };
     } catch {
-      return " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
+      return failed;
     }
   }
 
   async function resumePush(a: Announcement) {
     setResuming(a.id);
     try {
-      const note = await pushToDevices(a.id);
-      showAlert("success", "تم استكمال إرسال التنبيه." + note);
+      /* لا يُعلَن الاكتمال إلا إن اكتمل: فشلُ الاستدعاء، أو أجهزةٌ ما زالت
+         محجوزةً لعاملٍ آخر أو تنتظر موعدها، يبقى تنبيهاً لا نجاحاً */
+      const { note, done } = await pushToDevices(a.id);
+      showAlert(done ? "success" : "warning", (done ? "تم استكمال إرسال التنبيه." : "لم يكتمل إرسال التنبيه بعد.") + note);
     } finally {
       setResuming(null);
       load();
