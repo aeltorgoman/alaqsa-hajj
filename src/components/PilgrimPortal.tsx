@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  portalDocUrl, usePortalDoc, clearPortalDocCache, PORTAL_SESSION_KEY,
+  portalDocUrl, portalDocBytes, usePortalDoc, clearPortalDocCache, PORTAL_SESSION_KEY,
   type PortalDocType, type PortalSession,
 } from "../utils";
 import { portalSupabase } from "../portalSupabase";
@@ -76,7 +76,7 @@ function PilgrimPortal() {
   /* الشاشةُ من العنوان لا من حالةٍ داخليّة — فتصمد أمام التحديث */
   const { tab, navigate, resetToRoot } = usePortalRoute();
   const [lostOpen, setLostOpen] = useState(false);
-  const [docView, setDocView] = useState<{ title: string; url: string; isPdf: boolean } | null>(null);
+  const [docView, setDocView] = useState<{ title: string; url: string; isPdf: boolean; type: PortalDocType } | null>(null);
   const [docBusy, setDocBusy] = useState<PortalDocType | null>(null);
   /* الإخفاقُ يُعلَن: كان `portalDocUrl` يرجع null فلا يقع شيءٌ أصلاً
      — ضغطةٌ بلا أثرٍ ولا سبب. */
@@ -371,12 +371,16 @@ function PilgrimPortal() {
      الرقميّةُ تنحرف عن القائمة متى زِيدت خانةٌ أو نقصت. */
   const prepping = !!data && arrangements.some(ready => !ready);
 
+  /* بايتاتُ الـPDF المعروض — بالجلسة ونوعِ المستند، عبر `pilgrim-doc` نفسِها */
+  const docType = docView?.type;
+  const loadPdf = useCallback((signal: AbortSignal) => portalDocBytes(session, docType ?? "flight_ticket", signal), [session, docType]);
+
   async function openDoc(type: PortalDocType, title: string) {
     if (docBusy) return;
     setDocBusy(type); setDocError(null);
     const res = await portalDocUrl(session, type);
     setDocBusy(null);
-    if (res) setDocView({ title, url: res.url, isPdf: res.is_pdf });
+    if (res) setDocView({ title, url: res.url, isPdf: res.is_pdf, type });
     else setDocError(type);
   }
 
@@ -541,7 +545,7 @@ function PilgrimPortal() {
   if (docView && showDocs) {
     return (
       <DocumentViewer
-        t={t} doc={docView} showDownload={showDocs}
+        t={t} doc={docView} loadPdf={loadPdf} showDownload={showDocs}
         bannerH={bannerH} banner={banner} onClose={() => setDocView(null)}
       />
     );
