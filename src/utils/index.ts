@@ -479,6 +479,77 @@ export async function portalDocUrl(
   return doc;
 }
 
+/* ═══ بايتاتُ مستند PDF للبوابة — للعرض داخل الصفحة ═══
+   متصفّحاتُ الجوّال (Chrome على Android خاصّةً) لا تعرض PDF داخل إطار،
+   فيُقرأ الملفُّ نفسُه ويُصيَّر في الصفحة. والمسارُ هو مسارُ الرابط بعينه:
+   `pilgrim-doc` (الجلسة + إعداداتُ البوابة) ← رابطٌ موقّعٌ ١٥ دقيقة ← جلبٌ
+   من المتصفّح. لا مسارَ جديد ولا توقيعَ آخر.
+
+   وبوّاباتُ `fetchDocumentBytes` نفسُها قبل pdf.js: الرابطُ رابطُ تخزينٍ موقَّع،
+   والنوعُ المعلَن ليس نصّاً ولا HTML ولا JSON، والحجمُ معقول، والبايتاتُ تبدأ
+   بتوقيع PDF. وما يُرفض يُصنَّف ليعرف الحاجُّ ما يفعل. */
+export type PortalDocErrorKind = "unavailable" | "network" | "invalid" | "too_large" | "aborted";
+export class PortalDocError extends Error {
+  kind: PortalDocErrorKind;
+  constructor(kind: PortalDocErrorKind, message: string = kind) { super(message); this.kind = kind; }
+}
+
+/** سقفُ حجم الملفّ المعروض في البوابة — حارسُ ذاكرةٍ على الجوّال لا حدُّ صفحات */
+export const PORTAL_PDF_MAX_BYTES = 30 * 1024 * 1024;
+
+/** يتحقّق أنّ البايتات مستندُ PDF (توقيعُ `%PDF-` في أوّل ١٠٢٤ بايتاً كما تسمح المواصفة). */
+export function isPdfBytes(b: Uint8Array): boolean {
+  if (b.byteLength < 8 || looksLikeMarkup(b)) return false;
+  const n = Math.min(b.byteLength - 5, 1024);
+  for (let i = 0; i <= n; i++) {
+    if (b[i] === 0x25 && b[i + 1] === 0x50 && b[i + 2] === 0x44 && b[i + 3] === 0x46 && b[i + 4] === 0x2d) return true;
+  }
+  return false;
+}
+
+export async function portalDocBytes(
+  token: string | null,
+  docType: PortalDocType,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    /* المحاولةُ الثانية بتوقيعٍ جديد: الرابطُ المحفوظ قد يكون انتهى. وتوقيعٌ
+       جديدٌ يمرّ بـ`pilgrim-doc` كاملةً — فجلسةٌ انتهت أو مستندٌ أُخفي يُرفض. */
+    if (attempt === 1) portalDocCache.delete(docType);
+    const doc = await portalDocUrl(token, docType);
+    if (signal?.aborted) throw new PortalDocError("aborted");
+    if (!doc) throw new PortalDocError("unavailable");
+    if (!doc.url.includes("/storage/v1/object/sign/")) throw new PortalDocError("invalid", "الرابط ليس رابط تخزين موقّعاً");
+
+    let res: Response;
+    try {
+      res = await fetch(doc.url, { signal, credentials: "omit" });
+    } catch {
+      throw new PortalDocError(signal?.aborted ? "aborted" : "network");
+    }
+    /* ٤٠٠/٤٠١/٤٠٣ من التخزين: توقيعٌ منتهٍ أو مرفوض — يُعاد مرّةً بتوقيعٍ جديد */
+    if ([400, 401, 403].includes(res.status) && attempt === 0) continue;
+    if (res.status === 404 || [400, 401, 403].includes(res.status)) throw new PortalDocError("unavailable");
+    if (!res.ok) throw new PortalDocError("network", `HTTP ${res.status}`);
+
+    const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+    if (/text\/|json|html/.test(contentType)) throw new PortalDocError("invalid", `نوع غير متوقّع: ${contentType}`);
+    const declared = Number(res.headers.get("content-length") || 0);
+    if (declared > PORTAL_PDF_MAX_BYTES) throw new PortalDocError("too_large");
+
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await res.arrayBuffer());
+    } catch {
+      throw new PortalDocError(signal?.aborted ? "aborted" : "network");
+    }
+    if (bytes.byteLength > PORTAL_PDF_MAX_BYTES) throw new PortalDocError("too_large");
+    if (!isPdfBytes(bytes)) throw new PortalDocError("invalid", "البايتات ليست مستند PDF");
+    return bytes;
+  }
+  throw new PortalDocError("unavailable");
+}
+
 /** خطّاف عرض للبوابة — يطلب الرابط عند الحاجة ويعيده جاهزاً للـ`src`. */
 export function usePortalDoc(
   token: string | null,
