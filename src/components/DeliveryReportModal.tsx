@@ -22,6 +22,8 @@ const LABELS: Record<string, { text: string; bg: string; fg: string }> = {
   disabled: { text: "غير مفعّل", bg: "var(--warning-bg, #fef3c7)", fg: "var(--warning, #92400e)" },
   expired: { text: "اشتراك منتهٍ", bg: "var(--danger-bg, #f7eaef)", fg: "var(--primary)" },
   failed: { text: "فشل الإرسال", bg: "var(--danger-bg, #f7eaef)", fg: "var(--primary)" },
+  /* M6 — جهازٌ له محاولةٌ مؤجَّلة لم تكتمل بعد */
+  pending: { text: "قيد الإرسال", bg: "var(--warning-bg, #fef3c7)", fg: "var(--warning, #92400e)" },
 };
 
 function DeliveryReportModal({
@@ -64,7 +66,8 @@ function DeliveryReportModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const isMissed = (s: string) => s === "disabled" || s === "expired" || s === "failed";
+  /* M6: «قيد الإرسال» لم يصل بعد — يُعدّ مع ما لم يصل، ويتميّز بوسمه */
+  const isMissed = (s: string) => s === "disabled" || s === "expired" || s === "failed" || s === "pending";
 
   const total = rows.length;
   const delivered = rows.filter(r => r.status === "sent" || r.status === "read").length;
