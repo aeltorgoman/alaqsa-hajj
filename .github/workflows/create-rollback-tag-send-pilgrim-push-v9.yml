@@ -1,0 +1,122 @@
+# ════════════════════════════════════════════════════════════
+# One-off: create the rollback tag for send-pilgrim-push (M6, PR #248)
+# ════════════════════════════════════════════════════════════
+# Creates exactly ONE annotated tag, `rollback/send-pilgrim-push-v9`, on
+# commit 3f815ed4d922b5311128f9ede8ab4425ee18d493 — the source of the
+# send-pilgrim-push build now live in production (platform version 9,
+# deployed 2026-10-03 13:12:56Z by run 37125389184 of
+# send-pilgrim-push-redeploy.yml at that commit; platform ezbr_sha256
+# a3d22028…). Rolling back = dispatching send-pilgrim-push-redeploy.yml
+# on this tag: the workflow file at that commit pins that exact source.
+#
+# Before tagging, the commit is proven to be that source: it exists, is on
+# main's history, its send-pilgrim-push directory holds index.ts only, the
+# four deployed files hash to the recorded values, and its redeploy
+# workflow pins the same index.ts hash for the same slug.
+#
+# The tag is NEVER overwritten or moved: if it already exists on the
+# target it is a no-op; if it exists anywhere else the run fails. The push
+# is a plain create (no --force), so a concurrent creator makes it fail
+# rather than move.
+#
+# Deliberately absent: GitHub Release · --force · tag deletion · any branch
+# push · any deploy · any database or secret access. Only GITHUB_TOKEN with
+# contents: write is used.
+#
+# Temporary: remove this file in a follow-up PR once the tag exists.
+
+name: Create rollback tag rollback/send-pilgrim-push-v9 (ONE tag, never moved)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type TAG-SEND-PILGRIM-PUSH-V9 to authorize creating the tag"
+        required: true
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: create-rollback-tag-send-pilgrim-push-v9
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TAG: rollback/send-pilgrim-push-v9
+      TARGET: 3f815ed4d922b5311128f9ede8ab4425ee18d493
+      SHA_INDEX: "28b86b004d3b4275824c4d3b2afcbd3af104f210c1a0513fa66724e9dfd55b0b"
+      SHA_HTTP: "147f3657212178c7e96cbef08ff3048fbe4e010ee8c2826e41e142608bd1d1d1"
+      SHA_AUTHORIZE: "e5317ddc205ed598f08e0643ddb15447ce94f235d15b7e6944567c68805349f2"
+      SHA_RATELIMIT: "02e26e648c3eb0918675be96d59e5eaed4d9548d7fb5d86aba44d977c7be7cd7"
+
+    steps:
+      - name: "GATE: confirmation and ref"
+        run: |
+          set -euo pipefail
+          [ "${{ inputs.confirm }}" = "TAG-SEND-PILGRIM-PUSH-V9" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main, got ${GITHUB_REF}"; exit 1; }
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "GATE: the target is the verified v9 source"
+        run: |
+          set -euo pipefail
+          [ "$(git cat-file -t "$TARGET" 2>/dev/null)" = "commit" ] || { echo "::error::$TARGET is not a commit in this repository"; exit 1; }
+          git merge-base --is-ancestor "$TARGET" origin/main || { echo "::error::$TARGET is not on main's history"; exit 1; }
+          files="$(git ls-tree --name-only "$TARGET" supabase/functions/send-pilgrim-push/)"
+          [ "$files" = "supabase/functions/send-pilgrim-push/index.ts" ] || { echo "::error::unexpected files at target: $files"; exit 1; }
+          bad=0
+          for pair in "send-pilgrim-push/index.ts:$SHA_INDEX" "_shared/http.ts:$SHA_HTTP" \
+                      "_shared/authorize.ts:$SHA_AUTHORIZE" "_shared/rateLimit.ts:$SHA_RATELIMIT"; do
+            f="supabase/functions/${pair%%:*}"; want="${pair##*:}"
+            got="$(git show "$TARGET:$f" | sha256sum | cut -d' ' -f1)"
+            if [ "$got" = "$want" ]; then echo "ok   $f  $got"; else echo "::error::$f sha256 $got != $want"; bad=1; fi
+          done
+          wf="$(git show "$TARGET:.github/workflows/send-pilgrim-push-redeploy.yml")"
+          echo "$wf" | grep -qE "^ +SLUG: send-pilgrim-push$" || { echo "::error::redeploy workflow at target does not target send-pilgrim-push"; bad=1; }
+          echo "$wf" | grep -qE "^ +SRC_SHA256: \"$SHA_INDEX\"$" || { echo "::error::redeploy workflow at target does not pin $SHA_INDEX"; bad=1; }
+          [ "$bad" -eq 0 ] || exit 1
+          echo "Target $TARGET is the verified v9 source."
+
+      - name: "GATE: the tag does not exist elsewhere (never moved)"
+        id: existing
+        run: |
+          set -euo pipefail
+          remote="$(git ls-remote --tags origin "refs/tags/$TAG^{}" "refs/tags/$TAG")"
+          if [ -z "$remote" ]; then echo "exists=false" >> "$GITHUB_OUTPUT"; echo "Tag absent - will create."; exit 0; fi
+          # peeled (^{}) is the commit an annotated tag points to; a lightweight tag has no peeled line
+          points="$(echo "$remote" | awk '$2 ~ /\^\{\}$/ {print $1}')"
+          [ -n "$points" ] || points="$(echo "$remote" | awk '{print $1}')"
+          if [ "$points" = "$TARGET" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"; echo "Tag already exists on $TARGET - nothing to do."
+          else
+            echo "::error::$TAG already exists on $points, not $TARGET - refusing to move it"; exit 1
+          fi
+
+      - name: "WRITE: create and push the annotated tag (no --force)"
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            tag -a "$TAG" "$TARGET" -m "send-pilgrim-push rollback target: production v9
+
+          Deployed 2026-10-03 13:12:56Z by run 37125389184 of send-pilgrim-push-redeploy.yml at this commit.
+          index.ts sha256 $SHA_INDEX; platform ezbr_sha256 a3d22028ed160778610501041cb1387599e0f354e0c3506a608266dd5481b651.
+          Rollback: dispatch send-pilgrim-push-redeploy.yml on this tag. Created by workflow run ${GITHUB_RUN_ID}."
+          git push origin "refs/tags/$TAG"
+
+      - name: "POST: the tag points at the target"
+        run: |
+          set -euo pipefail
+          points="$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk '{print $1}')"
+          [ -n "$points" ] || points="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')"
+          [ "$points" = "$TARGET" ] || { echo "::error::$TAG points at '$points', expected $TARGET"; exit 1; }
+          echo "$TAG -> $TARGET"
