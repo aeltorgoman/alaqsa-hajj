@@ -131,6 +131,11 @@ eq "المتأخّرُ حين ينتهي (أُنهي) ← يخرج فوراً" "
 r="$(as_role service_role "select push_prepare_announcement(4817)::text")"
 echo "$r" | grep -q '"reason": "expired"' && ok "والتهيئةُ نفسُها (M6) ترفضه منتهياً" || bad "تهيئةُ المنتهي: $r"
 eq "ولا هدفَ له" "$(q "select count(*) from announcement_push_targets where announcement_id = 4817")" "0"
+q "insert into public.notification_deliveries (announcement_id, passenger_id, status, read_at) values (4818, 5802, 'read', now())" > /dev/null
+eq "سجلُّ read (حاجٌّ فتح التنبيه في البوابة) لا يُخرجه من المستحقّ" "$(due)" "4818,4810"
+r="$(as_role service_role "select push_prepare_announcement(4818)::text")"
+echo "$r" | grep -q '"prepared": true' && ok "والتهيئةُ (M6) تقبله: read ليس دليلَ دفع" || bad "تهيئة 4818 مع read: $r"
+eq "و read_at باقٍ بعد التهيئة" "$(q "select (read_at is not null)::text from notification_deliveries where announcement_id = 4818 and passenger_id = 5802")" "true"
 q "update public.announcements set push_sent_at = now() where id = 4818" > /dev/null
 eq "المستحقّ وحده" "$(due)" "4810"
 

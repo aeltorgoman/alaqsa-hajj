@@ -112,11 +112,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
           .eq("announcement_id", a.id).eq("status", "pending")
           .then(({ count, error: e }) => (!e && (count ?? 0) > 0 ? a.id : null))));
       setPendingPush(new Set(counts.filter((id): id is number => id !== null)));
-      /* M5 — بلا ختمٍ ولا سجلٍّ واحد: لم يُهيَّأ قطّ، فيُعرض «إرسال إلى الأجهزة».
+      /* M5 — بلا ختمٍ ولا سجلِّ تسليمٍ واحد: لم يُهيَّأ قطّ، فيُعرض «إرسال إلى الأجهزة».
+         والحالاتُ هي شرطُ التهيئة نفسه في push_prepare_announcement: سجلُّ `read` يكتبه
+         الحاجُّ حين يفتح التنبيه في البوابة، وليس دليلاً على دفعٍ إلى جهاز.
          وفشلُ العدّ لا يُظهر الزرّ (لا يُعرض إرسالٌ لم يُتحقَّق أنه لم يقع). */
       const never = await Promise.all(open.map(a =>
         supabase.from("notification_deliveries").select("id", { count: "exact", head: true })
-          .eq("announcement_id", a.id)
+          .eq("announcement_id", a.id).in("status", ["sent", "failed", "expired", "disabled", "pending"])
           .then(({ count, error: e }) => (!e && count === 0 ? a.id : null))));
       setUnsentPush(new Set(never.filter((id): id is number => id !== null)));
     }
