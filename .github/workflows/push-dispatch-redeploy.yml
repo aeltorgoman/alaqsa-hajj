@@ -67,9 +67,9 @@ jobs:
       SLUG: push-dispatch
       # "<path under supabase/functions>:<sha256>" — the exact bundle
       PINS: >-
-        push-dispatch/index.ts:27583f962f0e778e0225aa5844cbc5749d34763c9b1851fe1b2cd5b31f7188ab
-        push-dispatch/handler.ts:932f50c03e4fcfeba7f616f6145cbcc6c50012b5542fae0f4566f695aa161ca5
-        push-dispatch/deliver.ts:3966e6874d6424fc735a87d6493c29e732bfb746f787bba908f5bc73ee98bcbf
+        push-dispatch/index.ts:423e0fa3abe16ae806d6b63b56d864ddd204ad4d43a570c6abba5686a8d021ae
+        push-dispatch/handler.ts:56ff9ecf23db50de50ae57e17f26b8a5c9e1518fe24f3570d1426d2c4378ecda
+        push-dispatch/deliver.ts:c101915d55dd743e7c1a2fc714b75ee3d0f36b3d58fc7f15e8e0971bcd702cc6
         send-pilgrim-push/delivery.ts:b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf
       # send-pilgrim-push is not deployed here; its entry point must be the reviewed one
       SPP_INDEX_SHA256: "103b940b2744aa674527bdd134047098532933a20576155cfd6fd8b81942bcf8"
@@ -129,6 +129,14 @@ jobs:
           # a Supabase API key must never be the credential: it would sit in pg_net's PUBLIC queue
           if grep -nE 'SUPABASE_SECRET_KEYS|headers\.get\("(apikey|authorization)"\)' supabase/functions/$SLUG/*.ts; then
             echo "::error::push-dispatch authenticates with a Supabase API key"; exit 1; fi
+          # no customer name in the code: the untitled-alert title comes from company_config
+          if grep -n "حملة الأقصى" supabase/functions/$SLUG/*.ts; then
+            echo "::error::push-dispatch hardcodes a company name"; exit 1; fi
+          grep -q 'from("company_config").select("name_ar")' supabase/functions/$SLUG/index.ts || {
+            echo "::error::push-dispatch no longer reads the company name from company_config"; exit 1; }
+          # a token value never lives in the repository (generated once, set on the platform)
+          if git grep -nIE "(PUSH_DISPATCH_TOKEN|push_dispatch_token)['\"]?[[:space:]]*[:=,][[:space:]]*['\"][A-Za-z0-9_-]{43,}" -- . ; then
+            echo "::error::a PUSH_DISPATCH_TOKEN value is committed"; exit 1; fi
           grep -q 'await sameKey(presented, expected)' "$H" || { echo "::error::constant-time comparison missing"; exit 1; }
           if grep -nE 'console\.(log|error|warn).*(presented|expected|tokenEnv|PUSH_DISPATCH_TOKEN)' supabase/functions/$SLUG/*.ts; then
             echo "::error::a token-bearing value reaches a log"; exit 1; fi

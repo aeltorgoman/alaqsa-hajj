@@ -51,8 +51,12 @@ const KEY = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("ba
 const SB_KEY = "sb_" + "secret_" + Buffer.from(crypto.getRandomValues(new Uint8Array(24))).toString("base64url");
 const URL = "https://m5-e2e.invalid/functions/v1/push-dispatch";
 const CUT0 = sqlSync("select cutoff_id from public.push_dispatch_state");
+/* اسمُ شركةٍ مختلفٌ عن الافتراض المحايد، ليُثبت أن العنوانَ يُقرأ منها لا من الشيفرة؛ ويُعاد في الآخر */
+const NAME0 = sqlSync("select name_ar from public.company_config order by id limit 1");
+const NAME_TEST = "شركة اختبار M5";
 
 function cleanup() {
+  sqlSync(`update public.company_config set name_ar = ${lit(NAME0)} where id = (select min(id) from public.company_config);`);
   sqlSync(`set session_replication_role = replica;
     update public.push_dispatch_state set cutoff_id = ${CUT0}, lease_run_id = null, lease_expires_at = null, lease_started = false,
            last_tick_at = null, last_tick_result = null, last_run_at = null, last_run_result = null;
@@ -127,6 +131,7 @@ function deps(push, over = {}) {
     deliver: (id, budget) => deliverAnnouncement(id, budget, {
       rpc: counted,
       readAnnouncement: async (annId) => JSON.parse(await svc(`select to_jsonb(x) from (select id, title, body, priority, expires_at from public.announcements where id = ${annId}) x`) || "null"),
+      readCompanyName: async () => (await svc("select name_ar from public.company_config order by id limit 1")) || null,
       send: push.send,
       worker: crypto.randomUUID(),
       now: () => Date.now(),
@@ -154,6 +159,8 @@ async function scheduled(push, over) {
 const dstat = (a) => sqlSync(`select string_agg(passenger_id || '=' || status, ',' order by passenger_id) from public.notification_deliveries where announcement_id = ${a}`);
 const lease = () => sqlSync("select coalesce(lease_run_id::text, '-') from public.push_dispatch_state");
 
+if (NAME0 === "") { console.log("يرفض: لا صفَّ في company_config"); process.exit(2); }
+sqlSync(`update public.company_config set name_ar = ${lit(NAME_TEST)} where id = (select min(id) from public.company_config);`);
 try {
   console.log("═══ مجدوَلٌ حان: من التيك إلى الجهاز ═══");
   devices("s1"); announcement(4841); announcement(4842, "now() + interval '1 hour'"); announcement(4843, "now() - interval '2 hours'", "now() - interval '1 minute'");
@@ -167,6 +174,11 @@ try {
   check("custom audience isolation: the outsider's device is never sent to", p1.sends.every((s) => s.kind !== "outsider"));
   check("every send carries topic ann-4841 and the send-pilgrim-push payload",
     p1.sends.every((s) => s.options.topic === "ann-4841" && JSON.parse(s.payload).url === "/hajj/alerts" && JSON.parse(s.payload).id === 4841));
+  const company = sqlSync("select name_ar from public.company_config order by id limit 1");
+  check("the local company name under test differs from the neutral default", company === NAME_TEST);
+  check("untitled alert's title is the company name from company_config (not hardcoded)",
+    company !== "" && p1.sends.every((s) => JSON.parse(s.payload).title === company) && p1.sends.every((s) => !s.payload.includes("الأقصى")),
+    `${company} / ${JSON.parse(p1.sends[0].payload).title}`);
   check("deliveries: two pilgrims sent, the deviceless one disabled", dstat(4841) === "5821=sent,5822=sent,5823=disabled", dstat(4841));
   check("push_sent_at stamped; lease released",
     sqlSync("select (push_sent_at is not null)::text from public.announcements where id = 4841") === "true" && lease() === "-");
@@ -206,6 +218,35 @@ try {
   check("expires in 20 min → every send's TTL ≤ 1200 s (not 24 h)",
     rt.tick === "dispatched" && pt.sends.length === 3 && pt.sends.every((x) => x.options.TTL > 1100 && x.options.TTL <= 1200),
     JSON.stringify(pt.sends.map((x) => x.options.TTL)));
+
+  console.log("═══ رمزٌ مسرَّب: سباقٌ على العقد نفسه ═══");
+  /* مهاجمٌ يقرأ net.http_request_queue فيرى الرمزَ وrun_id، ويرسل الطلبَ نفسه مع pg_net */
+  devices("leak"); announcement(4851);
+  const pk = pushService({ flakyFails: 0 });
+  check("tick → dispatched", tick() === "dispatched");
+  const leaked = lastCall();
+  const [legit, attacker] = await Promise.all([handle(asRequest(leaked), deps(pk)), handle(asRequest(leaked), deps(pk))]);
+  check("exactly one of the two identical requests is accepted; the other gets 409",
+    [legit.status, attacker.status].sort().join(",") === "200,409", `${legit.status},${attacker.status}`);
+  check("each in-audience device sent exactly once; nothing outside the audience",
+    pk.count("ok") === 1 && pk.count("ok2") === 1 && pk.count("flaky") === 1 && pk.sends.length === 3);
+  const replayLeak = await handle(asRequest(leaked), deps(pk));
+  check("replaying it afterwards → 409, nothing sent", replayLeak.status === 409 && pk.sends.length === 3);
+
+  console.log("═══ عقدٌ حيّ لا يتجاوز الاستحقاق ═══");
+  devices("elig"); announcement(4852);
+  check("tick → dispatched (4852 due)", tick() === "dispatched");
+  const live = lastCall();
+  /* بين التيك ووصول الطلب: انتهى التنبيه، وأُضيف آخرُ لم يحن */
+  sqlSync("update public.announcements set expires_at = now() where id = 4852");
+  announcement(4853, "now() + interval '1 hour'");
+  const pe = pushService({ flakyFails: 0 });
+  const re = await handle(asRequest(live), deps(pe));
+  const reb = await re.json();
+  check("live lease, but the due one expired and the other is not due → 200 with nothing delivered",
+    re.status === 200 && reb.delivered === 0 && pe.sends.length === 0, JSON.stringify(reb));
+  check("neither was prepared", sqlSync("select count(*) from public.announcement_push_targets where announcement_id in (4852, 4853)") === "0");
+  check("lease released", lease() === "-");
 
   console.log("═══ M6: عاملٌ سقط يستردّه التيكُ التالي ═══");
   devices("s2"); announcement(4844);

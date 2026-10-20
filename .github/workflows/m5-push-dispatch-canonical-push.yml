@@ -75,7 +75,7 @@ jobs:
     env:
       M5: "20261020153000"
       F5: supabase/migrations/20261020153000_m5_scheduled_push_dispatch.sql
-      SHA5: "2ac170a96cd8b7f8a7fdb241a7d33cc74a9489c0e6e4034240d998e81d5e14be"
+      SHA5: "d02de1a7fd789ba0f4d773cfd71738fef13afad25acf3274337e5cf63af737f8"
       EXPECT_REPO_MIGRATIONS: "71"
       EXPECT_ROWS_BEFORE: "70"
       EXPECT_LATEST_BEFORE: "20261019135129"

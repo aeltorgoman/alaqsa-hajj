@@ -8,6 +8,8 @@
      · `topic: ann-<id>`: خدمةُ الدفع تستبدل نسخةً لم تُسلَّم بعدُ بالأحدث.
      · `TTL` لا يتجاوز ما بقي من عمر التنبيه (`expires_at`): جهازٌ غيرُ متّصل
        لا يتلقّاه بعد أن اختفى من البوابة.
+   والحمولةُ بالشكل نفسه (id · title · body · priority · url)، وعنوانُ التنبيه
+   بلا عنوانٍ هو اسمُ الشركة من `company_config` لا اسمٌ مكتوبٌ في الشيفرة.
 
    ⚠️ «مرّةً على الأقلّ» كما في M6، لا «مرّةً بالضبط».
 
@@ -34,6 +36,8 @@ export type SendOptions = {
 export type DeliverDeps = {
   rpc: <T>(fn: string, args: Record<string, unknown>) => Promise<T>;
   readAnnouncement: (id: number) => Promise<Announcement | null>;
+  /* `company_config.name_ar`، أو null إن تعذّر — فشلُها لا يوقف التسليم */
+  readCompanyName: () => Promise<string | null>;
   send: (target: Claimed, payload: string, options: SendOptions) => Promise<void>;
   worker: string;
   now: () => number;
@@ -47,11 +51,15 @@ export type DeliverOutcome =
 /* المهلةُ نفسُها في send-pilgrim-push (٣ث للنداء) — انظر تعليقها هناك */
 const SEND_TIMEOUT_MS = 3000;
 
-/* الحمولةُ بالحروف التي يرسلها send-pilgrim-push، فلا يفرّق الحاجُّ بين الطريقين */
-export function buildPayload(ann: Announcement): string {
+/* عنوانٌ محايدٌ إن لم يكن للتنبيه عنوانٌ ولا للشركة اسم — افتراضُ التطبيق نفسه
+   (`company_config.name_ar` افتراضُه في القاعدة، و`companyService` في الواجهة) */
+export const NEUTRAL_TITLE = "نظام الحج";
+
+/* الحمولةُ بمفاتيح send-pilgrim-push نفسها وترتيبها، فعاملُ الخدمة يقرؤها كما هي */
+export function buildPayload(ann: Announcement, companyName: string | null): string {
   return JSON.stringify({
     id: ann.id,
-    title: ann.title || "حملة الأقصى",
+    title: ann.title || companyName?.trim() || NEUTRAL_TITLE,
     body: ann.body,
     priority: ann.priority,
     url: "/hajj/alerts",
@@ -94,7 +102,8 @@ export async function deliverAnnouncement(id: number, budgetMs: number, deps: De
   const ann = await deps.readAnnouncement(id);
   if (!ann) return { status: "ineligible", reason: "not_found" };
 
-  const payload = buildPayload(ann);
+  const companyName = await deps.readCompanyName().catch(() => null);
+  const payload = buildPayload(ann, companyName);
   const summary = () => deps.rpc<Summary>("push_delivery_summary", { p_announcement_id: id });
 
   const run = await runDelivery({

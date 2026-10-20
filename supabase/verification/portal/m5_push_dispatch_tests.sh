@@ -177,7 +177,7 @@ eq "عنوانٌ بلا https ← not_configured" "$(tick)" "not_configured"
 q "update vault.decrypted_secrets set decrypted_secret = 'https://m5-local.invalid/functions/v1/send-pilgrim-push' where name = 'push_dispatch_url'" > /dev/null
 eq "عنوانُ دالّةٍ أخرى ← not_configured (لا يُرسل الرمزُ إليها)" "$(tick)" "not_configured"
 q "update vault.decrypted_secrets set decrypted_secret = '$URL' where name = 'push_dispatch_url'" > /dev/null
-for bad_tok in "short_token_only_20chars" "sb_""secret_$(printf 'a%.0s' $(seq 1 40))" "eyJ$(printf 'b%.0s' $(seq 1 60))" "has space $(printf 'c%.0s' $(seq 1 40))"; do
+for bad_tok in "short_token_only_20chars" "$(printf 'ab%.0s' $(seq 1 22))" "sb_""secret_$(printf 'a%.0s' $(seq 1 40))" "eyJ$(printf 'b%.0s' $(seq 1 60))" "has space $(printf 'c%.0s' $(seq 1 40))"; do
   q "update vault.decrypted_secrets set decrypted_secret = '$bad_tok' where name = 'push_dispatch_token'" > /dev/null
   eq "رمزٌ مرفوضُ الشكل (${bad_tok:0:6}…) ← not_configured" "$(tick)" "not_configured"
 done
@@ -198,7 +198,10 @@ eq "العقد: ١٨٠ث، لم يبدأ" "$(q "select (lease_expires_at between
 eq "التيك لا يهيّئ ولا يحجز بنفسه" "$(q "select count(*) from announcement_push_targets")" "$T0"
 eq "عقدٌ حيّ ← busy" "$(tick)" "busy"
 eq "busy بلا طلب" "$(calls)" "1"
-eq "begin بعقدٍ آخر ← false" "$(as_role service_role "select push_dispatch_begin(gen_random_uuid())")" "f"
+eq "begin بعقدٍ آخر (مُختلَق) ← false" "$(as_role service_role "select push_dispatch_begin(gen_random_uuid())")" "f"
+eq "والمُختلَقُ لا يُنشئ عقداً ولا يغيّر الحال" "$(q "select lease_run_id::text || ':' || lease_started::text from push_dispatch_state")" "$RUN:false"
+noexec "$(as_role service_role "update public.push_dispatch_state set lease_run_id = gen_random_uuid(), lease_expires_at = now() + interval '1 hour'")" \
+  && ok "مفتاحُ الخدمة نفسُه (ما تملكه الدالّة) لا يكتب عقداً في الجدول" || bad "service_role يكتب عقداً"
 eq "begin بلا عقد (null) ← false" "$(as_role service_role "select push_dispatch_begin(null)")" "f"
 eq "begin بعقده ← true" "$(as_role service_role "select push_dispatch_begin('$RUN')")" "t"
 eq "begin ثانيةً بالعقد نفسه ← false (مرّةً واحدة)" "$(as_role service_role "select push_dispatch_begin('$RUN')")" "f"
@@ -215,6 +218,19 @@ eq "عقدٌ انقضى (الدالّة سقطت) ← begin false" "$(as_role se
 eq "عقدٌ انقضى ← لا يحبس المُجدوِل: dispatched" "$(tick)" "dispatched"
 RUN3="$(q "select lease_run_id from push_dispatch_state")"
 eq "end بالعقد المنقضي القديم لا يمسّ الجديد" "$(as_role service_role "select push_dispatch_end('$RUN2', null)")::$(q "select lease_run_id from push_dispatch_state")" "f::$RUN3"
+q "update push_dispatch_state set lease_run_id = null, lease_expires_at = null, lease_started = false" > /dev/null
+
+echo "── begin متزامنان بالعقد نفسه (طلبٌ مشروعٌ وآخرُ مُعاد)"
+q "update push_dispatch_state set lease_run_id = null, lease_expires_at = null, lease_started = false" > /dev/null
+eq "تيك ← dispatched" "$(tick)" "dispatched"
+RUNC="$(q "select lease_run_id from push_dispatch_state")"
+A="$(mktemp)"; B="$(mktemp)"
+psql "$LOCAL" -X -q -At -c "begin; set local role service_role; select push_dispatch_begin('$RUNC'); select pg_sleep(1); commit;" > "$A" 2>&1 &
+sleep 0.3
+psql "$LOCAL" -X -q -At -c "begin; set local role service_role; select push_dispatch_begin('$RUNC'); commit;" > "$B" 2>&1 &
+wait
+eq "واحدٌ يقبل والآخر يُرفض" "$(cat "$A" "$B" | grep -xE "[tf]" | sort | paste -sd,)" "f,t"
+rm -f "$A" "$B"
 q "update push_dispatch_state set lease_run_id = null, lease_expires_at = null, lease_started = false" > /dev/null
 
 echo "── تيكان متزامنان"

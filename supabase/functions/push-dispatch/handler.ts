@@ -22,8 +22,12 @@
 import type { DeliverOutcome } from "./deliver.ts";
 
 export const TOKEN_HEADER = "x-push-dispatch-token";
-/* ٢٥٦ بتّاً فأكثر بأبجديّة base64url، وليس مفتاحَ API من Supabase (sb_…) ولا JWT (eyJ…) */
+/* ٢٥٦ بتّاً فأكثر بأبجديّة base64url (٣٢ بايتاً عشوائيّاً = ٤٣ حرفاً)، وليس مفتاحَ API من
+   Supabase (sb_…) ولا JWT (eyJ…). التوليد: `openssl rand 32 | base64 | tr '+/' '-_' | tr -d '='`.
+   والعشوائيّةُ لا يُثبتها فحص؛ فيُرفض على الأقلّ ما يبدو مكتوباً باليد: أقلُّ من ١٦ حرفاً مختلفاً
+   (٤٣ حرفاً عشوائيّاً فيها ~٢٨ مختلفاً، واحتمالُ ١٦ فأقلّ لا يُذكر). */
 const TOKEN_RE = /^[A-Za-z0-9_-]{43,128}$/;
+export const MIN_DISTINCT_CHARS = 16;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BODY = 1024;
 
@@ -50,6 +54,7 @@ export type DispatchDeps = {
 /* الرمزُ المتوقَّع، أو null إن لم يكن مضبوطاً كما يجب — لا افتراضَ ولا بديل */
 export function expectedToken(raw: string | undefined): string | null {
   if (typeof raw !== "string" || !TOKEN_RE.test(raw) || /^(sb_|eyJ)/.test(raw)) return null;
+  if (new Set(raw).size < MIN_DISTINCT_CHARS) return null;
   return raw;
 }
 

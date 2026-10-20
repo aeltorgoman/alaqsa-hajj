@@ -52,6 +52,13 @@ Deno.serve((req: Request) => {
           if (error) throw new Error("announcements: read");
           return (data as Announcement | null) ?? null;
         },
+        readCompanyName: async () => {
+          /* الصفُّ الأصغر معرّفاً، كما يقرؤه بقيّةُ النظام (ترحيلة company_config_seed_row) */
+          const { data, error } = await db()
+            .from("company_config").select("name_ar").order("id").limit(1).maybeSingle();
+          if (error) return null;
+          return (data as { name_ar: string | null } | null)?.name_ar ?? null;
+        },
         send: async (t, payload, options) => {
           await webpush.sendNotification(
             { endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth } }, payload, options,

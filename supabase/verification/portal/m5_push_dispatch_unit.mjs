@@ -74,6 +74,7 @@ check("the credential header is x-push-dispatch-token", HDR === "x-push-dispatch
 await rejected("GET", req(null, { [HDR]: KEY }, "GET"), undefined, 405);
 await rejected("PUSH_DISPATCH_TOKEN absent", req(probe, { [HDR]: KEY }), "", 503);
 await rejected("PUSH_DISPATCH_TOKEN too short (< 256 bits)", req(probe, { [HDR]: "abc" }), "a".repeat(42), 503);
+await rejected("PUSH_DISPATCH_TOKEN long but hand-typed (< 16 distinct characters)", req(probe, { [HDR]: "ab".repeat(30) }), "ab".repeat(30), 503);
 await rejected("PUSH_DISPATCH_TOKEN with characters outside base64url", req(probe, { [HDR]: KEY }), KEY.slice(0, 40) + "+/= x", 503);
 await rejected("PUSH_DISPATCH_TOKEN set to a Supabase secret key", req(probe, { [HDR]: SB + KEY }), SB + KEY, 503);
 await rejected("PUSH_DISPATCH_TOKEN set to a JWT-looking value", req(probe, { [HDR]: "eyJ" + KEY }), "eyJ" + KEY, 503);
@@ -119,6 +120,37 @@ for (const [name, body] of [["not JSON", "{"], ["unknown mode", { mode: "send" }
   const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   check("dispatch without a live lease → 409, nothing delivered, lease not touched",
     res.status === 409 && !s.calls.some((c) => c.startsWith("deliver") || c.startsWith("end") || c.startsWith("due")), JSON.stringify(s.calls));
+}
+console.log("═══ رمزٌ مسرَّب: لا عقدَ ولا تجاوز ═══");
+{
+  /* حاملُ الرمز يعيد طلباً مشروعاً سبق قبوله: begin يقبل العقدَ مرّةً واحدة */
+  let used = false;
+  const s = spyDeps({ begin: async (r) => { s.calls.push(`begin:${r}`); const ok = !used; used = true; return ok; } });
+  const first = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  const n = s.calls.filter((c) => c.startsWith("deliver:")).length;
+  const replay = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  check("replayed dispatch (same run_id) with the right token → 409, nothing delivered a second time",
+    first.status === 200 && replay.status === 409 && s.calls.filter((c) => c.startsWith("deliver:")).length === n, JSON.stringify(s.calls));
+}
+{
+  /* حاملُ الرمز يختلق run_id: لا يصل إلى deliver ولا dueIds، ولا يملك ما ينشئ عقداً */
+  const s = spyDeps({ begin: async (r) => { s.calls.push(`begin:${r}`); return false; } });
+  const fabricated = { mode: "dispatch", run_id: crypto.randomUUID() };
+  const res = await H.handle(req(fabricated, { [HDR]: KEY }), s.deps);
+  check("token + fabricated run_id → 409; the handler has no path that writes a lease",
+    res.status === 409 && s.calls.length === 2 && s.calls[0] === "configured" && s.calls[1].startsWith("begin:"), JSON.stringify(s.calls));
+  const src = ["index.ts", "handler.ts", "deliver.ts"].map((f) => fs.readFileSync(path.join(fnDir, f), "utf8")).join("\n");
+  check("the only lease operations the function can call are begin and end (no tick, no lease write)",
+    !/["']push_dispatch_(tick|probe)["']|from\(["']push_dispatch_state["']\)/.test(src)
+    && /["']push_dispatch_begin["']/.test(src) && /["']push_dispatch_end["']/.test(src));
+}
+{
+  /* حاملُ الرمز بعقدٍ حيّ: لا يختار التنبيهات — ما يُسلَّم هو ما تعيده القاعدة مستحقّاً وحده */
+  const s = spyDeps({ dueIds: async (n) => { s.calls.push(`due:${n}`); return []; } });
+  const res = await H.handle(req({ ...dispatch, ids: [1, 2, 3], announcement_id: 9 }, { [HDR]: KEY }), s.deps);
+  const body = await res.json();
+  check("extra fields (ids / announcement_id) are ignored: nothing due → nothing delivered",
+    res.status === 200 && body.delivered === 0 && !s.calls.some((c) => c.startsWith("deliver:")), JSON.stringify(s.calls));
 }
 {
   const s = spyDeps({ configured: () => false });
@@ -181,11 +213,19 @@ console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
 console.log("═══ الحمولةُ وtopic ═══");
 const ann = { id: 4242, title: null, body: "نصّ", priority: "عاجل", expires_at: null };
 const T0 = Date.parse("2026-10-20T12:00:00Z");
-check("payload is the one send-pilgrim-push sends",
-  D.buildPayload(ann) === JSON.stringify({ id: 4242, title: "حملة الأقصى", body: "نصّ", priority: "عاجل", url: "/hajj/alerts" }));
+const keysOf = (j) => Object.keys(JSON.parse(j)).join(",");
+check("payload keeps send-pilgrim-push's format: id, title, body, priority, url — in that order",
+  keysOf(D.buildPayload(ann, "شركة س")) === "id,title,body,priority,url"
+  && D.buildPayload(ann, "شركة س") === JSON.stringify({ id: 4242, title: "شركة س", body: "نصّ", priority: "عاجل", url: "/hajj/alerts" }));
+check("untitled alert → the company name from company_config", JSON.parse(D.buildPayload(ann, "شركة س")).title === "شركة س");
+check("an announcement's own title always wins", JSON.parse(D.buildPayload({ ...ann, title: "عنوان" }, "شركة س")).title === "عنوان");
+check("no company name (null / blank / read failure) → the neutral app default, never a customer's name",
+  [null, "", "   "].every((n) => JSON.parse(D.buildPayload(ann, n)).title === D.NEUTRAL_TITLE) && D.NEUTRAL_TITLE === "نظام الحج");
+const pdSrc = ["index.ts", "handler.ts", "deliver.ts"].map((f) => fs.readFileSync(path.join(fnDir, f), "utf8")).join("\n");
+check("push-dispatch hardcodes no company name", !pdSrc.includes("حملة الأقصى") && !pdSrc.includes("الأقصى"));
 const spp = fs.readFileSync(path.join(here, "../../functions/send-pilgrim-push/index.ts"), "utf8");
-check("send-pilgrim-push builds the same payload fields and options",
-  spp.includes('title: ann.title || "حملة الأقصى"') && spp.includes('url: "/hajj/alerts"')
+check("send-pilgrim-push (unchanged) builds the same payload keys and base options",
+  /id: ann\.id,\s*title: [^\n]+,\s*body: ann\.body,\s*priority: ann\.priority,/.test(spp) && spp.includes('url: "/hajj/alerts"')
   && spp.includes("TTL: 86400") && spp.includes('ann.priority === "عاجل" ? "high" : "normal"') && spp.includes("SEND_TIMEOUT_MS = 3000"));
 const o = D.buildSendOptions(ann, T0);
 check("options: TTL 86400 · urgency high for عاجل · timeout 3000 · topic ann-<id>",
@@ -232,6 +272,7 @@ function fakeDeliver(prep, claims) {
         throw new Error(fn);
       },
       readAnnouncement: async (id) => ({ id, title: "t", body: "b", priority: "عام", expires_at: new Date(Date.now() + 600e3).toISOString() }),
+      readCompanyName: async () => "شركة س",
       send: async (t, payload, options) => { log.push(`send:${t.target_id}:${options.topic}:${JSON.parse(payload).id}`); log.push(`ttl:${options.TTL}`); },
       worker: "00000000-0000-4000-8000-000000000001",
       now: () => Date.now(),
