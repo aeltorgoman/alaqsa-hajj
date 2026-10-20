@@ -94,7 +94,10 @@ def compare(repo, deployed_root, slug):
     want = expected_files(repo, slug)
     have = deployed_files(droot)
     result = {}
-    for part, pred in (("function", lambda p: p.startswith(slug + "/")),
+    # "function" is everything outside _shared/: the slug's own files and any
+    # file it imports from another function's directory (push-dispatch imports
+    # send-pilgrim-push/delivery.ts). A path in neither set is still "extra".
+    for part, pred in (("function", lambda p: not p.startswith(SHARED + "/")),
                        ("shared", lambda p: p.startswith(SHARED + "/"))):
         w = {p for p in want if pred(p)}
         h = {p for p in have if pred(p)}
@@ -103,11 +106,6 @@ def compare(repo, deployed_root, slug):
         details += [f"modified  {p}" for p in sorted(w & h)
                     if sha256(os.path.join(repo, p)) != sha256(os.path.join(droot, p))]
         result[part] = ("IDENTICAL" if not details else "DRIFT", details)
-    # anything outside <slug>/ and _shared/ is unexpected in a bundle
-    stray = sorted(p for p in have if not (p.startswith(slug + "/") or p.startswith(SHARED + "/")))
-    if stray:
-        st, det = result["function"]
-        result["function"] = ("DRIFT", det + [f"extra     {p}" for p in stray])
     return result
 
 
@@ -225,6 +223,27 @@ def selftest():
         d = os.path.join(t, "d7"); bundle(d, "fn-a", A)
         rc, rows, _ = verdict(d, ["fn-a", "fn-b"])
         check("missing deployed function -> FAIL", rc == 1 and rows["fn-b"] == ["MISSING_DEPLOYED", "MISSING_DEPLOYED"])
+
+        # 9) a cross-function import (fn-c imports ../fn-a/local.ts) is part of
+        #    fn-c's source: compared, not reported as a stray extra
+        _write(repo, "fn-c/index.ts", 'import { x } from "../fn-a/local.ts";\nimport { cors } from "../_shared/http.ts";\n')
+        C = ["fn-c/index.ts", "fn-a/local.ts", "_shared/http.ts"]
+        check("cross-function import is in the reachable set", expected_files(repo, "fn-c") == set(C))
+        d = os.path.join(t, "d9"); bundle(d, "fn-c", C)
+        rc, rows, _ = verdict(d, ["fn-c"])
+        check("cross-function import, identical -> PASS", rc == 0 and rows["fn-c"] == ["IDENTICAL", "IDENTICAL"])
+        _write(os.path.join(d, "fn-c"), "fn-a/local.ts", "export const x = 9;\n")
+        rc, rows, txt = verdict(d, ["fn-c"])
+        check("cross-function import, modified -> FAIL (source column)",
+              rc == 1 and rows["fn-c"] == ["DRIFT", "IDENTICAL"] and "fn-c [function] modified  fn-a/local.ts" in txt)
+        os.remove(os.path.join(d, "fn-c", "fn-a/local.ts"))
+        rc, rows, txt = verdict(d, ["fn-c"])
+        check("cross-function import, missing -> FAIL", rc == 1 and "fn-c [function] missing   fn-a/local.ts" in txt)
+        d = os.path.join(t, "d9b"); bundle(d, "fn-c", C)
+        _write(os.path.join(d, "fn-c"), "fn-b/index.ts", "x\n")
+        rc, rows, txt = verdict(d, ["fn-c"])
+        check("a file of another function fn-c does not import -> extra, FAIL",
+              rc == 1 and "fn-c [function] extra     fn-b/index.ts" in txt)
 
         # 8) control — the old single-tree method on case 6: fn-a (stale) then fn-b
         #    (current) written into ONE tree leaves only fn-b's http.ts, so the old

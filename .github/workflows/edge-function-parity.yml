@@ -42,7 +42,9 @@ jobs:
     env:
       PROJECT_REF: zkucwcnclbfvukhdqhgc
       OUT: parity-evidence
-      SLUGS: "Scan-passport send-pilgrim-push season-admin user-admin pilgrim-doc whatsapp-send"
+      # push-dispatch reports MISSING_DEPLOYED (FAIL) until its first approved
+      # deploy: a function the repository ships and production lacks is drift.
+      SLUGS: "Scan-passport send-pilgrim-push season-admin user-admin pilgrim-doc whatsapp-send push-dispatch"
 
     steps:
       - uses: actions/checkout@v4

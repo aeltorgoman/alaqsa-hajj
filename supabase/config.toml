@@ -73,3 +73,12 @@ verify_jwt = true
 # ولا يُضاف ثانٍ بلا مراجعةٍ معمارية.
 [functions.pilgrim-doc]
 verify_jwt = false
+
+# ⚠️ **المخالفةُ الثانية، وهي مقصودة** — دالّةٌ لا يستدعيها إنسان (M5): يوقظها
+# المُجدوِل (`push_dispatch_tick()` عبر pg_net) بمفتاحٍ سرّيٍّ مسمّى `push_dispatch`
+# في ترويسة `apikey`. والمفتاحُ `sb_secret_…` ليس JWT، فالبوابةُ لا تفهمه.
+# و`false` هنا **لا يعني بلا مصادقة**: handler.ts يرفض قبل أيّ عملٍ كلَّ طلبٍ
+# لا يحمل هذا المفتاحَ بعينه (401)، ويُغلق إن لم يُضبط (503). الإرسالُ اليدويّ
+# يبقى في send-pilgrim-push بـ`verify_jwt = true` وmanage_portal، بلا تغيير.
+[functions.push-dispatch]
+verify_jwt = false
