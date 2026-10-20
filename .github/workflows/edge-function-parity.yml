@@ -12,6 +12,17 @@
 # download` writes into `supabase/functions/<slug>/` — the very path
 # being compared. Diffing a directory against itself would pass
 # trivially, which is the one failure mode this check must not have.
+#
+# Each function is downloaded ALONE and moved into its own directory
+# before the next download. A bundle carries its own copy of the
+# `_shared/` files it imports, and `functions download` always writes
+# them to the same `supabase/functions/_shared/`: downloading every
+# function into one tree let each overwrite the last, so the single
+# `_shared/` comparison judged only the last function (a stale early
+# function could PASS; a stale last one failed everyone). Every function
+# is now compared on its own — its source and its bundled `_shared/` —
+# by supabase/verification/assert-edge-function-parity.py, which checks
+# itself (`--selftest`) before it is trusted.
 
 name: Edge function parity (read-only)
 
@@ -50,6 +61,7 @@ jobs:
             printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#"$RUNNER_TEMP/repo-functions/"}"
           done | tee "$OUT/repo-files.sha256"
           echo "repository files: $(wc -l < "$OUT/repo-files.sha256")"
+          python3 -I supabase/verification/assert-edge-function-parity.py --selftest
 
       - name: "Download the deployed source for every function"
         env:
@@ -57,54 +69,43 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
-          rm -rf supabase/functions
-          mkdir -p supabase/functions
+          DEPLOYED="$RUNNER_TEMP/deployed"
+          mkdir -p "$DEPLOYED"
           for s in $SLUGS; do
             echo "── $s"
+            # a clean, empty target for THIS function only
+            rm -rf supabase/functions
+            mkdir -p supabase/functions
             if ! npm run --silent supabase -- functions download "$s" \
                  --project-ref "$PROJECT_REF" --use-api > "$OUT/download-$s.log" 2>&1; then
               echo "::error::download failed for $s"
               sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g' "$OUT/download-$s.log"
               exit 1
             fi
-          done
-          find supabase/functions -type f | sort | while read -r f; do
-            printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#supabase/functions/}"
+            # moved aside before the next download can write to the same _shared/
+            mv supabase/functions "$DEPLOYED/$s"
+            find "$DEPLOYED/$s" -type f | sort | while read -r f; do
+              printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$s:${f#"$DEPLOYED/$s/"}"
+            done
           done | tee "$OUT/deployed-files.sha256"
+          mkdir -p supabase/functions
 
-      - name: "Compare, file by file"
+      - name: "Compare each function on its own: source and bundled _shared"
         run: |
           set -euo pipefail
-          bad=0
-          : > "$OUT/parity.tsv"
-          for s in $SLUGS; do
-            a="$RUNNER_TEMP/repo-functions/$s"
-            b="supabase/functions/$s"
-            if [ ! -d "$b" ]; then printf '%s\tMISSING_DEPLOYED\n' "$s" >> "$OUT/parity.tsv"; bad=1; continue; fi
-            if [ ! -d "$a" ]; then printf '%s\tMISSING_IN_REPO\n' "$s" >> "$OUT/parity.tsv"; bad=1; continue; fi
-            if diff -ru "$a" "$b" > "$OUT/diff-$s.txt" 2>&1; then
-              printf '%s\tIDENTICAL\n' "$s" >> "$OUT/parity.tsv"; rm -f "$OUT/diff-$s.txt"
-            else
-              printf '%s\tDRIFT\n' "$s" >> "$OUT/parity.tsv"; bad=1
-              echo "::error::drift in $s"; head -60 "$OUT/diff-$s.txt"
-            fi
-          done
-          # `_shared/` تُرفع مع كلّ دالّة، فتنزل نسخةٌ منها تحت كلّ
-          # واحدة. تُقارَن كلُّ نسخةٍ بالأصل في المستودع.
-          if [ -d "supabase/functions/_shared" ]; then
-            if diff -ru "$RUNNER_TEMP/repo-functions/_shared" "supabase/functions/_shared" > "$OUT/diff-_shared.txt" 2>&1; then
-              printf '_shared\tIDENTICAL\n' >> "$OUT/parity.tsv"; rm -f "$OUT/diff-_shared.txt"
-            else
-              printf '_shared\tDRIFT\n' >> "$OUT/parity.tsv"; bad=1
-              echo "::error::drift in _shared"; head -60 "$OUT/diff-_shared.txt"
-            fi
+          # Per function, the files its bundle should hold are exactly the
+          # repository files reachable from <slug>/index.ts through relative
+          # imports. Missing, extra and modified files are named, separately
+          # for the function source and for its own _shared/ copy.
+          if python3 -I supabase/verification/assert-edge-function-parity.py \
+               "$RUNNER_TEMP/repo-functions" "$RUNNER_TEMP/deployed" $SLUGS > "$OUT/parity.txt"; then
+            cat "$OUT/parity.txt"; echo PASS > "$OUT/verdict.txt"
+            echo "Every deployed function — source and bundled _shared — matches the repository, byte for byte."
+          else
+            cat "$OUT/parity.txt"; echo FAIL > "$OUT/verdict.txt"
+            grep -E '^\S+ \[(function|shared)\] ' "$OUT/parity.txt" | while read -r l; do echo "::error::$l"; done
+            echo "::error::parity FAILED"; exit 1
           fi
-          echo "--- parity ---"; cat "$OUT/parity.tsv"
-          diff -u "$OUT/repo-files.sha256" "$OUT/deployed-files.sha256" > "$OUT/fileset.diff" || {
-            echo "::warning::the deployed file set is not identical to the repository file set (see fileset.diff)"; }
-          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; echo "::error::parity FAILED"; exit 1; fi
-          echo PASS > "$OUT/verdict.txt"
-          echo "Every deployed function matches the repository source, byte for byte."
 
       - name: "Scan evidence for secret-like material"
         if: always()
