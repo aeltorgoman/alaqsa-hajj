@@ -4,8 +4,10 @@
    التهيئةُ (`push_prepare_announcement`) ثم `runDelivery` من
    send-pilgrim-push/delivery.ts بلا تعديل — الحجزُ بمهلةٍ والنتيجةُ لصاحب
    الحجز والمحاولاتُ الثلاث كلُّها هناك وفي القاعدة. وما يختلف عن
-   send-pilgrim-push شيءٌ واحد: `topic: ann-<id>` في خيارات الدفع، فخدمةُ
-   الدفع تستبدل نسخةً لم تُسلَّم بعدُ بالأحدث بدل أن تكدّسهما.
+   send-pilgrim-push في خيارات الدفع وحدها:
+     · `topic: ann-<id>`: خدمةُ الدفع تستبدل نسخةً لم تُسلَّم بعدُ بالأحدث.
+     · `TTL` لا يتجاوز ما بقي من عمر التنبيه (`expires_at`): جهازٌ غيرُ متّصل
+       لا يتلقّاه بعد أن اختفى من البوابة.
 
    ⚠️ «مرّةً على الأقلّ» كما في M6، لا «مرّةً بالضبط».
 
@@ -19,6 +21,7 @@ export type Announcement = {
   title: string | null;
   body: string;
   priority: string;
+  expires_at: string | null;
 };
 
 export type SendOptions = {
@@ -62,9 +65,19 @@ export function topicFor(id: number): string {
   return `ann-${id}`;
 }
 
-export function buildSendOptions(ann: Announcement): SendOptions {
+/* مدّةُ احتفاظ خدمة الدفع بتنبيهٍ لجهازٍ غير متّصل: يومٌ، ولا تتجاوز ما بقي من عمر التنبيه —
+   فجهازٌ يتّصل بعد انتهائه لا يتلقّى تنبيهاً اختفى من البوابة. (`expires_at` NULL = بلا انتهاء.) */
+export const MAX_TTL_SECONDS = 86400;
+export function ttlFor(ann: Announcement, nowMs: number): number {
+  if (!ann.expires_at) return MAX_TTL_SECONDS;
+  const end = Date.parse(ann.expires_at);
+  if (!Number.isFinite(end)) return 0;
+  return Math.max(0, Math.min(MAX_TTL_SECONDS, Math.floor((end - nowMs) / 1000)));
+}
+
+export function buildSendOptions(ann: Announcement, nowMs: number): SendOptions {
   return {
-    TTL: 86400,
+    TTL: ttlFor(ann, nowMs),
     urgency: ann.priority === "عاجل" ? "high" : "normal",
     timeout: SEND_TIMEOUT_MS,
     topic: topicFor(ann.id),
@@ -82,7 +95,6 @@ export async function deliverAnnouncement(id: number, budgetMs: number, deps: De
   if (!ann) return { status: "ineligible", reason: "not_found" };
 
   const payload = buildPayload(ann);
-  const options = buildSendOptions(ann);
   const summary = () => deps.rpc<Summary>("push_delivery_summary", { p_announcement_id: id });
 
   const run = await runDelivery({
@@ -90,7 +102,8 @@ export async function deliverAnnouncement(id: number, budgetMs: number, deps: De
       deps.rpc<Claimed[]>("push_claim_targets", {
         p_announcement_id: id, p_worker: deps.worker, p_limit: limit, p_lease_seconds: leaseSeconds,
       }).then((rows) => rows ?? []),
-    send: (t) => deps.send(t, payload, options),
+    /* المدّةُ تُحسب عند كلّ إرسال: محاولةٌ مُعادةٌ قربَ الانتهاء تأخذ ما بقي فعلاً */
+    send: (t) => deps.send(t, payload, buildSendOptions(ann, deps.now())),
     complete: (t, r) =>
       deps.rpc<string>("push_complete_target", {
         p_target_id: t.target_id, p_worker: deps.worker, p_attempt: t.attempt,

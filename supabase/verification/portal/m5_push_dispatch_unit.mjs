@@ -179,18 +179,26 @@ console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
 }
 
 console.log("═══ الحمولةُ وtopic ═══");
-const ann = { id: 4242, title: null, body: "نصّ", priority: "عاجل" };
+const ann = { id: 4242, title: null, body: "نصّ", priority: "عاجل", expires_at: null };
+const T0 = Date.parse("2026-10-20T12:00:00Z");
 check("payload is the one send-pilgrim-push sends",
   D.buildPayload(ann) === JSON.stringify({ id: 4242, title: "حملة الأقصى", body: "نصّ", priority: "عاجل", url: "/hajj/alerts" }));
 const spp = fs.readFileSync(path.join(here, "../../functions/send-pilgrim-push/index.ts"), "utf8");
 check("send-pilgrim-push builds the same payload fields and options",
   spp.includes('title: ann.title || "حملة الأقصى"') && spp.includes('url: "/hajj/alerts"')
   && spp.includes("TTL: 86400") && spp.includes('ann.priority === "عاجل" ? "high" : "normal"') && spp.includes("SEND_TIMEOUT_MS = 3000"));
-const o = D.buildSendOptions(ann);
+const o = D.buildSendOptions(ann, T0);
 check("options: TTL 86400 · urgency high for عاجل · timeout 3000 · topic ann-<id>",
-  o.TTL === 86400 && o.urgency === "high" && o.timeout === 3000 && o.topic === "ann-4242" && D.buildSendOptions({ ...ann, priority: "عام" }).urgency === "normal");
+  o.TTL === 86400 && o.urgency === "high" && o.timeout === 3000 && o.topic === "ann-4242" && D.buildSendOptions({ ...ann, priority: "عام" }, T0).urgency === "normal");
 check("topic within RFC 8030: ≤ 32 URL-safe base64 characters, even for the largest id",
   [1, 4242, Number.MAX_SAFE_INTEGER].every((n) => /^[A-Za-z0-9_-]{1,32}$/.test(D.topicFor(n))));
+const at = (ms) => new Date(T0 + ms).toISOString();
+check("TTL: no expiry → 24 h", D.ttlFor({ ...ann, expires_at: null }, T0) === 86400);
+check("TTL: expiry in 2 days → still capped at 24 h", D.ttlFor({ ...ann, expires_at: at(2 * 86400e3) }, T0) === 86400);
+check("TTL: expiry in 1 h → 3600 s (a device offline past expiry never receives it)",
+  D.ttlFor({ ...ann, expires_at: at(3600e3) }, T0) === 3600 && D.buildSendOptions({ ...ann, expires_at: at(3600e3) }, T0).TTL === 3600);
+check("TTL: rounds down, never past expiry", D.ttlFor({ ...ann, expires_at: at(1999) }, T0) === 1);
+check("TTL: already expired, or an unparseable expiry → 0", D.ttlFor({ ...ann, expires_at: at(-5000) }, T0) === 0 && D.ttlFor({ ...ann, expires_at: "not a date" }, T0) === 0);
 let threw = 0;
 for (const bad of [0, -1, 1.5, NaN, Number.MAX_SAFE_INTEGER + 2]) { try { D.topicFor(bad); } catch { threw++; } }
 check("invalid ids never produce a topic", threw === 5);
@@ -200,7 +208,7 @@ if (process.env.WEB_PUSH_MODULE) {
   const v = webpush.generateVAPIDKeys();
   const ok = [1, 4242, Number.MAX_SAFE_INTEGER].every((n) => {
     const d = webpush.generateRequestDetails({ endpoint: "https://push.example/x", keys: { p256dh: "", auth: "" } }, null,
-      { ...D.buildSendOptions({ ...ann, id: n }), vapidDetails: { subject: "mailto:test@example.invalid", publicKey: v.publicKey, privateKey: v.privateKey } });
+      { ...D.buildSendOptions({ ...ann, id: n }, T0), vapidDetails: { subject: "mailto:test@example.invalid", publicKey: v.publicKey, privateKey: v.privateKey } });
     return d.headers.Topic === `ann-${n}` && d.headers.Urgency === "high" && d.headers.TTL === 86400;
   });
   check("web-push@3.6.7 accepts the options and sends header Topic: ann-<id>", ok);
@@ -223,10 +231,10 @@ function fakeDeliver(prep, claims) {
         if (fn === "push_delivery_summary") return { total: 1, sent: 1, failed: 0, expired: 0, disabled: 0, pending: 0, complete: true, next_attempt_in_ms: null };
         throw new Error(fn);
       },
-      readAnnouncement: async (id) => ({ id, title: "t", body: "b", priority: "عام" }),
-      send: async (t, payload, options) => { log.push(`send:${t.target_id}:${options.topic}:${JSON.parse(payload).id}`); },
+      readAnnouncement: async (id) => ({ id, title: "t", body: "b", priority: "عام", expires_at: new Date(Date.now() + 600e3).toISOString() }),
+      send: async (t, payload, options) => { log.push(`send:${t.target_id}:${options.topic}:${JSON.parse(payload).id}`); log.push(`ttl:${options.TTL}`); },
       worker: "00000000-0000-4000-8000-000000000001",
-      now: () => 0,
+      now: () => Date.now(),
       sleep: async () => {},
     },
   };
@@ -242,6 +250,8 @@ for (const reason of ["not_due", "expired", "wrong_season", "not_found"]) {
   const out = await D.deliverAnnouncement(77, 10000, f.deps);
   check("eligible → M6 loop: prepare, claim, send with topic ann-77, complete, summary",
     out.status === "delivered" && out.claimed === 1 && f.log.includes("send:1:ann-77:77") && f.log.includes("push_complete_target"), f.log.join());
+  const ttl = Number((f.log.find((x) => x.startsWith("ttl:")) ?? "ttl:-1").slice(4));
+  check("the real send uses the announcement's remaining lifetime as TTL (10 min → ≤ 600 s)", ttl > 590 && ttl <= 600, String(ttl));
 }
 {
   const f = fakeDeliver({ eligible: true, prepared: false }, [[{ target_id: 5, attempt: 2, endpoint: "e", p256dh: "k", auth: "a" }]]);

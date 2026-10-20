@@ -67,9 +67,9 @@ jobs:
       SLUG: push-dispatch
       # "<path under supabase/functions>:<sha256>" — the exact bundle
       PINS: >-
-        push-dispatch/index.ts:9ed0d85244a936521724caf36572a0053a0e4c26b80214c2ce265aeffc702890
+        push-dispatch/index.ts:27583f962f0e778e0225aa5844cbc5749d34763c9b1851fe1b2cd5b31f7188ab
         push-dispatch/handler.ts:932f50c03e4fcfeba7f616f6145cbcc6c50012b5542fae0f4566f695aa161ca5
-        push-dispatch/deliver.ts:a21903bbfe25c1f6c122cb5c4de3d956f240e5370c373ac76c25f87b4d2895d5
+        push-dispatch/deliver.ts:3966e6874d6424fc735a87d6493c29e732bfb746f787bba908f5bc73ee98bcbf
         send-pilgrim-push/delivery.ts:b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf
       # send-pilgrim-push is not deployed here; its entry point must be the reviewed one
       SPP_INDEX_SHA256: "103b940b2744aa674527bdd134047098532933a20576155cfd6fd8b81942bcf8"

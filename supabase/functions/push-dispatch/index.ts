@@ -48,7 +48,7 @@ Deno.serve((req: Request) => {
         rpc,
         readAnnouncement: async (annId) => {
           const { data, error } = await db()
-            .from("announcements").select("id, title, body, priority").eq("id", annId).maybeSingle();
+            .from("announcements").select("id, title, body, priority, expires_at").eq("id", annId).maybeSingle();
           if (error) throw new Error("announcements: read");
           return (data as Announcement | null) ?? null;
         },

@@ -126,7 +126,7 @@ function deps(push, over = {}) {
     end: (r, res) => counted("push_dispatch_end", { p_run_id: r, p_result: res }).then(() => {}),
     deliver: (id, budget) => deliverAnnouncement(id, budget, {
       rpc: counted,
-      readAnnouncement: async (annId) => JSON.parse(await svc(`select to_jsonb(x) from (select id, title, body, priority from public.announcements where id = ${annId}) x`) || "null"),
+      readAnnouncement: async (annId) => JSON.parse(await svc(`select to_jsonb(x) from (select id, title, body, priority, expires_at from public.announcements where id = ${annId}) x`) || "null"),
       send: push.send,
       worker: crypto.randomUUID(),
       now: () => Date.now(),
@@ -194,9 +194,18 @@ try {
   check("5 hours late and still active → delivered automatically once",
     rl.tick === "dispatched" && rl.body.delivered === 1 && pl.sends.length === 3 && pl.sends.every((x) => x.options.topic === "ann-4848"),
     JSON.stringify(rl.body));
+  check("no expiry → TTL 24 h", pl.sends.every((x) => x.options.TTL === 86400));
   check("5 hours late but expired → never prepared, never sent",
     sqlSync("select count(*) from public.announcement_push_targets where announcement_id = 4849") === "0" && pl.sends.every((x) => x.options.topic !== "ann-4849"));
   check("after recovery nothing is left due → idle", tick() === "idle");
+
+  console.log("═══ TTL لا يتجاوز عمرَ التنبيه ═══");
+  devices("ttl"); announcement(4850, "now() - interval '1 minute'", "now() + interval '20 minutes'");
+  const pt = pushService({ flakyFails: 0 });
+  const rt = await scheduled(pt);
+  check("expires in 20 min → every send's TTL ≤ 1200 s (not 24 h)",
+    rt.tick === "dispatched" && pt.sends.length === 3 && pt.sends.every((x) => x.options.TTL > 1100 && x.options.TTL <= 1200),
+    JSON.stringify(pt.sends.map((x) => x.options.TTL)));
 
   console.log("═══ M6: عاملٌ سقط يستردّه التيكُ التالي ═══");
   devices("s2"); announcement(4844);
