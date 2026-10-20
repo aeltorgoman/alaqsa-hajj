@@ -15,7 +15,10 @@
    الحارس عبر _shared/authorize.ts وحدها، وصلاحية manage_portal هي
    نفسها التي تحرس صفحة بوابة الحاج في NAV.
 
-   ما دون ذلك من الملف منقول كما كان بلا تغيير.
+   M6: التسليمُ حجزٌ بمهلةٍ لكلِّ جهاز (announcement_push_targets) — لا
+   تكرارَ بين عاملين، واستئنافٌ بعد سقوط، وإعادةٌ للعابر وحده. انظر
+   delivery.ts وترحيلة 20261019135129. الحارسُ والحدُّ الكمّيّ وCORS
+   وشكلُ الطلب والردّ كما كانت (و`pending` حقلٌ مضاف).
    ══════════════════════════════════════════════════════════════ */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -23,8 +26,15 @@ import webpush from "https://esm.sh/web-push@3.6.7";
 import { authorize } from "../_shared/authorize.ts";
 import { cors } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
+import { classify, runDelivery, type Claimed, type Summary } from "./delivery.ts";
 
 const REQUIRED_PERMISSION = "manage_portal";
+
+const INELIGIBLE: Record<string, string> = {
+  not_due: "لم يحن موعد ظهور هذا التنبيه بعد، فلا يُرسَل إلى الأجهزة.",
+  expired: "انتهت مدة هذا التنبيه، فلا يُرسَل إلى الأجهزة.",
+  wrong_season: "هذا التنبيه لا يتبع الموسم المفتوح، فلا يُرسَل إلى الأجهزة.",
+};
 
 type Subscription = {
   id: number;
@@ -43,6 +53,12 @@ Deno.serve(async (req: Request) => {
     });
 
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+
+  /* تنبيهٌ لا يُرسَل الآن: لا جهازَ يُمسّ */
+  const ineligible = (reason: string) =>
+    reason === "not_found"
+      ? json({ error: "التنبيه غير موجود." }, 404)
+      : json({ error: INELIGIBLE[reason] ?? "لا يمكن إرسال هذا التنبيه الآن." }, 409);
 
   /* الهوية والصلاحية قبل قراءة الجسم وقبل أي إرسال إلى جهاز */
   const auth = await authorize(req, REQUIRED_PERMISSION);
@@ -82,7 +98,24 @@ Deno.serve(async (req: Request) => {
       { auth: { persistSession: false } }
     );
 
-    /* ─── (١) قراءة التنبيه ─── */
+    /* ─── (١) الاستحقاق (M6): الموسمُ المفتوح، وحان موعدُه، ولم ينتهِ ───
+       التحقّق في القاعدة لا هنا، فلا يُرسَل مجدوَلٌ لم يحن ولا منتهٍ ولا من موسمٍ آخر
+       أيّاً كان المستدعي. والتجريبيُّ (test_endpoint) يُفحص بالقاعدة نفسها ولا يُسجَّل. */
+    if (testEndpoint) {
+      const { data: reason, error: rErr } = await admin.rpc("push_announcement_ineligible_reason", {
+        p_announcement_id: announcementId,
+      });
+      if (rErr) return json({ error: "تعذّر التحقق من التنبيه." }, 500);
+      if (reason) return ineligible(reason as string);
+    } else {
+      const { data: prep, error: prepErr } = await admin.rpc("push_prepare_announcement", {
+        p_announcement_id: announcementId,
+      });
+      if (prepErr || !prep) return json({ error: "تعذّر تجهيز التنبيه للإرسال." }, 500);
+      if (!(prep as { eligible: boolean }).eligible) return ineligible((prep as { reason: string }).reason);
+    }
+
+    /* ─── (٢) قراءة التنبيه ─── */
     const { data: ann, error: annErr } = await admin
       .from("announcements")
       .select("id, title, body, priority, target_type, target_ids")
@@ -91,40 +124,6 @@ Deno.serve(async (req: Request) => {
 
     if (annErr || !ann) return json({ error: "التنبيه غير موجود." }, 404);
 
-    /* ─── (٢) تحديد جمهور التنبيه ─── */
-    const { data: audience, error: audErr } = await admin.rpc("announcement_audience", {
-      p_target_type: ann.target_type ?? "all",
-      p_target_ids: ann.target_ids ?? [],
-    });
-
-    if (audErr) return json({ error: "تعذّر تحديد المستهدفين." }, 500);
-
-    const passengerIds: number[] = (audience ?? []).map(
-      (r: { passenger_id: number }) => r.passenger_id
-    );
-
-    if (passengerIds.length === 0) {
-      return json({ total: 0, sent: 0, failed: 0, expired: 0, disabled: 0 });
-    }
-
-    /* ─── (٣) جلب أجهزة هؤلاء الحجاج ─── */
-    let query = admin
-      .from("pilgrim_push_subscriptions")
-      .select("id, passenger_id, endpoint, p256dh, auth")
-      .in("passenger_id", passengerIds);
-
-    if (testEndpoint) query = query.eq("endpoint", testEndpoint);
-
-    const { data: subsData, error: subsErr } = await query;
-    if (subsErr) return json({ error: "تعذّر قراءة أجهزة الحجاج." }, 500);
-
-    const subs: Subscription[] = subsData ?? [];
-
-    /* ─── (٤) الحجاج غير المفعّلين ─── */
-    const enabledIds = new Set(subs.map((s) => s.passenger_id));
-    const disabledIds = passengerIds.filter((id) => !enabledIds.has(id));
-
-    /* ─── (٥) الإرسال ─── */
     const payload = JSON.stringify({
       id: ann.id,
       title: ann.title || "حملة الأقصى",
@@ -136,104 +135,114 @@ Deno.serve(async (req: Request) => {
       url: "/hajj/alerts",
     });
 
-    const results = new Map<number, { status: string; error: string | null }>();
-    const deadEndpoints: string[] = [];
-
     /* ⚠️ مهلةُ كلِّ نداء — بالمللي ثانية (`socket.setTimeout` في Node).
-       بلا هذه المهلة لا سقفَ لنداءٍ واحد: نقطةُ نهايةٍ تقبل الوصلةَ ولا
-       تردّ تُجمّد دفعتَها بلا حدّ، فتستهلك الـ١٥٠ ثانيةً كلَّها ويُقتل
-       الاستدعاء — **فلا يُكتب أيُّ سجلِّ تسليم ولا `push_sent_at`** وقد
-       وصلت مئاتُ التنبيهات فعلاً. فالسجلُّ يقول «لم يُرسَل» والحاجُّ
-       استلم، وإعادةُ الإرسال تُكرّر عليه. والمهلةُ تُحوّل ذلك إلى فشلٍ
-       محدودٍ مُصنَّفٍ يبقى معه الحسابُ كاملاً.
-
-       ولمَ ٣٠٠٠ بالضبط: أسوأُ حالةٍ أن تنتهي مهلةُ أبطأِ نداءٍ في كلِّ
-       دفعة، أي ٢٥ × ٣ث + ~٥ث (بدءٌ بارد وقراءاتٌ قبل الحلقة وتثبيتٌ
-       بعدها) ≈ ٨٠ث — نحوَ نصفِ السقف، فالهامشُ ~٧٠ث. و٥ آلافٍ تبلغ
-       ١٣٠ث فلا هامشَ فيها، و٣ آلافٍ تبقى أضعافَ زمنِ خدمات الدفع
-       الواقعيّ (١٠٠–٥٠٠ مللي) فلا تُجهض تسليماً ناجحاً — وهذا مهمّ
-       لأنّه لا إعادةَ محاولةَ هنا.
-
-       والتصنيفُ لا يتغيّر: المهلةُ تُنتج `Error("Socket timeout")` بلا
-       `statusCode`، فتقع في فرع `failed` أدناه. و٤٠٤/٤١٠ تأتي
-       `WebPushError` بـ`statusCode` من مسار الاستجابة، فلا تتأثّر. */
+       بلا مهلةٍ لا سقفَ لنداءٍ واحد: نقطةُ نهايةٍ تقبل الوصلةَ ولا تردّ تُجمّد
+       دفعتَها حتى يُقتل الاستدعاء. ومع M6 صار لها شأنٌ ثانٍ: دفعةٌ تتجاوز مهلةَ
+       حجزها (`LEASE_SECONDS` = ٦٠ث) يُعاد حجزُ أجهزتها فتُرسَل مرّتين، و٣ث
+       للنداء تُبقي الدفعةَ كلَّها بضعَ ثوانٍ. وهي أضعافُ زمنِ خدمات الدفع
+       الواقعيّ (١٠٠–٥٠٠ مللي) فلا تُجهض تسليماً ناجحاً. والمهلةُ تُنتج
+       `Error("Socket timeout")` بلا `statusCode` فتُصنَّف عابرةً وتُعاد. */
     const SEND_TIMEOUT_MS = 3000;
+    const sendOptions = {
+      TTL: 86400,
+      urgency: (ann.priority === "عاجل" ? "high" : "normal") as "high" | "normal",
+      timeout: SEND_TIMEOUT_MS,
+    };
 
-    /* دفعات من عشرين جهازاً لتفادي إرهاق الدالة */
-    for (let i = 0; i < subs.length; i += 20) {
-      const batch = subs.slice(i, i + 20);
-      await Promise.all(
-        batch.map(async (s) => {
-          try {
-            await webpush.sendNotification(
-              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-              payload,
-              { TTL: 86400, urgency: ann.priority === "عاجل" ? "high" : "normal", timeout: SEND_TIMEOUT_MS }
-            );
-            /* نجاح جهاز واحد يكفي لاعتبار الحاج قد استلم */
-            results.set(s.passenger_id, { status: "sent", error: null });
-          } catch (err) {
-            const code = (err as { statusCode?: number }).statusCode ?? 0;
-            const message = (err as Error).message ?? "خطأ غير معروف";
+    /* ─── (٣ب) المسار التجريبيّ: جهازٌ واحدٌ بعنوانه، بلا سجلّ — كما كان ─── */
+    if (testEndpoint) {
+      const { data: audience, error: audErr } = await admin.rpc("announcement_audience", {
+        p_target_type: ann.target_type ?? "all",
+        p_target_ids: ann.target_ids ?? [],
+      });
+      if (audErr) return json({ error: "تعذّر تحديد المستهدفين." }, 500);
+      const passengerIds: number[] = (audience ?? []).map((r: { passenger_id: number }) => r.passenger_id);
+      if (passengerIds.length === 0) return json({ total: 0, sent: 0, failed: 0, expired: 0, disabled: 0 });
 
-            /* 404 و 410 تعني أن الجهاز لم يعد مشتركاً */
-            if (code === 404 || code === 410) {
-              deadEndpoints.push(s.endpoint);
-              if (results.get(s.passenger_id)?.status !== "sent") {
-                results.set(s.passenger_id, { status: "expired", error: message });
-              }
-            } else if (results.get(s.passenger_id)?.status !== "sent") {
-              results.set(s.passenger_id, { status: "failed", error: message.slice(0, 300) });
-            }
+      const { data: subsData, error: subsErr } = await admin
+        .from("pilgrim_push_subscriptions")
+        .select("id, passenger_id, endpoint, p256dh, auth")
+        .in("passenger_id", passengerIds)
+        .eq("endpoint", testEndpoint);
+      if (subsErr) return json({ error: "تعذّر قراءة أجهزة الحجاج." }, 500);
+
+      const subs: Subscription[] = subsData ?? [];
+      const results = new Map<number, string>();
+      for (const s of subs) {
+        try {
+          await webpush.sendNotification(
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, sendOptions,
+          );
+          results.set(s.passenger_id, "sent");
+        } catch (err) {
+          const r = classify(err);
+          if (r.outcome === "gone") {
+            await admin.from("pilgrim_push_subscriptions").delete().eq("id", s.id);
           }
-        })
-      );
-    }
-
-    /* ─── (٦) حذف الاشتراكات المنتهية ─── */
-    if (deadEndpoints.length > 0) {
-      await admin.from("pilgrim_push_subscriptions").delete().in("endpoint", deadEndpoints);
-    }
-
-    /* ─── (٧) تسجيل نتيجة كل حاج ─── */
-    if (!testEndpoint) {
-      const rows = [
-        ...Array.from(results.entries()).map(([passenger_id, r]) => ({
-          announcement_id: ann.id,
-          passenger_id,
-          status: r.status,
-          error: r.error,
-        })),
-        ...disabledIds.map((passenger_id) => ({
-          announcement_id: ann.id,
-          passenger_id,
-          status: "disabled",
-          error: null,
-        })),
-      ];
-
-      for (let i = 0; i < rows.length; i += 200) {
-        await admin
-          .from("notification_deliveries")
-          .upsert(rows.slice(i, i + 200), { onConflict: "announcement_id,passenger_id" });
+          if (results.get(s.passenger_id) !== "sent") {
+            results.set(s.passenger_id, r.outcome === "gone" ? "expired" : "failed");
+          }
+        }
       }
-
-      await admin
-        .from("announcements")
-        .update({ push_sent_at: new Date().toISOString() })
-        .eq("id", ann.id);
+      const enabled = new Set(subs.map((s) => s.passenger_id));
+      const count = (status: string) => Array.from(results.values()).filter((v) => v === status).length;
+      return json({
+        total: passengerIds.length,
+        sent: count("sent"),
+        failed: count("failed"),
+        expired: count("expired"),
+        disabled: passengerIds.filter((id) => !enabled.has(id)).length,
+      });
     }
 
-    /* ─── (٨) التقرير ─── */
-    const count = (status: string) =>
-      Array.from(results.values()).filter((r) => r.status === status).length;
+    /* ─── (٣) التسليم (M6): حجزٌ بمهلة، ثم إرسال، ثم نتيجةٌ لكلِّ جهاز ───
+       عاملان متزامنان (استدعاءٌ مكرَّر، أو يدويٌّ مع مجدوَل M5) لا يحجزان جهازاً
+       واحداً، وعاملٌ سقط تعود أجهزتُه بعد مهلتها. والعابرُ يُعاد حتى ثلاث محاولات. */
+    const worker = crypto.randomUUID();
+    const rpc = async <T>(fn: string, args: Record<string, unknown>): Promise<T> => {
+      const { data, error } = await admin.rpc(fn, args);
+      if (error) throw new Error(`${fn}: ${error.code ?? "rpc"}`);
+      return data as T;
+    };
+    const summary = () => rpc<Summary>("push_delivery_summary", { p_announcement_id: ann.id });
+
+    const run = await runDelivery({
+      claim: (limit, leaseSeconds) =>
+        rpc<Claimed[]>("push_claim_targets", {
+          p_announcement_id: ann.id, p_worker: worker, p_limit: limit, p_lease_seconds: leaseSeconds,
+        }).then((rows) => rows ?? []),
+      send: async (t) => {
+        await webpush.sendNotification(
+          { endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth } }, payload, sendOptions,
+        );
+      },
+      complete: (t, r) =>
+        rpc<string>("push_complete_target", {
+          p_target_id: t.target_id, p_worker: worker, p_attempt: t.attempt,
+          p_outcome: r.outcome, p_http_status: r.http, p_error_class: r.errorClass,
+        }),
+      summary,
+      now: () => Date.now(),
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
+
+    /* ─── (٤) التقرير: حالُ التنبيه كلِّه بالحجّاج، لا هذا الاستدعاء وحده ───
+       فاستدعاءٌ مكرَّرٌ بعد الاكتمال يردّ الأعدادَ نفسها ولا يرسل شيئاً.
+       و`pending` حجّاجٌ لم تكتمل أجهزتُهم بعد (محاولةٌ مؤجَّلة) — تُستأنف باستدعاءٍ لاحق. */
+    const s = await summary();
+    /* أعدادٌ وحدها: لا عنوانَ جهاز ولا هويّةَ حاجّ */
+    console.log("send-pilgrim-push", JSON.stringify({
+      announcement: ann.id, claimed: run.claimed, stale: run.stale,
+      sent: s.sent, failed: s.failed, expired: s.expired, pending: s.pending,
+    }));
 
     return json({
-      total: passengerIds.length,
-      sent: count("sent"),
-      failed: count("failed"),
-      expired: count("expired"),
-      disabled: disabledIds.length,
+      total: s.total,
+      sent: s.sent,
+      failed: s.failed,
+      expired: s.expired,
+      disabled: s.disabled,
+      pending: s.pending,
     });
   } catch (err) {
     /* س٩ — التفصيل إلى سجلّ الخادم، والمستدعي يأخذ رسالة عامة */

@@ -71,6 +71,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [audienceError, setAudienceError] = useState(false);
   const [enabledError, setEnabledError] = useState(false);
   const [reportFor, setReportFor] = useState<Announcement | null>(null);
+  /* M6 — تنبيهاتٌ بدأ تسليمُها ولم يكتمل (محاولةٌ مؤجَّلة أو استدعاءٌ انقطع) */
+  const [pendingPush, setPendingPush] = useState<Set<number>>(new Set());
+  const [resuming, setResuming] = useState<number | null>(null);
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [showAt, setShowAt] = useState(() => toLocalInput(new Date(Date.now() + 3600000)));
   const [duration, setDuration] = useState("24h");
@@ -96,6 +99,17 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       setItems(data as Announcement[]);
       setNowMs(Date.now());
       setItemsError(false);
+      /* M6 — `push_sent_at` يُختم عند اكتمال التسليم لا عند بدئه. فالقائمُ بلا
+         ختم وله حجّاجٌ «قيد الإرسال» تسليمُه معلَّق، ويُستأنف من هنا. والعدُّ
+         لتنبيهاتٍ قائمةٍ قليلة، لا لكلّ القائمة. */
+      const now = Date.now();
+      const open = (data as Announcement[]).filter(a =>
+        !a.push_sent_at && new Date(a.show_at).getTime() <= now && (!a.expires_at || new Date(a.expires_at).getTime() > now));
+      const counts = await Promise.all(open.map(a =>
+        supabase.from("notification_deliveries").select("id", { count: "exact", head: true })
+          .eq("announcement_id", a.id).eq("status", "pending")
+          .then(({ count, error: e }) => (!e && (count ?? 0) > 0 ? a.id : null))));
+      setPendingPush(new Set(counts.filter((id): id is number => id !== null)));
     }
     setItemsLoading(false);
   }, [activeSeason.id]);
@@ -226,23 +240,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       }
 
       /* التنبيه محفوظ الآن ولن يضيع، ودفعه إلى الأجهزة طبقة إضافية فوقه */
-      let pushNote = "";
-      if (when === "now") {
-        try {
-          const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
-            body: { announcement_id: created.id },
-          });
-          if (fnErr || (res as { error?: unknown })?.error) {
-            pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
-          } else {
-            const r = res as { sent: number; disabled: number };
-            pushNote = ` وصل إلى ${r.sent} من الأجهزة المفعّلة.`;
-            if (r.disabled > 0) pushNote += ` و${r.disabled} من الحجاج غير مفعّلين، وسيرونه عند فتح البوابة.`;
-          }
-        } catch {
-          pushNote = " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.";
-        }
-      }
+      const pushNote = when === "now" ? (await pushToDevices(created.id)).note : "";
 
       setSending(false);
       showAlert("success", (when === "now" ? "تم إرسال التنبيه." : "تمت جدولة التنبيه بنجاح.") + pushNote);
@@ -254,6 +252,38 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       showAlert("error", "تعذر إرسال التنبيه، يرجى المحاولة مرة أخرى.");
     } finally {
       setSending(false);
+    }
+  }
+
+  /* دفعُ تنبيهٍ إلى الأجهزة وملاحظتُه للموظّف. الدالةُ لا تعيد الإرسال إلى من
+     وصله، فاستدعاؤها ثانيةً يستأنف المعلَّق وحده (M6). */
+  async function pushToDevices(id: number): Promise<{ note: string; done: boolean }> {
+    const failed = { note: " تعذّر دفع التنبيه إلى الأجهزة، لكنه سيظهر للحجاج عند فتح البوابة.", done: false };
+    try {
+      const { data: res, error: fnErr } = await supabase.functions.invoke("send-pilgrim-push", {
+        body: { announcement_id: id },
+      });
+      if (fnErr || (res as { error?: unknown })?.error) return failed;
+      const r = res as { sent: number; disabled: number; pending?: number };
+      let note = ` وصل إلى ${r.sent} من الأجهزة المفعّلة.`;
+      if (r.disabled > 0) note += ` و${r.disabled} من الحجاج غير مفعّلين، وسيرونه عند فتح البوابة.`;
+      if ((r.pending ?? 0) > 0) note += ` ولم يكتمل الإرسال إلى ${r.pending} بعد؛ يمكن استكماله من قائمة التنبيهات.`;
+      return { note, done: (r.pending ?? 0) === 0 };
+    } catch {
+      return failed;
+    }
+  }
+
+  async function resumePush(a: Announcement) {
+    setResuming(a.id);
+    try {
+      /* لا يُعلَن الاكتمال إلا إن اكتمل: فشلُ الاستدعاء، أو أجهزةٌ ما زالت
+         محجوزةً لعاملٍ آخر أو تنتظر موعدها، يبقى تنبيهاً لا نجاحاً */
+      const { note, done } = await pushToDevices(a.id);
+      showAlert(done ? "success" : "warning", (done ? "تم استكمال إرسال التنبيه." : "لم يكتمل إرسال التنبيه بعد.") + note);
+    } finally {
+      setResuming(null);
+      load();
     }
   }
 
@@ -373,7 +403,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
           {kind !== "ended" && kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
           {kind !== "ended" && <button onClick={() => removeItem(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>}
-          {a.push_sent_at && <button onClick={() => setReportFor(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
+          {kind === "live" && pendingPush.has(a.id) && <button disabled={resuming !== null} onClick={() => resumePush(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>{resuming === a.id ? "جارٍ الاستكمال…" : "استكمال الإرسال"}</button>}
+          {(a.push_sent_at || pendingPush.has(a.id)) && <button onClick={() => setReportFor(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
         </div>
       </div>
     );
