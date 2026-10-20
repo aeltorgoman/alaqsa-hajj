@@ -172,7 +172,8 @@
     "edgeFeature": [
       "ANTHROPIC_API_KEY",
       "WHATSAPP_TOKEN",
-      "WHATSAPP_PHONE_ID"
+      "WHATSAPP_PHONE_ID",
+      "PUSH_DISPATCH_TOKEN"
     ],
     "_platformProvided_comment": "Injected by the Supabase platform at function runtime. Do not set by hand.",
     "platformProvided": [

@@ -1,0 +1,318 @@
+// ════════════════════════════════════════════════════════════
+// بوابة الحاجّ — M5: push-dispatch بلا قاعدةٍ ولا شبكة (handler.ts · deliver.ts)
+//
+//   node --experimental-strip-types supabase/verification/portal/m5_push_dispatch_unit.mjs
+//   WEB_PUSH_MODULE=/path/to/node_modules/web-push …   ← يُضيف فحصَ topic بمكتبة web-push@3.6.7 نفسها
+//
+//   المصادقة قبل كلّ شيء: غيابُ الرمز أو قِصرُه أو كونُه مفتاحَ API (sb_…/JWT) ← 503 · غيابُ الترويسة،
+//   أو رمزٌ آخر، أو بادئتُه، أو بزيادة، أو الرمزُ في apikey أو Authorization، أو مفتاحُ Supabase ← 401
+//   — ولا نداءَ لأيّ dep ولا رمزَ في ردٍّ ولا سجلّ · الجسم · probe لا يسلّم · dispatch بلا عقدٍ ← 409
+//   · الميزانية · فشلُ تنبيهٍ لا يوقف الباقي ولا يبقي العقد · الحمولة كما في send-pilgrim-push
+//   · topic ann-<id> صالحٌ لـweb-push · التسليمُ لا يرسل غيرَ المستحقّ
+// ════════════════════════════════════════════════════════════
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import path from "node:path";
+import fs from "node:fs";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const fnDir = path.join(here, "../../functions/push-dispatch");
+const H = await import(path.join(fnDir, "handler.ts"));
+const D = await import(path.join(fnDir, "deliver.ts"));
+
+let pass = 0, fail = 0;
+const check = (name, cond, detail = "") => {
+  if (cond) { pass++; console.log(`PASS — ${name}`); } else { fail++; console.log(`FAIL — ${name}${detail ? ` (${detail})` : ""}`); }
+};
+
+/* رمزٌ عشوائيّ لكلّ تشغيل (٢٥٦ بتّاً، base64url) — لا قيمةَ ثابتةً في المستودع */
+const rnd = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+const KEY = rnd();
+const OTHER = rnd();
+const HDR = H.TOKEN_HEADER;
+const SB = "sb_" + "secret_";
+const RUN = "4b0b6a7e-2f7e-4a43-9a51-6f2b0d1e9c11";
+
+/* deps تسجّل كلَّ نداء — المصادقةُ الفاشلة يجب ألّا تبلغ أيّاً منها */
+function spyDeps(over = {}) {
+  const calls = [];
+  const logs = [];
+  let t = 0;
+  const deps = {
+    tokenEnv: KEY,
+    configured: () => { calls.push("configured"); return true; },
+    dueIds: async (n) => { calls.push(`due:${n}`); return [11, 12]; },
+    begin: async (r) => { calls.push(`begin:${r}`); return true; },
+    end: async (r, res) => { calls.push(`end:${r}:${JSON.stringify(res)}`); },
+    deliver: async (id, budget) => { calls.push(`deliver:${id}:${budget}`); return { status: "delivered", claimed: 2, stale: 0, pending: 0, complete: true }; },
+    now: () => t,
+    log: (e, d) => logs.push(`${e} ${JSON.stringify(d)}`),
+    ...over,
+  };
+  return { deps, calls, logs, advance: (ms) => { t += ms; } };
+}
+const req = (body, headers = {}, method = "POST") =>
+  new Request("https://x.invalid/functions/v1/push-dispatch", {
+    method, headers: { "Content-Type": "application/json", ...headers },
+    body: method === "GET" ? undefined : (typeof body === "string" ? body : JSON.stringify(body)),
+  });
+const probe = { mode: "probe" };
+const dispatch = { mode: "dispatch", run_id: RUN };
+
+async function rejected(name, request, env, wantStatus) {
+  const s = spyDeps(env === undefined ? {} : { tokenEnv: env });
+  const res = await H.handle(request, s.deps);
+  const text = await res.text();
+  const leaked = [KEY, OTHER].some((k) => text.includes(k) || s.logs.some((l) => l.includes(k)));
+  check(`${name} → ${wantStatus}, no dependency reached, no key echoed`,
+    res.status === wantStatus && s.calls.length === 0 && !leaked,
+    `status ${res.status} calls ${JSON.stringify(s.calls)} leaked ${leaked}`);
+}
+
+console.log("═══ المصادقة: قبل أيّ عمل ═══");
+check("the credential header is x-push-dispatch-token", HDR === "x-push-dispatch-token");
+await rejected("GET", req(null, { [HDR]: KEY }, "GET"), undefined, 405);
+await rejected("PUSH_DISPATCH_TOKEN absent", req(probe, { [HDR]: KEY }), "", 503);
+await rejected("PUSH_DISPATCH_TOKEN too short (< 256 bits)", req(probe, { [HDR]: "abc" }), "a".repeat(42), 503);
+await rejected("PUSH_DISPATCH_TOKEN long but hand-typed (< 16 distinct characters)", req(probe, { [HDR]: "ab".repeat(30) }), "ab".repeat(30), 503);
+await rejected("PUSH_DISPATCH_TOKEN with characters outside base64url", req(probe, { [HDR]: KEY }), KEY.slice(0, 40) + "+/= x", 503);
+await rejected("PUSH_DISPATCH_TOKEN set to a Supabase secret key", req(probe, { [HDR]: SB + KEY }), SB + KEY, 503);
+await rejected("PUSH_DISPATCH_TOKEN set to a JWT-looking value", req(probe, { [HDR]: "eyJ" + KEY }), "eyJ" + KEY, 503);
+await rejected("no token header", req(probe), undefined, 401);
+await rejected("empty token header", req(probe, { [HDR]: "" }), undefined, 401);
+await rejected("wrong token", req(probe, { [HDR]: OTHER }), undefined, 401);
+await rejected("a prefix of the right token", req(probe, { [HDR]: KEY.slice(0, -1) }), undefined, 401);
+await rejected("the right token plus a suffix", req(probe, { [HDR]: KEY + "x" }), undefined, 401);
+await rejected("the right token on apikey only", req(probe, { apikey: KEY }), undefined, 401);
+await rejected("the right token on Authorization: Bearer only", req(probe, { Authorization: `Bearer ${KEY}` }), undefined, 401);
+await rejected("a Supabase secret key on apikey", req(probe, { apikey: SB + OTHER }), undefined, 401);
+await rejected("a service_role-style JWT on Authorization", req(probe, { Authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.sig" }), undefined, 401);
+await rejected("dispatch without a token", req(dispatch), undefined, 401);
+check("expectedToken accepts only a ≥ 256-bit base64url value that is not an API key",
+  H.expectedToken(KEY) === KEY && H.expectedToken(undefined) === null && H.expectedToken(SB + KEY) === null
+  && H.expectedToken("eyJ" + KEY) === null && H.expectedToken("a".repeat(42)) === null && H.expectedToken("a".repeat(129)) === null);
+check("sameKey: equal → true; any difference → false",
+  (await H.sameKey(KEY, KEY)) && !(await H.sameKey(KEY, OTHER)) && !(await H.sameKey("", KEY)));
+
+console.log("═══ الطلب بعد المصادقة ═══");
+for (const [name, body] of [["not JSON", "{"], ["unknown mode", { mode: "send" }], ["dispatch without run_id", { mode: "dispatch" }],
+  ["dispatch with a non-uuid run_id", { mode: "dispatch", run_id: "1; drop" }], ["body over 1 KiB", { mode: "probe", pad: "x".repeat(2000) }]]) {
+  const s = spyDeps();
+  const res = await H.handle(req(body, { [HDR]: KEY }), s.deps);
+  check(`${name} → 400, nothing called`, res.status === 400 && s.calls.length === 0, `${res.status} ${JSON.stringify(s.calls)}`);
+}
+
+{
+  const s = spyDeps();
+  const res = await H.handle(req(probe, { [HDR]: KEY }), s.deps);
+  const body = await res.json();
+  check("probe → 200 with a count only", res.status === 200 && body.mode === "probe" && body.due === 2 && Object.keys(body).length === 3, JSON.stringify(body));
+  check("probe never begins, delivers or ends a run", s.calls.length === 1 && s.calls[0] === "due:5", JSON.stringify(s.calls));
+}
+{
+  const s = spyDeps({ dueIds: async () => { throw new Error("push_due_announcements: 42501"); } });
+  const res = await H.handle(req(probe, { [HDR]: KEY }), s.deps);
+  const text = await res.text();
+  check("probe on a database error → 500 without detail", res.status === 500 && !text.includes("42501"), text);
+}
+{
+  const s = spyDeps({ begin: async (r) => { s.calls.push(`begin:${r}`); return false; } });
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  check("dispatch without a live lease → 409, nothing delivered, lease not touched",
+    res.status === 409 && !s.calls.some((c) => c.startsWith("deliver") || c.startsWith("end") || c.startsWith("due")), JSON.stringify(s.calls));
+}
+console.log("═══ رمزٌ مسرَّب: لا عقدَ ولا تجاوز ═══");
+{
+  /* حاملُ الرمز يعيد طلباً مشروعاً سبق قبوله: begin يقبل العقدَ مرّةً واحدة */
+  let used = false;
+  const s = spyDeps({ begin: async (r) => { s.calls.push(`begin:${r}`); const ok = !used; used = true; return ok; } });
+  const first = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  const n = s.calls.filter((c) => c.startsWith("deliver:")).length;
+  const replay = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  check("replayed dispatch (same run_id) with the right token → 409, nothing delivered a second time",
+    first.status === 200 && replay.status === 409 && s.calls.filter((c) => c.startsWith("deliver:")).length === n, JSON.stringify(s.calls));
+}
+{
+  /* حاملُ الرمز يختلق run_id: لا يصل إلى deliver ولا dueIds، ولا يملك ما ينشئ عقداً */
+  const s = spyDeps({ begin: async (r) => { s.calls.push(`begin:${r}`); return false; } });
+  const fabricated = { mode: "dispatch", run_id: crypto.randomUUID() };
+  const res = await H.handle(req(fabricated, { [HDR]: KEY }), s.deps);
+  check("token + fabricated run_id → 409; the handler has no path that writes a lease",
+    res.status === 409 && s.calls.length === 2 && s.calls[0] === "configured" && s.calls[1].startsWith("begin:"), JSON.stringify(s.calls));
+  const src = ["index.ts", "handler.ts", "deliver.ts"].map((f) => fs.readFileSync(path.join(fnDir, f), "utf8")).join("\n");
+  check("the only lease operations the function can call are begin and end (no tick, no lease write)",
+    !/["']push_dispatch_(tick|probe)["']|from\(["']push_dispatch_state["']\)/.test(src)
+    && /["']push_dispatch_begin["']/.test(src) && /["']push_dispatch_end["']/.test(src));
+}
+{
+  /* حاملُ الرمز بعقدٍ حيّ: لا يختار التنبيهات — ما يُسلَّم هو ما تعيده القاعدة مستحقّاً وحده */
+  const s = spyDeps({ dueIds: async (n) => { s.calls.push(`due:${n}`); return []; } });
+  const res = await H.handle(req({ ...dispatch, ids: [1, 2, 3], announcement_id: 9 }, { [HDR]: KEY }), s.deps);
+  const body = await res.json();
+  check("extra fields (ids / announcement_id) are ignored: nothing due → nothing delivered",
+    res.status === 200 && body.delivered === 0 && !s.calls.some((c) => c.startsWith("deliver:")), JSON.stringify(s.calls));
+}
+{
+  const s = spyDeps({ configured: () => false });
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  check("dispatch with VAPID/DB unconfigured → 503; releases its own lease; no begin, no delivery",
+    res.status === 503 && s.calls.length === 1 && s.calls[0].startsWith(`end:${RUN}:`), JSON.stringify(s.calls));
+}
+
+console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
+{
+  const s = spyDeps();
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  const body = await res.json();
+  const delivers = s.calls.filter((c) => c.startsWith("deliver:"));
+  check("dispatch → begin once, then every due id, then end once",
+    res.status === 200 && s.calls[1] === `begin:${RUN}` && delivers.length === 2
+    && s.calls.filter((c) => c.startsWith("end:")).length === 1 && s.calls.at(-1).startsWith(`end:${RUN}:`), JSON.stringify(s.calls));
+  check("per-announcement budget ≤ 85 s", delivers.every((c) => Number(c.split(":")[2]) <= 85000), JSON.stringify(delivers));
+  check("response and run record are counts only",
+    body.delivered === 2 && body.claimed === 4 && body.errors === 0 && !JSON.stringify(body).includes("sb_secret"), JSON.stringify(body));
+}
+{
+  const s = spyDeps({
+    dueIds: async () => [1, 2, 3, 4, 5],
+    deliver: async (id, budget) => { s.calls.push(`deliver:${id}:${budget}`); s.advance(budget); return { status: "delivered", claimed: 1, stale: 0, pending: 0, complete: true }; },
+  });
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  const body = await res.json();
+  const used = s.calls.filter((c) => c.startsWith("deliver:")).reduce((n, c) => n + Number(c.split(":")[2]), 0);
+  check("the whole run stays inside 100 s (less than the 150 s request and 180 s lease)",
+    used <= H.TOTAL_BUDGET_MS - H.RESERVE_MS, String(used));
+  check("ids that no longer fit are skipped, not started, and the lease is still released",
+    body.skipped >= 1 && body.delivered + body.skipped === 5 && s.calls.at(-1).startsWith(`end:${RUN}:`), JSON.stringify(body));
+}
+{
+  const s = spyDeps({
+    dueIds: async () => [1, 2, 3],
+    deliver: async (id) => { s.calls.push(`deliver:${id}`); if (id === 2) throw new Error("push_claim_targets: https://fcm.example/secret-endpoint"); return { status: id === 3 ? "ineligible" : "delivered", reason: "expired", claimed: 1, stale: 0, pending: 0, complete: true }; },
+  });
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  const text = await res.text();
+  const body = JSON.parse(text);
+  check("one failing announcement does not stop the others", body.delivered === 1 && body.errors === 1 && body.ineligible === 1, text);
+  check("the failure's message reaches neither the response nor the log",
+    !text.includes("fcm.example") && !s.logs.some((l) => l.includes("fcm.example")), text);
+  check("lease released after a failure", s.calls.at(-1).startsWith(`end:${RUN}:`));
+}
+{
+  const s = spyDeps({ end: async () => { throw new Error("end failed"); } });
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  check("an end() failure still answers 200 (the lease expires on its own)", res.status === 200);
+}
+{
+  const s = spyDeps({ dueIds: async () => { throw new Error("db down"); } });
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
+  const body = await res.json();
+  check("dueIds failure during dispatch → counted, lease released", body.errors === 1 && s.calls.at(-1).startsWith(`end:${RUN}:`), JSON.stringify(body));
+}
+
+console.log("═══ الحمولةُ وtopic ═══");
+const ann = { id: 4242, title: null, body: "نصّ", priority: "عاجل", expires_at: null };
+const T0 = Date.parse("2026-10-20T12:00:00Z");
+const keysOf = (j) => Object.keys(JSON.parse(j)).join(",");
+check("payload keeps send-pilgrim-push's format: id, title, body, priority, url — in that order",
+  keysOf(D.buildPayload(ann, "شركة س")) === "id,title,body,priority,url"
+  && D.buildPayload(ann, "شركة س") === JSON.stringify({ id: 4242, title: "شركة س", body: "نصّ", priority: "عاجل", url: "/hajj/alerts" }));
+check("untitled alert → the company name from company_config", JSON.parse(D.buildPayload(ann, "شركة س")).title === "شركة س");
+check("an announcement's own title always wins", JSON.parse(D.buildPayload({ ...ann, title: "عنوان" }, "شركة س")).title === "عنوان");
+check("no company name (null / blank / read failure) → the neutral app default, never a customer's name",
+  [null, "", "   "].every((n) => JSON.parse(D.buildPayload(ann, n)).title === D.NEUTRAL_TITLE) && D.NEUTRAL_TITLE === "نظام الحج");
+const pdSrc = ["index.ts", "handler.ts", "deliver.ts"].map((f) => fs.readFileSync(path.join(fnDir, f), "utf8")).join("\n");
+check("push-dispatch hardcodes no company name", !pdSrc.includes("حملة الأقصى") && !pdSrc.includes("الأقصى"));
+const spp = fs.readFileSync(path.join(here, "../../functions/send-pilgrim-push/index.ts"), "utf8");
+check("send-pilgrim-push (unchanged) builds the same payload keys and base options",
+  /id: ann\.id,\s*title: [^\n]+,\s*body: ann\.body,\s*priority: ann\.priority,/.test(spp) && spp.includes('url: "/hajj/alerts"')
+  && spp.includes("TTL: 86400") && spp.includes('ann.priority === "عاجل" ? "high" : "normal"') && spp.includes("SEND_TIMEOUT_MS = 3000"));
+const o = D.buildSendOptions(ann, T0);
+check("options: TTL 86400 · urgency high for عاجل · timeout 3000 · topic ann-<id>",
+  o.TTL === 86400 && o.urgency === "high" && o.timeout === 3000 && o.topic === "ann-4242" && D.buildSendOptions({ ...ann, priority: "عام" }, T0).urgency === "normal");
+check("topic within RFC 8030: ≤ 32 URL-safe base64 characters, even for the largest id",
+  [1, 4242, Number.MAX_SAFE_INTEGER].every((n) => /^[A-Za-z0-9_-]{1,32}$/.test(D.topicFor(n))));
+const at = (ms) => new Date(T0 + ms).toISOString();
+check("TTL: no expiry → 24 h", D.ttlFor({ ...ann, expires_at: null }, T0) === 86400);
+check("TTL: expiry in 2 days → still capped at 24 h", D.ttlFor({ ...ann, expires_at: at(2 * 86400e3) }, T0) === 86400);
+check("TTL: expiry in 1 h → 3600 s (a device offline past expiry never receives it)",
+  D.ttlFor({ ...ann, expires_at: at(3600e3) }, T0) === 3600 && D.buildSendOptions({ ...ann, expires_at: at(3600e3) }, T0).TTL === 3600);
+check("TTL: rounds down, never past expiry", D.ttlFor({ ...ann, expires_at: at(1999) }, T0) === 1);
+check("TTL: already expired, or an unparseable expiry → 0", D.ttlFor({ ...ann, expires_at: at(-5000) }, T0) === 0 && D.ttlFor({ ...ann, expires_at: "not a date" }, T0) === 0);
+let threw = 0;
+for (const bad of [0, -1, 1.5, NaN, Number.MAX_SAFE_INTEGER + 2]) { try { D.topicFor(bad); } catch { threw++; } }
+check("invalid ids never produce a topic", threw === 5);
+
+if (process.env.WEB_PUSH_MODULE) {
+  const webpush = createRequire(import.meta.url)(process.env.WEB_PUSH_MODULE);
+  const v = webpush.generateVAPIDKeys();
+  const ok = [1, 4242, Number.MAX_SAFE_INTEGER].every((n) => {
+    const d = webpush.generateRequestDetails({ endpoint: "https://push.example/x", keys: { p256dh: "", auth: "" } }, null,
+      { ...D.buildSendOptions({ ...ann, id: n }, T0), vapidDetails: { subject: "mailto:test@example.invalid", publicKey: v.publicKey, privateKey: v.privateKey } });
+    return d.headers.Topic === `ann-${n}` && d.headers.Urgency === "high" && d.headers.TTL === 86400;
+  });
+  check("web-push@3.6.7 accepts the options and sends header Topic: ann-<id>", ok);
+} else {
+  console.log("SKIP — WEB_PUSH_MODULE not set (web-push topic acceptance)");
+}
+
+console.log("═══ الإرسالُ اليدويّ (PortalPage) ═══");
+{
+  const ui = fs.readFileSync(path.join(here, "../../../src/components/PortalPage.tsx"), "utf8");
+  /* send-pilgrim-push (لا يُمسّ في M5) يضع لغير المعنوَن عنواناً ثابتاً؛ فالزرُّ الجديد للمعنوَن وحده */
+  check("manual send is offered only for announcements with their own title",
+    /const manualSendable = \(a: Announcement\) => !!a\.title\?\.trim\(\);/.test(ui)
+    && /async function sendUnsent\(a: Announcement\) \{\s*if \(!manualSendable\(a\)\) return;/.test(ui)
+    && /\(manualSendable\(a\)\s*\?\s*<button[^>]*onClick=\{\(\) => sendUnsent\(a\)\}/.test(ui));
+  check("the only call path from that button is send-pilgrim-push (no new privileged route)",
+    (ui.match(/functions\.invoke\(/g) ?? []).length === 1 && ui.includes('functions.invoke("send-pilgrim-push"'));
+  check("no company name hardcoded in PortalPage", !ui.includes("حملة الأقصى"));
+}
+
+console.log("═══ deliverAnnouncement ═══");
+function fakeDeliver(prep, claims) {
+  const log = [];
+  let batches = [...claims];
+  return {
+    log,
+    deps: {
+      rpc: async (fn, args) => {
+        log.push(fn);
+        if (fn === "push_prepare_announcement") return prep;
+        if (fn === "push_claim_targets") return batches.shift() ?? [];
+        if (fn === "push_complete_target") return "sent";
+        if (fn === "push_delivery_summary") return { total: 1, sent: 1, failed: 0, expired: 0, disabled: 0, pending: 0, complete: true, next_attempt_in_ms: null };
+        throw new Error(fn);
+      },
+      readAnnouncement: async (id) => ({ id, title: "t", body: "b", priority: "عام", expires_at: new Date(Date.now() + 600e3).toISOString() }),
+      readCompanyName: async () => "شركة س",
+      send: async (t, payload, options) => { log.push(`send:${t.target_id}:${options.topic}:${JSON.parse(payload).id}`); log.push(`ttl:${options.TTL}`); },
+      worker: "00000000-0000-4000-8000-000000000001",
+      now: () => Date.now(),
+      sleep: async () => {},
+    },
+  };
+}
+for (const reason of ["not_due", "expired", "wrong_season", "not_found"]) {
+  const f = fakeDeliver({ eligible: false, reason }, [[{ target_id: 1, attempt: 1, endpoint: "e", p256dh: "k", auth: "a" }]]);
+  const out = await D.deliverAnnouncement(77, 10000, f.deps);
+  check(`ineligible (${reason}) → nothing claimed, nothing sent`,
+    out.status === "ineligible" && out.reason === reason && f.log.join() === "push_prepare_announcement", f.log.join());
+}
+{
+  const f = fakeDeliver({ eligible: true, prepared: true }, [[{ target_id: 1, attempt: 1, endpoint: "e", p256dh: "k", auth: "a" }]]);
+  const out = await D.deliverAnnouncement(77, 10000, f.deps);
+  check("eligible → M6 loop: prepare, claim, send with topic ann-77, complete, summary",
+    out.status === "delivered" && out.claimed === 1 && f.log.includes("send:1:ann-77:77") && f.log.includes("push_complete_target"), f.log.join());
+  const ttl = Number((f.log.find((x) => x.startsWith("ttl:")) ?? "ttl:-1").slice(4));
+  check("the real send uses the announcement's remaining lifetime as TTL (10 min → ≤ 600 s)", ttl > 590 && ttl <= 600, String(ttl));
+}
+{
+  const f = fakeDeliver({ eligible: true, prepared: false }, [[{ target_id: 5, attempt: 2, endpoint: "e", p256dh: "k", auth: "a" }]]);
+  const out = await D.deliverAnnouncement(78, 10000, f.deps);
+  check("already prepared (resume) → claims what M6 hands out, prepares nothing new",
+    out.status === "delivered" && f.log.filter((x) => x === "push_prepare_announcement").length === 1 && f.log.includes("send:5:ann-78:78"), f.log.join());
+}
+
+console.log(`\nالنتيجة: ${pass} نجح · ${fail} أخفق`);
+process.exit(fail ? 1 : 0);

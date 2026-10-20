@@ -1,0 +1,202 @@
+# ════════════════════════════════════════════════════════════
+# deploy push-dispatch (M5), and nothing else
+# ════════════════════════════════════════════════════════════
+# دفعُ التنبيهات المجدوَلة حين يحين موعدُها. يوقظه المُجدوِل وحده
+# (`push_dispatch_tick()` عبر pg_net) برمزٍ لها وحدها (`PUSH_DISPATCH_TOKEN`).
+#
+# ⚠️ ONE function. The slug is hard-coded, not an input. `functions
+# deploy` with no slug deploys ALL of them, so the argument is mandatory
+# and asserted before the call.
+#
+# `verify_jwt = false` comes from `supabase/config.toml` and stays a
+# reviewed repository change: the caller is pg_net, which carries no user
+# JWT and must not carry a Supabase API key (pg_net keeps request headers
+# in net.http_request_queue, which pg_net 0.20.x grants to PUBLIC). It
+# carries a token scoped to this function alone (PUSH_DISPATCH_TOKEN).
+# Authentication is in push-dispatch/handler.ts, before any other work;
+# this workflow refuses unless that gate is present, and after the
+# deploy proves from outside that a request without the token, or with
+# a wrong one, or with only an apikey/Authorization header, is refused.
+#
+# The bundle is exactly four files, pinned below. One of them is
+# send-pilgrim-push/delivery.ts — imported, not copied, so M6 delivery
+# has one source. send-pilgrim-push itself is NOT deployed here, and its
+# own index.ts and config are asserted unchanged.
+#
+# Deliberately absent and audited for:
+# `db push` · `secrets set` · `config push` · any second slug · any
+# request that carries a real credential. (`secrets list` IS used by the
+# configuration gate: names only, never a value.)
+#
+# Deploying does NOT activate anything: without the M5 scheduler
+# (separate migration, separate approval) nothing calls this function,
+# and a `dispatch` request without a live lease written by the
+# scheduler is refused (409).
+#
+# Rollback (there is no earlier version to return to):
+#   1. stop the scheduler (`cron.unschedule`, PR 2) — nothing calls it;
+#   2. delete the PUSH_DISPATCH_TOKEN Edge Function secret — every
+#      request is then refused (503), whoever sends it;
+#   3. deleting the function is a separate, explicitly approved step.
+#
+# The pinned sha256 values are the reviewed source (`M-108`). A stale
+# pin REFUSES the deployment, which is the intended direction of failure.
+
+name: Deploy push-dispatch (ONE function)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY-PUSH-DISPATCH to authorize"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push-dispatch-redeploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: zkucwcnclbfvukhdqhgc
+      SLUG: push-dispatch
+      # "<path under supabase/functions>:<sha256>" — the exact bundle
+      PINS: >-
+        push-dispatch/index.ts:423e0fa3abe16ae806d6b63b56d864ddd204ad4d43a570c6abba5686a8d021ae
+        push-dispatch/handler.ts:56ff9ecf23db50de50ae57e17f26b8a5c9e1518fe24f3570d1426d2c4378ecda
+        push-dispatch/deliver.ts:c101915d55dd743e7c1a2fc714b75ee3d0f36b3d58fc7f15e8e0971bcd702cc6
+        send-pilgrim-push/delivery.ts:b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf
+      # send-pilgrim-push is not deployed here; its entry point must be the reviewed one
+      SPP_INDEX_SHA256: "103b940b2744aa674527bdd134047098532933a20576155cfd6fd8b81942bcf8"
+
+    steps:
+      - name: "GATE: confirmation and ref"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          [ "${CONFIRM}" = "DEPLOY-PUSH-DISPATCH" ] || {
+            echo "::error::confirmation string does not match"; exit 1; }
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main, got ${GITHUB_REF}"; exit 1; }
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: the exact sources, bundle and authentication under review"
+        run: |
+          set -euo pipefail
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          for p in $PINS; do
+            f="supabase/functions/${p%%:*}"; w="${p##*:}"
+            [[ "$w" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::$f pin is not a full SHA-256"; exit 1; }
+            got="$(sha256sum "$f" | cut -d' ' -f1)"
+            [ "$got" = "$w" ] || { echo "::error::$f sha256 mismatch: $got"; exit 1; }
+            echo "ok   $f  $got"
+          done
+          got="$(sha256sum supabase/functions/send-pilgrim-push/index.ts | cut -d' ' -f1)"
+          [ "$got" = "$SPP_INDEX_SHA256" ] || { echo "::error::send-pilgrim-push/index.ts changed: $got"; exit 1; }
+          git diff --quiet || { echo "::error::working tree is dirty"; exit 1; }
+          # the bundle the CLI builds is exactly the pinned files — nothing rides along unpinned
+          python3 -I - "$SLUG" <<'PY'
+          import importlib.util, os, sys
+          spec = importlib.util.spec_from_file_location("p", "supabase/verification/assert-edge-function-parity.py")
+          m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          got = m.expected_files("supabase/functions", sys.argv[1])
+          want = {s.split(":")[0] for s in os.environ["PINS"].split()}
+          if len(want) != 4 or got != want:
+              sys.exit(f"::error::bundle would be {sorted(got)}, expected {sorted(want)}")
+          print("bundle:", ", ".join(sorted(got)))
+          PY
+          # verify_jwt: false for this function only, and true stays true for the manual path
+          grep -A1 "^\[functions\.$SLUG\]" supabase/config.toml | grep -q "verify_jwt = false" || {
+            echo "::error::config.toml does not declare verify_jwt = false for $SLUG"; exit 1; }
+          grep -A1 "^\[functions\.send-pilgrim-push\]" supabase/config.toml | grep -q "verify_jwt = true" || {
+            echo "::error::config.toml no longer declares verify_jwt = true for send-pilgrim-push"; exit 1; }
+          # the authentication gate is present (the pins already fix its bytes; this names it)
+          H=supabase/functions/$SLUG/handler.ts
+          grep -q 'export const TOKEN_HEADER = "x-push-dispatch-token";' "$H" || { echo "::error::scoped token header missing"; exit 1; }
+          grep -q 'req.headers.get(TOKEN_HEADER)' "$H" || { echo "::error::token check missing"; exit 1; }
+          grep -q 'tokenEnv: Deno.env.get("PUSH_DISPATCH_TOKEN")' supabase/functions/$SLUG/index.ts || { echo "::error::token source missing"; exit 1; }
+          # a Supabase API key must never be the credential: it would sit in pg_net's PUBLIC queue
+          if grep -nE 'SUPABASE_SECRET_KEYS|headers\.get\("(apikey|authorization)"\)' supabase/functions/$SLUG/*.ts; then
+            echo "::error::push-dispatch authenticates with a Supabase API key"; exit 1; fi
+          # no customer name in the code: the untitled-alert title comes from company_config
+          if grep -n "حملة الأقصى" supabase/functions/$SLUG/*.ts; then
+            echo "::error::push-dispatch hardcodes a company name"; exit 1; fi
+          grep -q 'from("company_config").select("name_ar")' supabase/functions/$SLUG/index.ts || {
+            echo "::error::push-dispatch no longer reads the company name from company_config"; exit 1; }
+          # a token value never lives in the repository (generated once, set on the platform)
+          if git grep -nIE "(PUSH_DISPATCH_TOKEN|push_dispatch_token)['\"]?[[:space:]]*[:=,][[:space:]]*['\"][A-Za-z0-9_-]{43,}" -- . ; then
+            echo "::error::a PUSH_DISPATCH_TOKEN value is committed"; exit 1; fi
+          grep -q 'await sameKey(presented, expected)' "$H" || { echo "::error::constant-time comparison missing"; exit 1; }
+          if grep -nE 'console\.(log|error|warn).*(presented|expected|tokenEnv|PUSH_DISPATCH_TOKEN)' supabase/functions/$SLUG/*.ts; then
+            echo "::error::a token-bearing value reaches a log"; exit 1; fi
+          echo "commit=${GITHUB_SHA}"
+
+      - name: "GATE: required Edge Function configuration is present on the project"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          node scripts/release/preflight-edge-config.mjs \
+            --function "$SLUG" --project-ref "$PROJECT_REF"
+
+      - name: "DEPLOY: exactly one function"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          [ -n "$SLUG" ] || { echo "::error::empty slug would deploy EVERY function"; exit 1; }
+          npm run --silent supabase -- functions deploy "$SLUG" --project-ref "$PROJECT_REF" 2>&1 \
+            | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
+
+      - name: "POST: the deployed source is the pinned bundle"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf supabase/functions
+          mkdir -p supabase/functions
+          npm run --silent supabase -- functions download "$SLUG" \
+            --project-ref "$PROJECT_REF" --use-api > "$RUNNER_TEMP/download.log" 2>&1 || {
+            echo "::error::download failed"; sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g' "$RUNNER_TEMP/download.log"; exit 1; }
+          cd supabase/functions
+          got="$(find . -type f | sed 's|^\./||' | sort)"
+          want="$(for p in $PINS; do echo "${p%%:*}"; done | sort)"
+          [ "$got" = "$want" ] || { echo "::error::deployed files differ:"; diff <(echo "$want") <(echo "$got") || true; exit 1; }
+          for p in $PINS; do
+            f="${p%%:*}"; w="${p##*:}"
+            h="$(sha256sum "$f" | cut -d' ' -f1)"
+            [ "$h" = "$w" ] || { echo "::error::deployed $f sha256 $h != $w"; exit 1; }
+            echo "ok   deployed $f  $h"
+          done
+
+      # From outside, with NO valid token: verify_jwt = false must not mean
+      # open. No request here carries a real credential, so none can reach
+      # the database or a device — the gate answers before anything runs.
+      - name: "POST: unauthenticated requests are refused"
+        run: |
+          set -euo pipefail
+          U="https://${PROJECT_REF}.supabase.co/functions/v1/${SLUG}"
+          code() { curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$@"; }
+          ok_refused() { case "$2" in 401|503) echo "ok   $1 -> $2";; *) echo "::error::$1 -> $2 (expected 401, or 503 before PUSH_DISPATCH_TOKEN exists)"; exit 1;; esac; }
+          # a random 256-bit token: right shape, wrong value
+          WRONG="$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=')"
+          ok_refused "POST, no token"            "$(code -X POST -H 'Content-Type: application/json' -d '{"mode":"probe"}' "$U")"
+          ok_refused "POST, wrong token"         "$(code -X POST -H 'Content-Type: application/json' -H "x-push-dispatch-token: $WRONG" -d '{"mode":"probe"}' "$U")"
+          ok_refused "POST, apikey only"         "$(code -X POST -H 'Content-Type: application/json' -H "apikey: $WRONG" -d '{"mode":"probe"}' "$U")"
+          ok_refused "POST, Bearer only"         "$(code -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $WRONG" -d '{"mode":"probe"}' "$U")"
+          ok_refused "POST dispatch, no token"   "$(code -X POST -H 'Content-Type: application/json' -d '{"mode":"dispatch","run_id":"00000000-0000-4000-8000-000000000000"}' "$U")"
+          c="$(code -X GET "$U")"; [ "$c" = "405" ] || { echo "::error::GET -> $c (expected 405)"; exit 1; }; echo "ok   GET -> 405"
+          echo "$SLUG serves exactly the pinned source and refuses every request without its token."

@@ -42,7 +42,9 @@ jobs:
     env:
       PROJECT_REF: zkucwcnclbfvukhdqhgc
       OUT: parity-evidence
-      SLUGS: "Scan-passport send-pilgrim-push season-admin user-admin pilgrim-doc whatsapp-send"
+      # push-dispatch reports MISSING_DEPLOYED (FAIL) until its first approved
+      # deploy: a function the repository ships and production lacks is drift.
+      SLUGS: "Scan-passport send-pilgrim-push season-admin user-admin pilgrim-doc whatsapp-send push-dispatch"
 
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +63,34 @@ jobs:
             printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#"$RUNNER_TEMP/repo-functions/"}"
           done | tee "$OUT/repo-files.sha256"
           echo "repository files: $(wc -l < "$OUT/repo-files.sha256")"
+          # every function directory in the repository is in SLUGS: a new one cannot go uncompared
+          repo_slugs="$(find supabase/functions -mindepth 1 -maxdepth 1 -type d ! -name _shared -printf '%f\n' | LC_ALL=C sort)"
+          [ "$repo_slugs" = "$(printf '%s\n' $SLUGS | LC_ALL=C sort)" ] || {
+            echo "::error::repository functions and SLUGS differ:"; diff <(printf '%s\n' $SLUGS | LC_ALL=C sort) <(echo "$repo_slugs") || true; exit 1; }
           python3 -I supabase/verification/assert-edge-function-parity.py --selftest
+
+      # The set of deployed functions must be exactly SLUGS: a function in
+      # production that this list does not name would never be compared, so
+      # it is a failure, not a skip. Read-only: one GET, slugs only.
+      - name: "GATE: deployed function inventory is exactly SLUGS"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          curl --fail-with-body -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/functions" -o "$RUNNER_TEMP/functions.json" || {
+            echo "::error::could not list deployed functions"; exit 1; }
+          deployed="$(jq -er 'if type == "array" then .[].slug else error("not a list") end' "$RUNNER_TEMP/functions.json" | LC_ALL=C sort)"
+          rm -f "$RUNNER_TEMP/functions.json"
+          expected="$(printf '%s\n' $SLUGS | LC_ALL=C sort)"
+          printf '%s\n' "$deployed" > "$OUT/deployed-slugs.txt"
+          extra="$(LC_ALL=C comm -13 <(echo "$expected") <(echo "$deployed"))"
+          missing="$(LC_ALL=C comm -23 <(echo "$expected") <(echo "$deployed"))"
+          [ -z "$missing" ] || echo "::warning::named in SLUGS but not deployed (reported as MISSING_DEPLOYED below): $(echo $missing)"
+          [ -z "$extra" ] || { echo "::error::deployed but not in SLUGS, so never compared: $(echo $extra)"; echo FAIL > "$OUT/inventory.txt"; exit 1; }
+          echo PASS > "$OUT/inventory.txt"
+          echo "deployed functions: $(echo $deployed)"
 
       - name: "Download the deployed source for every function"
         env:

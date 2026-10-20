@@ -566,10 +566,16 @@ jobs:
           console.log(`::warning::Supabase reported an error after setting secrets, but the before/after read-back proves all ${sent.length} secrets from this run were written. Continuing.`);
           NODE
 
-      - name: "Deploy all six Edge Functions"
+      # By name, never `functions deploy` with no slug: that deploys every
+      # directory under supabase/functions, including ones a customer
+      # installation does not use (push-dispatch, M5 — scheduled push, which
+      # needs its own activation). The list is the one verified below.
+      - name: "Deploy the six Edge Functions"
         run: |
           set -euo pipefail
-          npm run --silent supabase -- functions deploy --project-ref "$PROJECT_REF" --use-api
+          for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send; do
+            npm run --silent supabase -- functions deploy "$slug" --project-ref "$PROJECT_REF" --use-api
+          done
 
       - name: "Verify backend deployment"
         env:
