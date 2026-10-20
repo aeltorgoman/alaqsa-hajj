@@ -73,9 +73,12 @@ jobs:
 
     steps:
       - name: "GATE: confirmation"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
-          [ "${{ inputs.confirm }}" = "REDEPLOY-WHATSAPP-SEND" ] || {
+          [ "${CONFIRM}" = "REDEPLOY-WHATSAPP-SEND" ] || {
             echo "::error::confirmation string does not match"; exit 1; }
 
       - uses: actions/checkout@v4
@@ -145,3 +148,29 @@ jobs:
           [ -n "$SLUG" ] || { echo "::error::empty slug would deploy EVERY function"; exit 1; }
           npm run --silent supabase -- functions deploy "$SLUG" --project-ref "$PROJECT_REF" 2>&1 \
             | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
+
+      # Independent of the deploy step's own output: what production now
+      # serves is downloaded into an empty tree and must be exactly the
+      # four pinned files — none missing, none extra, every byte equal.
+      - name: "POST: the deployed source is the pinned main source"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf supabase/functions
+          mkdir -p supabase/functions
+          npm run --silent supabase -- functions download "$SLUG" \
+            --project-ref "$PROJECT_REF" --use-api > "$RUNNER_TEMP/download.log" 2>&1 || {
+            echo "::error::download failed"; sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g' "$RUNNER_TEMP/download.log"; exit 1; }
+          cd supabase/functions
+          pins="$SLUG/index.ts:$SRC_SHA256 _shared/authorize.ts:$SHARED_AUTHORIZE_SHA256 _shared/http.ts:$SHARED_HTTP_SHA256 _shared/rateLimit.ts:$SHARED_RATELIMIT_SHA256"
+          got="$(find . -type f | sed 's|^\./||' | sort)"
+          want="$(for p in $pins; do echo "${p%%:*}"; done | sort)"
+          [ "$got" = "$want" ] || { echo "::error::deployed files differ:"; diff <(echo "$want") <(echo "$got") || true; exit 1; }
+          for p in $pins; do
+            f="${p%%:*}"; w="${p##*:}"
+            h="$(sha256sum "$f" | cut -d' ' -f1)"
+            [ "$h" = "$w" ] || { echo "::error::deployed $f sha256 $h != $w"; exit 1; }
+            echo "ok   deployed $f  $h"
+          done
+          echo "$SLUG serves exactly the pinned source."
