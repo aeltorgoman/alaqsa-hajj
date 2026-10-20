@@ -86,9 +86,12 @@ jobs:
 
     steps:
       - name: "GATE: confirmation"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
-          [ "${{ inputs.confirm }}" = "REDEPLOY-SEND-PILGRIM-PUSH" ] || {
+          [ "${CONFIRM}" = "REDEPLOY-SEND-PILGRIM-PUSH" ] || {
             echo "::error::confirmation string does not match"; exit 1; }
 
       - uses: actions/checkout@v4

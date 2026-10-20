@@ -92,11 +92,13 @@ jobs:
 
     steps:
       - name: "GATE: confirmation, ref and secrets"
+        # the input reaches the shell as data (env), never as script text
         env:
+          CONFIRM: ${{ inputs.confirm }}
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
-          [ "${{ inputs.confirm }}" = "PUSH-M6-20261019135129" ] || {
+          [ "${CONFIRM}" = "PUSH-M6-20261019135129" ] || {
             echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
           # M-52: apply after merge, never before
           [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main (M-52), got ${GITHUB_REF}"; exit 1; }
