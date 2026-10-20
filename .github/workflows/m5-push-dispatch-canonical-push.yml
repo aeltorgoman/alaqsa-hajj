@@ -75,7 +75,7 @@ jobs:
     env:
       M5: "20261020153000"
       F5: supabase/migrations/20261020153000_m5_scheduled_push_dispatch.sql
-      SHA5: "8b757e7556f164385281ecf733b3ff124e99a3f502b9a931c94d2757a1ec4429"
+      SHA5: "2ac170a96cd8b7f8a7fdb241a7d33cc74a9489c0e6e4034240d998e81d5e14be"
       EXPECT_REPO_MIGRATIONS: "71"
       EXPECT_ROWS_BEFORE: "70"
       EXPECT_LATEST_BEFORE: "20261019135129"
@@ -127,6 +127,9 @@ jobs:
           # the migration itself installs nothing and schedules nothing
           if grep -niE "^\s*(create|alter)\s+extension|cron\.schedule" "$F5"; then
             echo "::error::$F5 installs an extension or schedules a job"; exit 1; fi
+          # the scheduler's credential is the scoped token, never a Supabase API key in pg_net's queue
+          if grep -nE "'(apikey|Authorization)'" "$F5"; then
+            echo "::error::$F5 sends a Supabase API key header through pg_net"; exit 1; fi
           python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
           python3 supabase/verification/assert-no-toplevel-data-writes.py "$F5"
           python3 supabase/verification/assert-ledger-correspondence.py --selftest
@@ -192,6 +195,8 @@ jobs:
           p "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" > "$OUT/tables-before.txt"
           p "select string_agg(schemaname||'.'||indexname, ',' order by schemaname, indexname) from pg_indexes where schemaname in ('public','storage')" > "$OUT/indexes-before.txt"
           p "select string_agg(p.oid::regprocedure::text || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'" > "$OUT/fn-acl-before.txt"
+          # every existing function body (M6 delivery included): md5 per signature
+          p "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace" > "$OUT/fn-src-before.txt"
           # بصماتٌ بلا بيانات شخصية: معرّفاتٌ وحالاتٌ وأختام
           p "select coalesce(md5(string_agg(id||':'||announcement_id||':'||passenger_id||':'||status||':'||coalesce(read_at::text,'-'),'|' order by id)),'(none)') from public.notification_deliveries" > "$OUT/nd-fp-before.txt"
           p "select coalesce(md5(string_agg(id||':'||coalesce(push_sent_at::text,'-')||':'||coalesce(expires_at::text,'-')||':'||show_at::text,'|' order by id)),'(none)') from public.announcements" > "$OUT/ann-fp-before.txt"
@@ -285,6 +290,7 @@ jobs:
             want "owner-only ${fn%%(*} exec holders" "$(holders "$F")" "postgres"
           done
           want other_fn_acls_unchanged "select string_agg(p.oid::regprocedure::text || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname not in ('push_due_announcements','push_dispatch_begin','push_dispatch_end','push_dispatch_tick','push_dispatch_probe','_push_due_ids','_push_dispatch_target','_push_dispatch_state_guard')" "$(cat "$OUT/fn-acl-before.txt")"
+          want other_fn_bodies_unchanged "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname not in ('push_due_announcements','push_dispatch_begin','push_dispatch_end','push_dispatch_tick','push_dispatch_probe','_push_due_ids','_push_dispatch_target','_push_dispatch_state_guard')" "$(cat "$OUT/fn-src-before.txt")"
           want tables_before_plus_new  "select string_agg(t, ',' order by t) from (select schemaname||'.'||tablename t from pg_tables where schemaname in ('public','storage')) s" \
             "$( (tr ',' '\n' < "$OUT/tables-before.txt"; echo "$NEW_TABLE") | grep -v '^$' | LC_ALL=C sort | paste -sd, )"
           want indexes_before_plus_new "select string_agg(i, ',' order by i) from (select schemaname||'.'||indexname i from pg_indexes where schemaname in ('public','storage')) s" \
@@ -313,7 +319,7 @@ jobs:
           if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
           echo PASS > "$OUT/verdict.txt"
           echo "Migration $M5 applied; ledger 71; inactive: no extension, no job, no lease; no existing row changed."
-          echo "NEXT (separate approvals): push-dispatch-redeploy.yml; the named key; then the PR 2 activation."
+          echo "NEXT (separate approvals): push-dispatch-redeploy.yml; PUSH_DISPATCH_TOKEN; then the PR 2 activation."
 
       - name: "Scan evidence for secret-like material"
         if: always()

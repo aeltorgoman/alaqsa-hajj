@@ -10,11 +10,19 @@
 -- ما حان بحلقة M6 نفسها (`announcement_push_targets` — حجزٌ بمهلة، ونتيجةٌ لصاحب الحجز،
 -- وثلاثُ محاولات). لا تسليمَ جديداً هنا: M6 هي الضامنةُ ألّا يُحجز جهازٌ مرّتين.
 --
+-- المصادقة: رمزٌ مخصّصٌ لهذه الدالّة وحدها (`push_dispatch_token` في Vault، و`PUSH_DISPATCH_TOKEN`
+-- في أسرار الدالّة)، لا مفتاحُ API من Supabase. والسبب: pg_net يحفظ ترويساتِ الطلب في
+-- `net.http_request_queue` إلى أن يُرسله، وpg_net 0.20.x يمنح `PUBLIC` كلَّ الصلاحيات على جداول
+-- مخطّط net (`grant all on all tables in schema net to PUBLIC`). ومفتاحُ `sb_secret_…` يتجاوز RLS
+-- على القاعدة كلّها، فتسرّبُه من هناك كارثيّ؛ أمّا هذا الرمز فلا يفتح إلا هذه الدالّة، وهي
+-- لا تسلّم إلا بعقدٍ حيٍّ كتبه التيك، وإلا ما حان أصلاً. فالضررُ الأقصى لتسرّبه: تسليمٌ مبكّرٌ بثوانٍ.
+--
 -- ⚠️ لا يعمل شيءٌ بهذه الترحيلة وحدها:
 --   · لا `pg_cron` ولا `pg_net` ولا جدولة — تنشيطُها ترحيلةٌ منفصلة (PR 2) بموافقةٍ منفصلة.
 --   · `push_dispatch_tick()` لا يستدعيها أحد: مالكُها postgres، ومسحوبةٌ من كلّ أدوار الواجهة.
 --     وبلا `net.http_post` أو بلا سرَّي Vault تردّ 'not_configured' ولا تكتب شيئاً.
 --   · والدالّةُ الطرفيّة ترفض `dispatch` بلا عقدِ تشغيلٍ صالحٍ تكتبه `tick` وحدها (409).
+--   · وبلا `PUSH_DISPATCH_TOKEN` في أسرار الدالّة تردّ 503 على كلّ طلب.
 --
 -- القفلُ عقدٌ في صفّ (`push_dispatch_state`) لا قفلٌ استشاريّ: `pg_advisory_xact_lock`
 -- يُحرَّر عند انتهاء معاملة `tick`، أي **قبل** أن يُرسل pg_net طلبَه (يُرسَل بعد الالتزام
@@ -29,15 +37,15 @@
 -- أبداً، والمعرّفُ هويّةٌ مولَّدة (GENERATED ALWAYS) لا يكتبها عميل، بخلاف `created_at`.
 -- والصفُّ لا يُعدَّل ولا يُحذف ولا يُفرَّغ (محفّزات)، وإعادةُ إنشائه لا تحدث (`on conflict do
 -- nothing`)، فلا ترحيلةَ لاحقةً ولا إعادةَ نشرٍ تعيده إلى الصفر.
--- وحدٌّ ثانٍ للتأخّر: تنبيهٌ لم يُهيَّأ بعدُ لا يُدفع آليّاً إن مضى على موعده أكثرُ من ساعة
--- (مُجدوِلٌ معطَّلٌ عاد للعمل لا يُغرق الأجهزةَ بقديم). ما فات يُرسَل يدويّاً بصلاحية
--- manage_portal من «إرسال إلى الأجهزة» في البوابة. وما بدأ تسليمُه يُستكمل بلا حدّ.
+-- ولا حدَّ للتأخّر: مُجدوِلٌ تعطّل ساعاتٍ ثم عاد يدفع كلَّ تنبيهٍ ما زال سارياً في الموسم
+-- المفتوح ولم يُهيَّأ بعد. والمنتهي لا يُدفع أبداً. وما دون الحدّ التاريخيّ يُرسَل يدويّاً
+-- بصلاحية manage_portal من «إرسال إلى الأجهزة» في البوابة.
 --
 -- ⚠️ التسليمُ «مرّةً على الأقلّ» كما في M6، لا «مرّةً بالضبط». ووسمُ `ann-<id>` (topic في
 -- خدمة الدفع، وtag في عامل الخدمة) يجعل المكرَّر يحلّ محلّ الأول لا أن يتكدّس.
 --
--- التراجع: لا شيءَ يعمل ليُوقَف. والتنشيطُ (PR 2) يُوقَف بـ`cron.unschedule`، ثم بإبطال
--- المفتاح المسمّى (الدالّة تردّ 503). وحذفُ هذه الكائنات ترحيلةٌ لاحقةٌ بموافقة.
+-- التراجع: لا شيءَ يعمل ليُوقَف. والتنشيطُ (PR 2) يُوقَف بـ`cron.unschedule`، ثم بحذف
+-- `PUSH_DISPATCH_TOKEN` من أسرار الدالّة (تردّ 503). وحذفُ هذه الكائنات ترحيلةٌ لاحقةٌ بموافقة.
 
 -- ── حالُ المُجدوِل: صفٌّ واحد ─────────────────────────────────────────
 create table public.push_dispatch_state (
@@ -96,7 +104,7 @@ revoke all on table public.push_dispatch_state from public, anon, authenticated,
 -- ── أدواتٌ داخليّة (لا تُمنح لأحد) ───────────────────────────────────
 
 -- ما حان دفعُه الآن: الموسمُ المفتوح، وحان، ولم ينتهِ، ولم يكتمل، وفوق الحدّ التاريخيّ،
--- و(لم يُهيَّأ بعدُ ولم يمضِ على موعده ساعة — بشرط التهيئة نفسه في M6) أو (له جهازٌ يُحجز الآن).
+-- و(لم يُهيَّأ بعدُ — بشرط التهيئة نفسه في M6، أيّاً كان تأخّرُه) أو (له جهازٌ يُحجز الآن).
 create function public._push_due_ids(p_limit integer)
 returns bigint[]
 language sql
@@ -115,8 +123,7 @@ as $$
          and (a.expires_at is null or a.expires_at > now())
          and a.push_sent_at is null
          and (
-              (a.show_at > now() - interval '60 minutes'
-               and not exists (select 1 from public.announcement_push_targets t
+              (not exists (select 1 from public.announcement_push_targets t
                                 where t.announcement_id = a.id)
                and not exists (select 1 from public.notification_deliveries d
                                 where d.announcement_id = a.id
@@ -132,7 +139,7 @@ as $$
     ) x;
 $$;
 
--- ── الواجهة (service_role وحده — الدالّةُ الطرفيّة بعد مصادقة المفتاح المسمّى) ──
+-- ── الواجهة (service_role وحده — الدالّةُ الطرفيّة بعد مصادقة رمز push-dispatch) ──
 
 create function public.push_due_announcements(p_limit integer default 5)
 returns bigint[]
@@ -188,9 +195,9 @@ begin
 end;
 $$;
 
--- عنوانُ الدالّة ومفتاحُها من Vault بالاسم. NULL = غيرُ مضبوط (لا طلب).
+-- عنوانُ الدالّة ورمزُها من Vault بالاسم. NULL = غيرُ مضبوط (لا طلب).
 create function public._push_dispatch_target()
-returns table(url text, api_key text)
+returns table(url text, token text)
 language plpgsql
 stable
 security definer
@@ -198,19 +205,20 @@ set search_path to 'public', 'pg_temp'
 as $$
 declare
   v_url text;
-  v_key text;
+  v_tok text;
 begin
   if to_regclass('vault.decrypted_secrets') is null
      or to_regprocedure('net.http_post(text,jsonb,jsonb,jsonb,integer)') is null then
     return;
   end if;
   execute $q$select (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'push_dispatch_url'),
-                    (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'push_dispatch_key')$q$
-     into v_url, v_key;
-  -- لا يُرسل المفتاحُ إلى غير دالّته: https، والمسارُ بالضبط
+                    (select s.decrypted_secret from vault.decrypted_secrets s where s.name = 'push_dispatch_token')$q$
+     into v_url, v_tok;
+  -- لا يُرسل الرمزُ إلى غير دالّته: https، والمسارُ بالضبط
   if v_url is null or v_url !~ '^https://[A-Za-z0-9.-]+/functions/v1/push-dispatch$' then return; end if;
-  if v_key is null or v_key !~ '^sb_secret_[A-Za-z0-9_-]{20,}$' then return; end if;
-  return query select v_url, v_key;
+  -- ٢٥٦ بتّاً فأكثر بأبجديّة base64url، ولا يكون مفتاحَ API من Supabase (sb_… أو JWT)
+  if v_tok is null or v_tok !~ '^[A-Za-z0-9_-]{43,128}$' or v_tok ~ '^(sb_|eyJ)' then return; end if;
+  return query select v_url, v_tok;
 end;
 $$;
 
@@ -224,7 +232,7 @@ as $$
 declare
   st     public.push_dispatch_state%rowtype;
   v_url  text;
-  v_key  text;
+  v_tok  text;
   v_run  uuid;
 begin
   -- تيكان متزامنان يمرّان واحداً بعد واحد، والثاني يرى عقدَ الأول
@@ -236,7 +244,7 @@ begin
   if cardinality(public._push_due_ids(5)) = 0 then
     return 'idle';
   end if;
-  select t.url, t.api_key into v_url, v_key from public._push_dispatch_target() t;
+  select t.url, t.token into v_url, v_tok from public._push_dispatch_target() t;
   if v_url is null then
     return 'not_configured';
   end if;
@@ -247,11 +255,12 @@ begin
      set lease_run_id = v_run, lease_expires_at = now() + interval '180 seconds', lease_started = false,
          last_tick_at = now(), last_tick_result = 'dispatched'
    where id;
-  -- يُرسَل بعد الالتزام من عامل pg_net؛ المفتاحُ في ترويسة apikey لا في الجسم ولا في السجلّ
+  -- يُرسَل بعد الالتزام من عامل pg_net؛ الرمزُ في ترويسةٍ لا في الجسم، ومُعامِلٌ (USING) لا نصٌّ
+  -- في الجملة، فلا يظهر في سجلّ جملٍ ولا في سياق خطأ
   execute 'select net.http_post(url := $1, body := $2, headers := $3, timeout_milliseconds := 150000)'
     using v_url,
           jsonb_build_object('mode', 'dispatch', 'run_id', v_run),
-          jsonb_build_object('Content-Type', 'application/json', 'apikey', v_key);
+          jsonb_build_object('Content-Type', 'application/json', 'x-push-dispatch-token', v_tok);
   return 'dispatched';
 end;
 $$;
@@ -265,15 +274,15 @@ set search_path to 'public', 'pg_temp'
 as $$
 declare
   v_url text;
-  v_key text;
+  v_tok text;
 begin
-  select t.url, t.api_key into v_url, v_key from public._push_dispatch_target() t;
+  select t.url, t.token into v_url, v_tok from public._push_dispatch_target() t;
   if v_url is null then
     return 'not_configured';
   end if;
   execute 'select net.http_post(url := $1, body := $2, headers := $3, timeout_milliseconds := 10000)'
     using v_url, jsonb_build_object('mode', 'probe'),
-          jsonb_build_object('Content-Type', 'application/json', 'apikey', v_key);
+          jsonb_build_object('Content-Type', 'application/json', 'x-push-dispatch-token', v_tok);
   return 'probe_sent';
 end;
 $$;

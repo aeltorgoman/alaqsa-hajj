@@ -4,9 +4,9 @@
 //   node --experimental-strip-types supabase/verification/portal/m5_push_dispatch_unit.mjs
 //   WEB_PUSH_MODULE=/path/to/node_modules/web-push …   ← يُضيف فحصَ topic بمكتبة web-push@3.6.7 نفسها
 //
-//   المصادقة قبل كلّ شيء: غيابُ الضبط أو فسادُه ← 503 · غيابُ المفتاح، أو مفتاحٌ آخر، أو مفتاحُ
-//   default، أو JWT، أو المفتاحُ في Authorization، أو بادئته، أو بفراغ ← 401 — ولا نداءَ لأيّ dep
-//   ولا مفتاحَ في ردٍّ ولا سجلّ · الجسم · probe لا يسلّم · dispatch بلا عقدٍ ← 409 بلا تسليم
+//   المصادقة قبل كلّ شيء: غيابُ الرمز أو قِصرُه أو كونُه مفتاحَ API (sb_…/JWT) ← 503 · غيابُ الترويسة،
+//   أو رمزٌ آخر، أو بادئتُه، أو بزيادة، أو الرمزُ في apikey أو Authorization، أو مفتاحُ Supabase ← 401
+//   — ولا نداءَ لأيّ dep ولا رمزَ في ردٍّ ولا سجلّ · الجسم · probe لا يسلّم · dispatch بلا عقدٍ ← 409
 //   · الميزانية · فشلُ تنبيهٍ لا يوقف الباقي ولا يبقي العقد · الحمولة كما في send-pilgrim-push
 //   · topic ann-<id> صالحٌ لـweb-push · التسليمُ لا يرسل غيرَ المستحقّ
 // ════════════════════════════════════════════════════════════
@@ -25,11 +25,12 @@ const check = (name, cond, detail = "") => {
   if (cond) { pass++; console.log(`PASS — ${name}`); } else { fail++; console.log(`FAIL — ${name}${detail ? ` (${detail})` : ""}`); }
 };
 
-/* مفاتيحُ مُصطنَعة تُبنى بالوصل، فلا يبدو سطرٌ في المستودع مفتاحاً حقيقيّاً */
+/* رمزٌ عشوائيّ لكلّ تشغيل (٢٥٦ بتّاً، base64url) — لا قيمةَ ثابتةً في المستودع */
+const rnd = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+const KEY = rnd();
+const OTHER = rnd();
+const HDR = H.TOKEN_HEADER;
 const SB = "sb_" + "secret_";
-const KEY = SB + "unitTEST_push_dispatch_0123456789abcdef";
-const OTHER = SB + "unitTEST_default_key_0123456789abcdef";
-const ENV = JSON.stringify({ default: OTHER, push_dispatch: KEY });
 const RUN = "4b0b6a7e-2f7e-4a43-9a51-6f2b0d1e9c11";
 
 /* deps تسجّل كلَّ نداء — المصادقةُ الفاشلة يجب ألّا تبلغ أيّاً منها */
@@ -38,7 +39,7 @@ function spyDeps(over = {}) {
   const logs = [];
   let t = 0;
   const deps = {
-    secretKeysEnv: ENV,
+    tokenEnv: KEY,
     configured: () => { calls.push("configured"); return true; },
     dueIds: async (n) => { calls.push(`due:${n}`); return [11, 12]; },
     begin: async (r) => { calls.push(`begin:${r}`); return true; },
@@ -59,7 +60,7 @@ const probe = { mode: "probe" };
 const dispatch = { mode: "dispatch", run_id: RUN };
 
 async function rejected(name, request, env, wantStatus) {
-  const s = spyDeps(env === undefined ? {} : { secretKeysEnv: env });
+  const s = spyDeps(env === undefined ? {} : { tokenEnv: env });
   const res = await H.handle(request, s.deps);
   const text = await res.text();
   const leaked = [KEY, OTHER].some((k) => text.includes(k) || s.logs.some((l) => l.includes(k)));
@@ -69,24 +70,26 @@ async function rejected(name, request, env, wantStatus) {
 }
 
 console.log("═══ المصادقة: قبل أيّ عمل ═══");
-await rejected("GET", req(null, { apikey: KEY }, "GET"), undefined, 405);
-await rejected("SUPABASE_SECRET_KEYS absent", req(probe, { apikey: KEY }), "", 503);
-await rejected("SUPABASE_SECRET_KEYS not JSON", req(probe, { apikey: KEY }), "{not json", 503);
-await rejected("SUPABASE_SECRET_KEYS an array", req(probe, { apikey: KEY }), JSON.stringify([KEY]), 503);
-await rejected("named key push_dispatch absent (only default)", req(probe, { apikey: OTHER }), JSON.stringify({ default: OTHER }), 503);
-await rejected("named key not sb_secret_", req(probe, { apikey: "eyJhbGciOi.legacy.jwt" }), JSON.stringify({ push_dispatch: "eyJhbGciOi.legacy.jwt" }), 503);
-await rejected("named key too short", req(probe, { apikey: SB + "x" }), JSON.stringify({ push_dispatch: SB + "x" }), 503);
-await rejected("no apikey header", req(probe), undefined, 401);
-await rejected("empty apikey header", req(probe, { apikey: "" }), undefined, 401);
-await rejected("wrong key", req(probe, { apikey: SB + "wrong_0123456789abcdef0123456789" }), undefined, 401);
-await rejected("the project's default secret key (wrong scope)", req(probe, { apikey: OTHER }), undefined, 401);
-await rejected("a legacy service_role-style JWT", req(probe, { apikey: "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.sig" }), undefined, 401);
-await rejected("the right key on Authorization: Bearer only", req(probe, { Authorization: `Bearer ${KEY}` }), undefined, 401);
-await rejected("a prefix of the right key", req(probe, { apikey: KEY.slice(0, -1) }), undefined, 401);
-await rejected("the right key plus a suffix", req(probe, { apikey: KEY + "x" }), undefined, 401);
-await rejected("dispatch without a key", req(dispatch), undefined, 401);
-check("expectedKey reads push_dispatch by name only",
-  H.expectedKey(ENV) === KEY && H.expectedKey(JSON.stringify({ default: KEY })) === null && H.expectedKey(undefined) === null);
+check("the credential header is x-push-dispatch-token", HDR === "x-push-dispatch-token");
+await rejected("GET", req(null, { [HDR]: KEY }, "GET"), undefined, 405);
+await rejected("PUSH_DISPATCH_TOKEN absent", req(probe, { [HDR]: KEY }), "", 503);
+await rejected("PUSH_DISPATCH_TOKEN too short (< 256 bits)", req(probe, { [HDR]: "abc" }), "a".repeat(42), 503);
+await rejected("PUSH_DISPATCH_TOKEN with characters outside base64url", req(probe, { [HDR]: KEY }), KEY.slice(0, 40) + "+/= x", 503);
+await rejected("PUSH_DISPATCH_TOKEN set to a Supabase secret key", req(probe, { [HDR]: SB + KEY }), SB + KEY, 503);
+await rejected("PUSH_DISPATCH_TOKEN set to a JWT-looking value", req(probe, { [HDR]: "eyJ" + KEY }), "eyJ" + KEY, 503);
+await rejected("no token header", req(probe), undefined, 401);
+await rejected("empty token header", req(probe, { [HDR]: "" }), undefined, 401);
+await rejected("wrong token", req(probe, { [HDR]: OTHER }), undefined, 401);
+await rejected("a prefix of the right token", req(probe, { [HDR]: KEY.slice(0, -1) }), undefined, 401);
+await rejected("the right token plus a suffix", req(probe, { [HDR]: KEY + "x" }), undefined, 401);
+await rejected("the right token on apikey only", req(probe, { apikey: KEY }), undefined, 401);
+await rejected("the right token on Authorization: Bearer only", req(probe, { Authorization: `Bearer ${KEY}` }), undefined, 401);
+await rejected("a Supabase secret key on apikey", req(probe, { apikey: SB + OTHER }), undefined, 401);
+await rejected("a service_role-style JWT on Authorization", req(probe, { Authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.sig" }), undefined, 401);
+await rejected("dispatch without a token", req(dispatch), undefined, 401);
+check("expectedToken accepts only a ≥ 256-bit base64url value that is not an API key",
+  H.expectedToken(KEY) === KEY && H.expectedToken(undefined) === null && H.expectedToken(SB + KEY) === null
+  && H.expectedToken("eyJ" + KEY) === null && H.expectedToken("a".repeat(42)) === null && H.expectedToken("a".repeat(129)) === null);
 check("sameKey: equal → true; any difference → false",
   (await H.sameKey(KEY, KEY)) && !(await H.sameKey(KEY, OTHER)) && !(await H.sameKey("", KEY)));
 
@@ -94,32 +97,32 @@ console.log("═══ الطلب بعد المصادقة ═══");
 for (const [name, body] of [["not JSON", "{"], ["unknown mode", { mode: "send" }], ["dispatch without run_id", { mode: "dispatch" }],
   ["dispatch with a non-uuid run_id", { mode: "dispatch", run_id: "1; drop" }], ["body over 1 KiB", { mode: "probe", pad: "x".repeat(2000) }]]) {
   const s = spyDeps();
-  const res = await H.handle(req(body, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(body, { [HDR]: KEY }), s.deps);
   check(`${name} → 400, nothing called`, res.status === 400 && s.calls.length === 0, `${res.status} ${JSON.stringify(s.calls)}`);
 }
 
 {
   const s = spyDeps();
-  const res = await H.handle(req(probe, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(probe, { [HDR]: KEY }), s.deps);
   const body = await res.json();
   check("probe → 200 with a count only", res.status === 200 && body.mode === "probe" && body.due === 2 && Object.keys(body).length === 3, JSON.stringify(body));
   check("probe never begins, delivers or ends a run", s.calls.length === 1 && s.calls[0] === "due:5", JSON.stringify(s.calls));
 }
 {
   const s = spyDeps({ dueIds: async () => { throw new Error("push_due_announcements: 42501"); } });
-  const res = await H.handle(req(probe, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(probe, { [HDR]: KEY }), s.deps);
   const text = await res.text();
   check("probe on a database error → 500 without detail", res.status === 500 && !text.includes("42501"), text);
 }
 {
   const s = spyDeps({ begin: async (r) => { s.calls.push(`begin:${r}`); return false; } });
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   check("dispatch without a live lease → 409, nothing delivered, lease not touched",
     res.status === 409 && !s.calls.some((c) => c.startsWith("deliver") || c.startsWith("end") || c.startsWith("due")), JSON.stringify(s.calls));
 }
 {
   const s = spyDeps({ configured: () => false });
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   check("dispatch with VAPID/DB unconfigured → 503; releases its own lease; no begin, no delivery",
     res.status === 503 && s.calls.length === 1 && s.calls[0].startsWith(`end:${RUN}:`), JSON.stringify(s.calls));
 }
@@ -127,7 +130,7 @@ for (const [name, body] of [["not JSON", "{"], ["unknown mode", { mode: "send" }
 console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
 {
   const s = spyDeps();
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   const body = await res.json();
   const delivers = s.calls.filter((c) => c.startsWith("deliver:"));
   check("dispatch → begin once, then every due id, then end once",
@@ -142,7 +145,7 @@ console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
     dueIds: async () => [1, 2, 3, 4, 5],
     deliver: async (id, budget) => { s.calls.push(`deliver:${id}:${budget}`); s.advance(budget); return { status: "delivered", claimed: 1, stale: 0, pending: 0, complete: true }; },
   });
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   const body = await res.json();
   const used = s.calls.filter((c) => c.startsWith("deliver:")).reduce((n, c) => n + Number(c.split(":")[2]), 0);
   check("the whole run stays inside 100 s (less than the 150 s request and 180 s lease)",
@@ -155,7 +158,7 @@ console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
     dueIds: async () => [1, 2, 3],
     deliver: async (id) => { s.calls.push(`deliver:${id}`); if (id === 2) throw new Error("push_claim_targets: https://fcm.example/secret-endpoint"); return { status: id === 3 ? "ineligible" : "delivered", reason: "expired", claimed: 1, stale: 0, pending: 0, complete: true }; },
   });
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   const text = await res.text();
   const body = JSON.parse(text);
   check("one failing announcement does not stop the others", body.delivered === 1 && body.errors === 1 && body.ineligible === 1, text);
@@ -165,12 +168,12 @@ console.log("═══ التسليم: ميزانيةٌ وعقد ═══");
 }
 {
   const s = spyDeps({ end: async () => { throw new Error("end failed"); } });
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   check("an end() failure still answers 200 (the lease expires on its own)", res.status === 200);
 }
 {
   const s = spyDeps({ dueIds: async () => { throw new Error("db down"); } });
-  const res = await H.handle(req(dispatch, { apikey: KEY }), s.deps);
+  const res = await H.handle(req(dispatch, { [HDR]: KEY }), s.deps);
   const body = await res.json();
   check("dueIds failure during dispatch → counted, lease released", body.errors === 1 && s.calls.at(-1).startsWith(`end:${RUN}:`), JSON.stringify(body));
 }

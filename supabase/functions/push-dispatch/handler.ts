@@ -1,17 +1,19 @@
 /* ══════════════════════════════════════════════════════════════
    M5 — push-dispatch: يوقظه المُجدوِل (pg_cron → pg_net) فيسلّم ما حان.
 
-   ⚠️ verify_jwt = false لأن المفتاح المسمّى (`sb_secret_…`) ليس JWT،
-   فالبوابةُ لا تفهمه ولا تتحقّق من ترويسة apikey له. فالمصادقةُ هنا،
-   **قبل أيّ شيءٍ آخر** — قبل قراءة الجسم وقبل أيّ نداءٍ للقاعدة:
-     · المتوقَّع: `SUPABASE_SECRET_KEYS["push_dispatch"]` وحده. لا `default`
-       ولا مفتاحَ آخر ولا service_role ولا anon: مفتاحٌ صالحٌ باسمٍ آخر يُرفض.
-     · غيابُ المتغيّر أو فسادُه أو غيابُ الاسم ← 503 (إغلاقٌ معلَن).
-     · ترويسةٌ غائبة أو مفتاحٌ آخر ← 401. والمقارنةُ بزمنٍ ثابت على بصمتين.
-     · لا مفتاحَ في سجلٍّ ولا في ردّ، ولا CORS (لا يُستدعى من متصفّح).
+   ⚠️ verify_jwt = false لأن المستدعي (pg_net) لا يحمل JWT مستخدم، ولا يجوز أن
+   يحمل مفتاحَ API من Supabase: pg_net يحفظ ترويساتِ الطلب في
+   `net.http_request_queue`، وpg_net 0.20.x يمنح `PUBLIC` جداولَ مخطّط net، ومفتاحُ
+   `sb_secret_…` أو service_role يتجاوز RLS على القاعدة كلّها. فالمستدعي يحمل
+   **رمزاً لهذه الدالّة وحدها** (`PUSH_DISPATCH_TOKEN`، ٢٥٦ بتّاً فأكثر)، لا يفتح شيئاً غيرها.
+   والمصادقةُ هنا **قبل أيّ شيءٍ آخر** — قبل قراءة الجسم وقبل أيّ نداءٍ للقاعدة:
+     · غيابُ الرمز من أسرار الدالّة، أو قِصرُه، أو كونُه مفتاحَ API ← 503 (إغلاقٌ معلَن).
+     · ترويسةٌ غائبة أو رمزٌ آخر ← 401. والمقارنةُ بزمنٍ ثابت على بصمتين.
+       ومفتاحُ apikey أو Authorization لا يُقرأ أصلاً: لا يقوم مقامَ الرمز.
+     · لا رمزَ في سجلٍّ ولا في ردّ، ولا CORS (لا يُستدعى من متصفّح).
 
    ثم: `probe` يعدّ المستحقّ ولا يسلّم شيئاً. و`dispatch` لا يسلّم إلا بعقدِ
-   تشغيلٍ حيٍّ كتبه `push_dispatch_tick()` (begin مرّةً واحدة)، فحاملُ المفتاح
+   تشغيلٍ حيٍّ كتبه `push_dispatch_tick()` (begin مرّةً واحدة)، فحاملُ الرمز
    وحده لا يبدأ تسليماً لم يطلبه المُجدوِل — وبلا مُجدوِلٍ مفعَّل لا عقد، فلا تسليم.
 
    لا يعرف Deno ولا supabase-js ولا web-push: يأخذها دوالَّ فيُختبر وحده.
@@ -19,8 +21,9 @@
 
 import type { DeliverOutcome } from "./deliver.ts";
 
-export const KEY_NAME = "push_dispatch";
-const KEY_RE = /^sb_secret_[A-Za-z0-9_-]{20,}$/;
+export const TOKEN_HEADER = "x-push-dispatch-token";
+/* ٢٥٦ بتّاً فأكثر بأبجديّة base64url، وليس مفتاحَ API من Supabase (sb_…) ولا JWT (eyJ…) */
+const TOKEN_RE = /^[A-Za-z0-9_-]{43,128}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BODY = 1024;
 
@@ -32,8 +35,8 @@ export const RESERVE_MS = 15_000;
 export const MAX_PER_RUN = 5;
 
 export type DispatchDeps = {
-  /* SUPABASE_SECRET_KEYS كما هو (نصّ JSON) أو undefined */
-  secretKeysEnv: string | undefined;
+  /* PUSH_DISPATCH_TOKEN كما هو، أو undefined */
+  tokenEnv: string | undefined;
   /* VAPID وعنوانُ القاعدة ومفتاحُ الخدمة مضبوطة */
   configured: () => boolean;
   dueIds: (limit: number) => Promise<number[]>;
@@ -44,18 +47,10 @@ export type DispatchDeps = {
   log: (event: string, data: Record<string, unknown>) => void;
 };
 
-/* المفتاحُ المتوقَّع، أو null إن لم يكن مضبوطاً كما يجب — لا افتراضَ ولا بديل */
-export function expectedKey(raw: string | undefined): string | null {
-  if (!raw) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const v = (parsed as Record<string, unknown>)[KEY_NAME];
-  return typeof v === "string" && KEY_RE.test(v) ? v : null;
+/* الرمزُ المتوقَّع، أو null إن لم يكن مضبوطاً كما يجب — لا افتراضَ ولا بديل */
+export function expectedToken(raw: string | undefined): string | null {
+  if (typeof raw !== "string" || !TOKEN_RE.test(raw) || /^(sb_|eyJ)/.test(raw)) return null;
+  return raw;
 }
 
 /* زمنٌ ثابت: تُقارن بصمتا SHA-256 (طولٌ ثابت) بايتاً بايتاً بلا خروجٍ مبكّر */
@@ -79,12 +74,12 @@ export async function handle(req: Request, deps: DispatchDeps): Promise<Response
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   /* ── (١) المصادقة: قبل كلّ شيء ── */
-  const expected = expectedKey(deps.secretKeysEnv);
+  const expected = expectedToken(deps.tokenEnv);
   if (!expected) {
     deps.log("push-dispatch auth", { result: "not_configured" });
     return json({ error: "not_configured" }, 503);
   }
-  const presented = req.headers.get("apikey") ?? "";
+  const presented = req.headers.get(TOKEN_HEADER) ?? "";
   if (!presented) {
     deps.log("push-dispatch auth", { result: "missing" });
     return json({ error: "unauthorized" }, 401);

@@ -120,7 +120,7 @@ supabase/
 | ج٧ | `mark_pilgrim_notification_read(p_token, …)` | تعليم التنبيه مقروءاً | `SECURITY DEFINER` · **الهوية من الجلسة** (س٧ · إغلاق ف٢) | تنبيهات البوابة |
 | ج٨ | `‎/auth/v1/token` | الدخول وتأكيد كلمة المرور | GoTrue خارج `public` · التسجيل الذاتي مُغلق | نظام الهوية |
 | ج٩ | **`pilgrim-doc`** (دالة Edge · `verify_jwt=false`) | الحاجّ يفتح **مستنده هو** بعد خصخصة الحاوية | **نمط البوابة المجهولة** (Security Architecture v1.5 §٧.٢) · قائمة أنواع صريحة · **رمز جلسة** عبر `verify_pilgrim_session` · **المفتاح تستخرجه الدالة من سجلّ الحاجّ** · رابط موقّع ١٥ دقيقة · ثلاثة حدود fail-closed · ٤٠٤ واحد لا يفرّق بين «لا حاجّ» و«لا مستند» | بوابة الحاج |
-| ج١٣ | **`push-dispatch`** (دالة Edge · `verify_jwt=false`) | المُجدوِل (pg_cron → pg_net) يوقظها لتدفع المجدوَل الذي حان | **ليست مجهولة:** المفتاحُ `sb_secret_…` ليس JWT فلا تفهمه البوابة، فتُصادَق في الدالة قبل أيّ عمل على **المفتاح المسمّى `push_dispatch` وحده** (لا `default` ولا service_role) بمقارنةٍ ثابتة الزمن · غيابُ الضبط 503 · `dispatch` بلا عقدِ تشغيلٍ حيٍّ كتبه `push_dispatch_tick()` يُرفض 409 · لا CORS · لا مفتاحَ في ردٍّ ولا سجلّ | تنبيهات البوابة (M5) |
+| ج١٣ | **`push-dispatch`** (دالة Edge · `verify_jwt=false`) | المُجدوِل (pg_cron → pg_net) يوقظها لتدفع المجدوَل الذي حان | **ليست مجهولة:** تُصادَق في الدالة قبل أيّ عمل على **رمزٍ لها وحدها** (`PUSH_DISPATCH_TOKEN`، ترويسة `x-push-dispatch-token`) بمقارنةٍ ثابتة الزمن — لا مفتاحَ API من Supabase، لأن pg_net يحفظ الترويساتِ في جدولٍ ممنوحٍ لـPUBLIC · غيابُ الضبط 503 · `dispatch` بلا عقدِ تشغيلٍ حيٍّ كتبه `push_dispatch_tick()` يُرفض 409 · لا CORS · لا مفتاحَ في ردٍّ ولا سجلّ | تنبيهات البوابة (M5) |
 | ج١٠ | حاوية **`company-assets`** (قراءة عامة) | شاشة الدخول تعرض الشعار والخلفية قبل وجود جلسة | حاوية مستقلّة عن المستندات · الكتابة لـ`authenticated` وحده | ملفّ الشركة |
 
 > **الثابت أ١٢ (س٧):** لا يُخزَّن على جهاز الحاجّ اعتمادُ هويةٍ دائم. بعد إثبات
@@ -196,13 +196,13 @@ Supabase تحقن هذه في كل دالة. تُذكر هنا لأن القرا
 | `SUPABASE_URL` | عنوان المشروع — عميل الخادم يُبنى عليه | `_shared/authorize` · `pilgrim-doc` · `send-pilgrim-push` · `push-dispatch` · `user-admin` |
 | `SUPABASE_ANON_KEY` | فحصُ الصلاحية **بهوية المستدعي نفسه** (النمط الثلاثي §٧.٢) | `_shared/authorize` |
 | `SUPABASE_SERVICE_ROLE_KEY` | العملُ بامتياز الخادم بعد اجتياز التفويض وحده | `_shared/authorize` · `pilgrim-doc` · `send-pilgrim-push` · `push-dispatch` · `user-admin` |
-| `SUPABASE_SECRET_KEYS` | المفاتيحُ السرّيّة المسمّاة (JSON بالاسم). يُقرأ منها `push_dispatch` وحده للمصادقة، ولا يُستعمل لغيرها. **المفتاحُ المسمّى يُنشأ من لوحة Supabase** قبل التنشيط؛ وبغيابه تردّ الدالّة 503 | `push-dispatch` |
 
 ### مطلوبة لميزةٍ بعينها — الدالةُ تتعطّل بغيابها
 
 | الاسم | الغرض | يقرؤها | أثر الغياب |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | استخراجُ بيانات المستندات من الصورة | `Scan-passport` | المسحُ لا يعمل |
+| `PUSH_DISPATCH_TOKEN` | رمزُ المُجدوِل إلى `push-dispatch` وحدها (٢٥٦ بتّاً فأكثر، base64url، **ليس** مفتاحَ API). نسختُه الثانية في Vault (`push_dispatch_token`). يُضبط قبل التنشيط (M5 PR 2) | `push-dispatch` | الدالّةُ تردّ 503 على كلّ طلب، فلا دفعَ مجدوَل |
 | `VAPID_PUBLIC_KEY` | مفتاحُ Web Push العلنيّ | `send-pilgrim-push` · `push-dispatch` | الدفعُ لا يعمل |
 | `VAPID_PRIVATE_KEY` | مفتاحُ Web Push السرّيّ — توقيعُ الإرسال | `send-pilgrim-push` · `push-dispatch` | الدفعُ لا يعمل |
 | `VAPID_SUBJECT` | هويةُ المُرسِل التي يشترطها معيار VAPID | `send-pilgrim-push` · `push-dispatch` | الدفعُ لا يعمل |

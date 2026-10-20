@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 // بوابة الحاجّ — M5: المسارُ كلُّه على قاعدةٍ محلّيّة — التيكُ الحقيقيّ ← طلبُه كما سجّله
-// pg_net ← handler.ts بالمفتاح المسمّى ← deliver.ts ← حلقةُ M6 الحقيقيّة ← خدمةُ دفعٍ وهميّة.
+// pg_net ← handler.ts برمز push-dispatch ← deliver.ts ← حلقةُ M6 الحقيقيّة ← خدمةُ دفعٍ وهميّة.
 // لا شبكةَ ولا إرسالَ حقيقيّ ولا بياناتَ حقيقيّة.
 //
 //   node --experimental-strip-types supabase/verification/portal/m5_push_dispatch_e2e.mjs
@@ -8,7 +8,8 @@
 //
 //   مجدوَلٌ حان يُسلَّم مرّةً، بـtopic ann-<id>، ولجمهوره المخصّص وحده · لم يحن/منتهٍ لا يُمسّ
 //   · تيكٌ بعد الاكتمال idle ولا يعيد · إعادةُ الطلب نفسه 409 · طلبٌ بلا عقد 409
-//   · مفتاحٌ آخر 401 قبل أيّ نداءٍ للقاعدة · M6: عابرٌ يُعاد ثم يصل · عاملٌ سقط يُستردّ بالتيك التالي
+//   · مفتاحُ Supabase بدل الرمز 401 قبل أيّ نداءٍ للقاعدة · مُجدوِلٌ تعطّل ساعاتٍ ثم عاد: الساري يُسلَّم
+//   والمنتهي لا · M6: عابرٌ يُعاد ثم يصل · عاملٌ سقط يُستردّ بالتيك التالي
 //   · يدويٌّ (send-pilgrim-push) ومجدوَلٌ متزامنان: كلُّ جهازٍ مرّةً · فوريٌّ أُرسل لا يُعاد
 //   · الاستردادُ اليدويّ لتنبيهٍ تحت الحدّ التاريخيّ
 // ⚠️ يرفض أيَّ قاعدةٍ غيرِ محلّيّة أو فيها pg_net/Vault حقيقيّ، ويحذف ما يكتبه.
@@ -45,10 +46,9 @@ if (sqlSync("select count(*) from pg_namespace where nspname in ('net','vault')"
 if (sqlSync("select count(*) from public.seasons where id = 9791") !== "0") { console.log("يرفض: موسمُ التهيئة موجود"); process.exit(2); }
 if (sqlSync("select count(*) from public.seasons where closed_at is null") !== "0") { console.log("يرفض: في القاعدة موسمٌ مفتوح"); process.exit(2); }
 
-/* مفاتيحُ مُصطنَعة تُبنى بالوصل، فلا يبدو سطرٌ في المستودع مفتاحاً حقيقيّاً */
-const SB = "sb_" + "secret_";
-const KEY = SB + "m5e2e_local_only_00000000000000000";
-const SECRET_KEYS = JSON.stringify({ default: SB + "m5e2e_default_other_000000000000", push_dispatch: KEY });
+/* رمزٌ عشوائيّ لكلّ تشغيل (٢٥٦ بتّاً، base64url) — لا قيمةَ ثابتةً في المستودع */
+const KEY = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
+const SB_KEY = "sb_" + "secret_" + Buffer.from(crypto.getRandomValues(new Uint8Array(24))).toString("base64url");
 const URL = "https://m5-e2e.invalid/functions/v1/push-dispatch";
 const CUT0 = sqlSync("select cutoff_id from public.push_dispatch_state");
 
@@ -70,7 +70,7 @@ sqlSync(`create schema net; create table net.calls (id bigserial, url text, body
   create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 2000)
   returns bigint language sql as $f$ insert into net.calls (url, body, headers, timeout_ms) values (url, body, headers, timeout_milliseconds) returning id $f$;
   create schema vault; create table vault.decrypted_secrets (name text primary key, decrypted_secret text);
-  insert into vault.decrypted_secrets values ('push_dispatch_url', '${URL}'), ('push_dispatch_key', '${KEY}');`);
+  insert into vault.decrypted_secrets values ('push_dispatch_url', '${URL}'), ('push_dispatch_token', '${KEY}');`);
 
 /* 5821 جهازان (ok + flaky) · 5822 جهاز · 5823 بلا جهاز · 5824 خارج الجمهور بجهاز */
 sqlSync(`set app.season_maintenance = 'on';
@@ -119,7 +119,7 @@ function deps(push, over = {}) {
   const counted = async (fn, args) => { dbCalls++; return rpc(fn, args); };
   return {
     get dbCalls() { return dbCalls; },
-    secretKeysEnv: SECRET_KEYS,
+    tokenEnv: KEY,
     configured: () => true,
     dueIds: (n) => counted("push_due_announcements", { p_limit: n }).then((x) => x ?? []),
     begin: (r) => counted("push_dispatch_begin", { p_run_id: r }).then((x) => x === true),
@@ -139,8 +139,9 @@ function deps(push, over = {}) {
 }
 const tick = () => sqlSync("select public.push_dispatch_tick()");
 const lastCall = () => JSON.parse(sqlSync("select to_jsonb(c) from net.calls c order by id desc limit 1"));
-const asRequest = (call, apikey = call.headers.apikey) =>
-  new Request(call.url, { method: "POST", headers: { "Content-Type": "application/json", apikey }, body: JSON.stringify(call.body) });
+/* الطلبُ كما سجّله pg_net: ترويساتُه كلُّها كما هي، أو ترويساتٌ بديلة */
+const asRequest = (call, headers = call.headers) =>
+  new Request(call.url, { method: "POST", headers, body: JSON.stringify(call.body) });
 /* «ما سيُرسله pg_net»: التيك ثم طلبُه المسجَّل إلى الدالّة */
 async function scheduled(push, over) {
   const t = tick();
@@ -181,8 +182,21 @@ try {
   const fr = await handle(asRequest(forged), deps(p1));
   check("a dispatch with a run id no tick issued → 409, nothing sent", fr.status === 409 && p1.sends.length === before);
   const wd = deps(p1);
-  const wrong = await handle(asRequest(r1.call, JSON.parse(SECRET_KEYS).default), wd);
-  check("the project's default secret key → 401 before any database call", wrong.status === 401 && wd.dbCalls === 0);
+  const wrong = await handle(asRequest(r1.call, { "Content-Type": "application/json", apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }), wd);
+  check("a Supabase secret key (apikey / Bearer) instead of the token → 401 before any database call", wrong.status === 401 && wd.dbCalls === 0);
+  check("the scheduler's request carries the scoped token and no Supabase API key",
+    r1.call.headers["x-push-dispatch-token"] === KEY && !("apikey" in r1.call.headers) && !("Authorization" in r1.call.headers));
+
+  console.log("═══ مُجدوِلٌ تعطّل ساعاتٍ ثم عاد ═══");
+  devices("late"); announcement(4848, "now() - interval '5 hours'"); announcement(4849, "now() - interval '5 hours'", "now() - interval '10 minutes'");
+  const pl = pushService({ flakyFails: 0 });
+  const rl = await scheduled(pl);
+  check("5 hours late and still active → delivered automatically once",
+    rl.tick === "dispatched" && rl.body.delivered === 1 && pl.sends.length === 3 && pl.sends.every((x) => x.options.topic === "ann-4848"),
+    JSON.stringify(rl.body));
+  check("5 hours late but expired → never prepared, never sent",
+    sqlSync("select count(*) from public.announcement_push_targets where announcement_id = 4849") === "0" && pl.sends.every((x) => x.options.topic !== "ann-4849"));
+  check("after recovery nothing is left due → idle", tick() === "idle");
 
   console.log("═══ M6: عاملٌ سقط يستردّه التيكُ التالي ═══");
   devices("s2"); announcement(4844);

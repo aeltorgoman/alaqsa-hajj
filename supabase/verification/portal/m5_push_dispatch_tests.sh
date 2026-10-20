@@ -7,7 +7,8 @@
 #   LOCAL='postgresql:///db?host=/path/to/socket&port=…&user=postgres' …
 #
 #   الاستحقاق: حان · لم يحن · منتهٍ · أُنهي (إلغاء) · موسمٌ آخر · مكتمل · أُرسل قبل M6
-#              · تحت الحدّ التاريخيّ · فات موعدُه بأكثر من ساعة · مُهيّأٌ له جهازٌ يُحجز
+#              · تحت الحدّ التاريخيّ · مُهيّأٌ له جهازٌ يُحجز
+#   التأخّر: فات موعدُه بساعاتٍ أو أيّام (المُجدوِل كان معطَّلاً) وما زال سارياً ← مستحقّ؛ ومنتهٍ ← أبداً
 #   الحدُّ التاريخيّ: ثابت (تعديل/حذف/تفريغ مرفوض)، وإعادةُ البذر لا تعيده
 #   الجمهورُ المخصّص: التهيئةُ لا تبلغ إلا حجّاجَه وأجهزتَهم
 #   التيك: idle بلا طلب · not_configured بلا pg_net/Vault أو بعنوانٍ/مفتاحٍ فاسد · dispatched
@@ -44,7 +45,8 @@ if [ "$(q "select count(*) from public.seasons where closed_at is null")" != "0"
 if [ "$(q "select count(*) from pg_namespace where nspname in ('net','vault')")" != "0" ]; then echo "يرفض: مخطّط net أو vault موجود"; exit 2; fi
 
 CUT0="$(q "select cutoff_id from public.push_dispatch_state")"
-KEY="sb_""secret_m5localtestonly_0000000000000000"   # مُصطنَع، يُبنى بالوصل
+# رمزٌ عشوائيّ لهذا التشغيل وحده (٢٥٦ بتّاً، base64url)
+KEY="$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
 URL="https://m5-local.invalid/functions/v1/push-dispatch"
 
 cleanup() {
@@ -110,16 +112,27 @@ ann 4813 "now() - interval '5 minutes'"                                         
 ann 4814 "now() - interval '2 minutes'" "" 9782                                   # موسمٌ آخر
 ann 4815 "now() - interval '2 minutes'" "" 9781 "now()"                           # مكتمل
 ann 4816 "now() - interval '2 minutes'"                                           # أُرسل قبل M6
-ann 4817 "now() - interval '3 hours'"                                             # فات بأكثر من ساعة
+ann 4817 "now() - interval '3 hours'"                                             # فات بساعات، سارٍ
+ann 4818 "now() - interval '3 days'"                                              # فات بأيّام، بلا انتهاء
+ann 4819 "now() - interval '3 days'" "now() - interval '1 hour'"                  # فات وانتهى
 q "update public.announcements set expires_at = now() where id = 4813" > /dev/null
 q "insert into public.notification_deliveries (announcement_id, passenger_id, status) values (4816, 5801, 'sent')" > /dev/null
 D="$(due)"
 has "$D" 4810 && ok "حان، في الموسم، بلا تسليم ← مستحقّ" || bad "4810 ليس مستحقّاً ($D)"
 for x in "4801:تحت الحدّ التاريخيّ" "4811:لم يحن" "4812:منتهٍ" "4813:أُنهي (إلغاء)" "4814:موسمٌ آخر" \
-         "4815:مكتمل (push_sent_at)" "4816:أُرسل قبل M6 (سجلّات)" "4817:فات موعدُه بأكثر من ساعة"; do
+         "4815:مكتمل (push_sent_at)" "4816:أُرسل قبل M6 (سجلّات)" "4819:فات موعدُه وانتهى"; do
   id="${x%%:*}"; has "$D" "$id" && bad "${x#*:} ← مستحقّ ($D)" || ok "${x#*:} ← ليس مستحقّاً"
 done
-eq "المستحقّ وحده" "$D" "4810"
+has "$D" 4817 && ok "فات موعدُه بثلاث ساعات وما زال سارياً ← مستحقّ (لا يُتخطّى لتعطّل المُجدوِل)" || bad "4817 تُخطّي ($D)"
+has "$D" 4818 && ok "فات موعدُه بثلاثة أيّام بلا انتهاء ← مستحقّ" || bad "4818 تُخطّي ($D)"
+eq "المستحقّ بترتيب موعده: الأقدمُ أولاً" "$D" "4818,4817,4810"
+q "update public.announcements set expires_at = now() where id = 4817" > /dev/null
+eq "المتأخّرُ حين ينتهي (أُنهي) ← يخرج فوراً" "$(due)" "4818,4810"
+r="$(as_role service_role "select push_prepare_announcement(4817)::text")"
+echo "$r" | grep -q '"reason": "expired"' && ok "والتهيئةُ نفسُها (M6) ترفضه منتهياً" || bad "تهيئةُ المنتهي: $r"
+eq "ولا هدفَ له" "$(q "select count(*) from announcement_push_targets where announcement_id = 4817")" "0"
+q "update public.announcements set push_sent_at = now() where id = 4818" > /dev/null
+eq "المستحقّ وحده" "$(due)" "4810"
 
 echo "── الجمهورُ المخصّص (تهيئة M6 من مسار M5)"
 r="$(as_role service_role "select push_prepare_announcement(4810)::text")"
@@ -154,15 +167,17 @@ q "create schema net; create table net.calls (id bigserial, url text, body jsonb
      values (url, body, headers, timeout_milliseconds) returning id \$f\$;
    create schema vault; create table vault.decrypted_secrets (name text primary key, decrypted_secret text);" > /dev/null
 eq "pg_net بلا أسرار ← not_configured" "$(tick)" "not_configured"
-q "insert into vault.decrypted_secrets values ('push_dispatch_url', 'http://m5-local.invalid/functions/v1/push-dispatch'), ('push_dispatch_key', '$KEY')" > /dev/null
+q "insert into vault.decrypted_secrets values ('push_dispatch_url', 'http://m5-local.invalid/functions/v1/push-dispatch'), ('push_dispatch_token', '$KEY')" > /dev/null
 eq "عنوانٌ بلا https ← not_configured" "$(tick)" "not_configured"
 q "update vault.decrypted_secrets set decrypted_secret = 'https://m5-local.invalid/functions/v1/send-pilgrim-push' where name = 'push_dispatch_url'" > /dev/null
-eq "عنوانُ دالّةٍ أخرى ← not_configured (لا يُرسل المفتاحُ إليها)" "$(tick)" "not_configured"
-q "update vault.decrypted_secrets set decrypted_secret = '$URL' where name = 'push_dispatch_url';
-   update vault.decrypted_secrets set decrypted_secret = 'eyJhbGciOiJIUzI1NiJ9.legacy' where name = 'push_dispatch_key'" > /dev/null
-eq "مفتاحٌ ليس sb_secret_ (JWT قديم) ← not_configured" "$(tick)" "not_configured"
+eq "عنوانُ دالّةٍ أخرى ← not_configured (لا يُرسل الرمزُ إليها)" "$(tick)" "not_configured"
+q "update vault.decrypted_secrets set decrypted_secret = '$URL' where name = 'push_dispatch_url'" > /dev/null
+for bad_tok in "short_token_only_20chars" "sb_""secret_$(printf 'a%.0s' $(seq 1 40))" "eyJ$(printf 'b%.0s' $(seq 1 60))" "has space $(printf 'c%.0s' $(seq 1 40))"; do
+  q "update vault.decrypted_secrets set decrypted_secret = '$bad_tok' where name = 'push_dispatch_token'" > /dev/null
+  eq "رمزٌ مرفوضُ الشكل (${bad_tok:0:6}…) ← not_configured" "$(tick)" "not_configured"
+done
 eq "ولا طلبَ في كلّ ما سبق" "$(calls)" "0"
-q "update vault.decrypted_secrets set decrypted_secret = '$KEY' where name = 'push_dispatch_key'" > /dev/null
+q "update vault.decrypted_secrets set decrypted_secret = '$KEY' where name = 'push_dispatch_token'" > /dev/null
 
 echo "── التيك والعقد"
 T0="$(q "select count(*) from announcement_push_targets")"
@@ -171,8 +186,8 @@ eq "طلبٌ واحد" "$(calls)" "1"
 RUN="$(q "select lease_run_id from push_dispatch_state")"
 eq "الطلب: العنوانُ المضبوط" "$(q "select url from net.calls order by id desc limit 1")" "$URL"
 eq "الطلب: dispatch برقم العقد" "$(q "select (body->>'mode') || ':' || (body->>'run_id') from net.calls order by id desc limit 1")" "dispatch:$RUN"
-eq "الطلب: المفتاحُ في apikey وحده، لا Authorization" \
-  "$(q "select (headers->>'apikey' = '$KEY')::text || ':' || (headers ? 'Authorization')::text || ':' || (body::text like '%sb_secret%')::text from net.calls order by id desc limit 1")" "true:false:false"
+eq "الطلب: الرمزُ في x-push-dispatch-token وحده — لا apikey ولا Authorization، ولا في الجسم" \
+  "$(q "select (headers->>'x-push-dispatch-token' = '$KEY')::text || ':' || (headers ? 'apikey')::text || ':' || (headers ? 'Authorization')::text || ':' || (body::text like '%$KEY%')::text from net.calls order by id desc limit 1")" "true:false:false:false"
 eq "الطلب: مهلة ١٥٠ث" "$(q "select timeout_ms from net.calls order by id desc limit 1")" "150000"
 eq "العقد: ١٨٠ث، لم يبدأ" "$(q "select (lease_expires_at between now() + interval '170 seconds' and now() + interval '181 seconds')::text || ':' || lease_started::text from push_dispatch_state")" "true:false"
 eq "التيك لا يهيّئ ولا يحجز بنفسه" "$(q "select count(*) from announcement_push_targets")" "$T0"
@@ -215,6 +230,22 @@ eq "probe ← probe_sent" "$(q "select public.push_dispatch_probe()")" "probe_se
 eq "probe: mode=probe بلا run_id" "$(q "select (body->>'mode') || ':' || coalesce(body->>'run_id','-') from net.calls order by id desc limit 1")" "probe:-"
 eq "probe: لا عقد" "$(q "select (lease_run_id is null)::text from push_dispatch_state")" "true"
 eq "probe: طلبٌ واحد ولا أهدافَ جديدة" "$(( $(calls) - N0 )):$(q "select count(*) from announcement_push_targets")" "1:$T0"
+
+echo "── خطأُ pg_net لا يكشف الرمز ولا يترك عقداً"
+q "update push_dispatch_state set lease_run_id = null, lease_expires_at = null, lease_started = false;
+   create or replace function net.http_post(url text, body jsonb default '{}', params jsonb default '{}',
+                                 headers jsonb default '{}', timeout_milliseconds int default 2000)
+   returns bigint language plpgsql as \$f\$ begin raise exception 'pg_net down'; end \$f\$;" > /dev/null
+r="$(psql "$LOCAL" -X -q -At -v VERBOSITY=verbose -c "set log_min_messages = 'debug1'; select public.push_dispatch_tick()" 2>&1)"
+echo "$r" | grep -q "pg_net down" && ok "الخطأُ يبلغ المُجدوِل" || bad "لم يبلغ الخطأ: $r"
+echo "$r" | grep -qF "$KEY" && bad "الرمزُ في رسالة الخطأ أو سياقها" || ok "رسالةُ الخطأ وسياقُها بلا رمز"
+eq "خطأُ الطلب يُرجع العقدَ (لا عقدَ معلَّق)" "$(q "select (lease_run_id is null)::text from push_dispatch_state")" "true"
+q "create or replace function net.http_post(url text, body jsonb default '{}', params jsonb default '{}',
+                                 headers jsonb default '{}', timeout_milliseconds int default 2000)
+   returns bigint language sql as \$f\$ insert into net.calls (url, body, headers, timeout_ms)
+     values (url, body, headers, timeout_milliseconds) returning id \$f\$;" > /dev/null
+eq "الحالُ لا تحفظ الرمز" "$(q "select (to_jsonb(s)::text like '%$KEY%')::text from push_dispatch_state s")" "false"
+eq "ولا نصُّ دالّةٍ في القاعدة" "$(q "select count(*) from pg_proc where prosrc like '%$KEY%'")" "0"
 
 echo "── الصلاحيات"
 for r in anon authenticated service_role; do

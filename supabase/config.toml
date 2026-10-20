@@ -75,10 +75,11 @@ verify_jwt = true
 verify_jwt = false
 
 # ⚠️ **المخالفةُ الثانية، وهي مقصودة** — دالّةٌ لا يستدعيها إنسان (M5): يوقظها
-# المُجدوِل (`push_dispatch_tick()` عبر pg_net) بمفتاحٍ سرّيٍّ مسمّى `push_dispatch`
-# في ترويسة `apikey`. والمفتاحُ `sb_secret_…` ليس JWT، فالبوابةُ لا تفهمه.
+# المُجدوِل (`push_dispatch_tick()` عبر pg_net) برمزٍ لهذه الدالّة وحدها
+# (`PUSH_DISPATCH_TOKEN`، ترويسة `x-push-dispatch-token`) — لا JWT ولا مفتاحَ API،
+# لأن pg_net يحفظ الترويساتِ في جدولٍ ممنوحٍ لـPUBLIC.
 # و`false` هنا **لا يعني بلا مصادقة**: handler.ts يرفض قبل أيّ عملٍ كلَّ طلبٍ
-# لا يحمل هذا المفتاحَ بعينه (401)، ويُغلق إن لم يُضبط (503). الإرسالُ اليدويّ
+# لا يحمل هذا الرمزَ بعينه (401)، ويُغلق إن لم يُضبط (503). الإرسالُ اليدويّ
 # يبقى في send-pilgrim-push بـ`verify_jwt = true` وmanage_portal، بلا تغيير.
 [functions.push-dispatch]
 verify_jwt = false

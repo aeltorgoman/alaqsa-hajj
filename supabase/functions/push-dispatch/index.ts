@@ -2,15 +2,16 @@
    push-dispatch — دفعُ التنبيهات المجدوَلة حين يحين موعدُها (M5)
 
    يستدعيه المُجدوِل وحده: `push_dispatch_tick()` في القاعدة عبر pg_net،
-   بمفتاحٍ سرّيٍّ مسمّى (`push_dispatch`) في ترويسة apikey. المصادقةُ
-   والتوجيه في handler.ts، والتسليمُ في deliver.ts بحلقة M6 نفسها.
+   برمزٍ لهذه الدالّة وحدها في ترويسة x-push-dispatch-token (لا مفتاحَ API
+   من Supabase — انظر handler.ts). المصادقةُ والتوجيه في handler.ts،
+   والتسليمُ في deliver.ts بحلقة M6 نفسها.
 
    verify_jwt = false (supabase/config.toml) — والمصادقةُ في handler.ts
    قبل أيّ عمل. وsend-pilgrim-push لا يُمسّ: يبقى طريقَ الإرسال اليدويّ
    بـverify_jwt = true وصلاحية manage_portal.
 
-   المتغيرات: VAPID_PUBLIC_KEY · VAPID_PRIVATE_KEY · VAPID_SUBJECT
-   ومن المنصّة: SUPABASE_URL · SUPABASE_SERVICE_ROLE_KEY · SUPABASE_SECRET_KEYS
+   المتغيرات: VAPID_PUBLIC_KEY · VAPID_PRIVATE_KEY · VAPID_SUBJECT · PUSH_DISPATCH_TOKEN
+   ومن المنصّة: SUPABASE_URL · SUPABASE_SERVICE_ROLE_KEY
    ══════════════════════════════════════════════════════════════ */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -36,7 +37,7 @@ Deno.serve((req: Request) => {
   };
 
   return handle(req, {
-    secretKeysEnv: Deno.env.get("SUPABASE_SECRET_KEYS"),
+    tokenEnv: Deno.env.get("PUSH_DISPATCH_TOKEN"),
     configured: () => Boolean(url && serviceKey && publicKey && privateKey && subject),
     dueIds: (limit) => rpc<number[]>("push_due_announcements", { p_limit: limit }).then((ids) => ids ?? []),
     begin: (runId) => rpc<boolean>("push_dispatch_begin", { p_run_id: runId }).then((ok) => ok === true),
