@@ -256,6 +256,19 @@ if (process.env.WEB_PUSH_MODULE) {
   console.log("SKIP — WEB_PUSH_MODULE not set (web-push topic acceptance)");
 }
 
+console.log("═══ الإرسالُ اليدويّ (PortalPage) ═══");
+{
+  const ui = fs.readFileSync(path.join(here, "../../../src/components/PortalPage.tsx"), "utf8");
+  /* send-pilgrim-push (لا يُمسّ في M5) يضع لغير المعنوَن عنواناً ثابتاً؛ فالزرُّ الجديد للمعنوَن وحده */
+  check("manual send is offered only for announcements with their own title",
+    /const manualSendable = \(a: Announcement\) => !!a\.title\?\.trim\(\);/.test(ui)
+    && /async function sendUnsent\(a: Announcement\) \{\s*if \(!manualSendable\(a\)\) return;/.test(ui)
+    && /\(manualSendable\(a\)\s*\?\s*<button[^>]*onClick=\{\(\) => sendUnsent\(a\)\}/.test(ui));
+  check("the only call path from that button is send-pilgrim-push (no new privileged route)",
+    (ui.match(/functions\.invoke\(/g) ?? []).length === 1 && ui.includes('functions.invoke("send-pilgrim-push"'));
+  check("no company name hardcoded in PortalPage", !ui.includes("حملة الأقصى"));
+}
+
 console.log("═══ deliverAnnouncement ═══");
 function fakeDeliver(prep, claims) {
   const log = [];

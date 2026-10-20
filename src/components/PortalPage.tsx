@@ -299,8 +299,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   }
 
   /* M5 — الإرسالُ اليدويّ لتنبيهٍ ظاهرٍ لم يُرسَل: الطريقُ نفسه (send-pilgrim-push
-     بصلاحية manage_portal)، والقاعدةُ تمنع تهيئةً ثانية، فالضغطُ مرّتين لا يُرسل مرّتين. */
+     بصلاحية manage_portal)، والقاعدةُ تمنع تهيئةً ثانية، فالضغطُ مرّتين لا يُرسل مرّتين.
+     ⚠️ للتنبيه ذي العنوان وحده: send-pilgrim-push يضع لغير المعنوَن عنواناً ثابتاً لا اسمَ
+     الشركة المضبوط، فلا يُعرَض هنا طريقٌ يدفع إلى الحجّاج اسماً غيرَ اسمها. وغيرُ المعنوَن
+     يدفعه المُجدوِل (push-dispatch، باسم الشركة من company_config) إلى أن يُصلَح ذاك. */
+  const manualSendable = (a: Announcement) => !!a.title?.trim();
   async function sendUnsent(a: Announcement) {
+    if (!manualSendable(a)) return;
     const ok = await confirmAction("سيُدفع هذا التنبيه الآن إلى أجهزة الحجاج المستهدفين المفعّلة. هل أنت متأكد؟", { title: "إرسال إلى الأجهزة", confirmLabel: "إرسال" });
     if (!ok) return;
     setResuming(a.id);
@@ -429,7 +434,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
           {kind !== "ended" && kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
           {kind !== "ended" && <button onClick={() => removeItem(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>}
-          {kind === "live" && !a.push_sent_at && unsentPush.has(a.id) && !pendingPush.has(a.id) && <button disabled={resuming !== null} onClick={() => sendUnsent(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>{resuming === a.id ? "جارٍ الإرسال…" : "إرسال إلى الأجهزة"}</button>}
+          {kind === "live" && !a.push_sent_at && unsentPush.has(a.id) && !pendingPush.has(a.id) && (manualSendable(a)
+            ? <button disabled={resuming !== null} onClick={() => sendUnsent(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>{resuming === a.id ? "جارٍ الإرسال…" : "إرسال إلى الأجهزة"}</button>
+            : <span style={{ fontSize: 10.5, color: "var(--text-muted)", alignSelf: "center" }}>لم يُرسَل إلى الأجهزة — يُرسَل يدوياً التنبيهُ ذو العنوان وحده</span>)}
           {kind === "live" && pendingPush.has(a.id) && <button disabled={resuming !== null} onClick={() => resumePush(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>{resuming === a.id ? "جارٍ الاستكمال…" : "استكمال الإرسال"}</button>}
           {(a.push_sent_at || pendingPush.has(a.id)) && <button onClick={() => setReportFor(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
         </div>
