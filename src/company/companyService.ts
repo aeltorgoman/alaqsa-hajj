@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config/AppConfig";
 import type { Database, Json } from "../types/database";
-import type { CompanyAsset, CompanyAssetKey, CompanyProfile, SeasonMasterData } from "./types";
+import type { BankSettingsField, CompanyAsset, CompanyAssetKey, CompanyProfile, SeasonMasterData } from "./types";
 import { isPrivateCompanyAssetKey } from "./types";
 import { supabase } from "../supabase";
 import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "./safety";
@@ -172,6 +172,17 @@ export const companyService = {
       p_admin_phone: values.admin_phone,
       p_admin_whatsapp: values.admin_whatsapp,
     });
+    if (error) return classifyPostgrestError(error);
+    if (!data) return { status: "not_found", message: "تعذّر الوصول إلى صفّ إعدادات الحملة، لم يُحفظ شيء." };
+    return { status: "saved", data: data as unknown as ConfigRow };
+  },
+
+  /* ═══ البنك والسداد — البابُ الضيّق ═══
+     الحقولُ الستّة وحدها (البنك والحساب والرقم وIBAN وSWIFT والسجلّ
+     التجاريّ)، برقعةٍ بما تغيّر. لـ`manage_payments` أو `manage_users`،
+     والحارسُ والقائمةُ في الدالّة لا هنا: مفتاحٌ آخر يُرفض كلُّه. */
+  async updateBankSettings(patch: Partial<Record<BankSettingsField, string | null>>): Promise<SaveResult<ConfigRow>> {
+    const { data, error } = await supabase.rpc("update_company_bank_settings", { p_patch: patch as unknown as Json });
     if (error) return classifyPostgrestError(error);
     if (!data) return { status: "not_found", message: "تعذّر الوصول إلى صفّ إعدادات الحملة، لم يُحفظ شيء." };
     return { status: "saved", data: data as unknown as ConfigRow };
