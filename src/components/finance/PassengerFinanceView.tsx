@@ -2,7 +2,7 @@
 // شاشة تفاصيل حساب الحاج الفردي — مكوّن عرض فقط
 // لا يستورد Supabase ولا ينفّذ استعلامات ولا يحفظ ولا يحذف
 // ============================================================
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, AllocTypeMaps } from "./finance.types";
 import { getPriceInfo, viewSurcharge, requestedHotelName, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
@@ -34,6 +34,8 @@ export type PassengerFinanceViewProps = {
   // التنقّل والطباعة
   onBack: () => void;
   onPrintStatement: () => void;
+  /** «خيارات الطباعة» لكشف الحساب — بجوار زرّ الطباعة. */
+  statementOptions?: ReactNode;
 
   // السعر الخاص
   onEditCustomPrice: () => void;
@@ -62,7 +64,7 @@ export function PassengerFinanceView({
   passenger, pricing, hotelPrices, hotels, passengerPayments, passengerCharges, group, groups, allocTypes,
   canManage,
   editingCustomPrice, customPriceInput, savingCustomPrice,
-  onBack, onPrintStatement,
+  onBack, onPrintStatement, statementOptions,
   onEditCustomPrice, onCustomPriceInputChange, onSaveCustomPrice, onCancelEditCustomPrice,
   onAddPayment, onAddCharge, onOpenPayment, onDeletePayment, onDeleteCharge,
   onOpenGroup, onRemoveFromGroup, onCreateGroup, onAddToExistingGroup,
@@ -98,6 +100,7 @@ export function PassengerFinanceView({
           <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>{priceInfo.label}{addonRows.filter(a=>!a.isDiscount).map(a=>` · ${a.label}`).join("")}</div>
         </div>
         <span style={{ marginRight:"auto", fontSize:12, padding:"4px 14px", borderRadius:99, background:st.bg, color:st.color, fontWeight:700 }}>{st.label}</span>
+        {statementOptions}
         <button onClick={()=>onPrintStatement()} style={{ padding:"6px 12px", background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontSize:12, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:5, fontFamily:"var(--font-body)" }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
       </div>
       <div className="fin-trio" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>

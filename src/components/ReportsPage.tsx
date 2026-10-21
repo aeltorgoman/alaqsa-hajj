@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSeason } from "../season/useSeason";
 import { isHajj, orderHajjThenAdmins } from "../utils/passenger";
 /* ═══ الكشوفُ المشتركة ═══
@@ -13,6 +13,8 @@ import { busManifest, campManifest, campSubtitle, flightPassengers, campsInOrder
          compactHeaderHTML, chromeMetaHTML, pageStampHTML, PAGE_MARGIN_REPORT,
          type PrintReportKey, type PrintOptionsState } from "../print";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
+import { usePrintSeals } from "../company/printSeals";
+import type { PrintSeals } from "../print";
 import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { useCompanyPortal, useReportBranding } from "../company/CompanyContext";
@@ -109,10 +111,21 @@ function ReportsPage({ passengers: rawPassengers, resetKey, currentUser }: { pas
   const optsFor = (k: PrintReportKey) => printOpts[k] ?? initialPrintOptions(k);
   const setOptsFor = (k: PrintReportKey) => (next: PrintOptionsState) =>
     setPrintOpts(prev => ({ ...prev, [k]: next }));
+  /* الختمُ والتوقيع: يُحمَّلان قبل البناء ثم يُقرآن أثناءه من هذا المرجع —
+     فتبقى دوالُّ البناء كما هي، ولا يُبنى مستندٌ بختمٍ لم يصل. */
+  const { sealsFor, unavailable: sealsOff } = usePrintSeals(showAlert);
+  const sealsNow = useRef<PrintSeals | null>(null);
   const chromeFor = (k: PrintReportKey, inputs: Parameters<typeof chromeFromOptions>[2] = {}) =>
-    chromeFromOptions(k, optsFor(k), inputs);
+    chromeFromOptions(k, optsFor(k), { ...inputs, seals: sealsNow.current });
+  /** يحمّل ما طُلب من الختم والتوقيع لهذا التقرير، ثم يبني ويطبع — أو لا يطبع شيئاً. */
+  const printWith = async (k: PrintReportKey, build: () => string) => {
+    const seals = await sealsFor(k, optsFor(k));
+    if (!seals) return;
+    sealsNow.current = seals;
+    try { printInPage(build()); } finally { sealsNow.current = null; }
+  };
   const optionsMenu = (k: PrintReportKey) => (
-    <PrintOptionsMenu report={k} value={optsFor(k)} onChange={setOptsFor(k)} />
+    <PrintOptionsMenu report={k} value={optsFor(k)} onChange={setOptsFor(k)} disabled={sealsOff} />
   );
   // طالب درجة أولى: لو الدرجة المخصصة "درجة أولى" أو لو ده طلبه الأصلي في بياناته
   const wantsFirstClass = (p: Passenger) => p.flight_class === "درجة أولى" || p.services?.flight === "درجة أولى";
@@ -1261,7 +1274,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
               <ExportButtons
                 title="تقرير الحجاج"
                 onExcel={exportPassengersXLSX}
-                onPrint={() => printInPage(getPassengersHTML())}
+                onPrint={() => printWith("pilgrims", getPassengersHTML)}
                 options={optionsMenu("pilgrims")}
               />
 
@@ -1395,7 +1408,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                       <ExportButtons
                         title="تقرير خطوط الطيران"
                         onExcel={exportAirlineXLSX}
-                        onPrint={() => printInPage(getAirlineHTML())}
+                        onPrint={() => printWith("airline", getAirlineHTML)}
                         options={optionsMenu("airline")}
                       />
                       {/* خيارات الترتيب */}
@@ -1478,7 +1491,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginInlineStart: "auto" }}>
                           <button onClick={exportPerFlightXLSX} style={excelBtnStyle}>{excelIcon} Excel</button>
                           {optionsMenu("flights")}
-                          <button onClick={() => printInPage(getPerFlightHTML())} style={printBtnStyle}>{printIcon} طباعة</button>
+                          <button onClick={() => printWith("flights", getPerFlightHTML)} style={printBtnStyle}>{printIcon} طباعة</button>
                         </div>
                       </div>
                       {!isLoading("flights") && !isFailed("flights") && flights.length > 0 && (
@@ -1520,7 +1533,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                                     {flight.date && <div style={{ fontSize: 10, opacity: .65 }}>{flight.date}{flight.time ? ` · ${flight.time}` : ""}</div>}
                                   </div>
                                   {/* أيقونة طباعة */}
-                                  <button onClick={e => { e.stopPropagation(); printInPage(flightReportDocument(flight, passengers, branding)); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <button onClick={e => { e.stopPropagation(); void printWith("flights", () => flightReportDocument(flight, passengers, branding, { seals: sealsNow.current })); }} title="طباعة هذه الرحلة" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.15)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                                   </button>
                                 </div>
@@ -1595,7 +1608,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     title="تقرير الباصات"
                     onExcel={exportBusesXLSX}
                     options={optionsMenu("bus")}
-                    onPrint={() => printInPage(getBusesHTML())}
+                    onPrint={() => printWith("bus", getBusesHTML)}
                   />
                   <SelectionPanel
                     title="الباصات المطلوبة في التقرير"
@@ -1621,7 +1634,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{bus.name}{isVip && " — VIP"}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               {isVip && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>VIP</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleBusHTML(bus)); }} title="طباعة هذا الباص" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); void printWith("bus", () => getSingleBusHTML(bus)); }} title="طباعة هذا الباص" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1689,7 +1702,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     title="تقرير مخيمات منى"
                     onExcel={() => exportCampsXLSX("منى")}
                     options={optionsMenu("mina")}
-                    onPrint={() => printInPage(getCampsHTML("منى"))}
+                    onPrint={() => printWith("mina", () => getCampsHTML("منى"))}
                   />
                   <SelectionPanel
                     title="مخيمات منى المطلوبة في التقرير"
@@ -1713,7 +1726,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); void printWith("mina", () => getSingleCampHTML(camp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1740,7 +1753,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); void printWith("mina", () => getSingleCampHTML(camp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1776,7 +1789,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     title="تقرير مخيمات عرفة"
                     onExcel={() => exportCampsXLSX("عرفة")}
                     options={optionsMenu("arafa")}
-                    onPrint={() => printInPage(getCampsHTML("عرفة"))}
+                    onPrint={() => printWith("arafa", () => getCampsHTML("عرفة"))}
                   />
                   <SelectionPanel
                     title="مخيمات عرفة المطلوبة في التقرير"
@@ -1800,7 +1813,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); void printWith("arafa", () => getSingleCampHTML(camp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1827,7 +1840,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
-                              <button onClick={e => { e.stopPropagation(); printInPage(getSingleCampHTML(camp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <button onClick={e => { e.stopPropagation(); void printWith("arafa", () => getSingleCampHTML(camp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
                               </button>
                             </div>
@@ -1997,10 +2010,10 @@ const getReportAirlineLogo = (airline: string): string | null => {
                 options={optionsMenu("hotel")}
                 printActions={
                   <>
-                    <button onClick={() => printInPage(getHotelHTML({ landscape: false }))} style={printBtnStyle} title="ستّ عشرة غرفة في الورقة">
+                    <button onClick={() => printWith("hotel", () => getHotelHTML({ landscape: false }))} style={printBtnStyle} title="ستّ عشرة غرفة في الورقة">
                       {printIcon} طباعة بالطول
                     </button>
-                    <button onClick={() => printInPage(getHotelHTML({ landscape: true }))} style={printBtnStyle} title="خمس عشرة غرفة في الورقة — أسماء أوسع">
+                    <button onClick={() => printWith("hotel", () => getHotelHTML({ landscape: true }))} style={printBtnStyle} title="خمس عشرة غرفة في الورقة — أسماء أوسع">
                       {printIcon} طباعة بالعرض
                     </button>
                   </>

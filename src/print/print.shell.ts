@@ -11,6 +11,7 @@ import type { PrintChrome, HeaderMode } from "./print.chrome";
 import { compactHeaderHTML, chromeMetaHTML, CHROME_CSS } from "./print.chrome";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
 import { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK, COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternDataURL } from "./print.theme";
+import { hasSeals, sealPageCSS, sealPreloadHTML, bottomOfMargin } from "./print.seals";
 
 /* ═══ نمطُ التقرير العامّ ═══ */
 export function makeHTML(
@@ -86,6 +87,17 @@ export function makeHTML(
   const headerHTML = headerMode === "none" ? ""
     : headerMode === "compact" ? compactHeaderHTML(branding, title)
     : fullHeaderHTML;
+  /* الختمُ والتوقيع في هامش كلِّ ورقة (`print.seals.ts`) — ولا يُحقَن شيءٌ
+     إن لم يُطلبا، فالمطبوعُ كما كان بالحرف. والورقةُ الذرّيّةُ (هامشٌ صفر)
+     ترسمهما داخلها بنفسها، فلا هامشَ هنا يُعدَّل لها. */
+  const sealsOn = hasSeals(chrome.seals) && pageMargin.trim() !== "0";
+  const sealCSS = sealsOn ? `\n  ${sealPageCSS(chrome.seals!, bottomOfMargin(pageMargin))}` : "";
+  const sealImgs = sealsOn ? sealPreloadHTML(chrome.seals) : "";
+  /* ⚠️ سطرُ التذييل الختاميّ يحلّ محلَّه الختمُ والتوقيع حين يُطلبان: كشفٌ
+     بُني ليملأ ورقتَه (الباصُ والمخيّمُ بمعايرة الخطّ) كان يدفع ذلك السطرَ
+     وحده إلى ورقةٍ ثانية ليس فيها إلا هو والختم — وتلك ورقةٌ فارغةٌ فعلاً.
+     والسطرُ تكرارٌ لاسم الحملة والتقرير، والختمُ نفسُه توثيقُ الورقة. */
+  const showFooter = footer && !sealsOn;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${safeTitle}</title>
 ${FONT_LINK}
@@ -126,11 +138,11 @@ ${FONT_LINK}
   .page-break { page-break-after: always; }
   .page-break-before { page-break-before: always; }
   .footer { text-align: center; color: #aaa; font-size: 7pt; margin-top: 10pt; border-top: 0.5pt solid #eee; padding-top: 5pt; }
-  ${COLOR_ADJUST_RULE}${chromeCSS}
+  ${COLOR_ADJUST_RULE}${chromeCSS}${sealCSS}
 </style></head><body>
 ${headerHTML}${metaHTML}
-${body}
-${footer ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}
+${body}${sealImgs}
+${showFooter ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}
 </body></html>`;
 }
 
@@ -159,6 +171,8 @@ export function makeFinanceHTML(
   const showHeaderDate = chrome.issuedAt !== false;
   const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
   const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
+  const sealsOn = hasSeals(chrome.seals);
+  const sealCSS = sealsOn ? `\n  ${sealPageCSS(chrome.seals!, bottomOfMargin(PAGE_MARGIN_FINANCE))}` : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
 <style>
   ${pageRule(PAGE_MARGIN_FINANCE)}
@@ -181,7 +195,7 @@ export function makeFinanceHTML(
      أي أبيضُ على أبيض. موجودٌ في HTML وغيرُ مرئيّ على الورق. */
   tr.tot-row td { background: ${primaryColor} !important; color: #fff; font-weight: 700; }
   .footer { text-align:center; color:#bbb; font-size:7pt; margin-top:10pt; border-top:0.5pt solid #eee; padding-top:6pt; }
-  ${COLOR_ADJUST_RULE_ALL}${chromeCSS}
+  ${COLOR_ADJUST_RULE_ALL}${chromeCSS}${sealCSS}
 </style></head><body>
 ${(showBrand || showHeaderDate) ? `<div class="doc-header">
   ${showBrand ? `<div style="display:flex;align-items:center;gap:12px">
@@ -194,7 +208,7 @@ ${(showBrand || showHeaderDate) ? `<div class="doc-header">
 </div>` : ""}
 <div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}
-<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>
+${sealsOn ? sealPreloadHTML(chrome.seals) : `<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>`}
 </body></html>`;
 }
 

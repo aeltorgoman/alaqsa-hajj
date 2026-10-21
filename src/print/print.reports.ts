@@ -21,6 +21,7 @@ import { chromeMetaHTML, pageStampHTML, seasonLabel, compactHeaderHTML,
 import type { PrintBranding } from "./print.brand";
 import { safeBranding, escapeCompanyHtml } from "./print.brand";
 import { makeHTML } from "./print.shell";
+import { hasSeals, sealRowHTML } from "./print.seals";
 import { makeFlightSectionHTML, makeTwoLogoSectionHTML, renderNamesTable, joinSections } from "./print.blocks";
 import { busManifest, campManifest, flightManifest, flightsInOrder, campsInOrder,
          BUSES_DOC_TITLE, campsDocTitle, FLIGHTS_DOC_TITLE, type CampPageType } from "./print.manifests";
@@ -254,7 +255,15 @@ export function hotelReportDocument(
 ): string {
   const { landscape = false, showPattern = true, subtitle = "", chrome = {}, hotelOf, summary = false } = options;
   const COLS = landscape ? 5 : 4;
-  const ROWS = landscape ? 3 : 4;
+  /* ⚠️ الختمُ والتوقيع داخل الورقة لا فوقها: الورقةُ هنا ملكُ الشبكة كلُّها
+     (هامشُ `@page` صفر)، فلا هامشَ يسعهما ولا مساحةَ فارغةَ أسفلها — وأيُّ
+     صورةٍ تعلو الصفَّ الأخير تغطّي أسماءً. وتقصيرُ الكروت لإفساح صفّهما
+     جُرِّب: غرفُ الستّة والثمانية تضيق حتى تُقصّ أسطرُها.
+     فإن طُلبا نقصت الورقةُ **صفَّ غرفٍ واحداً** (١٦→١٢ طوليّاً، ١٥→١٠
+     عرضيّاً) وأخذا مكانَه — فلا يصغر خطٌّ ولا يقصر كرت، بل يطول قليلاً،
+     وتزيد الأوراق. والمطفأُ كما كان بالحرف. */
+  const seals = hasSeals(chrome.seals) ? chrome.seals : null;
+  const ROWS = (landscape ? 3 : 4) - (seals ? 1 : 0);
   const PER_PAGE = COLS * ROWS;
   const occupantsOf = (roomId: number) => passengers.filter(p => p.room_id === roomId);
 
@@ -359,7 +368,7 @@ export function hotelReportDocument(
       const pageFloor = pageRooms.length ? floorKeyOf(pageRooms[0]) : "";
       /* ورقةٌ واحدةٌ كاملة: هويّةٌ وعنوانٌ وحواشٍ وشبكةٌ وترقيمٌ وتذييل */
       return `<div class="hotel-print-page" data-floor="${escapeCompanyHtml(pageFloor)}">${headerHTML}${pi === 0 ? firstSheetBar : metaHTML}` +
-             `<div class="hotel-page">${cells}</div>${stamp}` +
+             `<div class="hotel-page">${cells}</div>${seals ? sealRowHTML(seals) : ""}${stamp}` +
              `<div class="hotel-foot">${footerLine}</div></div>`;
     }).join("");
 

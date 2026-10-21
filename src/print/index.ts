@@ -15,7 +15,12 @@ export { makeHTML, makeFinanceHTML } from "./print.shell";
 export type { PrintChrome, HeaderMode, PrintSeason } from "./print.chrome";
 export type { PrintOptionKey, PrintOptionsState, PrintOptionsSpec,
               PrintReportKey, PrintOptionInputs } from "./print.options";
-export { PRINT_OPTION_LABEL, PRINT_SPECS, initialPrintOptions, chromeFromOptions } from "./print.options";
+export { PRINT_OPTION_LABEL, PRINT_SPECS, initialPrintOptions, chromeFromOptions, requestedSeals, effectiveOptions } from "./print.options";
+export type { SealImage, PrintSeals } from "./print.seals";
+export { hasSeals, sealSizeMm, sealBandMm, sealBottomMarginMm, sealPageCSS, sealPreloadHTML, sealRowHTML, bottomOfMargin,
+         STAMP_BOX_MM, SIGNATURE_BOX_MM } from "./print.seals";
+export type { PrintBankLine, BankSource } from "./print.bank";
+export { bankLinesFrom, bankBlockHTML } from "./print.bank";
 export { seasonLabel, compactHeaderHTML, chromeMetaHTML, pageStampHTML, CHROME_CSS } from "./print.chrome";
 export type { NameItem } from "./print.blocks";
 export { sectionLogoHtml, renderNamesTable, makeTwoLogoSectionHTML, joinSections,
