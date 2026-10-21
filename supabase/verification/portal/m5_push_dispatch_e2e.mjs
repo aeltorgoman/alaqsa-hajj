@@ -5,6 +5,7 @@
 //
 //   node --experimental-strip-types supabase/verification/portal/m5_push_dispatch_e2e.mjs
 //   LOCAL='postgresql:///db?host=/path/to/socket&port=…&user=postgres' …
+//   على قاعدةٍ مُرحَّلةٍ حتى 20261020211932 وحده (قبل تثبيت pg_net الحقيقيّ): supabase db reset --version 20261020211932
 //
 //   مجدوَلٌ حان يُسلَّم مرّةً، بـtopic ann-<id>، ولجمهوره المخصّص وحده · لم يحن/منتهٍ لا يُمسّ
 //   · تيكٌ بعد الاكتمال idle ولا يعيد · إعادةُ الطلب نفسه 409 · طلبٌ بلا عقد 409
@@ -41,7 +42,7 @@ const check = (name, cond, detail = "") => {
   if (cond) { pass++; console.log(`PASS — ${name}`); } else { fail++; console.log(`FAIL — ${name}${detail ? ` (${detail})` : ""}`); }
 };
 
-if (sqlSync("select count(*) from pg_extension where extname in ('pg_net','supabase_vault')") !== "0") { console.log("يرفض: pg_net أو Vault حقيقيّ"); process.exit(2); }
+if (sqlSync("select count(*) from pg_extension where extname in ('pg_net','supabase_vault')") !== "0") { console.log("يرفض: pg_net أو Vault حقيقيّ — رحّل حتى 20261020211932 وحده"); process.exit(2); }
 if (sqlSync("select count(*) from pg_namespace where nspname in ('net','vault')") !== "0") { console.log("يرفض: مخطّط net أو vault موجود"); process.exit(2); }
 if (sqlSync("select count(*) from public.seasons where id = 9791") !== "0") { console.log("يرفض: موسمُ التهيئة موجود"); process.exit(2); }
 if (sqlSync("select count(*) from public.seasons where closed_at is null") !== "0") { console.log("يرفض: في القاعدة موسمٌ مفتوح"); process.exit(2); }

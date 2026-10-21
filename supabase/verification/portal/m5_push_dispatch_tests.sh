@@ -2,7 +2,9 @@
 # ════════════════════════════════════════════════════════════
 # بوابة الحاجّ — M5: دفعُ المجدوَل حين يحين — فحوصٌ بالتنفيذ (القاعدة)
 # ════════════════════════════════════════════════════════════
-# على قاعدةٍ محلّيّةٍ مؤقّتةٍ وحدها (بعد `db reset` إلى آخر ترحيلة):
+# على قاعدةٍ محلّيّةٍ مؤقّتةٍ وحدها، مُرحَّلةٍ حتى 20261020211932 (M5) — **قبل** 20261021030000 التي
+# تثبّت pg_net الحقيقيّ، فهذه الفحوص تستبدله ببديلٍ يسجّل ولا يرسل:
+#   supabase db reset --version 20261020211932
 #   supabase/verification/portal/m5_push_dispatch_tests.sh
 #   LOCAL='postgresql:///db?host=/path/to/socket&port=…&user=postgres' …
 #
@@ -39,7 +41,7 @@ as_role() { psql "$LOCAL" -X -q -At -v VERBOSITY=verbose -c "begin; set local ro
 noexec()  { echo "$1" | grep -q "ERROR:  42501: permission denied for"; }
 
 if [ "$(q "select count(*) from pg_extension where extname in ('pg_net','supabase_vault')")" != "0" ]; then
-  echo "يرفض: في القاعدة pg_net أو Vault حقيقيّ — هذه الفحوص تستبدلهما"; exit 2; fi
+  echo "يرفض: في القاعدة pg_net أو Vault حقيقيّ — هذه الفحوص تستبدلهما. رحّل حتى 20261020211932 وحده"; exit 2; fi
 if [ "$(q "select count(*) from public.seasons where id in (9781, 9782)")" != "0" ]; then echo "يرفض: موسمُ التهيئة موجود"; exit 2; fi
 if [ "$(q "select count(*) from public.seasons where closed_at is null")" != "0" ]; then echo "يرفض: في القاعدة موسمٌ مفتوح"; exit 2; fi
 if [ "$(q "select count(*) from pg_namespace where nspname in ('net','vault')")" != "0" ]; then echo "يرفض: مخطّط net أو vault موجود"; exit 2; fi
