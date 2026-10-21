@@ -287,9 +287,10 @@ eq "service_role ينفّذ الواجهةَ الثلاث" \
 echo "── لا تفعيلَ تلقائيّ"
 eq "لا pg_cron ولا pg_net مثبَّتَين بالترحيلة" "$(q "select count(*) from pg_extension where extname in ('pg_cron','pg_net')")" "0"
 eq "لا مخطّطَ cron" "$(q "select count(*) from pg_namespace where nspname = 'cron'")" "0"
-grep -qiE "^\s*(create|alter)\s+extension|cron\.schedule" \
-  "$(dirname "$0")/../../migrations/20261020153000_m5_scheduled_push_dispatch.sql" \
-  && bad "الترحيلةُ تثبّت امتداداً أو تجدول" || ok "الترحيلةُ لا تثبّت امتداداً ولا تجدول"
+M5_SQL="$(dirname "$0")/../../migrations/20261020211932_m5_scheduled_push_dispatch.sql"
+if [ ! -f "$M5_SQL" ]; then bad "ملفُّ الترحيلة غير موجود: $M5_SQL"
+elif grep -qiE "^\s*(create|alter)\s+extension|cron\.schedule" "$M5_SQL"; then bad "الترحيلةُ تثبّت امتداداً أو تجدول"
+else ok "الترحيلةُ لا تثبّت امتداداً ولا تجدول"; fi
 
 echo
 echo "النتيجة: $pass نجح · $fail أخفق"
