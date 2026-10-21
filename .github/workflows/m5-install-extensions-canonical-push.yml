@@ -238,7 +238,8 @@ jobs:
           [ "$latest" = "$M5" ] || { echo "::error::latest is $latest, expected $M5"; bad=1; }
           nm="$(psql "$URL" -X -q -At -c "$RO" -c "select name from supabase_migrations.schema_migrations where version='$M5'")"
           [ "$nm" = "m5_install_pg_net_pg_cron" ] || { echo "::error::recorded name '$nm' does not match the repository filename"; bad=1; }
-          grep -vE "^$M5	" "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          # exact match on the first TSV field: an escape, not an invisible literal tab that an editor can turn into spaces
+          awk -F '\t' -v v="$M5" '$1 != v' "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
           diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
             echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
           psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
