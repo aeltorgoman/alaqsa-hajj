@@ -1,0 +1,352 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — M5 activation (20261021120000)
+# ════════════════════════════════════════════════════════════
+# Applies the ONE pending migration through the canonical CLI path:
+#   20261021120000_m5_schedule_push_dispatch
+#
+# Playbook order (M-52): run only AFTER its PR is merged, from main.
+# It schedules ONE pg_cron job and NOTHING else:
+#   m5-push-dispatch · * * * * * · SELECT public.push_dispatch_tick();
+# No function, table, row, secret or extension changes.
+#
+# ⚠️ `--db-url`, not `--linked` (PR #148).
+#
+# Exactly ONE production-mutating command may run, and only after
+# every gate passes. Deliberately absent, and audited for: migration
+# repair · migration up · `--include-all` · manual SQL mutation ·
+# rollback · any Dashboard action · any Edge Function deploy · any
+# direct call to push_dispatch_tick() or push_dispatch_probe() · any
+# Vault write · any second cron job.
+#
+# Gates:
+#   · BEFORE: file hash · the file schedules exactly this one job and
+#     requests/stores/ticks nothing itself · ledger 72 / 20261021030000 ·
+#     pending set is exactly this migration · pg_net + pg_cron installed ·
+#     both M5 Vault entries present (names only) · cron.job holds no
+#     m5 job and no job touching push_dispatch · no live lease ·
+#     cutoff_id = 79 · nothing due right now · fingerprints captured.
+#   · AFTER (independent catalog queries, M-54/M-55): ledger 73, originals
+#     untouched · exactly one m5-push-dispatch job, active, * * * * *,
+#     the exact command, as postgres on postgres · the FIRST automatic run
+#     completes (cron.job_run_details: succeeded) · no live lease left ·
+#     cutoff_id = 79 · every public function body + ACL unchanged · no
+#     table added or removed · Vault count unchanged · announcements,
+#     deliveries, targets and subscriptions unchanged (nothing was due).
+#
+# Emergency stop (stops every scheduled push at once; M6 manual send is
+# untouched):   select cron.unschedule('m5-push-dispatch');
+#
+# Running it twice is safe: after success nothing is pending, so the
+# BEFORE gates fail and the second run stops before the write.
+
+name: M5 schedule push dispatch - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-M5-CRON-20261021120000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m5-schedule-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      M5: "20261021120000"
+      F5: supabase/migrations/20261021120000_m5_schedule_push_dispatch.sql
+      SHA5: "983d73303d55ab3ee7debf83b137be506dacc1af1f928d2c2a42d33ec04ba78c"
+      EXPECT_REPO_MIGRATIONS: "73"
+      EXPECT_ROWS_BEFORE: "72"
+      EXPECT_LATEST_BEFORE: "20261021030000"
+      EXPECT_ROWS_AFTER: "73"
+      EXPECT_CUTOFF: "79"
+      JOB: m5-push-dispatch
+      JOB_SCHEDULE: "* * * * *"
+      JOB_COMMAND: "SELECT public.push_dispatch_tick();"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: m5-schedule-evidence
+
+    steps:
+      - name: "GATE: confirmation, ref and secrets"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${CONFIRM}" = "PUSH-M5-CRON-20261021120000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          # M-52: apply after merge, never before
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main (M-52), got ${GITHUB_REF}"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          [ -f "$F5" ] || { echo "::error::$F5 missing"; exit 1; }
+          got="$(sha256sum "$F5" | cut -d' ' -f1)"
+          [ "$got" = "$SHA5" ] || { echo "::error::$F5 sha256 mismatch: $got != $SHA5"; exit 1; }
+          echo "ok   $(basename "$F5")  $got"
+          # exactly ONE schedule call, with exactly the approved name, schedule and command
+          calls="$(grep -ciE "cron\.schedule[[:space:]]*\(" "$F5")"
+          [ "$calls" -eq 1 ] || { echo "::error::$F5 must call cron.schedule exactly once, found $calls"; exit 1; }
+          grep -qxF "select cron.schedule('m5-push-dispatch', '* * * * *', 'SELECT public.push_dispatch_tick();');" "$F5" || {
+            echo "::error::$F5 does not schedule exactly the approved job"; exit 1; }
+          # and nothing else: no direct tick/probe, request, secret, second job, dynamic SQL, or DDL/grants.
+          # Comments and quoted literals are set aside (the job's command and the postconditions'
+          # comparisons NAME the tick, they do not call it); `execute` is refused so no call hides in a literal.
+          python3 -I - "$F5" <<'PY'
+          import re, sys
+          src = open(sys.argv[1], encoding="utf-8").read()
+          code = re.sub(r"'(?:[^']|'')*'", "''", re.sub(r"--[^\n]*", "", src))
+          bad = re.compile(
+              r"\b(select|perform)\s+(cron\.(alter_job|unschedule|schedule_in_database)"
+              r"|net\.http_(post|get|delete)|vault\.(create|update)_secret"
+              r"|(public\.)?push_dispatch_(tick|probe))\s*\("
+              r"|\bexecute\b"
+              r"|^\s*(create|drop|alter)\s+(extension|function|table|policy|trigger|role)\b"
+              r"|^\s*(grant|revoke)\s", re.I | re.M)
+          hits = [m.group(0) for m in bad.finditer(code)]
+          if hits:
+              sys.exit(f"::error::{sys.argv[1]} does more than schedule the one job: {hits}")
+          print("ok   the migration schedules the one job and does nothing else")
+          PY
+          python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F5"
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 72 / 20261021030000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: pending set is exactly 20261021120000"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${M5}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M5]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+
+      - name: "GATE: production preconditions"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          need() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          need extensions_installed  "select count(*) from pg_extension where extname in ('pg_net','pg_cron')" 2
+          need vault_entries_present "select count(*) from vault.secrets where name in ('push_dispatch_url','push_dispatch_token')" 2
+          need no_m5_job             "select count(*) from cron.job where jobname = '$JOB'" 0
+          need no_dispatch_job       "select count(*) from cron.job where command ~* 'push_dispatch_(tick|probe)'" 0
+          need no_live_lease         "select count(*) from public.push_dispatch_state where lease_run_id is not null and lease_expires_at > now()" 0
+          need cutoff                "select cutoff_id from public.push_dispatch_state" "$EXPECT_CUTOFF"
+          need nothing_due           "select cardinality(public._push_due_ids(20))" 0
+          need open_targets          "select count(*) from public.announcement_push_targets where status in ('pending','retryable','processing')" 0
+          p "select count(*) from cron.job" > "$OUT/cron-job-count-before.txt"
+          p "select count(*) from vault.secrets" > "$OUT/vault-count-before.txt"
+          p "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" > "$OUT/tables-before.txt"
+          p "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace" > "$OUT/fn-before.txt"
+          # بصماتٌ بلا بيانات شخصية: معرّفاتٌ وحالاتٌ وأختام
+          p "select coalesce(md5(string_agg(id||':'||announcement_id||':'||passenger_id||':'||status||':'||coalesce(read_at::text,'-'),'|' order by id)),'(none)') from public.notification_deliveries" > "$OUT/nd-fp-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||coalesce(push_sent_at::text,'-')||':'||coalesce(expires_at::text,'-')||':'||show_at::text,'|' order by id)),'(none)') from public.announcements" > "$OUT/ann-fp-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||status||':'||attempts,'|' order by id)),'(none)') from public.announcement_push_targets" > "$OUT/apt-fp-before.txt"
+          p "select coalesce(md5(string_agg(id||':'||passenger_id,'|' order by id)),'(none)') from public.pilgrim_push_subscriptions" > "$OUT/subs-fp-before.txt"
+          [ "$bad" -eq 0 ] || { echo "::error::preconditions failed - nothing was written"; exit 1; }
+          echo "All preconditions PASS."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 72 -> 73, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$M5" ] || { echo "::error::latest is $latest, expected $M5"; bad=1; }
+          nm="$(psql "$URL" -X -q -At -c "$RO" -c "select name from supabase_migrations.schema_migrations where version='$M5'")"
+          [ "$nm" = "m5_schedule_push_dispatch" ] || { echo "::error::recorded name '$nm' does not match the repository filename"; bad=1; }
+          # exact match on the first TSV field: an escape, not an invisible literal tab
+          awk -F '\t' -v v="$M5" '$1 != v' "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M5" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: one job, its first automatic run, nothing else changed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          want() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          want one_m5_job           "select count(*) from cron.job where jobname = '$JOB'" 1
+          want job_active           "select active::text from cron.job where jobname = '$JOB'" true
+          want job_schedule         "select schedule from cron.job where jobname = '$JOB'" "$JOB_SCHEDULE"
+          want job_command          "select command from cron.job where jobname = '$JOB'" "$JOB_COMMAND"
+          want job_role_db          "select username||'@'||database from cron.job where jobname = '$JOB'" "postgres@postgres"
+          want only_one_new_job     "select count(*) from cron.job" "$(( $(cat "$OUT/cron-job-count-before.txt") + 1 ))"
+          want no_other_dispatch    "select count(*) from cron.job where jobname <> '$JOB' and command ~* 'push_dispatch_(tick|probe)'" 0
+          p "select jobid||' '||jobname||' '||schedule||' '||active from cron.job where jobname = '$JOB'" | tee "$OUT/cron-job.txt"
+
+          # the first automatic run: pg_cron fires on the minute; allow up to ~150s
+          jid="$(p "select jobid from cron.job where jobname = '$JOB'")"
+          st=""
+          for i in $(seq 1 30); do
+            st="$(p "select coalesce((select status from cron.job_run_details where jobid = $jid and status in ('succeeded','failed') order by start_time limit 1),'')")"
+            [ -n "$st" ] && break
+            sleep 5
+          done
+          p "select runid||' '||status||' '||coalesce(return_message,'')||' '||start_time||' '||coalesce(end_time::text,'-') from cron.job_run_details where jobid = $jid order by start_time" | tee "$OUT/cron-runs.txt"
+          [ "$st" = "succeeded" ] || { echo "::error::first automatic run: '${st:-none within the wait}', expected succeeded"; bad=1; }
+          want no_failed_run        "select count(*) from cron.job_run_details where jobid = $jid and status = 'failed'" 0
+
+          want no_live_lease        "select count(*) from public.push_dispatch_state where lease_run_id is not null and lease_expires_at > now()" 0
+          want cutoff_unchanged     "select cutoff_id from public.push_dispatch_state" "$EXPECT_CUTOFF"
+          want pg_net_queue_empty   "select count(*) from net.http_request_queue" 0
+          want vault_count_unchanged "select count(*) from vault.secrets" "$(cat "$OUT/vault-count-before.txt")"
+          want public_fn_unchanged  "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace" "$(cat "$OUT/fn-before.txt")"
+          want tables_unchanged     "select string_agg(schemaname||'.'||tablename, ',' order by schemaname, tablename) from pg_tables where schemaname in ('public','storage')" "$(cat "$OUT/tables-before.txt")"
+          # nothing was due, so the run(s) touched no announcement, delivery, target or device
+          want deliveries_unchanged "select coalesce(md5(string_agg(id||':'||announcement_id||':'||passenger_id||':'||status||':'||coalesce(read_at::text,'-'),'|' order by id)),'(none)') from public.notification_deliveries" "$(cat "$OUT/nd-fp-before.txt")"
+          want announcements_unchanged "select coalesce(md5(string_agg(id||':'||coalesce(push_sent_at::text,'-')||':'||coalesce(expires_at::text,'-')||':'||show_at::text,'|' order by id)),'(none)') from public.announcements" "$(cat "$OUT/ann-fp-before.txt")"
+          want targets_unchanged    "select coalesce(md5(string_agg(id||':'||status||':'||attempts,'|' order by id)),'(none)') from public.announcement_push_targets" "$(cat "$OUT/apt-fp-before.txt")"
+          want subscriptions_unchanged "select coalesce(md5(string_agg(id||':'||passenger_id,'|' order by id)),'(none)') from public.pilgrim_push_subscriptions" "$(cat "$OUT/subs-fp-before.txt")"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-surface.txt"; else echo FAIL > "$OUT/status-surface.txt"; fi
+          echo "Surface verdict: $(cat "$OUT/status-surface.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger surface; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo FAIL > "$OUT/verdict.txt"
+            echo "::error::FAIL. If the job must stop now: select cron.unschedule('$JOB');"
+            exit 1
+          fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $M5 applied; ledger 73; $JOB scheduled every minute; first automatic run succeeded; nothing else changed."
+          echo "Emergency stop: select cron.unschedule('$JOB');"
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m5-schedule-canonical-push
+          path: m5-schedule-evidence
+          if-no-files-found: warn

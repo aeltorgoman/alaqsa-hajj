@@ -2,7 +2,8 @@
 # ════════════════════════════════════════════════════════════
 # M5 — تثبيتُ pg_net وpg_cron (20261021030000) — فحوصٌ بالتنفيذ
 # ════════════════════════════════════════════════════════════
-# على قاعدة Supabase محلّيّةٍ بعد الترحيلة (supabase start ثم db reset، أو صورة supabase/postgres):
+# على قاعدة Supabase محلّيّةٍ مُرحَّلةٍ حتى 20261021030000 وحدها (قبل التفعيل 20261021120000،
+# الذي يُنشئ مهمّةً في cron.job — وفحوصُه في m5_schedule_tests.sh):
 #   LOCAL='postgresql://postgres:postgres@127.0.0.1:54322/postgres' supabase/verification/portal/m5_install_extensions_tests.sh
 #
 #   الامتدادان مثبَّتان · net.http_post بالتوقيع الذي يستدعيه التيك · postgres يجدول ويُلغي
@@ -27,6 +28,8 @@ as_role() { psql "$LOCAL" -X -q -At -v VERBOSITY=verbose -c "begin; set local ro
 M="$(dirname "$0")/../../migrations/20261021030000_m5_install_pg_net_pg_cron.sql"
 
 [ -f "$M" ] || { echo "يرفض: $M غير موجود"; exit 2; }
+if [ "$(q "select count(*) from cron.job where jobname = 'm5-push-dispatch'")" != "0" ]; then
+  echo "يرفض: القاعدةُ مُرحَّلةٌ بعد التفعيل (m5-push-dispatch مجدوَلة) — شغّل m5_schedule_tests.sh"; exit 2; fi
 if [ "$(q "select count(*) from pg_namespace where nspname = 'vault'")" = "1" ] \
    && [ "$(q "select count(*) from vault.secrets where name in ('push_dispatch_url','push_dispatch_token')")" != "0" ]; then
   echo "يرفض: سرّا M5 في Vault — قد يُرسل التيكُ طلباً حقيقيّاً"; exit 2; fi
