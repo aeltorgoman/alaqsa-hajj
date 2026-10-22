@@ -65,6 +65,23 @@ function imagesSettled(doc: Document): Promise<void> {
    تمريره، ولا يفترق ما يُخطَّط عمّا يُطبَع. */
 const LANDSCAPE_PAGE = /@page[^}]*size:\s*A4\s+landscape/i;
 
+/* ⚠️ موضعُ الختمِ والتوقيع يُقرَّر في المستند نفسه بعد تخطيطه بخطوط الجهاز
+   (`sealPlanHTML` في `print.seals.ts`)، ويُعلَن بسمة `data-seal-plan` على
+   <html>. ومن طبع قبلها طبع بلا ختم. فيُنتظر القرارُ — بسقفٍ، ثم يُطبع على
+   أيّ حال (والمستندُ بلا قرارٍ لم يُضِف شيئاً، فلا يُغطّى سطر). */
+const SEAL_PLAN_CAP_MS = 8_000;
+function sealPlanSettled(doc: Document, html: string): Promise<void> {
+  if (!html.includes("data-seal-plan")) return Promise.resolve();
+  return new Promise(resolve => {
+    const start = Date.now();
+    const tick = () => {
+      if (doc.documentElement?.hasAttribute("data-seal-plan") || Date.now() - start > SEAL_PLAN_CAP_MS) resolve();
+      else setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
 export function printInPage(html: string, options: PrintOptions = {}) {
   const existing = document.getElementById("__print_frame__");
   if (existing) existing.remove();
@@ -80,7 +97,7 @@ export function printInPage(html: string, options: PrintOptions = {}) {
 
   const fire = () => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); };
   if (options.waitForImages) {
-    void imagesSettled(doc).then(() => setTimeout(fire, 120));
+    void imagesSettled(doc).then(() => sealPlanSettled(doc, html)).then(() => setTimeout(fire, 120));
     return;
   }
   /* ⚠️ عطبٌ أظهرته المعاينةُ الحقيقيّة للإيصال #1001: الختمُ والتوقيعُ
@@ -97,7 +114,7 @@ export function printInPage(html: string, options: PrintOptions = {}) {
        · صورٌ أبطأ           → تُطبَع حين تستقرّ (إلى السقف) — وهذا وحدَه تغيّر
      فلا منادٍ يُطبَع **أبكرَ** ممّا كان، والذي يتأخّر هو من كان يُطبَع ناقصاً. */
   const layoutFloor = new Promise<void>(resolve => setTimeout(resolve, LAYOUT_SETTLE_MS));
-  void Promise.all([layoutFloor, imagesSettled(doc)]).then(fire);
+  void Promise.all([layoutFloor, imagesSettled(doc).then(() => sealPlanSettled(doc, html))]).then(fire);
 }
 
 export function downloadPDF(html: string, filename: string) {

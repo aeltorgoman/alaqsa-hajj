@@ -21,7 +21,7 @@ import { chromeMetaHTML, pageStampHTML, seasonLabel, compactHeaderHTML,
 import type { PrintBranding } from "./print.brand";
 import { safeBranding, escapeCompanyHtml } from "./print.brand";
 import { makeHTML } from "./print.shell";
-import { hasSeals, sealRowHTML } from "./print.seals";
+import { hasSeals, sealRowHTML, hotelSealPlanHTML } from "./print.seals";
 import { makeFlightSectionHTML, makeTwoLogoSectionHTML, renderNamesTable, joinSections } from "./print.blocks";
 import { busManifest, campManifest, flightManifest, flightsInOrder, campsInOrder,
          BUSES_DOC_TITLE, campsDocTitle, FLIGHTS_DOC_TITLE, type CampPageType } from "./print.manifests";
@@ -256,14 +256,13 @@ export function hotelReportDocument(
   const { landscape = false, showPattern = true, subtitle = "", chrome = {}, hotelOf, summary = false } = options;
   const COLS = landscape ? 5 : 4;
   /* ⚠️ الختمُ والتوقيع داخل الورقة لا فوقها: الورقةُ هنا ملكُ الشبكة كلُّها
-     (هامشُ `@page` صفر)، فلا هامشَ يسعهما ولا مساحةَ فارغةَ أسفلها — وأيُّ
-     صورةٍ تعلو الصفَّ الأخير تغطّي أسماءً. وتقصيرُ الكروت لإفساح صفّهما
-     جُرِّب: غرفُ الستّة والثمانية تضيق حتى تُقصّ أسطرُها.
-     فإن طُلبا نقصت الورقةُ **صفَّ غرفٍ واحداً** (١٦→١٢ طوليّاً، ١٥→١٠
-     عرضيّاً) وأخذا مكانَه — فلا يصغر خطٌّ ولا يقصر كرت، بل يطول قليلاً،
-     وتزيد الأوراق. والمطفأُ كما كان بالحرف. */
+     (هامشُ `@page` صفر)، وأيُّ صورةٍ تعلو الصفَّ الأخير تغطّي أسماءً.
+     فيُبنى المستندُ بشبكته المعتمَدة كما هي، وفي كلّ ورقةٍ صفُّ الصورتين،
+     ثمّ يقرّر المخطِّطُ في المستند دوراً دوراً (`hotelSealPlanHTML`): خلايا
+     فارغةٌ تسعهما، أو صفُّهما بلا قصٍّ زائدٍ لكرت، أو غرفُ الدور بصفٍّ أقلّ في
+     كلّ ورقةٍ إن لم تزد ورقة. والمطفأُ كما كان بالحرف. */
   const seals = hasSeals(chrome.seals) ? chrome.seals : null;
-  const ROWS = (landscape ? 3 : 4) - (seals ? 1 : 0);
+  const ROWS = landscape ? 3 : 4;
   const PER_PAGE = COLS * ROWS;
   const occupantsOf = (roomId: number) => passengers.filter(p => p.room_id === roomId);
 
@@ -360,7 +359,7 @@ export function hotelReportDocument(
       while (padded.length < PER_PAGE) padded.push(null);
       const cells = padded.map(room =>
         room ? hotelRoomCard(room, occupantsOf(room.id), fontSize, showPattern, landscape ? "landscape" : "portrait", hotelOf?.(room) ?? null)
-             : `<div style="background:transparent"></div>`
+             : `<div${seals ? ' class="hotel-empty"' : ""} style="background:transparent"></div>`
       ).join("");
       const stamp = chrome.pageNumbers ? pageStampHTML(pi + 1, pages.length) : "";
       /* الدورُ متاحٌ على الورقة بياناً لا زينة: سمةٌ تُقرأ آلياً ولا
@@ -411,7 +410,7 @@ export function hotelReportDocument(
   /* ⚠️ القشرةُ هنا غلافٌ لا تُضيف كتلةً: لا ترويسةَ قبل الجسم ولا
      تذييلَ بعده ولا هامشَ `@page` — فالأوراقُ الصريحةُ وحدها في الجسم.
      وهذا شرطُ ألّا يقسّم المتصفّحُ ترويسةً عن شبكتها أبداً. */
-  return makeHTML(`تقرير الفندق${subtitle}`, pagesHTML + autoFitScript, branding, {
+  return makeHTML(`تقرير الفندق${subtitle}`, pagesHTML + autoFitScript + (seals ? hotelSealPlanHTML(seals, { cols: COLS, rows: ROWS }) : ""), branding, {
     landscape,
     patternOpacity: showPattern ? 0.04 : 0,
     pageMargin: "0",

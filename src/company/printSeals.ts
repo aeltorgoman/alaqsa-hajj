@@ -17,6 +17,7 @@ import { useCompanyAssets } from "./CompanyContext";
 import type { CompanyAsset } from "./types";
 import { signedPrivateCompanyUrl } from "../utils";
 import type { PrintSeals, SealImage, PrintReportKey, PrintOptionsState } from "../print";
+import { trimSealImage } from "./sealTrim";
 import { requestedSeals, effectiveOptions } from "../print";
 
 export type SealRequest = { stamp: boolean; signature: boolean };
@@ -29,8 +30,20 @@ const LOAD_CAP_MS = 15_000;
 const NAMES = { stamp: "ختم الشركة", signature: "التوقيع المعتمد" } as const;
 const ASSET_KEY = { stamp: "company_stamp", signature: "manager_signature" } as const;
 
-/** يحمّل الصورةَ ويفكّها، ويعيد أبعادَها الطبيعيّة — أو null إن تعذّرت. */
-export function loadImage(url: string, capMs = LOAD_CAP_MS): Promise<SealImage | null> {
+/** يحمّل الصورةَ ويفكّها ويقصّ حشوَها، ويعيد أبعادَها — أو null إن تعذّرت. */
+export async function loadImage(url: string, capMs = LOAD_CAP_MS): Promise<SealImage | null> {
+  const raw = await loadRawImage(url, capMs);
+  if (!raw) return null;
+  try {
+    const cut = await Promise.race([trimSealImage(url), new Promise<null>(r => setTimeout(() => r(null), capMs))]);
+    if (!cut) return raw;
+    return (await loadRawImage(cut.url, capMs)) ? cut : raw;
+  } catch {
+    return raw;
+  }
+}
+
+function loadRawImage(url: string, capMs: number): Promise<SealImage | null> {
   return new Promise(resolve => {
     const img = new Image();
     let settled = false;

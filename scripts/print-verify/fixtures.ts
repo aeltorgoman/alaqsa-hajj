@@ -11,14 +11,15 @@
             ghost    — كـ on بصورٍ شفّافةٍ بالمقاسات نفسها (قناعُ موضع الصورتين)
             stamp    — الختمُ وحده          · signature — التوقيعُ وحده
    ويطبع في الآخر نتائجَ فحوصِ المنطق (JSON) على stdout. */
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import {
   busesReportDocument, busReportDocument, campsReportDocument, flightsReportDocument, hotelReportDocument, makeHTML,
   chromeFromOptions, initialPrintOptions, effectiveOptions, requestedSeals, PRINT_SPECS, bankLinesFrom, bankBlockHTML,
-  sealSizeMm, sealBottomMarginMm, STAMP_BOX_MM, SIGNATURE_BOX_MM, type PrintSeals, type PrintOptionsState, type PrintReportKey,
+  sealSizeMm, sealBottomMarginMm, STAMP_BOX_MM, SIGNATURE_BOX_MM, A5_SEAL_SCALE, type PrintSeals, type PrintOptionsState, type PrintReportKey,
 } from "../../src/print";
 import { makeReceiptHTML, makePassengerStatementHTML, printFullReport, printPaymentsReport } from "../../src/components/finance/finance.print";
 import { loadPrintSeals, sealUnavailability } from "../../src/company/printSeals";
+import { alphaBounds } from "../../src/company/sealTrim";
 
 const [, , OUT, MODE = "off"] = process.argv;
 /* تاريخُ الإصدار ثابتٌ — فمخرجا الفرعين يُقارَنان بايتاً ببايت */
@@ -30,8 +31,10 @@ class FixedDate extends RealDate {
 }
 (globalThis as { Date: DateConstructor }).Date = FixedDate as unknown as DateConstructor;
 
-/* مقاساتُ الصورتين الاصطناعيّتين كأصلَي الحملة الحقيقيّين (metadata) */
-export const STAMP_PX = { w: 1503, h: 1600 }, SIGNATURE_PX = { w: 1600, h: 1376 };
+/* مقاساتُ الصورتين بعد القصّ — يقيسها `run.mjs` من `trimSealImage` الحقيقيّ في
+   المتصفّح (SEALS_JSON)؛ وإلا فأبعادُ أصلَي الحملة الخام. */
+const PX = process.env.SEALS_JSON ? JSON.parse(readFileSync(process.env.SEALS_JSON, "utf8")) : null;
+export const STAMP_PX = PX?.stamp ?? { w: 1503, h: 1600 }, SIGNATURE_PX = PX?.signature ?? { w: 1600, h: 1376 };
 const img = (name: string, px: { w: number; h: number }) => ({ url: `https://seal.test/${MODE === "ghost" ? "ghost-" : ""}${name}.png`, width: px.w, height: px.h });
 const SEALS: PrintSeals = MODE === "off" ? {}
   : MODE === "stamp" ? { stamp: img("stamp", STAMP_PX) }
@@ -146,10 +149,21 @@ const partial = bankLinesFrom({ ...bankSrc, accountNumber: "", swift: "  " });
 check("partial bank: only populated, CR included", partial.length === 4 && partial.some(l => l.label === "رقم السجل التجاري"), partial.map(l => l.label).join(","));
 check("bank identifiers isolated LTR", bankBlockHTML(bankLinesFrom(bankSrc), "#000").includes(`<bdi dir="ltr">QA58QNBA000000000123456789001</bdi>`));
 const sm = sealSizeMm(both.stamp, STAMP_BOX_MM), gm = sealSizeMm(both.signature, SIGNATURE_BOX_MM);
-check("stamp keeps its proportions", Math.abs(sm.w / sm.h - 1503 / 1600) < 0.01, `${sm.w}×${sm.h}mm`);
-check("signature keeps its proportions", Math.abs(gm.w / gm.h - 1600 / 1376) < 0.01, `${gm.w}×${gm.h}mm`);
-check("independent realistic sizes", sm.h !== gm.h && sm.h >= 28 && gm.h <= 22, `stamp ${sm.h}mm · signature ${gm.h}mm`);
-check("margin is the minimum that fits", sealBottomMarginMm(both, 14) < 14 + 30, `${sealBottomMarginMm(both, 14)}mm`);
+check("stamp keeps its proportions", Math.abs(sm.w / sm.h - STAMP_PX.w / STAMP_PX.h) < 0.01, `${sm.w}×${sm.h}mm`);
+check("signature keeps its proportions", Math.abs(gm.w / gm.h - SIGNATURE_PX.w / SIGNATURE_PX.h) < 0.01, `${gm.w}×${gm.h}mm`);
+check("A4 stamp is a realistic 38–42mm", Math.max(sm.w, sm.h) >= 38 && Math.max(sm.w, sm.h) <= 42, `${sm.w}×${sm.h}mm`);
+check("A4 signature is a realistic 50–62mm wide", gm.w >= 50 && gm.w <= 62 && gm.h <= 28, `${gm.w}×${gm.h}mm`);
+const sa5 = sealSizeMm(both.stamp, STAMP_BOX_MM, A5_SEAL_SCALE);
+check("A5 receipt stamp = A4 × 0.75 (same look on the smaller sheet)", Math.abs(sa5.h - sm.h * 0.75) < 0.05, `${sa5.w}×${sa5.h}mm`);
+/* القصّ: صندوقُ الحبر في صورةٍ اصطناعيّة ٢٠×١٠ — حبرٌ في (٥..١٤، ٢..٧) */
+const px = new Uint8ClampedArray(20 * 10 * 4);
+for (let y = 2; y <= 7; y++) for (let x = 5; x <= 14; x++) px.set([20, 40, 160, 255], (y * 20 + x) * 4);
+px.set([255, 255, 255, 255], (0 * 20 + 0) * 4); // بكسلٌ أبيضُ معتم = حشوٌ لا حبر
+const ab = alphaBounds(px, 20, 10);
+check("trim: ink box found, white & transparent padding ignored", !!ab && ab.x === 5 && ab.y === 2 && ab.w === 10 && ab.h === 6, JSON.stringify(ab));
+check("trim: empty image → null (printed untrimmed)", alphaBounds(new Uint8ClampedArray(16), 2, 2) === null);
+check("band margin = seal + edge + gap, never less than the document's", sealBottomMarginMm(both, 14) <= 6 + 3 + Math.max(sm.h, gm.h) + 0.01
+  && sealBottomMarginMm(both, 60) === 60, `${sealBottomMarginMm(both, 14)}mm`);
 const assets = { company_stamp: { url: "company_stamp_1.png" }, manager_signature: { url: "manager_signature_1.png" } } as Any;
 const okDeps = { sign: async (k: string) => `https://seal.test/${k}`, load: async (u: string) => ({ url: u, width: 10, height: 10 }) };
 const results = await Promise.all([

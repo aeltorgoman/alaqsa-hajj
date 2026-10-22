@@ -4,8 +4,9 @@
 import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
 import { amountInArabicWords } from "./amountInWords";
-import type { PrintBranding, PrintSeals } from "../../print";
-import { hasSeals, sealPageCSS, sealPreloadHTML, bankBlockHTML } from "../../print";
+import type { PrintBranding, PrintSeals, SealImage } from "../../print";
+import { hasSeals, sealPlanHTML, sealSizeMm, bankBlockHTML,
+         A5_SEAL_SCALE, STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
@@ -64,40 +65,27 @@ export function makeReceiptHTML(
   /* صندوقُ الختمِ/التوقيعِ يقبل صورةً موقَّعةً إن مُرِّرت، وإلا يبقى
      إطاراً فارغاً للختمِ والتوقيعِ باليد كما كان. والصورةُ تُعرَض بلا إطارٍ
      منقَّط — كختمٍ على ورق — في الموضعِ نفسِه وبالارتفاعِ نفسِه، فلا يتحرّك
-     في الإيصالِ سطر. */
-  const assetBox = (url: string, label: string) => url
-    ? `<div class="stamp-box has-img"><img src="${url}" alt="${label}" /></div>`
-    : `<div class="stamp-box"><span style="color:#ddd;font-size:11px">${label}</span></div>`;
+     في الإيصالِ سطر.
+     والصورةُ الإلكترونيّةُ (الختمُ/التوقيعُ المطلوبان) بمقاسِها الواقعيّ
+     بالمليمتر — مقاسُ التقارير بنسبةِ ورقة A5 (`A5_SEAL_SCALE`) — لا محشورةً
+     في صندوق ٦٢px. */
+  const assetBox = (url: string, label: string, img?: SealImage, box?: { w: number; h: number }) => {
+    if (!url) return `<div class="stamp-box"><span style="color:#ddd;font-size:11px">${label}</span></div>`;
+    const mm = img && box && img.url === url ? sealSizeMm(img, box, A5_SEAL_SCALE) : null;
+    return mm
+      ? `<div class="stamp-box has-img sized"><img src="${url}" alt="${label}" style="width:${mm.w}mm" /></div>`
+      : `<div class="stamp-box has-img"><img src="${url}" alt="${label}" /></div>`;
+  };
 
   /* ═══ إيصالٌ يمتدّ ورقتين (دفعةُ مجموعةٍ طويلة) ═══
      خانتا الختمِ والتوقيعِ في آخرِ الإيصال، فلا تقعان إلا على ورقته الأخيرة.
-     فإن طُلبت الصورُ وامتدّ الإيصالُ أكثرَ من ورقة A5، رُسمتا في هامشِ كلِّ
-     ورقةٍ (كالتقارير — `print.seals.ts`) وأُخفيت خانتاهما الإلكترونيّتان كي
-     لا تتكرّرا في الأخيرة. والخانةُ المطفأةُ تبقى للختمِ باليد.
-     ولا يُعرَف الامتدادُ قبل التخطيط: يُقاس الإيصالُ نفسُه في المستند بعرضِ
-     ورقته الفعليّ (A5 بهامش ١٠مم = ١٢٨×١٩٠مم) قبل الطباعة. والمقاسُ عرضٌ
-     لا بيانات: لا تُصغَّر كتابةٌ ولا يُحذَف سطر. */
+     فإن طُلبت الصورُ وامتدّ الإيصالُ أكثرَ من ورقة A5 — يُقاس في المستند نفسه
+     بخطوط الجهاز (`sealPlanHTML`) — رُسمتا في هامشِ كلِّ ورقةٍ بأكبر مقاسٍ لا
+     يزيد ورقة، وأُخفيت خانتاهما الإلكترونيّتان كي لا تتكرّرا في الأخيرة.
+     والخانةُ المطفأةُ تبقى للختمِ باليد. */
   const seals = hasSeals(options.seals) ? options.seals : null;
-  const multiPageScript = seals ? `<script>
-(function () {
-  var css = ${JSON.stringify(sealPageCSS(seals, 10))};
-  function check() {
-    var r = document.querySelector(".receipt");
-    if (!r) return;
-    var w = document.body.style.width;
-    document.body.style.width = "128mm";
-    var h = r.getBoundingClientRect().height;
-    document.body.style.width = w;
-    if (h > 190 * 96 / 25.4 - 2) {
-      document.documentElement.classList.add("receipt-multipage");
-      var st = document.createElement("style");
-      st.textContent = css;
-      document.head.appendChild(st);
-    }
-  }
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(check, check); else check();
-})();
-</script>` : "";
+  const sealPlan = seals ? sealPlanHTML(seals, { size: "A5", margin: "10mm", scale: A5_SEAL_SCALE,
+    boxes: { img: ".stamp-box.sized img", multipageClass: "receipt-multipage" } }) : "";
 
   const allocRows = isGroup && allocations.length
     ? `<table class="alloc"><thead><tr><th>الحاج</th><th>النصيب</th></tr></thead><tbody>${
@@ -141,6 +129,8 @@ export function makeReceiptHTML(
   .stamp-box { border:1px dashed #ccc; border-radius:8px; height:62px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:3px; }
   .stamp-box img { max-width:100%; max-height:100%; object-fit:contain; }
   .stamp-box.has-img { border-color:transparent; padding:0; }
+  .stamp-box.sized { height:auto; min-height:62px; overflow:visible; }
+  .stamp-box.sized img { max-width:100%; height:auto; max-height:none; }
   .receipt-multipage .stamp-area.e-sealed { display:none; }
   ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
@@ -180,15 +170,15 @@ export function makeReceiptHTML(
     <div class="receipt-footer">
       <div class="stamp-area${seals?.stamp && stampUrl ? " e-sealed" : ""}">
         <div class="stamp-label">ختم الشركة</div>
-        ${assetBox(stampUrl, "الختم")}
+        ${assetBox(stampUrl, "الختم", seals?.stamp, STAMP_BOX_MM)}
       </div>
       <div class="stamp-area${seals?.signature && signatureUrl ? " e-sealed" : ""}">
         <div class="stamp-label">توقيع المسؤول</div>
-        ${assetBox(signatureUrl, "التوقيع")}
+        ${assetBox(signatureUrl, "التوقيع", seals?.signature, SIGNATURE_BOX_MM)}
       </div>
     </div>
   </div>
-</div>${seals ? sealPreloadHTML(seals) : ""}${multiPageScript}
+</div>${sealPlan}
 </body></html>`;
 }
 
@@ -212,7 +202,6 @@ export function makePassengerStatementHTML(
   const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
   const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
   const sealsOn = hasSeals(chrome.seals);
-  const sealCSS = sealsOn ? `\n  ${sealPageCSS(chrome.seals!, 14)}` : "";
   const bankHTML = bankBlockHTML(chrome.bank, primaryColor);
   const totalDue  = calcTotalDue(p, pricing, hotelPrices, customCharges);
   const totalPaid = calcTotalPaid(p.id, payments);
@@ -274,7 +263,7 @@ export function makePassengerStatementHTML(
   .total-row td { background:${primaryColor}; color:#fff; font-weight:800; font-size:12pt; padding:10pt 12pt; text-align:center; }
   .total-row td:first-child { text-align:right; }
   .footer { text-align:center; font-size:8pt; color:#bbb; margin-top:14pt; border-top:0.5pt solid #eee; padding-top:8pt; }
-  ${COLOR_ADJUST_RULE_ALL}${sealCSS}
+  ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
 <div class="header">
   <div style="display:flex;align-items:center;gap:14px">
@@ -299,7 +288,7 @@ export function makePassengerStatementHTML(
   <tr class="total-row"><td>الإجمالي</td><td>${fmtAmt(totalDue)}</td><td>${fmtAmt(totalPaid)}</td></tr>
   <tr class="total-row" style="background:${balance>0?"#C0392B":"#2A9D8F"};color:#fff"><td>${balance>0?"الرصيد المتبقي":balance<0?"رصيد دائن للحاج":"الرصيد المتبقي"}</td><td colspan="2" style="text-align:center">${fmtAmt(Math.abs(balance))} ر.ق</td></tr>
 </table>
-${bankHTML}${sealsOn ? sealPreloadHTML(chrome.seals) : `<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>`}
+${bankHTML}<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>${sealsOn ? sealPlanHTML(chrome.seals, { margin: "14mm 12mm" }) : ""}
 </body></html>`;
 }
 
