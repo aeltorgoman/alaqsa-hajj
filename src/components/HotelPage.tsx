@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { isHajj, byOrder, applyReorder, mapPassenger, upsertPassenger } from "../utils/passenger";
+import { isHajj, applyReorder, mapPassenger, upsertPassenger, roomOccupants, occupantName } from "../utils/passenger";
 import { hotelNameOf, roomLabel } from "../utils/hotels";
 import { allocWriteError } from "./allocation/useAllocation";
 import { HotelSearch, type SearchRoom } from "./hotels/HotelSearch";
@@ -16,6 +16,7 @@ import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 /* المستندُ نفسه الذي تطبعه صفحةُ التقارير — لا نسخةَ ثانية للفندق */
 import { hotelReportDocument, printInPage, initialPrintOptions, chromeFromOptions, type PrintOptionsState } from "../print";
+import { usePrintSeals } from "../company/printSeals";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { useReportBranding } from "../company/CompanyContext";
 
@@ -197,7 +198,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
      تُبنى على مفتاح الإسناد لا على قائمة الحجاج. أما مؤشّرات «الحجاج
      الموزّعين» و«نسبة التوزيع» فتبقى حجّاجية، لأن معناها حجّاجي. */
   const roomPassengers = (roomId: number) =>
-    passengers.filter(p => p.room_id === roomId).sort(byOrder("room_sort_order"));
+    roomOccupants(passengers, roomId);
 
   /* من لا غرفة له — الإداري كذلك. كان يُسكَّن من صفحة الإداريين
      وحدها، وهي أضعف مدخل: بلا سعة ولا حالة غرفة أمام المستخدم. */
@@ -696,17 +697,19 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
   /* الطباعةُ من صفحة الفندق — بالمصدر المشترك وبنطاق ما يراه الموظّف
      على الشاشة الآن (الدور والنوع). فالورقةُ لا تختلف بباب طُبعت منه. */
   const reportBranding = useReportBranding();
-  const printRooms = (landscape: boolean) => {
+  const { sealsFor, unavailable: sealsOff } = usePrintSeals(showAlert);
+  const printRooms = async (landscape: boolean) => {
     if (filteredRooms.length === 0) { showAlert("warning", "لا توجد غرف ضمن التصفية الحالية"); return; }
     const scope: string[] = [`الفندق: ${hotel.name}`];
     if (filterFloor !== "الكل") scope.push(`الطابق: ${filterFloor}`);
     if (filterType) scope.push(`النوع: ${filterType}`);
     if (filterStatus !== "الكل") scope.push(`الحالة: ${filterStatus}`);
     if (onlyFree) scope.push("غرف بها أسرّة متاحة");
+    const seals = await sealsFor("hotel", printOpts); if (!seals) return;
     printInPage(hotelReportDocument(filteredRooms, passengers, reportBranding, {
       landscape,
       subtitle: filterType ? ` — ${filterType}` : "",
-      chrome: chromeFromOptions("hotel", printOpts, { season: viewedSeason, scope: scope.join(" · ") }),
+      chrome: chromeFromOptions("hotel", printOpts, { season: viewedSeason, scope: scope.join(" · "), seals }),
       summary: printOpts.summary,
     }));
   };
@@ -798,7 +801,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
             طباعة كشف الغرف ({filteredRooms.length})
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
-          <PrintOptionsMenu report="hotel" value={printOpts} onChange={setPrintOpts} />
+          <PrintOptionsMenu report="hotel" value={printOpts} onChange={setPrintOpts} disabled={sealsOff} />
           {printMenu && <>
             <div onClick={() => setPrintMenu(false)} style={{ position:"fixed", inset:0, zIndex:70 }} />
             <div role="menu" aria-label="اتّجاه الورقة"
@@ -963,7 +966,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
                                   {occ.map(p => (
                                     <li key={p.id} style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, lineHeight: 1.35, display: "flex", alignItems: "flex-start", gap: 4 }}>
                                       <span aria-hidden style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 6 }} />
-                                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.short_ar || makeShort(p.name_ar)}</span>
+                                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{occupantName(p)}</span>
                                     </li>
                                   ))}
                                 </ul>

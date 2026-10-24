@@ -5,8 +5,8 @@ import { isHajj, byOrder } from "../utils/passenger";
 import * as XLSX from "xlsx";
 import { AlertModal, useAlert, ConfirmModal, useConfirm } from "./AlertModal";
 import { supabase } from "../supabase";
-import { useReportBranding, useCompanyAssets } from "../company/CompanyContext";
-import { signedPrivateCompanyUrl } from "../utils";
+import { useReportBranding, useCompanyFinancial } from "../company/CompanyContext";
+import { usePrintSeals } from "../company/printSeals";
 import type { Passenger, User } from "../types";
 
 import type { HotelPackagePrices, HotelPackagePriceRow, FinanceHotel, PricingMap, Payment, PaymentReceipt, CustomCharge, FinancialGroup, FinancialGroupMember, PrintBrand, FinanceFilterStatus, FinanceSortKey, FinanceSortDir, FinanceTotals, AllocTypeMaps, GroupPayForm, PayForm, ChargeForm, ChargeErrors, PricingRow, CreatedGroupWithMember } from "./finance/finance.types";
@@ -15,7 +15,7 @@ import { FinanceListView } from "./finance/FinanceListView";
 import { CompanyBankCard } from "./finance/CompanyBankCard";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
 import { FinancialGroupView } from "./finance/FinancialGroupView";
-import { initialPrintOptions, chromeFromOptions } from "../print";
+import { initialPrintOptions, chromeFromOptions, bankLinesFrom, type PrintChrome } from "../print";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStatementHTML, printFullReport, printPaymentsReport, printPackagesReport, printAddonsReport, printCashflowReport } from "./finance/finance.print";
 
@@ -24,8 +24,18 @@ import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStat
 // ============================================================
 export function FinancePage({ passengers, setPassengers, currentUser }: { passengers: Passenger[]; setPassengers?: (updater: (prev: Passenger[]) => Passenger[]) => void; currentUser: User }) {
   const reportBranding = useReportBranding();
-  const companyAssets = useCompanyAssets();
   const { alert: alertState, showAlert } = useAlert();
+  /* الختمُ والتوقيع (والبنكُ لكشف الحساب) — يُحمَّل المطلوبُ قبل البناء،
+     وإن تعذّر أُبلغ الموظّفُ ولم يُطبع شيء. */
+  const { sealsFor, unavailable: sealsOff } = usePrintSeals(showAlert);
+  const companyFinancial = useCompanyFinancial();
+  const bankLines = useMemo(() => bankLinesFrom(companyFinancial), [companyFinancial]);
+  const [receiptOpts, setReceiptOpts] = useState(() => initialPrintOptions("receipt"));
+  const [statementOpts, setStatementOpts] = useState(() => initialPrintOptions("statement"));
+  const statementOff = useMemo(() => ({
+    ...sealsOff,
+    ...(bankLines.length ? {} : { bank: "لم تُدخَل بيانات البنك والسداد بعد — تُدخَل من «إعدادات الحسابات ← البنك والسداد»." }),
+  }), [sealsOff, bankLines]);
   const { assertWritable } = useSeasonWrite(showAlert);
   const { viewedSeason, canWrite: seasonWritable, refreshSeasons } = useSeason();
 
@@ -56,16 +66,13 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   const [settingsTab, setSettingsTab] = useState<"pricing"|"bank"|"receipts">(
     () => (currentUser.permissions?.manage_payments ? "pricing" : "bank"));
 
-  /* ── البنك والسداد: مِلكُ `company_config` كما كان ──
-     الكتابةُ عليه تشترط `manage_users` في RLS، وهذا السطحُ يُفتَح
-     بـ`manage_payments`. فلا تُوسَّع صلاحيةٌ ولا تُنسَخ حقول: من لا
-     يملك `manage_users` يرى القيمَ ولا يُعدّلها. */
-  const canEditBank = !!currentUser.permissions?.manage_users;
+  /* ── البنك والسداد: هنا وحدَه في الواجهة ──
+     الحقولُ الستّة في `company_config`، وبابُ كتابتها
+     `update_company_bank_settings`: لـ`manage_payments` أو `manage_users`.
+     فموظّفُ المال يحرّرها دون أن تُوسَّع له سياسةُ الجدول. */
+  const canEditBank = !!(currentUser.permissions?.manage_payments || currentUser.permissions?.manage_users);
 
-  /* ⚠️ فتحُ السطحِ ليس صلاحيةً ثالثةً: هو «أملكُ قسماً واحداً على
-     الأقلّ». وقرنُه بـ`manage_payments` وحدَها كان انحداراً حقيقيّاً —
-     مالكُ `manage_users` وحدَه كان يُحرّر البنكَ في موضعِه القديم، فلو
-     نُقل المُحرِّرُ إلى سطحٍ لا يبلغه لفقد قدرةً كانت له. */
+  /* فتحُ السطحِ ليس صلاحيةً ثالثةً: هو «أملكُ قسماً واحداً على الأقلّ». */
   const canOpenSettings = canManage || canEditBank;
 
   /* ── الإيصالات: مِلكُ صفِّ الموسم ── */
@@ -892,12 +899,25 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
      ⚠️ وحلُّ وعدِ التوقيعِ **ليس** وصولَ الصورة: الرابطُ يُعطى فوراً،
      والصورةُ تُجلب بعده عند رسمِ المستند. وانتظارُها قبلَ النداءِ على
      `print()` مِلكُ `printInPage` لا هذه الدالّة. */
+  /* ⚠️ ما تغيّر: الصورتان تُطلبان حسبَ خيارَي الإيصال (مشعَلَين افتراضاً كما
+     كان)، وتُحمَّلان وتُفكّان قبل البناء. وإن طُلبت صورةٌ فتعذّرت أُبلغ الموظّف
+     ولم يُطبع إيصالٌ ناقص. والمطفأُ يُبقي خانتَه فارغةً للختم باليد. */
   const printReceipt = async (rc: PaymentReceipt) => {
-    const [stampUrl, signatureUrl] = await Promise.all([
-      signedPrivateCompanyUrl(companyAssets.company_stamp?.url),
-      signedPrivateCompanyUrl(companyAssets.manager_signature?.url),
-    ]);
-    printInPage(makeReceiptHTML(rc, { ...reportBranding, stampUrl, signatureUrl }, allocationsOf(rc)));
+    const seals = await sealsFor("receipt", receiptOpts);
+    if (!seals) return;
+    printInPage(makeReceiptHTML(rc,
+      { ...reportBranding, stampUrl: seals.stamp?.url ?? "", signatureUrl: seals.signature?.url ?? "" },
+      allocationsOf(rc), { seals }));
+  };
+  const receiptOptionsMenu = <PrintOptionsMenu report="receipt" value={receiptOpts} onChange={setReceiptOpts} disabled={sealsOff} />;
+
+  /* كشفُ حساب الحاجّ — والبنكُ من مصدره الوحيد (`company_config`) لحظةَ الطباعة */
+  const printStatement = async (p: Passenger) => {
+    const seals = await sealsFor("statement", statementOpts);
+    if (!seals) return;
+    const chrome: PrintChrome = chromeFromOptions("statement", { ...statementOpts, bank: statementOpts.bank && !statementOff.bank },
+      { seals, bank: bankLines });
+    printInPage(makePassengerStatementHTML(p, pricing, hotelPrices, hotels, customCharges, payments, reportBranding, chrome));
   };
 
 
@@ -937,7 +957,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
               <span style={{ fontWeight:600 }}>{row.value}</span>
             </div>
           ))}
-          <div style={{ display:"flex", gap:10, marginTop:16 }}>
+          <div style={{ display:"flex", justifyContent:"center", marginTop:14 }}>{receiptOptionsMenu}</div>
+          <div style={{ display:"flex", gap:10, marginTop:10 }}>
             <button onClick={() => { void printReceipt(rc); }}
               style={{ flex:1, padding:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
               🖨️ طباعة
@@ -1005,6 +1026,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ fontSize:13, color:"var(--text-muted)", marginBottom:2 }}>{issuedReceipt.payer_name}</div>
           <div style={{ fontSize:12, color:"var(--em8)", fontWeight:700, marginBottom:4 }}>إيصال رقم {issuedReceipt.receipt_number}</div>
           <div style={{ fontSize:24, fontWeight:900, color:"var(--success)", marginBottom:16 }}>{fmtAmt(Number(issuedReceipt.total_amount))} <span style={{ fontSize:13 }}>ر.ق</span></div>
+          <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>{receiptOptionsMenu}</div>
           <button onClick={() => { void printReceipt(issuedReceipt); }}
             style={{ width:"100%", padding:10, marginBottom:10, background:"var(--em8)", color:"#fff", border:"none", borderRadius:10, fontFamily:"var(--font-body)", fontSize:13, cursor:"pointer", fontWeight:600 }}>
             🖨️ طباعة
@@ -1367,7 +1389,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           customPriceInput={customPriceInput}
           savingCustomPrice={savingCustomPrice}
           onBack={()=>{setSubView("list");setSelectedP(null);setSelectedPayment(null);}}
-          onPrintStatement={()=>printInPage(makePassengerStatementHTML(selectedP, pricing, hotelPrices, hotels, customCharges, payments, reportBranding))}
+          onPrintStatement={()=>{ void printStatement(selectedP); }}
+          statementOptions={<PrintOptionsMenu report="statement" value={statementOpts} onChange={setStatementOpts} disabled={statementOff} />}
           onEditCustomPrice={()=>{ setCustomPriceInput(String(selectedP.services.custom_price || "")); setEditingCustomPrice(true); }}
           onCustomPriceInputChange={setCustomPriceInput}
           onSaveCustomPrice={saveCustomPrice}
@@ -1538,8 +1561,13 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
     const cfTotal = cfRows.filter(r => !r.cancelled).reduce((s, r) => s + r.amount, 0);
     /* الموسمُ قدرةٌ مشتركة — والحسابُ والجداولُ كما هي بالحرف.
        والخياراتُ عرضٌ لا حساب: لا صفَّ ولا إجماليَّ ولا باقةَ تمسّها. */
-    const finChrome = chromeFromOptions("finance", printOpts, { season: viewedSeason });
-    const printActions:Record<string,()=>void>={ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfRows,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) };
+    /* الختمُ والتوقيع يُحمَّلان أولاً، ثم يُبنى التقريرُ بهما */
+    const printReport = async () => {
+      const seals = await sealsFor("finance", printOpts);
+      if (!seals) return;
+      printActions(chromeFromOptions("finance", printOpts, { season: viewedSeason, seals }))[reportType]();
+    };
+    const printActions = (finChrome: PrintChrome): Record<string,()=>void> => ({ full:()=>printFullReport(allData,pricing,printBrand,"تقرير الحجاج المالي الكامل",finChrome), late:()=>printFullReport(allData.filter(r=>r.balance>0),pricing,printBrand,"تقرير المتأخرين",finChrome), payments:()=>printPaymentsReport(cfRows,printBrand,cashflowFrom,cashflowTo,finChrome), packages:()=>printPackagesReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), addons:()=>printAddonsReport(sortedPassengers,pricing,hotelPrices,hotels,printBrand,finChrome), cashflow:()=>printCashflowReport({ dates:cfDates, byDate:cfByDate, total:cfTotal, from:cashflowFrom, to:cashflowTo, brand:printBrand, chrome:finChrome }) });
     const excelActions:Record<string,(()=>void)|undefined>={ full:()=>exportFullReportXLSX(allData), late:()=>exportFullReportXLSX(allData.filter(r=>r.balance>0),"تقرير المتأخرين") };
     return (
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
@@ -1553,8 +1581,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           {excelActions[reportType] && (
             <button onClick={excelActions[reportType]} style={{ marginRight:"auto", padding:"7px 18px", background:"#1D6F42", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>Excel</button>
           )}
-          <PrintOptionsMenu report="finance" value={printOpts} onChange={setPrintOpts} />
-          <button onClick={printActions[reportType]} style={{ padding:"7px 18px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
+          <PrintOptionsMenu report="finance" value={printOpts} onChange={setPrintOpts} disabled={sealsOff} />
+          <button onClick={() => { void printReport(); }} style={{ padding:"7px 18px", background:"var(--em8)", color:"#fff", border:"none", borderRadius:8, fontSize:13, cursor:"pointer", fontWeight:600, display:"inline-flex", alignItems:"center", gap:6, fontFamily:"var(--font-body)" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>طباعة</button>
         </div>
         <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
           {([{key:"full",label:"تقرير الحجاج الكامل"},{key:"late",label:"المتأخرون"},{key:"payments",label:"سجل الدفعات"},{key:"packages",label:"تقرير الباقات"},{key:"addons",label:"ملخص الإضافات"},{key:"cashflow",label:"التحصيل اليومي"}] as const).map(t=>(

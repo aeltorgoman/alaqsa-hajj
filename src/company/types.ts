@@ -7,6 +7,14 @@ import type { PhotoVisibility } from "./portalSettings";
 export interface CompanyIdentity { nameAr: string; nameEn: string; tagline: string; logoUrl: string | null }
 export interface CompanyContact { phone: string; email: string; country: string; city: string }
 export interface CompanyFinancial { bankName: string; accountName: string; accountNumber: string; iban: string; swift: string; commercialRegistration: string; paymentQrUrl: string | null }
+/* ═══ البنك والسداد — الحقولُ الستّة ═══
+   مالكُها في الواجهة «الحسابات ← إعدادات الحسابات» وحدها، وبابُها في القاعدة
+   `update_company_bank_settings` وحده (الترحيلة 20261022090000). والسجلُّ
+   التجاريّ منها عن قصد: يُستعمَل معرِّفاً للتحويل والسداد. */
+export const BANK_SETTINGS_FIELDS = [
+  "bank_name", "bank_account_name", "bank_account_number", "bank_iban", "bank_swift", "commercial_registration",
+] as const;
+export type BankSettingsField = typeof BANK_SETTINGS_FIELDS[number];
 export interface CompanyBranding { primaryColor: string; accentColor: string; sidebarColor: string; bannerUrl: string | null; bannerPosition: string; bannerPositionX: string }
 export interface ReportBranding { logoUrl: string; companyName: string; tagline: string; primaryColor: string; accentColor: string; headerUrl: string | null; footerText: string }
 /* ⚠️ ولا فندقَ هنا. الفندقُ بيانُ موسمٍ يملكه صفُّ الموسم،

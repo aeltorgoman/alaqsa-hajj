@@ -14,6 +14,8 @@
    والباصُ تبقى على مظهرها المعتمَد ما لم يُطلَب خلافُه صراحةً. */
 import type { PrintBranding } from "./print.brand";
 import { escapeCompanyHtml, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
+import type { PrintSeals } from "./print.seals";
+import type { PrintBankLine } from "./print.bank";
 
 /** نمطُ الترويسة — كاملةٌ، أو مضغوطةٌ تحفظ الهويّة وتوفّر الورق، أو لا شيء. */
 export type HeaderMode = "full" | "compact" | "none";
@@ -34,6 +36,11 @@ export type PrintChrome = {
   resultCount?: { label: string; value: number } | null;
   /** ترقيمُ الصفحات — لا يُدعَم إلا لمستندٍ مقسَّمٍ ببنائه (انظر أدناه). */
   pageNumbers?: boolean;
+  /** ختمُ الشركة والتوقيعُ المعتمد على كلّ ورقة — صورٌ محمَّلةٌ مسبقاً
+   *  برابطٍ موقَّع (انظر `print.seals.ts`). الغائبُ لا يُرسَم ولا يحجز شيئاً. */
+  seals?: PrintSeals | null;
+  /** بياناتُ البنك والسداد — لكشف حساب الحاجّ الفرديّ وحده. */
+  bank?: PrintBankLine[] | null;
 };
 
 /* ═══ الموسم ═══ */

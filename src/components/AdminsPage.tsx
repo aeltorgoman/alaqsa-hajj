@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import { PrintOptionsMenu } from "./PrintOptionsMenu";
+import { usePrintSeals } from "../company/printSeals";
+import { initialPrintOptions, chromeFromOptions } from "../print";
 import { isHajj, mapPassenger, upsertPassenger, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import { supabase } from "../supabase";
 import type { TablesUpdate } from "../types/database";
@@ -156,7 +159,11 @@ function AdminsPage({
   // ============================================================
   // طباعة الإداريين
   // ============================================================
-  const printAdmins = () => {
+  /* الختمُ والتوقيع — خياران وحدهما على هذا الكشف، وحواشيه كما هي */
+  const [printOpts, setPrintOpts] = useState(() => initialPrintOptions("lists"));
+  const { sealsFor, unavailable: sealsOff } = usePrintSeals(showAlert);
+  const printAdmins = async () => {
+    const seals = await sealsFor("lists", printOpts); if (!seals) return;
     const rows = admins.map((p, i) => {
       const type = p.passenger_type || "إداري";
       const bus    = buses.find(b => b.id === (p as any).bus_id);
@@ -192,7 +199,8 @@ function AdminsPage({
       </tr>
       ${rows}
     </table>`;
-    const html = makeHTML("كشف الإداريين", body, branding, { landscape: true });
+    const html = makeHTML("كشف الإداريين", body, branding,
+      { landscape: true, chrome: chromeFromOptions("lists", printOpts, { seals }) });
     printInPage(html);
   };
 
@@ -669,6 +677,7 @@ function AdminsPage({
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           إضافة إداري
         </button>
+        {admins.length > 0 && <PrintOptionsMenu report="lists" value={printOpts} onChange={setPrintOpts} disabled={sealsOff} />}
         {admins.length > 0 && (
           <button onClick={printAdmins} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--em7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-body)" }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>

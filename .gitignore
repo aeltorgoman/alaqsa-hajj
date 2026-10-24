@@ -47,3 +47,4 @@ supabase/**/*.local.toml
 !supabase/seed.sql
 !supabase/migrations/
 !supabase/functions/
+.print-verify/
