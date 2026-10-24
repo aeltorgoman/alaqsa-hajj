@@ -93,6 +93,14 @@ put("pilgrims-list", makeHTML("كشف الحجاج", `<table><tr><th>م</th><th>
 put("admins-list", makeHTML("كشف الإداريين", `<table><tr><th>م</th><th>الاسم</th><th>الجواز</th></tr>${rows.slice(0, 4000)}</table>`, brand,
   { landscape: true, chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
 
+// ── القاعدة «أ»: ما يُطبع ورقةً واحدةً بلا ختم يبقى ورقةً واحدةً به (حجمٌ تشغيليّ: باصٌ بـ٤٠، وعشرون إداريّاً)
+put("one-page-bus-40", busReportDocument(bus(1, "١"), pax(40, () => ({ bus_id: 1 })), brand, chromeFromOptions("bus", opts("bus"), { season, seals: SEALS })));
+const adm = pax(20, () => ({})).map((p, i) => `<tr><td>${i + 1}</td><td>${p.short_ar}</td><td>${p.name_en}</td><td>مشرف</td><td>${p.passport}</td><td>باص ${1 + i % 3}</td>` +
+  `<td>الخطوط القطرية — QR1182</td><td>أ</td><td>ب</td><td>غرفة ${101 + i}</td></tr>`).join("").replace(/<td>/g, '<td style="padding:5pt 6pt;font-size:9pt">');
+put("one-page-admins-20", makeHTML("كشف الإداريين", `<table style="width:100%;border-collapse:collapse"><tr>${["م", "الاسم بالعربي", "الاسم بالإنجليزي", "النوع",
+  "رقم الجواز", "الباص", "الطيران", "مخيم منى", "مخيم عرفة", "الغرفة"].map(h => `<th style="padding:5pt 6pt;font-size:9pt">${h}</th>`).join("")}</tr>${adm}</table>`,
+  brand, { landscape: true, chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
+
 // ── الموضعُ المتكيّف: ورقةٌ أسفلُ يسارها مشغول (تُزاح المجموعة)، وورقةٌ أسفلُها كلُّه سطرٌ (ترتفع)
 const spacer = (mm: number) => `<div style="height:${mm}mm"></div>`;
 const leftNote = `<p style="text-align:left;margin:0;font-size:11pt">ملاحظة الإدارة: تُراجَع البيانات قبل التسليم — مرجع ٤٥٨٢</p>`;

@@ -277,6 +277,7 @@ for (const d of docs) {
     sealOnEveryPage: [...Array(n).keys()].every(i => withImg.has(i + 1)),
     pagesWithoutSeal: [...Array(n).keys()].map(i => i + 1).filter(p => !withImg.has(p)),
     wordsUnderSeal: ov.reduce((s, p) => s + p.wordsUnderSeal, 0), inkUnderSeal: ov.reduce((s, p) => s + p.inkUnderSeal, 0),
+    stampOnlyPages1: single[0].pages === 1, signatureOnlyPages1: single[1].pages === 1,
     sparsePages: sparse, stampOnlyOk: single[0].withImg === single[0].pages, signatureOnlyOk: single[1].withImg === single[1].pages,
   });
 }
@@ -332,6 +333,8 @@ const bad = [
   ...(logic || []).filter(c => !c.ok).map(c => `logic: ${c.name} ${c.detail ?? ""}`),
   ...ui.filter(c => !c.ok).map(c => `ui: ${c.name}`),
   ...rows.filter(r => !r.sealOnEveryPage && !r.doc.startsWith("receipt")).map(r => `${r.doc}: no seal on pages ${r.pagesWithoutSeal}`),
+  /* القاعدة «أ»: ورقةٌ واحدةٌ بلا ختم تبقى ورقةً واحدةً به — بالمجموعة، وبالختم وحده، وبالتوقيع وحده */
+  ...rows.filter(r => r.pagesOff === 1 && (r.pagesOn !== 1 || !r.stampOnlyPages1 || !r.signatureOnlyPages1)).map(r => `${r.doc}: one-page report became ${r.pagesOn} pages with seals`),
   /* المسموح: حدودُ جدولٍ أو خلفيّةٌ تحت الحبر؛ الممنوع: كلمةٌ تحته */
   ...rows.filter(r => !r.doc.startsWith("receipt") && !r.doc.startsWith("hotel") && r.imagesPerPage.some(c => c !== 2))
     .map(r => `${r.doc}: stamp+signature not exactly once per page (${r.imagesPerPage})`),

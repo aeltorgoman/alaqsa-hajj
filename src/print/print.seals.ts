@@ -464,6 +464,8 @@ export function sealGroupHTML(s: PrintSeals | null | undefined, cls: string, sty
 
 /** أقصى ارتفاعٍ للمجموعة عن أسفل الورقة حين لا يسعها أسفلُها. */
 const GROUP_MAX_RAISE_MM = 40;
+/** أقلُّ نسبةٍ لحشو الصفوف العموديّ حين يُضيَّق القسمُ ليسع المجموعة — الخطُّ لا يُمسّ في هذه الخطوة. */
+const GROUP_MIN_ROW_PAD = 0.4;
 /** بُعدُ أسفل المجموعة عن حدّ المحتوى السفليّ — تبقى داخل الورقة فلا تفيض إلى التالية. */
 const GROUP_EDGE_MM = 1;
 
@@ -478,7 +480,7 @@ export function sealGroupPlanHTML(s: PrintSeals | null | undefined, page: { land
     contentWidthMm: round(dim.w - 2 * m.side),
     contentHeightMm: round(dim.h - m.top - m.bottom),
     groupWmm: z.w, groupHmm: z.h, clearMm: GROUP_CLEAR_MM, decorative: SEAL_DECORATIVE,
-    edgeMm: GROUP_EDGE_MM, maxRaiseMm: GROUP_MAX_RAISE_MM, stepMm: 2,
+    edgeMm: GROUP_EDGE_MM, maxRaiseMm: GROUP_MAX_RAISE_MM, stepMm: 2, minPad: GROUP_MIN_ROW_PAD,
     minScale: SEAL_FIT_MIN_SCALE, minPt: SEAL_FIT_MIN_PT,
     groupHTML: sealGroupHTML(s, "seal-group", "position:absolute;z-index:5;pointer-events:none;"),
   };
@@ -500,11 +502,20 @@ export function sealGroupPlanHTML(s: PrintSeals | null | undefined, page: { land
    فإن لم يسعها موضعٌ في ورقةٍ نُقل أوّلُ صفٍّ في أسفلها إلى التالية (إن لم تزد
    الأوراق)، ثمّ تصغيرُ خطّ الجداول ≥ ٨٥٪، ثمّ استثناءٌ مُعلَن بدليله. */
 const SEAL_GROUP_RUNTIME = `function (cfg) {
-${SIM_RUNTIME}${CELLS_RUNTIME}  /* أوراقُ القسم: بدايتُها، وأوّلُ ذرّةٍ فيها، ورأسُ الجدول المتكرّر أعلاها */
+${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخل جدولٍ رأسُه متكرّر (صفٌّ نقله المخطِّط): يطبع Chromium
+     الرأسَ فوقه في الورقة الجديدة — فبدايةُ الورقة قبل الصفّ بارتفاع الرأس. وبدونه
+     تقع المجموعةُ أدنى بقدره فتفيض إلى ورقةٍ تالية (ظهر في كشف الحجّاج العرضيّ). */
+  var layoutBase = layout;
+  layout = function () {
+    var segs = layoutBase();
+    for (var i = 1; i < segs.length; i++) { var a = segs[i].atoms[0]; if (a && a.head > 0 && !a.tail) segs[i].start = a.top - a.head; }
+    return segs;
+  };
+  /* أوراقُ القسم: بدايتُها، وأوّلُ ذرّةٍ فيها، ورأسُ الجدول المتكرّر أعلاها */
   function pagesFrom(segs, room) {
     var out = [];
     for (var i = 0; i < segs.length; i++) {
-      var seg = segs[i], pageTop = seg.start, first = seg.atoms[0], head = 0, list = [];
+      var seg = segs[i], pageTop = seg.start, first = seg.atoms[0], head = seg.start < first.top - 0.5 ? first.head : 0, list = [];
       for (var k = 0; k < seg.atoms.length; k++) {
         var a = seg.atoms[k];
         if (a.bottom - pageTop > room + 0.5 && a.top - a.head > pageTop + 0.5) {
@@ -616,6 +627,19 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* أوراقُ القسم: بدايتُها، �
     }
     moved = [];
   }
+  /* تضييقُ صفوف الأقسام الزائدة: حشوٌ عموديّ × padF، وخطٌّ × fontF (لا دون cfg.minPt) */
+  function fitCells(fontF, padF, bad) {
+    var minPx = cfg.minPt * 96 / 72;
+    for (var k = 0; k < cells.length; k++) {
+      var c = cells[k];
+      if (c.style === null) c.e.removeAttribute("style"); else c.e.setAttribute("style", c.style);
+      if ((fontF >= 1 && padF >= 1) || !bad[c.seg]) continue;
+      var fs = fontF < 1 ? Math.max(minPx, Math.min(c.fs, c.fs * fontF)) : c.fs, rr = fs / c.fs;
+      if (fs < c.fs) c.e.style.fontSize = fs + "px";
+      c.e.style.paddingTop = (c.pt * rr * padF) + "px";
+      c.e.style.paddingBottom = (c.pb * rr * padF) + "px";
+    }
+  }
   /* موضعٌ لكلّ ورقة، بنقل صفوفٍ حيث لا موضع؛ ويُعيد الأوراقَ ومواضعَها وما بقي بلا موضع */
   function resolve(room) {
     for (var guard = 0; guard < 400; guard++) {
@@ -654,24 +678,34 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* أوراقُ القسم: بدايتُها، �
     for (var i = 0; i < segs.length; i++) { base.push(pagesOf(segs[i], room)); total0 += base[i]; }
     collect(segs);
     /* الدليل: الأوراقُ التي لا موضعَ فيها قبل نقل أيّ صفّ */
-    var pages0 = pagesFrom(segs, room), tx0 = texts(), proof = [];
+    var pages0 = pagesFrom(segs, room), tx0 = texts(), proof = [], crowded = {};
     for (var e = 0; e < pages0.length; e++) {
       var mine0 = textsOn(pages0[e], tx0);
-      if (!spot(mine0, room)) proof.push("page " + (e + 1) + ": " + evidenceFor(mine0, room));
+      if (!spot(mine0, room)) { proof.push("page " + (e + 1) + ": " + evidenceFor(mine0, room)); crowded[pages0[e].seg] = true; }
     }
-    var r = resolve(room), f = 1;
+    var r = resolve(room), f = 1, pad = 1;
     if (r.pages.length > total0 || r.stuck.length) {
-      /* الأقسامُ التي زادت أوراقُها وحدها يُصغَّر خطُّ جداولها */
-      var now = layout(), bad = {};
-      for (var a = 0; a < now.length && a < base.length; a++) if (pagesOf(now[a], room) > base[a]) bad[a] = true;
-      if (r.stuck.length) for (var q = 0; q < base.length; q++) bad[q] = true;
-      var ok = false;
-      for (f = 0.97; f >= cfg.minScale - 1e-9; f -= 0.03) {
-        unmove(); scaleCells(f, bad);
+      /* الأقسامُ التي لا موضعَ للمجموعة في إحدى أوراقها (بالقياس قبل أيّ نقل) وحدها تُضيَّق —
+         وأرقامُها أرقامُ الأقسام الأصليّة: النقلُ يزيد الأقسامَ فلا يُقاس بعده */
+      var bad = crowded;
+      /* أوّلاً حشوُ الصفوف العموديّ وحده (حتى ٤٠٪) والخطُّ كما هو — ثمّ الخطُّ ≥ ٨٥٪ ولا دون ٩pt */
+      var ok = false, steps = [];
+      for (var pf = 0.9; pf >= cfg.minPad - 1e-9; pf -= 0.1) steps.push([1, pf]);
+      for (var ff = 0.97; ff >= cfg.minScale - 1e-9; ff -= 0.03) steps.push([ff, cfg.minPad]);
+      /* وإن لم يحفظ شيءٌ عددَ الأوراق (متعدّدة الأوراق وحدها): أقلُّ الخطوات أوراقاً، وأخفُّها عند التساوي —
+         فلا تُضاف ورقةٌ لا حاجة إليها */
+      var best = { n: r.stuck.length ? Infinity : r.pages.length, s: -1 };
+      for (var s = 0; s < steps.length; s++) {
+        unmove(); fitCells(steps[s][0], steps[s][1], bad);
         r = resolve(room);
-        if (r.pages.length <= total0 && !r.stuck.length) { ok = true; break; }
+        if (r.pages.length <= total0 && !r.stuck.length) { ok = true; f = steps[s][0]; pad = steps[s][1]; break; }
+        if (!r.stuck.length && r.pages.length < best.n) best = { n: r.pages.length, s: s };
       }
-      if (!ok) { unmove(); scaleCells(1, bad); f = 1; r = resolve(room); }
+      if (!ok) {
+        unmove();
+        if (best.s >= 0) { f = steps[best.s][0]; pad = steps[best.s][1]; } else { f = 1; pad = 1; }
+        fitCells(f, pad, bad); r = resolve(room);
+      }
     }
     var placed = [];
     for (var p = 0; p < r.pages.length; p++) {
@@ -690,7 +724,7 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* أوراقُ القسم: بدايتُها، �
       proof.join(" || "));
     var adaptive = placed.filter(function (x) { return x && (x.x > 0 || x.raise > 0); }).length;
     root.setAttribute("data-seal-plan", "group" + (adaptive ? ":adaptive" + adaptive : "") + (moved.length ? ":moved" + moved.length : "") +
-      (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
+      (pad < 1 ? ":rows" + pad.toFixed(1) : "") + (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
   }
   function go() {
     try { plan(); }
