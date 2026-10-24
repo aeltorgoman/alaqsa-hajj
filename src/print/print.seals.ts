@@ -468,13 +468,22 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     return true;
   }
   /* ورقةٌ بالمقاس k: الخلايا الفارغة، وإلا الصفّ بلا قصٍّ زائد */
-  function place(sheet, k) {
+  /* الكروتُ تُعاد ملاءمتُها لكلّ تغييرٍ في ارتفاعها (ضبطُ الطباعة: \`__hotelFitCard\`)
+     — نسبةً إلى مقاسها بلا ختم، فلا يصغر اسمٌ بسبب الختم إلا ١٥٪ على الأكثر */
+  function refit(sheet, minPx, fmin) {
+    if (typeof window.__hotelFitCard !== "function") return;
+    cellsOf(sheet).forEach(function (c) { if (!isEmpty(c) && c.classList.contains("hotel-card")) window.__hotelFitCard(c, minPx, fmin); });
+  }
+  /* shrink: هل يُسمح بتصغير خطّ الكروت (حتى ٨٥٪ من مقاسه بلا ختم) ليسع الختم؟ */
+  function place(sheet, k, shrink) {
     clearOverlay(sheet);
-    var row = rowOf(sheet);
+    var row = rowOf(sheet), fmin = shrink ? 0.85 : 1;
     if (row) row.style.display = "none";
-    if (tryOverlay(sheet, k)) return true;
+    refit(sheet, 7, 1);
+    if (tryOverlay(sheet, k)) return !clippedMore(sheet);
     if (!row) return false;
     row.style.display = "flex"; sizeRow(row, k);
+    refit(sheet, 7, fmin);
     return !clippedMore(sheet);
   }
   /* ── إعادةُ رصّ غرف الدور بصفّ أقلّ في كلّ ورقة ── */
@@ -524,16 +533,17 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     for (var i = 0; i < n; i++) st[i].textContent = "صفحة " + (i + 1) + " من " + n;
   }
   function group(sheets) {
-    for (var si = 0; si < cfg.sizes.length; si++) {
-      var k = cfg.sizes[si];
-      if (sheets.every(function (sh) { return place(sh, k); })) return { k: k, how: "grid" };
+    /* لكلّ مقاس: الشبكةُ ثمّ صفٌّ أقلّ بخطّ الكروت كما هو، ثمّ الاثنان بتصغيره قليلاً */
+    for (var si = 0; si < cfg.sizes.length; si++) for (var pass = 0; pass < 2; pass++) {
+      var k = cfg.sizes[si], shrink = pass === 1, tag = shrink ? ":text" : "";
+      if (sheets.every(function (sh) { return place(sh, k, shrink); })) return { k: k, how: "grid" + tag };
       if (cfg.rows > 1) {
         var snap = snapshot(sheets);
         if (repack(sheets, cfg.rows - 1)) {
           var live = sheets.filter(function (sh) { return gridOf(sh).children.length; });
-          if (live.every(function (sh) { return place(sh, k); })) {
+          if (live.every(function (sh) { return place(sh, k, shrink); })) {
             sheets.forEach(function (sh) { if (!gridOf(sh).children.length) sh.remove(); });
-            return { k: k, how: "rows" };
+            return { k: k, how: "rows" + tag };
           }
         }
         restore(snap);
@@ -543,8 +553,8 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     var added = 0;
     for (var i = 0; i < sheets.length; i++) {
       var sh = sheets[i];
-      if (place(sh, 1)) continue;
-      for (var g = 0; g < cfg.rows && !place(sh, 1); g++) { var ns = split(sh); if (!ns) break; sheets.splice(i + 1, 0, ns); added++; }
+      if (place(sh, 1, true)) continue;
+      for (var g = 0; g < cfg.rows && !place(sh, 1, true); g++) { var ns = split(sh); if (!ns) break; sheets.splice(i + 1, 0, ns); added++; }
     }
     return { k: 1, how: "split", added: added };
   }
@@ -561,6 +571,10 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     });
     var tags = [];
     groups.forEach(function (gr) { var r = group(gr.sheets); tags.push(r.how + (r.k < 1 ? "@" + r.k.toFixed(2) : "") + (r.added ? "+" + r.added : "")); });
+    /* الأخيرة: كلُّ كرتٍ بحدّه الأدنى العامّ — فلا يبقى صفٌّ مقصوص */
+    Array.prototype.slice.call(doc.querySelectorAll(".hotel-print-page")).forEach(function (sh) {
+      cellsOf(sh).forEach(function (c) { if (!isEmpty(c) && c.scrollHeight > c.clientHeight + 1 && window.__hotelFitCard) window.__hotelFitCard(c, 7, 0.3); });
+    });
     renumber();
     var after = doc.querySelectorAll(".hotel-print-page").length;
     root.setAttribute("data-seal-sim", String(before));

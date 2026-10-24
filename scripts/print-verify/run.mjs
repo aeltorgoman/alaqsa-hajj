@@ -73,9 +73,14 @@ try {
   writeFileSync(join(wt, "scripts/print-verify/baseline.ts"), readFileSync(join(HERE, "baseline.ts")));
   run(await bundle(join(wt, "scripts/print-verify/baseline.ts"), wt, join(OUT, "baseline-base.mjs")), join(baseDir, "base"));
 } finally { execSync(`git -C "${ROOT}" worktree remove --force "${wt}"`); }
+/* تغييرٌ مقصودٌ موثَّق: كرتُ الفندق المطبوع صار بترتيب كرت الشاشة وأسمائه، ولا
+   يُقصّ منه صفّ — فمستندُ الفندق يختلف عن الأساس ولو أُطفئت الخيارات، ويُتحقَّق
+   منه بـ`hotel-fidelity.mjs` */
+const INTENDED_CHANGE = new Set(["hotel-p", "hotel-l"]);
 const unchanged = readdirSync(join(baseDir, "base")).map(f => ({
   doc: f.replace(".html", ""),
   identical: readFileSync(join(baseDir, "base", f), "utf8") === readFileSync(join(baseDir, "branch", f), "utf8"),
+  intended: INTENDED_CHANGE.has(f.replace(".html", "")),
 }));
 
 /* ── ٢) صورتان اصطناعيّتان بحشوٍ شفّافٍ واسع كما تُرفع، ثم القصُّ الحقيقيّ ──
@@ -303,7 +308,7 @@ const ui = [
 const report = { generatedAt: new Date().toISOString(), baseRef: BASE_REF, unchanged, logic, ui, docs: rows };
 writeFileSync(join(OUT, "report.json"), JSON.stringify(report, null, 2));
 const bad = [
-  ...unchanged.filter(u => !u.identical).map(u => `HTML changed with options OFF: ${u.doc}`),
+  ...unchanged.filter(u => !u.identical && !u.intended).map(u => `HTML changed with options OFF: ${u.doc}`),
   ...(logic || []).filter(c => !c.ok).map(c => `logic: ${c.name} ${c.detail ?? ""}`),
   ...ui.filter(c => !c.ok).map(c => `ui: ${c.name}`),
   ...rows.filter(r => !r.sealOnEveryPage && !r.doc.startsWith("receipt")).map(r => `${r.doc}: no seal on pages ${r.pagesWithoutSeal}`),
@@ -318,7 +323,8 @@ const extra = rows.filter(r => r.pagesOn > r.pagesOff);
 console.log(extra.length ? `extra pages with seals ON: ${extra.map(r => `${r.doc} ${r.pagesOff}→${r.pagesOn} (${r.plan}; ${r.evidence ?? "no evidence"})`).join(", ")}` : "extra pages with seals ON: none");
 const missim = rows.filter(r => r.simulatedOff != null && r.simulatedOff !== r.pagesOff);
 console.log(missim.length ? `simulation ≠ real OFF pages: ${missim.map(r => `${r.doc} sim ${r.simulatedOff} real ${r.pagesOff}`).join(", ")}` : "simulation = real OFF pages for every planned doc");
-console.log(`unchanged with options OFF: ${unchanged.filter(u => u.identical).length}/${unchanged.length}`);
+console.log(`unchanged with options OFF: ${unchanged.filter(u => u.identical).length}/${unchanged.length}` +
+  ` (intended hotel-card fix: ${unchanged.filter(u => u.intended).map(u => `${u.doc} ${u.identical ? "same" : "changed"}`).join(", ")})`);
 console.log(`logic checks: ${(logic || []).filter(c => c.ok).length}/${(logic || []).length}`);
 console.log(`ui checks: ${ui.filter(c => c.ok).length}/${ui.length}`);
 if (bad.length) { console.log("FAIL:\n  " + bad.join("\n  ")); process.exit(1); }

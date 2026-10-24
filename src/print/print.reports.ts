@@ -15,7 +15,7 @@
    يفترق مدخلان. وهيئةُ `FlightsPage` هي المرجع، ولا تُغيَّر. */
 import type { Passenger, Bus, Camp, Flight, Room } from "../types";
 import { roomCapacity } from "../utils/room";
-import { isHajj } from "../utils/passenger";
+import { isHajj, roomOccupants, occupantName } from "../utils/passenger";
 import { chromeMetaHTML, pageStampHTML, seasonLabel, compactHeaderHTML,
          type PrintChrome, type PrintSeason } from "./print.chrome";
 import type { PrintBranding } from "./print.brand";
@@ -184,7 +184,7 @@ const CARD_METRICS: Record<"portrait" | "landscape", CardMetrics> = {
 };
 
 export function hotelRoomCard(
-  room: Room, occupants: { short_ar?: string; name_ar: string }[], fontSize: number, showPattern: boolean,
+  room: Room, occupants: { short_ar?: string | null; name_ar: string }[], fontSize: number, showPattern: boolean,
   orientation: "portrait" | "landscape" = "portrait",
   hotelName: string | null = null,
 ): string {
@@ -200,7 +200,7 @@ export function hotelRoomCard(
     return p
       ? `<tr>
               <td style="text-align:center;padding:${rowPad}px 4px;font-size:${numSize}px;font-weight:600;color:#333;width:${idxWidth}px;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2">${i + 1}</td>
-              <td class="auto-fit-name" data-max-size="${fontSize}" data-pad="${namePad * 2}" style="padding:${rowPad}px ${namePad}px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.short_ar || p.name_ar}</td>
+              <td class="auto-fit-name" data-max-size="${fontSize}" data-pad="${namePad * 2}" style="padding:${rowPad}px ${namePad}px;font-size:${fontSize}px;font-weight:600;color:#000;border-bottom:1px solid rgba(0,0,0,0.12);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeCompanyHtml(occupantName(p))}</td>
             </tr>`
       : `<tr>
               <td style="padding:${rowPad}px 4px;border-bottom:1px solid rgba(0,0,0,0.06);width:${idxWidth}px">&nbsp;</td>
@@ -208,7 +208,7 @@ export function hotelRoomCard(
             </tr>`;
   }).join("");
   const cardBg = showPattern ? "rgba(255,255,255,0.4)" : "#ffffff";
-  return `<div style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
+  return `<div class="hotel-card" style="break-inside:avoid;border:1.5px solid ${clr};border-radius:5px;overflow:hidden;display:flex;flex-direction:column;height:100%;background:${cardBg}">
         <div style="background:${clr};color:#ffffff;padding:5px 7px;flex-shrink:0;text-align:center;font-size:${headerFs}px;font-weight:800;line-height:1.3">
           ${hotelName ? `${escapeCompanyHtml(hotelName)} · ` : ""}غرفة ${room.number}${room.floor ? ` — الدور ${room.floor}` : ""}
           <div style="font-size:${Math.max(9, headerFs - 4)}px;font-weight:700;opacity:.92;margin-top:1px">${roomTypeBadge(room, occupants.length)}</div>
@@ -264,7 +264,8 @@ export function hotelReportDocument(
   const seals = hasSeals(chrome.seals) ? chrome.seals : null;
   const ROWS = landscape ? 3 : 4;
   const PER_PAGE = COLS * ROWS;
-  const occupantsOf = (roomId: number) => passengers.filter(p => p.room_id === roomId);
+  /* شاغلو الغرفة بترتيب كرتها على الشاشة وأسمائه — `roomOccupants`/`occupantName` */
+  const occupantsOf = (roomId: number) => roomOccupants(passengers, roomId);
 
   /* ═══ الدورُ حدُّ مجموعةٍ لا حدُّ صفحة ═══
      الدورُ وحدةٌ تشغيليّة: موظّفُ الفندق يحمل ورقةَ الدور ويصعد بها.
@@ -371,26 +372,67 @@ export function hotelReportDocument(
              `<div class="hotel-foot">${footerLine}</div></div>`;
     }).join("");
 
-  /* ضبطُ حجم كلّ اسمٍ على حدة — منقولٌ بحرفه، ومعايرتُه مُختبَرة */
+  /* ═══ ضبطُ الأسماء ثمّ الكرت — لا اسمَ يُقصّ ولا صفَّ يختفي ═══
+     ⚠️ العطبُ القديم: كان مقاسُ الاسم يُقدَّر على لوحة رسم (canvas) لا في
+     الخليّة نفسها، و`.hotel-page td` تسمح بالالتفاف (`white-space: normal`).
+     فاسمٌ «يسع» بتقدير اللوحة يزيد في التخطيط الحقيقيّ كسراً فيلتفّ سطرين،
+     ويطول الصفّ، والكرتُ ثابتُ الارتفاع ويخفي ما فاض — فيختفي آخرُ حاجٍّ فيه.
+     فصار:
+       ١) الاسمُ يُقاس في خليّته بسطرٍ واحد ويُصغَّر حتى يسعها (حتى ٨px)؛
+          فإن لم يسعها التفّ ولا يُبتر — لا نقاطَ ولا حرفَ ضائع.
+       ٢) ثمّ الكرت: إن فاض محتواه صُغِّر خطُّ صفوفه وحشوُها معاً بقدر
+          الحاجة وحدها حتى يظهر كلُّ صفّ (حتى ٧px)، وكرتٌ يسع لا يُمسّ.
+     ويُعاد ضبطُ الكرت حين يُدخل المخطِّطُ صفَّ الختم (`__hotelFitCard`). */
   const autoFitScript = `<script>
       (function() {
-        function fitNames() {
-          var cells = document.querySelectorAll('.auto-fit-name');
-          var canvas = document.createElement('canvas');
-          var ctx = canvas.getContext('2d');
-          cells.forEach(function(cell) {
-            var maxSize = parseFloat(cell.getAttribute('data-max-size')) || 17;
-            var minSize = 8;
-            var available = cell.clientWidth - (parseFloat(cell.getAttribute('data-pad')) || 14);
-            var text = cell.textContent;
-            var size = maxSize;
-            while (size > minSize) {
-              ctx.font = '600 ' + size + 'px Cairo, sans-serif';
-              if (ctx.measureText(text).width <= available) break;
-              size -= 0.5;
-            }
+        var NAME_MIN = 8, CARD_MIN = 7;
+        function fitName(cell) {
+          var size = parseFloat(cell.getAttribute('data-max-size')) || 17;
+          cell.style.setProperty('white-space', 'nowrap', 'important');
+          cell.style.fontSize = size + 'px';
+          while (size > NAME_MIN && cell.scrollWidth > cell.clientWidth + 0.5) {
+            size -= 0.5;
             cell.style.fontSize = size + 'px';
+          }
+          cell.style.removeProperty('white-space');
+        }
+        function over(card) { return card.scrollHeight > card.clientHeight + 1; }
+        function remember(card) {
+          card.querySelectorAll('td').forEach(function (td) {
+            var cs = getComputedStyle(td);
+            td.setAttribute('data-fs', parseFloat(cs.fontSize));
+            td.setAttribute('data-pt', parseFloat(cs.paddingTop));
+            td.setAttribute('data-pb', parseFloat(cs.paddingBottom));
           });
+        }
+        /* يعيد الكرتَ إلى مقاس أسمائه ثمّ يصغّره بقدر ما يفيض — ويُعلم إن وسع */
+        function fitCard(card, minPx, fmin) {
+          var tds = card.querySelectorAll('td');
+          function apply(f) {
+            tds.forEach(function (td) {
+              var fs = +td.getAttribute('data-fs');
+              td.style.fontSize = Math.max(Math.min(fs, minPx), fs * f) + 'px';
+              td.style.paddingTop = (+td.getAttribute('data-pt') * f) + 'px';
+              td.style.paddingBottom = (+td.getAttribute('data-pb') * f) + 'px';
+            });
+          }
+          var f = 1;
+          apply(1);
+          while (over(card) && f - 0.03 >= fmin - 1e-9) { f -= 0.03; apply(f); }
+          card.setAttribute('data-fit-f', f);
+          return !over(card);
+        }
+        /* للمخطِّط: إعادةُ ملاءمة الكرت بعد صفّ الختم. التصغيرُ نسبةً إلى مقاس الكرت
+           بلا ختم (rel: ١ = كما هو بلا ختم، ٠٫٨٥ = أصغرُ منه بـ١٥٪ على الأكثر) */
+        window.__hotelFitCard = function (card, minPx, rel) {
+          var off = +(card.getAttribute('data-off-f') || 1);
+          return fitCard(card, minPx || CARD_MIN, off * (rel == null ? 0.85 : rel));
+        };
+        function fitAll() {
+          /* المقاسُ المرجعيّ بلا صفّ الختم — يُظهره المخطِّطُ بعدُ حيث يسع */
+          document.querySelectorAll('.hotel-print-page > .print-seals').forEach(function (r) { r.style.display = 'none'; });
+          document.querySelectorAll('.auto-fit-name').forEach(fitName);
+          document.querySelectorAll('.hotel-card').forEach(function (card) { remember(card); fitCard(card, CARD_MIN, 0.3); card.setAttribute('data-off-f', card.getAttribute('data-fit-f')); });
           document.documentElement.setAttribute('data-fit-done', '1');
         }
         function runWhenFontReady() {
@@ -398,9 +440,9 @@ export function hotelReportDocument(
             Promise.all([
               document.fonts.load('600 17px Cairo'),
               document.fonts.ready
-            ]).then(fitNames).catch(fitNames);
+            ]).then(fitAll).catch(fitAll);
           } else {
-            window.addEventListener('load', fitNames);
+            window.addEventListener('load', fitAll);
           }
         }
         runWhenFontReady();

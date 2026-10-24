@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { isHajj, byOrder, applyReorder, mapPassenger, upsertPassenger } from "../utils/passenger";
+import { isHajj, applyReorder, mapPassenger, upsertPassenger, roomOccupants, occupantName } from "../utils/passenger";
 import { hotelNameOf, roomLabel } from "../utils/hotels";
 import { allocWriteError } from "./allocation/useAllocation";
 import { HotelSearch, type SearchRoom } from "./hotels/HotelSearch";
@@ -198,7 +198,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
      تُبنى على مفتاح الإسناد لا على قائمة الحجاج. أما مؤشّرات «الحجاج
      الموزّعين» و«نسبة التوزيع» فتبقى حجّاجية، لأن معناها حجّاجي. */
   const roomPassengers = (roomId: number) =>
-    passengers.filter(p => p.room_id === roomId).sort(byOrder("room_sort_order"));
+    roomOccupants(passengers, roomId);
 
   /* من لا غرفة له — الإداري كذلك. كان يُسكَّن من صفحة الإداريين
      وحدها، وهي أضعف مدخل: بلا سعة ولا حالة غرفة أمام المستخدم. */
@@ -966,7 +966,7 @@ function HotelPage({ passengers, setPassengers, hotel, hotels, onBack, seasonRoo
                                   {occ.map(p => (
                                     <li key={p.id} style={{ fontSize: 11, color: "var(--ink)", fontWeight: 600, lineHeight: 1.35, display: "flex", alignItems: "flex-start", gap: 4 }}>
                                       <span aria-hidden style={{ width: 3, height: 3, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 6 }} />
-                                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{p.short_ar || makeShort(p.name_ar)}</span>
+                                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{occupantName(p)}</span>
                                     </li>
                                   ))}
                                 </ul>
