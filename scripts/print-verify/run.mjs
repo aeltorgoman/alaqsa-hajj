@@ -168,7 +168,7 @@ async function toPdf(htmlFile, pdfFile) {
   await page.waitForFunction(() => !document.querySelector(".auto-fit-name") || document.documentElement.getAttribute("data-fit-done") === "1", null, { timeout: 5000 }).catch(() => {});
   /* كما ينتظر `printInPage`: قرارُ موضع الختم يُتَّخذ في المستند بعد تخطيطه */
   if (html.includes("data-seal-plan")) await page.waitForFunction(() => document.documentElement.hasAttribute("data-seal-plan"), null, { timeout: 9000 }).catch(() => {});
-  const plan = await page.evaluate(() => ["data-seal-plan", "data-seal-sim", "data-seal-evidence"].map(a => document.documentElement.getAttribute(a)));
+  const plan = await page.evaluate(() => ["data-seal-plan", "data-seal-sim", "data-seal-evidence", "data-seal-placements"].map(a => document.documentElement.getAttribute(a)));
   /* هندسةُ المجموعة كما رُسمت: التداخلُ بين الختم والتوقيع بالمليمتر */
   geometry[htmlFile] = await page.evaluate(() => {
     const g = document.querySelector(".seal-group, .print-seals-overlay, .print-seals");
@@ -181,10 +181,10 @@ async function toPdf(htmlFile, pdfFile) {
   return plan;
 }
 const docs = readdirSync(join(OUT, "on")).filter(f => f.endsWith(".html")).map(f => f.replace(".html", "")).sort();
-const plans = {}, sims = {}, evidence = {}, geometry = {};
+const plans = {}, sims = {}, evidence = {}, geometry = {}, placements = {};
 for (const m of MODES) for (const d of docs) {
   const plan = await toPdf(join(OUT, m, `${d}.html`), join(OUT, m, `${d}.pdf`));
-  if (m === "on") plans[d] = plan[0], sims[d] = plan[1], evidence[d] = plan[2];
+  if (m === "on") plans[d] = plan[0], sims[d] = plan[1], evidence[d] = plan[2], placements[d] = plan[3] ? JSON.parse(plan[3]) : null;
 }
 /* «قبل» بالصور المقصوصة نفسها (ما يطبعه التطبيقُ منذ قصّ الحشو) — مقارنةُ تخطيطٍ لا صور */
 const beforeDocs = BEFORE_REF ? docs.filter(d => existsSync(join(OUT, "before", `${d}.html`))) : [];
@@ -213,6 +213,8 @@ const sealMm = (f) => {
     signature: sg ? `${r(sg.mmW)}×${r(sg.mmH)}` : "-",
   };
 };
+/* صورُ كلّ ورقةٍ في الـPDF: الختمُ والتوقيعُ مرّةً واحدة لا أكثر (لا فيضَ إلى ورقةٍ أخرى) */
+const imagesPerPage = (f, n) => { const c = Array(n).fill(0); for (const p of imagePages(f)) c[p - 1]++; return c; };
 const wordsOn = (f, p) => execFileSync("pdftotext", ["-f", `${p}`, "-l", `${p}`, f, "-"], { encoding: "utf8" }).split(/\s+/).filter(Boolean).length;
 const OVERLAP_PY = `
 import sys, json, re, subprocess
@@ -220,7 +222,9 @@ from PIL import Image, ImageChops
 on, ghost, tmp = sys.argv[1], sys.argv[2], sys.argv[3]
 # كلماتُ سطر التذييل الختاميّ زينةٌ يجوز أن تعلوها المجموعة (كما في المخطِّط)
 strip_marks = lambda w: re.sub(r"[\\u064B-\\u0652\\u0640]", "", w)
-decorative = {strip_marks(w) for w in (json.loads(sys.argv[4]) if len(sys.argv) > 4 else [])}
+# بترتيب الحروف لا بتسلسلها: pdftotext يعكس العربيّة ويقلب «لا» المركّبة
+canon = lambda w: "".join(sorted(strip_marks(w)))
+decorative = {canon(w) for w in (json.loads(sys.argv[4]) if len(sys.argv) > 4 else [])}
 DPI = 60
 subprocess.run(["pdftoppm", "-r", str(DPI), "-png", on, tmp + "/on"], check=True)
 subprocess.run(["pdftoppm", "-r", str(DPI), "-png", ghost, tmp + "/gh"], check=True)
@@ -239,8 +243,7 @@ for i, (a, b) in enumerate(zip(ons, ghs)):
         sx, sy = A.width / float(pw), A.height / float(ph)
         for m in re.finditer(r'xMin="([\\d.]+)" yMin="([\\d.]+)" xMax="([\\d.]+)" yMax="([\\d.]+)">([^<]*)<', body):
             x0, y0, x1, y1 = [float(v) for v in m.groups()[:4]]
-            w = strip_marks(m.group(5).strip())
-            if w in decorative or w[::-1] in decorative: continue  # pdftotext يكتب العربيّة بترتيبها المرئيّ
+            if canon(m.group(5).strip()) in decorative: continue
             reg = diff.crop((int(x0 * sx), int(y0 * sy), int(x1 * sx) + 1, int(y1 * sy) + 1))
             if reg.getbbox(): words += 1
         Bp = B.load(); Dp = diff.load()
@@ -268,7 +271,7 @@ for (const d of docs) {
   const mm = sealMm(on), bmm = beforeDocs.includes(d) ? sealMm(join(OUT, "before", `${d}.pdf`)) : null;
   const sameAsBefore = beforeDocs.includes(d) ? readFileSync(join(OUT, "before", `${d}.html`), "utf8") === readFileSync(join(OUT, "on", `${d}.html`), "utf8") : null;
   rows.push({
-    doc: d, sameHtmlAsBefore: sameAsBefore, overlapMm: geometry[join(OUT, "on", `${d}.html`)]?.overlapMm ?? null, pagesOff: pagesOf(off), simulatedOff: sims[d] == null ? null : +sims[d], evidence: evidence[d], pagesBefore: bmm ? pagesOf(join(OUT, "before", `${d}.pdf`)) : null, pagesOn: n, plan: plans[d],
+    doc: d, placements: placements[d], imagesPerPage: imagesPerPage(on, n), sameHtmlAsBefore: sameAsBefore, overlapMm: geometry[join(OUT, "on", `${d}.html`)]?.overlapMm ?? null, pagesOff: pagesOf(off), simulatedOff: sims[d] == null ? null : +sims[d], evidence: evidence[d], pagesBefore: bmm ? pagesOf(join(OUT, "before", `${d}.pdf`)) : null, pagesOn: n, plan: plans[d],
     stampMm: mm.stamp, signatureMm: mm.signature, stampInkMm: mm.stampInkH, beforeStampInkMm: bmm?.stampInkH ?? null,
     beforeStampMm: bmm?.stamp ?? null, beforeSignatureMm: bmm?.signature ?? null,
     sealOnEveryPage: [...Array(n).keys()].every(i => withImg.has(i + 1)),
@@ -330,13 +333,16 @@ const bad = [
   ...ui.filter(c => !c.ok).map(c => `ui: ${c.name}`),
   ...rows.filter(r => !r.sealOnEveryPage && !r.doc.startsWith("receipt")).map(r => `${r.doc}: no seal on pages ${r.pagesWithoutSeal}`),
   /* المسموح: حدودُ جدولٍ أو خلفيّةٌ تحت الحبر؛ الممنوع: كلمةٌ تحته */
+  ...rows.filter(r => !r.doc.startsWith("receipt") && !r.doc.startsWith("hotel") && r.imagesPerPage.some(c => c !== 2))
+    .map(r => `${r.doc}: stamp+signature not exactly once per page (${r.imagesPerPage})`),
   ...rows.filter(r => r.wordsUnderSeal).map(r => `${r.doc}: ${r.wordsUnderSeal} word(s) under the stamp/signature ink`),
   /* الإيصالُ A5 معتمَدٌ كما هو: مطابقٌ بايتاً ببايت لـ --before-ref */
   ...rows.filter(r => r.doc.startsWith("receipt") && r.sameHtmlAsBefore === false).map(r => `${r.doc}: A5 receipt HTML changed`),
   ...rows.filter(r => r.sparsePages.length).map(r => `${r.doc}: nearly empty pages ${r.sparsePages}`),
 ];
 console.table(rows.map(r => ({ doc: r.doc, off: r.pagesOff, sim: r.simulatedOff ?? "-", before: r.pagesBefore ?? "-", on: r.pagesOn, plan: r.plan ?? "-",
-  stampMm: r.stampMm, sigMm: r.signatureMm, overlap: r.overlapMm ?? "-", stampBefore: r.beforeStampMm ?? "-",
+  stampMm: r.stampMm, sigMm: r.signatureMm, overlap: r.overlapMm ?? "-",
+  where: (r.placements || []).map(p => p ? (p.x === 0 && p.raise === 0 ? "L" : `x${p.x}${p.raise ? "↑" + p.raise : ""}`) : "∅").join(" ") || "-",
   everyPage: r.sealOnEveryPage, words: r.wordsUnderSeal, ink: r.inkUnderSeal, sparse: r.sparsePages.join(",") || "-",
   stampOnly: r.stampOnlyOk, sigOnly: r.signatureOnlyOk })));
 const extra = rows.filter(r => r.pagesOn > r.pagesOff);

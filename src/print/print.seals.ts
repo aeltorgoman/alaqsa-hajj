@@ -413,7 +413,8 @@ ${CELLS_RUNTIME}  function plan() {
    ═══════════════════════════════════════════════════════════════
    المطلوب النهائيّ: مقاسٌ واقعيٌّ ثابت لا يُصغَّر أبداً (الختمُ نحو ٤٢مم عرضاً،
    والتوقيعُ نحو ٦٠مم)، متقاربان يتداخلان نحو ٨مم كختمٍ وُضع على طرف التوقيع،
-   في الموضع نفسه أسفلَ كلّ ورقة — بلا شريطٍ محجوزٍ يدفع المحتوى.
+   أسفلَ كلّ ورقة — بلا شريطٍ محجوزٍ يدفع المحتوى، وموضعُها في كلّ ورقةٍ حيث
+   لا تعلو نصّاً (انظر «موضعُ المجموعة ورقةً ورقة» أدناه).
 
    ⚠️ ما حُسم بالطباعة الحقيقيّة إلى PDF:
      • `position: fixed` يُرسَم على **كلّ ورقة** في الموضع نفسه ولا يغيّر التدفّق،
@@ -461,7 +462,13 @@ export function sealGroupHTML(s: PrintSeals | null | undefined, cls: string, sty
          `align-items:center;break-inside:avoid;page-break-inside:avoid">${parts}</div>`;
 }
 
-/** مخطِّطُ تقارير A4: المجموعةُ ثابتةٌ أسفلَ يسار كلّ ورقة، ولا نصَّ تحتها. */
+/** أقصى ارتفاعٍ للمجموعة عن أسفل الورقة حين لا يسعها أسفلُها. */
+const GROUP_MAX_RAISE_MM = 40;
+/** بُعدُ أسفل المجموعة عن حدّ المحتوى السفليّ — تبقى داخل الورقة فلا تفيض إلى التالية. */
+const GROUP_EDGE_MM = 1;
+
+/** مخطِّطُ تقارير A4: لكلّ ورقةٍ موضعُ المجموعة الذي لا يعلو نصّاً — أسفلَ اليسار
+ *  ما أمكن، وإلا أسفلَ الورقة يميناً منه، وإلا أعلى قليلاً. */
 export function sealGroupPlanHTML(s: PrintSeals | null | undefined, page: { landscape?: boolean; margin: string }): string {
   if (!hasSeals(s)) return "";
   const m = marginsOf(page.margin);
@@ -471,30 +478,46 @@ export function sealGroupPlanHTML(s: PrintSeals | null | undefined, page: { land
     contentWidthMm: round(dim.w - 2 * m.side),
     contentHeightMm: round(dim.h - m.top - m.bottom),
     groupWmm: z.w, groupHmm: z.h, clearMm: GROUP_CLEAR_MM, decorative: SEAL_DECORATIVE,
+    edgeMm: GROUP_EDGE_MM, maxRaiseMm: GROUP_MAX_RAISE_MM, stepMm: 2,
     minScale: SEAL_FIT_MIN_SCALE, minPt: SEAL_FIT_MIN_PT,
+    groupHTML: sealGroupHTML(s, "seal-group", "position:absolute;z-index:5;pointer-events:none;"),
   };
-  const group = sealGroupHTML(s, "seal-group", "position:fixed;left:0;bottom:0;z-index:5;pointer-events:none;visibility:hidden;");
-  return `${group}<script>(${SEAL_GROUP_RUNTIME})(${JSON.stringify(cfg)});</script>`;
+  return `${sealPreloadHTML(s)}<script>(${SEAL_GROUP_RUNTIME})(${JSON.stringify(cfg)});</script>`;
 }
 
+/* ═══ موضعُ المجموعة ورقةً ورقة ═══
+   ⚠️ عنصرٌ ثابت (`position: fixed`) واحدٌ في كلّ الأوراق بالموضع نفسه؛ فإن وقع
+   نصٌّ تحته في ورقةٍ لم يبقَ إلا نقلُ صفوفها — فتزيد ورقة. فصار لكلّ ورقةٍ مجموعتُها:
+   مرساةٌ مطلقةٌ بلا إزاحة (`position: absolute` — خارج التدفّق فلا تغيّر سطراً)
+   في أوّل صفٍّ من الورقة، تقع في قطعة تلك الورقة نفسها (حُسم بالطباعة الحقيقيّة،
+   مع رأس الجدول المتكرّر والفواصل)، والمجموعةُ منها على الإزاحة المختارة.
+
+   الاختيار لكلّ ورقة — من مستطيلات نصوصها الفعليّة:
+     ١) أسفلَ اليسار (الموضع المعتمَد).
+     ٢) أسفلَ الورقة منزاحةً يميناً بخطوة ٢مم حتى الطرف الأيمن.
+     ٣) الشيءُ نفسه أعلى بخطوة ٢مم حتى ٤٠مم.
+   والمجموعةُ كلُّها داخل حدّ المحتوى (١مم فوقه) فلا يفيض منها شيءٌ إلى التالية.
+   فإن لم يسعها موضعٌ في ورقةٍ نُقل أوّلُ صفٍّ في أسفلها إلى التالية (إن لم تزد
+   الأوراق)، ثمّ تصغيرُ خطّ الجداول ≥ ٨٥٪، ثمّ استثناءٌ مُعلَن بدليله. */
 const SEAL_GROUP_RUNTIME = `function (cfg) {
-${SIM_RUNTIME}${CELLS_RUNTIME}  var group = doc.querySelector(".seal-group");
-  /* بداياتُ أوراق القسم (كـ pagesOf) */
-  function pageTops(seg, room) {
-    var tops = [seg.start], pageTop = seg.start;
-    for (var i = 0; i < seg.atoms.length; i++) {
-      var a = seg.atoms[i];
-      if (a.bottom - pageTop > room + 0.5 && a.top - a.head > pageTop + 0.5) { pageTop = a.top - a.head; tops.push(pageTop); }
-    }
-    return tops;
-  }
-  /* كلُّ ورقة: بدايتُها ونهايةُ ما يُنسَب إليها */
+${SIM_RUNTIME}${CELLS_RUNTIME}  /* أوراقُ القسم: بدايتُها، وأوّلُ ذرّةٍ فيها، ورأسُ الجدول المتكرّر أعلاها */
   function pagesFrom(segs, room) {
     var out = [];
     for (var i = 0; i < segs.length; i++) {
-      var tops = pageTops(segs[i], room);
-      for (var j = 0; j < tops.length; j++)
-        out.push({ seg: i, top: tops[j], end: j + 1 < tops.length ? tops[j + 1] : (i + 1 < segs.length ? segs[i + 1].start : Infinity) });
+      var seg = segs[i], pageTop = seg.start, first = seg.atoms[0], head = 0, list = [];
+      for (var k = 0; k < seg.atoms.length; k++) {
+        var a = seg.atoms[k];
+        if (a.bottom - pageTop > room + 0.5 && a.top - a.head > pageTop + 0.5) {
+          list.push({ top: pageTop, first: first, head: head });
+          pageTop = a.top - a.head; first = a; head = a.head;
+        }
+      }
+      list.push({ top: pageTop, first: first, head: head });
+      for (var j = 0; j < list.length; j++) {
+        list[j].seg = i;
+        list[j].end = j + 1 < list.length ? list[j + 1].top : (i + 1 < segs.length ? segs[i + 1].start : Infinity);
+        out.push(list[j]);
+      }
     }
     return out;
   }
@@ -517,29 +540,71 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  var group = doc.querySelector(".seal-group");
     }
     return out;
   }
-  /* أوّلُ ذرّةٍ في كلّ ورقةٍ يقع نصُّها تحت المجموعة */
-  function hits(segs, room) {
-    var pages = pagesFrom(segs, room), tx = texts(), gw = cfg.groupWmm * MM, gh = (cfg.groupHmm + cfg.clearMm) * MM, out = [];
-    for (var p = 0; p < pages.length; p++) {
-      var pg = pages[p], zone = pg.top + room - gh, first = null;
-      for (var t = 0; t < tx.length; t++) {
-        var x = tx[t];
-        if (x.top < pg.top - 0.5 || x.top >= pg.end - 0.5) continue;
-        if (x.bottom <= zone || x.left >= gw || x.right <= 0) continue;
-        if (!first || x.top < first.top) first = x;
-        if (!pg.sample) pg.sample = x.text;
-      }
-      if (!first) continue;
-      var atom = null, list = segs[pg.seg].atoms;
-      for (var a = 0; a < list.length; a++) {
-        var at = list[a];
-        if (!at.tail && at.top <= first.top + 0.5 && at.bottom >= first.bottom - 0.5) { atom = at; break; }
-      }
-      out.push({ page: p, atom: atom, sample: pg.sample, movable: !!atom && atom.top - atom.head > pg.top + 0.5 });
+  /* نصوصُ الورقة بإحداثيّاتها داخل الورقة — ورأسُ الجدول المتكرّر مشغولٌ أعلاها */
+  function textsOn(pg, tx) {
+    var out = [];
+    for (var t = 0; t < tx.length; t++) {
+      var x = tx[t];
+      if (x.top < pg.top - 0.5 || x.top >= pg.end - 0.5) continue;
+      out.push({ top: x.top - pg.top, bottom: x.bottom - pg.top, left: x.left, right: x.right, text: x.text });
     }
-    return { pages: pages.length, hits: out };
+    if (pg.head) out.push({ top: 0, bottom: pg.head, left: -1e9, right: 1e9, text: "" });
+    return out;
   }
-  /* نقلُ الذرّة إلى الورقة التالية بفاصلٍ قبلها */
+  /* أوّلُ موضعٍ خالٍ للمجموعة في الورقة بترتيب التفضيل — أو null */
+  /* الدليلُ لورقةٍ بلا موضع: أعرضُ فجوةٍ خاليةٍ من النصّ في شريط المجموعة أسفلَها،
+     وأدنى موضعٍ خالٍ في الورقة كلّها، وأمثلةٌ ممّا يشغل أسفلها */
+  function evidenceFor(mine, room) {
+    var W = cfg.contentWidthMm * MM, gh = cfg.groupHmm * MM, c = cfg.clearMm * MM;
+    var bottom = room - cfg.edgeMm * MM, top = bottom - gh, best = 0, run = 0, seen = {};
+    for (var x = 0; x <= W; x += MM) {
+      var busy = false;
+      for (var t = 0; t < mine.length && !busy; t++) {
+        var m = mine[t];
+        if (m.bottom > top - c && m.top < bottom + c && m.right > x - c && m.left < x + MM + c) busy = true;
+      }
+      run = busy ? 0 : run + 1; if (run > best) best = run;
+    }
+    var keep = cfg.maxRaiseMm; cfg.maxRaiseMm = 1e4;
+    var anywhere = spot(mine, room); cfg.maxRaiseMm = keep;
+    var sample = [];
+    for (var u = 0; u < mine.length && sample.length < 4; u++)
+      if (mine[u].text && mine[u].bottom > top && !seen[mine[u].text]) { seen[mine[u].text] = 1; sample.push(mine[u].text); }
+    return "widest text-free gap in the bottom " + cfg.groupHmm.toFixed(1) + "mm band = " + best + "mm (group needs " +
+      cfg.groupWmm.toFixed(1) + "mm); lowest free spot on the page: " +
+      (anywhere ? Math.round(anywhere.dy / MM) + "mm above the bottom" : "none") + "; bottom band holds: " + sample.join(" | ");
+  }
+  function spot(mine, room) {
+    var W = cfg.contentWidthMm * MM, gw = cfg.groupWmm * MM, gh = cfg.groupHmm * MM, c = cfg.clearMm * MM, step = cfg.stepMm * MM;
+    var xs = [];
+    for (var x = 0; x < W - gw - 0.5; x += step) xs.push(x);
+    xs.push(Math.max(0, W - gw));
+    for (var dy = 0; dy <= cfg.maxRaiseMm * MM + 0.01; dy += step) {
+      var bottom = room - cfg.edgeMm * MM - dy, top = bottom - gh;
+      if (top < 0) break;
+      for (var i = 0; i < xs.length; i++) {
+        var l = xs[i], r = l + gw, free = true;
+        for (var t = 0; t < mine.length && free; t++) {
+          var m = mine[t];
+          if (m.bottom > top - c && m.top < bottom + c && m.right > l - c && m.left < r + c) free = false;
+        }
+        if (free) return { x: l, y: top, dy: dy };
+      }
+    }
+    return null;
+  }
+  /* أوّلُ ذرّةٍ نصُّها في أسفل الورقة (حيث يُطلب للمجموعة مكان) — لتُنقل إلى التالية */
+  function lowest(pg, segs, mine, room) {
+    var band = room - cfg.edgeMm * MM - (cfg.groupHmm + cfg.clearMm) * MM, first = null;
+    for (var t = 0; t < mine.length; t++) if (mine[t].text && mine[t].bottom > band && (!first || mine[t].top < first.top)) first = mine[t];
+    if (!first) return null;
+    var list = segs[pg.seg].atoms, y = first.top + pg.top;
+    for (var a = 0; a < list.length; a++) {
+      var at = list[a];
+      if (!at.tail && at.top <= y + 0.5 && at.bottom >= y + 0.5) return at.top - at.head > pg.top + 0.5 ? at : null;
+    }
+    return null;
+  }
   var moved = [];
   function move(el) {
     moved.push({ e: el, v: el.style.getPropertyValue("break-before") });
@@ -551,16 +616,36 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  var group = doc.querySelector(".seal-group");
     }
     moved = [];
   }
-  /* يحلّ التصادم ورقةً ورقة؛ ويُعيد عددَ الأوراق وما بقي بلا حلّ */
+  /* موضعٌ لكلّ ورقة، بنقل صفوفٍ حيث لا موضع؛ ويُعيد الأوراقَ ومواضعَها وما بقي بلا موضع */
   function resolve(room) {
     for (var guard = 0; guard < 400; guard++) {
-      var segs = layout(), r = hits(segs, room);
-      if (!r.hits.length) return { pages: r.pages, stuck: 0 };
-      var h = r.hits[0];
-      if (!h.movable) return { pages: r.pages, stuck: r.hits.length };
-      move(h.atom.el);
+      var segs = layout(), pages = pagesFrom(segs, room), tx = texts(), missing = [];
+      for (var p = 0; p < pages.length; p++) {
+        var mine = textsOn(pages[p], tx);
+        pages[p].spot = spot(mine, room);
+        if (!pages[p].spot) missing.push({ page: p, mine: mine });
+      }
+      if (!missing.length) return { pages: pages, stuck: [] };
+      var at = lowest(pages[missing[0].page], segs, missing[0].mine, room);
+      if (!at) return { pages: pages, stuck: missing };
+      move(at.el);
     }
-    return { pages: Infinity, stuck: 1 };
+    return { pages: [], stuck: [{ page: -1 }] };
+  }
+  /* المجموعةُ في ورقتها: مرساةٌ في أوّل صفٍّ منها، والمجموعةُ على الإزاحة المختارة */
+  function draw(pg) {
+    var el = pg.first.el, host = el.tagName === "TR" && el.cells.length ? el.cells[0] : el;
+    var anchor = doc.createElement("div");
+    anchor.className = "seal-anchor";
+    anchor.style.cssText = "position:absolute;width:0;height:0;margin:0;padding:0;border:0";
+    host.insertBefore(anchor, host.firstChild);
+    var b = body.getBoundingClientRect(), r = anchor.getBoundingClientRect();
+    var t = doc.createElement("template");
+    t.innerHTML = cfg.groupHTML;
+    var g = t.content.firstChild;
+    g.style.left = (pg.spot.x - (r.left - b.left)) + "px";
+    g.style.top = (pg.top + pg.spot.y - (r.top - b.top)) + "px";
+    anchor.appendChild(g);
   }
   function plan() {
     var w = body.style.width;
@@ -568,36 +653,48 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  var group = doc.querySelector(".seal-group");
     var room = cfg.contentHeightMm * MM, segs = layout(), base = [], total0 = 0;
     for (var i = 0; i < segs.length; i++) { base.push(pagesOf(segs[i], room)); total0 += base[i]; }
     collect(segs);
-    /* الدليل: أوراقُ المستند بلا نقلٍ التي يقع نصٌّ تحت المجموعة فيها */
-    var initial = hits(segs, room).hits;
+    /* الدليل: الأوراقُ التي لا موضعَ فيها قبل نقل أيّ صفّ */
+    var pages0 = pagesFrom(segs, room), tx0 = texts(), proof = [];
+    for (var e = 0; e < pages0.length; e++) {
+      var mine0 = textsOn(pages0[e], tx0);
+      if (!spot(mine0, room)) proof.push("page " + (e + 1) + ": " + evidenceFor(mine0, room));
+    }
     var r = resolve(room), f = 1;
-    if (r.pages > total0 || r.stuck) {
+    if (r.pages.length > total0 || r.stuck.length) {
       /* الأقسامُ التي زادت أوراقُها وحدها يُصغَّر خطُّ جداولها */
       var now = layout(), bad = {};
       for (var a = 0; a < now.length && a < base.length; a++) if (pagesOf(now[a], room) > base[a]) bad[a] = true;
-      if (r.stuck) for (var q = 0; q < base.length; q++) bad[q] = true;
+      if (r.stuck.length) for (var q = 0; q < base.length; q++) bad[q] = true;
       var ok = false;
       for (f = 0.97; f >= cfg.minScale - 1e-9; f -= 0.03) {
         unmove(); scaleCells(f, bad);
         r = resolve(room);
-        if (r.pages <= total0 && !r.stuck) { ok = true; break; }
+        if (r.pages.length <= total0 && !r.stuck.length) { ok = true; break; }
       }
       if (!ok) { unmove(); scaleCells(1, bad); f = 1; r = resolve(room); }
     }
+    var placed = [];
+    for (var p = 0; p < r.pages.length; p++) {
+      var pg = r.pages[p];
+      if (!pg.spot) { placed.push(null); continue; }
+      draw(pg);
+      placed.push({ x: Math.round(pg.spot.x / MM * 10) / 10, raise: Math.round(pg.spot.dy / MM * 10) / 10 });
+    }
     body.style.width = w;
-    group.style.visibility = "visible";
+    var extra = r.pages.length - total0, exception = extra > 0 || r.stuck.length > 0;
     root.setAttribute("data-seal-sim", String(total0));
-    var exception = r.pages > total0 || r.stuck;
-    if (exception) root.setAttribute("data-seal-evidence", "data under the group on page(s) " +
-      initial.map(function (h) { return (h.page + 1) + " [" + h.sample + "]"; }).join(", ") +
-      "; moving it needs " + (r.pages - total0) + " more page(s) even with table text at " + Math.round(cfg.minScale * 100) + "%");
-    root.setAttribute("data-seal-plan", "group" + (moved.length ? ":moved" + moved.length : "") + (f < 1 ? ":text" + f.toFixed(2) : "") +
-      (exception ? ":exception" + (r.pages > total0 ? "+" + (r.pages - total0) + "page" : "") + (r.stuck ? ":overlap" + r.stuck : "") : ""));
+    root.setAttribute("data-seal-placements", JSON.stringify(placed));
+    if (exception) root.setAttribute("data-seal-evidence",
+      (r.stuck.length ? "no free position on page(s) " + r.stuck.map(function (m) { return m.page + 1; }).join(", ") + "; " : "") +
+      (extra > 0 ? "rows moved to free a position need " + extra + " more page(s) even with table text at " + Math.round(cfg.minScale * 100) + "%; " : "") +
+      proof.join(" || "));
+    var adaptive = placed.filter(function (x) { return x && (x.x > 0 || x.raise > 0); }).length;
+    root.setAttribute("data-seal-plan", "group" + (adaptive ? ":adaptive" + adaptive : "") + (moved.length ? ":moved" + moved.length : "") +
+      (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
   }
-  /* عطلٌ في القياس: تظهر المجموعةُ في موضعها ويُعلَن ذلك */
   function go() {
     try { plan(); }
-    catch (err) { if (group) group.style.visibility = "visible"; root.setAttribute("data-seal-plan", "group:error"); }
+    catch (err) { root.setAttribute("data-seal-plan", "group:error"); }
   }
   var ready = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
   ready.then(function () { if (doc.readyState === "complete") go(); else addEventListener("load", go); }, go);

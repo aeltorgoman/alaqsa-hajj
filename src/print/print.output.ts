@@ -97,7 +97,7 @@ export function printInPage(html: string, options: PrintOptions = {}) {
 
   const fire = () => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); };
   if (options.waitForImages) {
-    void imagesSettled(doc).then(() => sealPlanSettled(doc, html)).then(() => setTimeout(fire, 120));
+    void imagesSettled(doc).then(() => sealPlanSettled(doc, html)).then(() => imagesSettled(doc)).then(() => setTimeout(fire, 120));
     return;
   }
   /* ⚠️ عطبٌ أظهرته المعاينةُ الحقيقيّة للإيصال #1001: الختمُ والتوقيعُ
@@ -114,7 +114,8 @@ export function printInPage(html: string, options: PrintOptions = {}) {
        · صورٌ أبطأ           → تُطبَع حين تستقرّ (إلى السقف) — وهذا وحدَه تغيّر
      فلا منادٍ يُطبَع **أبكرَ** ممّا كان، والذي يتأخّر هو من كان يُطبَع ناقصاً. */
   const layoutFloor = new Promise<void>(resolve => setTimeout(resolve, LAYOUT_SETTLE_MS));
-  void Promise.all([layoutFloor, imagesSettled(doc).then(() => sealPlanSettled(doc, html))]).then(fire);
+  /* صورُ المجموعة تُدرَج في أوراقها بعد القرار — فتُنتظر مرّةً أخرى بعده */
+  void Promise.all([layoutFloor, imagesSettled(doc).then(() => sealPlanSettled(doc, html)).then(() => imagesSettled(doc))]).then(fire);
 }
 
 export function downloadPDF(html: string, filename: string) {

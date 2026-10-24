@@ -93,6 +93,15 @@ put("pilgrims-list", makeHTML("كشف الحجاج", `<table><tr><th>م</th><th>
 put("admins-list", makeHTML("كشف الإداريين", `<table><tr><th>م</th><th>الاسم</th><th>الجواز</th></tr>${rows.slice(0, 4000)}</table>`, brand,
   { landscape: true, chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
 
+// ── الموضعُ المتكيّف: ورقةٌ أسفلُ يسارها مشغول (تُزاح المجموعة)، وورقةٌ أسفلُها كلُّه سطرٌ (ترتفع)
+const spacer = (mm: number) => `<div style="height:${mm}mm"></div>`;
+const leftNote = `<p style="text-align:left;margin:0;font-size:11pt">ملاحظة الإدارة: تُراجَع البيانات قبل التسليم — مرجع ٤٥٨٢</p>`;
+const wideNote = `<p style="margin:0;font-size:11pt;text-align:justify">${"تُسلَّم هذه الكشوف للمشرفين قبل موعد التحرّك بساعة، وتُطابَق الأسماء والجوازات مع البطاقات. ".repeat(1)}</p>`;
+put("adaptive-right", makeHTML("اختبار الموضع — يمين", spacer(205) + leftNote + `<div style="break-before:page"></div>` + spacer(225) + leftNote, brand,
+  { chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
+put("adaptive-raise", makeHTML("اختبار الموضع — أعلى", spacer(232) + wideNote, brand,
+  { chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
+
 // ── المالية
 const fin = pax(75, () => ({})).map((p, i) => ({ p, due: 30000, paid: (i * 1700) % 30000, balance: 30000 - (i * 1700) % 30000 }));
 put("finance-full", capture(() => printFullReport(fin as Any, {} as Any, brand, "تقرير الحجاج المالي الكامل",
