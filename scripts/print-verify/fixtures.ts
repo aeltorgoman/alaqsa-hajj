@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
   busesReportDocument, busReportDocument, campsReportDocument, flightsReportDocument, hotelReportDocument, makeHTML,
   chromeFromOptions, initialPrintOptions, effectiveOptions, requestedSeals, PRINT_SPECS, bankLinesFrom, bankBlockHTML,
-  sealSizeMm, sealBottomMarginMm, STAMP_BOX_MM, SIGNATURE_BOX_MM, A5_SEAL_SCALE, type PrintSeals, type PrintOptionsState, type PrintReportKey,
+  sealSizeMm, sealBottomMarginMm, STAMP_BOX_MM, SIGNATURE_BOX_MM, A5_SEAL_SCALE, sealGroupSize, SEAL_OVERLAP_MM, type PrintSeals, type PrintOptionsState, type PrintReportKey,
 } from "../../src/print";
 import { makeReceiptHTML, makePassengerStatementHTML, printFullReport, printPaymentsReport } from "../../src/components/finance/finance.print";
 import { loadPrintSeals, sealUnavailability } from "../../src/company/printSeals";
@@ -151,10 +151,13 @@ check("bank identifiers isolated LTR", bankBlockHTML(bankLinesFrom(bankSrc), "#0
 const sm = sealSizeMm(both.stamp, STAMP_BOX_MM), gm = sealSizeMm(both.signature, SIGNATURE_BOX_MM);
 check("stamp keeps its proportions", Math.abs(sm.w / sm.h - STAMP_PX.w / STAMP_PX.h) < 0.01, `${sm.w}×${sm.h}mm`);
 check("signature keeps its proportions", Math.abs(gm.w / gm.h - SIGNATURE_PX.w / SIGNATURE_PX.h) < 0.01, `${gm.w}×${gm.h}mm`);
-check("A4 stamp is a realistic 38–42mm", Math.max(sm.w, sm.h) >= 38 && Math.max(sm.w, sm.h) <= 42, `${sm.w}×${sm.h}mm`);
-check("A4 signature is a realistic 50–62mm wide", gm.w >= 50 && gm.w <= 62 && gm.h <= 28, `${gm.w}×${gm.h}mm`);
+const grp = sealGroupSize(both);
+check("A4 stamp width 40–45mm (fixed, never shrunk)", !!grp.stamp && grp.stamp.w >= 40 && grp.stamp.w <= 45, `${grp.stamp?.w}×${grp.stamp?.h}mm`);
+check("A4 signature width 55–65mm (fixed, never shrunk)", !!grp.signature && grp.signature.w >= 55 && grp.signature.w <= 65, `${grp.signature?.w}×${grp.signature?.h}mm`);
+check("A4 group: stamp overlaps signature 5–10mm", SEAL_OVERLAP_MM >= 5 && SEAL_OVERLAP_MM <= 10 && Math.abs(grp.w - (grp.stamp!.w + grp.signature!.w - SEAL_OVERLAP_MM)) < 0.02, `${SEAL_OVERLAP_MM}mm, group ${grp.w}×${grp.h}mm`);
+check("A4 sizes keep proportions", Math.abs(grp.stamp!.w / grp.stamp!.h - STAMP_PX.w / STAMP_PX.h) < 0.01 && Math.abs(grp.signature!.w / grp.signature!.h - SIGNATURE_PX.w / SIGNATURE_PX.h) < 0.01);
 const sa5 = sealSizeMm(both.stamp, STAMP_BOX_MM, A5_SEAL_SCALE);
-check("A5 receipt stamp = A4 × 0.75 (same look on the smaller sheet)", Math.abs(sa5.h - sm.h * 0.75) < 0.05, `${sa5.w}×${sa5.h}mm`);
+check("A5 receipt stamp unchanged (receipt box × 0.75)", Math.abs(sa5.h - sm.h * 0.75) < 0.05, `${sa5.w}×${sa5.h}mm`);
 /* القصّ: صندوقُ الحبر في صورةٍ اصطناعيّة ٢٠×١٠ — حبرٌ في (٥..١٤، ٢..٧) */
 const px = new Uint8ClampedArray(20 * 10 * 4);
 for (let y = 2; y <= 7; y++) for (let x = 5; x <= 14; x++) px.set([20, 40, 160, 255], (y * 20 + x) * 4);

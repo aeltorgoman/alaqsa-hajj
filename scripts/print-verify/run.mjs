@@ -149,7 +149,8 @@ if (BEFORE_REF) {
     symlinkSync(join(ROOT, "node_modules"), join(bw, "node_modules"));
     const bf = await bundle(join(bw, "scripts/print-verify/fixtures.ts"), bw, join(OUT, "fixtures-before.mjs"));
     mkdirSync(join(OUT, "before"), { recursive: true });
-    run(bf, join(OUT, "before"), "on");
+    execFileSync(process.execPath, [bf, join(OUT, "before"), "on"], { encoding: "utf8", maxBuffer: 64 << 20,
+      env: { ...process.env, SEALS_JSON: join(OUT, "seals.json") } });
   } finally { execSync(`git -C "${ROOT}" worktree remove --force "${bw}"`); }
 }
 
@@ -168,16 +169,24 @@ async function toPdf(htmlFile, pdfFile) {
   /* كما ينتظر `printInPage`: قرارُ موضع الختم يُتَّخذ في المستند بعد تخطيطه */
   if (html.includes("data-seal-plan")) await page.waitForFunction(() => document.documentElement.hasAttribute("data-seal-plan"), null, { timeout: 9000 }).catch(() => {});
   const plan = await page.evaluate(() => ["data-seal-plan", "data-seal-sim", "data-seal-evidence"].map(a => document.documentElement.getAttribute(a)));
+  /* هندسةُ المجموعة كما رُسمت: التداخلُ بين الختم والتوقيع بالمليمتر */
+  geometry[htmlFile] = await page.evaluate(() => {
+    const g = document.querySelector(".seal-group, .print-seals-overlay, .print-seals");
+    if (!g || getComputedStyle(g).display === "none") return null;
+    const im = [...g.querySelectorAll("img")].map(i => i.getBoundingClientRect());
+    const mm = v => Math.round(v * 25.4 / 96 * 10) / 10;
+    return { overlapMm: im.length === 2 ? mm(Math.min(im[0].right, im[1].right) - Math.max(im[0].left, im[1].left)) : null };
+  });
   await page.pdf({ path: pdfFile, preferCSSPageSize: true, printBackground: false });
   return plan;
 }
 const docs = readdirSync(join(OUT, "on")).filter(f => f.endsWith(".html")).map(f => f.replace(".html", "")).sort();
-const plans = {}, sims = {}, evidence = {};
+const plans = {}, sims = {}, evidence = {}, geometry = {};
 for (const m of MODES) for (const d of docs) {
   const plan = await toPdf(join(OUT, m, `${d}.html`), join(OUT, m, `${d}.pdf`));
   if (m === "on") plans[d] = plan[0], sims[d] = plan[1], evidence[d] = plan[2];
 }
-served = IMAGES.before;
+/* «قبل» بالصور المقصوصة نفسها (ما يطبعه التطبيقُ منذ قصّ الحشو) — مقارنةُ تخطيطٍ لا صور */
 const beforeDocs = BEFORE_REF ? docs.filter(d => existsSync(join(OUT, "before", `${d}.html`))) : [];
 for (const d of beforeDocs) await toPdf(join(OUT, "before", `${d}.html`), join(OUT, "before", `${d}.pdf`));
 await browser.close();
@@ -190,7 +199,8 @@ const imagePages = f => execFileSync("pdfimages", ["-list", f], { encoding: "utf
    والصورةُ بعد القصّ هي الحبرُ وحاشيةٌ ٢٪؛ وقبله الصورةُ الخام بحشوها، فيُضرب
    في نسبة الحبر إليها ليُقارَن الحبرُ بالحبر. */
 const INK = { stamp: { w: 1074 / 1503, h: 1074 / 1600 } };
-const sealMm = (f, before) => {
+const sealMm = (f) => {
+  const before = false;
   const ims = execFileSync("pdfimages", ["-list", f], { encoding: "utf8" }).split("\n").slice(2)
     .map(l => l.trim().split(/\s+/)).filter(c => c[2] === "image")
     .map(c => ({ page: +c[0], w: +c[3], h: +c[4], mmW: +c[3] / +c[12] * 25.4, mmH: +c[4] / +c[13] * 25.4 }));
@@ -208,6 +218,9 @@ const OVERLAP_PY = `
 import sys, json, re, subprocess
 from PIL import Image, ImageChops
 on, ghost, tmp = sys.argv[1], sys.argv[2], sys.argv[3]
+# كلماتُ سطر التذييل الختاميّ زينةٌ يجوز أن تعلوها المجموعة (كما في المخطِّط)
+strip_marks = lambda w: re.sub(r"[\\u064B-\\u0652\\u0640]", "", w)
+decorative = {strip_marks(w) for w in (json.loads(sys.argv[4]) if len(sys.argv) > 4 else [])}
 DPI = 60
 subprocess.run(["pdftoppm", "-r", str(DPI), "-png", on, tmp + "/on"], check=True)
 subprocess.run(["pdftoppm", "-r", str(DPI), "-png", ghost, tmp + "/gh"], check=True)
@@ -224,8 +237,10 @@ for i, (a, b) in enumerate(zip(ons, ghs)):
     if box:
         pw, ph, body = pages[i]
         sx, sy = A.width / float(pw), A.height / float(ph)
-        for m in re.finditer(r'xMin="([\\d.]+)" yMin="([\\d.]+)" xMax="([\\d.]+)" yMax="([\\d.]+)"', body):
-            x0, y0, x1, y1 = [float(v) for v in m.groups()]
+        for m in re.finditer(r'xMin="([\\d.]+)" yMin="([\\d.]+)" xMax="([\\d.]+)" yMax="([\\d.]+)">([^<]*)<', body):
+            x0, y0, x1, y1 = [float(v) for v in m.groups()[:4]]
+            w = strip_marks(m.group(5).strip())
+            if w in decorative or w[::-1] in decorative: continue  # pdftotext يكتب العربيّة بترتيبها المرئيّ
             reg = diff.crop((int(x0 * sx), int(y0 * sy), int(x1 * sx) + 1, int(y1 * sy) + 1))
             if reg.getbbox(): words += 1
         Bp = B.load(); Dp = diff.load()
@@ -240,18 +255,20 @@ const rows = [];
 for (const d of docs) {
   const on = join(OUT, "on", `${d}.pdf`), ghost = join(OUT, "ghost", `${d}.pdf`), off = join(OUT, "off", `${d}.pdf`);
   const tmp = join(OUT, "tmp", d); mkdirSync(tmp, { recursive: true });
-  const ov = JSON.parse(execFileSync("python3", [join(OUT, "overlap.py"), on, ghost, tmp], { encoding: "utf8" }));
-  const n = pagesOf(on), withImg = new Set(imagePages(on));
   /* ورقةٌ «فارغة» = لا كلمةَ فيها من التقرير سوى سطر التذييل (إن وُجد) */
   const html = readFileSync(join(OUT, "on", `${d}.html`), "utf8");
   const footerWords = new Set([...html.matchAll(/class="(?:footer|hotel-foot)">([^<]*)</g)].flatMap(m => m[1].split(/\s+/)).filter(Boolean));
+  const closing = [...html.matchAll(/<div class="footer">([^<]*)</g)].flatMap(m => m[1].split(/\s+/)).filter(Boolean);
+  const ov = JSON.parse(execFileSync("python3", [join(OUT, "overlap.py"), on, ghost, tmp, JSON.stringify(closing)], { encoding: "utf8" }));
+  const n = pagesOf(on), withImg = new Set(imagePages(on));
   const bodyWords = p => execFileSync("pdftotext", ["-f", `${p}`, "-l", `${p}`, on, "-"], { encoding: "utf8" })
     .split(/\s+/).filter(w => w && !footerWords.has(w)).length;
   const sparse = [...Array(n).keys()].map(i => i + 1).filter(p => bodyWords(p) < 4);
   const single = ["stamp", "signature"].map(m => ({ m, pages: pagesOf(join(OUT, m, `${d}.pdf`)), withImg: new Set(imagePages(join(OUT, m, `${d}.pdf`))).size }));
-  const mm = sealMm(on, false), bmm = beforeDocs.includes(d) ? sealMm(join(OUT, "before", `${d}.pdf`), true) : null;
+  const mm = sealMm(on), bmm = beforeDocs.includes(d) ? sealMm(join(OUT, "before", `${d}.pdf`)) : null;
+  const sameAsBefore = beforeDocs.includes(d) ? readFileSync(join(OUT, "before", `${d}.html`), "utf8") === readFileSync(join(OUT, "on", `${d}.html`), "utf8") : null;
   rows.push({
-    doc: d, pagesOff: pagesOf(off), simulatedOff: sims[d] == null ? null : +sims[d], evidence: evidence[d], pagesBefore: bmm ? pagesOf(join(OUT, "before", `${d}.pdf`)) : null, pagesOn: n, plan: plans[d],
+    doc: d, sameHtmlAsBefore: sameAsBefore, overlapMm: geometry[join(OUT, "on", `${d}.html`)]?.overlapMm ?? null, pagesOff: pagesOf(off), simulatedOff: sims[d] == null ? null : +sims[d], evidence: evidence[d], pagesBefore: bmm ? pagesOf(join(OUT, "before", `${d}.pdf`)) : null, pagesOn: n, plan: plans[d],
     stampMm: mm.stamp, signatureMm: mm.signature, stampInkMm: mm.stampInkH, beforeStampInkMm: bmm?.stampInkH ?? null,
     beforeStampMm: bmm?.stamp ?? null, beforeSignatureMm: bmm?.signature ?? null,
     sealOnEveryPage: [...Array(n).keys()].every(i => withImg.has(i + 1)),
@@ -312,14 +329,19 @@ const bad = [
   ...(logic || []).filter(c => !c.ok).map(c => `logic: ${c.name} ${c.detail ?? ""}`),
   ...ui.filter(c => !c.ok).map(c => `ui: ${c.name}`),
   ...rows.filter(r => !r.sealOnEveryPage && !r.doc.startsWith("receipt")).map(r => `${r.doc}: no seal on pages ${r.pagesWithoutSeal}`),
-  ...rows.filter(r => r.wordsUnderSeal || r.inkUnderSeal).map(r => `${r.doc}: overlap (${r.wordsUnderSeal} words, ${r.inkUnderSeal} ink px)`),
+  /* المسموح: حدودُ جدولٍ أو خلفيّةٌ تحت الحبر؛ الممنوع: كلمةٌ تحته */
+  ...rows.filter(r => r.wordsUnderSeal).map(r => `${r.doc}: ${r.wordsUnderSeal} word(s) under the stamp/signature ink`),
+  /* الإيصالُ A5 معتمَدٌ كما هو: مطابقٌ بايتاً ببايت لـ --before-ref */
+  ...rows.filter(r => r.doc.startsWith("receipt") && r.sameHtmlAsBefore === false).map(r => `${r.doc}: A5 receipt HTML changed`),
   ...rows.filter(r => r.sparsePages.length).map(r => `${r.doc}: nearly empty pages ${r.sparsePages}`),
 ];
 console.table(rows.map(r => ({ doc: r.doc, off: r.pagesOff, sim: r.simulatedOff ?? "-", before: r.pagesBefore ?? "-", on: r.pagesOn, plan: r.plan ?? "-",
-  stampMm: r.stampMm, sigMm: r.signatureMm, inkBefore: r.beforeStampInkMm ?? "-", inkAfter: r.stampInkMm,
+  stampMm: r.stampMm, sigMm: r.signatureMm, overlap: r.overlapMm ?? "-", stampBefore: r.beforeStampMm ?? "-",
   everyPage: r.sealOnEveryPage, words: r.wordsUnderSeal, ink: r.inkUnderSeal, sparse: r.sparsePages.join(",") || "-",
   stampOnly: r.stampOnlyOk, sigOnly: r.signatureOnlyOk })));
 const extra = rows.filter(r => r.pagesOn > r.pagesOff);
+const exceptions = rows.filter(r => /exception|extra/.test(r.plan || ""));
+console.log(exceptions.length ? `UNRESOLVED EXCEPTIONS: ${exceptions.map(r => `${r.doc} (${r.plan})`).join(", ")}` : "unresolved exceptions: none");
 console.log(extra.length ? `extra pages with seals ON: ${extra.map(r => `${r.doc} ${r.pagesOff}→${r.pagesOn} (${r.plan}; ${r.evidence ?? "no evidence"})`).join(", ")}` : "extra pages with seals ON: none");
 const missim = rows.filter(r => r.simulatedOff != null && r.simulatedOff !== r.pagesOff);
 console.log(missim.length ? `simulation ≠ real OFF pages: ${missim.map(r => `${r.doc} sim ${r.simulatedOff} real ${r.pagesOff}`).join(", ")}` : "simulation = real OFF pages for every planned doc");

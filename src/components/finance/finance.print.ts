@@ -5,7 +5,7 @@ import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
 import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding, PrintSeals, SealImage } from "../../print";
-import { hasSeals, sealPlanHTML, sealSizeMm, bankBlockHTML,
+import { hasSeals, sealPlanHTML, sealGroupPlanHTML, sealSizeMm, bankBlockHTML,
          A5_SEAL_SCALE, STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
@@ -288,7 +288,7 @@ export function makePassengerStatementHTML(
   <tr class="total-row"><td>الإجمالي</td><td>${fmtAmt(totalDue)}</td><td>${fmtAmt(totalPaid)}</td></tr>
   <tr class="total-row" style="background:${balance>0?"#C0392B":"#2A9D8F"};color:#fff"><td>${balance>0?"الرصيد المتبقي":balance<0?"رصيد دائن للحاج":"الرصيد المتبقي"}</td><td colspan="2" style="text-align:center">${fmtAmt(Math.abs(balance))} ر.ق</td></tr>
 </table>
-${bankHTML}<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>${sealsOn ? sealPlanHTML(chrome.seals, { margin: "14mm 12mm" }) : ""}
+${bankHTML}<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>${sealsOn ? sealGroupPlanHTML(chrome.seals, { margin: "14mm 12mm" }) : ""}
 </body></html>`;
 }
 

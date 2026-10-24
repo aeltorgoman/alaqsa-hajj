@@ -18,7 +18,7 @@ export type { PrintOptionKey, PrintOptionsState, PrintOptionsSpec,
 export { PRINT_OPTION_LABEL, PRINT_SPECS, initialPrintOptions, chromeFromOptions, requestedSeals, effectiveOptions } from "./print.options";
 export type { SealImage, PrintSeals } from "./print.seals";
 export { hasSeals, sealSizeMm, sealBandMm, sealWidthMm, sealBottomMarginMm, sealPageCSS, sealPreloadHTML, sealRowHTML, sealImagesHTML,
-         sealPlanHTML, hotelSealPlanHTML, bottomOfMargin, marginsOf, PAGE_MM,
+         sealPlanHTML, hotelSealPlanHTML, sealGroupPlanHTML, sealGroupHTML, sealGroupSize, A4_STAMP_BOX_MM, A4_SIGNATURE_BOX_MM, SEAL_OVERLAP_MM, bottomOfMargin, marginsOf, PAGE_MM,
          STAMP_BOX_MM, SIGNATURE_BOX_MM, A5_SEAL_SCALE, SEAL_FIT_MIN_SCALE, SEAL_FIT_MIN_PT, SEAL_MIN_SIZE_SCALE } from "./print.seals";
 export type { PrintBankLine, BankSource } from "./print.bank";
 export { bankLinesFrom, bankBlockHTML } from "./print.bank";

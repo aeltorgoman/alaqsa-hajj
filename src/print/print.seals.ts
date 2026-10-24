@@ -127,10 +127,9 @@ export function sealPreloadHTML(s: PrintSeals | null | undefined): string {
     .map(i => `<img src="${attrUrl(i.url)}" alt="" style="display:none" />`).join("");
 }
 
-/** الصورتان داخل ورقةٍ ذرّيّة (الفندق): صفٌّ بلا إطار في طرف الورقة الأيسر. */
+/** المجموعةُ داخل ورقةٍ ذرّيّة (الفندق): صفٌّ تحت الشبكة في طرف الورقة الأيسر. */
 export function sealRowHTML(s: PrintSeals | null | undefined): string {
-  if (!hasSeals(s)) return "";
-  return sealImagesHTML(s, 1, "print-seals").replace('style="', `style="margin-top:${SEAL_GAP_MM}mm;flex-shrink:0;`);
+  return sealGroupHTML(s, "print-seals", `margin-top:${SEAL_GAP_MM}mm;flex-shrink:0;align-self:flex-end;`);
 }
 
 /** الهامشُ لقاعدة `@page` القائمة — من صيغتها المختصرة (١–٤ قيم): أعلى، جانب، أسفل. */
@@ -200,8 +199,9 @@ export function sealPlanHTML(s: PrintSeals | null | undefined, page: SealPage): 
    ختمٌ نحو ٢٤مم، وهو أصغرُ مقاسٍ مقبولٍ لختم شركة؛ فترتيبُ الأولويّات يقدّم
    عددَ الأوراق على المقاس).
    فإن لم يكفِ شيءٌ قُبلت الورقةُ بالمقاس الواقعيّ وسُجّل ذلك في القرار. */
-const SEAL_PLAN_RUNTIME = `function (cfg) {
-  var MM = 96 / 25.4, doc = document, body = doc.body, root = doc.documentElement;
+/* الأجزاءُ المشتركة بين المخطِّطَين (الإيصال A5 بالشريط، وتقارير A4 بالمجموعة):
+   المحاكاةُ (الذرّات والأقسام والأوراق) وتصغيرُ خطّ الجداول. نصوصٌ تُوصَل كما هي. */
+const SIM_RUNTIME = `  var MM = 96 / 25.4, doc = document, body = doc.body, root = doc.documentElement;
   function cs(e) { return getComputedStyle(e); }
   function isBreak(e, side) {
     var c = cs(e), v = side === "before" ? (c.breakBefore || c.pageBreakBefore) : (c.breakAfter || c.pageBreakAfter);
@@ -290,22 +290,8 @@ const SEAL_PLAN_RUNTIME = `function (cfg) {
     }
     return n;
   }
-  /* ── الصورتان بالمقاس k ── */
-  function sealH(k) { return Math.max(cfg.stamp ? cfg.stamp.h : 0, cfg.signature ? cfg.signature.h : 0) * k; }
-  function marginFor(k) { return Math.max(cfg.baseBottomMm, (cfg.edgeMm + cfg.gapMm) * k + sealH(k)); }
-  function roomFor(k) { return (cfg.contentHeightMm - (marginFor(k) - cfg.baseBottomMm) - cfg.safetyMm) * MM; }
-  function url(u) { return 'url("' + u.replace(/["\\\\\\n\\r]/g, encodeURIComponent) + '")'; }
-  function image(x, k) { return "image-set(" + url(x.url) + " " + (x.px / (x.h * k * MM)).toFixed(4) + "x)"; }
-  function bandCSS(k) {
-    var items = [];
-    if (cfg.stamp) items.push(image(cfg.stamp, k));
-    if (cfg.stamp && cfg.signature) items.push('"\\\\2003"');
-    if (cfg.signature) items.push(image(cfg.signature, k));
-    return "@page { margin-bottom: " + marginFor(k).toFixed(2) + "mm; @bottom-left { content: " + items.join(" ") +
-      "; direction: ltr; text-align: left; vertical-align: bottom; font-size: " + (cfg.betweenMm * k).toFixed(2) +
-      "mm; line-height: 1; padding-bottom: " + (cfg.edgeMm * k).toFixed(2) + "mm; } }";
-  }
-  /* ── تصغيرُ خطّ جداول الأقسام الزائدة وحدها ── */
+`;
+const CELLS_RUNTIME = `  /* ── تصغيرُ خطّ جداول الأقسام الزائدة وحدها ── */
   var cells = null;
   function collect(segs) {
     cells = [];
@@ -332,7 +318,25 @@ const SEAL_PLAN_RUNTIME = `function (cfg) {
       c.e.style.paddingBottom = (c.pb * r) + "px";
     }
   }
-  function plan() {
+`;
+
+const SEAL_PLAN_RUNTIME = `function (cfg) {
+${SIM_RUNTIME}  /* ── الصورتان بالمقاس k ── */
+  function sealH(k) { return Math.max(cfg.stamp ? cfg.stamp.h : 0, cfg.signature ? cfg.signature.h : 0) * k; }
+  function marginFor(k) { return Math.max(cfg.baseBottomMm, (cfg.edgeMm + cfg.gapMm) * k + sealH(k)); }
+  function roomFor(k) { return (cfg.contentHeightMm - (marginFor(k) - cfg.baseBottomMm) - cfg.safetyMm) * MM; }
+  function url(u) { return 'url("' + u.replace(/["\\\\\\n\\r]/g, encodeURIComponent) + '")'; }
+  function image(x, k) { return "image-set(" + url(x.url) + " " + (x.px / (x.h * k * MM)).toFixed(4) + "x)"; }
+  function bandCSS(k) {
+    var items = [];
+    if (cfg.stamp) items.push(image(cfg.stamp, k));
+    if (cfg.stamp && cfg.signature) items.push('"\\\\2003"');
+    if (cfg.signature) items.push(image(cfg.signature, k));
+    return "@page { margin-bottom: " + marginFor(k).toFixed(2) + "mm; @bottom-left { content: " + items.join(" ") +
+      "; direction: ltr; text-align: left; vertical-align: bottom; font-size: " + (cfg.betweenMm * k).toFixed(2) +
+      "mm; line-height: 1; padding-bottom: " + (cfg.edgeMm * k).toFixed(2) + "mm; } }";
+  }
+${CELLS_RUNTIME}  function plan() {
     var w = body.style.width;
     body.style.width = cfg.contentWidthMm + "mm";
     var full = cfg.contentHeightMm * MM, boxImgs = cfg.boxes ? doc.querySelectorAll(cfg.boxes.img) : [];
@@ -404,6 +408,201 @@ const SEAL_PLAN_RUNTIME = `function (cfg) {
   ready.then(function () { if (doc.readyState === "complete") go(); else addEventListener("load", go); }, go);
 }`;
 
+/* ═══════════════════════════════════════════════════════════════
+   تقارير A4: الختمُ والتوقيعُ مجموعةٌ واحدة بمقاسٍ ثابت (المعتمَد)
+   ═══════════════════════════════════════════════════════════════
+   المطلوب النهائيّ: مقاسٌ واقعيٌّ ثابت لا يُصغَّر أبداً (الختمُ نحو ٤٢مم عرضاً،
+   والتوقيعُ نحو ٦٠مم)، متقاربان يتداخلان نحو ٨مم كختمٍ وُضع على طرف التوقيع،
+   في الموضع نفسه أسفلَ كلّ ورقة — بلا شريطٍ محجوزٍ يدفع المحتوى.
+
+   ⚠️ ما حُسم بالطباعة الحقيقيّة إلى PDF:
+     • `position: fixed` يُرسَم على **كلّ ورقة** في الموضع نفسه ولا يغيّر التدفّق،
+       فعددُ الأوراق كما هو بلا ختم.
+     • وما يخرج منه تحت حدّ المحتوى (في الهامش السفليّ) **يُعاد رسمُه أعلى الورقة
+       التالية** (شريطٌ فوق رأس الجدول) — ولو بـ`transform`. فأسفلُ المجموعة على
+       حدّ المحتوى السفليّ تماماً (`bottom: 0`) لا دونه.
+
+   والمجموعةُ قد تعلو أسفلَ الورقة — حدودَ جدولٍ أو فراغاً — لكن **لا نصّاً**:
+   فيحاكي المخطِّطُ تقسيمَ الأوراق، ويجمع مستطيلَ كلّ نصٍّ مرئيّ، ويعرف ما يقع منها
+   تحت المجموعة في كلّ ورقة. فإن وقع نصٌّ تحتها نُقل صفُّه (وما بعده) إلى الورقة
+   التالية — ما دام عددُ الأوراق لا يزيد. وإلا صُغِّر خطُّ جداول القسم الزائد قليلاً
+   (حتى ٨٥٪ ولا دون ٩pt). فإن لم يكفِ: **استثناءٌ مُعلَن** (`exception`) — تبقى
+   البياناتُ مقروءةً كاملةً بورقةٍ زائدة، ولا تُصغَّر الصورتان ولا يُغطّى نصّ. */
+
+/** مقاسُ الختم والتوقيع على A4 — أكبرُ ما يسعه الصندوقُ بنسبة الصورة (بعد قصّ حشوها). */
+export const A4_STAMP_BOX_MM = { w: 42, h: 42 } as const;
+export const A4_SIGNATURE_BOX_MM = { w: 60, h: 30 } as const;
+/** تداخلُ الختم مع طرف التوقيع. */
+export const SEAL_OVERLAP_MM = 8;
+/** فسحةٌ فوق المجموعة لا يقع فيها نصّ. */
+const GROUP_CLEAR_MM = 1;
+/** ما يجوز أن تعلوه المجموعة من النصوص: سطرُ التذييل الختاميّ (زينةٌ متكرّرة لا بيانات). */
+const SEAL_DECORATIVE = "body > .footer";
+
+/** مقاسُ كلٍّ منهما ومقاسُ المجموعة بالمليمتر. */
+export function sealGroupSize(s: PrintSeals): { stamp: { w: number; h: number } | null; signature: { w: number; h: number } | null; w: number; h: number } {
+  const stamp = s.stamp ? sealSizeMm(s.stamp, A4_STAMP_BOX_MM) : null;
+  const signature = s.signature ? sealSizeMm(s.signature, A4_SIGNATURE_BOX_MM) : null;
+  const w = (stamp?.w ?? 0) + (signature?.w ?? 0) - (stamp && signature ? SEAL_OVERLAP_MM : 0);
+  return { stamp, signature, w: round(w), h: Math.max(stamp?.h ?? 0, signature?.h ?? 0) };
+}
+
+/** المجموعة: الختمُ يساراً فوق طرف التوقيع الأيسر، بلا إطارٍ ولا تسمية. `style` موضعُها. */
+export function sealGroupHTML(s: PrintSeals | null | undefined, cls: string, style: string): string {
+  if (!hasSeals(s)) return "";
+  const z = sealGroupSize(s);
+  const img = (src: SealImage, mm: { w: number; h: number }, extra: string) =>
+    `<img src="${attrUrl(src.url)}" alt="" style="width:${mm.w}mm;height:${mm.h}mm;display:block;flex-shrink:0;mix-blend-mode:multiply;${extra}" />`;
+  const parts = [
+    s.stamp && z.stamp ? img(s.stamp, z.stamp, "position:relative;z-index:2") : "",
+    s.signature && z.signature ? img(s.signature, z.signature, s.stamp ? `margin-left:-${SEAL_OVERLAP_MM}mm` : "") : "",
+  ].join("");
+  return `<div class="${cls}" style="${style}width:${z.w}mm;height:${z.h}mm;direction:ltr;display:flex;flex-direction:row;` +
+         `align-items:center;break-inside:avoid;page-break-inside:avoid">${parts}</div>`;
+}
+
+/** مخطِّطُ تقارير A4: المجموعةُ ثابتةٌ أسفلَ يسار كلّ ورقة، ولا نصَّ تحتها. */
+export function sealGroupPlanHTML(s: PrintSeals | null | undefined, page: { landscape?: boolean; margin: string }): string {
+  if (!hasSeals(s)) return "";
+  const m = marginsOf(page.margin);
+  const dim = PAGE_MM.A4[page.landscape ? "landscape" : "portrait"];
+  const z = sealGroupSize(s);
+  const cfg = {
+    contentWidthMm: round(dim.w - 2 * m.side),
+    contentHeightMm: round(dim.h - m.top - m.bottom),
+    groupWmm: z.w, groupHmm: z.h, clearMm: GROUP_CLEAR_MM, decorative: SEAL_DECORATIVE,
+    minScale: SEAL_FIT_MIN_SCALE, minPt: SEAL_FIT_MIN_PT,
+  };
+  const group = sealGroupHTML(s, "seal-group", "position:fixed;left:0;bottom:0;z-index:5;pointer-events:none;visibility:hidden;");
+  return `${group}<script>(${SEAL_GROUP_RUNTIME})(${JSON.stringify(cfg)});</script>`;
+}
+
+const SEAL_GROUP_RUNTIME = `function (cfg) {
+${SIM_RUNTIME}${CELLS_RUNTIME}  var group = doc.querySelector(".seal-group");
+  /* بداياتُ أوراق القسم (كـ pagesOf) */
+  function pageTops(seg, room) {
+    var tops = [seg.start], pageTop = seg.start;
+    for (var i = 0; i < seg.atoms.length; i++) {
+      var a = seg.atoms[i];
+      if (a.bottom - pageTop > room + 0.5 && a.top - a.head > pageTop + 0.5) { pageTop = a.top - a.head; tops.push(pageTop); }
+    }
+    return tops;
+  }
+  /* كلُّ ورقة: بدايتُها ونهايةُ ما يُنسَب إليها */
+  function pagesFrom(segs, room) {
+    var out = [];
+    for (var i = 0; i < segs.length; i++) {
+      var tops = pageTops(segs[i], room);
+      for (var j = 0; j < tops.length; j++)
+        out.push({ seg: i, top: tops[j], end: j + 1 < tops.length ? tops[j + 1] : (i + 1 < segs.length ? segs[i + 1].start : Infinity) });
+    }
+    return out;
+  }
+  /* مستطيلُ كلّ نصٍّ مرئيّ في المستند — بإحداثيّات الجسم */
+  function texts() {
+    var b = body.getBoundingClientRect(), out = [], rg = doc.createRange();
+    var tw = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT), n;
+    while ((n = tw.nextNode())) {
+      if (!/\\S/.test(n.nodeValue)) continue;
+      var p = n.parentElement;
+      /* سطرُ التذييل (اسمُ الحملة · عنوانُ الكشف) زينةٌ لا بيانات — يجوز أن تعلوه المجموعة */
+      if (!p || p.closest("script, style, .seal-group, " + cfg.decorative)) continue;
+      if (cs(p).visibility === "hidden") continue;
+      rg.selectNodeContents(n);
+      var rs = rg.getClientRects();
+      for (var i = 0; i < rs.length; i++) {
+        var r = rs[i];
+        if (r.width > 0 && r.height > 0) out.push({ top: r.top - b.top, bottom: r.bottom - b.top, left: r.left - b.left, right: r.right - b.left, text: n.nodeValue.trim().slice(0, 40) });
+      }
+    }
+    return out;
+  }
+  /* أوّلُ ذرّةٍ في كلّ ورقةٍ يقع نصُّها تحت المجموعة */
+  function hits(segs, room) {
+    var pages = pagesFrom(segs, room), tx = texts(), gw = cfg.groupWmm * MM, gh = (cfg.groupHmm + cfg.clearMm) * MM, out = [];
+    for (var p = 0; p < pages.length; p++) {
+      var pg = pages[p], zone = pg.top + room - gh, first = null;
+      for (var t = 0; t < tx.length; t++) {
+        var x = tx[t];
+        if (x.top < pg.top - 0.5 || x.top >= pg.end - 0.5) continue;
+        if (x.bottom <= zone || x.left >= gw || x.right <= 0) continue;
+        if (!first || x.top < first.top) first = x;
+        if (!pg.sample) pg.sample = x.text;
+      }
+      if (!first) continue;
+      var atom = null, list = segs[pg.seg].atoms;
+      for (var a = 0; a < list.length; a++) {
+        var at = list[a];
+        if (!at.tail && at.top <= first.top + 0.5 && at.bottom >= first.bottom - 0.5) { atom = at; break; }
+      }
+      out.push({ page: p, atom: atom, sample: pg.sample, movable: !!atom && atom.top - atom.head > pg.top + 0.5 });
+    }
+    return { pages: pages.length, hits: out };
+  }
+  /* نقلُ الذرّة إلى الورقة التالية بفاصلٍ قبلها */
+  var moved = [];
+  function move(el) {
+    moved.push({ e: el, v: el.style.getPropertyValue("break-before") });
+    el.style.setProperty("break-before", "page");
+  }
+  function unmove() {
+    for (var i = moved.length - 1; i >= 0; i--) {
+      if (moved[i].v) moved[i].e.style.setProperty("break-before", moved[i].v); else moved[i].e.style.removeProperty("break-before");
+    }
+    moved = [];
+  }
+  /* يحلّ التصادم ورقةً ورقة؛ ويُعيد عددَ الأوراق وما بقي بلا حلّ */
+  function resolve(room) {
+    for (var guard = 0; guard < 400; guard++) {
+      var segs = layout(), r = hits(segs, room);
+      if (!r.hits.length) return { pages: r.pages, stuck: 0 };
+      var h = r.hits[0];
+      if (!h.movable) return { pages: r.pages, stuck: r.hits.length };
+      move(h.atom.el);
+    }
+    return { pages: Infinity, stuck: 1 };
+  }
+  function plan() {
+    var w = body.style.width;
+    body.style.width = cfg.contentWidthMm + "mm";
+    var room = cfg.contentHeightMm * MM, segs = layout(), base = [], total0 = 0;
+    for (var i = 0; i < segs.length; i++) { base.push(pagesOf(segs[i], room)); total0 += base[i]; }
+    collect(segs);
+    /* الدليل: أوراقُ المستند بلا نقلٍ التي يقع نصٌّ تحت المجموعة فيها */
+    var initial = hits(segs, room).hits;
+    var r = resolve(room), f = 1;
+    if (r.pages > total0 || r.stuck) {
+      /* الأقسامُ التي زادت أوراقُها وحدها يُصغَّر خطُّ جداولها */
+      var now = layout(), bad = {};
+      for (var a = 0; a < now.length && a < base.length; a++) if (pagesOf(now[a], room) > base[a]) bad[a] = true;
+      if (r.stuck) for (var q = 0; q < base.length; q++) bad[q] = true;
+      var ok = false;
+      for (f = 0.97; f >= cfg.minScale - 1e-9; f -= 0.03) {
+        unmove(); scaleCells(f, bad);
+        r = resolve(room);
+        if (r.pages <= total0 && !r.stuck) { ok = true; break; }
+      }
+      if (!ok) { unmove(); scaleCells(1, bad); f = 1; r = resolve(room); }
+    }
+    body.style.width = w;
+    group.style.visibility = "visible";
+    root.setAttribute("data-seal-sim", String(total0));
+    var exception = r.pages > total0 || r.stuck;
+    if (exception) root.setAttribute("data-seal-evidence", "data under the group on page(s) " +
+      initial.map(function (h) { return (h.page + 1) + " [" + h.sample + "]"; }).join(", ") +
+      "; moving it needs " + (r.pages - total0) + " more page(s) even with table text at " + Math.round(cfg.minScale * 100) + "%");
+    root.setAttribute("data-seal-plan", "group" + (moved.length ? ":moved" + moved.length : "") + (f < 1 ? ":text" + f.toFixed(2) : "") +
+      (exception ? ":exception" + (r.pages > total0 ? "+" + (r.pages - total0) + "page" : "") + (r.stuck ? ":overlap" + r.stuck : "") : ""));
+  }
+  /* عطلٌ في القياس: تظهر المجموعةُ في موضعها ويُعلَن ذلك */
+  function go() {
+    try { plan(); }
+    catch (err) { if (group) group.style.visibility = "visible"; root.setAttribute("data-seal-plan", "group:error"); }
+  }
+  var ready = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
+  ready.then(function () { if (doc.readyState === "complete") go(); else addEventListener("load", go); }, go);
+}`;
+
 /* ═══ الفندق — الورقةُ الذرّيّة ═══
    هامشُ `@page` صفر فلا شريط، والشبكةُ تملأ الورقة، والصورتان صفٌّ داخلها.
    فيُقرَّر بعد ضبط الأسماء (`data-fit-done`)، دوراً دوراً (الدورُ حدُّ أوراقٍ
@@ -412,13 +611,15 @@ const SEAL_PLAN_RUNTIME = `function (cfg) {
      ٢) وإلا صفُّ الصورتين تحت الشبكة، إن لم يُقصّ من أيّ كرتٍ أكثرُ ممّا
         يُقصّ منه بلا ختم (القصُّ القائم في الشبكة الأصليّة مرجعٌ لا يُزاد).
      ٣) وإلا غرفُ الدور بصفٍّ أقلّ في كلّ ورقة — إن لم تزد أوراقُ الدور.
-     ٤) وإلا الخطواتُ نفسُها بالصورتين أصغرَ قليلاً (حتى ٦٠٪).
-     ٥) وإلا نُقل صفُّ الغرف الأخير من الورقة إلى ورقةٍ تليها (لا مفرّ) —
-        بالمقاس الواقعيّ — ثمّ يُعاد ترقيمُ الأوراق. */
+     ٤) وإلا نُقل صفُّ الغرف الأخير من الورقة إلى ورقةٍ تليها — استثناءٌ مُعلَن
+        (`extra+`) — ثمّ يُعاد ترقيمُ الأوراق.
+   والمجموعةُ بمقاسها الثابت (`sealGroupHTML`) لا تُصغَّر. */
 export function hotelSealPlanHTML(s: PrintSeals | null | undefined, grid: { cols: number; rows: number }): string {
   if (!hasSeals(s)) return "";
-  const cfg = { cols: grid.cols, rows: grid.rows, sealWidthMm: sealWidthMm(s), sealHeightMm: sealBandMm(s), gapMm: SEAL_GAP_MM,
-                blockHTML: sealImagesHTML(s, 1, "print-seals-overlay"), sizes: [1, 0.9, 0.8, 0.7, SEAL_MIN_SIZE_SCALE] };
+  /* المجموعةُ بمقاسها الثابت (لا تصغير) — المعتمَد لتقارير A4 */
+  const z = sealGroupSize(s);
+  const cfg = { cols: grid.cols, rows: grid.rows, sealWidthMm: z.w, sealHeightMm: z.h, gapMm: SEAL_GAP_MM,
+                blockHTML: sealGroupHTML(s, "print-seals-overlay", ""), sizes: [1] };
   return `<script>(${HOTEL_SEAL_RUNTIME})(${JSON.stringify(cfg)});</script>`;
 }
 
@@ -462,7 +663,6 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     sheet.style.position = "relative";
     ov.style.position = "absolute";
     ov.style.left = (l - s.left) + "px";
-    ov.style.width = (r - l) + "px";
     ov.style.top = (b - s.top - cfg.sealHeightMm * k * MM) + "px";
     sheet.appendChild(ov);
     return true;

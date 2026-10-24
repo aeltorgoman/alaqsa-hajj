@@ -11,7 +11,7 @@ import type { PrintChrome, HeaderMode } from "./print.chrome";
 import { compactHeaderHTML, chromeMetaHTML, CHROME_CSS } from "./print.chrome";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
 import { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK, COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternDataURL } from "./print.theme";
-import { hasSeals, sealPlanHTML } from "./print.seals";
+import { hasSeals, sealGroupPlanHTML } from "./print.seals";
 
 /* ═══ نمطُ التقرير العامّ ═══ */
 export function makeHTML(
@@ -92,7 +92,7 @@ export function makeHTML(
      شيءٌ إن لم يُطلبا، فالمطبوعُ كما كان بالحرف. والورقةُ الذرّيّةُ (هامشٌ
      صفر) ترسمهما داخلها بنفسها. */
   const sealsOn = hasSeals(chrome.seals) && pageMargin.trim() !== "0";
-  const sealImgs = sealsOn ? sealPlanHTML(chrome.seals, { margin: pageMargin, landscape }) : "";
+  const sealImgs = sealsOn ? sealGroupPlanHTML(chrome.seals, { margin: pageMargin, landscape }) : "";
   const showFooter = footer;
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${safeTitle}</title>
@@ -203,7 +203,7 @@ ${(showBrand || showHeaderDate) ? `<div class="doc-header">
 </div>` : ""}
 <div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}
-<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>${sealsOn ? sealPlanHTML(chrome.seals, { margin: PAGE_MARGIN_FINANCE }) : ""}
+<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>${sealsOn ? sealGroupPlanHTML(chrome.seals, { margin: PAGE_MARGIN_FINANCE }) : ""}
 </body></html>`;
 }
 
