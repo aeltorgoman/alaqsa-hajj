@@ -31,11 +31,11 @@ const NAMES = { stamp: "ختم الشركة", signature: "التوقيع الم�
 const ASSET_KEY = { stamp: "company_stamp", signature: "manager_signature" } as const;
 
 /** يحمّل الصورةَ ويفكّها ويقصّ حشوَها، ويعيد أبعادَها — أو null إن تعذّرت. */
-export async function loadImage(url: string, capMs = LOAD_CAP_MS): Promise<SealImage | null> {
+export async function loadImage(url: string, capMs = LOAD_CAP_MS, kind: "stamp" | "signature" = "signature"): Promise<SealImage | null> {
   const raw = await loadRawImage(url, capMs);
   if (!raw) return null;
   try {
-    const cut = await Promise.race([trimSealImage(url), new Promise<null>(r => setTimeout(() => r(null), capMs))]);
+    const cut = await Promise.race([trimSealImage(url, kind), new Promise<null>(r => setTimeout(() => r(null), capMs))]);
     if (!cut) return raw;
     return (await loadRawImage(cut.url, capMs)) ? cut : raw;
   } catch {
@@ -65,8 +65,8 @@ function loadRawImage(url: string, capMs: number): Promise<SealImage | null> {
 /** يوقّع ما طُلب ويحمّله. والفشلُ برسالةٍ تسمّي الأصلَ وسببَه. */
 export async function loadPrintSeals(
   assets: Assets, req: SealRequest,
-  deps: { sign: (key: string) => Promise<string>; load: (url: string) => Promise<SealImage | null> } =
-    { sign: k => signedPrivateCompanyUrl(k), load: loadImage },
+  deps: { sign: (key: string) => Promise<string>; load: (url: string, kind: "stamp" | "signature") => Promise<SealImage | null> } =
+    { sign: k => signedPrivateCompanyUrl(k), load: (u, kind) => loadImage(u, LOAD_CAP_MS, kind) },
 ): Promise<SealLoadResult> {
   const seals: PrintSeals = {};
   for (const which of ["stamp", "signature"] as const) {
@@ -75,7 +75,7 @@ export async function loadPrintSeals(
     if (!key) return { ok: false, message: `لم يُرفع ${NAMES[which]} في الإعدادات.` };
     const url = await deps.sign(key);
     if (!url) return { ok: false, message: `تعذّر الوصول إلى ${NAMES[which]} — قد لا تملك صلاحية عرضه.` };
-    const img = await deps.load(url);
+    const img = await deps.load(url, which);
     if (!img) return { ok: false, message: `تعذّر تحميل صورة ${NAMES[which]}.` };
     seals[which] = img;
   }

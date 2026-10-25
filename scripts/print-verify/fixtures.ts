@@ -19,7 +19,7 @@ import {
 } from "../../src/print";
 import { makeReceiptHTML, makePassengerStatementHTML, printFullReport, printPaymentsReport } from "../../src/components/finance/finance.print";
 import { loadPrintSeals, sealUnavailability } from "../../src/company/printSeals";
-import { alphaBounds } from "../../src/company/sealTrim";
+import { alphaBounds, stampInkBounds } from "../../src/company/sealTrim";
 
 const [, , OUT, MODE = "off"] = process.argv;
 /* تاريخُ الإصدار ثابتٌ — فمخرجا الفرعين يُقارَنان بايتاً ببايت */
@@ -193,9 +193,9 @@ const sm = sealSizeMm(both.stamp, STAMP_BOX_MM), gm = sealSizeMm(both.signature,
 check("stamp keeps its proportions", Math.abs(sm.w / sm.h - STAMP_PX.w / STAMP_PX.h) < 0.01, `${sm.w}×${sm.h}mm`);
 check("signature keeps its proportions", Math.abs(gm.w / gm.h - SIGNATURE_PX.w / SIGNATURE_PX.h) < 0.01, `${gm.w}×${gm.h}mm`);
 const grp = sealGroupSize(both);
-const inkMm = grp.stamp ? grp.stamp.w * ((STAMP_PX.inkW ?? STAMP_PX.w) / STAMP_PX.w) : 0;
+const inkMm = grp.stamp ? grp.stamp.w * (((STAMP_PX.inkW ?? STAMP_PX.w) + (STAMP_PX.inkH ?? STAMP_PX.inkW ?? STAMP_PX.w)) / 2 / STAMP_PX.w) : 0;
 check("A4 stamp: visible ink diameter = 40mm (sized by ink, not image box)", Math.abs(inkMm - 40) < 0.1, `ink ${inkMm.toFixed(2)}mm, image ${grp.stamp?.w}×${grp.stamp?.h}mm`);
-const bigger = sealGroupSize({ ...both, stamp: { ...both.stamp, inkWidth: Math.round((STAMP_PX.inkW ?? STAMP_PX.w) / 2) } });
+const bigger = sealGroupSize({ ...both, stamp: { ...both.stamp, inkWidth: Math.round((STAMP_PX.inkW ?? STAMP_PX.w) / 2), inkHeight: Math.round((STAMP_PX.inkH ?? STAMP_PX.h) / 2) } });
 check("stamp and signature sized independently (stamp change leaves signature as is)", JSON.stringify(bigger.signature) === JSON.stringify(grp.signature) && bigger.stamp!.w > grp.stamp!.w,
   `signature ${grp.signature?.w}×${grp.signature?.h}mm both times`);
 check("A4 signature width 55–65mm (fixed, never shrunk)", !!grp.signature && grp.signature.w >= 55 && grp.signature.w <= 65, `${grp.signature?.w}×${grp.signature?.h}mm`);
@@ -210,6 +210,15 @@ px.set([255, 255, 255, 255], (0 * 20 + 0) * 4); // بكسلٌ أبيضُ معت�
 const ab = alphaBounds(px, 20, 10);
 check("trim: ink box found, white & transparent padding ignored", !!ab && ab.x === 5 && ab.y === 2 && ab.w === 10 && ab.h === 6, JSON.stringify(ab));
 check("trim: empty image → null (printed untrimmed)", alphaBounds(new Uint8ClampedArray(16), 2, 2) === null);
+/* الختم: بقايا ورقٍ باهتةٌ في الصورة كلّها (شفافيّة ٣٠ — كان يعدّها القصُّ حبراً) وخطٌّ داكنٌ منفصل —
+   لا يدخلان قطرَ الحبر؛ الحبرُ مربّعٌ في (٤٠..٩٩، ٢٠..٧٩) */
+const SW = 120, SH = 100, sp = new Uint8ClampedArray(SW * SH * 4);
+for (let i = 0; i < SW * SH; i++) sp.set([205, 200, 190, 30], i * 4);
+for (let y = 5; y < 95; y++) sp.set([60, 60, 60, 230], (y * SW + 3) * 4);
+for (let y = 20; y < 80; y++) for (let x = 40; x < 100; x++) sp.set([20, 40, 160, 255], (y * SW + x) * 4);
+const oldInk = alphaBounds(sp, SW, SH), sib = stampInkBounds(sp, SW, SH);
+check("stamp trim: faint paper residue & a separate line are not ink (old trim counted them)",
+  oldInk?.ink.w === SW && !!sib && sib.ink.x0 === 40 && sib.ink.x1 === 99 && sib.ink.y0 === 20 && sib.ink.y1 === 79, JSON.stringify(sib?.ink));
 check("band margin = seal + edge + gap, never less than the document's", sealBottomMarginMm(both, 14) <= 6 + 3 + Math.max(sm.h, gm.h) + 0.01
   && sealBottomMarginMm(both, 60) === 60, `${sealBottomMarginMm(both, 14)}mm`);
 const assets = { company_stamp: { url: "company_stamp_1.png" }, manager_signature: { url: "manager_signature_1.png" } } as Any;
