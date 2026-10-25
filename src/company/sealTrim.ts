@@ -42,7 +42,7 @@ export function alphaBounds(data: ArrayLike<number>, width: number, height: numb
    حبراً، فيُحسب «قطرُ الحبر» أعرضَ من الختم ويصغر الختمُ المطبوع بقدرها.
    فحبرُ الختم هنا ما **يُرى** على ورقٍ أبيض: شفافيّتُه × دُكنتُه ≥ `STAMP_VISIBLE_INK`،
    ثمّ أكبرُ كتلةٍ متّصلةٍ في إسقاطَي الأعمدة والصفوف (فجوةٌ تفصل بقعةً أو حافّةَ ظلٍّ أو خطّاً
-   بعيداً تُخرجها). وذلك صندوقُ القطر وحده؛ أمّا القصُّ فبالمعيار القديم داخل جوار الختم
+   بعيداً تُخرجها). وذلك صندوقُ القطر وحده؛ أمّا القصُّ فبكلّ ما يُرى ولو باهتاً داخل جوار الختم
    (٦٪ حوله) — فما خفت من حلقته لا يُقطع — ومعه كلُّ كتلةٍ أخرى ذاتِ وزن (≥ ربع الختم)،
    فلا يُحذف من الرسم شيءٌ يُرى. والتوقيعُ لا يمرّ بهذا: قصُّه كما كان. */
 const STAMP_VISIBLE_INK = 0.1;
@@ -95,6 +95,21 @@ export function stampInkBounds(data: ArrayLike<number>, width: number, height: n
            keep: { x0: Math.max(0, X.ka - m), y0: Math.max(0, Y.ka - m), x1: Math.min(width - 1, X.kb + m), y1: Math.min(height - 1, Y.kb + m) } };
 }
 
+/** القصُّ في جوار الختم: كلُّ ما يُرى ولو باهتاً (تغطيةٌ ≥ ٣٪ — حافّةُ حلقةٍ خفيفة تبقى)، لا بقايا الورق
+ *  الأبهتُ منه (كانت تكبّر صندوقَ الصورة فتحجز المجموعةُ أكثرَ ممّا يُطبع) — وحاشيةٌ ٢٪. */
+function faintInkBounds(data: ArrayLike<number>, width: number, r: Box) {
+  let x0 = r.x1 + 1, y0 = r.y1 + 1, x1 = -1, y1 = -1;
+  for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
+    const i = (y * width + x) * 4;
+    if ((data[i + 3] / 255) * (1 - lum(data, i) / 255) < 0.03) continue;
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 < 0) return null;
+  const pad = Math.round(Math.max(x1 - x0 + 1, y1 - y0 + 1) * 0.02);
+  const x = Math.max(r.x0, x0 - pad), y = Math.max(r.y0, y0 - pad);
+  return { x, y, w: Math.min(r.x1 + 1, x1 + 1 + pad) - x, h: Math.min(r.y1 + 1, y1 + 1 + pad) - y };
+}
+
 /** أطولُ ضلعٍ للصورة بعد القصّ — يكفي ٦٠٠dpi لختمٍ ٤٢مم ويُبقي المستند خفيفاً. */
 const TRIM_MAX_PX = 1000;
 
@@ -114,7 +129,7 @@ export async function trimSealImage(url: string, kind: "stamp" | "signature" = "
   let b = alphaBounds(px, bmp.width, bmp.height);
   if (!b) return null;
   const st = kind === "stamp" ? stampInkBounds(px, bmp.width, bmp.height) : null;
-  const near = st && alphaBounds(px, bmp.width, bmp.height, st.keep);
+  const near = st && faintInkBounds(px, bmp.width, st.keep);
   if (st && near) b = { ...near, ink: { w: st.ink.x1 - st.ink.x0 + 1, h: st.ink.y1 - st.ink.y0 + 1 } };
   const k = Math.min(1, TRIM_MAX_PX / Math.max(b.w, b.h));
   const out = document.createElement("canvas");
