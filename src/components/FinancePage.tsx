@@ -1043,7 +1043,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
   // ══════════════════════════════════════════════
   // PAYMENT DETAIL MODAL
   // ══════════════════════════════════════════════
-  const PaymentDetailModal = () => {
+  /* عقدةُ JSX لا مكوّن — كـ`receiptViewNode`: المكوّنُ المعرَّفُ داخل الصفحة هويّتُه جديدةٌ في
+     كلّ تصيير، فيُعاد تركيبُه عند كلّ تغيّرٍ في حالة الصفحة — فتنغلق قائمةُ خيارات الطباعة
+     بعد كلّ نقرة. */
+  const paymentDetailNode = (() => {
     if (!selectedPayment) return null;
     const modalP = selectedP ?? passengers.find(x => x.id === selectedPayment.passenger_id) ?? null;
     const pName = modalP ? (modalP.short_ar || modalP.name_ar) : "—";
@@ -1072,6 +1075,8 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
               <span style={{ fontWeight:600 }}>{row.value}</span>
             </div>
           ))}
+          {/* خياراتُ الإيصال نفسُها (الختمُ والتوقيع) كما في مودال الإيصال — الحالةُ والطباعةُ واحدة */}
+          {selectedPayment.receipt && <div style={{ display:"flex", justifyContent:"center", marginTop:14 }}>{receiptOptionsMenu}</div>}
           <div style={{ display:"flex", gap:10, marginTop:16 }}>
             <button disabled={!selectedPayment.receipt}
               onClick={() => { const rc = selectedPayment.receipt; if (rc) void printReceipt(rc); }}
@@ -1086,7 +1091,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         </div>
       </div>
     );
-  };
+  })();
 
   // ══════════════════════════════════════════════
   // SETTINGS VIEW
@@ -1372,7 +1377,7 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
         <ReceiptModal />{receiptViewNode}{cancelReceiptNode}
-        <PaymentDetailModal />
+        {paymentDetailNode}
         {pricingNotice}
         <PassengerFinanceView
           canManage={canManage}
@@ -1573,7 +1578,10 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
       <div style={{ flex:1, overflowY:"auto", padding:20 }}>
         <AlertModal alert={alertState} onClose={()=>showAlert(null)} />
         <ConfirmModal state={confirmState} onConfirm={handleConfirmYes} onCancel={handleConfirmNo} />
-        <PaymentDetailModal />
+        {/* ⚠️ صفوفُ سجلّ الدفعات ذاتُ الإيصال تفتح مودالَ الإيصال (\`viewReceipt\`)، وكان لا يُركَّب
+            في هذا العرض — فتتغيّر الحالةُ ولا يظهر شيء حتى يُغادَر التقرير إلى عرضٍ يركّبه */}
+        {receiptViewNode}{cancelReceiptNode}
+        {paymentDetailNode}
         {pricingNotice}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <button onClick={()=>setSubView("list")} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--primary)", fontSize:24 }}>←</button>

@@ -35,7 +35,8 @@ class FixedDate extends RealDate {
    المتصفّح (SEALS_JSON)؛ وإلا فأبعادُ أصلَي الحملة الخام. */
 const PX = process.env.SEALS_JSON ? JSON.parse(readFileSync(process.env.SEALS_JSON, "utf8")) : null;
 export const STAMP_PX = PX?.stamp ?? { w: 1503, h: 1600 }, SIGNATURE_PX = PX?.signature ?? { w: 1600, h: 1376 };
-const img = (name: string, px: { w: number; h: number }) => ({ url: `https://seal.test/${MODE === "ghost" ? "ghost-" : ""}${name}.png`, width: px.w, height: px.h });
+const img = (name: string, px: { w: number; h: number; inkW?: number; inkH?: number }) => ({ url: `https://seal.test/${MODE === "ghost" ? "ghost-" : ""}${name}.png`,
+  width: px.w, height: px.h, ...(px.inkW ? { inkWidth: px.inkW, inkHeight: px.inkH } : {}) });
 const SEALS: PrintSeals = MODE === "off" ? {}
   : MODE === "stamp" ? { stamp: img("stamp", STAMP_PX) }
   : MODE === "signature" ? { signature: img("signature", SIGNATURE_PX) }
@@ -192,7 +193,11 @@ const sm = sealSizeMm(both.stamp, STAMP_BOX_MM), gm = sealSizeMm(both.signature,
 check("stamp keeps its proportions", Math.abs(sm.w / sm.h - STAMP_PX.w / STAMP_PX.h) < 0.01, `${sm.w}×${sm.h}mm`);
 check("signature keeps its proportions", Math.abs(gm.w / gm.h - SIGNATURE_PX.w / SIGNATURE_PX.h) < 0.01, `${gm.w}×${gm.h}mm`);
 const grp = sealGroupSize(both);
-check("A4 stamp width 40–45mm (fixed, never shrunk)", !!grp.stamp && grp.stamp.w >= 40 && grp.stamp.w <= 45, `${grp.stamp?.w}×${grp.stamp?.h}mm`);
+const inkMm = grp.stamp ? grp.stamp.w * ((STAMP_PX.inkW ?? STAMP_PX.w) / STAMP_PX.w) : 0;
+check("A4 stamp: visible ink diameter = 40mm (sized by ink, not image box)", Math.abs(inkMm - 40) < 0.1, `ink ${inkMm.toFixed(2)}mm, image ${grp.stamp?.w}×${grp.stamp?.h}mm`);
+const bigger = sealGroupSize({ ...both, stamp: { ...both.stamp, inkWidth: Math.round((STAMP_PX.inkW ?? STAMP_PX.w) / 2) } });
+check("stamp and signature sized independently (stamp change leaves signature as is)", JSON.stringify(bigger.signature) === JSON.stringify(grp.signature) && bigger.stamp!.w > grp.stamp!.w,
+  `signature ${grp.signature?.w}×${grp.signature?.h}mm both times`);
 check("A4 signature width 55–65mm (fixed, never shrunk)", !!grp.signature && grp.signature.w >= 55 && grp.signature.w <= 65, `${grp.signature?.w}×${grp.signature?.h}mm`);
 check("A4 group: stamp overlaps signature 5–10mm", SEAL_OVERLAP_MM >= 5 && SEAL_OVERLAP_MM <= 10 && Math.abs(grp.w - (grp.stamp!.w + grp.signature!.w - SEAL_OVERLAP_MM)) < 0.02, `${SEAL_OVERLAP_MM}mm, group ${grp.w}×${grp.h}mm`);
 check("A4 sizes keep proportions", Math.abs(grp.stamp!.w / grp.stamp!.h - STAMP_PX.w / STAMP_PX.h) < 0.01 && Math.abs(grp.signature!.w / grp.signature!.h - SIGNATURE_PX.w / SIGNATURE_PX.h) < 0.01);

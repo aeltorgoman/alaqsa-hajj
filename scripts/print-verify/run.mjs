@@ -122,7 +122,8 @@ const IMAGES = {
   after: { stamp: png(cut.stamp.url), signature: png(cut.signature.url), "ghost-stamp": png(ghosts.stamp), "ghost-signature": png(ghosts.signature) },
   before: { stamp: png(raw.stamp), signature: png(raw.signature) },
 };
-const SEAL_PX = { stamp: { w: cut.stamp.width, h: cut.stamp.height }, signature: { w: cut.signature.width, h: cut.signature.height },
+const SEAL_PX = { stamp: { w: cut.stamp.width, h: cut.stamp.height, inkW: cut.stamp.inkWidth, inkH: cut.stamp.inkHeight },
+  signature: { w: cut.signature.width, h: cut.signature.height, inkW: cut.signature.inkWidth, inkH: cut.signature.inkHeight },
   /* الصيغةُ التي يطبع بها التطبيقُ فعلاً: ناتجُ القصّ data:image/png — لا رابطٌ موقَّع */
   stampDataUrl: cut.stamp.url, signatureDataUrl: cut.signature.url, ghostStampDataUrl: ghosts.stamp, ghostSignatureDataUrl: ghosts.signature,
   rawStamp: { w: 1503, h: 1600 }, rawSignature: { w: 1600, h: 1376 } };

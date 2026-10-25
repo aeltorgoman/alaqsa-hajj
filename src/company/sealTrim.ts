@@ -15,7 +15,7 @@ import type { SealImage } from "../print/print.seals";
 
 /** صندوقُ الحبر المرئيّ في بكسلات RGBA — أو null إن كانت الصورةُ فارغة. */
 export function alphaBounds(data: ArrayLike<number>, width: number, height: number):
-  { x: number; y: number; w: number; h: number } | null {
+  { x: number; y: number; w: number; h: number; ink: { w: number; h: number } } | null {
   let x0 = width, y0 = height, x1 = -1, y1 = -1;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -29,7 +29,7 @@ export function alphaBounds(data: ArrayLike<number>, width: number, height: numb
   if (x1 < 0) return null;
   const pad = Math.round(Math.max(x1 - x0 + 1, y1 - y0 + 1) * 0.02);
   const x = Math.max(0, x0 - pad), y = Math.max(0, y0 - pad);
-  return { x, y, w: Math.min(width, x1 + 1 + pad) - x, h: Math.min(height, y1 + 1 + pad) - y };
+  return { x, y, w: Math.min(width, x1 + 1 + pad) - x, h: Math.min(height, y1 + 1 + pad) - y, ink: { w: x1 - x0 + 1, h: y1 - y0 + 1 } };
 }
 
 /** أطولُ ضلعٍ للصورة بعد القصّ — يكفي ٦٠٠dpi لختمٍ ٤٢مم ويُبقي المستند خفيفاً. */
@@ -56,5 +56,7 @@ export async function trimSealImage(url: string): Promise<SealImage | null> {
   oc.imageSmoothingQuality = "high";
   oc.drawImage(bmp, b.x, b.y, b.w, b.h, 0, 0, out.width, out.height);
   bmp.close?.();
-  return { url: out.toDataURL("image/png"), width: out.width, height: out.height };
+  /* أبعادُ الحبر نفسه داخل الصورة الناتجة — يُحسب بها المقاسُ المرئيّ (قطرُ الختم الفعليّ) */
+  return { url: out.toDataURL("image/png"), width: out.width, height: out.height,
+           inkWidth: Math.round(b.ink.w * k), inkHeight: Math.round(b.ink.h * k) };
 }

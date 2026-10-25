@@ -29,7 +29,11 @@
    والورقةُ الذرّيّةُ (الفندق) ترسمهما داخلها — انظر `print.reports.ts`. */
 
 /** صورةٌ جاهزةٌ للطباعة: رابطٌ (موقَّعٌ أو data: بعد القصّ)، وأبعادُها بالبكسل. */
-export type SealImage = { url: string; width: number; height: number };
+export type SealImage = {
+  url: string; width: number; height: number;
+  /** أبعادُ الحبر المرئيّ داخل الصورة (بكسل) — من القصّ؛ وغيابُها يعني أنّ الصورة كلَّها حبر. */
+  inkWidth?: number; inkHeight?: number;
+};
 /** الختمُ والتوقيعُ المطلوبان لهذه الطبعة — الغائبُ لم يُطلَب. */
 export type PrintSeals = { stamp?: SealImage; signature?: SealImage };
 
@@ -430,8 +434,8 @@ ${CELLS_RUNTIME}  function plan() {
    (حتى ٨٥٪ ولا دون ٩pt). فإن لم يكفِ: **استثناءٌ مُعلَن** (`exception`) — تبقى
    البياناتُ مقروءةً كاملةً بورقةٍ زائدة، ولا تُصغَّر الصورتان ولا يُغطّى نصّ. */
 
-/** مقاسُ الختم والتوقيع على A4 — أكبرُ ما يسعه الصندوقُ بنسبة الصورة (بعد قصّ حشوها). */
-export const A4_STAMP_BOX_MM = { w: 42, h: 42 } as const;
+/** مقاسُ التوقيع على A4 — أكبرُ ما يسعه صندوقُه بنسبة الصورة (بعد قصّ حشوها). والختمُ
+ *  مستقلٌّ عنه بقطر حبره (`A4_STAMP_INK_MM`). */
 export const A4_SIGNATURE_BOX_MM = { w: 60, h: 30 } as const;
 /** تداخلُ الختم مع طرف التوقيع. */
 export const SEAL_OVERLAP_MM = 8;
@@ -440,9 +444,23 @@ const GROUP_CLEAR_MM = 1;
 /** ما يجوز أن تعلوه المجموعة من النصوص: سطرُ التذييل الختاميّ (زينةٌ متكرّرة لا بيانات). */
 const SEAL_DECORATIVE = "body > .footer";
 
-/** مقاسُ كلٍّ منهما ومقاسُ المجموعة بالمليمتر. */
+/** قطرُ الختم المرئيّ على A4 — المقاسُ الفعليّ لختم الحملة (٤سم) كما أكّده المستخدم. */
+export const A4_STAMP_INK_MM = 40;
+
+/** مقاسُ صورة الختم بالمليمتر بحيث يكون **حبرُه** (لا صندوقُ صورته) بعرض `inkMm`:
+ *  الصورةُ بعد القصّ = الحبرُ وحاشيةٌ ٢٪، فتُكبَّر بنسبتها إلى الحبر. وبلا أبعاد حبرٍ
+ *  (صورةٌ لم تُقصّ) يُعامَل عرضُها كلُّه حبراً. */
+export function stampSizeByInk(img: SealImage, inkMm: number): { w: number; h: number } {
+  const w = Math.max(1, img.width), h = Math.max(1, img.height);
+  const ink = img.inkWidth && img.inkWidth > 0 ? Math.min(img.inkWidth, w) : w;
+  const mmW = inkMm * (w / ink);
+  return { w: round(mmW), h: round(mmW * (h / w)) };
+}
+
+/** مقاسُ كلٍّ منهما ومقاسُ المجموعة بالمليمتر — **مستقلّان**: الختمُ بقطر حبره (٤٠مم)،
+ *  والتوقيعُ بصندوقه هو؛ وتغييرُ أحدهما لا يمسّ الآخر. */
 export function sealGroupSize(s: PrintSeals): { stamp: { w: number; h: number } | null; signature: { w: number; h: number } | null; w: number; h: number } {
-  const stamp = s.stamp ? sealSizeMm(s.stamp, A4_STAMP_BOX_MM) : null;
+  const stamp = s.stamp ? stampSizeByInk(s.stamp, A4_STAMP_INK_MM) : null;
   const signature = s.signature ? sealSizeMm(s.signature, A4_SIGNATURE_BOX_MM) : null;
   const w = (stamp?.w ?? 0) + (signature?.w ?? 0) - (stamp && signature ? SEAL_OVERLAP_MM : 0);
   return { stamp, signature, w: round(w), h: Math.max(stamp?.h ?? 0, signature?.h ?? 0) };
@@ -849,8 +867,27 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     cellsOf(sheet).forEach(function (c) { if (!isEmpty(c) && c.classList.contains("hotel-card")) window.__hotelFitCard(c, minPx, fmin); });
   }
   /* shrink: هل يُسمح بتصغير خطّ الكروت (حتى ٨٥٪ من مقاسه بلا ختم) ليسع الختم؟ */
-  function place(sheet, k, shrink) {
+  /* ═══ الورقةُ المضغوطة — الفراغُ قبل الخطّ ═══
+     ورقةٌ ممتلئةٌ (خمسَ عشرة غرفةً عرضيّاً) لا يسعها ارتفاعُ المجموعة إلا إن ارتفعت الشبكةُ
+     نحو ٢٥مم. وفي الورقة فراغٌ زائدٌ عن الحاجة يسعها بلا مساسٍ بالخطّ: حشوُ صفوف الكرت
+     حول الاسم (٢×١٫١مم في كلّ صفّ)، وحشوُ رأس الكرت، وفجواتُ الشبكة، وهوامشُ شريط العنوان،
+     وحشوُ الورقة العلويّ. فيُضيَّق ذلك وحدَه — حين لا تسعها الورقةُ كما هي — والاسمُ
+     بخطّه، والكرتُ وكلُّ ما فيه كما هو. */
+  function compactCSS() {
+    if (doc.getElementById("seal-compact-css")) return;
+    var st = doc.createElement("style");
+    st.id = "seal-compact-css";
+    st.textContent = ".hotel-print-page.seal-compact { padding-top: 9mm !important; }" +
+      ".seal-compact .hotel-page { gap: 3px !important; }" +
+      ".seal-compact .doc-title-bar { margin-top: 1mm !important; margin-bottom: 1.5mm !important; }" +
+      ".seal-compact .hotel-card > div:first-child { padding-top: 1.5px !important; padding-bottom: 1.5px !important; }" +
+      ".seal-compact .hotel-card td { padding-top: 1px !important; padding-bottom: 1px !important; }";
+    doc.head.appendChild(st);
+  }
+  function place(sheet, k, shrink, compact) {
     clearOverlay(sheet);
+    if (compact) compactCSS();
+    sheet.classList.toggle("seal-compact", !!compact);
     var row = rowOf(sheet), stamp = stampOf(sheet), fmin = shrink ? 0.85 : 1;
     if (stamp) stamp.style.textAlign = "";
     if (!row) return false;
@@ -913,15 +950,17 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     for (var i = 0; i < n; i++) st[i].textContent = "صفحة " + (i + 1) + " من " + n;
   }
   function group(sheets) {
-    /* لكلّ مقاس: الشبكةُ ثمّ صفٌّ أقلّ بخطّ الكروت كما هو، ثمّ الاثنان بتصغيره قليلاً */
-    for (var si = 0; si < cfg.sizes.length; si++) for (var pass = 0; pass < 2; pass++) {
-      var k = cfg.sizes[si], shrink = pass === 1, tag = shrink ? ":text" : "";
-      if (sheets.every(function (sh) { return place(sh, k, shrink); })) return { k: k, how: "grid" + tag };
+    /* لكلّ مقاس: الورقةُ كما هي، ثمّ مضغوطةً بخطّ الكروت كما هو، ثمّ مضغوطةً بتصغيره قليلاً —
+       وفي كلٍّ: الشبكةُ ثمّ صفٌّ أقلّ */
+    var PASSES = [[false, false], [false, true], [true, true]];
+    for (var si = 0; si < cfg.sizes.length; si++) for (var pass = 0; pass < PASSES.length; pass++) {
+      var k = cfg.sizes[si], shrink = PASSES[pass][0], compact = PASSES[pass][1], tag = (compact ? ":compact" : "") + (shrink ? ":text" : "");
+      if (sheets.every(function (sh) { return place(sh, k, shrink, compact); })) return { k: k, how: "grid" + tag };
       if (cfg.rows > 1) {
         var snap = snapshot(sheets);
         if (repack(sheets, cfg.rows - 1)) {
           var live = sheets.filter(function (sh) { return gridOf(sh).children.length; });
-          if (live.every(function (sh) { return place(sh, k, shrink); })) {
+          if (live.every(function (sh) { return place(sh, k, shrink, compact); })) {
             sheets.forEach(function (sh) { if (!gridOf(sh).children.length) sh.remove(); });
             return { k: k, how: "rows" + tag };
           }
@@ -933,8 +972,8 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     var added = 0;
     for (var i = 0; i < sheets.length; i++) {
       var sh = sheets[i];
-      if (place(sh, 1, true)) continue;
-      for (var g = 0; g < cfg.rows && !place(sh, 1, true); g++) { var ns = split(sh); if (!ns) break; sheets.splice(i + 1, 0, ns); added++; }
+      if (place(sh, 1, true, true)) continue;
+      for (var g = 0; g < cfg.rows && !place(sh, 1, true, true); g++) { var ns = split(sh); if (!ns) break; sheets.splice(i + 1, 0, ns); added++; }
     }
     return { k: 1, how: "split", added: added };
   }
