@@ -123,6 +123,8 @@ const IMAGES = {
   before: { stamp: png(raw.stamp), signature: png(raw.signature) },
 };
 const SEAL_PX = { stamp: { w: cut.stamp.width, h: cut.stamp.height }, signature: { w: cut.signature.width, h: cut.signature.height },
+  /* الصيغةُ التي يطبع بها التطبيقُ فعلاً: ناتجُ القصّ data:image/png — لا رابطٌ موقَّع */
+  stampDataUrl: cut.stamp.url, signatureDataUrl: cut.signature.url, ghostStampDataUrl: ghosts.stamp, ghostSignatureDataUrl: ghosts.signature,
   rawStamp: { w: 1503, h: 1600 }, rawSignature: { w: 1600, h: 1376 } };
 writeFileSync(join(OUT, "seals.json"), JSON.stringify(SEAL_PX));
 let served = IMAGES.after;
@@ -171,7 +173,8 @@ async function toPdf(htmlFile, pdfFile) {
   const plan = await page.evaluate(() => ["data-seal-plan", "data-seal-sim", "data-seal-evidence", "data-seal-placements"].map(a => document.documentElement.getAttribute(a)));
   /* هندسةُ المجموعة كما رُسمت: التداخلُ بين الختم والتوقيع بالمليمتر */
   geometry[htmlFile] = await page.evaluate(() => {
-    const g = document.querySelector(".seal-group, .print-seals-overlay, .print-seals");
+    /* المرئيّة أوّلاً: صفُّ الفندق (.print-seals) فاصلٌ خفيّ، ومجموعتُه .print-seals-overlay */
+    const g = document.querySelector(".seal-group") || document.querySelector(".print-seals-overlay") || document.querySelector(".print-seals");
     if (!g || getComputedStyle(g).display === "none") return null;
     const im = [...g.querySelectorAll("img")].map(i => i.getBoundingClientRect());
     const mm = v => Math.round(v * 25.4 / 96 * 10) / 10;
@@ -316,6 +319,9 @@ for d in docs:
 
 /* ── ٦) ملكيّةُ البنك في الواجهة: موضعٌ واحد، وبابٌ ضيّق ── */
 const src = f => readFileSync(join(ROOT, f), "utf8");
+/* الإيصالُ بصورتي data (صيغةُ الإنتاج): الختمُ والتوقيعُ ظاهران حسب الخيار — عددُ الصور في الـPDF */
+const receiptData = Object.fromEntries(["on", "stamp", "signature", "off"].map(m => [m, imagePages(join(OUT, m, "receipt-dataurl.pdf")).length]));
+const receiptDataOk = receiptData.on === 2 && receiptData.stamp === 1 && receiptData.signature === 1 && receiptData.off === 0;
 const ui = [
   { name: "Company Settings no longer renders the bank card", ok: !/CompanyBankCard/.test(src("src/components/UsersPage.tsx")) },
   { name: "Finance → Account Settings renders the bank card", ok: /settingsTab === "bank" && <CompanyBankCard/.test(src("src/components/FinancePage.tsx")) },
@@ -332,6 +338,7 @@ const bad = [
   ...unchanged.filter(u => !u.identical && !u.intended).map(u => `HTML changed with options OFF: ${u.doc}`),
   ...(logic || []).filter(c => !c.ok).map(c => `logic: ${c.name} ${c.detail ?? ""}`),
   ...ui.filter(c => !c.ok).map(c => `ui: ${c.name}`),
+  ...(receiptDataOk ? [] : [`A5 receipt with data: images (production format): images per mode ${JSON.stringify(receiptData)} (expected both 2, stamp 1, signature 1, off 0)`]),
   ...rows.filter(r => !r.sealOnEveryPage && !r.doc.startsWith("receipt")).map(r => `${r.doc}: no seal on pages ${r.pagesWithoutSeal}`),
   /* القاعدة «أ»: ورقةٌ واحدةٌ بلا ختم تبقى ورقةً واحدةً به — بالمجموعة، وبالختم وحده، وبالتوقيع وحده */
   ...rows.filter(r => r.pagesOff === 1 && (r.pagesOn !== 1 || !r.stampOnlyPages1 || !r.signatureOnlyPages1)).map(r => `${r.doc}: one-page report became ${r.pagesOn} pages with seals`),
@@ -358,6 +365,7 @@ console.log(`unchanged with options OFF: ${unchanged.filter(u => u.identical).le
   ` (intended hotel-card fix: ${unchanged.filter(u => u.intended).map(u => `${u.doc} ${u.identical ? "same" : "changed"}`).join(", ")})`);
 console.log(`logic checks: ${(logic || []).filter(c => c.ok).length}/${(logic || []).length}`);
 console.log(`ui checks: ${ui.filter(c => c.ok).length}/${ui.length}`);
+console.log(`A5 receipt (data: images) images per mode: ${JSON.stringify(receiptData)} ${receiptDataOk ? "OK" : "FAIL"}`);
 if (bad.length) { console.log("FAIL:\n  " + bad.join("\n  ")); process.exit(1); }
 console.log(`PASS — evidence in ${OUT}`);
 if (!existsSync(join(OUT, "report.json"))) process.exit(2);

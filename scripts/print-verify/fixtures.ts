@@ -101,6 +101,21 @@ put("one-page-admins-20", makeHTML("كشف الإداريين", `<table style="w
   "رقم الجواز", "الباص", "الطيران", "مخيم منى", "مخيم عرفة", "الغرفة"].map(h => `<th style="padding:5pt 6pt;font-size:9pt">${h}</th>`).join("")}</tr>${adm}</table>`,
   brand, { landscape: true, chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
 
+// ── عيوبُ الطباعة الفعليّة (تُعاد هنا فتفشل قبل التصحيح وتنجح بعده)
+// الفندق: ورقةٌ واحدةٌ ممتلئة — طوليّةٌ بستّ عشرة غرفة، وعرضيّةٌ بإحدى عشرة وخمس عشرة
+for (const [n, landscape] of [[16, false], [11, true], [15, true]] as const) {
+  const rooms = Array.from({ length: n }, (_, i) => ({ id: i + 1, number: String(101 + i), type: "رباعية", capacity: null, floor: "1" }));
+  put(`one-page-hotel-${landscape ? "landscape" : "portrait"}-${n}rooms`, hotelReportDocument(rooms as Any,
+    pax(n * 4, i => ({ room_id: Math.floor((i - 1) / 4) + 1, room_sort_order: ((i - 1) % 4) * 10 })), brand,
+    { landscape, chrome: chromeFromOptions("hotel", opts("hotel"), { season, seals: SEALS }) }));
+}
+// سطرُ التذييل وحده في ورقةٍ ثانية بينما يسع أسفلُ يسار الأولى المجموعة (آليّةُ ما رآه المستخدم في عرفة):
+// جدولٌ يملأ الورقة وبياناتُه في نصفه الأيمن — فكانت الثانيةُ تذييلاً ومجموعةً لا غير
+put("footer-spill-32", makeHTML("كشف تجريبي", `<table style="width:100%;border-collapse:collapse">${Array.from({ length: 32 }, (_, i) =>
+  `<tr><td style="padding:5pt;font-size:11pt">${i + 1}</td><td style="padding:5pt;font-size:11pt">${nm(i + 1).split(" ").slice(0, 4).join(" ")}</td><td style="width:55%"></td></tr>`).join("")}</table>`,
+  brand, { chrome: chromeFromOptions("lists", opts("lists"), { seals: SEALS }) }));
+// عرفة بخمسين: في main نفسه يملأ الجدولُ ورقته فيُدفع سطرُ التذييل وحده إلى ورقةٍ ثانية
+put("arafa-50", campsReportDocument([camp(1, "أ")], pax(50, () => ({ camp_arafa_id: 1 })), "عرفة", brand, chromeFromOptions("arafa", opts("arafa"), { season, seals: SEALS })));
 // ── الموضعُ المتكيّف: ورقةٌ أسفلُ يسارها مشغول (تُزاح المجموعة)، وورقةٌ أسفلُها كلُّه سطرٌ (ترتفع)
 const spacer = (mm: number) => `<div style="height:${mm}mm"></div>`;
 const leftNote = `<p style="text-align:left;margin:0;font-size:11pt">ملاحظة الإدارة: تُراجَع البيانات قبل التسليم — مرجع ٤٥٨٢</p>`;
@@ -139,6 +154,14 @@ put("receipt", makeReceiptHTML(receipt, rBrand, [], { seals: SEALS }));
 put("receipt-cancelled", makeReceiptHTML({ ...receipt, receipt_number: 1002, status: "cancelled", cancel_reason: "إدخالٌ مكرَّر" }, rBrand, [], { seals: SEALS }));
 put("receipt-group-long", makeReceiptHTML({ ...receipt, receipt_number: 1003, total_amount: 30000, group_name: "مجموعة العائلة" }, rBrand,
   Array.from({ length: 24 }, (_, i) => ({ name: nm(i + 1), amount: 1250 })), { seals: SEALS }));
+// الإيصالُ بصورتي data:image/png كما يطبعه التطبيق بعد قصّ الحشو
+{
+  const g = MODE === "ghost";
+  const dataSeals: PrintSeals = !PX || MODE === "off" ? {}
+    : { ...(MODE !== "signature" ? { stamp: { url: g ? PX.ghostStampDataUrl : PX.stampDataUrl, width: STAMP_PX.w, height: STAMP_PX.h } } : {}),
+        ...(MODE !== "stamp" ? { signature: { url: g ? PX.ghostSignatureDataUrl : PX.signatureDataUrl, width: SIGNATURE_PX.w, height: SIGNATURE_PX.h } } : {}) };
+  put("receipt-dataurl", makeReceiptHTML({ ...receipt, receipt_number: 1004 }, { ...brand, stampUrl: dataSeals.stamp?.url ?? "", signatureUrl: dataSeals.signature?.url ?? "" }, [], { seals: dataSeals }));
+}
 
 // ── فحوصُ المنطق (لا متصفّح)
 const checks: { name: string; ok: boolean; detail?: string }[] = [];

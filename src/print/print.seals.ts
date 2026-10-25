@@ -616,6 +616,21 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
     }
     return null;
   }
+  /* ورقةٌ أخيرةٌ لا يقع فيها إلا التذييلُ الزخرفيّ (يقع في main نفسه بلا ختم: جدولٌ يملأ
+     ورقته فيُدفع سطرُ التذييل وحده إلى التالية) — فلا تُضاف إليها مجموعةٌ ولا تُترك */
+  function decorativeTail(segs, room) {
+    var pages = pagesFrom(segs, room);
+    if (pages.length < 2) return null;
+    var last = pages[pages.length - 1], list = segs[last.seg].atoms, els = [];
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i];
+      if (a.top < last.top - 0.5) continue;
+      if (a.tail) continue;
+      if (!(a.el.matches && a.el.matches(cfg.decorative))) return null;
+      els.push(a.el);
+    }
+    return els.length ? { seg: last.seg, els: els } : null;
+  }
   var moved = [];
   function move(el) {
     moved.push({ e: el, v: el.style.getPropertyValue("break-before") });
@@ -683,8 +698,11 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
       var mine0 = textsOn(pages0[e], tx0);
       if (!spot(mine0, room)) { proof.push("page " + (e + 1) + ": " + evidenceFor(mine0, room)); crowded[pages0[e].seg] = true; }
     }
+    /* التذييلُ وحده في الورقة الأخيرة: الهدفُ ورقةٌ أقلّ، وقسمُه يُضيَّق كغيره */
+    var tail = decorativeTail(segs, room), target = tail ? total0 - 1 : total0, dropped = false;
+    if (tail) crowded[tail.seg] = true;
     var r = resolve(room), f = 1, pad = 1;
-    if (r.pages.length > total0 || r.stuck.length) {
+    if (r.pages.length > target || r.stuck.length) {
       /* الأقسامُ التي لا موضعَ للمجموعة في إحدى أوراقها (بالقياس قبل أيّ نقل) وحدها تُضيَّق —
          وأرقامُها أرقامُ الأقسام الأصليّة: النقلُ يزيد الأقسامَ فلا يُقاس بعده */
       var bad = crowded;
@@ -698,7 +716,7 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
       for (var s = 0; s < steps.length; s++) {
         unmove(); fitCells(steps[s][0], steps[s][1], bad);
         r = resolve(room);
-        if (r.pages.length <= total0 && !r.stuck.length) { ok = true; f = steps[s][0]; pad = steps[s][1]; break; }
+        if (r.pages.length <= target && !r.stuck.length) { ok = true; f = steps[s][0]; pad = steps[s][1]; break; }
         if (!r.stuck.length && r.pages.length < best.n) best = { n: r.pages.length, s: s };
       }
       if (!ok) {
@@ -706,6 +724,13 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
         if (best.s >= 0) { f = steps[best.s][0]; pad = steps[best.s][1]; } else { f = 1; pad = 1; }
         fitCells(f, pad, bad); r = resolve(room);
       }
+    }
+    /* وإن بقي التذييلُ وحدَه في ورقةٍ أخيرة: يُرفع سطرُه (زخرفةٌ متكرّرة؛ الهويّةُ في الترويسة) */
+    var lastTail = decorativeTail(layout(), room);
+    if (lastTail) {
+      lastTail.els.forEach(function (e) { e.parentNode.removeChild(e); });
+      dropped = true;
+      r = resolve(room);
     }
     var placed = [];
     for (var p = 0; p < r.pages.length; p++) {
@@ -724,7 +749,7 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
       proof.join(" || "));
     var adaptive = placed.filter(function (x) { return x && (x.x > 0 || x.raise > 0); }).length;
     root.setAttribute("data-seal-plan", "group" + (adaptive ? ":adaptive" + adaptive : "") + (moved.length ? ":moved" + moved.length : "") +
-      (pad < 1 ? ":rows" + pad.toFixed(1) : "") + (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
+      (pad < 1 ? ":rows" + pad.toFixed(1) : "") + (tail ? ":footer-page" + (dropped ? "-dropped" : "-absorbed") : "") + (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
   }
   function go() {
     try { plan(); }
@@ -738,18 +763,20 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
    هامشُ `@page` صفر فلا شريط، والشبكةُ تملأ الورقة، والصورتان صفٌّ داخلها.
    فيُقرَّر بعد ضبط الأسماء (`data-fit-done`)، دوراً دوراً (الدورُ حدُّ أوراقٍ
    لا تختلط غرفُه بغيره)، بقياسٍ في المستند نفسه:
-     ١) خلايا فارغةٌ في آخر صفّ الشبكة تسع الصورتين ← تُوضعان فيها.
-     ٢) وإلا صفُّ الصورتين تحت الشبكة، إن لم يُقصّ من أيّ كرتٍ أكثرُ ممّا
-        يُقصّ منه بلا ختم (القصُّ القائم في الشبكة الأصليّة مرجعٌ لا يُزاد).
+     ١) المجموعةُ أسفلَ يسار الورقة؛ والشبكةُ ترتفع بقدر ما يلزم كي لا يقع تحتها
+        كرت (خلايا فارغةٌ أو التذييلُ الزخرفيّ تحتها مقبول)، إن لم يُقصّ من أيّ كرتٍ
+        أكثرُ ممّا يُقصّ منه بلا ختم.
      ٣) وإلا غرفُ الدور بصفٍّ أقلّ في كلّ ورقة — إن لم تزد أوراقُ الدور.
      ٤) وإلا نُقل صفُّ الغرف الأخير من الورقة إلى ورقةٍ تليها — استثناءٌ مُعلَن
         (`extra+`) — ثمّ يُعاد ترقيمُ الأوراق.
    والمجموعةُ بمقاسها الثابت (`sealGroupHTML`) لا تُصغَّر. */
+/** بُعدُ أسفل المجموعة عن حافّة ورقة الفندق — داخل حشوها السفليّ (١٢مم)، فوق هامش الطابعة. */
+const HOTEL_FLOOR_MM = 8;
 export function hotelSealPlanHTML(s: PrintSeals | null | undefined, grid: { cols: number; rows: number }): string {
   if (!hasSeals(s)) return "";
   /* المجموعةُ بمقاسها الثابت (لا تصغير) — المعتمَد لتقارير A4 */
   const z = sealGroupSize(s);
-  const cfg = { cols: grid.cols, rows: grid.rows, sealWidthMm: z.w, sealHeightMm: z.h, gapMm: SEAL_GAP_MM,
+  const cfg = { cols: grid.cols, rows: grid.rows, sealWidthMm: z.w, sealHeightMm: z.h, gapMm: SEAL_GAP_MM, clearMm: GROUP_CLEAR_MM, floorMm: HOTEL_FLOOR_MM,
                 blockHTML: sealGroupHTML(s, "print-seals-overlay", ""), sizes: [1] };
   return `<script>(${HOTEL_SEAL_RUNTIME})(${JSON.stringify(cfg)});</script>`;
 }
@@ -780,25 +807,41 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     return false;
   }
   function clearOverlay(sheet) { var o = sheet.querySelector(".print-seals-overlay"); if (o) o.remove(); }
-  function tryOverlay(sheet, k) {
-    var cs = cellsOf(sheet), last = cs.slice(-cfg.cols), empties = [];
-    for (var i = last.length - 1; i >= 0 && isEmpty(last[i]); i--) empties.push(last[i]);
-    if (!empties.length) return false;
-    var l = Infinity, r = -Infinity, t = Infinity, b = -Infinity;
-    empties.forEach(function (e) { var x = e.getBoundingClientRect(); l = Math.min(l, x.left); r = Math.max(r, x.right); t = Math.min(t, x.top); b = Math.max(b, x.bottom); });
-    if (r - l < cfg.sealWidthMm * k * MM || b - t < (cfg.sealHeightMm + cfg.gapMm) * k * MM) return false;
-    var s = sheet.getBoundingClientRect(), holder = doc.createElement("div");
+  /* ═══ المجموعةُ أسفلَ يسار الورقة الفعليّة ═══
+     ⚠️ كانت المجموعةُ إمّا في خلايا فارغةٍ تسعها كاملةً، وإمّا صفّاً **فوق** رقم الورقة
+     والتذييل — فتأخذ من الكروت ٤٥مم كاملةً، وورقةٌ ممتلئةٌ تنقسم ورقتين. وما تحت
+     الشبكة (حشوُ الورقة السفليّ وسطرُ التذييل الزخرفيّ) فراغٌ يسعها جزئيّاً.
+     فصارت تُرسم في أسفل يسار الورقة نفسها (حشوُها الأيسر، و\`floorMm\` فوق حافّتها)،
+     ويبقى الصفُّ فاصلاً خفيّاً يطول بقدر ما يلزم وحده كي لا يقع تحتها كرتٌ —
+     فإن كانت تحتها خلايا فارغةٌ لم يطل شيئاً. ورقمُ الورقة إن غطّته انتقل يميناً. */
+  function stampOf(sheet) { return sheet.querySelector(".page-stamp"); }
+  function rect(e, pad) { var r = e.getBoundingClientRect(); return { l: r.left - pad, r: r.right + pad, t: r.top - pad, b: r.bottom + pad }; }
+  function meets(a, b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
+  function cardsUnder(sheet, g) {
+    var cs = cellsOf(sheet);
+    for (var i = 0; i < cs.length; i++) if (!isEmpty(cs[i]) && meets(rect(cs[i], -0.5), g)) return true;
+    return false;
+  }
+  function textUnder(el, g) {
+    if (!el) return false;
+    var rg = doc.createRange(); rg.selectNodeContents(el);
+    var rs = rg.getClientRects();
+    for (var i = 0; i < rs.length; i++) if (rs[i].width > 0 && meets({ l: rs[i].left, r: rs[i].right, t: rs[i].top, b: rs[i].bottom }, g)) return true;
+    return false;
+  }
+  function drawFloor(sheet, k) {
+    var holder = doc.createElement("div");
     holder.innerHTML = cfg.blockHTML;
     var ov = holder.firstChild;
     sizeRow(ov, k);
     sheet.style.position = "relative";
     ov.style.position = "absolute";
-    ov.style.left = (l - s.left) + "px";
-    ov.style.top = (b - s.top - cfg.sealHeightMm * k * MM) + "px";
+    ov.style.left = getComputedStyle(sheet).paddingLeft;
+    ov.style.bottom = cfg.floorMm + "mm";
     sheet.appendChild(ov);
-    return true;
+    return ov;
   }
-  /* ورقةٌ بالمقاس k: الخلايا الفارغة، وإلا الصفّ بلا قصٍّ زائد */
+  /* ورقةٌ بالمقاس k: المجموعةُ أسفلَ اليسار، والشبكةُ ترتفع بقدر ما يلزم ولا يُقصّ كرت */
   /* الكروتُ تُعاد ملاءمتُها لكلّ تغييرٍ في ارتفاعها (ضبطُ الطباعة: \`__hotelFitCard\`)
      — نسبةً إلى مقاسها بلا ختم، فلا يصغر اسمٌ بسبب الختم إلا ١٥٪ على الأكثر */
   function refit(sheet, minPx, fmin) {
@@ -808,14 +851,20 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
   /* shrink: هل يُسمح بتصغير خطّ الكروت (حتى ٨٥٪ من مقاسه بلا ختم) ليسع الختم؟ */
   function place(sheet, k, shrink) {
     clearOverlay(sheet);
-    var row = rowOf(sheet), fmin = shrink ? 0.85 : 1;
-    if (row) row.style.display = "none";
-    refit(sheet, 7, 1);
-    if (tryOverlay(sheet, k)) return !clippedMore(sheet);
+    var row = rowOf(sheet), stamp = stampOf(sheet), fmin = shrink ? 0.85 : 1;
+    if (stamp) stamp.style.textAlign = "";
     if (!row) return false;
-    row.style.display = "flex"; sizeRow(row, k);
-    refit(sheet, 7, fmin);
-    return !clippedMore(sheet);
+    row.style.display = "block"; row.style.visibility = "hidden"; row.style.marginTop = "0px"; row.style.height = "0px";
+    refit(sheet, 7, 1);
+    var ov = drawFloor(sheet, k), clear = cfg.clearMm * MM, step = MM / 2, limit = (cfg.sealHeightMm * k + cfg.gapMm) * MM + 1;
+    for (var h = 0; h <= limit; h += step) {
+      row.style.height = h + "px";
+      refit(sheet, 7, fmin);
+      if (!cardsUnder(sheet, rect(ov, clear))) break;
+    }
+    if (cardsUnder(sheet, rect(ov, clear))) return false;
+    if (stamp && textUnder(stamp, rect(ov, clear))) stamp.style.textAlign = "right";
+    return !clippedMore(sheet) && !textUnder(stamp, rect(ov, clear));
   }
   /* ── إعادةُ رصّ غرف الدور بصفّ أقلّ في كلّ ورقة ── */
   function snapshot(sheets) {

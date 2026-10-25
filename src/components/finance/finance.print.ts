@@ -36,6 +36,10 @@ const printStatusColor = (label: string) => PRINT_STATUS_COLOR[label] || "#1c1c1
 import { esc, safeBranding, logoOrInitial, issuedStamp, pageRule, joinSections,
          COLOR_ADJUST_RULE_ALL, makeFinanceHTML, printInPage } from "../../print";
 import type { PrintChrome } from "../../print";
+import { normalizeCompanyAssetUrl } from "../../company/safety";
+
+/** صورةُ data مشفّرةٌ base64 — كما يُخرجها قصُّ حشو الختم والتوقيع. */
+const SEAL_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
 export { makeFinanceHTML, printInPage };
 
 
@@ -84,6 +88,15 @@ export function makeReceiptHTML(
      يزيد ورقة، وأُخفيت خانتاهما الإلكترونيّتان كي لا تتكرّرا في الأخيرة.
      والخانةُ المطفأةُ تبقى للختمِ باليد. */
   const seals = hasSeals(options.seals) ? options.seals : null;
+  /* ⚠️ عطبٌ ظهر في الطباعة الفعليّة: صورتا الختم والتوقيع بعد قصّ حشوهما روابطُ
+     `data:image/png` (`company/sealTrim.ts`)، و`safeBranding` لا يقبل إلا http(s) —
+     فصار الرابطُ فارغاً وطُبعت الخانتان فارغتين. فمصدرُ الصورة المطلوبة من `seals`
+     نفسها: رابطٌ آمنٌ أو صورةُ data مشفّرةٌ base64 لا غير. */
+  const sealSrc = (img: SealImage | undefined, fallback: string) => {
+    const u = img?.url ?? "";
+    return SEAL_DATA_URL.test(u) || normalizeCompanyAssetUrl(u) ? u : fallback;
+  };
+  const stampSrc = sealSrc(seals?.stamp, stampUrl), signatureSrc = sealSrc(seals?.signature, signatureUrl);
   const sealPlan = seals ? sealPlanHTML(seals, { size: "A5", margin: "10mm", scale: A5_SEAL_SCALE,
     boxes: { img: ".stamp-box.sized img", multipageClass: "receipt-multipage" } }) : "";
 
@@ -168,13 +181,13 @@ export function makeReceiptHTML(
     </div>
     ${allocRows}
     <div class="receipt-footer">
-      <div class="stamp-area${seals?.stamp && stampUrl ? " e-sealed" : ""}">
+      <div class="stamp-area${seals?.stamp && stampSrc ? " e-sealed" : ""}">
         <div class="stamp-label">ختم الشركة</div>
-        ${assetBox(stampUrl, "الختم", seals?.stamp, STAMP_BOX_MM)}
+        ${assetBox(stampSrc, "الختم", seals?.stamp, STAMP_BOX_MM)}
       </div>
-      <div class="stamp-area${seals?.signature && signatureUrl ? " e-sealed" : ""}">
+      <div class="stamp-area${seals?.signature && signatureSrc ? " e-sealed" : ""}">
         <div class="stamp-label">توقيع المسؤول</div>
-        ${assetBox(signatureUrl, "التوقيع", seals?.signature, SIGNATURE_BOX_MM)}
+        ${assetBox(signatureSrc, "التوقيع", seals?.signature, SIGNATURE_BOX_MM)}
       </div>
     </div>
   </div>
