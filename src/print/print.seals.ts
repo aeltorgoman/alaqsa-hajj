@@ -985,11 +985,17 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     row.style.display = "block"; row.style.visibility = "hidden"; row.style.marginTop = "0px"; row.style.height = "0px";
     refit(sheet, 7, 1);
     var ov = drawFloor(sheet, k), clear = cfg.clearMm * MM, step = MM / 2, limit = (cfg.sealHeightMm * k + cfg.gapMm) * MM + 1;
-    for (var h = 0; h <= limit; h += step) {
-      row.style.height = h + "px";
-      refit(sheet, 7, fmin);
-      if (!cardsUnder(sheet, rect(ov, clear))) break;
-    }
+    /* أقلُّ ارتفاعٍ للفاصل لا يقع معه كرتٌ تحت المجموعة — بحثٌ ثنائيّ بخطوة نصف مليمتر (الوقوعُ
+       يقلّ كلّما طال الفاصل). كان خطوةً خطوة (نحو تسعين، وكلُّها إعادةُ ملاءمةٍ للكروت) فيبلغ
+       التخطيطُ عشرات الثواني — والطباعةُ لا تنتظره أكثر من ثمانٍ. */
+    /* ومواضعُ الكروت لا تتبع ملاءمةَ أسمائها (صفوفُ الشبكة 1fr والكرتُ overflow:hidden)، فلا تُعاد
+       الملاءمةُ إلا عند الارتفاع المختار */
+    var under = function (n) { row.style.height = (n * step) + "px"; return cardsUnder(sheet, rect(ov, clear)); };
+    var lo = 0, hi = Math.floor(limit / step);
+    if (under(hi)) return false;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (under(mid)) lo = mid + 1; else hi = mid; }
+    under(hi);
+    refit(sheet, 7, fmin);
     if (cardsUnder(sheet, rect(ov, clear))) return false;
     if (stamp && textUnder(stamp, rect(ov, clear))) stamp.style.textAlign = "right";
     return !clippedMore(sheet) && !textUnder(stamp, rect(ov, clear));
