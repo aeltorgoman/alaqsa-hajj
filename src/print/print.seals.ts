@@ -324,6 +324,34 @@ const CELLS_RUNTIME = `  /* ── تصغيرُ خطّ جداول الأقسام
   }
 `;
 
+/* ── التذييلُ الختاميّ وحده في الورقة الأخيرة ──
+   سطرُ التذييل (بهامشه العلويّ ١٠pt وحشوه وحدّه نحو ٨٫٦مم) يُدفع وحده إلى ورقةٍ جديدة متى بقي
+   تحت آخر صفٍّ أقلُّ من ذلك. فيُعرَف هنا، بارتفاع الورقة ناقصاً هامشَ الأمان، ويُعالَج بما لا يُخفيه:
+   تضييقُ حواشيه هو، فإن لم يكفِ فحملُ آخر صفٍّ معه إلى الورقة التالية (ورقةٌ فيها بيانات). */
+const FOOTER_TAIL_RUNTIME = `  function footerAlone(room) {
+    var segs = layout(); if (!segs.length) return null;
+    var seg = segs[segs.length - 1], pageTop = seg.start, onPage = [];
+    for (var i = 0; i < seg.atoms.length; i++) {
+      var a = seg.atoms[i];
+      if (a.bottom - pageTop > room + 0.5 && a.top - a.head > pageTop + 0.5) { pageTop = a.top - a.head; onPage = []; }
+      onPage.push(a);
+    }
+    if (pageTop === seg.start) return null;
+    var els = [];
+    for (var j = 0; j < onPage.length; j++) {
+      var b = onPage[j];
+      if (b.tail) continue;
+      if (!(b.el.matches && b.el.matches(cfg.decorative))) return null;
+      els.push(b);
+    }
+    if (!els.length) return null;
+    var k = seg.atoms.indexOf(els[0]) - 1;
+    while (k >= 0 && seg.atoms[k].tail) k--;
+    return { els: els.map(function (x) { return x.el; }), before: k >= 0 ? seg.atoms[k] : null };
+  }
+  function compactFooter(els) { els.forEach(function (e) { e.style.marginTop = "3pt"; e.style.paddingTop = "2pt"; }); }
+`;
+
 const SEAL_PLAN_RUNTIME = `function (cfg) {
 ${SIM_RUNTIME}  /* ── الصورتان بالمقاس k ── */
   function sealH(k) { return Math.max(cfg.stamp ? cfg.stamp.h : 0, cfg.signature ? cfg.signature.h : 0) * k; }
@@ -525,7 +553,7 @@ export function sealGroupPlanHTML(s: PrintSeals | null | undefined, page: { land
    فإن لم يسعها موضعٌ في ورقةٍ نُقل أوّلُ صفٍّ في أسفلها إلى التالية (إن لم تزد
    الأوراق)، ثمّ تصغيرُ خطّ الجداول ≥ ٨٥٪، ثمّ استثناءٌ مُعلَن بدليله. */
 const SEAL_GROUP_RUNTIME = `function (cfg) {
-${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخل جدولٍ رأسُه متكرّر (صفٌّ نقله المخطِّط): يطبع Chromium
+${SIM_RUNTIME}${CELLS_RUNTIME}${FOOTER_TAIL_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخل جدولٍ رأسُه متكرّر (صفٌّ نقله المخطِّط): يطبع Chromium
      الرأسَ فوقه في الورقة الجديدة — فبدايةُ الورقة قبل الصفّ بارتفاع الرأس. وبدونه
      تقع المجموعةُ أدنى بقدره فتفيض إلى ورقةٍ تالية (ظهر في كشف الحجّاج العرضيّ). */
   var layoutBase = layout;
@@ -726,7 +754,7 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
       if (!spot(mine0, room)) { proof.push("page " + (e + 1) + ": " + evidenceFor(mine0, room)); crowded[pages0[e].seg] = true; }
     }
     /* التذييلُ وحده في الورقة الأخيرة: الهدفُ ورقةٌ أقلّ، وقسمُه يُضيَّق كغيره */
-    var tailFull = decorativeTail(segs, full), tail = tailFull || decorativeTail(segs, room), target = tailFull ? total0 - 1 : total0, dropped = false;
+    var tailFull = decorativeTail(segs, full), tail = tailFull || decorativeTail(segs, room), target = tailFull ? total0 - 1 : total0, tailHow = "absorbed";
     if (tail) crowded[tail.seg] = true;
     var r = resolve(room), f = 1, pad = 1;
     if (r.pages.length > target || r.stuck.length) {
@@ -752,11 +780,13 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
         fitCells(f, pad, bad); r = resolve(room);
       }
     }
-    /* وإن بقي التذييلُ وحدَه في ورقةٍ أخيرة: يُرفع سطرُه (زخرفةٌ متكرّرة؛ الهويّةُ في الترويسة) */
+    /* وإن بقي التذييلُ وحدَه في ورقةٍ أخيرة: تُضيَّق حواشيه، فإن لم يسعه ذلك حُمل معه آخرُ صفّ —
+       ولا يُخفى (كان يُحذف سطرُه) */
     var lastTail = decorativeTail(layout(), room);
     if (lastTail) {
-      lastTail.els.forEach(function (e) { e.parentNode.removeChild(e); });
-      dropped = true;
+      compactFooter(lastTail.els); tailHow = "compact";
+      var ft = decorativeTail(layout(), room) && footerAlone(room);
+      if (ft && ft.before && !ft.before.tail) { move(ft.before.el); tailHow = "carried"; }
       r = resolve(room);
     }
     /* الأوراقُ كما خُطِّطت: فاصلٌ صريحٌ قبل أوّل صفٍّ في كلّ ورقةٍ تبدأ داخل قسم — فلا يضع المتصفّحُ
@@ -782,12 +812,59 @@ ${SIM_RUNTIME}${CELLS_RUNTIME}  /* ⚠️ قسمٌ يبدأ بفاصلٍ داخ�
       proof.join(" || "));
     var adaptive = placed.filter(function (x) { return x && (x.x > 0 || x.raise > 0); }).length;
     root.setAttribute("data-seal-plan", "group" + (adaptive ? ":adaptive" + adaptive : "") + (moved.length ? ":moved" + moved.length : "") +
-      (pad < 1 ? ":rows" + pad.toFixed(1) : "") + (tail ? ":footer-page" + (dropped ? "-dropped" : "-absorbed") : "") + (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
+      (pad < 1 ? ":rows" + pad.toFixed(1) : "") + (tail ? ":footer-page-" + tailHow : "") + (f < 1 ? ":text" + f.toFixed(2) : "") + (exception ? ":exception" + (extra > 0 ? "+" + extra + "page" : "") + (r.stuck.length ? ":noplace" + r.stuck.length : "") : ""));
   }
   function go() {
     try { plan(); }
     catch (err) { root.setAttribute("data-seal-plan", "group:error"); }
   }
+  var ready = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
+  ready.then(function () { if (doc.readyState === "complete") go(); else addEventListener("load", go); }, go);
+}`;
+
+/* ═══ بلا ختم: التذييلُ لا يخرج وحده إلى ورقة ═══
+   (عرفة بخمسين: يملأ الجدولُ الورقةَ فيُدفع سطرُ التذييل وحده إلى ثانية.) يُقاس المستندُ كما
+   يُطبع (هامشُ أمانٍ لفرق الطباعة)، فإن وقع التذييلُ وحده في الورقة الأخيرة: تُضيَّق حواشيه،
+   ثمّ حشوُ صفوف القسم الأخير (الخطُّ كما هو، حتى ٤٠٪)، ثمّ يُحمل معه آخرُ صفّ. ولا شيءَ يتغيّر
+   حين يسعه مكانُه. ويُعلن القرار بـ`data-seal-plan` فتنتظره الطباعة. */
+export function footerFitHTML(page: { landscape?: boolean; margin: string }): string {
+  const m = marginsOf(page.margin);
+  const dim = PAGE_MM.A4[page.landscape ? "landscape" : "portrait"];
+  const cfg = { contentWidthMm: round(dim.w - 2 * m.side), contentHeightMm: round(dim.h - m.top - m.bottom),
+                safetyMm: GROUP_SAFETY_MM, decorative: SEAL_DECORATIVE, minPad: GROUP_MIN_ROW_PAD };
+  return `<script data-footer-fit>(${FOOTER_FIT_RUNTIME})(${JSON.stringify(cfg)});</script>`;
+}
+const FOOTER_FIT_RUNTIME = `function (cfg) {
+${SIM_RUNTIME}${FOOTER_TAIL_RUNTIME}  function plan() {
+    var w = body.style.width, how = "ok";
+    body.style.width = cfg.contentWidthMm + "mm";
+    var room = (cfg.contentHeightMm - cfg.safetyMm) * MM, t = footerAlone(room);
+    if (t) {
+      compactFooter(t.els); how = "compact";
+      if (footerAlone(room)) {
+        var segs = layout(), from = segs[segs.length - 1].start, top = body.getBoundingClientRect().top, cells = [];
+        var list = body.querySelectorAll("td, th");
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].getBoundingClientRect().top - top < from - 0.5) continue;
+          var c = cs(list[i]);
+          cells.push({ e: list[i], pt: parseFloat(c.paddingTop), pb: parseFloat(c.paddingBottom), style: list[i].getAttribute("style") });
+        }
+        var pad = function (f) { cells.forEach(function (c) {
+          if (c.style === null) c.e.removeAttribute("style"); else c.e.setAttribute("style", c.style);
+          if (f < 1) { c.e.style.paddingTop = (c.pt * f) + "px"; c.e.style.paddingBottom = (c.pb * f) + "px"; } }); };
+        how = null;
+        for (var pf = 0.9; pf >= cfg.minPad - 1e-9; pf -= 0.1) { pad(pf); if (!footerAlone(room)) { how = "rows" + pf.toFixed(1); break; } }
+        if (!how) {
+          pad(1);
+          var t2 = footerAlone(room);
+          if (t2 && t2.before && !t2.before.tail) { t2.before.el.style.setProperty("break-before", "page"); how = "carried"; } else how = "none";
+        }
+      }
+    }
+    body.style.width = w;
+    root.setAttribute("data-seal-plan", "footer:" + how);
+  }
+  function go() { try { plan(); } catch (e) { root.setAttribute("data-seal-plan", "footer:error"); } }
   var ready = doc.fonts && doc.fonts.ready ? doc.fonts.ready : Promise.resolve();
   ready.then(function () { if (doc.readyState === "complete") go(); else addEventListener("load", go); }, go);
 }`;
@@ -882,8 +959,26 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     cellsOf(sheet).forEach(function (c) { if (!isEmpty(c) && c.classList.contains("hotel-card")) window.__hotelFitCard(c, minPx, fmin); });
   }
   /* shrink: هل يُسمح بتصغير خطّ الكروت (حتى ٨٥٪ من مقاسه بلا ختم) ليسع الختم؟ */
-  function place(sheet, k, shrink) {
+  /* ═══ تضييقُ الكروت — حين لا يسع الختمَ غيرُه وحدَه ═══
+     الترتيبُ المعتمَد هو الأصل. فإن لم تسع الورقةُ المجموعةَ (خمسَ عشرة غرفةً عرضيّاً
+     ممتلئة) ضُيِّق ما في الكروت من فراغٍ بدرجات، أقلُّها أوّلاً: فجواتُ الشبكة وحشوُ صفوف
+     الأسماء، ثمّ حشوُ رأس الكرت، ثمّ حشوُ الورقة العلويّ وهوامشُ شريط العنوان.
+     خطُّ الأسماء لا يُمسّ في هذه الدرجات، والكرتُ لا يُقصّ منه شيء (\`clippedMore\`). */
+  var LEVELS = ["",
+    ".seal-tight-1 .hotel-page { gap: 3px !important; } .seal-tight-1 .hotel-card td { padding-top: 1px !important; padding-bottom: 1px !important; }",
+    ".seal-tight-2 .hotel-card > div:first-child { padding-top: 2px !important; padding-bottom: 2px !important; }",
+    ".hotel-print-page.seal-tight-3 { padding-top: 9mm !important; } .seal-tight-3 .doc-title-bar { margin-top: 1mm !important; margin-bottom: 1.5mm !important; }"];
+  function tight(sheet, level) {
+    if (level && !doc.getElementById("seal-tight-css")) {
+      var st = doc.createElement("style"); st.id = "seal-tight-css";
+      st.textContent = LEVELS.join(" ");
+      doc.head.appendChild(st);
+    }
+    for (var l = 1; l < LEVELS.length; l++) sheet.classList.toggle("seal-tight-" + l, l <= level);
+  }
+  function place(sheet, k, shrink, level) {
     clearOverlay(sheet);
+    tight(sheet, level || 0);
     var row = rowOf(sheet), stamp = stampOf(sheet), fmin = shrink ? 0.85 : 1;
     if (stamp) stamp.style.textAlign = "";
     if (!row) return false;
@@ -946,15 +1041,17 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     for (var i = 0; i < n; i++) st[i].textContent = "صفحة " + (i + 1) + " من " + n;
   }
   function group(sheets) {
-    /* لكلّ مقاس: الشبكةُ ثمّ صفٌّ أقلّ بخطّ الكروت كما هو، ثمّ الاثنان بتصغيره قليلاً */
-    for (var si = 0; si < cfg.sizes.length; si++) for (var pass = 0; pass < 2; pass++) {
-      var k = cfg.sizes[si], shrink = pass === 1, tag = shrink ? ":text" : "";
-      if (sheets.every(function (sh) { return place(sh, k, shrink); })) return { k: k, how: "grid" + tag };
+    /* لكلّ مقاس: الترتيبُ المعتمَد، ثمّ درجاتُ التضييق بخطّ الكروت كما هو، ثمّ (الملاذ القديم)
+       تصغيرُه قليلاً — وفي كلٍّ: الشبكةُ ثمّ صفٌّ أقلّ */
+    var PASSES = [[false, 0], [false, 1], [false, 2], [false, 3], [true, 3]];
+    for (var si = 0; si < cfg.sizes.length; si++) for (var pass = 0; pass < PASSES.length; pass++) {
+      var k = cfg.sizes[si], shrink = PASSES[pass][0], level = PASSES[pass][1], tag = (level ? ":tight" + level : "") + (shrink ? ":text" : "");
+      if (sheets.every(function (sh) { return place(sh, k, shrink, level); })) return { k: k, how: "grid" + tag };
       if (cfg.rows > 1) {
         var snap = snapshot(sheets);
         if (repack(sheets, cfg.rows - 1)) {
           var live = sheets.filter(function (sh) { return gridOf(sh).children.length; });
-          if (live.every(function (sh) { return place(sh, k, shrink); })) {
+          if (live.every(function (sh) { return place(sh, k, shrink, level); })) {
             sheets.forEach(function (sh) { if (!gridOf(sh).children.length) sh.remove(); });
             return { k: k, how: "rows" + tag };
           }
@@ -966,8 +1063,8 @@ const HOTEL_SEAL_RUNTIME = `function (cfg) {
     var added = 0;
     for (var i = 0; i < sheets.length; i++) {
       var sh = sheets[i];
-      if (place(sh, 1, true)) continue;
-      for (var g = 0; g < cfg.rows && !place(sh, 1, true); g++) { var ns = split(sh); if (!ns) break; sheets.splice(i + 1, 0, ns); added++; }
+      if (place(sh, 1, true, 3)) continue;
+      for (var g = 0; g < cfg.rows && !place(sh, 1, true, 3); g++) { var ns = split(sh); if (!ns) break; sheets.splice(i + 1, 0, ns); added++; }
     }
     return { k: 1, how: "split", added: added };
   }

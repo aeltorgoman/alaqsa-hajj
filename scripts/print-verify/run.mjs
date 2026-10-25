@@ -79,7 +79,8 @@ try {
 const INTENDED_CHANGE = new Set(["hotel-p", "hotel-l"]);
 const unchanged = readdirSync(join(baseDir, "base")).map(f => ({
   doc: f.replace(".html", ""),
-  identical: readFileSync(join(baseDir, "base", f), "utf8") === readFileSync(join(baseDir, "branch", f), "utf8"),
+  /* التغييرُ المقصود الوحيد بلا خيارات: مُقيِّمُ التذييل (لا يخرج وحده إلى ورقة) — يُزال قبل المقارنة */
+  identical: readFileSync(join(baseDir, "base", f), "utf8") === readFileSync(join(baseDir, "branch", f), "utf8").replace(/<script data-footer-fit>[\s\S]*?<\/script>/, ""),
   intended: INTENDED_CHANGE.has(f.replace(".html", "")),
 }));
 
@@ -276,6 +277,9 @@ for (const d of docs) {
   const bodyWords = p => execFileSync("pdftotext", ["-f", `${p}`, "-l", `${p}`, on, "-"], { encoding: "utf8" })
     .split(/\s+/).filter(w => w && !footerWords.has(w)).length;
   const sparse = [...Array(n).keys()].map(i => i + 1).filter(p => bodyWords(p) < 4);
+  /* وبلا ختم أيضاً: لا ورقةَ فيها التذييلُ وحده */
+  const offWords = p => execFileSync("pdftotext", ["-f", `${p}`, "-l", `${p}`, off, "-"], { encoding: "utf8" }).split(/\s+/).filter(w => w && !footerWords.has(w)).length;
+  const sparseOff = [...Array(pagesOf(off)).keys()].map(i => i + 1).filter(p => offWords(p) < 4);
   const single = ["stamp", "signature"].map(m => ({ m, pages: pagesOf(join(OUT, m, `${d}.pdf`)), withImg: new Set(imagePages(join(OUT, m, `${d}.pdf`))).size }));
   const mm = sealMm(on), bmm = beforeDocs.includes(d) ? sealMm(join(OUT, "before", `${d}.pdf`)) : null;
   const sameAsBefore = beforeDocs.includes(d) ? readFileSync(join(OUT, "before", `${d}.html`), "utf8") === readFileSync(join(OUT, "on", `${d}.html`), "utf8") : null;
@@ -287,7 +291,7 @@ for (const d of docs) {
     pagesWithoutSeal: [...Array(n).keys()].map(i => i + 1).filter(p => !withImg.has(p)),
     wordsUnderSeal: ov.reduce((s, p) => s + p.wordsUnderSeal, 0), inkUnderSeal: ov.reduce((s, p) => s + p.inkUnderSeal, 0),
     stampOnlyPages1: single[0].pages === 1, signatureOnlyPages1: single[1].pages === 1,
-    sparsePages: sparse, stampOnlyOk: single[0].withImg === single[0].pages, signatureOnlyOk: single[1].withImg === single[1].pages,
+    sparsePages: sparse, sparseOffPages: sparseOff, stampOnlyOk: single[0].withImg === single[0].pages, signatureOnlyOk: single[1].withImg === single[1].pages,
   });
 }
 rmSync(join(OUT, "tmp"), { recursive: true, force: true });
@@ -373,9 +377,7 @@ const ui = [
 const report = { generatedAt: new Date().toISOString(), baseRef: BASE_REF, unchanged, logic, ui, docs: rows };
 writeFileSync(join(OUT, "report.json"), JSON.stringify(report, null, 2));
 /* تعارضٌ مُعلَنٌ ينتظر قرار المستخدم — يُطبع صريحاً ولا يُعَدّ نجاحاً */
-const KNOWN_CONFLICT = {
-  "one-page-hotel-landscape-15rooms": "full 15-room landscape sheet: the approved layout (compaction reverted on request) has no free 40mm corner, so the last row moves to a 2nd page",
-};
+const KNOWN_CONFLICT = {};
 const bad = [
   ...unchanged.filter(u => !u.identical && !u.intended).map(u => `HTML changed with options OFF: ${u.doc}`),
   ...(logic || []).filter(c => !c.ok).map(c => `logic: ${c.name} ${c.detail ?? ""}`),
@@ -391,6 +393,7 @@ const bad = [
   /* الإيصالُ A5 معتمَدٌ كما هو: مطابقٌ بايتاً ببايت لـ --before-ref */
   ...rows.filter(r => r.doc.startsWith("receipt") && r.sameHtmlAsBefore === false).map(r => `${r.doc}: A5 receipt HTML changed`),
   ...rows.filter(r => r.sparsePages.length).map(r => `${r.doc}: nearly empty pages ${r.sparsePages}`),
+  ...rows.filter(r => r.sparseOffPages.length).map(r => `${r.doc}: nearly empty pages with seals OFF ${r.sparseOffPages}`),
   /* قطرُ الختم المطبوع ٤٠مم (±١٫٥) في كلّ مطبوعٍ بمجموعة A4 أو الفندق — والإيصالُ A5 بصندوقه */
   ...rows.filter(r => !r.doc.startsWith("receipt") && (!r.stampVisibleInk || Math.abs(r.stampVisibleInk.inkW - 40) > 1.5))
     .map(r => `${r.doc}: printed stamp ink ${r.stampVisibleInk ? r.stampVisibleInk.inkW + "mm" : "not found"} (expected 40±1.5mm)`),
