@@ -71,7 +71,11 @@ RPC="public.update_company_bank_settings"
 
 echo "── manage_payments وحدها"
 base_other="$(other_fp)"
-r="$(as $U_PAY "select bank_iban from $RPC('{\"bank_name\":\"  بنك قطر الوطني  \",\"bank_account_name\":\"حملة الاختبار\",\"bank_account_number\":\"0123-4567\",\"bank_iban\":\"QA58DOHB00001234567890ABCDEFG\",\"bank_swift\":\"QNBAQAQA\",\"commercial_registration\":\"CR-12345\"}'::jsonb)")"
+r="$(as $U_PAY "select $RPC('{\"bank_name\":\"  بنك قطر الوطني  \",\"bank_account_name\":\"حملة الاختبار\",\"bank_account_number\":\"0123-4567\",\"bank_iban\":\"QA58DOHB00001234567890ABCDEFG\",\"bank_swift\":\"QNBAQAQA\",\"commercial_registration\":\"CR-12345\"}'::jsonb)")"
+eq "الردُّ الحقولُ الستّة وحدها — لا صفُّ company_config" \
+  "$(echo "$r" | tail -1 | python3 -c 'import json,sys; print(",".join(sorted(json.load(sys.stdin))))')" \
+  "bank_account_name,bank_account_number,bank_iban,bank_name,bank_swift,commercial_registration"
+eq "وقيمُ الردّ هي المحفوظة" "$(echo "$r" | tail -1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["bank_iban"])')" "QA58DOHB00001234567890ABCDEFG"
 eq "تحرّر الحقولَ الستّة كلَّها" "$(bank)" "بنك قطر الوطني|حملة الاختبار|0123-4567|QA58DOHB00001234567890ABCDEFG|QNBAQAQA|CR-12345"
 eq "والقيمةُ تُقَصّ من المسافات" "$(q "select bank_name from public.company_config where id = 1")" "بنك قطر الوطني"
 eq "ولا يُمسّ حقلٌ آخر" "$(other_fp)" "$base_other"
@@ -120,6 +124,9 @@ eq "ولا يكتب على الجدول مباشرةً" "$(bank)" "$before"
 echo "── القراءة"
 eq "كلُّ مصادَقٍ يقرأ الحقولَ الستّة (مصدرُ التقارير)" \
   "$(as $U_NONE "select (bank_name is not null)::text from public.company_config where id = 1" | tail -1)" "true"
+eq "نوعُ ردّ الدالّة jsonb" "$(q "select prorettype::regtype from pg_proc where oid = '$RPC(jsonb)'::regprocedure")" "jsonb"
+eq "anon لا يملك تنفيذَها" "$(q "select has_function_privilege('anon', '$RPC(jsonb)', 'EXECUTE')")" "f"
+eq "ولا يقرأ company_config (لا صلاحيةَ أعمدة)" "$(q "select count(*) from information_schema.column_privileges where table_schema='public' and table_name='company_config' and grantee='anon'")" "0"
 eq "سياسةُ الكتابة على الجدول لم تُوسَّع" \
   "$(q "select string_agg(policyname||':'||qual, ',') from pg_policies where schemaname='public' and tablename='company_config' and cmd='UPDATE'")" \
   "company_config_management_update:has_permission('manage_users'::text)"

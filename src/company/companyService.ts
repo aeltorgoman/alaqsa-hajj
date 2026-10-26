@@ -181,11 +181,12 @@ export const companyService = {
      الحقولُ الستّة وحدها (البنك والحساب والرقم وIBAN وSWIFT والسجلّ
      التجاريّ)، برقعةٍ بما تغيّر. لـ`manage_payments` أو `manage_users`،
      والحارسُ والقائمةُ في الدالّة لا هنا: مفتاحٌ آخر يُرفض كلُّه. */
-  async updateBankSettings(patch: Partial<Record<BankSettingsField, string | null>>): Promise<SaveResult<ConfigRow>> {
+  /* والردُّ الحقولُ الستّة وحدها — لا صفُّ الإعدادات كلُّه */
+  async updateBankSettings(patch: Partial<Record<BankSettingsField, string | null>>): Promise<SaveResult<Record<BankSettingsField, string | null>>> {
     const { data, error } = await supabase.rpc("update_company_bank_settings", { p_patch: patch as unknown as Json });
     if (error) return classifyPostgrestError(error);
     if (!data) return { status: "not_found", message: "تعذّر الوصول إلى صفّ إعدادات الحملة، لم يُحفظ شيء." };
-    return { status: "saved", data: data as unknown as ConfigRow };
+    return { status: "saved", data: data as unknown as Record<BankSettingsField, string | null> };
   },
 
   /* ═══ بياناتُ الموسم الرئيسة — بابُ الموسم النشط ═══

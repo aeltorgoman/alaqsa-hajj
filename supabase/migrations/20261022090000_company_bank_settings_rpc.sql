@@ -19,9 +19,12 @@
 --     العبث تفشل كلُّها ولا يُحفظ منها شيء.
 --   · القيمةُ نصٌّ أو null؛ تُقَصّ، والفارغُ null، وأقصاها ١٢٠ حرفاً.
 --   · سياسةُ `company_config_management_update` وصلاحياتُ الأعمدة كما هي.
+--   · والردُّ الحقولُ الستّة وحدها (jsonb) لا صفُّ company_config كلُّه: بابُ
+--     المالية لا يُعيد هويّةً ولا أرقامَ تواصلٍ ولا إعداداتِ بوابة، ولا عموداً
+--     يُضاف إلى الجدول لاحقاً. (القارئُ الوحيد — بطاقةُ البنك — لا يقرأ الردّ أصلاً.)
 
 create or replace function public.update_company_bank_settings(p_patch jsonb)
-returns public.company_config
+returns jsonb
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
@@ -73,7 +76,10 @@ begin
   if not found then
     raise exception 'لا يوجد صفّ إعدادات للحملة.' using errcode = 'P0002';
   end if;
-  return v_row;
+  return jsonb_build_object(
+    'bank_name', v_row.bank_name, 'bank_account_name', v_row.bank_account_name,
+    'bank_account_number', v_row.bank_account_number, 'bank_iban', v_row.bank_iban,
+    'bank_swift', v_row.bank_swift, 'commercial_registration', v_row.commercial_registration);
 end;
 $$;
 
@@ -90,6 +96,10 @@ begin
                   where p.oid = 'public.update_company_bank_settings(jsonb)'::regprocedure
                     and p.prosecdef and p.proconfig @> array['search_path=public, pg_temp']) then
     raise exception 'update_company_bank_settings ليست SECURITY DEFINER بـsearch_path ثابت.' using errcode = 'P0001';
+  end if;
+  -- الردُّ الحقولُ الستّة (jsonb) لا صفُّ الجدول
+  if (select p.prorettype from pg_proc p where p.oid = 'public.update_company_bank_settings(jsonb)'::regprocedure) <> 'jsonb'::regtype then
+    raise exception 'update_company_bank_settings تُعيد غيرَ jsonb.' using errcode = 'P0001';
   end if;
   if has_function_privilege('anon', 'public.update_company_bank_settings(jsonb)', 'EXECUTE')
      or exists (select 1 from pg_proc p, aclexplode(p.proacl) a

@@ -1419,7 +1419,7 @@ export type Database = {
           }
       update_company_bank_settings: {
         Args: { p_patch: Json }
-        Returns: Database["public"]["Tables"]["company_config"]["Row"]
+        Returns: Json
       }
       update_portal_settings: {
         /* المولّدُ يكتب وسائطَ الدوالّ غيرَ قابلةٍ للعدم دائماً، ودالّتُنا

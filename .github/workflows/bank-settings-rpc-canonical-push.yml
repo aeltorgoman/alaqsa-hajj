@@ -67,7 +67,7 @@ jobs:
     env:
       M5: "20261022090000"
       F5: supabase/migrations/20261022090000_company_bank_settings_rpc.sql
-      SHA5: "309be202e0be00ecc798ea963d4f52183c9f8356caea6dcaa3fae83cb694995b"
+      SHA5: "0d89eb78d7b9df99622275f21a9004b574667c8ec981d2bafedafe0868ce9b47"
       EXPECT_REPO_MIGRATIONS: "74"
       EXPECT_ROWS_BEFORE: "73"
       EXPECT_LATEST_BEFORE: "20261021120000"
@@ -121,7 +121,7 @@ jobs:
           code = re.sub(r"\$([A-Za-z_]*)\$.*?\$\1\$", "", code, flags=re.S)
           stmts = [s.strip() for s in code.split(";") if s.strip()]
           allowed = [
-              r"^create or replace function public\.update_company_bank_settings\(p_patch jsonb\)\s+returns public\.company_config\s+language plpgsql\s+security definer\s+set search_path to 'public', 'pg_temp'\s+as$",
+              r"^create or replace function public\.update_company_bank_settings\(p_patch jsonb\)\s+returns jsonb\s+language plpgsql\s+security definer\s+set search_path to 'public', 'pg_temp'\s+as$",
               r"^revoke all on function public\.update_company_bank_settings\(jsonb\) from public, anon$",
               r"^grant execute on function public\.update_company_bank_settings\(jsonb\) to authenticated, service_role$",
               r"^comment on function public\.update_company_bank_settings\(jsonb\) is\s+'.*'$",
@@ -255,6 +255,7 @@ jobs:
           want security_definer     "select (prosecdef and proconfig @> array['search_path=public, pg_temp'])::text from pg_proc where oid = '$FN'::regprocedure" true
           want authenticated_exec   "select has_function_privilege('authenticated', '$FN', 'EXECUTE')::text" true
           want anon_no_exec         "select has_function_privilege('anon', '$FN', 'EXECUTE')::text" false
+          want returns_jsonb        "select prorettype::regtype::text from pg_proc where oid = '$FN'::regprocedure" jsonb
           want public_no_exec       "select count(*) from pg_proc p, aclexplode(p.proacl) a where p.oid = '$FN'::regprocedure and a.grantee = 0" 0
           want policies_unchanged   "select string_agg(policyname||':'||cmd||':'||coalesce(qual,'')||':'||coalesce(with_check,''), E'\n' order by policyname) from pg_policies where schemaname='public' and tablename='company_config'" "$(cat "$OUT/policies-before.txt")"
           want colprivs_unchanged   "select string_agg(grantee||':'||privilege_type||':'||column_name, ',' order by grantee, privilege_type, column_name) from information_schema.column_privileges where table_schema='public' and table_name='company_config' and grantee in ('anon','authenticated')" "$(cat "$OUT/colprivs-before.txt")"
