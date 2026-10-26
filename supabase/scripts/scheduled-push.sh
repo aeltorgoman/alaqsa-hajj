@@ -80,24 +80,35 @@ target_state() {     # valid | url (valid token, URL for another project) | miss
                    else 'valid' end as s" | jq -r '.[0].s'
 }
 
-# probe: the database sends one probe through pg_net to the deployed function, exactly as the
-# scheduler would (Vault URL and token). The probe counts what is due and delivers nothing.
+# probe: the database sends one probe through pg_net to the deployed function, as the scheduler
+# would: the same target (Vault URL and token, validated by _push_dispatch_target()), the same body
+# and header as push_dispatch_probe(). It is sent here rather than through push_dispatch_probe()
+# because that function discards pg_net's request id, and only the id identifies THIS probe's
+# response among concurrent pg_net traffic (net._http_response.id = the request id). The token
+# stays in the database: it is read by the statement itself, never returned.
+# The probe counts what is due and delivers nothing.
 # Prints: ok | not_configured | http_<code> | error | timeout
 probe() {
-  local t0 r rows
-  t0="$(sql "select clock_timestamp()::text as ts" | jq -r '.[0].ts')"
-  [[ "$t0" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9:.]+[+-][0-9:]+$ ]] || fail "Unexpected database time: $t0"
-  r="$(sql "select public.push_dispatch_probe() as r" | jq -r '.[0].r')"
-  [ "$r" = probe_sent ] || { echo "not_configured"; return 0; }
+  local id row
+  id="$(sql "select net.http_post(
+                      url := d.url,
+                      body := '{\"mode\":\"probe\"}'::jsonb,
+                      headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-dispatch-token', d.token),
+                      timeout_milliseconds := 10000) as id
+               from public._push_dispatch_target() d" | jq -r '.[0].id // empty')"
+  [ -n "$id" ] || { echo "not_configured"; return 0; }
+  [[ "$id" =~ ^[0-9]+$ ]] || fail "Unexpected pg_net request id: $id"
   for _ in $(seq 1 "$PROBE_WAIT"); do
-    rows="$(sql "select status_code, coalesce(content, '') ~ '\"mode\"[[:space:]]*:[[:space:]]*\"probe\"' as is_probe,
-                        (timed_out is true or error_msg is not null) as failed
-                   from net._http_response where created >= '$t0'::timestamptz order by id")"
-    if jq -e 'any(.[]; .status_code == 200 and .is_probe)' <<<"$rows" >/dev/null; then echo ok; return 0; fi
-    if jq -e 'any(.[]; .status_code != null and .status_code != 200)' <<<"$rows" >/dev/null; then
-      echo "http_$(jq -r 'map(select(.status_code != null and .status_code != 200))[0].status_code' <<<"$rows")"; return 0
+    row="$(sql "select status_code, coalesce(content, '') ~ '\"mode\"[[:space:]]*:[[:space:]]*\"probe\"' as is_probe,
+                       (timed_out is true or error_msg is not null) as failed
+                  from net._http_response where id = $id")"
+    if jq -e 'length == 1' <<<"$row" >/dev/null; then
+      if jq -e '.[0].status_code == 200 and .[0].is_probe' <<<"$row" >/dev/null; then echo ok
+      elif jq -e '.[0].status_code != null and .[0].status_code != 200' <<<"$row" >/dev/null; then echo "http_$(jq -r '.[0].status_code' <<<"$row")"
+      elif jq -e '.[0].failed' <<<"$row" >/dev/null; then echo error
+      else echo "http_200_unexpected"; fi
+      return 0
     fi
-    if jq -e 'any(.[]; .failed)' <<<"$rows" >/dev/null; then echo error; return 0; fi
     sleep 1
   done
   echo timeout
@@ -109,6 +120,7 @@ probe_message() {
     http_401) echo "push-dispatch rejected the token (HTTP 401): the PUSH_DISPATCH_TOKEN function secret does not match Vault push_dispatch_token." ;;
     http_503) echo "push-dispatch has no valid PUSH_DISPATCH_TOKEN function secret (HTTP 503)." ;;
     http_404) echo "push-dispatch is not deployed at the Vault URL (HTTP 404)." ;;
+    http_200_unexpected) echo "push-dispatch answered the probe with HTTP 200 but not as a probe." ;;
     http_*)   echo "push-dispatch answered the probe with HTTP ${1#http_}." ;;
     error)    echo "pg_net could not reach push-dispatch (network error or timeout)." ;;
     timeout)  echo "No answer to the probe within ${PROBE_WAIT}s: pg_net did not deliver it." ;;
