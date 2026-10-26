@@ -492,6 +492,12 @@ jobs:
             echo "private_key=$PRIVATE_KEY"
           } >> "$GITHUB_OUTPUT"
 
+      # Scheduled push (pg_cron → pg_net → push-dispatch): the Vault URL and token for this
+      # project. A working token is kept; otherwise a new one is generated in the database.
+      - name: "Prepare scheduled push dispatch"
+        id: dispatch
+        run: bash supabase/scripts/scheduled-push.sh prepare
+
       - name: "Set required Edge Function secrets"
         env:
           ALLOWED_ORIGIN: ${{ steps.admin.outputs.origins }}
@@ -501,6 +507,8 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
           VAPID_PRIVATE_KEY: ${{ steps.vapid.outputs.private_key }}
           ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
+          DISPATCH_TOKEN: ${{ steps.dispatch.outputs.token }}
+          ROTATE_DISPATCH: ${{ steps.dispatch.outputs.rotate }}
         run: |
           set -euo pipefail
           args=(
@@ -511,6 +519,9 @@ jobs:
           )
           if [ "$ROTATE_VAPID" = "true" ]; then
             args+=("VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY" "VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY")
+          fi
+          if [ "$ROTATE_DISPATCH" = "true" ]; then
+            args+=("PUSH_DISPATCH_TOKEN=$DISPATCH_TOKEN")
           fi
           # list_secrets <file>: names, digests and updated_at only; no secret value is returned.
           list_secrets() {
@@ -539,7 +550,7 @@ jobs:
 
           // Every secret the functions require must exist (the VAPID pair even when kept).
           const required = ['ALLOWED_ORIGINS', 'VERCEL_PROJECT_SLUG', 'VERCEL_OWNER_SLUG',
-            'VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'];
+            'VAPID_SUBJECT', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'PUSH_DISPATCH_TOKEN'];
           const missing = required.filter((n) => !after.has(n));
           if (missing.length) fail(`Required Edge Function secrets are missing: ${missing.join(', ')}`);
           if (process.env.SET_RC === '0') {
@@ -553,6 +564,7 @@ jobs:
           // does not matter. The job's concurrency group rules out another writer.
           const sent = ['ALLOWED_ORIGINS', 'VERCEL_PROJECT_SLUG', 'VERCEL_OWNER_SLUG', 'VAPID_SUBJECT'];
           if (process.env.ROTATE_VAPID === 'true') sent.push('VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY');
+          if (process.env.ROTATE_DISPATCH === 'true') sent.push('PUSH_DISPATCH_TOKEN');
           const written = (name) => {
             const was = before.get(name);
             const now = after.get(name);
@@ -566,14 +578,12 @@ jobs:
           console.log(`::warning::Supabase reported an error after setting secrets, but the before/after read-back proves all ${sent.length} secrets from this run were written. Continuing.`);
           NODE
 
-      # By name, never `functions deploy` with no slug: that deploys every
-      # directory under supabase/functions, including ones a customer
-      # installation does not use (push-dispatch, M5 — scheduled push, which
-      # needs its own activation). The list is the one verified below.
-      - name: "Deploy the six Edge Functions"
+      # By name, never `functions deploy` with no slug: the list is exactly the one
+      # verified below. push-dispatch takes verify_jwt = false from supabase/config.toml.
+      - name: "Deploy the seven Edge Functions"
         run: |
           set -euo pipefail
-          for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send; do
+          for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send push-dispatch; do
             npm run --silent supabase -- functions deploy "$slug" --project-ref "$PROJECT_REF" --use-api
           done
 
@@ -593,7 +603,7 @@ jobs:
           [ "$open" = 1 ] || { echo "::error::Exactly one open season is required; found ${open:-none}."; exit 1; }
 
           functions="$(curl --fail-with-body -sS "${auth[@]}" "$API/projects/$PROJECT_REF/functions")"
-          for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send; do
+          for slug in Scan-passport pilgrim-doc season-admin send-pilgrim-push user-admin whatsapp-send push-dispatch; do
             printf '%s' "$functions" | jq -e --arg slug "$slug"               'any(.[]; .slug == $slug and .status == "ACTIVE")' >/dev/null || {
                 echo "::error::Function $slug is not ACTIVE"; exit 1; }
           done
@@ -612,6 +622,9 @@ jobs:
             echo "::error::ANTHROPIC_API_KEY is no longer set. Add it in Supabase → Edge Functions → Secrets → name ANTHROPIC_API_KEY, then run this workflow again."
             exit 1; }
           echo "ANTHROPIC_API_KEY: present (presence only)."
+
+          # Mandatory: scheduled push must work end to end, not merely be installed.
+          bash supabase/scripts/scheduled-push.sh verify
           echo "Backend setup verified."
 
       - name: "Setup result"
@@ -626,11 +639,12 @@ jobs:
           ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
           SUBSCRIPTIONS: ${{ steps.vapid.outputs.subscriptions }}
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
+          ROTATE_DISPATCH: ${{ steps.dispatch.outputs.rotate }}
         run: |
           {
             echo "## Customer Backend Setup — SUCCESS"
             echo
-            echo "Database migrations, all six Edge Functions, the First Administrator and the open season are configured."
+            echo "Database migrations, all seven Edge Functions, the First Administrator and the open season are configured."
             echo
             echo "**First Administrator:** \`$ADMIN_LOGIN\` ($ADMIN_STATE)"
             echo
@@ -639,6 +653,8 @@ jobs:
             echo "**Open season:** Hijri year $SEASON_YEAR ($SEASON_STATE)"
             echo
             echo "**Supabase Auth (verified, read-only):** public sign-up off · anonymous sign-in off · Site URL \`$SITE_URL\`"
+            echo
+            echo "**Push notifications:** immediate and scheduled — scheduled delivery verified end to end (pg_cron → pg_net → push-dispatch, authenticated). Dispatch token: $([ "$ROTATE_DISPATCH" = "true" ] && echo "new, stored in Vault and as a function secret" || echo "existing, kept")."
             echo
             echo "**ANTHROPIC_API_KEY:** present in Supabase Edge Function secrets (presence only). Before handover, scan a test/specimen passport image in the application (never real personal data), confirm the extracted fields are populated, and do not save the test pilgrim."
             echo

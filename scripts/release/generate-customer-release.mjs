@@ -228,8 +228,11 @@ Config: Read**. No other permission, secret or password is stored.
    stops without changing anything if not.
    It then applies the database, creates the First Administrator with every system permission,
    creates the first open season (an existing open season is kept unchanged),
-   configures the Edge Function secrets, deploys the six Edge Functions and
-   verifies the result. If a run fails, fix the reported
+   configures the Edge Function secrets, deploys the seven Edge Functions,
+   activates scheduled push notifications for this project (its own Vault
+   dispatch URL and token, never copied from elsewhere) and verifies the
+   result — including a probe that proves scheduled push reaches its function.
+   If a run fails, fix the reported
    cause and run it again — it continues safely.
 4. **Vercel** — set \`VITE_SUPABASE_URL\`, \`VITE_SUPABASE_ANON_KEY\` and the
    \`VITE_VAPID_PUBLIC_KEY\` shown in the workflow's summary, then deploy.

@@ -26,6 +26,7 @@
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
+    "supabase/scripts/scheduled-push.sh",
     ".github/workflows/customer-backend-setup.yml",
     "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
     "docs/runbooks/MIGRATION_WORKFLOW.md"
@@ -64,6 +65,7 @@
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
+    "supabase/scripts/scheduled-push.sh",
     ".env.example",
     "RELEASE.md"
   ],
@@ -74,7 +76,8 @@
     "season-admin",
     "send-pilgrim-push",
     "user-admin",
-    "whatsapp-send"
+    "whatsapp-send",
+    "push-dispatch"
   ],
 
   "forbiddenPaths": [
