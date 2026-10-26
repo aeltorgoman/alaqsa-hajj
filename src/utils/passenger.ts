@@ -7,6 +7,7 @@
 import { supabase } from "../supabase";
 import type { Passenger } from "../types";
 import type { Database } from "../types/database";
+import { makeShort } from "./names";
 
 /* صف جدول passengers كما تولّده Supabase — مصدر الحقيقة لشكل
    البيانات القادمة من القاعدة */
@@ -94,6 +95,18 @@ export function byOrder(column: OrderColumn) {
   return (a: Passenger, b: Passenger) =>
     ((a[column] ?? 0) - (b[column] ?? 0)) || a.id - b.id;
 }
+
+/* ═══ شاغلو الغرفة بترتيب كرتها — الشاشةُ والمطبوعُ من هنا معاً ═══
+   كلُّ من `room_id` يشير إليها (حاجّاً كان أو إداريّاً) بترتيب
+   `room_sort_order` الذي يرتّبه الموظّف بالسحب في كرت الغرفة. وكان المطبوعُ
+   يأخذهم بترتيب قائمة الحجاج ويطبع الاسمَ الكامل — فاختلف عن الكرت. */
+export function roomOccupants(passengers: Passenger[], roomId: number): Passenger[] {
+  return passengers.filter(p => p.room_id === roomId).sort(byOrder("room_sort_order"));
+}
+
+/** الاسمُ كما في كرت الغرفة: المختصرُ المحفوظ، وإلا مختصرُ الاسم الكامل. */
+export const occupantName = (p: { short_ar?: string | null; name_ar?: string | null }): string =>
+  p.short_ar || makeShort(p.name_ar || "");
 
 /* إعادة ترقيم قائمة **داخل سياقها**: 10,20,30… بفجوةٍ تسمح
    بالإدراج البينيّ بلا إعادة ترقيم شاملة. تُرجع الوعود ليفحصها

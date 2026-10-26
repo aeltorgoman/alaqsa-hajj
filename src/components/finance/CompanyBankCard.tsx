@@ -3,11 +3,13 @@ import { useCompanyFinancial } from "../../company/CompanyContext";
 import { companyService } from "../../company/companyService";
 import { isSaved, saveErrorText } from "../../company/saveResult";
 
-/* بطاقةُ «البنك والسداد» — مصدرٌ واحدٌ لسطحَين:
-   • الحسابات (يفتحها `manage_payments`) — تحريرٌ لمن يملك `manage_users` أيضاً.
-   • الإعدادات ← بيانات الحملة (تفتحها `manage_users`) — فمالكُ
-     `manage_users` وحدَه يبلغ بياناتِ البنك دون أن يُفتَح له المال.
-   الكتابةُ على `company_config` تشترط `manage_users` في RLS كما كانت. */
+/* بطاقةُ «البنك والسداد» — سطحٌ واحدٌ لا سطحان: «الحسابات ← إعدادات
+   الحسابات» وحدها. وكانت تُعرَض كذلك في «الإعدادات ← بيانات الحملة»،
+   فأُزيلت من هناك ليبقى للبنك مالكٌ واحدٌ في الواجهة.
+
+   والكتابةُ عبر `update_company_bank_settings` (الترحيلة 20261022090000):
+   الحقولُ الستّة وحدها، لـ`manage_payments` أو `manage_users`. وسياسةُ
+   `company_config` لم تُوسَّع — فموظّفُ المال لا يبلغ عموداً آخر. */
 const inputStyle = { width:"100%", padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-input)", fontFamily:"var(--font-body)", fontSize:13, boxSizing:"border-box" as const };
 const cardBox = { background:"var(--bg-card)", borderRadius:12, padding:16, marginBottom:16, boxShadow:"var(--shadow-sm)" };
 const cardTitle = { fontWeight:700, color:"var(--text)", marginBottom:12, fontSize:14, borderBottom:"1px solid var(--border)", paddingBottom:8 };
@@ -43,11 +45,10 @@ export function CompanyBankCard({ canEdit }: { canEdit: boolean }) {
   const [bankMsg, setBankMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
 
-  /* حفظُ البنك: **نفسُ** أعمدةِ `company_config` التي كانت تُكتَب من
-     صفحة الإعدادات، وحدَها لا غير — لا عمودَ هويّةٍ ولا لونَ يُرسَل
-     من هنا، فلا يُصادِر هذا السطحُ حقلاً ليس له. */
+  /* حفظُ البنك: الحقولُ الستّة وحدها عبر بابِها الضيّق — لا عمودَ هويّةٍ
+     ولا لونَ يُرسَل من هنا، والدالّةُ ترفض أيَّ مفتاحٍ سواها. */
   async function saveBank() {
-    if (!canEdit) { setBankMsg({ text: "لا تملك صلاحية تعديل بيانات الحملة.", ok: false }); return; }
+    if (!canEdit) { setBankMsg({ text: "لا تملك صلاحية تعديل بيانات البنك والسداد.", ok: false }); return; }
     /* ⚠️ لا يُرسَل إلا **ما غيّره المستخدم**. لو كان المصدرُ ملفّاً
        ناقصاً — كالعلنيِّ قبل اكتمالِ إعادةِ القراءةِ بعد الدخول — لكان
        إرسالُ النموذجِ كاملاً يكتب الفراغَ فوق بياناتِ البنكِ الحقيقيّة.
@@ -58,7 +59,7 @@ export function CompanyBankCard({ canEdit }: { canEdit: boolean }) {
     const patch = Object.fromEntries(changed.map(k => [k, bankForm[k] || null]));
     setBankSaving(true);
     setBankMsg(null);
-    const res = await companyService.updateConfig(patch);
+    const res = await companyService.updateBankSettings(patch);
     setBankSaving(false);
     if (!isSaved(res)) { setBankMsg({ text: saveErrorText(res), ok: false }); return; }
     /* سياقُ الشركةِ يُبنى عند الإقلاع، وتحديثُه يجري بإعادةِ التحميل
@@ -105,7 +106,7 @@ export function CompanyBankCard({ canEdit }: { canEdit: boolean }) {
         /* لا زرَّ حفظٍ لمن لا يملك الصلاحية — والرسالةُ تقول السببَ
            صراحةً بدل زرٍّ يُضغَط فيُرفَض من الخادم. */
         <div style={{ marginTop:16, padding:"10px 13px", borderRadius:9, background:"var(--bg-2)", border:"1px solid var(--border)", fontSize:11.5, color:"var(--text-muted)", lineHeight:1.9 }}>
-          هذه بياناتُ حملةٍ، وتعديلُها يحتاج صلاحيةَ «إدارة المستخدمين والإعدادات». القيمُ معروضةٌ للاطّلاع — ويحرّرها صاحبُ الصلاحية من «الإعدادات ← بيانات الحملة» أو من هنا.
+          تعديلُ بيانات البنك والسداد يحتاج صلاحيةَ «إدارة المدفوعات». القيمُ معروضةٌ للاطّلاع.
         </div>
       )}
       {bankMsg && <div style={noteBox(bankMsg.ok)}>{bankMsg.text}</div>}

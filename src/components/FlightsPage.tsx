@@ -9,7 +9,8 @@ import { StatsRow, type StatCardData } from "./StatCard";
 import { useReportBranding } from "../company/CompanyContext";
 import { inp, btnP, btnS, printInPage } from "../utils";
 import { flightPassengers, flightReportDocument, flightsReportDocument,
-         initialPrintOptions, chromeFromOptions } from "../print";
+         initialPrintOptions, chromeFromOptions, type PrintSeals } from "../print";
+import { usePrintSeals } from "../company/printSeals";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
@@ -462,9 +463,16 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
      صفحةٌ بعارضٍ دون أخرى. وهذه الهيئةُ هي المرجع ولم تتغيّر. */
   /* الجامعُ يستعيد ترويستَه؛ والهيئةُ الداخليّة وترتيبُها كما أُقرّت */
   const [printOpts, setPrintOpts] = useState(() => initialPrintOptions("flights"));
-  const flightChrome = () => chromeFromOptions("flights", printOpts, { season: viewedSeason });
-  const printFlight = (f: Flight) => printInPage(flightReportDocument(f, passengers, branding, flightChrome()));
-  const printAll = () => printInPage(flightsReportDocument(flights, passengers, branding, flightChrome()));
+  const { sealsFor, unavailable: sealsOff } = usePrintSeals(showAlert);
+  const flightChrome = (seals: PrintSeals) => chromeFromOptions("flights", printOpts, { season: viewedSeason, seals });
+  const printFlight = async (f: Flight) => {
+    const seals = await sealsFor("flights", printOpts); if (!seals) return;
+    printInPage(flightReportDocument(f, passengers, branding, flightChrome(seals)));
+  };
+  const printAll = async () => {
+    const seals = await sealsFor("flights", printOpts); if (!seals) return;
+    printInPage(flightsReportDocument(flights, passengers, branding, flightChrome(seals)));
+  };
 
   // ══════════════════════════════════════════════════════════
   const dirBadge = (type: string, light?: boolean) => (
@@ -666,7 +674,7 @@ function FlightsPage({ passengers, setPassengers }: { passengers: Passenger[]; s
           style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--primary)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)" }}>
           <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> رحلة جديدة
         </button>
-        {flights.length > 0 && <PrintOptionsMenu report={"flights"} value={printOpts} onChange={setPrintOpts} />}
+        {flights.length > 0 && <PrintOptionsMenu report={"flights"} value={printOpts} onChange={setPrintOpts} disabled={sealsOff} />}
         {flights.length > 0 && <button onClick={printAll} style={btnS()}>طباعة الكل</button>}
         <div style={{ display: "flex", gap: 6, marginInlineStart: "auto", flexWrap: "wrap" }}>
           {tabBtn("ذهاب", goFlights.length)}{tabBtn("إياب", retFlights.length)}{tabBtn("الكل", flights.length)}

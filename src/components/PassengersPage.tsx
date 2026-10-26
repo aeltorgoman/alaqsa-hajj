@@ -1,4 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { PrintOptionsMenu } from "./PrintOptionsMenu";
+import { usePrintSeals } from "../company/printSeals";
+import { initialPrintOptions, chromeFromOptions } from "../print";
 import type { Dispatch, SetStateAction } from "react";
 import { mapPassenger, upsertPassenger, isHajj, byOrder, reorderUpdates, applyReorder } from "../utils/passenger";
 import { useSeasonWrite } from "../season/useSeasonWrite";
@@ -647,7 +650,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   [passengers, search, filters, metaBuses, metaFlights, metaRooms, metaCamps, opsFilter, dupPhoneIds]);
 
   // ===== طباعة كشف الحجاج الحالي (بعد البحث/الفلاتر) =====
-  const printList = () => {
+  const [listPrintOpts, setListPrintOpts] = useState(() => initialPrintOptions("lists"));
+  const { sealsFor, unavailable: sealsOff } = usePrintSeals(showAlert);
+  const printList = async () => {
+    const seals = await sealsFor("lists", listPrintOpts); if (!seals) return;
     const headers = EXPORT_COLS.map(c => `<th style="padding:4pt 6pt;background:${reportBranding.primaryColor};color:#fff;text-align:right;font-size:8pt">${c.label}</th>`).join("");
     const rows = filtered.map((p, i) =>
       `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9f6f2"}">
@@ -672,6 +678,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
         season: viewedSeason,
         resultCount: { label: "عدد النتائج", value: filtered.length },
         scope: scope.length ? scope.join(" · ") : null,
+        seals: chromeFromOptions("lists", listPrintOpts, { seals }).seals,
       },
     });
     printInPage(html);
@@ -1964,7 +1971,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/></svg>
               إكسيل
             </div>
-            {/* طباعة */}
+            {/* طباعة — والختمُ والتوقيع خياران بجوارها */}
+            <PrintOptionsMenu report="lists" value={listPrintOpts} onChange={setListPrintOpts} disabled={sealsOff} />
             <div onClick={printList} title="طباعة" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--em7)"; e.currentTarget.style.color = "var(--em7)"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--line)"; e.currentTarget.style.color = "var(--muted)"; }}>

@@ -3,12 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabase";
 import { portalSupabase } from "../portalSupabase";
 
-export function makeShort(fullName: string): string {
-  if (!fullName) return "";
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 3) return parts.join(" ");
-  return [parts[0], parts[1], parts[parts.length - 1]].join(" ");
-}
+export { makeShort } from "./names";
 
 /* «٥ بنود» — تمييزُ العربية لا صيغةٌ واحدة بـ«s». يسكن هنا لأن
    كارت الداشبورد وغرفة العمليات كليهما يعدّ بنوداً، ونسختان منه

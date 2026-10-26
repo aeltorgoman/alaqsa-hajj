@@ -1,0 +1,298 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — bank & payment settings RPC (20261022090000)
+# ════════════════════════════════════════════════════════════
+# Applies the ONE pending migration through the canonical CLI path:
+#   20261022090000_company_bank_settings_rpc
+#
+# Playbook order (M-52): run only AFTER its PR is merged, from main.
+# It adds ONE function, public.update_company_bank_settings(jsonb): the six
+# bank/payment fields (bank_name, bank_account_name, bank_account_number,
+# bank_iban, bank_swift, commercial_registration) for manage_payments or
+# manage_users. No table, column, policy, grant on a table, or row changes.
+#
+# ⚠️ `--db-url`, not `--linked` (PR #148).
+#
+# Exactly ONE production-mutating command may run, and only after every
+# gate passes. Deliberately absent: migration repair · migration up ·
+# `--include-all` · manual SQL mutation · rollback · any Dashboard action ·
+# any Edge Function deploy · any call of the new function.
+#
+# Gates:
+#   · BEFORE: file hash · the file only defines/grants/comments this one
+#     function (plus its postcondition block) · ledger 73 / 20261021120000 ·
+#     pending set is exactly this migration · the function does not exist ·
+#     company_config UPDATE policy is the manage_users one · fingerprints.
+#   · AFTER: ledger 74, originals untouched · the function exists,
+#     SECURITY DEFINER with a fixed search_path, executable by authenticated
+#     and not by anon/PUBLIC · company_config policies, column privileges and
+#     the row itself unchanged · every other public function unchanged.
+#
+# Running it twice is safe: after success nothing is pending, so the BEFORE
+# gates fail and the second run stops before the write.
+
+name: Bank settings RPC - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-BANK-RPC-20261022090000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bank-settings-rpc-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      M5: "20261022090000"
+      F5: supabase/migrations/20261022090000_company_bank_settings_rpc.sql
+      SHA5: "0d89eb78d7b9df99622275f21a9004b574667c8ec981d2bafedafe0868ce9b47"
+      EXPECT_REPO_MIGRATIONS: "74"
+      EXPECT_ROWS_BEFORE: "73"
+      EXPECT_LATEST_BEFORE: "20261021120000"
+      EXPECT_ROWS_AFTER: "74"
+      FN: "public.update_company_bank_settings(jsonb)"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: bank-settings-rpc-evidence
+
+    steps:
+      - name: "GATE: confirmation, ref and secrets"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${CONFIRM}" = "PUSH-BANK-RPC-20261022090000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          # M-52: apply after merge, never before
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main (M-52), got ${GITHUB_REF}"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          [ -f "$F5" ] || { echo "::error::$F5 missing"; exit 1; }
+          got="$(sha256sum "$F5" | cut -d' ' -f1)"
+          [ "$got" = "$SHA5" ] || { echo "::error::$F5 sha256 mismatch: $got != $SHA5"; exit 1; }
+          echo "ok   $(basename "$F5")  $got"
+          # only this one function: definition, revoke/grant on it, comment, and the postcondition block
+          python3 -I - "$F5" <<'PY'
+          import re, sys
+          src = open(sys.argv[1], encoding="utf-8").read()
+          # drop comments and dollar-quoted bodies (the function body and the DO postconditions)
+          code = re.sub(r"--[^\n]*", "", src)
+          code = re.sub(r"\$([A-Za-z_]*)\$.*?\$\1\$", "", code, flags=re.S)
+          stmts = [s.strip() for s in code.split(";") if s.strip()]
+          allowed = [
+              r"^create or replace function public\.update_company_bank_settings\(p_patch jsonb\)\s+returns jsonb\s+language plpgsql\s+security definer\s+set search_path to 'public', 'pg_temp'\s+as$",
+              r"^revoke all on function public\.update_company_bank_settings\(jsonb\) from public, anon$",
+              r"^grant execute on function public\.update_company_bank_settings\(jsonb\) to authenticated, service_role$",
+              r"^comment on function public\.update_company_bank_settings\(jsonb\) is\s+'.*'$",
+              r"^do$",
+          ]
+          bad = [s for s in stmts if not any(re.match(a, re.sub(r"\s+", " ", s), re.S | re.I) for a in allowed)]
+          if bad:
+              sys.exit(f"::error::{sys.argv[1]} contains statements outside the approved scope: {bad}")
+          print(f"ok   {len(stmts)} top-level statements, all within the approved scope")
+          PY
+          python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F5"
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 73 / 20261021120000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: pending set is exactly 20261022090000"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${M5}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M5]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+
+      - name: "GATE: production preconditions"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          need() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          need function_absent   "select count(*) from pg_proc where proname = 'update_company_bank_settings' and pronamespace = 'public'::regnamespace" 0
+          need update_policy     "select string_agg(policyname||':'||qual, ',') from pg_policies where schemaname='public' and tablename='company_config' and cmd='UPDATE'" "company_config_management_update:has_permission('manage_users'::text)"
+          p "select string_agg(policyname||':'||cmd||':'||coalesce(qual,'')||':'||coalesce(with_check,''), E'\n' order by policyname) from pg_policies where schemaname='public' and tablename='company_config'" > "$OUT/policies-before.txt"
+          p "select string_agg(grantee||':'||privilege_type||':'||column_name, ',' order by grantee, privilege_type, column_name) from information_schema.column_privileges where table_schema='public' and table_name='company_config' and grantee in ('anon','authenticated')" > "$OUT/colprivs-before.txt"
+          p "select md5(to_jsonb(c)::text) from public.company_config c where id = 1" > "$OUT/config-row-before.txt"
+          p "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace" > "$OUT/fn-before.txt"
+          [ "$bad" -eq 0 ] || { echo "::error::preconditions failed - nothing was written"; exit 1; }
+          echo "All preconditions PASS."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 73 -> 74, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$M5" ] || { echo "::error::latest is $latest, expected $M5"; bad=1; }
+          nm="$(psql "$URL" -X -q -At -c "$RO" -c "select name from supabase_migrations.schema_migrations where version='$M5'")"
+          [ "$nm" = "company_bank_settings_rpc" ] || { echo "::error::recorded name '$nm' does not match the repository filename"; bad=1; }
+          # exact match on the first TSV field: an escape, not an invisible literal tab
+          awk -F '\t' -v v="$M5" '$1 != v' "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M5" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the function, and nothing else changed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          want() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          want function_exists      "select count(*) from pg_proc where oid = to_regprocedure('$FN')" 1
+          want security_definer     "select (prosecdef and proconfig @> array['search_path=public, pg_temp'])::text from pg_proc where oid = '$FN'::regprocedure" true
+          want authenticated_exec   "select has_function_privilege('authenticated', '$FN', 'EXECUTE')::text" true
+          want anon_no_exec         "select has_function_privilege('anon', '$FN', 'EXECUTE')::text" false
+          want returns_jsonb        "select prorettype::regtype::text from pg_proc where oid = '$FN'::regprocedure" jsonb
+          want public_no_exec       "select count(*) from pg_proc p, aclexplode(p.proacl) a where p.oid = '$FN'::regprocedure and a.grantee = 0" 0
+          want policies_unchanged   "select string_agg(policyname||':'||cmd||':'||coalesce(qual,'')||':'||coalesce(with_check,''), E'\n' order by policyname) from pg_policies where schemaname='public' and tablename='company_config'" "$(cat "$OUT/policies-before.txt")"
+          want colprivs_unchanged   "select string_agg(grantee||':'||privilege_type||':'||column_name, ',' order by grantee, privilege_type, column_name) from information_schema.column_privileges where table_schema='public' and table_name='company_config' and grantee in ('anon','authenticated')" "$(cat "$OUT/colprivs-before.txt")"
+          want config_row_unchanged "select md5(to_jsonb(c)::text) from public.company_config c where id = 1" "$(cat "$OUT/config-row-before.txt")"
+          want other_fn_unchanged   "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.oid <> '$FN'::regprocedure" "$(cat "$OUT/fn-before.txt")"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-surface.txt"; else echo FAIL > "$OUT/status-surface.txt"; fi
+          echo "Surface verdict: $(cat "$OUT/status-surface.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger surface; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $M5 applied; ledger 74; $FN added; company_config policies, privileges and row unchanged."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bank-settings-rpc-canonical-push
+          path: bank-settings-rpc-evidence
+          if-no-files-found: warn

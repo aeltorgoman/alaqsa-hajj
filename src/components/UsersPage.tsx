@@ -14,7 +14,6 @@ import { companyService, seasonMasterData } from "../company/companyService";
 import type { CompanyAssetKey, CompanyAssetImageMeta } from "../company/types";
 import type { Json } from "../types/database";
 import { isSaved, saveErrorText } from "../company/saveResult";
-import { CompanyBankCard } from "./finance/CompanyBankCard";
 
 /* ─── helpers ─── */
 function getInitials(name: string): string {
@@ -716,10 +715,7 @@ function UsersPage({ currentUser }: { currentUser: User }) {
               </div>
             </div>
 
-            {/* البنك والسداد — مالكُ `manage_users` يحرّره هنا دون أن
-                يحتاج صفحةَ الحسابات (التي تشترط `manage_payments`). */}
-            <CompanyBankCard canEdit={!!currentUser.permissions?.manage_users} />
-
+            {/* البنك والسداد ليس هنا: مالكُه الوحيد «الحسابات ← إعدادات الحسابات». */}
           </div>
         )}
 

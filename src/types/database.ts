@@ -1417,6 +1417,10 @@ export type Database = {
             }
             Returns: Database["public"]["Tables"]["seasons"]["Row"]
           }
+      update_company_bank_settings: {
+        Args: { p_patch: Json }
+        Returns: Json
+      }
       update_portal_settings: {
         /* المولّدُ يكتب وسائطَ الدوالّ غيرَ قابلةٍ للعدم دائماً، ودالّتُنا
            تقبل NULL في حقول النصّ فعلاً (وهي الطريقةُ التي يُفرَّغ بها

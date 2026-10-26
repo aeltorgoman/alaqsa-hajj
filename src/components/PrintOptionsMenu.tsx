@@ -8,7 +8,7 @@
    والحالُ محليّةٌ في الجلسة: لا قاعدةَ بيانات ولا حالةٌ مشتركة —
    فالخيارُ قرارُ طبعةٍ لا إعدادُ نظام. */
 import { useEffect, useRef, useState } from "react";
-import { PRINT_OPTION_LABEL, PRINT_SPECS,
+import { PRINT_OPTION_LABEL, PRINT_SPECS, effectiveOptions,
          type PrintOptionKey, type PrintOptionsState, type PrintReportKey } from "../print";
 
 type Props = {
@@ -17,9 +17,12 @@ type Props = {
   onChange: (next: PrintOptionsState) => void;
   /** خياراتٌ تُخفى لأنّ هذا المطبوعَ بعينه لا معنى لها فيه. */
   hide?: PrintOptionKey[];
+  /** خياراتٌ تُعرَض معطَّلةً مع سببها — ختمٌ لم يُرفع، أو بنكٌ لم يُملأ.
+   *  ولا تُطبَع وإن كانت مشعَلةً افتراضاً: المعطَّلُ مطفأٌ فعلاً. */
+  disabled?: Partial<Record<PrintOptionKey, string>>;
 };
 
-export function PrintOptionsMenu({ report, value, onChange, hide = [] }: Props) {
+export function PrintOptionsMenu({ report, value, onChange, hide = [], disabled = {} }: Props) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
@@ -36,7 +39,7 @@ export function PrintOptionsMenu({ report, value, onChange, hide = [] }: Props) 
 
   const keys = PRINT_SPECS[report].available.filter(k => !hide.includes(k));
   if (keys.length === 0) return null;
-  const changed = keys.filter(k => value[k] !== PRINT_SPECS[report].defaults[k]).length;
+  const changed = keys.filter(k => effectiveOptions(value, disabled)[k] !== PRINT_SPECS[report].defaults[k]).length;
 
   return (
     <div ref={box} style={{ position: "relative", display: "inline-block" }}>
@@ -78,24 +81,33 @@ export function PrintOptionsMenu({ report, value, onChange, hide = [] }: Props) 
           <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", marginBottom: 6 }}>
             عناصر المطبوع
           </div>
-          {keys.map(k => (
-            <label
-              key={k}
-              style={{
-                display: "flex", alignItems: "center", gap: 7, padding: "5px 2px",
-                fontSize: 12, fontWeight: 600, cursor: "pointer",
-                color: value[k] ? "var(--ink, var(--text))" : "var(--muted)",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={value[k]}
-                onChange={e => onChange({ ...value, [k]: e.target.checked })}
-                style={{ cursor: "pointer" }}
-              />
-              {PRINT_OPTION_LABEL[k]}
-            </label>
-          ))}
+          {keys.map(k => {
+            const reason = disabled[k];
+            const on = effectiveOptions(value, disabled)[k];
+            return (
+              <label
+                key={k}
+                title={reason}
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: 7, padding: "5px 2px",
+                  fontSize: 12, fontWeight: 600, cursor: reason ? "not-allowed" : "pointer",
+                  color: on ? "var(--ink, var(--text))" : "var(--muted)", opacity: reason ? 0.7 : 1,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!!reason}
+                  onChange={e => onChange({ ...value, [k]: e.target.checked })}
+                  style={{ cursor: reason ? "not-allowed" : "pointer", marginTop: 2 }}
+                />
+                <span>
+                  {PRINT_OPTION_LABEL[k]}
+                  {reason && <span style={{ display: "block", fontSize: 10, fontWeight: 500, lineHeight: 1.5 }}>{reason}</span>}
+                </span>
+              </label>
+            );
+          })}
           <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>
             تغيّر شكل المطبوع فقط — لا تغيّر بيانات التقرير ولا فلاتره.
           </div>

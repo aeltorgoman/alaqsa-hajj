@@ -4,7 +4,9 @@
 import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
 import { amountInArabicWords } from "./amountInWords";
-import type { PrintBranding } from "../../print";
+import type { PrintBranding, PrintSeals, SealImage } from "../../print";
+import { hasSeals, sealPlanHTML, sealGroupPlanHTML, sealSizeMm, bankBlockHTML,
+         A5_SEAL_SCALE, STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
@@ -34,6 +36,10 @@ const printStatusColor = (label: string) => PRINT_STATUS_COLOR[label] || "#1c1c1
 import { esc, safeBranding, logoOrInitial, issuedStamp, pageRule, joinSections,
          COLOR_ADJUST_RULE_ALL, makeFinanceHTML, printInPage } from "../../print";
 import type { PrintChrome } from "../../print";
+import { normalizeCompanyAssetUrl } from "../../company/safety";
+
+/** صورةُ data مشفّرةٌ base64 — كما يُخرجها قصُّ حشو الختم والتوقيع. */
+const SEAL_DATA_URL = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
 export { makeFinanceHTML, printInPage };
 
 
@@ -50,7 +56,8 @@ export { makeFinanceHTML, printInPage };
 
    والملغى يُطبَع بنفسِ رقمِه وعليه «ملغي» وسببُه — الرقمُ لا يُعاد. */
 export function makeReceiptHTML(
-  receipt: PaymentReceipt, brand: PrintBranding, allocations: { name: string; amount: number }[] = []
+  receipt: PaymentReceipt, brand: PrintBranding, allocations: { name: string; amount: number }[] = [],
+  options: { seals?: PrintSeals | null } = {},
 ): string {
   const { logoUrl, companyName, tagline, primaryColor, accentColor, stampUrl, signatureUrl } = safeBranding(brand);
   const logoHtml = logoOrInitial(logoUrl, companyName);
@@ -60,10 +67,38 @@ export function makeReceiptHTML(
   const isGroup = !!receipt.group_name;
 
   /* صندوقُ الختمِ/التوقيعِ يقبل صورةً موقَّعةً إن مُرِّرت، وإلا يبقى
-     إطاراً فارغاً كما اليوم — فلا شيءَ يتعطّل قبل دمج #177. */
-  const assetBox = (url: string, label: string) => url
-    ? `<div class="stamp-box"><img src="${url}" alt="${label}" /></div>`
-    : `<div class="stamp-box"><span style="color:#ddd;font-size:11px">${label}</span></div>`;
+     إطاراً فارغاً للختمِ والتوقيعِ باليد كما كان. والصورةُ تُعرَض بلا إطارٍ
+     منقَّط — كختمٍ على ورق — في الموضعِ نفسِه وبالارتفاعِ نفسِه، فلا يتحرّك
+     في الإيصالِ سطر.
+     والصورةُ الإلكترونيّةُ (الختمُ/التوقيعُ المطلوبان) بمقاسِها الواقعيّ
+     بالمليمتر — مقاسُ التقارير بنسبةِ ورقة A5 (`A5_SEAL_SCALE`) — لا محشورةً
+     في صندوق ٦٢px. */
+  const assetBox = (url: string, label: string, img?: SealImage, box?: { w: number; h: number }) => {
+    if (!url) return `<div class="stamp-box"><span style="color:#ddd;font-size:11px">${label}</span></div>`;
+    const mm = img && box && img.url === url ? sealSizeMm(img, box, A5_SEAL_SCALE) : null;
+    return mm
+      ? `<div class="stamp-box has-img sized"><img src="${url}" alt="${label}" style="width:${mm.w}mm" /></div>`
+      : `<div class="stamp-box has-img"><img src="${url}" alt="${label}" /></div>`;
+  };
+
+  /* ═══ إيصالٌ يمتدّ ورقتين (دفعةُ مجموعةٍ طويلة) ═══
+     خانتا الختمِ والتوقيعِ في آخرِ الإيصال، فلا تقعان إلا على ورقته الأخيرة.
+     فإن طُلبت الصورُ وامتدّ الإيصالُ أكثرَ من ورقة A5 — يُقاس في المستند نفسه
+     بخطوط الجهاز (`sealPlanHTML`) — رُسمتا في هامشِ كلِّ ورقةٍ بأكبر مقاسٍ لا
+     يزيد ورقة، وأُخفيت خانتاهما الإلكترونيّتان كي لا تتكرّرا في الأخيرة.
+     والخانةُ المطفأةُ تبقى للختمِ باليد. */
+  const seals = hasSeals(options.seals) ? options.seals : null;
+  /* ⚠️ عطبٌ ظهر في الطباعة الفعليّة: صورتا الختم والتوقيع بعد قصّ حشوهما روابطُ
+     `data:image/png` (`company/sealTrim.ts`)، و`safeBranding` لا يقبل إلا http(s) —
+     فصار الرابطُ فارغاً وطُبعت الخانتان فارغتين. فمصدرُ الصورة المطلوبة من `seals`
+     نفسها: رابطٌ آمنٌ أو صورةُ data مشفّرةٌ base64 لا غير. */
+  const sealSrc = (img: SealImage | undefined, fallback: string) => {
+    const u = img?.url ?? "";
+    return SEAL_DATA_URL.test(u) || normalizeCompanyAssetUrl(u) ? u : fallback;
+  };
+  const stampSrc = sealSrc(seals?.stamp, stampUrl), signatureSrc = sealSrc(seals?.signature, signatureUrl);
+  const sealPlan = seals ? sealPlanHTML(seals, { size: "A5", margin: "10mm", scale: A5_SEAL_SCALE,
+    boxes: { img: ".stamp-box.sized img", multipageClass: "receipt-multipage" } }) : "";
 
   const allocRows = isGroup && allocations.length
     ? `<table class="alloc"><thead><tr><th>الحاج</th><th>النصيب</th></tr></thead><tbody>${
@@ -106,6 +141,10 @@ export function makeReceiptHTML(
   .stamp-label { font-size:9.5px; color:#aaa; margin-bottom:5px; }
   .stamp-box { border:1px dashed #ccc; border-radius:8px; height:62px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:3px; }
   .stamp-box img { max-width:100%; max-height:100%; object-fit:contain; }
+  .stamp-box.has-img { border-color:transparent; padding:0; }
+  .stamp-box.sized { height:auto; min-height:62px; overflow:visible; }
+  .stamp-box.sized img { max-width:100%; height:auto; max-height:none; }
+  .receipt-multipage .stamp-area.e-sealed { display:none; }
   ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
 <div class="receipt">
@@ -142,17 +181,17 @@ export function makeReceiptHTML(
     </div>
     ${allocRows}
     <div class="receipt-footer">
-      <div class="stamp-area">
+      <div class="stamp-area${seals?.stamp && stampSrc ? " e-sealed" : ""}">
         <div class="stamp-label">ختم الشركة</div>
-        ${assetBox(stampUrl, "الختم")}
+        ${assetBox(stampSrc, "الختم", seals?.stamp, STAMP_BOX_MM)}
       </div>
-      <div class="stamp-area">
+      <div class="stamp-area${seals?.signature && signatureSrc ? " e-sealed" : ""}">
         <div class="stamp-label">توقيع المسؤول</div>
-        ${assetBox(signatureUrl, "التوقيع")}
+        ${assetBox(signatureSrc, "التوقيع", seals?.signature, SIGNATURE_BOX_MM)}
       </div>
     </div>
   </div>
-</div>
+</div>${sealPlan}
 </body></html>`;
 }
 
@@ -161,7 +200,10 @@ export function makeReceiptHTML(
 // كشف حساب الحاج الفردي - تصميم كبير للطباعة
 // ============================================================
 export function makePassengerStatementHTML(
-  p: Passenger, pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[], customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding
+  p: Passenger, pricing: PricingMap, hotelPrices: HotelPackagePrices, hotels: FinanceHotel[], customCharges: CustomCharge[], payments: Payment[], brand: PrintBranding,
+  /* خياراتُ «كشف الحساب» (`PRINT_SPECS.statement`) — كلُّها مطفأةٌ افتراضاً،
+     والمطفأُ لا يُحقَن منه شيء: الكشفُ كما كان بالحرف. */
+  chrome: PrintChrome = {},
 ): string {
   const { logoUrl, companyName, tagline, primaryColor, accentColor } = safeBranding(brand);
   const s = p.services;
@@ -172,6 +214,8 @@ export function makePassengerStatementHTML(
   const pkgAmt = priceInfo.amount;
   const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
   const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
+  const sealsOn = hasSeals(chrome.seals);
+  const bankHTML = bankBlockHTML(chrome.bank, primaryColor);
   const totalDue  = calcTotalDue(p, pricing, hotelPrices, customCharges);
   const totalPaid = calcTotalPaid(p.id, payments);
   const balance   = totalDue - totalPaid;
@@ -257,7 +301,7 @@ export function makePassengerStatementHTML(
   <tr class="total-row"><td>الإجمالي</td><td>${fmtAmt(totalDue)}</td><td>${fmtAmt(totalPaid)}</td></tr>
   <tr class="total-row" style="background:${balance>0?"#C0392B":"#2A9D8F"};color:#fff"><td>${balance>0?"الرصيد المتبقي":balance<0?"رصيد دائن للحاج":"الرصيد المتبقي"}</td><td colspan="2" style="text-align:center">${fmtAmt(Math.abs(balance))} ر.ق</td></tr>
 </table>
-<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>
+${bankHTML}<div class="footer">${esc(companyName)}${tagline?" — "+esc(tagline):""} · كشف حساب</div>${sealsOn ? sealGroupPlanHTML(chrome.seals, { margin: "14mm 12mm" }) : ""}
 </body></html>`;
 }
 

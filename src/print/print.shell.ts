@@ -11,6 +11,7 @@ import type { PrintChrome, HeaderMode } from "./print.chrome";
 import { compactHeaderHTML, chromeMetaHTML, CHROME_CSS } from "./print.chrome";
 import { escapeCompanyHtml, normalizeCompanyAssetUrl, normalizeCompanyColor, safeBranding, logoOrInitial, issuedStamp } from "./print.brand";
 import { pageRule, PAGE_MARGIN_REPORT, PAGE_MARGIN_FINANCE, FONT_LINK, COLOR_ADJUST_RULE, COLOR_ADJUST_RULE_ALL, patternDataURL } from "./print.theme";
+import { hasSeals, sealGroupPlanHTML, footerFitHTML } from "./print.seals";
 
 /* ═══ نمطُ التقرير العامّ ═══ */
 export function makeHTML(
@@ -86,6 +87,15 @@ export function makeHTML(
   const headerHTML = headerMode === "none" ? ""
     : headerMode === "compact" ? compactHeaderHTML(branding, title)
     : fullHeaderHTML;
+  /* الختمُ والتوقيع: مخطِّطٌ يُلحَق بآخر الجسم فيقيس الأوراقَ بخطوط الجهاز
+     ويضعهما في فراغ كلّ ورقة أو في هامشها (`print.seals.ts`). ولا يُحقَن
+     شيءٌ إن لم يُطلبا، فالمطبوعُ كما كان بالحرف. والورقةُ الذرّيّةُ (هامشٌ
+     صفر) ترسمهما داخلها بنفسها. */
+  const sealsOn = hasSeals(chrome.seals) && pageMargin.trim() !== "0";
+  const sealImgs = sealsOn ? sealGroupPlanHTML(chrome.seals, { margin: pageMargin, landscape }) : "";
+  const showFooter = footer;
+  /* بلا ختم: التذييلُ لا يخرج وحده إلى ورقةٍ أخيرة (`footerFitHTML`) */
+  const footerFit = showFooter && !sealsOn && pageMargin.trim() !== "0" ? footerFitHTML({ margin: pageMargin, landscape }) : "";
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>${safeTitle}</title>
 ${FONT_LINK}
@@ -130,7 +140,7 @@ ${FONT_LINK}
 </style></head><body>
 ${headerHTML}${metaHTML}
 ${body}
-${footer ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}
+${showFooter ? `<div class="footer">${footerText || `${companyName}${tagline ? " — " + tagline : ""} · تقرير ${safeTitle}`}</div>` : ""}${sealImgs}${footerFit}
 </body></html>`;
 }
 
@@ -159,6 +169,7 @@ export function makeFinanceHTML(
   const showHeaderDate = chrome.issuedAt !== false;
   const metaHTML = chromeMetaHTML({ ...chrome, issuedAt: false });
   const chromeCSS = metaHTML ? `\n  ${CHROME_CSS}` : "";
+  const sealsOn = hasSeals(chrome.seals);
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
 <style>
   ${pageRule(PAGE_MARGIN_FINANCE)}
@@ -194,7 +205,7 @@ ${(showBrand || showHeaderDate) ? `<div class="doc-header">
 </div>` : ""}
 <div class="doc-title-bar">${safeTitle}</div>${metaHTML}
 ${body}
-<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>
+<div class="footer">${companyName}${tagline?" — "+tagline:""} · ${safeTitle}</div>${sealsOn ? sealGroupPlanHTML(chrome.seals, { margin: PAGE_MARGIN_FINANCE }) : ""}
 </body></html>`;
 }
 
