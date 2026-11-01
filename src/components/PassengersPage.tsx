@@ -31,22 +31,27 @@ import { namesClearlyDiffer, type PermitConfirmState } from "./permitMatch";
 
 const PERMIT_FIELD = "hajj_permit_url";
 
-// تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
-function nameMatches(a?: string | null, b?: string | null): boolean {
-  const norm = (s?: string | null) => (s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const wa = norm(a), wb = norm(b);
-  if (!wa.length || !wb.length) return false;
-  const common = wa.filter(w => wb.includes(w)).length;
-  return common >= Math.min(2, Math.min(wa.length, wb.length));
+// تشابه الاسم وحده لا يثبت الهوية. لا نقارن بالأسماء المختصرة، ولا نُظهر
+// مرشحين لمجرد اتفاق الاسم الأول أو كلمتين شائعتين.
+function scanNameWords(value?: string | null): string[] {
+  return (value || "").trim().toLowerCase()
+    .replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه")
+    .replace(/[ًٌٍَُِّْـ]/g, "")
+    .split(/\s+/).filter(Boolean);
 }
-
-// مطابقة مشددة: الاسم الأول متطابق + نفس شرط الكلمتين المشتركتين أعلاه — تقلل المرشحين الخاطئين بشكل كبير
-function strongNameMatch(a?: string | null, b?: string | null): boolean {
-  const norm = (s?: string | null) => (s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const wa = norm(a), wb = norm(b);
-  if (!wa.length || !wb.length) return false;
-  if (wa[0] !== wb[0]) return false;
-  return nameMatches(a, b);
+function strongNameMatch(
+  storedName?: string | null, scannedName?: string | null,
+  storedDob?: string | null, scannedDob?: string | null,
+): boolean {
+  const a = scanNameWords(storedName), b = scanNameWords(scannedName);
+  if (a.length < 3 || b.length < 3) return false;
+  const firstThree = a.slice(0, 3).every((word, i) => word === b[i]);
+  if (!firstThree) return false;
+  // تطابق الاسم الثلاثي + تاريخ الميلاد، أو الاسم الرباعي الكامل.
+  const sameDob = !!storedDob && !!scannedDob && storedDob === scannedDob;
+  const fullFour = a.length >= 4 && b.length >= 4
+    && a.length === b.length && a.every((word, i) => word === b[i]);
+  return sameDob || fullFour;
 }
 
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
@@ -825,8 +830,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           if (candidates.length === 0 && (nameAr || nameEn)) {
             candidates = passengers.filter(p =>
               (!parsed.gender || p.gender === parsed.gender) &&
-              ((nameAr && (strongNameMatch(p.name_ar, nameAr) || strongNameMatch(p.short_ar, nameAr))) ||
-              (nameEn && (strongNameMatch(p.name_en, nameEn) || strongNameMatch(p.short_en, nameEn))))
+              ((nameAr && strongNameMatch(p.name_ar, nameAr, p.dob, parsed.dob)) ||
+              (nameEn && strongNameMatch(p.name_en, nameEn, p.dob, parsed.dob)))
             );
           }
           setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard" });
@@ -850,8 +855,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           if (candidates.length === 0 && (nameAr || nameEn)) {
             candidates = passengers.filter(p =>
               (!parsed.gender || p.gender === parsed.gender) &&
-              ((nameAr && (strongNameMatch(p.name_ar, nameAr) || strongNameMatch(p.short_ar, nameAr))) ||
-              (nameEn && (strongNameMatch(p.name_en, nameEn) || strongNameMatch(p.short_en, nameEn))))
+              ((nameAr && strongNameMatch(p.name_ar, nameAr, p.dob, parsed.dob)) ||
+              (nameEn && strongNameMatch(p.name_en, nameEn, p.dob, parsed.dob)))
             );
           }
           if (candidates.length > 0) {
