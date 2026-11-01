@@ -13,7 +13,7 @@ on:
         description: "Vercel Team/Owner slug"
         required: true
       vapid_subject:
-        description: "Customer contact, e.g. mailto:it@customer.com"
+        description: "Customer push contact: mailto:it@customer.com or https://customer.com (a bare email is rejected)"
         required: true
       admin_login:
         description: "First Administrator Login ID, e.g. admin@company.local (add it first in Supabase: Authentication > Users > Add user, with Auto Confirm User ticked)"
@@ -62,6 +62,7 @@ jobs:
           ADMIN_NAME: ${{ inputs.admin_name }}
           SEASON_HIJRI_YEAR: ${{ inputs.season_hijri_year }}
           ALLOWED_ORIGIN_INPUT: ${{ inputs.allowed_origin }}
+          VAPID_SUBJECT_INPUT: ${{ inputs.vapid_subject }}
           LC_ALL: C.UTF-8
         run: |
           set -euo pipefail
@@ -113,6 +114,11 @@ jobs:
           NODE
           )"
 
+          # Web push accepts only a mailto: or https: URL as the VAPID subject; a bare email
+          # address is stored without complaint and then fails every push. Rejected here,
+          # before any change, with the exact value to enter instead.
+          vapid_subject="$(node supabase/scripts/vapid-subject.mjs)"
+
           # The complete permission set, read from the application's own ALL_PERMISSIONS.
           keys="$(node supabase/scripts/permission-keys.mjs)"
 
@@ -125,9 +131,11 @@ jobs:
             echo "season_year=$((10#$year))"
             echo "origins=$origins"
             echo "site_url=${origins%%,*}"
+            echo "vapid_subject=$vapid_subject"
           } >> "$GITHUB_OUTPUT"
           echo "First Administrator: $login · permissions to grant: $(jq length <<<"$keys")"
           echo "Allowed origins: $origins · Site URL: ${origins%%,*}"
+          echo "VAPID subject: valid ($(printf '%s' "$vapid_subject" | cut -d: -f1))"
 
       - name: "Verify Supabase Auth settings (read-only)"
         env:
@@ -503,7 +511,7 @@ jobs:
           ALLOWED_ORIGIN: ${{ steps.admin.outputs.origins }}
           VERCEL_PROJECT: ${{ inputs.vercel_project_slug }}
           VERCEL_OWNER: ${{ inputs.vercel_owner_slug }}
-          VAPID_SUBJECT: ${{ inputs.vapid_subject }}
+          VAPID_SUBJECT: ${{ steps.admin.outputs.vapid_subject }}
           VAPID_PUBLIC_KEY: ${{ steps.vapid.outputs.public_key }}
           VAPID_PRIVATE_KEY: ${{ steps.vapid.outputs.private_key }}
           ROTATE_VAPID: ${{ steps.vapid.outputs.rotate }}
