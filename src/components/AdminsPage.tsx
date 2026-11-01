@@ -19,6 +19,7 @@ import { DocumentViewer } from "./registration/DocumentViewer";
 import { RegistrationShell } from "./registration/RegistrationShell";
 import { FieldSection, IdentityFields, ScanStatusBar } from "./registration/RegistrationFields";
 import { useReportBranding } from "../company/CompanyContext";
+import { findDocConflict, docUniqueViolation, DOC_UNIQUE_MESSAGE } from "../utils/pilgrimMatch";
 
 // ============================================================
 // ثوابت
@@ -346,30 +347,14 @@ function AdminsPage({
     if (!assertWritable()) return;
     if (!form.name_ar.trim() && !form.name_en.trim()) { showAlert("warning", "يرجى إدخال الاسم على الأقل"); return; }
 
-    // منع تسجيل نفس الشخص كحاج وإداري
-    if (!editTarget && (form.passport.trim() || form.national_id.trim())) {
-      const duplicate = passengers.find(p =>
-        (isHajj(p)) &&
-        ((form.passport.trim() && p.passport === form.passport.trim()) ||
-         (form.national_id.trim() && p.national_id === form.national_id.trim()))
-      );
-      if (duplicate) {
-        showAlert("warning", `هذا الشخص مسجّل بالفعل كحاج باسم: ${duplicate.short_ar || duplicate.name_ar}`);
-        return;
-      }
-    }
-
-    // منع تكرار نفس الإداري (بنفس الجواز أو الهوية) — يستثني الإداري الحالي عند التعديل
-    if (form.passport.trim() || form.national_id.trim()) {
-      const duplicateAdmin = admins.find(p =>
-        p.id !== editTarget?.id &&
-        ((form.passport.trim() && p.passport === form.passport.trim()) ||
-         (form.national_id.trim() && p.national_id === form.national_id.trim()))
-      );
-      if (duplicateAdmin) {
-        showAlert("warning", `هذا الشخص مسجّل بالفعل كـ${duplicateAdmin.passenger_type} باسم: ${duplicateAdmin.short_ar || duplicateAdmin.name_ar}`);
-        return;
-      }
+    /* رقمُ الجواز أو الهوية لا يتكرّر في الموسم بين حاجٍّ وإداريّ ولا بين إداريَّين — عند
+       الإضافة والتعديل (الإداريُّ نفسُه مستثنى)، وبالتطبيع نفسه الذي يفرضه الفهرسُ الفريد */
+    const dup = findDocConflict(passengers, form, editTarget?.id);
+    if (dup) {
+      showAlert("warning", isHajj(dup.pilgrim)
+        ? `هذا الشخص مسجّل بالفعل كحاج باسم: ${dup.pilgrim.short_ar || dup.pilgrim.name_ar}`
+        : `هذا الشخص مسجّل بالفعل كـ${dup.pilgrim.passenger_type} باسم: ${dup.pilgrim.short_ar || dup.pilgrim.name_ar}`);
+      return;
     }
 
     setSaving(true);
@@ -446,8 +431,9 @@ function AdminsPage({
         showAlert("success", "تمت إضافة الإداري بنجاح");
       }
       closeModal();
-    } catch {
-      showAlert("error", "حدث خطأ أثناء الحفظ");
+    } catch (err) {
+      const dupField = docUniqueViolation(err as { code?: string; message?: string } | null);
+      showAlert("error", dupField ? DOC_UNIQUE_MESSAGE[dupField] : "حدث خطأ أثناء الحفظ");
     } finally {
       setSaving(false);
     }

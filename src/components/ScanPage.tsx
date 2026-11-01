@@ -4,6 +4,7 @@ import type { TablesUpdate } from "../types/database";
 import type { Passenger } from "../types";
 import { makeShort, scanDocument, uploadDoc, btnP, btnS, inp } from "../utils";
 import { AlertModal, useAlert } from "./AlertModal";
+import { findDocConflict, docConflictMessage, docUniqueViolation, DOC_UNIQUE_MESSAGE } from "../utils/pilgrimMatch";
 
 function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenger[]; setPassengers: (p: Passenger[]) => void; setPage: (p: string) => void }) {
   const [loading, setLoading] = useState(false);
@@ -83,10 +84,9 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
   };
 
   const handleSave = async () => {
-    const dupPassport = form.passport && passengers.some(p => p.passport && p.passport === form.passport);
-    const dupNational = form.national_id && passengers.some(p => p.national_id && p.national_id === form.national_id);
-    if (dupPassport) { showAlert("warning", "رقم الجواز مسجل بالفعل."); return; }
-    if (dupNational) { showAlert("warning", "رقم البطاقة مسجل بالفعل."); return; }
+    /* حجّاجُ الموسم المعروض وحدهم — والرقمُ بعد تطبيعٍ لا يدمج رقمين مختلفين */
+    const dup = findDocConflict(passengers, form);
+    if (dup) { showAlert("warning", docConflictMessage(dup)); return; }
     setUploading(true);
     const short_en = makeShort(form.name_en);
     const short_ar = makeShort(form.name_ar);
@@ -103,7 +103,8 @@ function ScanPage({ passengers, setPassengers, setPage }: { passengers: Passenge
     }]).select();
     if (error) {
       console.error("Save error:", error);
-      showAlert("error", "فشل حفظ بيانات الحاج، يرجى المحاولة مرة أخرى");
+      const dupField = docUniqueViolation(error);
+      showAlert("error", dupField ? DOC_UNIQUE_MESSAGE[dupField] : "فشل حفظ بيانات الحاج، يرجى المحاولة مرة أخرى");
       setUploading(false);
       return;
     }
