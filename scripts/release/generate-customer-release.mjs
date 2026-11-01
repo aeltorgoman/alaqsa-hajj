@@ -221,7 +221,8 @@ Config: Read**. No other permission, secret or password is stored.
    password, and tick **Auto Confirm User**.
 3. **GitHub** — Actions → **Customer Backend Setup** → Run workflow. Enter the
    Vercel production URL, Vercel project name and owner, a contact
-   (\`mailto:…\`), the same administrator Login ID with a display name, and
+   (\`mailto:it@customer.com\` or \`https://…\`; a bare email address is
+   rejected), the same administrator Login ID with a display name, and
    the Hijri year of the first Hajj season (e.g. \`1448\`). The workflow first
    verifies that public sign-up and anonymous sign-in are off, that the Site
    URL is the first Production URL and that \`ANTHROPIC_API_KEY\` exists, and

@@ -27,6 +27,7 @@
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
     "supabase/scripts/scheduled-push.sh",
+    "supabase/scripts/vapid-subject.mjs",
     ".github/workflows/customer-backend-setup.yml",
     "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
     "docs/runbooks/MIGRATION_WORKFLOW.md"
@@ -66,6 +67,7 @@
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
     "supabase/scripts/scheduled-push.sh",
+    "supabase/scripts/vapid-subject.mjs",
     ".env.example",
     "RELEASE.md"
   ],
