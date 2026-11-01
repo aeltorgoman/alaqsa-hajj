@@ -28,26 +28,9 @@ import { DocumentViewer } from "./registration/DocumentViewer";
 import { RegistrationShell } from "./registration/RegistrationShell";
 import { FieldSection, IdentityFields, ScanStatusBar, type IdentityForm, type FieldProposal } from "./registration/RegistrationFields";
 import { namesClearlyDiffer, type PermitConfirmState } from "./permitMatch";
+import { findDocOwner, findDocConflict, docConflictMessage, docUniqueViolation, DOC_UNIQUE_MESSAGE, nameMatchCandidates, normalizeDocNumber } from "../utils/pilgrimMatch";
 
 const PERMIT_FIELD = "hajj_permit_url";
-
-// تطابق تقريبي للأسماء (مشاركة كلمتين على الأقل) — يُستخدم لاقتراح حجاج مطابقين عند مسح بطاقة شخصية
-function nameMatches(a?: string | null, b?: string | null): boolean {
-  const norm = (s?: string | null) => (s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const wa = norm(a), wb = norm(b);
-  if (!wa.length || !wb.length) return false;
-  const common = wa.filter(w => wb.includes(w)).length;
-  return common >= Math.min(2, Math.min(wa.length, wb.length));
-}
-
-// مطابقة مشددة: الاسم الأول متطابق + نفس شرط الكلمتين المشتركتين أعلاه — تقلل المرشحين الخاطئين بشكل كبير
-function strongNameMatch(a?: string | null, b?: string | null): boolean {
-  const norm = (s?: string | null) => (s || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const wa = norm(a), wb = norm(b);
-  if (!wa.length || !wb.length) return false;
-  if (wa[0] !== wb[0]) return false;
-  return nameMatches(a, b);
-}
 
 function PassengersStats({ passengers }: { passengers: Passenger[] }) {
 
@@ -722,7 +705,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const manualScanning = manualDocs.scanning;
   const [autoScanning, setAutoScanning] = useState(false);
   const [docMatchCandidates, setDocMatchCandidates] = useState<Passenger[] | null>(null);
-  const [pendingDocScan, setPendingDocScan] = useState<{ file: File; dataUrl: string; parsed: any; docKind: "idcard" | "hajj_permit" | "passport" } | null>(null);
+  const [pendingDocScan, setPendingDocScan] = useState<{ file: File; dataUrl: string; parsed: any; docKind: "idcard" | "hajj_permit" | "passport"; exactId?: number } | null>(null);
   const [compareCandidate, setCompareCandidate] = useState<Passenger | null>(null);
 
   const resetManualModal = () => {
@@ -809,53 +792,25 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           }
         } else if (parsed.doc_type === "idcard") {
           // بطاقة شخصية — دايمًا تأكيد قبل الربط أو فتح الإضافة (تجنب الدبلكيت)
-          const idNum = parsed.national_id || "";
-          const nameAr = parsed.name_ar || "";
-          const nameEn = parsed.name_en || "";
-          if (idNum) {
-            const exactId = passengers.find(p => p.national_id === idNum);
-            if (exactId && (exactId as any).national_id_url) {
-              showAlert("warning", `هذه البطاقة مسجَّلة بالفعل في ملف ${exactId.short_ar || exactId.name_ar}`);
-              setAutoScanning(false);
-              return;
-            }
-          }
-          let candidates: Passenger[] = [];
-          if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
-          if (candidates.length === 0 && (nameAr || nameEn)) {
-            candidates = passengers.filter(p =>
-              (!parsed.gender || p.gender === parsed.gender) &&
-              ((nameAr && (strongNameMatch(p.name_ar, nameAr) || strongNameMatch(p.short_ar, nameAr))) ||
-              (nameEn && (strongNameMatch(p.name_en, nameEn) || strongNameMatch(p.short_en, nameEn))))
-            );
-          }
-          setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard" });
+          /* (أ) رقمُ البطاقة نفسُه في الموسم: تكرارٌ مؤكَّد — يُربط بملفّ صاحبه أو يُفتح
+             ملفُّه، ولا يُنشأ حاجٌّ ثانٍ به. (ب) وإلا فتشابهُ الاسم اقتراحٌ لا هويّة. */
+          const exact = findDocOwner(passengers, "national_id", parsed.national_id);
+          if (exact && exact.national_id_url) { await offerOpenExisting(exact, "national_id"); setAutoScanning(false); return; }
+          const candidates = exact ? [exact]
+            : nameMatchCandidates(passengers.filter(p => !parsed.gender || p.gender === parsed.gender), parsed);
+          setPendingDocScan({ file, dataUrl, parsed, docKind: "idcard", exactId: exact?.id });
           setDocMatchCandidates(candidates);
         } else {
           // جواز سفر — تحقق أولًا من تكرار رقم الجواز نفسه، ثم من وجود حاج مطابق قبل فتح الإضافة
-          const passportNum = parsed.passport || "";
-          const idNum = parsed.national_id || "";
-          const nameAr = parsed.name_ar || "";
-          const nameEn = parsed.name_en || "";
-          if (passportNum) {
-            const exactPassport = passengers.find(p => p.passport === passportNum);
-            if (exactPassport) {
-              showAlert("warning", `هذا الجواز مسجَّل بالفعل في ملف ${exactPassport.short_ar || exactPassport.name_ar}`);
-              setAutoScanning(false);
-              return;
-            }
-          }
-          let candidates: Passenger[] = [];
-          if (idNum) candidates = passengers.filter(p => p.national_id === idNum);
-          if (candidates.length === 0 && (nameAr || nameEn)) {
-            candidates = passengers.filter(p =>
-              (!parsed.gender || p.gender === parsed.gender) &&
-              ((nameAr && (strongNameMatch(p.name_ar, nameAr) || strongNameMatch(p.short_ar, nameAr))) ||
-              (nameEn && (strongNameMatch(p.name_en, nameEn) || strongNameMatch(p.short_en, nameEn))))
-            );
-          }
+          /* (أ) رقمُ الجواز نفسُه أو رقمُ الهوية المقروء منه: تكرارٌ مؤكَّد. صاحبُ الجواز
+             بصورته يُفتح ملفُّه؛ وبلا صورته يُعرض للربط وحده (لا «حاجّ جديد»). */
+          const exactPassport = findDocOwner(passengers, "passport", parsed.passport);
+          if (exactPassport && exactPassport.passport_url) { await offerOpenExisting(exactPassport, "passport"); setAutoScanning(false); return; }
+          const exact = exactPassport ?? findDocOwner(passengers, "national_id", parsed.national_id);
+          const candidates = exact ? [exact]
+            : nameMatchCandidates(passengers.filter(p => !parsed.gender || p.gender === parsed.gender), parsed);
           if (candidates.length > 0) {
-            setPendingDocScan({ file, dataUrl, parsed, docKind: "passport" });
+            setPendingDocScan({ file, dataUrl, parsed, docKind: "passport", exactId: exact?.id });
             setDocMatchCandidates(candidates);
           } else {
             resetManualModal();
@@ -886,6 +841,22 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     reader.readAsDataURL(file);
   };
 
+  /* تكرارٌ مؤكَّد لمستندٍ له صورتُه في ملفّ صاحبه: تحذيرٌ يسمّيه، وفتحُ ملفّه بطلب الموظّف */
+  const offerOpenExisting = async (owner: Passenger, field: "passport" | "national_id") => {
+    const open = await confirmAction(`${docConflictMessage({ field, pilgrim: owner })}\nالمستندُ محفوظٌ في ملفّه بالفعل.`,
+      { title: "مستندٌ مسجَّل", confirmLabel: "فتح ملف الحاجّ", cancelLabel: "إغلاق", danger: false });
+    if (open) setSelected(owner);
+  };
+  /** الرقمُ المقروء يخالف الرقمَ المحفوظ في الملفّ — تأكيدٌ صريحٌ قبل ربط الصورة. */
+  const confirmDocMismatch = async (p: Passenger, field: "passport" | "national_id", scanned?: string | null) => {
+    const stored = normalizeDocNumber(p[field]), read = normalizeDocNumber(scanned);
+    if (!stored || !read || stored === read) return true;
+    return confirmAction(
+      `${field === "passport" ? "رقم الجواز" : "رقم البطاقة"} المقروء (${read}) يختلف عن المحفوظ في ملف ${p.name_ar || p.short_ar || ""} (${stored}). ` +
+      "قد لا يكون هذا الحاجَّ نفسَه. المتابعةُ تحفظ الصورة وتُبقي الرقمَ المحفوظ.",
+      { title: "تحقّق من الهويّة", confirmLabel: "نعم، هذا هو", cancelLabel: "إلغاء", danger: true });
+  };
+
   /* ربط الصورة بحاج موجود بالفعل — للجواز والبطاقة وحدهما.
      ⚠️ تصريح الحج خرج من هنا: كان يرفع فور الضغط على «هذا هو» بلا
      عرض بيانات ولا تنظيف عند فشل الحفظ. صار يمرّ بـ`commitPermit`
@@ -893,6 +864,13 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const linkDocToExisting = async (passenger: Passenger) => {
     if (!pendingDocScan) return;
     const { file, parsed, docKind } = pendingDocScan;
+    /* رقمٌ لحاجٍّ آخر في الموسم لا يُربط بهذا الملفّ — ولا يُرفع شيء */
+    const conflict = findDocConflict(passengers,
+      { passport: docKind === "passport" ? parsed.passport : null, national_id: parsed.national_id }, passenger.id);
+    if (conflict) { showAlert("warning", docConflictMessage(conflict)); return; }
+    /* الهويّةُ غيرُ مؤكَّدة: الرقمُ المقروء يخالف رقمَ الملفّ — تأكيدٌ صريح، والرقمُ المحفوظ يبقى */
+    if (!await confirmDocMismatch(passenger, docKind === "passport" ? "passport" : "national_id",
+      docKind === "passport" ? parsed.passport : parsed.national_id)) return;
     setAutoScanning(true);
     if (docKind === "idcard") {
       const url = await uploadDoc(file, passenger.id, "idcard");
@@ -945,7 +923,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   // الحاج جديد — افتح مودال الإضافة مع البيانات المستخرجة (بطاقة أو جواز)
   const proceedDocAsNew = () => {
-    if (!pendingDocScan || pendingDocScan.docKind === "hajj_permit") return;
+    if (!pendingDocScan || pendingDocScan.docKind === "hajj_permit" || pendingDocScan.exactId != null) return;
     const { file, parsed, docKind } = pendingDocScan;
     resetManualModal();
     if (docKind === "idcard") {
@@ -991,10 +969,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
 
   const handleManualSave = async () => {
     if (!manualForm.name_ar && !manualForm.name_en) { showAlert("warning", "يرجى إدخال الاسم على الأقل"); return; }
-    const dupP = manualForm.passport && passengers.some((p: Passenger) => p.passport === manualForm.passport);
-    const dupN = manualForm.national_id && passengers.some((p: Passenger) => p.national_id === manualForm.national_id);
-    if (dupP) { showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return; }
-    if (dupN) { showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return; }
+    const dup = findDocConflict(passengers, manualForm);
+    if (dup) { showAlert("warning", docConflictMessage(dup)); return; }
     /* الفندقُ المطلوب إلزاميٌّ للحاجّ الجديد، ومن فنادق موسمه — والقاعدةُ
        تفرض الموسمَ نفسَه بالمفتاح المركّب (requested_hotel_id, season_id). */
     if (hotelsStatus === "loading") { showAlert("warning", "جاري تحميل فنادق الموسم، حاول بعد لحظة"); return; }
@@ -1008,7 +984,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const { data, error } = await supabase.from("passengers").insert([{ ...manualForm, short_ar, short_en, bus: manualServices.bus, flight: manualServices.flight, hotel_type: manualServices.hotel_type, hotel_view: manualServices.hotel_view, camp_mina: manualServices.camp_mina, camp_arafa: manualServices.camp_arafa, requested_hotel_id: manualHotelId, created_by: currentUser?.name || null }]).select();
     if (error) {
       console.error("Manual save error:", error);
-      showAlert("error", "فشل حفظ البيانات، يرجى المحاولة مرة أخرى");
+      /* القاعدةُ رفضت رقماً مكرَّراً (حفظٌ متزامن من موظّفٍ آخر) */
+      const dupField = docUniqueViolation(error);
+      showAlert("error", dupField ? DOC_UNIQUE_MESSAGE[dupField] : "فشل حفظ البيانات، يرجى المحاولة مرة أخرى");
       setManualSaving(false);
       return;
     }
@@ -1166,6 +1144,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
          والتسلسلُ يُلغي النافذة بدل أن يعوّض عنها: ما لم يُقرأ
          المستند لا يُرفع أصلاً. والكلفةُ جولةُ شبكةٍ واحدة. */
       const parsed = await scanDocument(file, "passport");
+      /* رقمٌ لحاجٍّ آخر لا يُكتب على هذا الملفّ، ورقمٌ يخالف المحفوظ يحتاج تأكيداً — قبل أيّ رفع */
+      const conflict = findDocConflict(passengers, { passport: parsed.passport, national_id: parsed.national_id }, p.id);
+      if (conflict) { showAlert("warning", docConflictMessage(conflict)); return; }
+      if (!await confirmDocMismatch(p, "passport", parsed.passport)) return;
       const url = await uploadDoc(file, p.id, docType);
       const updates: any = {};
       if (url) updates.passport_url = url;
@@ -1187,6 +1169,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     } else if (docType === "idcard") {
       /* التحليلُ قبل الرفع — كما في الجواز أعلاه */
       const parsed = await scanDocument(file, "idcard");
+      const conflict = findDocConflict(passengers, { national_id: parsed.national_id }, p.id);
+      if (conflict) { showAlert("warning", docConflictMessage(conflict)); return; }
+      if (!await confirmDocMismatch(p, "national_id", parsed.national_id)) return;
       const url = await uploadDoc(file, p.id, docType);
       const updates: any = {};
       if (url) updates.national_id_url = url;
@@ -1703,12 +1688,9 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
     const passportNow = (p.passport ?? "").trim(), idNow = (p.national_id ?? "").trim();
     const passportChanged = !!passportNow && passportNow !== (orig.passport ?? "").trim();
     const idChanged = !!idNow && idNow !== (orig.national_id ?? "").trim();
-    if (passportChanged && passengers.some(x => x.id !== p.id && (x.passport ?? "").trim() === passportNow)) {
-      showAlert("warning", "رقم جواز السفر هذا مسجَّل بالفعل لحاج آخر"); return;
-    }
-    if (idChanged && passengers.some(x => x.id !== p.id && (x.national_id ?? "").trim() === idNow)) {
-      showAlert("warning", "رقم البطاقة الشخصية هذا مسجَّل بالفعل لحاج آخر"); return;
-    }
+    /* الحاجُّ نفسُه لا يُعدّ تكراراً لنفسه (`p.id`) */
+    const localDup = findDocConflict(passengers, { passport: passportChanged ? passportNow : null, national_id: idChanged ? idNow : null }, p.id);
+    if (localDup) { showAlert("warning", docConflictMessage(localDup)); return; }
     setEditSaving(true);
     const uploaded: string[] = [];
     let committed = false;
@@ -1785,6 +1767,8 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
           updated_by, updated_at
         }).eq("id", p.id).select("id");
         if (!error && rows?.length === 1 && rows[0].id === p.id) outcome = "committed";
+        /* الفهرسُ الفريد رفض رقماً سبقه إليه حاجٌّ آخر — رفضٌ مؤكَّد برسالته */
+        else if (docUniqueViolation(error)) { await notSaved(DOC_UNIQUE_MESSAGE[docUniqueViolation(error)!]); return; }
         else if (!error && rows?.length === 0) outcome = "rejected";
         /* 408 مهلةٌ لا رفض: لا يُعرف أوصل الطلبُ أم لا */
         else if (error && status >= 400 && status < 500 && status !== 408) outcome = "rejected";
@@ -1854,8 +1838,10 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               {pendingDocScan.docKind === "hajj_permit" ? "تأكيد تصريح الحج" : pendingDocScan.docKind === "passport" ? "تأكيد جواز السفر" : "تأكيد البطاقة الشخصية"}
             </div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
-              {docMatchCandidates.length > 0
-                ? (pendingDocScan.docKind === "hajj_permit" ? "تم العثور على حاج مطابق بنفس الاسم أو الرقم — هل هذا هو؟" : "تم العثور على حجاج بنفس الاسم أو الرقم — هل أحدهم هو المقصود؟")
+              {pendingDocScan.exactId != null
+                ? "رقم المستند مسجَّل لهذا الحاجّ في الموسم الحالي — تكرارٌ مؤكَّد، فلا يُضاف حاجٌّ جديد به. اربط الصورة بملفّه أو افتح الملفّ."
+                : docMatchCandidates.length > 0
+                ? (pendingDocScan.docKind === "hajj_permit" ? "تم العثور على حاج مطابق بنفس الاسم أو الرقم — هل هذا هو؟" : "تشابهٌ في الاسم الكامل (اقتراحٌ للتحقّق فقط، لا يثبت الهويّة) — هل أحدهم هو المقصود؟")
                 : (pendingDocScan.docKind === "hajj_permit" ? "لم يتم العثور على حاج مطابق لهذا التصريح" : "لا يوجد حاج بنفس الاسم في القائمة")}
             </div>
             {pendingDocScan.docKind !== "hajj_permit" && (
@@ -1881,11 +1867,14 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
                     <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{p.nat} {p.passport ? `· ${p.passport}` : ""}</div>
                   </div>
                 </div>
-                <button onClick={() => linkDocToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px", flexShrink: 0 }}>هذا هو</button>
+                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  <button onClick={() => { cancelDocScan(); setSelected(p); }} title="فتح ملف الحاجّ" style={{ ...btnS(), fontSize: 11, padding: "5px 8px" }}>الملف</button>
+                  <button onClick={() => linkDocToExisting(p)} style={{ ...btnP(), fontSize: 11, padding: "5px 10px" }}>هذا هو</button>
+                </div>
               </div>
               );
             })}
-            {pendingDocScan.docKind !== "hajj_permit" && (
+            {pendingDocScan.docKind !== "hajj_permit" && pendingDocScan.exactId == null && (
               <button onClick={proceedDocAsNew} style={{ ...btnS(), width: "100%", marginTop: 6, fontWeight: 600 }}>لا، هذا حاج جديد ← فتح نموذج الإضافة</button>
             )}
             <button onClick={cancelDocScan} style={{ width: "100%", marginTop: 8, background: "none", border: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", padding: "4px 0" }}>{pendingDocScan.docKind === "hajj_permit" ? "إلغاء / تجاهل" : "إلغاء"}</button>
