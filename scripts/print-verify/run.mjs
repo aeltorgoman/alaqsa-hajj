@@ -80,7 +80,9 @@ const INTENDED_CHANGE = new Set(["hotel-p", "hotel-l"]);
 const unchanged = readdirSync(join(baseDir, "base")).map(f => ({
   doc: f.replace(".html", ""),
   /* التغييرُ المقصود الوحيد بلا خيارات: مُقيِّمُ التذييل (لا يخرج وحده إلى ورقة) — يُزال قبل المقارنة */
-  identical: readFileSync(join(baseDir, "base", f), "utf8") === readFileSync(join(baseDir, "branch", f), "utf8").replace(/<script data-footer-fit>[\s\S]*?<\/script>/, ""),
+  /* مُقيِّمُ التذييل يُزال من الطرفين: صار في main أيضاً */
+  identical: readFileSync(join(baseDir, "base", f), "utf8").replace(/<script data-footer-fit>[\s\S]*?<\/script>/, "")
+    === readFileSync(join(baseDir, "branch", f), "utf8").replace(/<script data-footer-fit>[\s\S]*?<\/script>/, ""),
   intended: INTENDED_CHANGE.has(f.replace(".html", "")),
 }));
 
