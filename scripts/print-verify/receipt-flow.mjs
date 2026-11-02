@@ -126,14 +126,15 @@ async function printed(tag) {
   const imgs = execFileSync("pdfimages", ["-list", pdf], { encoding: "utf8" }).split("\n").slice(2).filter(l => l.trim().split(/\s+/)[2] === "image").length;
   const pages = +execFileSync("pdfinfo", [pdf], { encoding: "utf8" }).match(/Pages:\s+(\d+)/)[1];
   await page.evaluate(() => document.getElementById("__print_frame__")?.remove());
-  return { imgs, pages, size: /size:\s*A5/.test(html) };
+  /* الإيصالُ نصفُ A4: ورقةُ A4 والإيصالُ صندوقُ ٢١٠ × ١٤٨٫٥مم */
+  return { imgs, pages, size: /size:\s*A4 portrait/.test(html) && /\.sheet \{ width:210mm; min-height:148\.5mm/.test(html) };
 }
 async function combos(title, printLabel, tag) {
   for (const [stamp, signature, want] of [[false, false, 0], [true, false, 1], [false, true, 1], [true, true, 2]]) {
     await setSeals(title, stamp, signature);
     await card(title).getByRole("button", { name: printLabel }).click();
     const r = await printed(`${tag}-stamp${+stamp}-sig${+signature}`);
-    check(`${tag}: stamp ${stamp ? "ON" : "OFF"} / signature ${signature ? "ON" : "OFF"} → ${want} image(s) on the A5 receipt`, r.imgs === want && r.pages === 1 && r.size, `images ${r.imgs}, pages ${r.pages}`);
+    check(`${tag}: stamp ${stamp ? "ON" : "OFF"} / signature ${signature ? "ON" : "OFF"} → ${want} image(s) on the half-A4 receipt`, r.imgs === want && r.pages === 1 && r.size, `images ${r.imgs}, pages ${r.pages}`);
   }
 }
 

@@ -390,8 +390,8 @@ const bad = [
   ...rows.filter(r => !r.doc.startsWith("receipt") && !r.doc.startsWith("hotel") && r.imagesPerPage.some(c => c !== 2))
     .map(r => `${r.doc}: stamp+signature not exactly once per page (${r.imagesPerPage})`),
   ...rows.filter(r => r.wordsUnderSeal).map(r => `${r.doc}: ${r.wordsUnderSeal} word(s) under the stamp/signature ink`),
-  /* الإيصالُ A5 معتمَدٌ كما هو: مطابقٌ بايتاً ببايت لـ --before-ref */
-  ...rows.filter(r => r.doc.startsWith("receipt") && r.sameHtmlAsBefore === false).map(r => `${r.doc}: A5 receipt HTML changed`),
+  /* الإيصالُ أُعيد تصميمُه (نصفُ A4 بالعرض): مقاسُه وأقسامُه وختمُه وتوقيعُه يتحقّق منها
+     `receipt-layout.mjs` مقابلَ الإيصال السابق — لا مطابقةَ بايتٍ هنا */
   ...rows.filter(r => r.sparsePages.length).map(r => `${r.doc}: nearly empty pages ${r.sparsePages}`),
   ...rows.filter(r => r.sparseOffPages.length).map(r => `${r.doc}: nearly empty pages with seals OFF ${r.sparseOffPages}`),
   /* قطرُ الختم المطبوع ٤٠مم (±١٫٥) في كلّ مطبوعٍ بمجموعة A4 أو الفندق — والإيصالُ A5 بصندوقه */
