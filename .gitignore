@@ -48,3 +48,5 @@ supabase/**/*.local.toml
 !supabase/migrations/
 !supabase/functions/
 .print-verify/
+.print-verify-flow/
+.print-verify-receipt/
