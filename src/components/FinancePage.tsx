@@ -15,6 +15,7 @@ import { FinanceListView } from "./finance/FinanceListView";
 import { CompanyBankCard } from "./finance/CompanyBankCard";
 import { PassengerFinanceView } from "./finance/PassengerFinanceView";
 import { FinancialGroupView } from "./finance/FinancialGroupView";
+import { PaymentDetailsField } from "./finance/PaymentDetailsField";
 import { initialPrintOptions, chromeFromOptions, bankLinesFrom, type PrintChrome } from "../print";
 import { PrintOptionsMenu } from "./PrintOptionsMenu";
 import { printInPage, makeReceiptHTML, makePassengerStatementHTML, makeGroupStatementHTML, printFullReport, printPaymentsReport, printPackagesReport, printAddonsReport, printCashflowReport } from "./finance/finance.print";
@@ -1417,10 +1418,12 @@ export function FinancePage({ passengers, setPassengers, currentUser }: { passen
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }}>
             <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)" }}>
               <div style={{ fontWeight:700, fontSize:16, marginBottom:16, color:"var(--success)" }}>تسجيل دفعة جديدة</div>
-              {([{label:"المبلغ",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}] as { label:string; key:keyof PayForm; type:string; ph:string }[]).map(f=>(
+              {([{label:"المبلغ",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""}] as { label:string; key:keyof PayForm; type:string; ph:string }[]).map(f=>(
                 <div key={f.key} style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div><input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={payForm[f.key]} onChange={e=>setPayForm(p=>({...p,[f.key]:e.target.value}))} style={inputStyle}/></div>
               ))}
-              <div style={{ marginBottom:16 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>طريقة الدفع</div><select value={payForm.method} onChange={e=>setPayForm(p=>({...p,method:e.target.value}))} style={inputStyle}>{["نقدي","تحويل بنكي","شيك"].map(m=><option key={m}>{m}</option>)}</select></div>
+              <div style={{ marginBottom:12 }}><div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>طريقة الدفع</div><select value={payForm.method} onChange={e=>setPayForm(p=>({...p,method:e.target.value}))} style={inputStyle}>{["نقدي","تحويل بنكي","شيك"].map(m=><option key={m}>{m}</option>)}</select></div>
+              {/* «تفاصيل الدفعة» هي حقلُ `notes` نفسُه — يُجمَّد في الإيصال ويُطبع تحت المبلغ */}
+              <PaymentDetailsField value={payForm.notes} onChange={v=>setPayForm(p=>({...p,notes:v}))} style={inputStyle} />
               <div style={{ display:"flex", gap:10 }}>
                 <button onClick={addPayment} disabled={savingPay} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>{savingPay?"جارٍ الحفظ...":"حفظ"}</button>
                 <button onClick={()=>setShowPayModal(false)} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إلغاء</button>

@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // ============================================================
-// الإيصالُ نصفَ A4 بالعرض — Chromium print-to-PDF من بانيه الحقيقيّ
+// الإيصالُ ٢١٠ × ١٧٠مم أعلى A4 طوليّة — Chromium print-to-PDF من بانيه الحقيقيّ
 // ============================================================
 /* يبني الإيصالَ لكلّ سيناريو (`receipt-layout.ts`)، ويطبعه في Chromium إلى PDF، ويتحقّق:
-     · ورقةٌ واحدة A4، والإيصالُ ٢١٠ × ١٤٨٫٥مم في نصفها الأعلى (دفعةُ مجموعةٍ طويلةٌ تطول وحدها)
+     · ورق A4 طوليّ، والإيصالُ ٢١٠ × ١٧٠مم في أعلاه — ورقةٌ واحدة؛ ومجموعةٌ فوق ٤ حجّاجٍ:
+       الإيصالُ بمقاسه نفسه وتوزيعُها كاملاً في ورقةٍ مرفقة تليه؛ وتفاصيلُ استثنائيّةٌ: يطول ولا يُقصّ
+     · الأقسامُ عموديّةٌ بالترتيب: الرأس ← الحاجّ ← المبلغ ← طريقة الدفع ← تفاصيل الدفعة (بالعرض كلّه)
+       ← [التوزيع] ← الختم والتوقيع
      · لا تراكبَ بين الأقسام، ولا نصَّ مقصوصاً أو فائضاً عن صندوقه
-     · المبلغُ رقماً وكتابةً كما يُخرجه `amountInArabicWords`، وطريقةُ الدفع والتفاصيلُ كما هي
+     · المبلغُ: الصحيحُ بلا كسور والكسرُ بقيمته؛ وكتابةً كما يُخرجه `amountInArabicWords` (≤ سطرين)
+     · طريقةُ الدفع والتفاصيلُ كما هي
      · المحصِّلُ لا يُطبع
      · الختمُ والتوقيعُ بمقاسهما في الإيصال السابق (`--before-ref`) بالمليمتر، وفي موضعهما
        (الختمُ يمين التوقيع)، وكاملان داخل الورقة
@@ -67,6 +71,7 @@ const MM = 96 / 25.4;
 async function render(dir, name) {
   const html = readFileSync(join(OUT, dir, `${name}.html`), "utf8");
   await page.setContent(html, { waitUntil: "load" });
+  if (meta[name]?.twoLineWords) await page.evaluate(() => { const w = document.querySelector(".words") || document.querySelector(".amount-words"); if (w) w.lastChild.textContent += " — " + w.lastChild.textContent; });
   await page.evaluate(async () => { await document.fonts.ready; await Promise.all([...document.images].map(i => i.complete ? i.decode?.().catch(() => {}) : new Promise(r => { i.onload = i.onerror = r; }))); });
   if (html.includes("data-seal-plan")) await page.waitForFunction(() => document.documentElement.hasAttribute("data-seal-plan"), null, { timeout: 9000 }).catch(() => {});
   await page.emulateMedia({ media: "print" });
@@ -76,14 +81,14 @@ async function render(dir, name) {
     const imgs = [...document.querySelectorAll(".stamp-box img")].map(i => { const r = i.getBoundingClientRect(); return { alt: i.alt, w: mm(r.width), h: mm(r.height), left: r.left, top: r.top, bottom: mm(r.bottom), nat: i.naturalWidth > 0 }; });
     const sheet = R(document.querySelector(".sheet") || document.querySelector(".receipt"));
     /* أقسامٌ لا يجوز أن تتراكب */
-    const secs = [".head", ".payer", ".amount", ".side", ".alloc", ".receipt-footer"].map(s => [s, R(document.querySelector(s))]).filter(([, r]) => r && r.height > 0);
+    const secs = [".head", ".payer", ".amount", ".method", ".details", ".receipt .alloc", ".receipt-footer"].map(s => [s, R(document.querySelector(s))]).filter(([, r]) => r && r.height > 0);
     const overlaps = [];
     for (let i = 0; i < secs.length; i++) for (let j = i + 1; j < secs.length; j++) {
       const [a, ra] = secs[i], [b, rb] = secs[j];
       if (ra.left < rb.right - 0.5 && rb.left < ra.right - 0.5 && ra.top < rb.bottom - 0.5 && rb.top < ra.bottom - 0.5) overlaps.push(`${a}×${b}`);
     }
     /* نصٌّ مقصوصٌ أو فائضٌ عن صندوقه */
-    const clipped = [".words", ".details .v", ".payer .v", ".meta", ".company", ".title h1", ".method"].flatMap(s => [...document.querySelectorAll(s)])
+    const clipped = [".words", ".details .v", ".payer .v", ".meta", ".company", ".title h1", ".method", ".alloc-i", ".amount .num"].flatMap(s => [...document.querySelectorAll(s)])
       .filter(e => e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1).map(e => e.className || e.tagName);
     const frame = R(document.querySelector(".frame"));
     const outside = [...document.querySelectorAll(".frame *")].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > frame.right + 1 || r.left < frame.left - 1 || r.bottom > frame.bottom + 1); }).length;
@@ -93,53 +98,81 @@ async function render(dir, name) {
     const dLines = detailsEl ? Math.round(detailsEl.getBoundingClientRect().height / parseFloat(getComputedStyle(detailsEl).lineHeight)) : 0;
     const stamp = imgs.find(i => i.alt === "الختم"), sig = imgs.find(i => i.alt === "التوقيع");
     const footer = R(document.querySelector(".receipt-footer"));
-    return { sheetW: sheet ? mm(sheet.width) : null, sheetH: sheet ? mm(sheet.height) : null, imgs, overlaps, clipped, outside,
+    /* الترتيبُ العموديّ: كلُّ قسمٍ يبدأ تحت سابقه، و«تفاصيل الدفعة» بعرض الإطار كلِّه */
+    const order = secs.map(([k, r]) => ({ k, top: mm(r.top), bottom: mm(r.bottom), w: mm(r.width) }));
+    const vertical = order.every((x, i) => i === 0 || x.top >= order[i - 1].bottom - 0.2);
+    const fEl = document.querySelector(".frame"), fr = R(fEl), fcs = fEl && getComputedStyle(fEl);
+    const innerW = fEl ? mm(fr.width - parseFloat(fcs.paddingLeft) - parseFloat(fcs.paddingRight) - 2 * parseFloat(fcs.borderLeftWidth)) : 0;
+    const det = R(document.querySelector(".details")), amt = R(document.querySelector(".amount"));
+    const allocItems = [...document.querySelectorAll(".alloc-i b")].map(b => b.textContent.trim());
+    const apRows = [...document.querySelectorAll(".ap-table tbody tr")].map(tr => tr.lastElementChild.textContent.trim());
+    return { sheetW: sheet ? mm(sheet.width) : null, sheetH: sheet ? mm(sheet.height) : null, sheetTop: sheet ? mm(sheet.top + scrollY) : null, imgs, overlaps, clipped, outside,
+      order: order.map(o => o.k), vertical, detailsFullWidth: !!det && Math.abs(mm(det.width) - innerW) < 0.6, detailsBelowAmount: !!det && !!amt && det.top >= amt.bottom,
+      allocItems, apRows, allocRef: !!document.querySelector(".alloc-ref"), apTotal: (document.querySelector(".ap-table tfoot .num")?.textContent ?? "").trim(),
       words: (wordsEl?.textContent ?? "").trim(), wordsLines: lines, detailsLines: dLines,
       method: (document.querySelector(".method .v")?.textContent ?? "").trim(), details: (document.querySelector(".details .v")?.textContent ?? "").trim(),
       payer: (document.querySelector(".payer .v")?.textContent ?? "").trim(),
       amount: (document.querySelector(".amount .num b")?.textContent ?? "").trim(),
       collector: document.body.innerText.includes("collector@test.local") || document.body.innerText.includes("المُحصِّل"),
       stampRightOfSig: stamp && sig ? stamp.left > sig.left : null, footerH: footer ? mm(footer.height) : null,
-      manualBoxes: document.querySelectorAll(".stamp-box:not(.has-img)").length, plan: document.documentElement.getAttribute("data-seal-plan") };
+      manualBoxes: document.querySelectorAll(".stamp-box:not(.has-img)").length,
+      footerBoxMin: Math.min(...[...document.querySelectorAll(".receipt-footer .stamp-box")].map(e => mm(e.getBoundingClientRect().height))), plan: document.documentElement.getAttribute("data-seal-plan") };
   });
   await page.emulateMedia({ media: "screen" });
   const pdf = join(OUT, dir, `${name}.pdf`);
   await page.pdf({ path: pdf, preferCSSPageSize: true, printBackground: true });
   const info = execFileSync("pdfinfo", [pdf], { encoding: "utf8" });
   const [pw, ph] = info.match(/Page size:\s+([\d.]+) x ([\d.]+)/).slice(1).map(v => Math.round(+v / 72 * 25.4));
-  return { ...m, pages: +info.match(/Pages:\s+(\d+)/)[1], paper: `${pw}x${ph}` };
+  const pages = +info.match(/Pages:\s+(\d+)/)[1];
+  const text = p => execFileSync("pdftotext", ["-f", String(p), "-l", String(p), pdf, "-"], { encoding: "utf8" });
+  return { ...m, pages, paper: `${pw}x${ph}`, p1: text(1), p2: pages > 1 ? text(2) : "" };
 }
 const results = [];
 const check = (name, ok, detail = "") => { results.push({ name, ok: !!ok }); console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? " — " + detail : ""}`); };
 const before = {}, after = {};
 for (const name of Object.keys(meta)) { after[name] = await render("after", name); before[name] = await render("before", name); }
+const ORDER = [".head", ".payer", ".amount", ".method", ".details", ".receipt .alloc", ".receipt-footer"];
 for (const [name, a] of Object.entries(after)) {
   const s = meta[name], b = before[name];
-  const big = name === "group-24";
-  check(`${name}: one A4 page, receipt box 210 × 148.5 mm${big ? " (long group: grows, still one page)" : ""}`,
-    a.pages === 1 && a.paper === "210x297" && Math.abs(a.sheetW - 210) < 0.3 && (big ? a.sheetH >= 148.4 : Math.abs(a.sheetH - 148.5) < 0.3), `pages ${a.pages}, paper ${a.paper}, box ${a.sheetW}×${a.sheetH}mm`);
+  const appendix = s.kind === "appendix", exceptional = s.kind === "exceptional";
+  check(`${name}: A4 portrait, receipt 210 × 170 mm at the top of the page${appendix ? " + allocation on the following page(s)" : exceptional ? " (exceptional details: grows, nothing clipped)" : ", one page"}`,
+    a.paper === "210x297" && Math.abs(a.sheetW - 210) < 0.3 && Math.abs(a.sheetTop) < 0.3 &&
+    (exceptional ? a.sheetH >= 169.9 : Math.abs(a.sheetH - 170) < 0.3) && (appendix ? a.pages >= 2 : a.pages === 1),
+    `pages ${a.pages}, paper ${a.paper}, box ${a.sheetW}×${a.sheetH}mm at y=${a.sheetTop}`);
+  check(`${name}: sections stacked vertically in order, details full width below amount + method`,
+    a.vertical && a.detailsFullWidth && a.detailsBelowAmount && a.order.join() === ORDER.filter(k => k !== ".receipt .alloc" || s.alloc).join(),
+    a.order.join(" → "));
   check(`${name}: no overlapping sections, no clipped/overflowing text, nothing outside the frame`, !a.overlaps.length && !a.clipped.length && !a.outside,
     JSON.stringify({ overlaps: a.overlaps, clipped: a.clipped, outside: a.outside }));
-  check(`${name}: amount in words = amountInArabicWords (≤ 2 lines)`, a.words === s.expectWords && a.wordsLines <= 2, `${a.amount} · "${a.words}" (${a.wordsLines} line(s))`);
-  check(`${name}: payer, method and payment details printed as entered`, a.payer === s.payer && a.method === s.method && a.details === (s.notes ?? "—"),
+  check(`${name}: amount ${s.expectAmount} (whole → no decimals, fraction → exact)`, a.amount === s.expectAmount, a.amount);
+  if (s.twoLineWords) check(`${name}: amount in words on two lines fits the standard receipt`, a.wordsLines === 2 && a.words.startsWith("المبلغ كتابةً:" + s.expectWords), `${a.wordsLines} line(s)`);
+  else check(`${name}: amount in words = amountInArabicWords (≤ 2 lines)`, a.words === "المبلغ كتابةً:" + s.expectWords && a.wordsLines <= 2, `${a.wordsLines} line(s)`);
+  check(`${name}: payer, method and payment details printed as entered`,
+    a.payer === s.payer && a.method === s.method && a.details.replace(/\s+/g, " ") === (s.notes ?? "—").replace(/\s+/g, " "),
     `method ${a.method}; details ${a.detailsLines} line(s)`);
+  if (s.notes && !exceptional) check(`${name}: payment details fit within the standard height`, a.detailsLines >= 1 && a.detailsLines <= 4, `${a.detailsLines} line(s)`);
   check(`${name}: collector not printed`, !a.collector);
+  if (s.alloc && !appendix) check(`${name}: all ${s.alloc} pilgrim allocation(s) inside the receipt`, a.allocItems.join() === s.allocAmounts.join() && !a.allocRef, a.allocItems.join(" | "));
+  if (appendix) check(`${name}: allocation of all ${s.alloc} pilgrims on the next page, none truncated, totals kept`,
+    !a.allocItems.length && a.allocRef && a.apRows.join() === s.allocAmounts.join() && a.apTotal === s.expectAmount &&
+    !a.p1.includes("ملحق إيصال") && a.p2.includes("ملحق إيصال"), `${a.apRows.length} row(s) on ${a.pages - 1} page(s); total ${a.apTotal}`);
   /* الختمُ والتوقيع: بالمقاس نفسه في الإيصال السابق بالمليمتر، وفي موضعهما */
   const pick = (m, alt) => m.imgs.find(i => i.alt === alt);
   for (const alt of ["الختم", "التوقيع"]) {
-    /* السابقُ امتدّ ورقتين A5 (مجموعةٌ طويلة) فأُخفيت خانتاه ورُسمتا في الهامش — يُقارَن بمقاسه في إيصالٍ من ورقة */
+    /* السابقُ امتدّ ورقتين (مجموعةٌ طويلة) فأُخفيت خانتاه ورُسمتا في الهامش — يُقارَن بمقاسه في إيصالٍ من ورقة */
     const ia = pick(a, alt), ib0 = pick(b, alt), ib = ib0 && ib0.w > 0 ? ib0 : pick(before["amount-1000"], alt);
     if (!ia && !ib0) continue;
-    check(`${name}: ${alt === "الختم" ? "stamp" : "signature"} same size as before (mm), fully on the page`,
-      ia && ib && Math.abs(ia.w - ib.w) < 0.15 && Math.abs(ia.h - ib.h) < 0.15 && ia.nat && ia.bottom <= 148.5 + (big ? 150 : 0),
-      `after ${ia?.w}×${ia?.h} · before ${ib?.w}×${ib?.h}`);
+    check(`${name}: ${alt === "الختم" ? "stamp" : "signature"} same size as production (mm), inside the receipt`,
+      ia && ib && Math.abs(ia.w - ib.w) < 0.15 && Math.abs(ia.h - ib.h) < 0.15 && ia.nat && ia.bottom <= (exceptional ? a.sheetH : 170) - 4,
+      `after ${ia?.w}×${ia?.h} · production ${ib?.w}×${ib?.h}`);
   }
   if (a.stampRightOfSig !== null) check(`${name}: stamp stays right of the signature (as before)`, a.stampRightOfSig && before["amount-1000"].stampRightOfSig);
   if (s.seals !== "both") check(`${name}: the missing seal keeps its manual box`, a.manualBoxes === (s.seals === "none" ? 2 : 1), `${a.manualBoxes} manual box(es)`);
+  check(`${name}: reserved stamp/signature area not reduced (≥ 30 mm boxes)`, a.footerBoxMin >= 29.9, `${a.footerBoxMin} mm`);
 }
 await browser.close();
 writeFileSync(join(OUT, "report.json"), JSON.stringify({ after, before }, null, 1));
-for (const name of Object.keys(meta)) execFileSync("pdftoppm", ["-r", "110", "-png", "-singlefile", join(OUT, "after", `${name}.pdf`), join(OUT, "after", name)]);
+for (const name of Object.keys(meta)) execFileSync("pdftoppm", ["-r", "110", "-png", join(OUT, "after", `${name}.pdf`), join(OUT, "after", name)]);
 const bad = results.filter(r => !r.ok);
 console.log(`\n${results.length - bad.length} passed, ${bad.length} failed — evidence in ${OUT}`);
 process.exit(bad.length ? 1 : 0);

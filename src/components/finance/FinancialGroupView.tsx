@@ -7,6 +7,7 @@ import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, Payment, CustomCharge, FinancialGroup, GroupPayForm } from "./finance.types";
 import { calcTotalDue, calcTotalPaid, fmtAmt, financeStatus } from "./finance.utils";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
+import { PaymentDetailsField } from "./PaymentDetailsField";
 
 export type FinancialGroupViewProps = {
   // بيانات المجموعة
@@ -155,18 +156,19 @@ export function FinancialGroupView({
           <div style={{ background:"var(--bg-card)", borderRadius:16, padding:24, width:340, boxShadow:"var(--shadow-xl)" }}>
             <div style={{ fontWeight:700, fontSize:16, marginBottom:4, color:"var(--success)" }}>دفعة مشتركة</div>
             <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:16 }}>ستُوزَّع على {groupPassengers.length} من الأعضاء ({groupPayForm.amount&&groupPassengers.length>0?fmtAmt(Math.floor(Number(groupPayForm.amount)*100/groupPassengers.length)/100):"0"} ر.ق للفرد تقريباً)</div>
-            {([{label:"المبلغ الإجمالي",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""},{label:"ملاحظات (اختياري)",key:"notes",type:"text",ph:"..."}] as { label:string; key:keyof GroupPayForm; type:string; ph:string }[]).map(f=>(
+            {([{label:"المبلغ الإجمالي",key:"amount",type:"number",ph:"0"},{label:"التاريخ",key:"payment_date",type:"date",ph:""}] as { label:string; key:keyof GroupPayForm; type:string; ph:string }[]).map(f=>(
               <div key={f.key} style={{ marginBottom:12 }}>
                 <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>{f.label}</div>
                 <input type={f.type} min={f.type==="number"?0:undefined} placeholder={f.ph} value={groupPayForm[f.key]} onChange={e=>onGroupPayFormChange(f.key, e.target.value)} style={inputStyle} />
               </div>
             ))}
-            <div style={{ marginBottom:16 }}>
+            <div style={{ marginBottom:12 }}>
               <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>طريقة الدفع</div>
               <select value={groupPayForm.method} onChange={e=>onGroupPayFormChange("method", e.target.value)} style={inputStyle}>
                 {["نقدي","تحويل بنكي","شيك"].map(m=><option key={m}>{m}</option>)}
               </select>
             </div>
+            <PaymentDetailsField value={groupPayForm.notes} onChange={v=>onGroupPayFormChange("notes", v)} style={inputStyle} />
             <div style={{ display:"flex", gap:10 }}>
               <button onClick={onSubmitGroupPayment} disabled={savingGroupPay} style={{ flex:1, padding:10, background:"var(--success)", color:"#fff", border:"none", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>{savingGroupPay?"جارٍ الحفظ...":"توزيع الدفعة"}</button>
               <button onClick={()=>onCloseGroupPayModal()} style={{ flex:1, padding:10, background:"var(--bg-2)", border:"1px solid var(--border)", borderRadius:8, fontFamily:"var(--font-body)", cursor:"pointer" }}>إلغاء</button>
