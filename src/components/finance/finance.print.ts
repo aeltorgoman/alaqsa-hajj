@@ -173,55 +173,56 @@ export function makeReceiptHTML(
   html, body { margin:0; padding:0; background:#fff; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; color:#1f1f1f; }
   /* ٢١٠ × ١٧٠مم بالضبط — ولا يطول إلا لتفاصيل استثنائيّة لا تسعها (لا قصّ) */
-  .sheet { width:210mm; min-height:180mm; padding:4mm 5mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
+  .sheet { width:210mm; min-height:180mm; padding:3.5mm 4mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
   .receipt { position:relative; flex:1; border:0.5mm solid ${ink}; border-radius:2.5mm; padding:1.8mm;
              background:#fff; display:flex; flex-direction:column; }
   /* الفراغُ الزائد يتوزّع بين الأقسام بالتساوي — لا كتلةً واحدةً فوق الختم */
-  .frame { flex:1; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:1.6mm; padding:3mm 4mm 2.8mm; display:flex; flex-direction:column; justify-content:space-between; gap:1.7mm; position:relative; }
+  .frame { flex:1; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:1.6mm; padding:2.6mm 3.6mm 2.6mm; display:flex; flex-direction:column; justify-content:space-between; gap:1.4mm; position:relative; }
   .corner { position:absolute; line-height:0; opacity:.55; }
   .corner.tr { top:1mm; right:1mm; } .corner.tl { top:1mm; left:1mm; }
   .corner.br { bottom:1mm; right:1mm; } .corner.bl { bottom:1mm; left:1mm; }
 
-  .head { display:grid; grid-template-columns:1.2fr auto 1.2fr; align-items:center; gap:2mm; padding-bottom:2.2mm; border-bottom:0.35mm solid ${RECEIPT_GOLD}; }
+  .head { display:grid; grid-template-columns:1.15fr auto 1fr; align-items:center; gap:2mm; padding-bottom:2mm; border-bottom:0.35mm solid ${RECEIPT_GOLD}; }
   .brand { display:flex; align-items:center; gap:2.6mm; min-width:0; }
-  .logo-box { width:23mm; height:23mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  .logo-box { width:26mm; height:26mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
               background:${ink}; color:#fff; font-size:18px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company { font-size:19px; font-weight:800; color:${ink}; line-height:1.25; }
-  .tagline { font-size:12px; color:#7a7a7a; margin-top:0.6mm; }
+  .company { font-size:21px; font-weight:800; color:${ink}; line-height:1.25; }
+  .tagline { font-size:13px; color:#7a7a7a; margin-top:0.6mm; }
   .title { text-align:center; }
-  .title h1 { margin:0; padding:2mm 4mm; font-size:25px; font-weight:900; color:#fff; background:${ink}; border:0.55mm solid ${RECEIPT_GOLD}; border-radius:3mm; letter-spacing:.2px; white-space:nowrap; }
+  .title h1 { margin:0; padding:2mm 4mm; font-size:26px; font-weight:900; color:#fff; background:${ink}; border:0.55mm solid ${RECEIPT_GOLD}; border-radius:3mm; letter-spacing:.2px; white-space:nowrap; }
   .title .rule { display:flex; align-items:center; justify-content:center; gap:1.6mm; margin-top:1mm; }
   .title .rule i { display:block; width:14mm; height:0.3mm; background:${RECEIPT_GOLD}; }
-  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:0.8mm 2.8mm; font-size:12.5px; align-items:baseline; }
+  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:1mm 2mm; font-size:13px; align-items:baseline; border:0.3mm solid ${RECEIPT_GOLD}; border-radius:2.5mm; padding:2mm; background:#fff; }
   .meta .k { color:#8a7a5a; text-align:start; white-space:nowrap; }
   .meta .v { font-weight:700; color:#1f1f1f; white-space:nowrap; direction:ltr; text-align:end; unicode-bidi:isolate; }
   .meta .v.no { font-size:20px; font-weight:900; color:${ink}; }
   .meta .v.season { direction:rtl; text-align:start; }
 
   .sec-k { font-size:11px; font-weight:800; color:#8a7a5a; white-space:nowrap; }
-  .payer { display:flex; align-items:baseline; gap:2.5mm; padding-bottom:1.6mm; border-bottom:0.25mm dashed #d9cdb3; }
-  .payer .sec-k { font-size:15px; font-weight:400; }
-  .payer .v { font-size:22px; font-weight:800; color:#1f1f1f; line-height:1.35; overflow-wrap:anywhere; }
+  .payer { display:flex; align-items:center; gap:2.5mm; padding-bottom:1.6mm; border-bottom:0.25mm dashed #d9cdb3; }
+  .payer .sec-k { font-size:18px; font-weight:800; color:${ink}; background:#fff1cf; border-radius:2mm; padding:1.4mm 2.5mm; white-space:nowrap; }
+  .payer .v { font-size:25px; font-weight:900; color:${ink}; line-height:1.35; overflow-wrap:anywhere; }
   .payer .tag { font-size:11px; font-weight:700; color:${ink}; white-space:nowrap; }
 
-  .amount { border:0.4mm solid ${ink}; border-radius:2mm; background:#fff; padding:2.6mm 4mm; }
-  .amount .num { display:flex; align-items:baseline; gap:3mm; }
-  .amount .num .sec-k { font-size:15px; }
-  .amount .num b { font-size:34px; font-weight:900; color:${ink}; direction:ltr; unicode-bidi:isolate; line-height:1.15; }
-  .amount .num .cur { font-size:12px; font-weight:700; color:#6b6b6b; }
-  .amount .words { margin-top:1.6mm; padding-top:1.6mm; border-top:0.25mm dashed #d9cdb3; font-size:17px; font-weight:700; color:#333;
-                   line-height:1.5; overflow-wrap:anywhere; }
-  .amount .words .sec-k { display:inline; margin-inline-end:1.8mm; font-size:13px; }
+  /* Reference mockup: two adjacent, equally aligned amount cards, with prominent words. */
+  .amount { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:2.2mm; direction:rtl; }
+  .amount-card { border:0.45mm solid ${ink}; border-radius:3mm; overflow:hidden; background:#fff; min-width:0; display:flex; flex-direction:column; }
+  .amount-card .card-heading { background:#fff0cf; color:${ink}; text-align:center; font-size:17px; font-weight:900; padding:1.4mm 1mm; }
+  .amount-card .card-body { flex:1; min-height:15mm; display:flex; align-items:center; justify-content:center; padding:1.5mm 2.2mm; }
+  .amount-words .card-body { font-size:19px; line-height:1.45; font-weight:900; color:${ink}; text-align:center; overflow-wrap:anywhere; }
+  .amount-number .card-body { gap:2mm; direction:ltr; }
+  .amount-number b { font-size:36px; line-height:1.1; color:${ink}; font-weight:900; white-space:nowrap; }
+  .amount-number .cur { font-size:12px; color:${ink}; font-weight:800; text-align:center; }
 
   .method { display:flex; align-items:center; gap:2.4mm; }
-  .method .sec-k { font-size:14px; }
-  .method .v { font-size:14px; font-weight:800; color:${ink}; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:5mm; padding:0.6mm 3.6mm; background:#fff; }
+  .method .sec-k { font-size:16px; color:${ink}; }
+  .method .v { font-size:16px; font-weight:800; color:${ink}; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:5mm; padding:0.6mm 3.6mm; background:#fff; }
 
-  .details { border:0.25mm solid #e3d7bd; border-radius:2mm; background:#fff; padding:2mm 3.5mm 2.2mm; }
-  .details .sec-k { color:${ink}; margin-bottom:0.6mm; font-size:14px; }
+  .details { border:0.35mm solid ${ink}; border-radius:2.5mm; background:#fff; padding:2mm 3mm 2mm; }
+  .details .sec-k { display:inline-block; background:${ink}; color:#fff; border-radius:1.5mm; padding:1mm 3mm; margin-bottom:1mm; font-size:15px; }
   /* ثلاثةُ أسطرٍ محجوزة (والإيصال يطول إن زاد النصُّ عن مكانه استثناءً — لا قصّ) */
-  .details .v { font-size:13px; color:#333; line-height:1.5; min-height:calc(13px * 1.5 * 2); white-space:pre-line; overflow-wrap:anywhere;
+  .details .v { font-size:15px; color:#222; line-height:1.4; min-height:calc(15px * 1.4 * 2); white-space:pre-line; overflow-wrap:anywhere;
                 unicode-bidi:plaintext; text-align:start; }
   .details .v.empty { color:#b5b5b5; }
 
@@ -241,7 +242,7 @@ export function makeReceiptHTML(
   /* المنطقةُ المحجوزة للختم والتوقيع — بارتفاع أكبرِ صندوقيهما، لا تُضغط */
   .receipt-footer { display:grid; grid-template-columns:1fr 1fr; gap:10mm; padding-top:1.4mm; border-top:0.25mm dashed #d9cdb3; break-inside:avoid; }
   .stamp-area { text-align:center; display:flex; flex-direction:column; align-items:center; }
-  .stamp-label { font-size:14px; color:#8a7a5a; margin-bottom:0.8mm; }
+  .stamp-label { font-size:17px; font-weight:800; color:${ink}; margin-bottom:0.8mm; }
   .stamp-box { width:100%; min-height:${sealAreaMm}mm; border:0.25mm dashed #d0c4a8; border-radius:2mm; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0.8mm; }
   .stamp-box img { max-width:100%; max-height:${sealAreaMm}mm; object-fit:contain; }
   .stamp-box.has-img { border-color:transparent; padding:0; }
@@ -288,8 +289,8 @@ export function makeReceiptHTML(
     <div class="sec payer"><span class="sec-k">استلمنا من /</span><span class="v">${esc(receipt.payer_name)}</span>${isGroup ? `<span class="tag">— دفعة مجموعة</span>` : ""}</div>
     ${cancelled ? `<div class="cancel-note">هذا الإيصال ملغي${receipt.cancel_reason ? ` — السبب: ${esc(receipt.cancel_reason)}` : ""}</div>` : ""}
     <div class="sec amount">
-      <div class="num"><span class="sec-k">المبلغ المستلم</span><b>${receiptAmount(total)}</b><span class="cur">ريال قطري · QAR</span></div>
-      <div class="words"><span class="sec-k">المبلغ كتابةً:</span>${esc(amountInArabicWords(total))}</div>
+      <div class="amount-card amount-words"><div class="card-heading">المبلغ كتابةً</div><div class="card-body">${esc(amountInArabicWords(total))}</div></div>
+      <div class="amount-card amount-number"><div class="card-heading">المبلغ المستلم</div><div class="card-body"><b>${receiptAmount(total)}</b><span class="cur">QAR<br/>ريال قطري</span></div></div>
     </div>
     <div class="sec method"><span class="sec-k">طريقة الدفع:</span><span class="v">${esc(receipt.method)}</span></div>
     <div class="sec details"><div class="sec-k">تفاصيل الدفعة</div>${details
