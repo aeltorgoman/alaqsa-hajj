@@ -82,6 +82,8 @@ export { makeFinanceHTML, printInPage };
    القاعدة وسجلّ التدقيق). */
 /** الذهبيّ الزخرفيّ — خطوطٌ ونجومٌ فقط؛ اللونُ الرئيسيّ من إعدادات الحملة. */
 const RECEIPT_GOLD = "#B08D3C";
+/** Full-size seal assets for the more legible receipt layout. */
+const RECEIPT_SEAL_SCALE = 1;
 /** أكثرُ عددٍ من الحجّاج يُطبع توزيعُه داخل الإيصال؛ وما زاد ففي الورقة المرفقة. */
 export const RECEIPT_INLINE_ALLOC_MAX = 4;
 /** مبلغُ الإيصال: الصحيحُ بلا كسور (10,000)، والكسرُ بقيمته الماليّة (125,750.50).
@@ -114,7 +116,7 @@ export function makeReceiptHTML(
      (مقاسُ التقارير بنسبةِ A5: `A5_SEAL_SCALE`). */
   const assetBox = (url: string, label: string, img?: SealImage, box?: { w: number; h: number }) => {
     if (!url) return `<div class="stamp-box"><span style="color:#ccc;font-size:10px">${label}</span></div>`;
-    const mm = img && box && img.url === url ? sealSizeMm(img, box, A5_SEAL_SCALE) : null;
+    const mm = img && box && img.url === url ? sealSizeMm(img, box, RECEIPT_SEAL_SCALE) : null;
     return mm
       ? `<div class="stamp-box has-img sized"><img src="${url}" alt="${label}" style="width:${mm.w}mm" /></div>`
       : `<div class="stamp-box has-img"><img src="${url}" alt="${label}" /></div>`;
@@ -130,7 +132,7 @@ export function makeReceiptHTML(
   };
   const stampSrc = sealSrc(seals?.stamp, stampUrl), signatureSrc = sealSrc(seals?.signature, signatureUrl);
   /* المنطقةُ المحجوزة: ارتفاعُ أكبرِ الصندوقين بمقاس الإيصال — الختمُ ٤٠ × ٠٫٧٥ = ٣٠مم */
-  const sealAreaMm = Math.max(STAMP_BOX_MM.h, SIGNATURE_BOX_MM.h) * A5_SEAL_SCALE;
+  const sealAreaMm = Math.max(STAMP_BOX_MM.h, SIGNATURE_BOX_MM.h) * RECEIPT_SEAL_SCALE;
 
   const groupAlloc = isGroup ? allocations : [];
   const appendix = groupAlloc.length > RECEIPT_INLINE_ALLOC_MAX;
@@ -139,7 +141,7 @@ export function makeReceiptHTML(
      الصورتان في خانتيهما، تُحمَّلان مسبقاً، ويُعلَن القرارُ لتنتظره الطباعة. */
   const sealPlan = !seals ? ""
     : appendix ? `${sealPreloadHTML(seals)}<script>document.documentElement.setAttribute("data-seal-plan","boxes:appendix");</script>`
-    : sealPlanHTML(seals, { size: "A4", margin: "0", scale: A5_SEAL_SCALE,
+    : sealPlanHTML(seals, { size: "A4", margin: "0", scale: RECEIPT_SEAL_SCALE,
         boxes: { img: ".stamp-box.sized img", multipageClass: "receipt-multipage" } });
 
   const allocInline = groupAlloc.length && !appendix
@@ -171,55 +173,55 @@ export function makeReceiptHTML(
   html, body { margin:0; padding:0; background:#fff; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; color:#1f1f1f; }
   /* ٢١٠ × ١٧٠مم بالضبط — ولا يطول إلا لتفاصيل استثنائيّة لا تسعها (لا قصّ) */
-  .sheet { width:210mm; min-height:170mm; padding:5mm 6mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
+  .sheet { width:210mm; min-height:180mm; padding:4mm 5mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
   .receipt { position:relative; flex:1; border:0.5mm solid ${ink}; border-radius:2.5mm; padding:1.8mm;
-             background:#FFFDF8; display:flex; flex-direction:column; }
+             background:#fff; display:flex; flex-direction:column; }
   /* الفراغُ الزائد يتوزّع بين الأقسام بالتساوي — لا كتلةً واحدةً فوق الختم */
-  .frame { flex:1; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:1.6mm; padding:3.2mm 5.5mm 2.8mm; display:flex; flex-direction:column; justify-content:space-between; gap:2.4mm; position:relative; }
+  .frame { flex:1; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:1.6mm; padding:3mm 4mm 2.8mm; display:flex; flex-direction:column; justify-content:space-between; gap:1.7mm; position:relative; }
   .corner { position:absolute; line-height:0; opacity:.55; }
   .corner.tr { top:1mm; right:1mm; } .corner.tl { top:1mm; left:1mm; }
   .corner.br { bottom:1mm; right:1mm; } .corner.bl { bottom:1mm; left:1mm; }
 
-  .head { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:4mm; padding-bottom:2.2mm; border-bottom:0.35mm solid ${RECEIPT_GOLD}; }
+  .head { display:grid; grid-template-columns:1.2fr auto 1.2fr; align-items:center; gap:2mm; padding-bottom:2.2mm; border-bottom:0.35mm solid ${RECEIPT_GOLD}; }
   .brand { display:flex; align-items:center; gap:2.6mm; min-width:0; }
-  .logo-box { width:16mm; height:16mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  .logo-box { width:23mm; height:23mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
               background:${ink}; color:#fff; font-size:18px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company { font-size:15px; font-weight:800; color:${ink}; line-height:1.25; }
-  .tagline { font-size:10px; color:#7a7a7a; margin-top:0.6mm; }
+  .company { font-size:19px; font-weight:800; color:${ink}; line-height:1.25; }
+  .tagline { font-size:12px; color:#7a7a7a; margin-top:0.6mm; }
   .title { text-align:center; }
-  .title h1 { margin:0; font-size:24px; font-weight:800; color:${ink}; letter-spacing:.2px; white-space:nowrap; }
+  .title h1 { margin:0; padding:2mm 4mm; font-size:25px; font-weight:900; color:#fff; background:${ink}; border:0.55mm solid ${RECEIPT_GOLD}; border-radius:3mm; letter-spacing:.2px; white-space:nowrap; }
   .title .rule { display:flex; align-items:center; justify-content:center; gap:1.6mm; margin-top:1mm; }
   .title .rule i { display:block; width:14mm; height:0.3mm; background:${RECEIPT_GOLD}; }
-  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:0.8mm 2.8mm; font-size:11.5px; align-items:baseline; }
+  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:0.8mm 2.8mm; font-size:12.5px; align-items:baseline; }
   .meta .k { color:#8a7a5a; text-align:start; white-space:nowrap; }
   .meta .v { font-weight:700; color:#1f1f1f; white-space:nowrap; direction:ltr; text-align:end; unicode-bidi:isolate; }
-  .meta .v.no { font-size:17px; font-weight:900; color:${ink}; }
+  .meta .v.no { font-size:20px; font-weight:900; color:${ink}; }
   .meta .v.season { direction:rtl; text-align:start; }
 
   .sec-k { font-size:11px; font-weight:800; color:#8a7a5a; white-space:nowrap; }
   .payer { display:flex; align-items:baseline; gap:2.5mm; padding-bottom:1.6mm; border-bottom:0.25mm dashed #d9cdb3; }
-  .payer .sec-k { font-size:12px; font-weight:400; }
-  .payer .v { font-size:17px; font-weight:800; color:#1f1f1f; line-height:1.35; overflow-wrap:anywhere; }
+  .payer .sec-k { font-size:15px; font-weight:400; }
+  .payer .v { font-size:22px; font-weight:800; color:#1f1f1f; line-height:1.35; overflow-wrap:anywhere; }
   .payer .tag { font-size:11px; font-weight:700; color:${ink}; white-space:nowrap; }
 
   .amount { border:0.4mm solid ${ink}; border-radius:2mm; background:#fff; padding:2.6mm 4mm; }
   .amount .num { display:flex; align-items:baseline; gap:3mm; }
-  .amount .num .sec-k { font-size:12px; }
-  .amount .num b { font-size:28px; font-weight:900; color:${ink}; direction:ltr; unicode-bidi:isolate; line-height:1.15; }
+  .amount .num .sec-k { font-size:15px; }
+  .amount .num b { font-size:34px; font-weight:900; color:${ink}; direction:ltr; unicode-bidi:isolate; line-height:1.15; }
   .amount .num .cur { font-size:12px; font-weight:700; color:#6b6b6b; }
-  .amount .words { margin-top:1.6mm; padding-top:1.6mm; border-top:0.25mm dashed #d9cdb3; font-size:13px; font-weight:700; color:#333;
+  .amount .words { margin-top:1.6mm; padding-top:1.6mm; border-top:0.25mm dashed #d9cdb3; font-size:17px; font-weight:700; color:#333;
                    line-height:1.5; overflow-wrap:anywhere; }
-  .amount .words .sec-k { display:inline; margin-inline-end:1.8mm; font-size:11px; }
+  .amount .words .sec-k { display:inline; margin-inline-end:1.8mm; font-size:13px; }
 
   .method { display:flex; align-items:center; gap:2.4mm; }
-  .method .sec-k { font-size:12px; }
-  .method .v { font-size:12.5px; font-weight:800; color:${ink}; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:5mm; padding:0.6mm 3.6mm; background:#fff; }
+  .method .sec-k { font-size:14px; }
+  .method .v { font-size:14px; font-weight:800; color:${ink}; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:5mm; padding:0.6mm 3.6mm; background:#fff; }
 
   .details { border:0.25mm solid #e3d7bd; border-radius:2mm; background:#fff; padding:2mm 3.5mm 2.2mm; }
-  .details .sec-k { color:${ink}; margin-bottom:0.6mm; }
+  .details .sec-k { color:${ink}; margin-bottom:0.6mm; font-size:14px; }
   /* ثلاثةُ أسطرٍ محجوزة (والإيصال يطول إن زاد النصُّ عن مكانه استثناءً — لا قصّ) */
-  .details .v { font-size:11.5px; color:#333; line-height:1.55; min-height:calc(11.5px * 1.55 * 3); white-space:pre-line; overflow-wrap:anywhere;
+  .details .v { font-size:13px; color:#333; line-height:1.5; min-height:calc(13px * 1.5 * 2); white-space:pre-line; overflow-wrap:anywhere;
                 unicode-bidi:plaintext; text-align:start; }
   .details .v.empty { color:#b5b5b5; }
 
@@ -239,7 +241,7 @@ export function makeReceiptHTML(
   /* المنطقةُ المحجوزة للختم والتوقيع — بارتفاع أكبرِ صندوقيهما، لا تُضغط */
   .receipt-footer { display:grid; grid-template-columns:1fr 1fr; gap:10mm; padding-top:1.4mm; border-top:0.25mm dashed #d9cdb3; break-inside:avoid; }
   .stamp-area { text-align:center; display:flex; flex-direction:column; align-items:center; }
-  .stamp-label { font-size:10.5px; color:#8a7a5a; margin-bottom:0.8mm; }
+  .stamp-label { font-size:14px; color:#8a7a5a; margin-bottom:0.8mm; }
   .stamp-box { width:100%; min-height:${sealAreaMm}mm; border:0.25mm dashed #d0c4a8; border-radius:2mm; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0.8mm; }
   .stamp-box img { max-width:100%; max-height:${sealAreaMm}mm; object-fit:contain; }
   .stamp-box.has-img { border-color:transparent; padding:0; }
