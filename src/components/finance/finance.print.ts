@@ -6,7 +6,7 @@ import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharg
 import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding, PrintSeals, SealImage } from "../../print";
 import { hasSeals, sealPlanHTML, sealGroupPlanHTML, sealPreloadHTML, sealSizeMm, bankBlockHTML,
-         A5_SEAL_SCALE, STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
+         STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
