@@ -5,8 +5,8 @@ import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, FinanceRow, CashflowByDate, PaymentReceipt } from "./finance.types";
 import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding, PrintSeals, SealImage } from "../../print";
-import { hasSeals, sealPlanHTML, sealGroupPlanHTML, sealSizeMm, bankBlockHTML,
-         A5_SEAL_SCALE, STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
+import { hasSeals, sealPlanHTML, sealGroupPlanHTML, sealPreloadHTML, sealSizeMm, bankBlockHTML,
+         STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
 import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
@@ -47,139 +47,255 @@ export { makeFinanceHTML, printInPage };
 
 
 // ============================================================
-// HTML إيصال الدفعة — نصفُ A4، والبنيةُ القائمةُ تُحسَّن لا تُستبدل
+// HTML إيصال الدفعة — ٢١٠ × ١٧٠مم أعلى ورقة A4 طوليّة
 // ============================================================
 /* الإيصالُ يُطبَع من **صفِّ الإيصال** لا من سطرِ الدفع: الرقمُ الرسميُّ
-   والإجماليُّ التاريخيُّ واسمُ الدافعِ واسمُ الموسمِ كلُّها مجمَّدةٌ فيه،
-   فإعادةُ الطباعةِ تُخرج الورقةَ نفسَها حتى بعد إزالةِ الحاجِّ أو حذفِ
-   الموسمِ كلِّه.
+   والإجماليُّ التاريخيُّ واسمُ الدافعِ واسمُ الموسمِ والتفاصيلُ كلُّها مجمَّدةٌ
+   فيه، فإعادةُ الطباعةِ تُخرج الورقةَ نفسَها حتى بعد إزالةِ الحاجِّ أو حذفِ
+   الموسمِ كلِّه. والملغى يُطبَع بنفسِ رقمِه وعليه «ملغي» وسببُه.
 
-   والملغى يُطبَع بنفسِ رقمِه وعليه «ملغي» وسببُه — الرقمُ لا يُعاد. */
+   ── الترتيب (من أعلى إلى أسفل، قسمٌ تحت قسم) ──
+   ١ الرأس: الشعارُ واسمُ الحملة، «إيصال استلام مبلغ»، رقمُ الإيصال والتاريخُ والموسم
+   ٢ الحاجّ: «استلمنا من /»
+   ٣ المبلغُ المستلم: الرقمُ والمبلغُ كتابةً معاً (حتى سطرين)
+   ٤ طريقةُ الدفع
+   ٥ «تفاصيل الدفعة» بعرض الإيصال كلِّه — تحت المبلغ وطريقة الدفع لا بجانبهما
+   ( توزيعُ دفعة المجموعة: حتى ٤ حجّاجٍ داخل الإيصال، وأكثرُ في ورقةٍ مرفقة )
+   ٦ الختمُ (يميناً) والتوقيعُ (يساراً) في منطقةٍ محجوزةٍ أسفلَ الإيصال
+
+   ── المقاس ──
+   الورقةُ A4 طوليّة بلا هامش، والإيصالُ صندوقٌ ٢١٠ × ١٧٠مم في أعلاها. لا `@page`
+   مخصَّص بمقاس الإيصال: الطابعةُ ذاتُ ورق A4 تُكبِّر الصفحةَ الصغيرة أو تُوسِّطها حسب
+   برنامجها. والإيصالُ لا يطول لدفعة مجموعةٍ كبيرة: أكثرُ من ٤ حجّاجٍ يُنقل توزيعُهم
+   كاملاً إلى ورقةٍ مرفقة (`@page receipt-alloc` بهامشٍ، والجدولُ يمتدّ أوراقاً
+   ورأسُه يتكرّر). وإن جاوزت تفاصيلُ استثنائيّةٌ مكانَها طال الصندوقُ ولا يُقصّ
+   شيءٌ — فإن جاوز الورقةَ تولّى `sealPlanHTML` الختمَ والتوقيعَ كما كان.
+
+   ── الختمُ والتوقيع ──
+   بمقاسهما كما كانا تماماً (`sealSizeMm(…, STAMP_BOX_MM / SIGNATURE_BOX_MM,
+   A5_SEAL_SCALE)`)، بالترتيب نفسه (الختمُ يميناً والتوقيعُ يساراً)، ومصدرُهما كما
+   كان. ولهما منطقةٌ محجوزةٌ بارتفاع أكبرِ صندوقَيهما، فلا يُصغَّران، وما فوقها هو
+   الذي يتكيّف. ومع الورقة المرفقة يبقيان في خانتيهما في الإيصال (لا شريطَ هامش).
+
+   «تفاصيلُ الدفعة» هي حقلُ `notes` في نموذج تسجيل الدفعة (`issue_payment_receipt`
+   تجمّده في `payment_receipts.notes`) — بلا عمودٍ جديد. والمحصِّل لا يُطبَع (يبقى في
+   القاعدة وسجلّ التدقيق). */
+/** الذهبيّ الزخرفيّ — خطوطٌ ونجومٌ فقط؛ اللونُ الرئيسيّ من إعدادات الحملة. */
+const RECEIPT_GOLD = "#B08D3C";
+/** Full-size seal assets for the more legible receipt layout. */
+const RECEIPT_SEAL_SCALE = 1;
+/** أكثرُ عددٍ من الحجّاج يُطبع توزيعُه داخل الإيصال؛ وما زاد ففي الورقة المرفقة. */
+export const RECEIPT_INLINE_ALLOC_MAX = 4;
+/** مبلغُ الإيصال: الصحيحُ بلا كسور (10,000)، والكسرُ بقيمته الماليّة (125,750.50).
+ *  محلّيٌّ للإيصال عمداً — `fmtAmt` المشتركة لا تُمسّ. */
+export function receiptAmount(n: number): string {
+  const v = Math.round(Number(n) * 100) / 100;
+  const d = Number.isInteger(v) ? 0 : 2;
+  return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+/** نجمةٌ ثمانيّة (مربّعان متراكبان) — زخرفةٌ إسلاميّةٌ خفيفة في زوايا الإطار. */
+const STAR8 = (size: number, color: string) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="${color}" stroke-width="1.3">` +
+  `<rect x="5" y="5" width="14" height="14"/><rect x="5" y="5" width="14" height="14" transform="rotate(45 12 12)"/>` +
+  `<circle cx="12" cy="12" r="2.2" fill="${color}" stroke="none"/></g></svg>`;
+
 export function makeReceiptHTML(
   receipt: PaymentReceipt, brand: PrintBranding, allocations: { name: string; amount: number }[] = [],
   options: { seals?: PrintSeals | null } = {},
 ): string {
-  const { logoUrl, companyName, tagline, primaryColor, accentColor, stampUrl, signatureUrl } = safeBranding(brand);
+  const { logoUrl, companyName, tagline, primaryColor, stampUrl, signatureUrl } = safeBranding(brand);
   const logoHtml = logoOrInitial(logoUrl, companyName);
   const receiptNo = String(receipt.receipt_number);
   const cancelled = receipt.status === "cancelled";
   const total = Number(receipt.total_amount);
   const isGroup = !!receipt.group_name;
+  const ink = cancelled ? PRINT_DANGER : primaryColor;
 
-  /* صندوقُ الختمِ/التوقيعِ يقبل صورةً موقَّعةً إن مُرِّرت، وإلا يبقى
-     إطاراً فارغاً للختمِ والتوقيعِ باليد كما كان. والصورةُ تُعرَض بلا إطارٍ
-     منقَّط — كختمٍ على ورق — في الموضعِ نفسِه وبالارتفاعِ نفسِه، فلا يتحرّك
-     في الإيصالِ سطر.
-     والصورةُ الإلكترونيّةُ (الختمُ/التوقيعُ المطلوبان) بمقاسِها الواقعيّ
-     بالمليمتر — مقاسُ التقارير بنسبةِ ورقة A5 (`A5_SEAL_SCALE`) — لا محشورةً
-     في صندوق ٦٢px. */
+  /* صندوقُ الختمِ/التوقيعِ — كما كان حرفاً: صورةٌ إن مُرِّرت، وإلا إطارٌ فارغٌ
+     للختمِ والتوقيعِ باليد. والصورةُ الإلكترونيّةُ بمقاسِها الواقعيّ بالمليمتر
+     (مقاسُ التقارير بنسبةِ A5: `A5_SEAL_SCALE`). */
   const assetBox = (url: string, label: string, img?: SealImage, box?: { w: number; h: number }) => {
-    if (!url) return `<div class="stamp-box"><span style="color:#ddd;font-size:11px">${label}</span></div>`;
-    const mm = img && box && img.url === url ? sealSizeMm(img, box, A5_SEAL_SCALE) : null;
+    if (!url) return `<div class="stamp-box"><span style="color:#ccc;font-size:10px">${label}</span></div>`;
+    const mm = img && box && img.url === url ? sealSizeMm(img, box, RECEIPT_SEAL_SCALE) : null;
     return mm
       ? `<div class="stamp-box has-img sized"><img src="${url}" alt="${label}" style="width:${mm.w}mm" /></div>`
       : `<div class="stamp-box has-img"><img src="${url}" alt="${label}" /></div>`;
   };
 
-  /* ═══ إيصالٌ يمتدّ ورقتين (دفعةُ مجموعةٍ طويلة) ═══
-     خانتا الختمِ والتوقيعِ في آخرِ الإيصال، فلا تقعان إلا على ورقته الأخيرة.
-     فإن طُلبت الصورُ وامتدّ الإيصالُ أكثرَ من ورقة A5 — يُقاس في المستند نفسه
-     بخطوط الجهاز (`sealPlanHTML`) — رُسمتا في هامشِ كلِّ ورقةٍ بأكبر مقاسٍ لا
-     يزيد ورقة، وأُخفيت خانتاهما الإلكترونيّتان كي لا تتكرّرا في الأخيرة.
-     والخانةُ المطفأةُ تبقى للختمِ باليد. */
   const seals = hasSeals(options.seals) ? options.seals : null;
-  /* ⚠️ عطبٌ ظهر في الطباعة الفعليّة: صورتا الختم والتوقيع بعد قصّ حشوهما روابطُ
-     `data:image/png` (`company/sealTrim.ts`)، و`safeBranding` لا يقبل إلا http(s) —
-     فصار الرابطُ فارغاً وطُبعت الخانتان فارغتين. فمصدرُ الصورة المطلوبة من `seals`
-     نفسها: رابطٌ آمنٌ أو صورةُ data مشفّرةٌ base64 لا غير. */
+  /* ⚠️ صورتا الختم والتوقيع بعد قصّ حشوهما روابطُ `data:image/png`
+     (`company/sealTrim.ts`)، و`safeBranding` لا يقبل إلا http(s) — فمصدرُ
+     الصورة المطلوبة من `seals` نفسها: رابطٌ آمنٌ أو صورةُ data مشفّرةٌ base64 لا غير. */
   const sealSrc = (img: SealImage | undefined, fallback: string) => {
     const u = img?.url ?? "";
     return SEAL_DATA_URL.test(u) || normalizeCompanyAssetUrl(u) ? u : fallback;
   };
   const stampSrc = sealSrc(seals?.stamp, stampUrl), signatureSrc = sealSrc(seals?.signature, signatureUrl);
-  const sealPlan = seals ? sealPlanHTML(seals, { size: "A5", margin: "10mm", scale: A5_SEAL_SCALE,
-    boxes: { img: ".stamp-box.sized img", multipageClass: "receipt-multipage" } }) : "";
+  /* المنطقةُ المحجوزة: ارتفاعُ أكبرِ الصندوقين بمقاس الإيصال — الختمُ ٤٠ × ٠٫٧٥ = ٣٠مم */
+  const sealAreaMm = Math.max(STAMP_BOX_MM.h, SIGNATURE_BOX_MM.h) * RECEIPT_SEAL_SCALE;
 
-  const allocRows = isGroup && allocations.length
-    ? `<table class="alloc"><thead><tr><th>الحاج</th><th>النصيب</th></tr></thead><tbody>${
-        allocations.map(a => `<tr><td>${esc(a.name)}</td><td>${fmtAmt(Number(a.amount))}</td></tr>`).join("")
-      }</tbody></table>`
+  const groupAlloc = isGroup ? allocations : [];
+  const appendix = groupAlloc.length > RECEIPT_INLINE_ALLOC_MAX;
+  /* الإيصالُ ورقةٌ واحدة؛ والمخطِّطُ يعدّ أوراقَ المستند كلِّه — فمع الورقة المرفقة
+     لا مخطِّط (كان سيظنّ الإيصالَ طويلاً فينقل الصورتين إلى شريط الهامش ويصغّرهما):
+     الصورتان في خانتيهما، تُحمَّلان مسبقاً، ويُعلَن القرارُ لتنتظره الطباعة. */
+  const sealPlan = !seals ? ""
+    : appendix ? `${sealPreloadHTML(seals)}<script>document.documentElement.setAttribute("data-seal-plan","boxes:appendix");</script>`
+    : sealPlanHTML(seals, { size: "A4", margin: "0", scale: RECEIPT_SEAL_SCALE,
+        boxes: { img: ".stamp-box.sized img", multipageClass: "receipt-multipage" } });
+
+  const allocInline = groupAlloc.length && !appendix
+    ? `<div class="sec alloc"><div class="sec-k">توزيع المبلغ على الحجاج (${groupAlloc.length})</div><div class="alloc-grid">${
+        groupAlloc.map(a => `<div class="alloc-i"><span class="n">${esc(a.name)}</span><b>${receiptAmount(Number(a.amount))}</b></div>`).join("")
+      }</div></div>`
+    : appendix
+      ? `<div class="sec alloc alloc-ref"><span class="sec-k">توزيع المبلغ على الحجاج (${groupAlloc.length})</span><span class="ref">مرفقٌ بالورقة التالية — ملحق الإيصال رقم ${esc(receiptNo)}</span></div>`
+      : "";
+  const allocPage = appendix
+    ? `<section class="alloc-page">
+  <div class="ap-head">
+    <div><div class="ap-title">ملحق إيصال استلام مبلغ رقم ${esc(receiptNo)} — توزيع المبلغ على الحجاج</div>
+      <div class="ap-sub">${esc(companyName)} · ${esc(receipt.season_name)} · <span class="num">${esc(receipt.payment_date)}</span></div></div>
+    <div class="ap-sum"><span>استلمنا من / <b>${esc(receipt.payer_name)}</b></span><span>الإجمالي: <b class="num">${receiptAmount(total)}</b> ريال قطري</span></div>
+  </div>
+  <table class="ap-table"><thead><tr><th class="c">م</th><th>الحاج</th><th class="c">النصيب (ر.ق)</th></tr></thead><tbody>${
+    groupAlloc.map((a, i) => `<tr><td class="c">${i + 1}</td><td>${esc(a.name)}</td><td class="c num">${receiptAmount(Number(a.amount))}</td></tr>`).join("")
+  }</tbody><tfoot><tr><td></td><td>الإجمالي (${groupAlloc.length} حاجّاً)</td><td class="c num">${receiptAmount(total)}</td></tr></tfoot></table>
+</section>`
     : "";
+  const details = (receipt.notes ?? "").trim();
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>إيصال استلام دفعة ${esc(receiptNo)}</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>إيصال استلام مبلغ ${esc(receiptNo)}</title>
 <style>
-  ${pageRule("10mm", false, "A5")}
+  ${pageRule("0", false, "A4")}
+  @page receipt-alloc { size: A4 portrait; margin: 12mm 0; }
   * { box-sizing: border-box; }
-  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; margin:0; padding:0; color:#1c1c1c; background:#fff; }
-  .receipt { border:2px solid ${cancelled ? PRINT_DANGER : primaryColor}; border-radius:12px; overflow:hidden; position:relative; }
-  .receipt-header { background:linear-gradient(135deg,${cancelled ? PRINT_DANGER : primaryColor},${cancelled ? "#7d1f1f" : accentColor}); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; }
-  .logo-box { width:50px; height:50px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.15); color:#fff; font-size:20px; font-weight:800; flex-shrink:0; }
-  .logo-box img { width:100%; height:100%; object-fit:contain; }
-  .receipt-title { font-size:10px; color:rgba(255,255,255,0.85); margin-bottom:2px; }
-  .receipt-subtitle { font-size:16px; font-weight:700; }
-  .no-badge { margin-inline-start:auto; text-align:center; background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.55); border-radius:9px; padding:5px 12px; }
-  .no-badge-label { font-size:8.5px; color:rgba(255,255,255,0.85); }
-  .no-badge-value { font-size:21px; font-weight:900; line-height:1.1; letter-spacing:.5px; }
-  .receipt-body { padding:16px 18px; }
-  .passenger-name { font-size:19px; font-weight:800; color:${primaryColor}; text-align:center; margin-bottom:12px; padding-bottom:10px; border-bottom:1.5px dashed #ddd; }
-  .amount-box { background:${primaryColor}10; border:2px solid ${primaryColor}; border-radius:10px; padding:12px; text-align:center; margin-bottom:12px; }
-  .amount-label { font-size:10px; color:#888; margin-bottom:3px; }
-  .amount-value { font-size:31px; font-weight:900; color:${primaryColor}; line-height:1; }
-  .amount-currency { font-size:12.5px; color:#888; margin-top:3px; }
-  .amount-words { font-size:11px; color:#444; margin-top:7px; padding-top:7px; border-top:1px dashed #ccc; line-height:1.6; }
-  .details-grid { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-size:12px; margin-bottom:12px; }
-  .detail-label { color:#888; white-space:nowrap; }
-  .detail-value { font-weight:600; }
-  .alloc { width:100%; border-collapse:collapse; font-size:10.5px; margin-bottom:12px; }
-  .alloc th { background:${primaryColor}; color:#fff; padding:3px 6px; font-weight:600; }
-  .alloc td { border-bottom:1px solid #eee; padding:3px 6px; }
-  .cancel-note { border:1.5px solid ${PRINT_DANGER}; background:#fdeaea; color:${PRINT_DANGER}; border-radius:8px; padding:8px 10px; font-size:11px; margin-bottom:12px; font-weight:700; }
-  .watermark { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-  .watermark span { font-size:74px; font-weight:900; color:${PRINT_DANGER}; opacity:.17; transform:rotate(-22deg); letter-spacing:8px; }
-  .receipt-footer { border-top:1.5px dashed #ddd; padding-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-  .stamp-area { text-align:center; }
-  .stamp-label { font-size:9.5px; color:#aaa; margin-bottom:5px; }
-  .stamp-box { border:1px dashed #ccc; border-radius:8px; height:62px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:3px; }
-  .stamp-box img { max-width:100%; max-height:100%; object-fit:contain; }
+  html, body { margin:0; padding:0; background:#fff; }
+  body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; color:#1f1f1f; }
+  /* ٢١٠ × ١٧٠مم بالضبط — ولا يطول إلا لتفاصيل استثنائيّة لا تسعها (لا قصّ) */
+  .sheet { width:210mm; min-height:180mm; padding:4mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
+  .receipt { position:relative; flex:1; border:0.45mm solid ${ink}; border-radius:3.5mm; padding:0; overflow:hidden;
+             background:#fff; display:flex; flex-direction:column; }
+  /* الفراغُ الزائد يتوزّع بين الأقسام بالتساوي — لا كتلةً واحدةً فوق الختم */
+  .frame { flex:1; border-top:2.3mm solid ${ink}; border-bottom:1.4mm solid ${RECEIPT_GOLD}; padding:5mm 5mm 3mm; display:flex; flex-direction:column; justify-content:space-between; gap:2mm; position:relative; }
+  .corner { display:none; position:absolute; line-height:0; opacity:.55; }
+  .corner.tr { top:1mm; right:1mm; } .corner.tl { top:1mm; left:1mm; }
+  .corner.br { bottom:1mm; right:1mm; } .corner.bl { bottom:1mm; left:1mm; }
+
+  .head { display:grid; grid-template-columns:1.1fr 1.1fr .9fr; align-items:center; gap:2.5mm; padding-bottom:3mm; border-bottom:0.3mm solid #e3d7c5; }
+  .brand { display:flex; align-items:center; gap:2.6mm; min-width:0; }
+  .logo-box { width:23mm; height:23mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
+              background:${ink}; color:#fff; font-size:18px; font-weight:800; flex-shrink:0; }
+  .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
+  .company { font-size:20px; font-weight:900; color:${ink}; line-height:1.25; }
+  .tagline { font-size:11px; color:#6b5c60; margin-top:0.6mm; }
+  .title { text-align:center; }
+  .title h1 { margin:0; padding:0; font-size:23px; font-weight:900; color:${ink}; background:transparent; border:0; letter-spacing:.2px; white-space:nowrap; }
+  .title .rule { display:flex; align-items:center; justify-content:center; gap:1.6mm; margin-top:1mm; }
+  .title .rule i { display:block; width:14mm; height:0.3mm; background:${RECEIPT_GOLD}; }
+  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:1.3mm 2mm; font-size:11px; align-items:baseline; border:0.25mm solid #e7d9c4; border-radius:2mm; padding:1.8mm 2.2mm; background:#faf8f5; }
+  .meta .k { color:#8a7a5a; text-align:start; white-space:nowrap; }
+  .meta .v { font-weight:700; color:#1f1f1f; white-space:nowrap; direction:ltr; text-align:end; unicode-bidi:isolate; }
+  .meta .v.no { font-size:18px; font-weight:900; color:${ink}; }
+  .meta .v.season { direction:rtl; text-align:start; }
+
+  .sec-k { font-size:11px; font-weight:800; color:#8a7a5a; white-space:nowrap; }
+  .payer { display:flex; align-items:center; gap:4mm; padding:2.5mm 3mm; border:0; border-right:1.1mm solid ${RECEIPT_GOLD}; border-radius:1.7mm; background:#fbf8f4; }
+  .payer .sec-k { font-size:13px; font-weight:800; color:#8b6e4c; background:transparent; border:0; padding:0; white-space:nowrap; }
+  .payer .v { font-size:22px; font-weight:900; color:${ink}; line-height:1.35; overflow-wrap:anywhere; }
+  .payer .tag { font-size:11px; font-weight:700; color:${ink}; white-space:nowrap; }
+
+  /* Reference mockup: two adjacent, equally aligned amount cards, with prominent words. */
+  .amount { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:3mm; direction:rtl; min-height:33mm; }
+  .amount-card { border:0.3mm solid #e1d4c9; border-radius:2.5mm; overflow:hidden; background:#fff; min-width:0; display:flex; flex-direction:column; }
+  .amount-card .card-heading { background:#f9f4ec; color:${ink}; text-align:start; font-size:13px; font-weight:900; padding:2mm 3mm; border-bottom:0.25mm solid #eee0cf; }
+  .amount-card .card-body { flex:1; min-height:15mm; display:flex; align-items:center; justify-content:center; padding:2.5mm 3mm; }
+  .amount-words .card-body { font-size:18px; line-height:1.5; font-weight:900; color:${ink}; text-align:center; overflow-wrap:anywhere; }
+  .amount-number .card-body { gap:2mm; direction:ltr; }
+  .amount-number b { font-size:37px; line-height:1.1; color:${ink}; font-weight:900; white-space:nowrap; }
+  .amount-number .cur { font-size:12px; color:${ink}; font-weight:800; text-align:center; }
+
+  .method { display:flex; align-items:center; gap:2.4mm; }
+  .method .sec-k { font-size:12px; color:#7d7272; }
+  .method .v { font-size:14px; font-weight:800; color:${ink}; border:0.25mm solid #dec9a1; border-radius:10mm; padding:1mm 4mm; background:#fbf5e9; }
+
+  .details { border:0.3mm solid #e2d7ce; border-radius:2.5mm; background:#fff; padding:2.5mm 3mm; min-height:23mm; }
+  .details .sec-k { display:block; background:transparent; color:${ink}; border-radius:0; padding:0; margin-bottom:1.6mm; font-size:14px; }
+  /* ثلاثةُ أسطرٍ محجوزة (والإيصال يطول إن زاد النصُّ عن مكانه استثناءً — لا قصّ) */
+  .details .v { font-size:13px; color:#393036; line-height:1.6; min-height:calc(13px * 1.6 * 2); white-space:pre-line; overflow-wrap:anywhere;
+                unicode-bidi:plaintext; text-align:start; }
+  .details .v.empty { color:#b5b5b5; }
+
+  .alloc .sec-k { color:${ink}; margin-bottom:0.8mm; }
+  .alloc-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.6mm 6mm; font-size:11px; }
+  .alloc-i { display:flex; justify-content:space-between; gap:2mm; border-bottom:0.25mm solid #eee5d2; padding:0.3mm 0; min-width:0; }
+  .alloc-i .n { overflow-wrap:anywhere; min-width:0; }
+  .alloc-i b { direction:ltr; unicode-bidi:isolate; white-space:nowrap; font-weight:800; }
+  .alloc-ref { display:flex; align-items:baseline; gap:2.4mm; font-size:11px; }
+  .alloc-ref .sec-k { margin:0; }
+  .alloc-ref .ref { color:#555; font-weight:700; }
+
+  .cancel-note { border:0.35mm solid ${PRINT_DANGER}; background:#fdeaea; color:${PRINT_DANGER}; border-radius:1.6mm; padding:1.2mm 2.6mm; font-size:10.5px; font-weight:700; }
+  .watermark { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:3; }
+  .watermark span { font-size:68px; font-weight:900; color:${PRINT_DANGER}; opacity:.16; transform:rotate(-18deg); letter-spacing:8px; }
+
+  /* المنطقةُ المحجوزة للختم والتوقيع — بارتفاع أكبرِ صندوقيهما، لا تُضغط */
+  .receipt-footer { display:grid; grid-template-columns:1fr 1fr; gap:6mm; padding-top:2.8mm; margin-top:auto; border-top:0.3mm solid #e9e0d5; break-inside:avoid; min-height:46mm; }
+  .stamp-area { text-align:center; display:flex; flex-direction:column; align-items:center; }
+  .stamp-label { font-size:14px; font-weight:800; color:${ink}; margin-bottom:1mm; }
+  .stamp-box { width:100%; min-height:${Math.max(sealAreaMm,37)}mm; border:0.25mm dashed #d0c4a8; border-radius:2mm; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0.8mm; }
+  .stamp-box img { max-width:100%; max-height:${sealAreaMm}mm; object-fit:contain; }
   .stamp-box.has-img { border-color:transparent; padding:0; }
-  .stamp-box.sized { height:auto; min-height:62px; overflow:visible; }
+  .stamp-box.sized { overflow:visible; }
   .stamp-box.sized img { max-width:100%; height:auto; max-height:none; }
   .receipt-multipage .stamp-area.e-sealed { display:none; }
+
+  /* الورقةُ المرفقة: توزيعُ دفعة مجموعةٍ تزيد على ${RECEIPT_INLINE_ALLOC_MAX} حجّاج — كاملاً، بلا قصّ */
+  .alloc-page { page:receipt-alloc; break-before:page; width:210mm; padding:0 12mm; }
+  .ap-head { border:0.4mm solid ${primaryColor}; border-radius:2mm; padding:2.4mm 4mm; margin-bottom:3mm; background:#FFFDF8; }
+  .ap-title { font-size:13px; font-weight:800; color:${primaryColor}; }
+  .ap-sub { font-size:10px; color:#8a7a5a; margin-top:0.6mm; }
+  .ap-sum { display:flex; justify-content:space-between; gap:4mm; margin-top:1.6mm; padding-top:1.4mm; border-top:0.25mm dashed #d9cdb3; font-size:11px; }
+  .ap-table { width:100%; border-collapse:collapse; font-size:10.5px; }
+  .ap-table thead { display:table-header-group; }
+  .ap-table th { background:${primaryColor}; color:#fff; padding:1.2mm 2.4mm; font-weight:700; text-align:start; }
+  .ap-table td { border-bottom:0.25mm solid #e6e0d2; padding:1mm 2.4mm; }
+  .ap-table tr { break-inside:avoid; }
+  .ap-table .c { text-align:center; }
+  .ap-table tfoot td { font-weight:800; border-top:0.4mm solid ${primaryColor}; border-bottom:none; }
+  .num { direction:ltr; unicode-bidi:isolate; }
   ${COLOR_ADJUST_RULE_ALL}
 </style></head><body>
-<div class="receipt">
+<div class="sheet"><div class="receipt">
   ${cancelled ? `<div class="watermark"><span>ملغي</span></div>` : ""}
-  <div class="receipt-header">
-    <div class="logo-box">${logoHtml}</div>
-    <div>
-      <div class="receipt-title">${esc(companyName)}${tagline ? " · " + esc(tagline) : ""}</div>
-      <div class="receipt-subtitle">إيصال استلام دفعة${cancelled ? " — ملغي" : ""}</div>
+  <div class="frame">
+    <span class="corner tr">${STAR8(11, RECEIPT_GOLD)}</span><span class="corner tl">${STAR8(11, RECEIPT_GOLD)}</span>
+    <span class="corner br">${STAR8(11, RECEIPT_GOLD)}</span><span class="corner bl">${STAR8(11, RECEIPT_GOLD)}</span>
+    <div class="head">
+      <div class="brand">
+        <div class="logo-box">${logoHtml}</div>
+        <div><div class="company">${esc(companyName)}</div>${tagline ? `<div class="tagline">${esc(tagline)}</div>` : ""}</div>
+      </div>
+      <div class="title">
+        <h1>إيصال استلام مبلغ${cancelled ? " — ملغي" : ""}</h1>
+        <div class="rule"><i></i>${STAR8(9, RECEIPT_GOLD)}<i></i></div>
+      </div>
+      <div class="meta">
+        <span class="k">رقم الإيصال</span><span class="v no">${esc(receiptNo)}</span>
+        <span class="k">التاريخ</span><span class="v">${esc(receipt.payment_date)}</span>
+        <span class="k">الموسم</span><span class="v season">${esc(receipt.season_name)}</span>
+      </div>
     </div>
-    <div class="no-badge">
-      <div class="no-badge-label">رقم الإيصال</div>
-      <div class="no-badge-value">${esc(receiptNo)}</div>
-    </div>
-  </div>
-  <div class="receipt-body">
-    <div class="passenger-name">${esc(receipt.payer_name)}${isGroup ? " — دفعة مجموعة" : ""}</div>
+    <div class="sec payer"><span class="sec-k">استلمنا من /</span><span class="v">${esc(receipt.payer_name)}</span>${isGroup ? `<span class="tag">— دفعة مجموعة</span>` : ""}</div>
     ${cancelled ? `<div class="cancel-note">هذا الإيصال ملغي${receipt.cancel_reason ? ` — السبب: ${esc(receipt.cancel_reason)}` : ""}</div>` : ""}
-    <div class="amount-box">
-      <div class="amount-label">المبلغ المستلم</div>
-      <div class="amount-value">${fmtAmt(total)}</div>
-      <div class="amount-currency">ريال قطري · QAR</div>
-      <div class="amount-words">${esc(amountInArabicWords(total))}</div>
+    <div class="sec amount">
+      <div class="amount-card amount-words"><div class="card-heading">المبلغ كتابةً</div><div class="card-body">${esc(amountInArabicWords(total))}</div></div>
+      <div class="amount-card amount-number"><div class="card-heading">المبلغ المستلم</div><div class="card-body"><b>${receiptAmount(total)}</b><span class="cur">QAR<br/>ريال قطري</span></div></div>
     </div>
-    <div class="details-grid">
-      <div class="detail-label">التاريخ:</div>
-      <div class="detail-value">${esc(receipt.payment_date)}</div>
-      <div class="detail-label">طريقة الدفع:</div>
-      <div class="detail-value">${esc(receipt.method)}</div>
-      <div class="detail-label">الموسم:</div>
-      <div class="detail-value">${esc(receipt.season_name)}</div>
-      ${receipt.issued_by ? `<div class="detail-label">المُحصِّل:</div><div class="detail-value">${esc(receipt.issued_by)}</div>` : ""}
-      ${receipt.notes ? `<div class="detail-label">ملاحظات:</div><div class="detail-value">${esc(receipt.notes)}</div>` : ""}
-    </div>
-    ${allocRows}
+    <div class="sec method"><span class="sec-k">طريقة الدفع:</span><span class="v">${esc(receipt.method)}</span></div>
+    <div class="sec details"><div class="sec-k">تفاصيل الدفعة</div>${details
+      ? `<div class="v" dir="auto">${esc(details)}</div>` : `<div class="v empty">—</div>`}</div>
+    ${allocInline}
     <div class="receipt-footer">
       <div class="stamp-area${seals?.stamp && stampSrc ? " e-sealed" : ""}">
         <div class="stamp-label">ختم الشركة</div>
@@ -191,7 +307,7 @@ export function makeReceiptHTML(
       </div>
     </div>
   </div>
-</div>${sealPlan}
+</div></div>${allocPage}${sealPlan}
 </body></html>`;
 }
 

@@ -55,6 +55,7 @@ const TABLES = {
     { asset_key: "manager_signature", asset_url: "manager_signature_1.png", alt_text: null, metadata: {}, updated_at: null }],
 };
 
+const issued = [];
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 const ctx = await browser.newContext({ viewport: { width: 1366, height: 860 } });
 /* الصورتان: حبرٌ في وسط لوحةٍ شفّافةٍ واسعة — كما تُرفع */
@@ -80,6 +81,13 @@ await ctx.route(`${MOCK}/**`, async route => {
     if (req.method() === "POST") return json(route, { signedURL: `/object/sign/company-private/${key}?token=t` });
     const body = key.startsWith("company_stamp") ? png(PNG.stamp) : key.startsWith("manager_signature") ? png(PNG.signature) : null;
     return body ? route.fulfill({ status: 200, contentType: "image/png", headers: { "access-control-allow-origin": "*" }, body }) : route.fulfill({ status: 404, body: "" });
+  }
+  /* تسجيلُ دفعة: يُلتقط جسمُ الطلب كما أُرسل، ويُعاد صفُّ الإيصال كما تجمّده الدالّة (`btrim`) */
+  if (path === "/rest/v1/rpc/issue_payment_receipt") {
+    const body = JSON.parse(req.postData() || "{}"); issued.push(body);
+    const total = body.p_allocations.reduce((t, x) => t + Number(x.amount), 0);
+    return json(route, { ...receipts[0], id: 99, receipt_number: 1099, total_amount: total, method: body.p_method, payment_date: body.p_payment_date,
+      notes: (body.p_notes ?? "").replace(/^ +| +$/g, "") || null });
   }
   if (path.startsWith("/rest/v1/rpc/")) return json(route, null);
   if (path.startsWith("/rest/v1/")) {
@@ -126,14 +134,15 @@ async function printed(tag) {
   const imgs = execFileSync("pdfimages", ["-list", pdf], { encoding: "utf8" }).split("\n").slice(2).filter(l => l.trim().split(/\s+/)[2] === "image").length;
   const pages = +execFileSync("pdfinfo", [pdf], { encoding: "utf8" }).match(/Pages:\s+(\d+)/)[1];
   await page.evaluate(() => document.getElementById("__print_frame__")?.remove());
-  return { imgs, pages, size: /size:\s*A5/.test(html) };
+  /* الإيصالُ نصفُ A4: ورقةُ A4 والإيصالُ صندوقُ ٢١٠ × ١٤٨٫٥مم */
+  return { imgs, pages, size: /size:\s*A4 portrait/.test(html) && /\.sheet \{ width:210mm; min-height:170mm/.test(html) };
 }
 async function combos(title, printLabel, tag) {
   for (const [stamp, signature, want] of [[false, false, 0], [true, false, 1], [false, true, 1], [true, true, 2]]) {
     await setSeals(title, stamp, signature);
     await card(title).getByRole("button", { name: printLabel }).click();
     const r = await printed(`${tag}-stamp${+stamp}-sig${+signature}`);
-    check(`${tag}: stamp ${stamp ? "ON" : "OFF"} / signature ${signature ? "ON" : "OFF"} → ${want} image(s) on the A5 receipt`, r.imgs === want && r.pages === 1 && r.size, `images ${r.imgs}, pages ${r.pages}`);
+    check(`${tag}: stamp ${stamp ? "ON" : "OFF"} / signature ${signature ? "ON" : "OFF"} → ${want} image(s) on the 210 × 170 mm receipt`, r.imgs === want && r.pages === 1 && r.size, `images ${r.imgs}, pages ${r.pages}`);
   }
 }
 
@@ -183,6 +192,35 @@ if (aOpts) {
   await card(A).getByRole("button", { name: "إغلاق" }).click();
   check("A: closing returns to the pilgrim statement", !(await card(A).isVisible().catch(() => false)) && await page.getByTitle("اضغط لعرض التفاصيل").first().isVisible());
 }
+
+/* ── ج) نموذجُ تسجيل الدفعة: «تفاصيل الدفعة (اختياري)» نصٌّ متعدّد الأسطر يصل إلى الدالّة ويُطبع في الإيصال ── */
+const DETAILS = "الدفعة الثانية من قيمة الباقة\nتحويل بنكي من QNB — Ref: TRX-2026-04-118";
+await page.getByRole("button", { name: "+ تسجيل دفعة" }).click();
+const C = "تسجيل دفعة جديدة";
+const field = card(C).getByRole("textbox", { name: "تفاصيل الدفعة (اختياري)" });
+const fieldInfo = await field.evaluate(e => ({ tag: e.tagName, rows: e.rows, dir: e.getAttribute("dir") })).catch(() => null);
+const oldLabel = await card(C).getByText("ملاحظات (اختياري)").count();
+check("C: payment form shows «تفاصيل الدفعة (اختياري)» as a multiline textarea (old «ملاحظات» label gone)",
+  fieldInfo?.tag === "TEXTAREA" && fieldInfo.rows >= 3 && fieldInfo.dir === "auto" && oldLabel === 0, JSON.stringify(fieldInfo));
+await card(C).locator("input[type=number]").fill("1000");
+await card(C).locator("select").selectOption("تحويل بنكي");
+await field.click(); await page.keyboard.type("الدفعة الثانية من قيمة الباقة"); await page.keyboard.press("Enter"); await page.keyboard.type("تحويل بنكي من QNB — Ref: TRX-2026-04-118");
+check("C: the field is editable (typed text incl. a line break is kept)", (await field.inputValue()) === DETAILS, JSON.stringify(await field.inputValue()));
+await card(C).getByRole("button", { name: "حفظ" }).click();
+/* الحاجُّ التجريبيّ بلا مستحقّ: تأكيدُ «مبلغ يتجاوز المتبقي» كما يفعل الموظّف */
+const over = page.locator("[data-confirm-dialog] button", { hasText: /^تأكيد$/ });
+await over.last().waitFor({ timeout: 3000 }).catch(() => {});
+if (await over.count()) await over.last().click();
+await page.getByText("تم تسجيل الدفعة").waitFor({ timeout: 8000 }).catch(() => {});
+check("C: saved through the existing RPC — p_notes carries the details exactly (no new field)", issued.length === 1 && issued[0].p_notes === DETAILS
+  && Object.keys(issued[0]).sort().join() === "p_allocations,p_group_name,p_method,p_notes,p_payment_date", JSON.stringify(issued[0] ?? null));
+const R = "تم تسجيل الدفعة";
+await card(R).getByRole("button", { name: /^🖨️ طباعة$/ }).click();
+await page.waitForFunction(() => { const f = document.getElementById("__print_frame__"); return f && f.contentDocument && f.contentDocument.querySelector(".details .v"); }, null, { timeout: 15000 }).catch(() => {});
+const printedDetails = await page.evaluate(() => document.getElementById("__print_frame__")?.contentDocument?.querySelector(".details .v")?.textContent ?? null);
+check("C: the issued receipt prints the details under the amount and method, line break kept", printedDetails === DETAILS, JSON.stringify(printedDetails));
+await page.evaluate(() => document.getElementById("__print_frame__")?.remove());
+await card(R).getByRole("button", { name: "إغلاق" }).click().catch(() => {});
 
 check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 writeFileSync(join(OUT, "report.json"), JSON.stringify(results, null, 2));
