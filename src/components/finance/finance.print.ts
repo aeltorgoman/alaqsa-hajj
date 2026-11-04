@@ -173,56 +173,56 @@ export function makeReceiptHTML(
   html, body { margin:0; padding:0; background:#fff; }
   body { font-family:'Tajawal','Arial',sans-serif; direction:rtl; color:#1f1f1f; }
   /* ٢١٠ × ١٧٠مم بالضبط — ولا يطول إلا لتفاصيل استثنائيّة لا تسعها (لا قصّ) */
-  .sheet { width:210mm; min-height:180mm; padding:3.5mm 4mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
-  .receipt { position:relative; flex:1; border:0.5mm solid ${ink}; border-radius:2.5mm; padding:1.8mm;
+  .sheet { width:210mm; min-height:180mm; padding:4mm; position:relative; display:flex; flex-direction:column; break-inside:auto; }
+  .receipt { position:relative; flex:1; border:0.45mm solid ${ink}; border-radius:3.5mm; padding:0; overflow:hidden;
              background:#fff; display:flex; flex-direction:column; }
   /* الفراغُ الزائد يتوزّع بين الأقسام بالتساوي — لا كتلةً واحدةً فوق الختم */
-  .frame { flex:1; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:1.6mm; padding:2.6mm 3.6mm 2.6mm; display:flex; flex-direction:column; justify-content:space-between; gap:1.4mm; position:relative; }
-  .corner { position:absolute; line-height:0; opacity:.55; }
+  .frame { flex:1; border-top:2.3mm solid ${ink}; border-bottom:1.4mm solid ${RECEIPT_GOLD}; padding:5mm 5mm 3mm; display:flex; flex-direction:column; justify-content:space-between; gap:2mm; position:relative; }
+  .corner { display:none; position:absolute; line-height:0; opacity:.55; }
   .corner.tr { top:1mm; right:1mm; } .corner.tl { top:1mm; left:1mm; }
   .corner.br { bottom:1mm; right:1mm; } .corner.bl { bottom:1mm; left:1mm; }
 
-  .head { display:grid; grid-template-columns:1.15fr auto 1fr; align-items:center; gap:2mm; padding-bottom:2mm; border-bottom:0.35mm solid ${RECEIPT_GOLD}; }
+  .head { display:grid; grid-template-columns:1.1fr 1.1fr .9fr; align-items:center; gap:2.5mm; padding-bottom:3mm; border-bottom:0.3mm solid #e3d7c5; }
   .brand { display:flex; align-items:center; gap:2.6mm; min-width:0; }
-  .logo-box { width:26mm; height:26mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  .logo-box { width:23mm; height:23mm; border-radius:2mm; overflow:hidden; display:flex; align-items:center; justify-content:center;
               background:${ink}; color:#fff; font-size:18px; font-weight:800; flex-shrink:0; }
   .logo-box img { width:100%; height:100%; object-fit:contain; background:#fff; }
-  .company { font-size:21px; font-weight:800; color:${ink}; line-height:1.25; }
-  .tagline { font-size:13px; color:#7a7a7a; margin-top:0.6mm; }
+  .company { font-size:20px; font-weight:900; color:${ink}; line-height:1.25; }
+  .tagline { font-size:11px; color:#6b5c60; margin-top:0.6mm; }
   .title { text-align:center; }
-  .title h1 { margin:0; padding:2mm 4mm; font-size:26px; font-weight:900; color:#fff; background:${ink}; border:0.55mm solid ${RECEIPT_GOLD}; border-radius:3mm; letter-spacing:.2px; white-space:nowrap; }
+  .title h1 { margin:0; padding:0; font-size:23px; font-weight:900; color:${ink}; background:transparent; border:0; letter-spacing:.2px; white-space:nowrap; }
   .title .rule { display:flex; align-items:center; justify-content:center; gap:1.6mm; margin-top:1mm; }
   .title .rule i { display:block; width:14mm; height:0.3mm; background:${RECEIPT_GOLD}; }
-  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:1mm 2mm; font-size:13px; align-items:baseline; border:0.3mm solid ${RECEIPT_GOLD}; border-radius:2.5mm; padding:2mm; background:#fff; }
+  .meta { justify-self:end; display:grid; grid-template-columns:auto auto; gap:1.3mm 2mm; font-size:11px; align-items:baseline; border:0.25mm solid #e7d9c4; border-radius:2mm; padding:1.8mm 2.2mm; background:#faf8f5; }
   .meta .k { color:#8a7a5a; text-align:start; white-space:nowrap; }
   .meta .v { font-weight:700; color:#1f1f1f; white-space:nowrap; direction:ltr; text-align:end; unicode-bidi:isolate; }
-  .meta .v.no { font-size:20px; font-weight:900; color:${ink}; }
+  .meta .v.no { font-size:18px; font-weight:900; color:${ink}; }
   .meta .v.season { direction:rtl; text-align:start; }
 
   .sec-k { font-size:11px; font-weight:800; color:#8a7a5a; white-space:nowrap; }
-  .payer { display:flex; align-items:center; gap:2.5mm; padding-bottom:1.6mm; border-bottom:0.25mm dashed #d9cdb3; }
-  .payer .sec-k { font-size:18px; font-weight:800; color:${ink}; background:#fff1cf; border-radius:2mm; padding:1.4mm 2.5mm; white-space:nowrap; }
-  .payer .v { font-size:25px; font-weight:900; color:${ink}; line-height:1.35; overflow-wrap:anywhere; }
+  .payer { display:flex; align-items:center; gap:4mm; padding:2.5mm 3mm; border:0; border-right:1.1mm solid ${RECEIPT_GOLD}; border-radius:1.7mm; background:#fbf8f4; }
+  .payer .sec-k { font-size:13px; font-weight:800; color:#8b6e4c; background:transparent; border:0; padding:0; white-space:nowrap; }
+  .payer .v { font-size:22px; font-weight:900; color:${ink}; line-height:1.35; overflow-wrap:anywhere; }
   .payer .tag { font-size:11px; font-weight:700; color:${ink}; white-space:nowrap; }
 
   /* Reference mockup: two adjacent, equally aligned amount cards, with prominent words. */
-  .amount { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:2.2mm; direction:rtl; }
-  .amount-card { border:0.45mm solid ${ink}; border-radius:3mm; overflow:hidden; background:#fff; min-width:0; display:flex; flex-direction:column; }
-  .amount-card .card-heading { background:#fff0cf; color:${ink}; text-align:center; font-size:17px; font-weight:900; padding:1.4mm 1mm; }
-  .amount-card .card-body { flex:1; min-height:15mm; display:flex; align-items:center; justify-content:center; padding:1.5mm 2.2mm; }
-  .amount-words .card-body { font-size:19px; line-height:1.45; font-weight:900; color:${ink}; text-align:center; overflow-wrap:anywhere; }
+  .amount { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:3mm; direction:rtl; min-height:33mm; }
+  .amount-card { border:0.3mm solid #e1d4c9; border-radius:2.5mm; overflow:hidden; background:#fff; min-width:0; display:flex; flex-direction:column; }
+  .amount-card .card-heading { background:#f9f4ec; color:${ink}; text-align:start; font-size:13px; font-weight:900; padding:2mm 3mm; border-bottom:0.25mm solid #eee0cf; }
+  .amount-card .card-body { flex:1; min-height:15mm; display:flex; align-items:center; justify-content:center; padding:2.5mm 3mm; }
+  .amount-words .card-body { font-size:18px; line-height:1.5; font-weight:900; color:${ink}; text-align:center; overflow-wrap:anywhere; }
   .amount-number .card-body { gap:2mm; direction:ltr; }
-  .amount-number b { font-size:36px; line-height:1.1; color:${ink}; font-weight:900; white-space:nowrap; }
+  .amount-number b { font-size:37px; line-height:1.1; color:${ink}; font-weight:900; white-space:nowrap; }
   .amount-number .cur { font-size:12px; color:${ink}; font-weight:800; text-align:center; }
 
   .method { display:flex; align-items:center; gap:2.4mm; }
-  .method .sec-k { font-size:16px; color:${ink}; }
-  .method .v { font-size:16px; font-weight:800; color:${ink}; border:0.25mm solid ${RECEIPT_GOLD}; border-radius:5mm; padding:0.6mm 3.6mm; background:#fff; }
+  .method .sec-k { font-size:12px; color:#7d7272; }
+  .method .v { font-size:14px; font-weight:800; color:${ink}; border:0.25mm solid #dec9a1; border-radius:10mm; padding:1mm 4mm; background:#fbf5e9; }
 
-  .details { border:0.35mm solid ${ink}; border-radius:2.5mm; background:#fff; padding:2mm 3mm 2mm; }
-  .details .sec-k { display:inline-block; background:${ink}; color:#fff; border-radius:1.5mm; padding:1mm 3mm; margin-bottom:1mm; font-size:15px; }
+  .details { border:0.3mm solid #e2d7ce; border-radius:2.5mm; background:#fff; padding:2.5mm 3mm; min-height:23mm; }
+  .details .sec-k { display:block; background:transparent; color:${ink}; border-radius:0; padding:0; margin-bottom:1.6mm; font-size:14px; }
   /* ثلاثةُ أسطرٍ محجوزة (والإيصال يطول إن زاد النصُّ عن مكانه استثناءً — لا قصّ) */
-  .details .v { font-size:15px; color:#222; line-height:1.4; min-height:calc(15px * 1.4 * 2); white-space:pre-line; overflow-wrap:anywhere;
+  .details .v { font-size:13px; color:#393036; line-height:1.6; min-height:calc(13px * 1.6 * 2); white-space:pre-line; overflow-wrap:anywhere;
                 unicode-bidi:plaintext; text-align:start; }
   .details .v.empty { color:#b5b5b5; }
 
@@ -240,10 +240,10 @@ export function makeReceiptHTML(
   .watermark span { font-size:68px; font-weight:900; color:${PRINT_DANGER}; opacity:.16; transform:rotate(-18deg); letter-spacing:8px; }
 
   /* المنطقةُ المحجوزة للختم والتوقيع — بارتفاع أكبرِ صندوقيهما، لا تُضغط */
-  .receipt-footer { display:grid; grid-template-columns:1fr 1fr; gap:10mm; padding-top:1.4mm; border-top:0.25mm dashed #d9cdb3; break-inside:avoid; }
+  .receipt-footer { display:grid; grid-template-columns:1fr 1fr; gap:6mm; padding-top:2.8mm; margin-top:auto; border-top:0.3mm solid #e9e0d5; break-inside:avoid; min-height:46mm; }
   .stamp-area { text-align:center; display:flex; flex-direction:column; align-items:center; }
-  .stamp-label { font-size:17px; font-weight:800; color:${ink}; margin-bottom:0.8mm; }
-  .stamp-box { width:100%; min-height:${sealAreaMm}mm; border:0.25mm dashed #d0c4a8; border-radius:2mm; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0.8mm; }
+  .stamp-label { font-size:14px; font-weight:800; color:${ink}; margin-bottom:1mm; }
+  .stamp-box { width:100%; min-height:${Math.max(sealAreaMm,37)}mm; border:0.25mm dashed #d0c4a8; border-radius:2mm; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0.8mm; }
   .stamp-box img { max-width:100%; max-height:${sealAreaMm}mm; object-fit:contain; }
   .stamp-box.has-img { border-color:transparent; padding:0; }
   .stamp-box.sized { overflow:visible; }
