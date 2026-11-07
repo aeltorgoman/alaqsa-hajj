@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ════════════════════════════════════════════════════════════
-# رقمُ الجواز والهوية فريدٌ في الموسم (20261101120000) — بالتنفيذ
+# رقمُ الجواز والهوية فريدٌ في الموسم (20261101155834) — بالتنفيذ
 # ════════════════════════════════════════════════════════════
 # على قاعدةٍ محلّيّةٍ بعد الترحيلات كلّها:
 #   LOCAL='postgresql://postgres:postgres@127.0.0.1:54322/postgres' supabase/verification/passengers/doc_uniqueness_tests.sh
@@ -20,7 +20,7 @@ case "$LOCAL" in
   *) echo "يرفض: $LOCAL ليست قاعدةً محلّيّة"; exit 2 ;;
 esac
 HERE="$(cd "$(dirname "$0")" && pwd)"
-MIG="$HERE/../../migrations/20261101120000_passengers_document_uniqueness_per_season.sql"
+MIG="$HERE/../../migrations/20261101155834_passengers_document_uniqueness_per_season.sql"
 pass=0; fail=0
 ok()  { echo "PASS — $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL — $1"; fail=$((fail + 1)); }
