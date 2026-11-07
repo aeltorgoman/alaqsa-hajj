@@ -125,8 +125,9 @@ for (const [path, pageName] of [["/mina", "منى"], ["/arafat", "عرفة"]]) {
 
   await open("خاص أول");
   const prvText = await dialog.innerText();
-  check(`${pageName}: private tent lists unassigned men AND women, labelled «رجال ونساء»`,
-    prvText.includes("رجل أول") && prvText.includes("امرأة أولى") && prvText.includes("رجال ونساء") && prvText.includes("من الرجال والنساء"), "");
+  /* منذ 20261107160000: الخاصّ تميّزه شارةُ «خاص» لا «رجال ونساء» (الطباعةُ وحدها تقولها صراحةً) */
+  check(`${pageName}: private tent lists unassigned men AND women, shown as «خاص» (no «رجال ونساء»)`,
+    prvText.includes("رجل أول") && prvText.includes("امرأة أولى") && prvText.includes("خاص") && !prvText.includes("رجال ونساء") && prvText.includes("من الحجاج"), "");
   await page.screenshot({ path: join(OUT, `camps-${pageName === "منى" ? "mina" : "arafa"}-private.png`) });
   /* إسنادٌ جماعيّ: رجلٌ وامرأةٌ معاً */
   for (const n of ["رجل أول", "امرأة أولى"]) await dialog.getByText(n, { exact: true }).first().click();

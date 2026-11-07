@@ -47,6 +47,9 @@ for (const tag of ["mina", "arafa"]) {
     !html("camp-2").includes("رجال ونساء") && !html("camp-3").includes("رجال ونساء")
     && has(men, "رجال") && has(women, "نساء") && has(men, "رجل عادي") && has(women, "امرأة عادية"));
   check(`${tag}: all-camps print labels the private tent «رجال ونساء»`, html("all").includes("رجال ونساء") && has(all, "رجال ونساء"));
+  const legacy = await printed(`${tag}-camp-4`);
+  check(`${tag}: a private tent with a legacy gender still prints «رجال ونساء» (gender ignored)`,
+    html("camp-4").includes("رجال ونساء") && has(legacy, "رجال ونساء"));
 }
 await browser.close();
 const bad = results.filter(r => !r).length;

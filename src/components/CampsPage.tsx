@@ -16,7 +16,7 @@ import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
   ALLOC_GRID, ALLOC_GAP, AllocationCard, AllocationDialog, AllocationSearch, AllocationStates,
-  AssignedRow, CapacityBar, DialogAction, PassengerPicker, RosterHeader, SuggestionStrip,
+  AssignedRow, CapacityBar, DialogAction, PassengerPicker, PremiumBadge, RosterHeader, SuggestionStrip,
   type PickerItem, type SuggestionItem,
 } from "./allocation/AllocationUI";
 import {
@@ -28,6 +28,8 @@ import { deleteContainer, deleteFeedback, useInFlight } from "./allocation/conta
    نوعياً. ومنى وعرفة يفترقان هنا وحدهما: عمودُ إسنادٍ وعمودُ ترتيبٍ
    ومفتاحُ خدمة. ما بعد ذلك واحد. */
 type CampIdKey = "camp_mina_id" | "camp_arafa_id";
+/* مجموعاتُ العرض والترتيب: «ذكر»/«أنثى» للعاديّ، و«خاص» للخاصّ كلّه */
+type CampGroup = "ذكر" | "أنثى" | "خاص";
 type CampServiceKey = "camp_mina" | "camp_arafa";
 
 const MinaIcon = () => (
@@ -105,7 +107,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const [capDraft, setCapDraft] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [campName, setCampName] = useState("");
-  const [campGender, setCampGender] = useState<"ذكر" | "أنثى">("ذكر");
+  /* الجنسُ للمخيّم العاديّ وحده — `null` = لم يُختر بعد (تحويلُ خاصٍّ إلى عاديّ) */
+  const [campGender, setCampGender] = useState<"ذكر" | "أنثى" | null>("ذكر");
+  /* نموذجٌ واحدٌ للإضافة والتعديل: `editingCampId` يحدّد أيّهما */
+  const [editingCampId, setEditingCampId] = useState<number | null>(null);
   const [campType, setCampType] = useState<"عادي" | "خاص">("عادي");
   const [campCapacity, setCampCapacity] = useState("");
   const [formError, setFormError] = useState("");
@@ -155,7 +160,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const byContainerOrder = (a: Camp, b: Camp) =>
     ((a.sort_order ?? 0) - (b.sort_order ?? 0)) || a.id - b.id;
 
-  const inGroup = (gender: "ذكر" | "أنثى") => camps.filter(c => c.gender === gender).sort(byContainerOrder);
+  /* ثلاثُ مجموعاتٍ مستقلّة: عاديّ رجال، عاديّ نساء، والخاصّ كلُّه (أيّاً كان جنسٌ قديمٌ
+     فيه) — كلُّ مخيّمٍ في واحدةٍ لا غير، وبها يكون ترتيبه وسحبه. */
+  const groupOf = (c: Camp): CampGroup => c.type === "خاص" ? "خاص" : c.gender === "أنثى" ? "أنثى" : "ذكر";
+  const inGroup = (group: CampGroup) => camps.filter(c => groupOf(c) === group).sort(byContainerOrder);
 
   /* إعادة الترقيم بفجوة عشرة — نفس عُرف `reorderUpdates` للنازلين،
      وفي القاعدة نفسها في التعبئة الرجعيّة.
@@ -168,11 +176,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   const orderGeneration = useRef(0);
   const cardGeneration = useRef(new Map<number, number>());
 
-  const saveContainerOrder = async (gender: string, ordered: Camp[]) => {
+  const saveContainerOrder = async (group: string, ordered: Camp[]) => {
     if (!assertWritable()) return;
-    /* الحدّ الأخير على النطاق: لا يُكتب إلا لمن هم فعلاً في مجموعة
-       الجنس المسحوب فيها — فبطاقةٌ من مجموعةٍ أخرى لا تُرقَّم هنا. */
-    if (ordered.some(c => c.gender !== gender)) { console.error("محاولة ترتيب عبر مجموعتَي الجنس — أُلغيت"); return; }
+    /* الحدّ الأخير على النطاق: لا يُكتب إلا لمن هم فعلاً في المجموعة المسحوب
+       فيها (رجال / نساء / الخاصّ) — فبطاقةٌ من مجموعةٍ أخرى لا تُرقَّم هنا. */
+    if (ordered.some(c => groupOf(c) !== group)) { console.error("محاولة ترتيب عبر مجموعتين — أُلغيت"); return; }
     const gen = ++orderGeneration.current;
     for (const c of ordered) cardGeneration.current.set(c.id, gen);
     const isLatest = (id: number) => cardGeneration.current.get(id) === gen;
@@ -222,7 +230,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
      مسارٍ آخر. والقرابة لا شأن لها بالقبول. */
   const isPrivate = (camp: Camp) => camp.type === "خاص";
   const genderOk = (camp: Camp, p: Passenger) => isPrivate(camp) || (!!p.gender && p.gender === camp.gender);
-  const genderLabel = (camp: Camp) => isPrivate(camp) ? "رجال ونساء" : camp.gender === "ذكر" ? "رجال" : "نساء";
+  /* وسمُ الجنس للعاديّ وحده — الخاصّ تُميّزه شارةُ «خاص» لا «رجال ونساء» */
+  const genderLabel = (camp: Camp) => camp.gender === "ذكر" ? "رجال" : "نساء";
 
   const hardBlock = (camp: Camp, chosen: Passenger[]): string | null => {
     const bad = chosen.find(p => !genderOk(camp, p));
@@ -341,29 +350,76 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   /* طلبٌ جارٍ واحدٌ لكلّ عمليّة — النقرة المكرّرة لا تُرسَل */
   const inFlight = useInFlight();
 
-  const addCamp = () => inFlight("add", async () => {
+  /* ═══ نموذجُ المخيّم — إضافةٌ وتعديل ═══
+     العاديّ: الجنسُ إلزاميّ. الخاصّ: بلا جنس (يُحفظ null). والتحويلُ بينهما في
+     التعديل: إلى خاصٍّ يُسقط الجنس؛ وإلى عاديٍّ يلزمه جنسٌ يوافق كلَّ نازليه —
+     والقاعدةُ تفرض الشرطين كذلك (`camps_gender_by_type`، `camps_guard_occupants`). */
+  const resetCampForm = () => {
+    setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setCampCapacity(""); setFormError(""); setEditingCampId(null);
+  };
+  const closeCampForm = () => { setShowAdd(false); resetCampForm(); };
+  const openAddCamp = () => { resetCampForm(); setShowAdd(true); };
+  /* نافذةُ المخيّم تُغلق أوّلاً: نموذجُ التعديل لا يُفتح تحتها */
+  const openEditCamp = (camp: Camp) => {
+    closeCamp();
+    setEditingCampId(camp.id);
+    setCampName(camp.name);
+    setCampType(camp.type === "خاص" ? "خاص" : "عادي");
+    setCampGender(camp.type === "خاص" ? null : camp.gender === "أنثى" ? "أنثى" : "ذكر");
+    setCampCapacity(camp.capacity != null ? String(camp.capacity) : "");
+    setFormError("");
+    setShowAdd(true);
+  };
+
+  const saveCampForm = () => inFlight(editingCampId == null ? "add" : `edit:${editingCampId}`, async () => {
     if (!assertWritable()) return;
+    const editing = editingCampId == null ? null : camps.find(c => c.id === editingCampId) ?? null;
+    if (editingCampId != null && !editing) { closeCampForm(); return; }
     const name = campName.trim();
     const cap = parseCapacity(campCapacity);
+    const isPriv = campType === "خاص";
+    const gender = isPriv ? null : campGender;
     if (!name) { setFormError("يرجى إدخال اسم المخيم"); return; }
-    /* الجنس جزءٌ من هويّة المخيّم: «منى ٢ رجال» و«منى ٢ نساء»
-       مخيّمان مختلفان — وهو حدّ التميُّز في القاعدة كذلك. */
-    if (camps.some(c => c.name.trim() === name && c.gender === campGender)) {
-      setFormError(`يوجد مخيم ${campGender === "ذكر" ? "رجال" : "نساء"} بالاسم "${name}" بالفعل`); return;
+    if (!isPriv && !gender) { setFormError("اختر جنس المخيم العادي: رجال أو نساء"); return; }
+    /* الاسمُ فريدٌ في مجموعته — «منى ٢ رجال» و«منى ٢ نساء» و«منى ٢ الخاص» ثلاثةُ
+       مخيّمات — وهو حدّ التميُّز في القاعدة كذلك. */
+    const target: CampGroup = isPriv ? "خاص" : gender!;
+    if (camps.some(c => c.id !== editingCampId && c.name.trim() === name && groupOf(c) === target)) {
+      setFormError(`يوجد مخيم ${isPriv ? "خاص" : gender === "ذكر" ? "رجال" : "نساء"} بالاسم "${name}" بالفعل`); return;
     }
     if (cap === null) { setFormError("السعة مطلوبة، ويجب أن تكون عدداً صحيحاً أكبر من صفر"); return; }
     setFormError("");
-    const { data, error } = await supabase.from("camps")
-      .insert([{ name, gender: campGender, type: campType, page_type: pageType, capacity: cap }]).select();
-    if (error) {
-      console.error("فشل إضافة المخيم", error);
-      showAlert("error", allocWriteError("فشل إضافة المخيم، يرجى المحاولة مرة أخرى", error.message));
+
+    if (!editing) {
+      const { data, error } = await supabase.from("camps")
+        .insert([{ name, gender, type: campType, page_type: pageType, capacity: cap }]).select();
+      if (error) {
+        console.error("فشل إضافة المخيم", error);
+        showAlert("error", allocWriteError("فشل إضافة المخيم، يرجى المحاولة مرة أخرى", error.message));
+        return;
+      }
+      if (data?.[0]) { setCamps(prev => [...prev, data[0] as Camp]); closeCampForm(); }
       return;
     }
-    if (data?.[0]) {
-      setCamps(prev => [...prev, data[0] as Camp]);
-      setCampName(""); setCampGender("ذكر"); setCampType("عادي"); setCampCapacity(""); setShowAdd(false);
+
+    const occ = dwellers(editing.id);
+    if (cap < occ.length) { setFormError(`المخيّم يضمّ ${paxLabel(occ.length)}، فلا تُخفَّض سعته إلى ${cap}. أخرِج النازلين أولاً.`); return; }
+    if (!isPriv) {
+      const other = occ.filter(p => p.gender !== gender);
+      if (other.length) {
+        setFormError(`المخيّم يضمّ ${paxLabel(other.length)} من غير ${gender === "ذكر" ? "الرجال" : "النساء"} — لا يصير مخيّماً عاديّاً لـ${gender === "ذكر" ? "الرجال" : "النساء"} قبل نقلهم.`);
+        return;
+      }
     }
+    const patch = { name, type: campType, gender, capacity: cap };
+    /* المجموعةُ تغيّرت: آخرَ المجموعة الجديدة — لا موضعٌ مستعارٌ من القديمة */
+    const moved = groupOf(editing) !== target;
+    const nextOrder = moved ? Math.max(0, ...inGroup(target).map(c => c.sort_order ?? 0)) + 10 : editing.sort_order;
+    const { data, error } = await supabase.from("camps").update({ ...patch, ...(moved ? { sort_order: nextOrder } : {}) }).eq("id", editing.id).select("id");
+    if (error) { console.error("تعذر تعديل المخيم", error); setFormError(allocWriteError("تعذر تعديل المخيم", error.message)); return; }
+    if (!data || data.length !== 1) { setFormError(campGone(editing, "تعذر تعديل المخيم")); return; }
+    setCamps(prev => prev.map(c => c.id === editing.id ? { ...c, ...patch, sort_order: nextOrder ?? c.sort_order } : c));
+    closeCampForm();
   });
 
   /* الحذف ببرهان: لا يُزال المخيّم من الشاشة إلا إن حُذف فعلاً أو تبيّن أنه
@@ -387,8 +443,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!assertWritable()) return;
     const next = name.trim();
     if (!next || next === camp.name) { setEditingName(false); return; }
-    if (camps.some(c => c.id !== camp.id && c.name.trim() === next && c.gender === camp.gender)) {
-      showAlert("warning", `يوجد مخيم ${camp.gender === "ذكر" ? "رجال" : "نساء"} بالاسم "${next}" بالفعل`); return;
+    if (camps.some(c => c.id !== camp.id && c.name.trim() === next && groupOf(c) === groupOf(camp))) {
+      showAlert("warning", `يوجد مخيم ${isPrivate(camp) ? "خاص" : genderLabel(camp)} بالاسم "${next}" بالفعل`); return;
     }
     const { data, error } = await supabase.from("camps").update({ name: next }).eq("id", camp.id).select("id");
     if (error) { console.error("تعذر تعديل اسم المخيم", error); showAlert("error", allocWriteError("تعذر تعديل اسم المخيم", error.message)); return; }
@@ -484,7 +540,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!assertWritable()) return;
 
     const ok = await confirmAction(
-      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيب مخيّمات منى ${isPrivate(camp) ? "(الرجال ثم النساء)" : camp.gender === "ذكر" ? "للرجال" : "للنساء"} وترتيبَ نازليها.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
+      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيب مخيّمات منى ${isPrivate(camp) ? "(الخيام الخاصة، ثم الرجال، ثم النساء)" : `${camp.gender === "ذكر" ? "للرجال" : "للنساء"} (ثم الخيام الخاصة)`} وترتيبَ نازليها.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
       { title: "ترتيب حسب منى", confirmLabel: "رتّب", cancelLabel: "إلغاء" },
     );
     if (!ok) return;
@@ -492,15 +548,19 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     /* مصدر ترتيب حاويات منى هو `camps.sort_order` — القرار
        التشغيليّ الذي يملكه الموظّف بسحب البطاقات، لا `created_at`
        الذي كان أثراً لتسلسل الإنشاء. و`id` يحسم التساوي وحده.
-       ⚠️ والجنس شرطٌ لا زينة: الفصل بالجنس حدٌّ صلب، فمخيّم عرفة
-       للرجال يشتقّ ترتيبه من مخيّمات منى للرجال وحدها — ولا
-       يختلط التيّاران في العاديّ. والخاصّ يجمع الجنسين، فيشتقّ ترتيبه من
-       مجموعتَي منى كلتيهما: مجموعةُ جنسه أوّلاً ثم الأخرى. */
-    let q = supabase.from("camps").select("id, gender").eq("page_type", "منى").eq("season_id", viewedSeason.id);
-    if (!isPrivate(camp)) q = q.eq("gender", camp.gender);
-    const { data: rows, error } = await q.order("sort_order", { nullsFirst: false }).order("id");
-    /* ترتيبٌ مستقرّ: مجموعةُ جنس المخيّم أوّلاً، وداخلَ كلٍّ ترتيبُ القاعدة */
-    const data = rows && [...rows.filter(c => c.gender === camp.gender), ...rows.filter(c => c.gender !== camp.gender)];
+       ومجموعاتُ منى ثلاث (رجال، نساء، الخاصّ)، ونازلو مخيّم عرفة قد يأتون من
+       أكثرَ من واحدة: العاديُّ للرجال من مخيّمات الرجال ثم من الخاصّ، والخاصُّ
+       من الخاصّ ثم الرجال ثم النساء. يُقرأ الكلّ ويُرتَّب بالمجموعة أوّلاً ثم
+       بترتيب القاعدة داخلها (ترتيبٌ مستقرّ)؛ ومن ليس هنا لا يدخل التسطيح. */
+    const { data: rows, error } = await supabase.from("camps").select("id, gender, type")
+      .eq("page_type", "منى").eq("season_id", viewedSeason.id)
+      .order("sort_order", { nullsFirst: false }).order("id");
+    const rank = (c: { gender: string | null; type: string | null }) => {
+      const g = c.type === "خاص" ? "خاص" : c.gender;
+      if (isPrivate(camp)) return g === "خاص" ? 0 : g === "ذكر" ? 1 : 2;
+      return g === camp.gender ? 0 : g === "خاص" ? 1 : 2;
+    };
+    const data = rows && [...rows].sort((a, b) => rank(a) - rank(b));
     if (error || !data) {
       console.error("تعذر قراءة ترتيب مخيّمات منى", error);
       showAlert("error", "تعذر قراءة ترتيب مخيّمات منى — يرجى المحاولة مرة أخرى");
@@ -554,8 +614,12 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     printInPage(campsReportDocument(camps, passengers, pageType, branding, campChrome(seals)));
   };
 
-  const specialBadge = (light?: boolean) => (
-    <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>خاص</span>
+  /* «خاص» بالذهب الرقيق المشترك مع «VIP» في الباصات — على الرأس أو على الورق */
+  const specialBadge = (light?: boolean) => <PremiumBadge label="خاص" onHeader={light} />;
+  const privatePill = (
+    <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 99, background: "var(--premium-soft-bg)", color: "var(--premium-soft-ink)", border: "1px solid color-mix(in srgb, var(--premium) 45%, transparent)" }}>
+      الخيام الخاصة
+    </span>
   );
 
   /* هويّة الجنس برموز السمة القائمة — لا وردياً ولا أزرقَ مثبَّتاً */
@@ -571,7 +635,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     return left > 0 ? placesLabel(left) : left === 0 ? "مكتمل" : `تجاوز السعة بـ ${-left}`;
   };
 
-  const renderGroup = (gender: "ذكر" | "أنثى") => {
+  const renderGroup = (gender: CampGroup) => {
     const group = inGroup(gender);
     const shown = group.filter(c => !campSearch || c.name.includes(campSearch.trim()) || dwellers(c.id).some(p => matchesPassenger(p, campSearch)));
     /* السحب يُعطَّل أثناء البحث: القائمة المعروضة ليست المجموعة
@@ -579,14 +643,14 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     const canReorder = !readOnly && !campSearch && group.length > 1;
     return (
       <div style={{ marginBottom: 20 }}>
-        <div style={{ marginBottom: 10 }}>{genderPill(gender)} <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>({group.length})</span></div>
+        <div data-camp-section={gender} style={{ marginBottom: 10 }}>{gender === "خاص" ? privatePill : genderPill(gender)} <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>({group.length})</span></div>
         {shown.length === 0
           ? <div style={{ fontSize: 11, color: "var(--muted)", padding: "6px 0" }}>{campSearch ? "لا نتائج لهذا البحث" : "لا يوجد مخيمات بعد"}</div>
           : <div style={{ display: "grid", gridTemplateColumns: ALLOC_GRID, gap: ALLOC_GAP }}>
             {shown.map(camp => (
               <AllocationCard key={camp.id} selected={sel.selectedId === camp.id} onClick={() => openCamp(camp.id)}
-                icon={<Icon />} title={`مخيم ${camp.name}`} badge={camp.type === "خاص" ? specialBadge(true) : undefined}
-                subtitle={genderLabel(camp)}
+                icon={<Icon />} title={`مخيم ${camp.name}`} badge={isPrivate(camp) ? specialBadge(true) : undefined}
+                subtitle={isPrivate(camp) ? undefined : genderLabel(camp)} premium={isPrivate(camp)}
                 occ={dwellers(camp.id).length} cap={camp.capacity ?? null}
                 emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} noteNeedsAction={camp.capacity == null}
                 reorder={canReorder ? {
@@ -609,7 +673,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       <CampsStats camps={camps} passengers={passengers} campIdKey={campIdKey} campServiceKey={serviceKey} />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, marginTop: 12 }}>
-        <button disabled={readOnly} onClick={() => setShowAdd(true)}
+        <button disabled={readOnly} onClick={openAddCamp}
           style={{ ...roOff, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 99, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--primary)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-body)", transition: "var(--transition)", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> مخيم جديد
         </button>
@@ -624,7 +688,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       <AllocationStates loading={campsLoading} error={campsError} empty={!camps.length}
         icon={<Icon />} errorText="تعذر تحميل المخيمات — يرجى التحقق من الاتصال وتحديث الصفحة" emptyText="لا يوجد مخيمات بعد" />
 
-      {!campsLoading && !campsError && camps.length > 0 && <>{renderGroup("ذكر")}{renderGroup("أنثى")}</>}
+      {!campsLoading && !campsError && camps.length > 0 && <>{renderGroup("ذكر")}{renderGroup("أنثى")}{renderGroup("خاص")}</>}
 
       {/* ═══ مودال المخيّم ═══ */}
       {selectedCamp && (() => {
@@ -674,14 +738,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                 aria-label={readOnly ? undefined : `مخيم ${camp.name} — تعديل الاسم`}
                 onKeyDown={e => { if (!readOnly && (e.key === "Enter" || e.key === "F2")) { e.preventDefault(); setEditingName(true); } }}>مخيم {camp.name}</span>
             )}
-            badges={
-              <>
-                <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "color-mix(in srgb, var(--text-inverse) 22%, transparent)" }}>
-                  {genderLabel(camp)}
-                </span>
-                {camp.type === "خاص" && specialBadge(true)}
-              </>
-            }
+            badges={isPrivate(camp) ? specialBadge(true) : (
+              <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "color-mix(in srgb, var(--text-inverse) 22%, transparent)" }}>
+                {genderLabel(camp)}
+              </span>
+            )}
             meta={
               <div style={{ maxWidth: 420 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, fontWeight: 800, marginBottom: 5, flexWrap: "wrap" }}>
@@ -712,6 +773,9 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                     <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h13" /><path d="M3 12h9" /><path d="M3 18h5" /><path d="m18 9 3 3-3 3" /></svg>
                   </DialogAction>
                 )}
+                <DialogAction disabled={readOnly} label="تعديل المخيم (الاسم والنوع والجنس والسعة)" onClick={() => openEditCamp(camp)}>
+                  <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                </DialogAction>
                 <DialogAction onClick={() => printCamp(camp)} label="طباعة قائمة المخيم">
                   <svg aria-hidden width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" /></svg>
                 </DialogAction>
@@ -779,7 +843,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
               <PassengerPicker title="إضافة نازلين" search={sel.pickerSearch} onSearch={sel.setPickerSearch}
                 items={items} selected={sel.picked} onToggle={sel.toggle} disabled={readOnly}
                 onToggleAll={() => sel.setPicked(sel.picked.size === items.length ? new Set() : new Set(items.map(i => i.id)))}
-                countText={`${items.length} ${isPrivate(camp) ? "من الرجال والنساء" : camp.gender === "ذكر" ? "من الرجال" : "من النساء"} غير موزّع · ${camp.capacity == null ? "السعة غير محدّدة" : (left ?? 0) > 0 ? placesLabel(left ?? 0) : "المخيّم مكتمل"}`}
+                countText={`${items.length} ${isPrivate(camp) ? "من الحجاج" : camp.gender === "ذكر" ? "من الرجال" : "من النساء"} غير موزّع · ${camp.capacity == null ? "السعة غير محدّدة" : (left ?? 0) > 0 ? placesLabel(left ?? 0) : "المخيّم مكتمل"}`}
                 emptyText={sel.pickerSearch ? "لا توجد نتائج" : `جميع ${isPrivate(camp) ? "الحجاج" : camp.gender === "ذكر" ? "الرجال" : "النساء"} موزعون`}
                 drag={readOnly ? undefined : { onDragStart: drag.startAdd, onDragEnd: drag.end, draggingId: drag.draggingId }}
                 footer={sel.picked.size > 0 && (
@@ -793,44 +857,57 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
       })()}
 
       {/* Modal إضافة مخيم — نوع الصفحة من سياقها لا من اختيارٍ يدويّ */}
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setFormError(""); }} title={`مخيمات ${pageType} — مخيم جديد`} maxWidth={340}>
+      <Modal show={showAdd} onClose={closeCampForm} title={`مخيمات ${pageType} — ${editingCampId == null ? "مخيم جديد" : "تعديل المخيم"}`} maxWidth={340}>
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>رقم / اسم المخيم</div>
-          <input style={{ ...inp, borderColor: formError ? "var(--danger)" : "var(--border)" }} value={campName} onChange={e => { setCampName(e.target.value); setFormError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && addCamp()} />
+          <input style={{ ...inp, borderColor: formError ? "var(--danger)" : "var(--border)" }} value={campName} onChange={e => { setCampName(e.target.value); setFormError(""); }} autoFocus onKeyDown={e => e.key === "Enter" && saveCampForm()} />
         </div>
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الجنس</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {(["ذكر", "أنثى"] as const).map(g => (
-              <div key={g} onClick={() => setCampGender(g)} style={{ flex: 1, padding: 8, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 12, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", color: campGender === g ? (g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)") : "var(--text-muted)" }}>
-                {g === "ذكر" ? "رجال" : "نساء"}
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* النوعُ أوّلاً: هو الذي يقرّر هل للمخيّم جنس */}
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>نوع المخيم</div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div role="radiogroup" aria-label="نوع المخيم" style={{ display: "flex", gap: 8 }}>
             {(["عادي", "خاص"] as const).map(t => (
-              <div key={t} onClick={() => setCampType(t)} style={{ flex: 1, padding: 8, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 12, border: `1.5px solid ${campType === t ? "var(--primary)" : "var(--border)"}`, background: campType === t ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "transparent", color: campType === t ? "var(--primary)" : "var(--text-muted)" }}>
+              <div key={t} role="radio" aria-checked={campType === t} tabIndex={0}
+                onClick={() => { setCampType(t); setFormError(""); }}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCampType(t); setFormError(""); } }}
+                style={{ flex: 1, padding: 8, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 12,
+                  border: `1.5px solid ${campType === t ? (t === "خاص" ? "var(--premium)" : "var(--primary)") : "var(--border)"}`,
+                  background: campType === t ? (t === "خاص" ? "var(--premium-soft-bg)" : "color-mix(in srgb, var(--primary) 8%, transparent)") : "transparent",
+                  color: campType === t ? (t === "خاص" ? "var(--premium-soft-ink)" : "var(--primary)") : "var(--text-muted)", fontWeight: campType === t ? 800 : 400 }}>
                 {t}
               </div>
             ))}
           </div>
           <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5 }}>
             {campType === "خاص"
-              ? "المخيّم الخاص يقبل الرجال والنساء معاً — والجنس أعلاه يحدّد المجموعة التي يظهر فيها."
+              ? "المخيّم الخاص يقبل الرجال والنساء معاً، ويظهر في قسم «الخيام الخاصة» — بلا جنس."
               : "المخيّم العادي لجنسٍ واحد — الفصل بالجنس لا يُتجاوز."}
           </div>
         </div>
+        {/* الجنس للعاديّ وحده — مخفيٌّ تماماً للخاصّ */}
+        {campType === "عادي" && (
+          <div style={{ marginBottom: 10 }} data-camp-gender-field>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الجنس — مطلوب</div>
+            <div role="radiogroup" aria-label="جنس المخيم" style={{ display: "flex", gap: 8 }}>
+              {(["ذكر", "أنثى"] as const).map(g => (
+                <div key={g} role="radio" aria-checked={campGender === g} tabIndex={0}
+                  onClick={() => { setCampGender(g); setFormError(""); }}
+                  onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCampGender(g); setFormError(""); } }}
+                  style={{ flex: 1, padding: 8, borderRadius: 8, cursor: "pointer", textAlign: "center", fontSize: 12, border: `1.5px solid ${campGender === g ? (g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)") : "var(--border)"}`, background: campGender === g ? (g === "ذكر" ? "var(--male-bg)" : "var(--female-bg)") : "transparent", color: campGender === g ? (g === "ذكر" ? "var(--male-fg)" : "var(--female-fg)") : "var(--text-muted)" }}>
+                  {g === "ذكر" ? "رجال" : "نساء"}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>السعة (عدد الأماكن) — مطلوبة</div>
           <input style={inp} type="number" value={campCapacity} onChange={e => { setCampCapacity(e.target.value); setFormError(""); }} placeholder="مثال: 20" min="1" />
         </div>
         {formError && <div role="alert" style={{ fontSize: 11, color: "var(--danger)", marginBottom: 10 }}>{formError}</div>}
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={addCamp} style={{ ...btnP(), flex: 1 }}><svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg> إضافة</button>
-          <button onClick={() => { setShowAdd(false); setFormError(""); }} style={btnS()}>إلغاء</button>
+          <button onClick={saveCampForm} style={{ ...btnP(), flex: 1 }}><svg aria-hidden width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg> {editingCampId == null ? "إضافة" : "حفظ"}</button>
+          <button onClick={closeCampForm} style={btnS()}>إلغاء</button>
         </div>
       </Modal>
     </div>

@@ -49,8 +49,22 @@ export function CapacityBar({ occ, cap, height = 8, onDark }: { occ: number; cap
 // ═══════════════════════════════════════════════════════════
 // كارت الحاوية
 // ═══════════════════════════════════════════════════════════
+/* ═══ الشارةُ الفاخرة — «خاص» للمخيّم و«VIP» للباص ═══
+   ذهبٌ رقيق من رموز السمة (`--premium-*` في themes.css). `onHeader`: على رأس
+   البطاقة أو المودال؛ وإلا فعلى الورق (صفوفُ المسافرين). */
+export function PremiumBadge({ label, onHeader }: { label: string; onHeader?: boolean }) {
+  return (
+    <span data-premium-badge style={{
+      fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, letterSpacing: .2, whiteSpace: "nowrap",
+      ...(onHeader
+        ? { background: "var(--premium-badge-bg)", color: "var(--premium-badge-ink)", border: "1px solid var(--premium-badge-line)" }
+        : { background: "var(--premium-soft-bg)", color: "var(--premium-soft-ink)", border: "1px solid color-mix(in srgb, var(--premium) 45%, transparent)" }),
+    }}>{label}</span>
+  );
+}
+
 export function AllocationCard({
-  title, badge, icon, occ, cap, capacityNote, noteNeedsAction, emptyHint, subtitle, selected, onClick, reorder,
+  title, badge, icon, occ, cap, capacityNote, noteNeedsAction, emptyHint, subtitle, selected, onClick, reorder, premium,
 }: {
   title: React.ReactNode;
   badge?: React.ReactNode;      // VIP · خاص · ما يميّز الحاوية
@@ -74,25 +88,33 @@ export function AllocationCard({
     dragging: boolean;
     dragOver: boolean;
   };
+  /* حاويةٌ فاخرة (المخيّمُ الخاصّ، الباصُ VIP): إطارٌ ذهبيٌّ رقيق وخطٌّ ذهبيّ أعلى
+     الرأس. لا يغيّر شيئاً غيرَ المظهر؛ والعاديّةُ كما كانت حرفاً. */
+  premium?: boolean;
 }) {
   const over = cap != null && occ > cap;
+  const restShadow = premium
+    ? "0 1px 4px rgba(0,0,0,.06), 0 0 0 3px color-mix(in srgb, var(--premium) 10%, transparent)"
+    : "0 1px 4px rgba(0,0,0,.06)";
   return (
     <div onClick={onClick} role="button" tabIndex={0}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       draggable={!!reorder} onDragStart={reorder?.onDragStart} onDragOver={reorder?.onDragOver} onDragEnd={reorder?.onDragEnd}
+      data-premium-card={premium ? "" : undefined}
       style={{
         background: "var(--paper)", borderRadius: 12, cursor: "pointer", overflow: "hidden",
         border: reorder?.dragOver ? "2.5px dashed var(--primary)"
-          : selected ? "2.5px solid var(--primary)" : "1px solid var(--line)",
-        boxShadow: selected ? "0 4px 16px color-mix(in srgb, var(--primary) 28%, transparent)" : "0 1px 4px rgba(0,0,0,.06)",
+          : selected ? "2.5px solid var(--primary)" : premium ? "1.5px solid var(--premium)" : "1px solid var(--line)",
+        boxShadow: selected ? "0 4px 16px color-mix(in srgb, var(--primary) 28%, transparent)" : restShadow,
         opacity: reorder?.dragging ? .45 : 1,
         transform: selected ? "translateY(-2px)" : "none", transition: "all .18s",
       }}
       onMouseEnter={e => { if (!selected) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px color-mix(in srgb, var(--primary) 20%, transparent)"; } }}
-      onMouseLeave={e => { if (!selected) { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,.06)"; } }}>
+      onMouseLeave={e => { if (!selected) { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = restShadow; } }}>
 
-      {/* لافتةٌ على لون السمة لا على لونٍ مثبَّت للصفحة */}
-      <div style={{ background: "linear-gradient(150deg, var(--primary), var(--primary-dark, var(--primary)))", color: "var(--text-inverse)", padding: "10px 12px 8px", position: "relative", overflow: "hidden" }}>
+      {/* لافتةٌ على لون السمة لا على لونٍ مثبَّت للصفحة — والفاخرةُ بخطٍّ ذهبيّ أعلاها */}
+      <div style={{ background: "linear-gradient(150deg, var(--primary), var(--primary-dark, var(--primary)))", color: "var(--text-inverse)", padding: "10px 12px 8px", position: "relative", overflow: "hidden",
+        boxShadow: premium ? "inset 0 3px 0 var(--premium-accent)" : undefined }}>
         <div aria-hidden style={{ position: "absolute", insetInlineStart: -8, bottom: -12, opacity: .12, pointerEvents: "none", transform: "scale(3.2)", transformOrigin: "bottom left" }}>{icon}</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, position: "relative", zIndex: 1 }}>
           {/* المقبض — لغةُ السحب نفسها المستعملة في صفوف المسافرين،

@@ -79,7 +79,9 @@ export interface Bus {
 export interface Camp {
   id: number;
   name: string;
-  gender: string;
+  /* جنسُ المخيّم العاديّ («ذكر»/«أنثى») — إلزاميٌّ له. والخاصّ بلا جنس (null)؛
+     وقيمةٌ قديمةٌ فيه إن بقيت لا يقرؤها شيء (20261107160000). */
+  gender: string | null;
   type: string;
   page_type: string;
   /* السعة الحقيقية — يُدخِلها الموظّف، لا تُستنبط من نوع.

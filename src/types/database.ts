@@ -160,35 +160,35 @@ export type Database = {
         Row: {
           capacity: number | null
           created_at: string | null
-          gender: string
+          gender: string | null
           id: number
           name: string | null
           page_type: string
           season_id: number
           sort_order: number | null
-          type: string | null
+          type: string
         }
         Insert: {
           capacity?: number | null
           created_at?: string | null
-          gender: string
+          gender?: string | null
           id?: never
           name?: string | null
           page_type: string
           season_id?: number
           sort_order?: number | null
-          type?: string | null
+          type?: string
         }
         Update: {
           capacity?: number | null
           created_at?: string | null
-          gender?: string
+          gender?: string | null
           id?: never
           name?: string | null
           page_type?: string
           season_id?: number
           sort_order?: number | null
-          type?: string | null
+          type?: string
         }
         Relationships: [
           {
