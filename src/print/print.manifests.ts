@@ -62,7 +62,8 @@ export function campTitle(camp: Camp, pageType: CampPageType): string {
 }
 
 /** الجنسُ عنوانٌ فرعيّ — والفصلُ بالجنس مطلقٌ في المخيّمات. */
-export const campSubtitle = (camp: Camp): string => (camp.gender === "ذكر" ? "رجال" : "نساء");
+/* الخاصّ يجمع الرجال والنساء؛ العاديّ لجنسه */
+export const campSubtitle = (camp: Camp): string => (camp.type === "خاص" ? "رجال ونساء" : camp.gender === "ذكر" ? "رجال" : "نساء");
 
 export function campDwellers(camp: Camp, passengers: Passenger[], pageType: CampPageType): Passenger[] {
   const idKey = campIdKeyOf(pageType);

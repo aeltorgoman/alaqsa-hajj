@@ -322,6 +322,35 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
      فلا ينفع فيها disabled. */
   const roOff = readOnly ? { opacity: 0.4, pointerEvents: "none" as const } : null;
 
+  /* ═══ إجراءاتٌ ثابتةٌ أثناء التمرير ═══
+     «مسح» و«يدوي» يبقيان في مكانهما؛ فإذا مُرِّرا خارج الشاشة (إلى أعلى) ظهر
+     شريطٌ مضغوطٌ ثابتٌ أسفلَ الشاشة بالمعالِجَين نفسيهما والقيدِ نفسه (`roOff`)،
+     فلا شريطان ظاهران معاً. ويُحجز أسفلَ المحتوى مكانُه فلا يغطّي آخرَ الصفوف. */
+  const openScanPicker = () => document.getElementById("scan-input-btn")?.click();
+  const openManualAdd = () => { resetManualModal(); setShowManual(true); };
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [actionsOffscreen, setActionsOffscreen] = useState(false);
+  /* «خارج الشاشة» = مُرِّر فوق حافّتها العليا. لا `IntersectionObserver`: على الجوّال
+     يكون الزرّ مقصوصاً أفقيّاً في شريط الأدوات الأعرض من الشاشة، فلا تتغيّر حالةُ
+     تقاطعه بالتمرير العموديّ ولا يُطلق المراقِب. قراءةٌ واحدةٌ لكلّ إطار. */
+  useEffect(() => {
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const el = actionsRef.current;
+      setActionsOffscreen(!!el && el.getBoundingClientRect().bottom < 0);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    measure();
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
@@ -1915,8 +1944,24 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
       <div style={{ flex: 1, display: "flex", alignItems: "flex-start" }}>
 
         {/* ══ المحتوى الرئيسي ══ */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, paddingBottom: actionsOffscreen ? 72 : 0 }}>
         <PassengersStats passengers={passengers} />
+        {actionsOffscreen && !showManual && (
+          <div role="toolbar" aria-label="إجراءات الحجاج" data-sticky-pilgrim-actions
+            style={{ position: "fixed", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", insetInlineEnd: 16, zIndex: 900, display: "flex", gap: 6, padding: 6,
+              background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 99, boxShadow: "0 6px 24px rgba(0,0,0,.18)", maxWidth: "calc(100vw - 32px)" }}>
+            <button type="button" onClick={openScanPicker} title="مسح جواز / بطاقة / تصريح حج"
+              style={{ height: 38, padding: "0 14px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 6, background: "var(--em7)", border: "1px solid var(--em7)", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "var(--font-body)", whiteSpace: "nowrap" }}>
+              <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+              مسح مستند
+            </button>
+            <button type="button" onClick={openManualAdd} title="إضافة حاج يدوياً" disabled={readOnly}
+              style={{ ...roOff, height: 38, padding: "0 14px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 6, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--ink)", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "var(--font-body)", whiteSpace: "nowrap" }}>
+              <svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
+              إضافة يدوي
+            </button>
+          </div>
+        )}
 
         <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, background: "var(--paper)" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -1929,7 +1974,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               {search && <span onClick={() => setSearch("")} style={{ cursor: "pointer", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>✕</span>}
             </div>
             {/* مسح موحّد — جواز/بطاقة/تصريح حج، بيتعرف على النوع ويتصرف تلقائيًا */}
-            <div onClick={() => document.getElementById("scan-input-btn")?.click()} title="مسح جواز / بطاقة / تصريح حج" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontSize: 11, fontWeight: 700, transition: "var(--transition)", flexShrink: 0 }}>
+            <div ref={actionsRef} onClick={openScanPicker} title="مسح جواز / بطاقة / تصريح حج" style={{ height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--em7)", color: "var(--em7)", cursor: "pointer", fontSize: 11, fontWeight: 700, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
               مسح
             </div>
@@ -1942,7 +1987,7 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
               e.target.value = "";
             }} />
             {/* إضافة يدوي */}
-            <div onClick={() => { resetManualModal(); setShowManual(true); }} title="إضافة يدوي" style={{ ...roOff, height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
+            <div onClick={openManualAdd} title="إضافة يدوي" style={{ ...roOff, height: 34, padding: "0 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 5, background: "var(--paper)", border: "1px solid var(--line)", color: "var(--muted)", cursor: "pointer", fontSize: 11, fontWeight: 600, transition: "var(--transition)", flexShrink: 0 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 3l5 5L8 21H3v-5z"/></svg>
               يدوي
             </div>
