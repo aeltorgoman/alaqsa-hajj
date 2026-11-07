@@ -242,6 +242,26 @@ Config: Read**. No other permission, secret or password is stored.
    then close the form without saving the test pilgrim. The workflow proves
    only that the key exists; this proves passport scanning works.
 
+## Updating an existing installation
+
+For an installation that is already in use, **do not** run Customer Backend
+Setup again (it is for a fresh deployment only), and do not use
+\`supabase db push\`. Apply this release's database changes first, then deploy
+the application:
+
+1. **GitHub** — Actions → **Customer Database Update** → Run workflow with
+   **mode = plan**. It only reads the database's migration history and lists the
+   pending migrations in the job summary. It stops if the database holds a
+   migration this release does not contain.
+2. **GitHub** — run it again with **mode = apply**, **expected_pending** = that
+   exact list, and **confirm** = \`APPLY\`. It applies exactly those migrations,
+   in order, and verifies that every migration of this release is recorded. A
+   migration whose own check fails stops the run before anything after it; fix
+   the reported cause and run it again.
+3. **Vercel** — deploy this release.
+
+It never changes users, administrators, seasons, secrets or Edge Functions.
+
 Full ownership, release, recovery and handover rules:
 \`docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md\`.
 `);
