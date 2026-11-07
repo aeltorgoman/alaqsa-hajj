@@ -5,7 +5,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Passenger } from "../../types";
 import type { PricingMap, HotelPackagePrices, FinanceHotel, Payment, CustomCharge, FinancialGroup, AllocTypeMaps } from "./finance.types";
-import { getPriceInfo, viewSurcharge, requestedHotelName, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
+import { getPriceInfo, viewSurcharge, requestedHotelName, chargesFor, paymentsFor, calcTotalDue, calcTotalPaid, isPaymentCounted, paidFlightService, fmtAmt, financeStatus } from "./finance.utils";
 import { serviceContextRows } from "./finance.context";
 import { FINANCE_RESPONSIVE_CSS } from "./finance.responsive";
 
@@ -74,7 +74,7 @@ export function PassengerFinanceView({
   const priceInfo = getPriceInfo(passenger, pricing, hotelPrices), pkgAmt = priceInfo.amount;
   const isSpecial = s.hotel_type === "خاص";
   const reqHotel = isSpecial ? null : requestedHotelName(passenger, hotels);
-  const pPayments=[...paymentsFor(passenger.id, passengerPayments)].sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
+  const pPayments=[...paymentsFor(passenger.id, passengerPayments)].filter(isPaymentCounted).sort((a,b)=>new Date(a.payment_date).getTime()-new Date(b.payment_date).getTime());
   const pCustom=chargesFor(passenger.id, passengerCharges);
   const totalDue=calcTotalDue(passenger,pricing,hotelPrices,passengerCharges), totalPaid=calcTotalPaid(passenger.id,passengerPayments), balance=totalDue-totalPaid;
   const st=financeStatus(totalDue,totalPaid);

@@ -7,7 +7,7 @@ import { amountInArabicWords } from "./amountInWords";
 import type { PrintBranding, PrintSeals, SealImage } from "../../print";
 import { hasSeals, sealPlanHTML, sealGroupPlanHTML, sealPreloadHTML, sealSizeMm, bankBlockHTML,
          STAMP_BOX_MM, SIGNATURE_BOX_MM } from "../../print";
-import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, paidFlightService } from "./finance.utils";
+import { fmtAmt, financeStatus, getPriceInfo, viewSurcharge, addonReportRows, packageLabel, requestedHotelName, packageReportRows, calcTotalDue, calcTotalPaid, isPaymentCounted, paidFlightService } from "./finance.utils";
 /* ⚠️ متغيّراتُ السمة (`var(--danger)` وأخواتُها) **لا تعمل في المطبوع**:
    إطارُ الطباعة مستندٌ مستقلٌّ لا يحمل أوراقَ أنماط التطبيق، فتسقط
    القيمةُ ويرث النصُّ لونَ أبيه — وقد يكون أبيضَ على أبيض. فألوانُ
@@ -329,7 +329,7 @@ export function makePassengerStatementHTML(
   const pkgLine = `${esc(priceInfo.label)}${reqHotel ? ` — ${esc(reqHotel)}` : ""}${zeroReason(priceInfo)}`;
   const pkgAmt = priceInfo.amount;
   const pCustom   = customCharges.filter(c => c.passenger_id === p.id);
-  const pPayments = [...payments.filter(py => py.passenger_id === p.id)].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
+  const pPayments = [...payments.filter(py => py.passenger_id === p.id && isPaymentCounted(py))].sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
   const sealsOn = hasSeals(chrome.seals);
   const bankHTML = bankBlockHTML(chrome.bank, primaryColor);
   const totalDue  = calcTotalDue(p, pricing, hotelPrices, customCharges);
