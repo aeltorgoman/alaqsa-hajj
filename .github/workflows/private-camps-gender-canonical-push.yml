@@ -1,0 +1,310 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — private camps without gender (20261107160000)
+# ════════════════════════════════════════════════════════════
+# Applies the ONE pending migration through the canonical CLI path:
+#   20261107160000_private_camps_gender_independent
+#
+# Playbook order (M-52): run only AFTER its PR is merged, from main — and
+# BEFORE PR #267 (the UI that saves private camps with gender = NULL) is merged.
+# The migration changes the camps table only: type NOT NULL + vocab,
+# gender optional for private camps (CHECK camps_gender_by_type), the unique
+# name index and group-order index keyed by section («خاص» / gender), and the
+# body of camps_assign_sort_order. No row is inserted, updated or deleted.
+#
+# ⚠️ `--db-url`, not `--linked` (PR #148).
+#
+# Exactly ONE production-mutating command may run, and only after every
+# gate passes. Deliberately absent: migration repair · migration up ·
+# `--include-all` · manual SQL mutation · rollback · any Dashboard action ·
+# any Edge Function deploy.
+#
+# Gates:
+#   · BEFORE: file hash · the file only does the approved camps DDL and the one
+#     function body · ledger 76 / 20261107104607 · pending set is exactly this
+#     migration · camps is in the expected pre-state (gender NOT NULL,
+#     camps_gender_vocab, the two old indexes) · the migration's own
+#     preconditions hold (type vocab, no duplicate private names) · fingerprints.
+#   · AFTER: ledger 77, originals untouched, 77 = 77 correspondence · the new
+#     constraints, nullability and indexes · camps rows, camps triggers and
+#     every other public function unchanged · camps_assign_sort_order keeps
+#     SECURITY DEFINER, its search_path and its ACL.
+#
+# Running it twice is safe: after success nothing is pending, so the BEFORE
+# gates fail and the second run stops before the write.
+
+name: Private camps gender - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-PRIVATE-CAMPS-20261107160000 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-camps-gender-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      M7: "20261107160000"
+      F7: supabase/migrations/20261107160000_private_camps_gender_independent.sql
+      SHA7: "00df9976682a6b57c0488f598b3bfc870db86ae760d58c6b91873d4c7f35d089"
+      EXPECT_REPO_MIGRATIONS: "77"
+      EXPECT_ROWS_BEFORE: "76"
+      EXPECT_LATEST_BEFORE: "20261107104607"
+      EXPECT_ROWS_AFTER: "77"
+      FN: "public.camps_assign_sort_order()"
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: private-camps-gender-evidence
+
+    steps:
+      - name: "GATE: confirmation, ref and secrets"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${CONFIRM}" = "PUSH-PRIVATE-CAMPS-20261107160000" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          # M-52: apply after merge, never before
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main (M-52), got ${GITHUB_REF}"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          [ -f "$F7" ] || { echo "::error::$F7 missing"; exit 1; }
+          got="$(sha256sum "$F7" | cut -d' ' -f1)"
+          [ "$got" = "$SHA7" ] || { echo "::error::$F7 sha256 mismatch: $got != $SHA7"; exit 1; }
+          echo "ok   $(basename "$F7")  $got"
+          # only the approved camps DDL, the precondition DO block and the one function body
+          python3 -I - "$F7" <<'PY'
+          import re, sys
+          src = open(sys.argv[1], encoding="utf-8").read()
+          code = re.sub(r"--[^\n]*", "", src)
+          code = re.sub(r"\$([A-Za-z_]*)\$.*?\$\1\$", "", code, flags=re.S)
+          stmts = [s.strip() for s in code.split(";") if s.strip()]
+          allowed = [
+              r"^do$",
+              r"^alter table public\.camps alter column type set not null$",
+              r"^alter table public\.camps add constraint camps_type_vocab check \(type in \('عادي', 'خاص'\)\)$",
+              r"^alter table public\.camps alter column gender drop not null$",
+              r"^alter table public\.camps drop constraint camps_gender_vocab$",
+              r"^alter table public\.camps add constraint camps_gender_by_type check \( \(type = 'عادي' and gender is not null and gender in \('ذكر', 'أنثى'\)\) or \(type = 'خاص' and \(gender is null or gender in \('ذكر', 'أنثى'\)\)\) \)$",
+              r"^drop index if exists public\.(camps_season_page_gender_name_uniq|idx_camps_group_order)$",
+              r"^create unique index camps_season_page_group_name_uniq on public\.camps \(season_id, page_type, \(case when type = 'خاص' then 'خاص' else gender end\), btrim\(name\)\)$",
+              r"^create index idx_camps_group_order on public\.camps \(season_id, page_type, \(case when type = 'خاص' then 'خاص' else gender end\), sort_order, id\)$",
+              r"^create or replace function public\.camps_assign_sort_order\(\) returns trigger language plpgsql security definer set search_path to 'public', 'pg_temp' as$",
+          ]
+          bad = [s for s in stmts if not any(re.match(a, re.sub(r"\s+", " ", s), re.S | re.I) for a in allowed)]
+          if bad:
+              sys.exit(f"::error::{sys.argv[1]} contains statements outside the approved scope: {bad}")
+          if len(stmts) != 11:
+              sys.exit(f"::error::expected 11 top-level statements, found {len(stmts)}")
+          print(f"ok   {len(stmts)} top-level statements, all within the approved scope")
+          PY
+          python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F7"
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 76 / 20261107104607"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: pending set is exactly 20261107160000"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${M7}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M7]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+
+      - name: "GATE: production preconditions"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          need() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          need gender_not_null      "select is_nullable from information_schema.columns where table_schema='public' and table_name='camps' and column_name='gender'" NO
+          need old_gender_vocab     "select count(*) from pg_constraint where conrelid='public.camps'::regclass and conname='camps_gender_vocab'" 1
+          need new_constraints_absent "select count(*) from pg_constraint where conrelid='public.camps'::regclass and conname in ('camps_gender_by_type','camps_type_vocab')" 0
+          need old_indexes          "select string_agg(indexname, ',' order by indexname) from pg_indexes where schemaname='public' and tablename='camps' and indexname in ('camps_season_page_gender_name_uniq','idx_camps_group_order','camps_season_page_group_name_uniq')" "camps_season_page_gender_name_uniq,idx_camps_group_order"
+          need type_in_vocab        "select count(*) from public.camps where type is null or type not in ('عادي','خاص')" 0
+          need no_dup_private_names "select count(*) from (select 1 from public.camps where type = 'خاص' group by season_id, page_type, btrim(name) having count(*) > 1) d" 0
+          p "select md5(coalesce(string_agg(to_jsonb(c)::text, '' order by id), '')) from public.camps c" > "$OUT/camps-rows-before.txt"
+          p "select string_agg(pg_get_triggerdef(oid), E'\n' order by tgname) from pg_trigger where tgrelid='public.camps'::regclass and not tgisinternal" > "$OUT/camps-triggers-before.txt"
+          p "select proacl::text || ' ' || prosecdef::text || ' ' || array_to_string(proconfig, ',') from pg_proc where oid = '$FN'::regprocedure" > "$OUT/fn-props-before.txt"
+          p "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.oid <> '$FN'::regprocedure" > "$OUT/fn-before.txt"
+          [ "$bad" -eq 0 ] || { echo "::error::preconditions failed - nothing was written"; exit 1; }
+          echo "All preconditions PASS."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 76 -> 77, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$M7" ] || { echo "::error::latest is $latest, expected $M7"; bad=1; }
+          nm="$(psql "$URL" -X -q -At -c "$RO" -c "select name from supabase_migrations.schema_migrations where version='$M7'")"
+          [ "$nm" = "private_camps_gender_independent" ] || { echo "::error::recorded name '$nm' does not match the repository filename"; bad=1; }
+          awk -F '\t' -v v="$M7" '$1 != v' "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M7" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the camps schema change, and nothing else changed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          want() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          want gender_nullable       "select is_nullable from information_schema.columns where table_schema='public' and table_name='camps' and column_name='gender'" YES
+          want type_not_null         "select is_nullable from information_schema.columns where table_schema='public' and table_name='camps' and column_name='type'" NO
+          want new_constraints       "select string_agg(conname, ',' order by conname) from pg_constraint where conrelid='public.camps'::regclass and conname in ('camps_gender_by_type','camps_type_vocab','camps_gender_vocab')" "camps_gender_by_type,camps_type_vocab"
+          want regular_needs_gender  "select (pg_get_constraintdef(oid) like '%gender IS NOT NULL%')::text from pg_constraint where conrelid='public.camps'::regclass and conname='camps_gender_by_type'" true
+          want indexes               "select string_agg(indexname, ',' order by indexname) from pg_indexes where schemaname='public' and tablename='camps' and indexname in ('camps_season_page_gender_name_uniq','idx_camps_group_order','camps_season_page_group_name_uniq')" "camps_season_page_group_name_uniq,idx_camps_group_order"
+          want unique_index_valid    "select (i.indisunique and i.indisvalid)::text from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname='camps_season_page_group_name_uniq'" true
+          want fn_props_unchanged    "select proacl::text || ' ' || prosecdef::text || ' ' || array_to_string(proconfig, ',') from pg_proc where oid = '$FN'::regprocedure" "$(cat "$OUT/fn-props-before.txt")"
+          want fn_groups_private     "select (prosrc like '%then ''خاص'' else%')::text from pg_proc where oid = '$FN'::regprocedure" true
+          want camps_rows_unchanged  "select md5(coalesce(string_agg(to_jsonb(c)::text, '' order by id), '')) from public.camps c" "$(cat "$OUT/camps-rows-before.txt")"
+          want camps_triggers_unchanged "select string_agg(pg_get_triggerdef(oid), E'\n' order by tgname) from pg_trigger where tgrelid='public.camps'::regclass and not tgisinternal" "$(cat "$OUT/camps-triggers-before.txt")"
+          want other_fn_unchanged    "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.oid <> '$FN'::regprocedure" "$(cat "$OUT/fn-before.txt")"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-surface.txt"; else echo FAIL > "$OUT/status-surface.txt"; fi
+          echo "Surface verdict: $(cat "$OUT/status-surface.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger surface; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $M7 applied; ledger 77; camps: private camps gender-independent; rows, triggers and other functions unchanged."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-camps-gender-canonical-push
+          path: private-camps-gender-evidence
+          if-no-files-found: warn
