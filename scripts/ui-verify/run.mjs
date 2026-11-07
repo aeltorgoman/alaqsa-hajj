@@ -62,13 +62,17 @@ const filtered = (rows, url) => {
   return out;
 };
 
-async function appContext(browser, viewport, passengers) {
+async function appContext(browser, viewport, passengers, { archived = false } = {}) {
   const ctx = await browser.newContext({ viewport });
-  const tables = { user_profiles: [{ id: UID, email: user.email, name: "موظف", permissions: perms, is_active: true }], seasons: [season],
+  /* موسمٌ مؤرشَف معروض = للعرض فقط (`canWrite` خطأ) — كما يختاره الموظّف من مبدّل المواسم */
+  const seasons = archived ? [season, { ...season, id: 2, name: "موسم ١٤٤٦", hijri_year: 1446, is_active: false, closed_at: "2025-08-01" }] : [season];
+  const tables = { user_profiles: [{ id: UID, email: user.email, name: "موظف", permissions: perms, is_active: true }], seasons,
     passengers, camps: CAMPS, company_config: [{ id: 1, company_name: "حملة الاختبار", primary_color: "#6B1F3A", accent_color: "#085041", active_season_id: 1 }] };
-  const patches = [];
+  const patches = [], writes = [];
   await ctx.route(`${MOCK}/**`, async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
+    if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method()) && (path.startsWith("/rest/v1/") && !path.startsWith("/rest/v1/rpc/") || path.startsWith("/storage/v1/object/")))
+      writes.push(`${req.method()} ${path}`);
     if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
     if (path.startsWith("/auth/v1/user")) return json(route, user);
     if (path.startsWith("/auth/v1/")) return json(route, session);
@@ -85,8 +89,8 @@ async function appContext(browser, viewport, passengers) {
     }
     return json(route, {});
   });
-  await ctx.addInitScript(s => { try { localStorage.setItem("sb-mock-auth-token", s); } catch { /* */ } }, JSON.stringify(session));
-  return { ctx, patches };
+  await ctx.addInitScript(([s, a]) => { try { localStorage.setItem("sb-mock-auth-token", s); if (a) sessionStorage.setItem("hajj_viewed_season", "2"); } catch { /* */ } }, [JSON.stringify(session), archived]);
+  return { ctx, patches, writes };
 }
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
@@ -208,6 +212,37 @@ for (const [label, viewport] of [["desktop", { width: 1366, height: 800 }], ["mo
   check(`pilgrims ${label}: bar «إضافة يدوي» opens the manual-add form and the bar hides`,
     await bar.count() === 0 && (await page.getByText(/إضافة حاج|إضافة يدوي|بيانات الحاج/).count()) > 0);
   await page.screenshot({ path: join(OUT, `pilgrims-manual-${label}.png`) });
+  await ctx.close();
+}
+
+/* ══ ٣ب) للعرض فقط (موسمٌ مؤرشَف): الشريطُ الثابت كالأزرار الأصليّة تماماً ══
+   «مسح» الأصليّ غيرُ مقيَّدٍ في هذا الوضع أصلاً (قائمٌ قبل هذا التغيير)، و«يدوي» معطَّل؛
+   والشريطُ يطابقهما: لا يتجاوز قيداً ولا يضيف قيداً، ولا كتابةَ تخرج من الصفحة. */
+{
+  const { ctx, writes } = await appContext(browser, { width: 1366, height: 800 }, structuredClone(MANY_PAX).map(p => ({ ...p, season_id: 2 })), { archived: true });
+  const page = await ctx.newPage();
+  page.on("pageerror", e => errors.push(`passengers read-only: ${e}`));
+  await page.goto(APP + "/pilgrims", { waitUntil: "domcontentloaded" });
+  await page.getByText("حاج قائمة 70").first().waitFor({ state: "attached", timeout: 20000 });
+  await page.waitForTimeout(500);
+  const origScan = page.locator("[title='مسح جواز / بطاقة / تصريح حج']:not([data-sticky-pilgrim-actions] *)").first();
+  const origManual = page.locator("[title='إضافة يدوي']").first();
+  const origState = { scanPE: await origScan.evaluate(e => getComputedStyle(e).pointerEvents), manualPE: await origManual.evaluate(e => getComputedStyle(e).pointerEvents) };
+  const opensPicker = async loc => { const c = page.waitForEvent("filechooser", { timeout: 2500 }).then(() => true).catch(() => false); await loc.click({ force: true }); return c; };
+  const origScanOpens = await opensPicker(origScan);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight / 2));
+  await page.waitForTimeout(400);
+  const bar = page.locator("[data-sticky-pilgrim-actions]");
+  const barScan = bar.getByRole("button", { name: /مسح مستند/ }), barManual = bar.getByRole("button", { name: /إضافة يدوي/ });
+  const barState = { scanDisabled: await barScan.isDisabled(), manualDisabled: await barManual.isDisabled(), manualPE: await barManual.evaluate(e => getComputedStyle(e).pointerEvents) };
+  const barScanOpens = await opensPicker(barScan);
+  check("read-only season: original «مسح» unrestricted (pre-existing) and the bar's «مسح مستند» is identical — same picker, no extra power",
+    origState.scanPE !== "none" && origScanOpens && !barState.scanDisabled && barScanOpens, JSON.stringify({ origState, barState }));
+  await barManual.click({ force: true }).catch(() => {});
+  await page.waitForTimeout(500);
+  check("read-only season: «يدوي» blocked in both places — the bar's add button is disabled and opens nothing",
+    origState.manualPE === "none" && barState.manualDisabled && barState.manualPE === "none" && await bar.count() === 1, JSON.stringify(barState));
+  check("read-only season: no write request left the page", writes.length === 0, writes.join(" | "));
   await ctx.close();
 }
 
