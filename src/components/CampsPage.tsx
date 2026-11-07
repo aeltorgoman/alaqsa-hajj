@@ -216,10 +216,13 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
   // قواعد المخيّم — حدود صلبة ثم تعارض طريّ
   // ══════════════════════════════════════════════════════════
 
-  /* الفصل بالجنس مطلق: «خاص» تصنيفٌ تجاريّ لا استثناءٌ من الفصل.
-     كانت الواجهة تجعله يقبل الجنسين، وقرار المنتج ألغى ذلك.
-     والقاعدة ترفضه أيضاً، فلا يمرّ من مسارٍ آخر. */
-  const genderOk = (camp: Camp, p: Passenger) => !!p.gender && p.gender === camp.gender;
+  /* المخيّم العاديّ لجنسه وحده — الفصل فيه لا يُتجاوز. والخاصّ يجمع الرجال
+     والنساء (قرار المنتج ٢٠٢٦-١١)، وجنسُه يحدّد مجموعةَ عرضه لا من يُقبل فيه.
+     والقاعدة تطبّق القاعدةَ نفسها (`assert_camp_admits`)، فلا يمرّ عاديٌّ مختلطٌ من
+     مسارٍ آخر. والقرابة لا شأن لها بالقبول. */
+  const isPrivate = (camp: Camp) => camp.type === "خاص";
+  const genderOk = (camp: Camp, p: Passenger) => isPrivate(camp) || (!!p.gender && p.gender === camp.gender);
+  const genderLabel = (camp: Camp) => isPrivate(camp) ? "رجال ونساء" : camp.gender === "ذكر" ? "رجال" : "نساء";
 
   const hardBlock = (camp: Camp, chosen: Passenger[]): string | null => {
     const bad = chosen.find(p => !genderOk(camp, p));
@@ -425,7 +428,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
 
     return passengers
       /* الحدود الصلبة ترشّح الأهليّة: خارج هذا المخيّم، حاجّ،
-         وجنسه جنس المخيّم. التعارض الطريّ (خاص/عادي) لا يُخرجه —
+         ويقبله المخيّم بجنسه (الخاصّ يقبل الجنسين). التعارض الطريّ (خاص/عادي) لا يُخرجه —
          يبقى ويُطلب التأكيد عند القبول. */
       .filter(p => p[campIdKey] !== camp.id && isHajj(p) && !dismissed.has(p.id) && genderOk(camp, p))
       .map(p => ({
@@ -481,7 +484,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
     if (!assertWritable()) return;
 
     const ok = await confirmAction(
-      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيب مخيّمات منى ${camp.gender === "ذكر" ? "للرجال" : "للنساء"} وترتيبَ نازليها.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
+      `سيُعاد ترتيب النازلين داخل مخيّم «${camp.name}» ليتبع ترتيب مخيّمات منى ${isPrivate(camp) ? "(الرجال ثم النساء)" : camp.gender === "ذكر" ? "للرجال" : "للنساء"} وترتيبَ نازليها.\n\n· لن يُنقل أحدٌ إلى مخيّمٍ آخر.\n· لن يُسنَد أحدٌ جديد ولا يُخرَج أحد.\n· لن يتغيّر شيءٌ في منى.\n\nالترتيب داخل هذا المخيّم وحده هو ما يتغيّر.`,
       { title: "ترتيب حسب منى", confirmLabel: "رتّب", cancelLabel: "إلغاء" },
     );
     if (!ok) return;
@@ -491,10 +494,13 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
        الذي كان أثراً لتسلسل الإنشاء. و`id` يحسم التساوي وحده.
        ⚠️ والجنس شرطٌ لا زينة: الفصل بالجنس حدٌّ صلب، فمخيّم عرفة
        للرجال يشتقّ ترتيبه من مخيّمات منى للرجال وحدها — ولا
-       يختلط التيّاران. و«خاص» لا يستثنى. */
-    const { data, error } = await supabase.from("camps")
-      .select("id").eq("page_type", "منى").eq("season_id", viewedSeason.id).eq("gender", camp.gender)
-      .order("sort_order", { nullsFirst: false }).order("id");
+       يختلط التيّاران في العاديّ. والخاصّ يجمع الجنسين، فيشتقّ ترتيبه من
+       مجموعتَي منى كلتيهما: مجموعةُ جنسه أوّلاً ثم الأخرى. */
+    let q = supabase.from("camps").select("id, gender").eq("page_type", "منى").eq("season_id", viewedSeason.id);
+    if (!isPrivate(camp)) q = q.eq("gender", camp.gender);
+    const { data: rows, error } = await q.order("sort_order", { nullsFirst: false }).order("id");
+    /* ترتيبٌ مستقرّ: مجموعةُ جنس المخيّم أوّلاً، وداخلَ كلٍّ ترتيبُ القاعدة */
+    const data = rows && [...rows.filter(c => c.gender === camp.gender), ...rows.filter(c => c.gender !== camp.gender)];
     if (error || !data) {
       console.error("تعذر قراءة ترتيب مخيّمات منى", error);
       showAlert("error", "تعذر قراءة ترتيب مخيّمات منى — يرجى المحاولة مرة أخرى");
@@ -580,7 +586,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
             {shown.map(camp => (
               <AllocationCard key={camp.id} selected={sel.selectedId === camp.id} onClick={() => openCamp(camp.id)}
                 icon={<Icon />} title={`مخيم ${camp.name}`} badge={camp.type === "خاص" ? specialBadge(true) : undefined}
-                subtitle={camp.gender === "ذكر" ? "رجال" : "نساء"}
+                subtitle={genderLabel(camp)}
                 occ={dwellers(camp.id).length} cap={camp.capacity ?? null}
                 emptyHint="＋ إضافة نازل" capacityNote={capNote(camp)} noteNeedsAction={camp.capacity == null}
                 reorder={canReorder ? {
@@ -625,9 +631,10 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
         const camp = selectedCamp;
         const list = dwellers(camp.id);
         const left = remainingOf(camp);
-        /* النقل إلى مخيّماتٍ من نفس الجنس وحدها — الفصل مطلق */
-        const others = camps.filter(c => c.id !== camp.id && c.gender === camp.gender);
-        /* الأهليّة: غير موزَّع في هذه الصفحة، ومن جنس المخيّم */
+        /* النقل إلى مخيّمٍ يقبل النازلَ بجنسه: العاديُّ من جنسه، والخاصُّ أيّاً كان */
+        const others = camps.filter(c => c.id !== camp.id);
+        const targetsFor = (p: Passenger) => others.filter(c => genderOk(c, p));
+        /* الأهليّة: غير موزَّع في هذه الصفحة، ويقبله المخيّم بجنسه (الخاصّ: الجنسان) */
         const pickerSource = passengers.filter(p =>
           p[campIdKey] == null && genderOk(camp, p) && matchesPassenger(p, sel.pickerSearch));
 
@@ -670,7 +677,7 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
             badges={
               <>
                 <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99, background: "color-mix(in srgb, var(--text-inverse) 22%, transparent)" }}>
-                  {camp.gender === "ذكر" ? "رجال" : "نساء"}
+                  {genderLabel(camp)}
                 </span>
                 {camp.type === "خاص" && specialBadge(true)}
               </>
@@ -743,12 +750,12 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
                         ) : undefined}
                         actions={
                           <>
-                            {others.length > 0 && (
+                            {targetsFor(p).length > 0 && (
                               <select onChange={e => { void moveP(p, e.target.value); e.currentTarget.value = ""; }} defaultValue="" disabled={readOnly}
                                 aria-label={`نقل ${p.short_ar || p.name_ar} إلى مخيم آخر`} title="نقل لمخيم آخر"
                                 style={{ ...roOff, fontSize: 10, fontWeight: 700, color: "var(--muted)", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 7, padding: "3px 8px", fontFamily: "var(--font-body)", cursor: "pointer", minWidth: 62 }}>
                                 <option value="">نقل</option>
-                                {others.map(c => <option key={c.id} value={c.id}>{c.name} ({c.capacity == null ? "بلا سعة" : `${remainingOf(c)} متاح`})</option>)}
+                                {targetsFor(p).map(c => <option key={c.id} value={c.id}>{c.name}{isPrivate(c) ? " · خاص" : ""} ({c.capacity == null ? "بلا سعة" : `${remainingOf(c)} متاح`})</option>)}
                               </select>
                             )}
                             <button disabled={readOnly} onClick={() => void removeP(p, camp)}
@@ -772,8 +779,8 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
               <PassengerPicker title="إضافة نازلين" search={sel.pickerSearch} onSearch={sel.setPickerSearch}
                 items={items} selected={sel.picked} onToggle={sel.toggle} disabled={readOnly}
                 onToggleAll={() => sel.setPicked(sel.picked.size === items.length ? new Set() : new Set(items.map(i => i.id)))}
-                countText={`${items.length} ${camp.gender === "ذكر" ? "من الرجال" : "من النساء"} غير موزّع · ${camp.capacity == null ? "السعة غير محدّدة" : (left ?? 0) > 0 ? placesLabel(left ?? 0) : "المخيّم مكتمل"}`}
-                emptyText={sel.pickerSearch ? "لا توجد نتائج" : `جميع ${camp.gender === "ذكر" ? "الرجال" : "النساء"} موزعون`}
+                countText={`${items.length} ${isPrivate(camp) ? "من الرجال والنساء" : camp.gender === "ذكر" ? "من الرجال" : "من النساء"} غير موزّع · ${camp.capacity == null ? "السعة غير محدّدة" : (left ?? 0) > 0 ? placesLabel(left ?? 0) : "المخيّم مكتمل"}`}
+                emptyText={sel.pickerSearch ? "لا توجد نتائج" : `جميع ${isPrivate(camp) ? "الحجاج" : camp.gender === "ذكر" ? "الرجال" : "النساء"} موزعون`}
                 drag={readOnly ? undefined : { onDragStart: drag.startAdd, onDragEnd: drag.end, draggingId: drag.draggingId }}
                 footer={sel.picked.size > 0 && (
                   <button disabled={readOnly} onClick={() => void addPicked(camp)}
@@ -810,8 +817,11 @@ function CampsPage({ pageType, passengers, setPassengers }: { pageType: "منى"
               </div>
             ))}
           </div>
-          {/* «خاص» تصنيفٌ تجاريّ لا استثناءٌ من الفصل بالجنس */}
-          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5 }}>«خاص» لا يقبل الجنسين — الفصل بالجنس يسري على كل المخيّمات.</div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 5 }}>
+            {campType === "خاص"
+              ? "المخيّم الخاص يقبل الرجال والنساء معاً — والجنس أعلاه يحدّد المجموعة التي يظهر فيها."
+              : "المخيّم العادي لجنسٍ واحد — الفصل بالجنس لا يُتجاوز."}
+          </div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>السعة (عدد الأماكن) — مطلوبة</div>
