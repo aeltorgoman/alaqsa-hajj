@@ -7,7 +7,8 @@ const [, , OUT] = process.argv;
 type Any = Record<string, unknown>;
 const brand = { companyName: "حملة الاختبار", tagline: "", primaryColor: "#5d2222", accentColor: "#B08D3C", logoUrl: "", stampUrl: "", signatureUrl: "" };
 const camps = [
-  { id: 1, name: "خاص أول", gender: "ذكر", type: "خاص" },
+  { id: 1, name: "خاص أول", gender: null, type: "خاص" }, // بلا جنس (20261107160000)
+  { id: 4, name: "خاص قديم", gender: "أنثى", type: "خاص" }, // خاصٌّ بجنسٍ قديم — لا أثر له
   { id: 2, name: "عادي رجال", gender: "ذكر", type: "عادي" },
   { id: 3, name: "عادي نساء", gender: "أنثى", type: "عادي" },
 ] as Any[];

@@ -16,7 +16,7 @@ import { useSeasonWrite } from "../season/useSeasonWrite";
 import { useSeason } from "../season/useSeason";
 import {
   ALLOC_GRID, ALLOC_GAP, AllocationCard, AllocationDialog, AllocationSearch, AllocationStates,
-  AssignedRow, CapacityBar, DialogAction, PassengerPicker, RosterHeader, SuggestionStrip,
+  AssignedRow, CapacityBar, DialogAction, PassengerPicker, PremiumBadge, RosterHeader, SuggestionStrip,
   type PickerItem, type SuggestionItem,
 } from "./allocation/AllocationUI";
 import {
@@ -375,9 +375,8 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
   };
 
   // ══════════════════════════════════════════════════════════
-  const vipBadge = (light?: boolean) => (
-    <span style={{ fontSize: 9.5, fontWeight: 800, padding: "2px 8px", borderRadius: 99, flexShrink: 0, background: light ? "color-mix(in srgb, var(--text-inverse) 22%, transparent)" : "var(--warning-bg)", color: light ? "var(--text-inverse)" : "var(--warning)" }}>VIP ✦</span>
-  );
+  /* الباصُ الخاصّ هو `type = "VIP"` — بالذهب الرقيق نفسه الذي للمخيّم الخاصّ */
+  const vipBadge = (light?: boolean) => <PremiumBadge label="VIP ✦" onHeader={light} />;
 
   const visibleBuses = buses.filter(b =>
     !busSearch || b.name.includes(busSearch.trim()) || riders(b.id).some(p => matchesPassenger(p, busSearch)));
@@ -413,7 +412,7 @@ function BusesPage({ passengers, setPassengers }: { passengers: Passenger[]; set
               const left = bus.capacity - occ;
               return (
                 <AllocationCard key={bus.id} selected={sel.selectedId === bus.id} onClick={() => openBus(bus.id)}
-                  icon={<BusIcon />} title={`باص ${bus.name}`} badge={bus.type === "VIP" ? vipBadge(true) : undefined}
+                  icon={<BusIcon />} title={`باص ${bus.name}`} badge={bus.type === "VIP" ? vipBadge(true) : undefined} premium={bus.type === "VIP"}
                   occ={occ} cap={bus.capacity} emptyHint="＋ إضافة مسافر"
                   capacityNote={left > 0 ? seatsLabel(left) : left === 0 ? "مكتمل" : `تجاوز السعة بـ ${-left}`} />
               );

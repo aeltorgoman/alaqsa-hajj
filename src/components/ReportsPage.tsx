@@ -713,12 +713,12 @@ const getReportAirlineLogo = (airline: string): string | null => {
     const usedNames = new Set<string>();
     pageCamps.forEach(camp => {
       const cp = campManifest(camp, passengers, pageType).people;
-      const isMale = camp.gender === "ذكر";
       const half = Math.ceil(cp.length / 2);
       const col1 = cp.slice(0, half);
       const col2 = cp.slice(half);
       const maxRows = Math.max(col1.length, col2.length);
-      const title = `مخيم ${pageType} ${camp.name} — ${isMale ? "رجال" : "نساء"}`;
+      /* المطبوعُ والمُصدَّر يقول صراحةً «رجال ونساء» للخاصّ (`campSubtitle`) */
+      const title = `مخيم ${pageType} ${camp.name} — ${campSubtitle(camp)}`;
       const aoa: (string | number | null)[][] = [[title], ["م", "اسم الحاج", "م", "اسم الحاج"]];
       for (let i = 0; i < maxRows; i++) {
         const p1 = col1[i], p2 = col2[i];
@@ -1708,7 +1708,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     title="مخيمات منى المطلوبة في التقرير"
                     panelKey="mina"
                     alwaysOpen
-                    items={camps.filter(c => c.page_type === "منى").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
+                    items={camps.filter(c => c.page_type === "منى").map(c => ({ id: c.id, label: `${c.name} (${c.type === "خاص" ? "خاص" : c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
                     selected={selectedMinaCampIds}
                     setSelected={(s) => setSelectedMinaCampIds(s as Set<number>)}
                   />
@@ -1724,7 +1724,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <div onClick={() => toggleExpandedItem(camp.id)} style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
                             <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>مخيم {camp.name} ▾</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
+                              {!isSpecial && <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>}
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
                               <button onClick={e => { e.stopPropagation(); void printWith("mina", () => getSingleCampHTML(camp, "منى")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
@@ -1751,7 +1751,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, color: "#fff" }}>
                             <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{camp.name}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
+                              {!isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>}
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
                               <button onClick={e => { e.stopPropagation(); void printWith("mina", () => getSingleCampHTML(camp, "منى")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
@@ -1795,7 +1795,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                     title="مخيمات عرفة المطلوبة في التقرير"
                     panelKey="arafa"
                     alwaysOpen
-                    items={camps.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, label: `${c.name} (${c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
+                    items={camps.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, label: `${c.name} (${c.type === "خاص" ? "خاص" : c.gender === "ذكر" ? "رجال" : "نساء"})` }))}
                     selected={selectedArafaCampIds}
                     setSelected={(s) => setSelectedArafaCampIds(s as Set<number>)}
                   />
@@ -1811,7 +1811,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <div onClick={() => toggleExpandedItem(camp.id)} style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, cursor: "pointer", color: "#fff" }}>
                             <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>مخيم {camp.name} ▾</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>
+                              {!isSpecial && <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 99, background: "rgba(255,255,255,.2)", fontWeight: 800 }}>{isMale ? "رجال" : "نساء"}</span>}
                               <span style={{ fontSize: 11, fontWeight: 700, opacity: .85 }}>{cp.length === 1 ? `${cp.length} مسافر` : cp.length === 2 ? `${cp.length} مسافران` : `${cp.length} مسافرين`}</span>
                               <button onClick={e => { e.stopPropagation(); void printWith("arafa", () => getSingleCampHTML(camp, "عرفة")); }} title="طباعة هذا المخيم" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "rgba(255,255,255,.2)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
@@ -1838,7 +1838,7 @@ const getReportAirlineLogo = (airline: string): string | null => {
                           <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", background: stripBg, color: "#fff" }}>
                             <span style={{ fontSize: 17, fontWeight: 900, fontFamily: "var(--font-heading)" }}>{camp.name}</span>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>
+                              {!isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>{isMale ? "رجال" : "نساء"}</span>}
                               {isSpecial && <span style={{ fontSize: 9, fontWeight: 900, background: "rgba(255,255,255,.25)", padding: "2px 8px", borderRadius: 99 }}>خاص</span>}
                               <button onClick={e => { e.stopPropagation(); void printWith("arafa", () => getSingleCampHTML(camp, "عرفة")); }} title="طباعة" style={{ width: 26, height: 26, borderRadius: 7, border: "none", background: "rgba(255,255,255,.18)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>

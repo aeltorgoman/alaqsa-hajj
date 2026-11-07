@@ -279,3 +279,24 @@ body { font-family: var(--font-body); background: var(--bg); color: var(--text);
   outline: 2px solid var(--accent-light, #e7cd8a);
   outline-offset: -2px;
 }
+
+/* ═══ التمييزُ الفاخر — المخيّمُ الخاصّ والباصُ VIP ═══
+   ذهبٌ رقيقٌ ثابتٌ في كلّ سمة (لا `--g5`: في «modern-green» أزرق، ولا `--accent`:
+   في «dark-heritage» عنّابيّ). إطارٌ وخطٌّ علويّ وشارة — لا خلفياتٌ ذهبيّة.
+     --premium            إطارُ البطاقة
+     --premium-accent     الخطّ العلويّ على رأس البطاقة (يُرى فوق لون الرأس)
+     --premium-badge-*    الشارة على رأس البطاقة
+     --premium-soft-*     الشارة الصغيرة على خلفيّة الورق */
+[data-theme="qatar-heritage"], :root, [data-theme="modern-green"], [data-theme="royal-emerald"] {
+  --premium: #B8913A;
+  --premium-accent: #D9B65E;
+  --premium-badge-bg: #F3E3B5; --premium-badge-ink: #5A400B; --premium-badge-line: #D9B65E;
+  --premium-soft-bg: rgba(184, 145, 58, .14); --premium-soft-ink: #7A5A12;
+}
+/* رأسُ البطاقة ذهبيٌّ في هذه السمة: الشارةُ داكنةٌ بحبرٍ ذهبيّ، والخطُّ أفتح */
+[data-theme="dark-heritage"] {
+  --premium: #D4AC4F;
+  --premium-accent: #F5E2AE;
+  --premium-badge-bg: #1A1015; --premium-badge-ink: #EAD08F; --premium-badge-line: #EAD08F;
+  --premium-soft-bg: rgba(212, 172, 79, .16); --premium-soft-ink: #E7CD8A;
+}
