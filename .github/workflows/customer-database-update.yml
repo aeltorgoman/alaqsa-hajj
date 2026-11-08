@@ -1,0 +1,134 @@
+name: Customer Database Update
+# ════════════════════════════════════════════════════════════
+# Applies the database migrations of a new release to an EXISTING installation.
+#
+# It does only this:
+#   1. reads the project's migration history (Management API),
+#   2. plans the pending migrations with supabase/scripts/migration-ledger.mjs
+#      (fails closed on any migration this release does not know, on a gap, and on
+#      a renamed migration whose identity or content is not proven),
+#   3. in `apply` mode, and only with the exact confirmation, applies exactly the
+#      planned migrations in order, the same way Customer Backend Setup does,
+#   4. verifies that every migration of the release is recorded.
+#
+# It never creates or changes users, administrators, seasons, secrets, Auth
+# settings or Edge Functions, and it never uses `supabase db push` (the history
+# was recorded by the Management API, so CLI versions do not match it).
+#
+# How to run (Actions -> Customer Database Update -> Run workflow):
+#   1. mode = plan          -> read-only; the job summary lists the pending migrations
+#   2. mode = apply,
+#      expected_pending     = that list, exactly as printed (comma-separated),
+#      confirm              = APPLY
+#   A migration whose own precondition fails (for example incompatible existing
+#   data) stops the run; nothing after it is applied, and a later run resumes.
+# ════════════════════════════════════════════════════════════
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan (read-only) or apply"
+        required: true
+        default: "plan"
+        type: choice
+        options: [plan, apply]
+      expected_pending:
+        description: "apply only: the pending list printed by the plan run, comma-separated, exactly"
+        required: false
+        default: ""
+      confirm:
+        description: "apply only: type APPLY"
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: customer-database-update
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      API: https://api.supabase.com/v1
+    steps:
+      - name: "Check required secrets"
+        run: |
+          set -euo pipefail
+          [ -n "${PROJECT_REF:-}" ] || { echo "::error::SUPABASE_PROJECT_REF is not set"; exit 1; }
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          echo "Secrets present (values not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "Plan pending migrations (read-only)"
+        id: plan
+        run: |
+          set -euo pipefail
+          node supabase/scripts/migration-ledger.mjs --selftest
+          curl --fail-with-body -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "$API/projects/$PROJECT_REF/database/migrations" -o "$RUNNER_TEMP/history.json"
+          node supabase/scripts/migration-ledger.mjs plan "$RUNNER_TEMP/history.json" > "$RUNNER_TEMP/pending.txt"
+          pending="$(paste -sd, "$RUNNER_TEMP/pending.txt")"
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Pending migrations ($(grep -c . "$RUNNER_TEMP/pending.txt" || true))"
+            echo '```'; echo "${pending:-none}"; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "pending: ${pending:-none}"
+
+      - name: "Confirmation gate"
+        if: inputs.mode == 'apply'
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          EXPECTED: ${{ inputs.expected_pending }}
+          PENDING: ${{ steps.plan.outputs.pending }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRM" = "APPLY" ] || { echo "::error::confirm must be APPLY - nothing was written"; exit 1; }
+          [ -n "$PENDING" ] || { echo "Nothing to apply."; exit 0; }
+          norm() { printf '%s' "$1" | tr -d ' \r\n'; }
+          [ "$(norm "$EXPECTED")" = "$(norm "$PENDING")" ] || {
+            echo "::error::the pending set is not the one confirmed - nothing was written"
+            echo "expected: $(norm "$EXPECTED")"; echo "pending:  $(norm "$PENDING")"; exit 1; }
+          echo "Confirmed: $PENDING"
+
+      - name: "Apply pending migrations"
+        if: inputs.mode == 'apply' && steps.plan.outputs.pending != ''
+        run: |
+          set -euo pipefail
+          api() {
+            local code args=(-sS -o "$RUNNER_TEMP/api.out" -w '%{http_code}'
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -X "$1" "$API/projects/$PROJECT_REF$2")
+            [ -z "${3:-}" ] || args+=(-H "Content-Type: application/json" --data-binary @"$3")
+            code="$(curl "${args[@]}")" || { echo "::error::$1 $2: request failed"; return 1; }
+            if [ "$code" -ge 400 ]; then
+              local msg; msg="$(jq -r '.message // empty' "$RUNNER_TEMP/api.out" 2>/dev/null || true)"
+              echo "::error::$1 $2 returned HTTP $code: ${msg:-$(head -c 2000 "$RUNNER_TEMP/api.out")}"
+              return 1
+            fi
+          }
+          count=0
+          while IFS= read -r base; do
+            # The full file name is the recorded name, so a re-run recognises it.
+            jq -n --rawfile query "supabase/migrations/$base.sql" --arg name "$base" \
+              '{query:$query,name:$name}' > "$RUNNER_TEMP/migration.json"
+            api POST /database/migrations "$RUNNER_TEMP/migration.json" || {
+              echo "::error::Migration $base was not applied; nothing after it was applied. Fix the cause above, then run this workflow again."; exit 1; }
+            echo "apply $base"
+            count=$((count + 1))
+          done < "$RUNNER_TEMP/pending.txt"
+          echo "Applied $count migration(s)."
+
+      - name: "Verify every release migration is recorded"
+        if: inputs.mode == 'apply'
+        run: |
+          set -euo pipefail
+          curl --fail-with-body -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "$API/projects/$PROJECT_REF/database/migrations" -o "$RUNNER_TEMP/history.json"
+          node supabase/scripts/migration-ledger.mjs verify "$RUNNER_TEMP/history.json" | tee -a "$GITHUB_STEP_SUMMARY"

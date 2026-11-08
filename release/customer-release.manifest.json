@@ -29,6 +29,7 @@
     "supabase/scripts/scheduled-push.sh",
     "supabase/scripts/vapid-subject.mjs",
     ".github/workflows/customer-backend-setup.yml",
+    ".github/workflows/customer-database-update.yml",
     "docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md",
     "docs/runbooks/MIGRATION_WORKFLOW.md"
   ],
@@ -63,6 +64,7 @@
     "supabase/functions/_shared/http.ts",
     "supabase/functions/_shared/rateLimit.ts",
     ".github/workflows/customer-backend-setup.yml",
+    ".github/workflows/customer-database-update.yml",
     "supabase/scripts/permission-keys.mjs",
     "supabase/scripts/migration-ledger.mjs",
     "supabase/scripts/auth-settings.mjs",
