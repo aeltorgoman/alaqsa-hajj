@@ -26,6 +26,7 @@ let pass = 0, fail = 0;
 const check = (name, cond, detail = "") => {
   if (cond) { pass++; console.log(`PASS — ${name}`); } else { fail++; console.log(`FAIL — ${name}${detail ? ` (${detail})` : ""}`); }
 };
+const fnListAll = () => JSON.parse(fs.readFileSync(path.join(repo, "release/customer-release.manifest.json"), "utf8")).requiredFunctions;
 const throws = (fn) => { try { fn(); return false; } catch { return true; } };
 const run = (cwd, args) => spawnSync(process.execPath, [path.join(cwd, "supabase/scripts/function-bundle.mjs"), ...args], { cwd, encoding: "utf8" });
 
@@ -45,6 +46,8 @@ const parity = JSON.parse(py);
 const same = Object.entries(parity).every(([s, files]) =>
   JSON.stringify(B.bundleFiles(repo, s).map((f) => f.replace(/^supabase\/functions\//, ""))) === JSON.stringify(files));
 check("bundle resolver agrees with the Master parity script for every function", same);
+check("strict dependency scan accepts every real function (no unsupported import pattern in Master)",
+  fnListAll().every((f) => { try { B.dependencies(repo, f); B.verifyJwt(repo, f); return true; } catch (e) { console.log("   ", f, e.message); return false; } }));
 check("send-pilgrim-push bundle includes push-dispatch/deliver.ts (the #271 fix)",
   B.bundleFiles(repo, "send-pilgrim-push").includes("supabase/functions/push-dispatch/deliver.ts"));
 
@@ -65,18 +68,35 @@ check("inputs reach shell only through env (no ${{ … }} expression inside any 
   runs.length >= 7 && runs.every((r) => !/\$\{\{/.test(r)), `${runs.length} run scripts`);
 check("project_ref must equal the repository's SUPABASE_PROJECT_REF secret",
   wf.includes("PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}") && wf.includes('[ "$INPUT_REF" = "$PROJECT_REF" ]'));
-check("deploy requires confirm = DEPLOY <function> and the planned commit",
-  wf.includes('[ "$CONFIRM" = "DEPLOY $SLUG" ]') && wf.includes('[ "$EXPECTED_COMMIT" = "$GITHUB_SHA" ]'));
+check("deploy requires confirm = DEPLOY <function> and the planned SOURCE commit",
+  wf.includes('[ "$CONFIRM" = "DEPLOY $SLUG" ]') && wf.includes('[ "$MODE" = "deploy" ] && [ "$EXPECTED_COMMIT" != "$commit" ]'));
 check("release pin and expected_release are enforced before any API call",
   wf.indexOf("verify-release") > 0 && wf.indexOf("verify-release") < wf.indexOf("$API/projects") && wf.includes('[ "$release" = "$EXPECTED_RELEASE" ]'));
 check("vendor targets refused before any API call",
   wf.indexOf("check-target") > 0 && wf.indexOf("check-target") < wf.indexOf("$API/projects"));
 check("deployed verify_jwt must equal config.toml (preserved, never written)",
   wf.includes('[ "$have_jwt" = "$want_jwt" ]') && wf.includes('[ "$jwt" = "$WANT_JWT" ]') && !/verify_jwt\s*=/.test(code.replace(/\[functions[^\n]*/g, "")));
-check("rollback baseline recorded and pre-deploy source kept as evidence",
-  wf.includes("pre-deploy.json") && wf.includes('"$OUT/pre-deploy-source"') && wf.includes("actions/upload-artifact@v4"));
+check("rollback baseline recorded as metadata + hashes (function-before.json, deployed-before.sha256)",
+  wf.includes('"$OUT/function-before.json"') && wf.includes('> "$OUT/deployed-before.sha256"'));
+check("rollback: source = release-tag deploys tag v<expected_release> from a separate worktree",
+  wf.includes('git rev-parse -q --verify "refs/tags/$tag^{commit}"') && wf.includes('git worktree add -q --detach "$src" "$commit"')
+  && /options: \[checkout, release-tag\]/.test(wf));
+check("every check after source resolution runs on the resolved source (--root \"$SRC\")",
+  (code.match(/(?:function-bundle\.mjs|"\$B") --root "\$(?:src|SRC)"/g) ?? []).length >= 6
+  && !/(?:function-bundle\.mjs|"\$B") (?:verify-release|verify-jwt|required-env|compare|deps)/.test(code));
+check("deploy and download run inside the resolved source",
+  code.includes('(cd "$SRC" && npm run --silent supabase -- functions deploy') && (code.match(/\(cd "\$SRC" && npm run --silent supabase -- functions download/g) ?? []).length === 2);
 check("post-deploy: version advances, ACTIVE, byte parity",
-  wf.includes('[ "$version" -gt "$PRE_VERSION" ]') && wf.includes('[ "$status" = "ACTIVE" ]') && wf.includes('compare "$SLUG" "$OUT/post-deploy-source"'));
+  wf.includes('[ "$version" -gt "$PRE_VERSION" ]') && wf.includes('[ "$status" = "ACTIVE" ]') && wf.includes('--root "$SRC" compare "$SLUG" "$dl" | tee "$OUT/parity-after.txt"'));
+check("evidence: downloaded source never enters the artifact (kept in RUNNER_TEMP, deleted)",
+  !/OUT\/[a-z-]*source/.test(code) && (code.match(/dl="\$RUNNER_TEMP\/deployed-(?:before|after)"/g) ?? []).length === 2 && (code.match(/rm -rf "\$dl"/g) ?? []).length === 2);
+check("evidence: explicit file allowlist blocks anything else; metadata filtered to named fields; 30-day retention",
+  wf.includes("allowed='^(release-bundle\\.sha256|function-before\\.json|function-after\\.json|configuration\\.txt|deployed-before\\.sha256|deployed-after\\.sha256|parity-before\\.txt|parity-after\\.txt)$'")
+  && (code.match(/jq '\{slug, version, status, verify_jwt, ezbr_sha256, updated_at\}'/g) ?? []).length === 2
+  && /retention-days: 30/.test(wf));
+check("secret names file and raw API responses never reach the evidence directory",
+  !/OUT\/(?:secrets|secret-names|fn-before|fn-after)/.test(code) && code.includes('rm -f "$RUNNER_TEMP/secret-names.txt"'));
+check("a non-private repository is warned about", wf.includes("REPO_PRIVATE: ${{ github.event.repository.private }}") && wf.includes('[ "$REPO_PRIVATE" = "true" ] || echo "::warning::'));
 check("permissions are read-only for the repository", /permissions:\n\s+contents: read\n/.test(wf));
 const opts = (wf.match(/options: \[([^\]]+)\]\n\s+project_ref/) ?? [])[1]?.split(",").map((s) => s.trim()).sort();
 const fnList = JSON.parse(fs.readFileSync(path.join(repo, "release/customer-release.manifest.json"), "utf8")).requiredFunctions.slice().sort();

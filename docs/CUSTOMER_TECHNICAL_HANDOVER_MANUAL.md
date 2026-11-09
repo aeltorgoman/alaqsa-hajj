@@ -345,7 +345,8 @@ On an existing installation this is done with the **Customer Function Update** w
 - it targets only the project in the repository's own `SUPABASE_PROJECT_REF` secret, which the operator must type again as `project_ref`, and it refuses the vendor's own projects;
 - it requires `confirm = DEPLOY <function>`;
 - it never runs migrations and never changes data, users, seasons, Auth settings, secrets or `supabase/config.toml`, and it refuses when the deployed JWT setting differs from the release's;
-- it records the previous deployed version and keeps that version's downloaded source as evidence, then verifies a new ACTIVE version whose source is byte-for-byte the release. Rollback is the same workflow run on the previous release.
+- it records the previous deployed version and the hashes of its source, then verifies a new ACTIVE version whose source is byte-for-byte the release. Its evidence artifact holds hashes and metadata only — never function source or secret values;
+- rollback is the same workflow on the current release with `source = release-tag`: it deploys the function from the earlier release's tag, verified against that release's own manifest, so it also works for releases that predate the workflow.
 
 Customer Backend Setup remains for a fresh installation only.
 

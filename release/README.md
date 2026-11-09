@@ -167,12 +167,14 @@ re-run for an update.
 | Control | How |
 |---|---|
 | Approved source | every file of the function's bundle (its own files, imported `_shared` files, files imported from another function) must match `release-manifest.json`; `expected_release` must equal its version |
+| Dependency completeness | one supported local form (static relative `.ts` imports, incl. side-effect and export-from). Dynamic import, require, `import.meta`, runtime file reads, non-`.ts`/bare/`http:`/`file:` specifiers, relative paths outside imports, symlinks, `deno.json`/import maps, and per-function config keys other than `verify_jwt` fail closed |
 | Exact commit | the deploy run must name the full commit SHA the plan run printed |
 | Target | only the repository's `SUPABASE_PROJECT_REF`, typed again as `project_ref`; the vendor's own project refs are refused by sha256 (no vendor identifier ships) |
 | Confirmation | `confirm = DEPLOY <function>`; the function is a fixed choice list, one per run |
 | JWT setting | read from `supabase/config.toml` and compared with the deployed function; a difference refuses the run — never changed |
 | Configuration | the names the bundle reads (`Deno.env.get`) are classified with `.env.example`; a missing REQUIRED name or an unclassified name refuses the run (names only) |
-| Rollback | the pre-deploy version and downloaded source are kept as the run's evidence artifact; rollback is the same workflow on the previous release |
+| Rollback | `source = release-tag` deploys the function from the tag `v<expected_release>` in a separate worktree, verified against that release's own `release-manifest.json` — works for releases that predate the workflow, with no commit to the customer repository. The pre-deploy version and source hashes are recorded |
+| Evidence | an explicit allowlist of hash/metadata files (function metadata filtered to named fields); downloaded source stays in `RUNNER_TEMP` and is deleted; anything unexpected blocks the upload; pattern scan is a second layer; 30-day retention; a warning when the repository is not private |
 | After deploy | new version > previous, `ACTIVE`, same `verify_jwt`, downloaded source byte-for-byte equal to the release bundle |
 | Absent by design | migrations, `db push`, `secrets set`, `config push`, data writes, a second function |
 

@@ -273,23 +273,27 @@ setting differs from \`supabase/config.toml\`).
 1. **GitHub** — Actions → **Customer Function Update** → Run workflow on this
    release with **mode = plan**, **function** = the function, **project_ref** =
    this installation's Supabase project ref (it must equal the
-   \`SUPABASE_PROJECT_REF\` secret) and **expected_release** = \`${args.version}\`.
-   It is read-only: it proves every file of the function's bundle matches
-   \`release-manifest.json\`, reads the deployed version and JWT setting, checks
-   that the configuration names the function reads are set (names only, never
-   values), and prints the exact deploy inputs.
+   \`SUPABASE_PROJECT_REF\` secret), **expected_release** = \`${args.version}\` and
+   **source = checkout**. It is read-only: it proves every file of the
+   function's bundle matches \`release-manifest.json\`, reads the deployed
+   version and JWT setting, checks that the configuration names the function
+   reads are set (names only, never values), and prints the exact deploy inputs.
 2. **GitHub** — run it again with **mode = deploy**, the same values, plus
-   **expected_commit** = the commit printed by the plan run and **confirm** =
-   \`DEPLOY <function>\`. It records the deployed version and downloads its
-   source into the run's evidence artifact, deploys exactly that function, and
-   verifies a new ACTIVE version with the same JWT setting whose source is
-   byte-for-byte this release.
+   **expected_commit** = the source commit printed by the plan run and
+   **confirm** = \`DEPLOY <function>\`. It records the deployed version and the
+   hashes of the deployed source, deploys exactly that function, and verifies a
+   new ACTIVE version with the same JWT setting whose source is byte-for-byte
+   the release.
 
-**Rollback:** run the same two steps on the previous release. For a release
-older than the first one that ships this workflow, first add
-\`.github/workflows/customer-function-update.yml\` and
-\`supabase/scripts/function-bundle.mjs\` from this release to a branch made from
-that older release, and run there with that release's version.
+**Rollback:** the same two steps, still run on this release, with
+**source = release-tag** and **expected_release** = the earlier version. The
+workflow checks out the tag \`v<version>\` of this repository separately,
+verifies the function against *that* release's \`release-manifest.json\` and
+deploys it. This works for every earlier release, including releases that did
+not ship this workflow. Nothing is committed to the repository.
+
+The run's evidence artifact (kept 30 days) holds hashes and metadata only —
+never function source and never secret values.
 
 Apply a release's database changes (above) before updating a function that
 needs them.
