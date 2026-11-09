@@ -339,6 +339,17 @@ and the release must then follow the project's existing approved rules for each.
 
 **Edge Functions.** The deployed function must correspond to the **reviewed release source** (`M-108`). Where a deployed function and the approved release diverge, the correction is to redeploy the release source — never to edit source to match what is deployed.
 
+On an existing installation this is done with the **Customer Function Update** workflow shipped in the release (`.github/workflows/customer-function-update.yml`, steps in `RELEASE.md`). It updates one named function per run and nothing else:
+
+- the approval pin is the release itself: every file of the function's bundle must match `release-manifest.json`, and the deploy run must name the exact commit the read-only plan run printed;
+- it targets only the project in the repository's own `SUPABASE_PROJECT_REF` secret, which the operator must type again as `project_ref`, and it refuses the vendor's own projects;
+- it requires `confirm = DEPLOY <function>`;
+- it never runs migrations and never changes data, users, seasons, Auth settings, secrets or `supabase/config.toml`, and it refuses when the deployed JWT setting differs from the release's;
+- it records the previous deployed version and the hashes of its source, then verifies a new ACTIVE version whose source is byte-for-byte the release. Its evidence artifact holds hashes and metadata only — never function source or secret values;
+- rollback is the same workflow on the current release with `source = release-tag`: it deploys the function from the earlier release's tag, verified against that release's own manifest, so it also works for releases that predate the workflow.
+
+Customer Backend Setup remains for a fresh installation only.
+
 **Responsibility.** Applying the migrations and deploying the Edge Functions for an approved release is the responsibility of the authorized technical team performing that release, under the authorization rule in `M-102`. Section 13 verifies that both were actually done before a deployment is declared Production Ready.
 
 ---
