@@ -76,7 +76,7 @@ jobs:
     env:
       PROJECT_REF: zkucwcnclbfvukhdqhgc
       SLUG: send-pilgrim-push
-      SRC_SHA256: "77f1b4d82c8c992d6b5bcf1289222a794b064fbf8b854535bc510fffd8b99873"
+      SRC_SHA256: "ef56e7ca3068277ad62074353d451ab97db4242076783ecf2ce31de30231dec1"
       DELIVERY_SHA256: "b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf"
       # the untitled-alert title is built by push-dispatch/deliver.ts (buildPayload),
       # which index.ts imports: it rides in this bundle, so it is pinned too

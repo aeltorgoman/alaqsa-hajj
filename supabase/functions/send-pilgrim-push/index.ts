@@ -40,18 +40,6 @@ const INELIGIBLE: Record<string, string> = {
   wrong_season: "هذا التنبيه لا يتبع الموسم المفتوح، فلا يُرسَل إلى الأجهزة.",
 };
 
-/* `company_config.name_ar`، أو null إن تعذّر — فشلُها لا يوقف التسليم */
-async function readCompanyName(admin: ReturnType<typeof createClient>): Promise<string | null> {
-  try {
-    const { data, error } = await admin
-      .from("company_config").select("name_ar").order("id").limit(1).maybeSingle();
-    if (error) return null;
-    return (data as { name_ar: string | null } | null)?.name_ar ?? null;
-  } catch {
-    return null;
-  }
-}
-
 type Subscription = {
   id: number;
   passenger_id: number;
@@ -141,8 +129,14 @@ Deno.serve(async (req: Request) => {
     if (annErr || !ann) return json({ error: "التنبيه غير موجود." }, 404);
 
     /* اسمُ الشركة لغير المعنوَن — الاستعلامُ نفسُه في push-dispatch (الصفُّ
-       الأصغر معرّفاً). وتعذُّرُه لا يوقف التسليم: يُرسَل بالعنوان المحايد. */
-    const companyName = await readCompanyName(admin);
+       الأصغر معرّفاً). وتعذُّرُه — خطأً أو رفضاً — لا يوقف التسليم: null، فيُرسَل
+       بالعنوان المحايد. */
+    const companyName: string | null = await admin
+      .from("company_config").select("name_ar").order("id").limit(1).maybeSingle()
+      .then(
+        ({ data, error }) => (error ? null : (data as { name_ar: string | null } | null)?.name_ar ?? null),
+        () => null,
+      );
     /* المفاتيحُ وترتيبُها كما كانت (id · title · body · priority · url)، و`url`
        شاشةُ التنبيهات فيطابق الفتحُ البارد الفتحَ الدافئ (`OPEN_ALERTS`). */
     const payload = buildPayload(ann, companyName);

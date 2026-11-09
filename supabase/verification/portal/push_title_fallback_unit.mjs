@@ -50,9 +50,9 @@ check("builds its payload with buildPayload(ann, companyName) — no hand-built 
   /const payload = buildPayload\(ann, companyName\);/.test(spp) && !/JSON\.stringify\(\{\s*id: ann\.id/.test(spp));
 check("reads the company name from company_config.name_ar (same query as push-dispatch)",
   spp.includes('.from("company_config").select("name_ar").order("id").limit(1).maybeSingle()')
-  && /const companyName = await readCompanyName\(admin\);/.test(spp));
-check("a failed company-name read falls back to null (neutral title), never blocks delivery",
-  /if \(error\) return null;/.test(spp) && /catch \{\s*return null;\s*\}/.test(spp));
+  && /const companyName: string \| null = await admin\s*\.from\("company_config"\)/.test(spp));
+check("a failed company-name read (error or rejection) falls back to null (neutral title), never blocks delivery",
+  /\(\{ data, error \}\) => \(error \? null : /.test(spp) && /,\s*\(\) => null,\s*\);/.test(spp));
 check("no string-literal title fallback (`title || \"…\"`) anywhere in the function",
   !/title\s*\|\|\s*["'`]/.test(spp));
 check("authorization, rate limit and M6 delivery are still in place",
