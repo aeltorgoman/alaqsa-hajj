@@ -262,6 +262,38 @@ the application:
 
 It never changes users, administrators, seasons, secrets or Edge Functions.
 
+## Updating one Edge Function
+
+When a release changes an Edge Function, update that function on the existing
+installation with **Customer Function Update** — one function per run. It never
+runs migrations, never changes data, users, seasons, Auth settings or secrets,
+and never changes the function's JWT setting (it refuses if the deployed
+setting differs from \`supabase/config.toml\`).
+
+1. **GitHub** — Actions → **Customer Function Update** → Run workflow on this
+   release with **mode = plan**, **function** = the function, **project_ref** =
+   this installation's Supabase project ref (it must equal the
+   \`SUPABASE_PROJECT_REF\` secret) and **expected_release** = \`${args.version}\`.
+   It is read-only: it proves every file of the function's bundle matches
+   \`release-manifest.json\`, reads the deployed version and JWT setting, checks
+   that the configuration names the function reads are set (names only, never
+   values), and prints the exact deploy inputs.
+2. **GitHub** — run it again with **mode = deploy**, the same values, plus
+   **expected_commit** = the commit printed by the plan run and **confirm** =
+   \`DEPLOY <function>\`. It records the deployed version and downloads its
+   source into the run's evidence artifact, deploys exactly that function, and
+   verifies a new ACTIVE version with the same JWT setting whose source is
+   byte-for-byte this release.
+
+**Rollback:** run the same two steps on the previous release. For a release
+older than the first one that ships this workflow, first add
+\`.github/workflows/customer-function-update.yml\` and
+\`supabase/scripts/function-bundle.mjs\` from this release to a branch made from
+that older release, and run there with that release's version.
+
+Apply a release's database changes (above) before updating a function that
+needs them.
+
 Full ownership, release, recovery and handover rules:
 \`docs/CUSTOMER_TECHNICAL_HANDOVER_MANUAL.md\`.
 `);

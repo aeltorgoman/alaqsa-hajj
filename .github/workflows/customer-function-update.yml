@@ -1,0 +1,243 @@
+name: Customer Function Update
+# ════════════════════════════════════════════════════════════
+# Updates ONE Edge Function of an EXISTING installation to this release's
+# reviewed source. Nothing else.
+#
+# It never runs migrations, never changes users, seasons, data, Auth settings
+# or secrets, never writes supabase/config.toml, and never deploys a second
+# function. A fresh installation uses Customer Backend Setup instead.
+#
+# The approval pin is this release itself: release-manifest.json records the
+# sha256 of every shipped file, and the function's whole bundle (its own files,
+# the _shared files and any other function's file it imports) must match it.
+# The run is also pinned to the exact commit the plan run printed.
+#
+# How to run (Actions -> Customer Function Update -> Run workflow, on the
+# release you are installing):
+#   1. mode = plan, function = <slug>, project_ref = this installation's
+#      Supabase project ref, expected_release = the release version.
+#      Read-only. The job summary prints the bundle, the deployed version, the
+#      JWT setting, the configuration check and the exact deploy inputs.
+#   2. mode = deploy with the same values, plus
+#      expected_commit = the commit printed by the plan run, and
+#      confirm         = DEPLOY <slug>
+#   The previous deployed version and its downloaded source are kept as the
+#   run's evidence artifact. Rollback: run this workflow in deploy mode on the
+#   previous release (see RELEASE.md, "Updating one Edge Function").
+# ════════════════════════════════════════════════════════════
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan (read-only) or deploy"
+        required: true
+        default: "plan"
+        type: choice
+        options: [plan, deploy]
+      function:
+        description: "the ONE Edge Function to update"
+        required: true
+        type: choice
+        options: [send-pilgrim-push, push-dispatch, Scan-passport, pilgrim-doc, season-admin, user-admin, whatsapp-send]
+      project_ref:
+        description: "this installation's Supabase project ref (must equal the SUPABASE_PROJECT_REF secret)"
+        required: true
+        default: ""
+      expected_release:
+        description: "the release version you are installing, e.g. 1.2.1 (must equal release-manifest.json)"
+        required: true
+        default: ""
+      expected_commit:
+        description: "deploy only: the full commit SHA printed by the plan run"
+        required: false
+        default: ""
+      confirm:
+        description: "deploy only: type DEPLOY <function>, e.g. DEPLOY send-pilgrim-push"
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: customer-function-update
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      API: https://api.supabase.com/v1
+      # inputs reach the shell as data (env), never as script text
+      MODE: ${{ inputs.mode }}
+      SLUG: ${{ inputs.function }}
+      INPUT_REF: ${{ inputs.project_ref }}
+      EXPECTED_RELEASE: ${{ inputs.expected_release }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      CONFIRM: ${{ inputs.confirm }}
+      OUT: function-update-evidence
+    steps:
+      - name: "GATE: secrets, target and confirmation"
+        run: |
+          set -euo pipefail
+          [ -n "${PROJECT_REF:-}" ] || { echo "::error::SUPABASE_PROJECT_REF is not set"; exit 1; }
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || { echo "::error::SUPABASE_ACCESS_TOKEN is not set"; exit 1; }
+          [ "$INPUT_REF" = "$PROJECT_REF" ] || {
+            echo "::error::project_ref does not match this repository's SUPABASE_PROJECT_REF. Nothing was changed."; exit 1; }
+          [ -n "$EXPECTED_RELEASE" ] || { echo "::error::expected_release is required"; exit 1; }
+          if [ "$MODE" = "deploy" ]; then
+            [ "$CONFIRM" = "DEPLOY $SLUG" ] || { echo "::error::confirm must be exactly: DEPLOY $SLUG"; exit 1; }
+            [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit must be the full 40-character SHA printed by the plan run"; exit 1; }
+            [ "$EXPECTED_COMMIT" = "$GITHUB_SHA" ] || {
+              echo "::error::this run is on $GITHUB_SHA, not the planned $EXPECTED_COMMIT. Nothing was changed."; exit 1; }
+          fi
+          echo "mode=$MODE function=$SLUG (secrets present; values not printed)"
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: this release's reviewed source for the function"
+        run: |
+          set -euo pipefail
+          # before anything is written (the evidence directory lives in the checkout)
+          [ -z "$(git status --porcelain)" ] || { echo "::error::working tree is not clean"; exit 1; }
+          mkdir -p "$OUT"
+          node supabase/scripts/function-bundle.mjs --selftest > "$OUT/selftest.txt" || { cat "$OUT/selftest.txt"; exit 1; }
+          node supabase/scripts/function-bundle.mjs check-target "$PROJECT_REF"
+          node supabase/scripts/function-bundle.mjs verify-release "$SLUG" > "$OUT/bundle.sha256"
+          release="$(head -1 "$OUT/bundle.sha256" | sed 's/^release //')"
+          [ "$release" = "$EXPECTED_RELEASE" ] || {
+            echo "::error::this checkout is release $release, not the expected $EXPECTED_RELEASE. Nothing was changed."; exit 1; }
+          v="$(node -p 'require("./package.json").scripts.supabase')"
+          [[ "$v" =~ ^npx\ --yes\ supabase@[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Supabase CLI is not pinned in package.json"; exit 1; }
+          {
+            echo "### Release $release · commit \`$GITHUB_SHA\` · function \`$SLUG\`"
+            echo ""
+            echo "Bundle (every file matches release-manifest.json):"
+            echo '```'
+            tail -n +2 "$OUT/bundle.sha256"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "GATE: the deployed function and its JWT setting"
+        id: pre
+        run: |
+          set -euo pipefail
+          want_jwt="$(node supabase/scripts/function-bundle.mjs verify-jwt "$SLUG")"
+          code="$(curl -sS -o "$OUT/pre-deploy.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$API/projects/$PROJECT_REF/functions/$SLUG")" || {
+            echo "::error::could not reach the Supabase Management API. Nothing was changed."; exit 1; }
+          [ "$code" != "404" ] || { echo "::error::$SLUG is not deployed on this project. A missing function is installed by Customer Backend Setup, not updated here."; exit 1; }
+          [ "$code" = "200" ] || { echo "::error::reading $SLUG returned HTTP $code. Nothing was changed."; exit 1; }
+          version="$(jq -er '.version' "$OUT/pre-deploy.json")"
+          status="$(jq -er '.status' "$OUT/pre-deploy.json")"
+          have_jwt="$(jq -r '.verify_jwt | tostring' "$OUT/pre-deploy.json")"
+          [[ "$have_jwt" =~ ^(true|false)$ ]] || { echo "::error::deployed verify_jwt is unreadable ($have_jwt)"; exit 1; }
+          [ "$have_jwt" = "$want_jwt" ] || {
+            echo "::error::deployed verify_jwt is $have_jwt but this release declares $want_jwt. This workflow preserves the setting and will not change it; stopped."; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "jwt=$want_jwt" >> "$GITHUB_OUTPUT"
+          {
+            echo ""
+            echo "Deployed now (rollback baseline): version **$version**, status $status, verify_jwt $have_jwt"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "GATE: configuration the function reads is present (names only)"
+        run: |
+          set -euo pipefail
+          curl --fail-with-body -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "$API/projects/$PROJECT_REF/secrets" -o "$RUNNER_TEMP/secrets.json" || {
+            echo "::error::could not read the project's secret names. Nothing was changed."; exit 1; }
+          jq -er 'if type == "array" then .[].name else error("not a list") end' "$RUNNER_TEMP/secrets.json" > "$RUNNER_TEMP/secret-names.txt"
+          rm -f "$RUNNER_TEMP/secrets.json"
+          [ -s "$RUNNER_TEMP/secret-names.txt" ] || { echo "::error::the project's secret list is empty; refusing to assume"; exit 1; }
+          node supabase/scripts/function-bundle.mjs required-env "$SLUG" "$RUNNER_TEMP/secret-names.txt" | tee "$OUT/configuration.txt"
+
+      - name: "Keep the deployed source (rollback evidence) and compare it"
+        id: before
+        run: |
+          set -euo pipefail
+          # `functions download` writes into supabase/functions: the repository copy
+          # is set aside first and restored after, and the tree must be clean again.
+          mv supabase/functions "$RUNNER_TEMP/repo-functions"
+          mkdir -p supabase/functions
+          ok=1
+          npm run --silent supabase -- functions download "$SLUG" --project-ref "$PROJECT_REF" --use-api \
+            > "$RUNNER_TEMP/download-before.log" 2>&1 || ok=0
+          mv supabase/functions "$OUT/pre-deploy-source"
+          mv "$RUNNER_TEMP/repo-functions" supabase/functions
+          [ -z "$(git status --porcelain -- supabase)" ] || { echo "::error::repository copy was not restored cleanly"; exit 1; }
+          [ "$ok" = 1 ] || { sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g' "$RUNNER_TEMP/download-before.log"; echo "::error::could not download the deployed source. Nothing was changed."; exit 1; }
+          if node supabase/scripts/function-bundle.mjs compare "$SLUG" "$OUT/pre-deploy-source" > "$OUT/parity-before.txt" 2>&1; then
+            echo "current=yes" >> "$GITHUB_OUTPUT"; note="already identical to this release"
+          else
+            echo "current=no" >> "$GITHUB_OUTPUT"; note="differs from this release (deploy will replace it)"
+          fi
+          cat "$OUT/parity-before.txt"
+          {
+            echo "Deployed source $note."
+            if [ "$MODE" = "plan" ]; then
+              echo ""
+              echo "To deploy, run again with: mode = deploy · function = $SLUG · project_ref = (same) · expected_release = $EXPECTED_RELEASE"
+              echo "· expected_commit = \`$GITHUB_SHA\` · confirm = \`DEPLOY $SLUG\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # By name, exactly one function. verify_jwt comes from supabase/config.toml and
+      # was proven equal to the deployed setting above.
+      - name: "DEPLOY: exactly one function"
+        if: inputs.mode == 'deploy'
+        run: |
+          set -euo pipefail
+          [ -n "$SLUG" ] || { echo "::error::empty function name"; exit 1; }
+          npm run --silent supabase -- functions deploy "$SLUG" --project-ref "$PROJECT_REF" --use-api 2>&1 \
+            | sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g'
+
+      - name: "VERIFY: new version, ACTIVE, same JWT setting, source parity"
+        if: inputs.mode == 'deploy'
+        env:
+          PRE_VERSION: ${{ steps.pre.outputs.version }}
+          WANT_JWT: ${{ steps.pre.outputs.jwt }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "$API/projects/$PROJECT_REF/functions/$SLUG" -o "$OUT/post-deploy.json"
+          version="$(jq -er '.version' "$OUT/post-deploy.json")"
+          status="$(jq -er '.status' "$OUT/post-deploy.json")"
+          jwt="$(jq -r '.verify_jwt | tostring' "$OUT/post-deploy.json")"
+          [ "$version" -gt "$PRE_VERSION" ] || { echo "::error::version did not advance ($PRE_VERSION -> $version)"; exit 1; }
+          [ "$status" = "ACTIVE" ] || { echo "::error::function status is $status, not ACTIVE"; exit 1; }
+          [ "$jwt" = "$WANT_JWT" ] || { echo "::error::verify_jwt changed to $jwt"; exit 1; }
+          mv supabase/functions "$RUNNER_TEMP/repo-functions"
+          mkdir -p supabase/functions
+          ok=1
+          npm run --silent supabase -- functions download "$SLUG" --project-ref "$PROJECT_REF" --use-api \
+            > "$RUNNER_TEMP/download-after.log" 2>&1 || ok=0
+          mv supabase/functions "$OUT/post-deploy-source"
+          mv "$RUNNER_TEMP/repo-functions" supabase/functions
+          [ -z "$(git status --porcelain -- supabase)" ] || { echo "::error::repository copy was not restored cleanly"; exit 1; }
+          [ "$ok" = 1 ] || { sed -E 's/(sbp_[A-Za-z0-9]{6})[A-Za-z0-9]+/\1***/g' "$RUNNER_TEMP/download-after.log"; echo "::error::could not download the deployed source"; exit 1; }
+          node supabase/scripts/function-bundle.mjs compare "$SLUG" "$OUT/post-deploy-source" | tee "$OUT/parity-after.txt"
+          {
+            echo ""
+            echo "**Deployed:** version $PRE_VERSION → **$version**, status $status, verify_jwt $jwt, source identical to release $EXPECTED_RELEASE (commit \`$GITHUB_SHA\`)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|sb_secret_[A-Za-z0-9_-]{10,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; rm -rf "$OUT"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: function-update-${{ inputs.function }}-${{ github.run_id }}
+          path: function-update-evidence
+          if-no-files-found: ignore
