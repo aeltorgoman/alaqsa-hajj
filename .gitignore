@@ -50,3 +50,7 @@ supabase/**/*.local.toml
 .print-verify/
 .print-verify-flow/
 .print-verify-receipt/
+
+# Python bytecode — يولّده تحميلُ سكربتات التحقق (importlib) محلّياً، ولا يُلتزم.
+__pycache__/
+*.py[cod]

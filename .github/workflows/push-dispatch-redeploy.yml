@@ -72,7 +72,7 @@ jobs:
         push-dispatch/deliver.ts:c101915d55dd743e7c1a2fc714b75ee3d0f36b3d58fc7f15e8e0971bcd702cc6
         send-pilgrim-push/delivery.ts:b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf
       # send-pilgrim-push is not deployed here; its entry point must be the reviewed one
-      SPP_INDEX_SHA256: "103b940b2744aa674527bdd134047098532933a20576155cfd6fd8b81942bcf8"
+      SPP_INDEX_SHA256: "ef56e7ca3068277ad62074353d451ab97db4242076783ecf2ce31de30231dec1"
 
     steps:
       - name: "GATE: confirmation and ref"

@@ -76,8 +76,11 @@ jobs:
     env:
       PROJECT_REF: zkucwcnclbfvukhdqhgc
       SLUG: send-pilgrim-push
-      SRC_SHA256: "103b940b2744aa674527bdd134047098532933a20576155cfd6fd8b81942bcf8"
+      SRC_SHA256: "ef56e7ca3068277ad62074353d451ab97db4242076783ecf2ce31de30231dec1"
       DELIVERY_SHA256: "b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf"
+      # the untitled-alert title is built by push-dispatch/deliver.ts (buildPayload),
+      # which index.ts imports: it rides in this bundle, so it is pinned too
+      DELIVER_SHA256: "c101915d55dd743e7c1a2fc714b75ee3d0f36b3d58fc7f15e8e0971bcd702cc6"
       # M6: the schema this source calls must already be in production
       REQUIRED_MIGRATION: "20261019135129"
       DB_HOST: ${{ inputs.db_host }}
@@ -112,6 +115,25 @@ jobs:
           [ -f "$d" ] || { echo "::error::$d missing"; exit 1; }
           dgot="$(sha256sum "$d" | cut -d' ' -f1)"
           [ "$dgot" = "$DELIVERY_SHA256" ] || { echo "::error::delivery.ts sha256 mismatch: $dgot"; exit 1; }
+          b="supabase/functions/push-dispatch/deliver.ts"
+          [ -f "$b" ] || { echo "::error::$b missing"; exit 1; }
+          bgot="$(sha256sum "$b" | cut -d' ' -f1)"
+          [ "$bgot" = "$DELIVER_SHA256" ] || { echo "::error::push-dispatch/deliver.ts sha256 mismatch: $bgot"; exit 1; }
+          # the bundle the CLI builds is exactly the reviewed files — nothing rides along unpinned
+          python3 -I - "$SLUG" <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location("p", "supabase/verification/assert-edge-function-parity.py")
+          m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          got = m.expected_files("supabase/functions", sys.argv[1])
+          want = {"send-pilgrim-push/index.ts", "send-pilgrim-push/delivery.ts", "push-dispatch/deliver.ts",
+                  "_shared/authorize.ts", "_shared/http.ts", "_shared/rateLimit.ts"}
+          if got != want:
+              sys.exit(f"::error::bundle would be {sorted(got)}, expected {sorted(want)}")
+          print("bundle:", ", ".join(sorted(got)))
+          PY
+          # no customer name in the code: the untitled-alert title comes from company_config
+          if grep -n "حملة الأقصى" "$f" "$d" "$b"; then
+            echo "::error::send-pilgrim-push hardcodes a company name"; exit 1; fi
           # nothing else may ride along in the function directory
           extra="$(ls "supabase/functions/$SLUG" | grep -vxE 'index\.ts|delivery\.ts' || true)"
           [ -z "$extra" ] || { echo "::error::unreviewed file(s) in the function directory: $extra"; exit 1; }
@@ -120,7 +142,7 @@ jobs:
           # تبقى من المستودع، ولا يضبطها أمرُ النشر.
           grep -A1 "^\[functions\.$SLUG\]" supabase/config.toml | grep -q "verify_jwt = true" || {
             echo "::error::config.toml no longer declares verify_jwt = true for $SLUG"; exit 1; }
-          echo "commit=${GITHUB_SHA} index.ts=$got delivery.ts=$dgot"
+          echo "commit=${GITHUB_SHA} index.ts=$got delivery.ts=$dgot deliver.ts=$bgot"
 
       - name: "GATE: M6 migration is in the production ledger (read-only)"
         env:
