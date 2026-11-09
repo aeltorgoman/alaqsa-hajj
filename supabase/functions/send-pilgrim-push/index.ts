@@ -27,6 +27,10 @@ import { authorize } from "../_shared/authorize.ts";
 import { cors } from "../_shared/http.ts";
 import { enforceRateLimit, LIMITS } from "../_shared/rateLimit.ts";
 import { classify, runDelivery, type Claimed, type Summary } from "./delivery.ts";
+/* الحمولةُ وعنوانُ غير المعنوَن من مصدرٍ واحد مع المُجدوِل (push-dispatch):
+   عنوانُ التنبيه، وإلّا اسمُ الشركة من `company_config`، وإلّا عنوانٌ محايد.
+   لا اسمَ حملةٍ في الشيفرة — كلُّ تثبيتٍ يقرأ اسمَ شركته من قاعدته وحدها. */
+import { buildPayload } from "../push-dispatch/deliver.ts";
 
 const REQUIRED_PERMISSION = "manage_portal";
 
@@ -35,6 +39,18 @@ const INELIGIBLE: Record<string, string> = {
   expired: "انتهت مدة هذا التنبيه، فلا يُرسَل إلى الأجهزة.",
   wrong_season: "هذا التنبيه لا يتبع الموسم المفتوح، فلا يُرسَل إلى الأجهزة.",
 };
+
+/* `company_config.name_ar`، أو null إن تعذّر — فشلُها لا يوقف التسليم */
+async function readCompanyName(admin: ReturnType<typeof createClient>): Promise<string | null> {
+  try {
+    const { data, error } = await admin
+      .from("company_config").select("name_ar").order("id").limit(1).maybeSingle();
+    if (error) return null;
+    return (data as { name_ar: string | null } | null)?.name_ar ?? null;
+  } catch {
+    return null;
+  }
+}
 
 type Subscription = {
   id: number;
@@ -118,22 +134,18 @@ Deno.serve(async (req: Request) => {
     /* ─── (٢) قراءة التنبيه ─── */
     const { data: ann, error: annErr } = await admin
       .from("announcements")
-      .select("id, title, body, priority, target_type, target_ids")
+      .select("id, title, body, priority, expires_at, target_type, target_ids")
       .eq("id", announcementId)
       .single();
 
     if (annErr || !ann) return json({ error: "التنبيه غير موجود." }, 404);
 
-    const payload = JSON.stringify({
-      id: ann.id,
-      title: ann.title || "حملة الأقصى",
-      body: ann.body,
-      priority: ann.priority,
-      /* شاشةُ التنبيهات صار لها عنوانٌ قانونيّ، وضغطةُ التنبيه تقصدها
-         هي لا «رحلتي». والعاملُ يقرأ هذا الحقل عند الضغط، فبه يطابق
-         الفتحُ البارد الفتحَ الدافئ (`OPEN_ALERTS`). */
-      url: "/hajj/alerts",
-    });
+    /* اسمُ الشركة لغير المعنوَن — الاستعلامُ نفسُه في push-dispatch (الصفُّ
+       الأصغر معرّفاً). وتعذُّرُه لا يوقف التسليم: يُرسَل بالعنوان المحايد. */
+    const companyName = await readCompanyName(admin);
+    /* المفاتيحُ وترتيبُها كما كانت (id · title · body · priority · url)، و`url`
+       شاشةُ التنبيهات فيطابق الفتحُ البارد الفتحَ الدافئ (`OPEN_ALERTS`). */
+    const payload = buildPayload(ann, companyName);
 
     /* ⚠️ مهلةُ كلِّ نداء — بالمللي ثانية (`socket.setTimeout` في Node).
        بلا مهلةٍ لا سقفَ لنداءٍ واحد: نقطةُ نهايةٍ تقبل الوصلةَ ولا تردّ تُجمّد

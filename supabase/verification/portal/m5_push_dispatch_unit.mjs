@@ -224,8 +224,9 @@ check("no company name (null / blank / read failure) → the neutral app default
 const pdSrc = ["index.ts", "handler.ts", "deliver.ts"].map((f) => fs.readFileSync(path.join(fnDir, f), "utf8")).join("\n");
 check("push-dispatch hardcodes no company name", !pdSrc.includes("حملة الأقصى") && !pdSrc.includes("الأقصى"));
 const spp = fs.readFileSync(path.join(here, "../../functions/send-pilgrim-push/index.ts"), "utf8");
-check("send-pilgrim-push (unchanged) builds the same payload keys and base options",
-  /id: ann\.id,\s*title: [^\n]+,\s*body: ann\.body,\s*priority: ann\.priority,/.test(spp) && spp.includes('url: "/hajj/alerts"')
+check("send-pilgrim-push builds its payload with the same buildPayload and keeps the base options",
+  spp.includes('import { buildPayload } from "../push-dispatch/deliver.ts";') && spp.includes("const payload = buildPayload(ann, companyName);")
+  && !spp.includes("حملة الأقصى")
   && spp.includes("TTL: 86400") && spp.includes('ann.priority === "عاجل" ? "high" : "normal"') && spp.includes("SEND_TIMEOUT_MS = 3000"));
 const o = D.buildSendOptions(ann, T0);
 check("options: TTL 86400 · urgency high for عاجل · timeout 3000 · topic ann-<id>",
