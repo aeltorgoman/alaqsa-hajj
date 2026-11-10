@@ -18,5 +18,12 @@ eq("describe: new audience", A.describeAudience({ bus: [1, 2], pilgrim: [5, 6], 
    "باص: باص ١، باص ٢ · 2 حاج محدد · يشمل: مشرف");
 eq("describe: legacy rows", [A.describeAudience(null, { type: "all" }, {}), A.describeAudience(null, { type: "bus", ids: [1, 2] }, {})], ["جميع الحجاج", "باصات (2)"]);
 eq("describe: more than three shown as +n", A.describeAudience({ hotel: [1, 2, 3, 4, 5] }, {}, {}), "فندق: #1، #2، #3 +2");
+// «جميع الحجاج» (الافتراض) وعنصرٌ محدّد لا يجتمعان — وُجد في قبول بيئة الاختبار: اختيارُ فندقٍ
+// مع بقاء «الجميع» كان يُرسل إلى كلّ الحجّاج
+eq("picking an item turns «all» off (default {all:true} + hotel → hotel only)", A.toggleAudienceItem({ all: true }, "hotel", 4), { all: false, hotel: [4] });
+eq("…and the result reaches only that hotel once cleaned", A.cleanAudience(A.toggleAudienceItem({ all: true }, "hotel", 4)), { hotel: [4] });
+eq("unpicking an item leaves «all» as it was", A.toggleAudienceItem({ all: false, hotel: [4, 5] }, "hotel", 4), { all: false, hotel: [5] });
+eq("turning «all» on clears specific items, keeps the type filter", A.toggleAudienceAll({ bus: [1], pilgrim: [7], types: ["حاج", "مرافق"] }), { all: true, types: ["حاج", "مرافق"] });
+eq("turning «all» off keeps nothing selected (send blocked as empty)", A.audienceIsEmpty(A.toggleAudienceAll({ all: true })), true);
 console.log(`\nresult: ${pass} passed · ${fail} failed`);
 process.exit(fail ? 1 : 0);

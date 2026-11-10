@@ -63,3 +63,15 @@ export function describeAudience(a: Audience | null | undefined, legacy: { type?
   return parts.join(" · ") || "—";
 }
 
+/* «جميع الحجاج» وعنصرٌ محدّد لا يجتمعان: الاتّحادُ مع «الجميع» هو الجميع، فاختيارُ فندقٍ مع
+   بقاء «الجميع» مفعّلاً (وهو الافتراض) كان يرسل إلى كلّ الحجّاج وهو يوحي بالتضييق. فاختيارُ
+   عنصرٍ يُلغي «الجميع»، وتفعيلُ «الجميع» يُفرغ العناصر (ويبقى مرشّحُ الأنواع). */
+export function toggleAudienceItem(a: Audience, k: IdKey, id: number): Audience {
+  const cur = a[k] || [];
+  const adding = !cur.includes(id);
+  return { ...a, all: adding ? false : a.all, [k]: adding ? [...cur, id] : cur.filter(x => x !== id) };
+}
+export function toggleAudienceAll(a: Audience): Audience {
+  if (a.all) return { ...a, all: false };
+  return { all: true, ...(a.types ? { types: a.types } : {}) };
+}

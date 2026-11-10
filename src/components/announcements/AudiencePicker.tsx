@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../supabase";
 import { inp } from "../../utils";
-import { CATS, PASSENGER_TYPES, type Audience, type IdKey, type Opt, type Pilgrim } from "./audience";
+import { CATS, PASSENGER_TYPES, toggleAudienceAll, toggleAudienceItem, type Audience, type IdKey, type Opt, type Pilgrim } from "./audience";
 
 type Props = {
   seasonId: number;
@@ -68,10 +68,8 @@ export function AudiencePicker({ seasonId, value, onChange, onNames }: Props) {
   }, [seasonId]);
 
   const types = value.types && value.types.length ? value.types : ["حاج"];
-  const toggleId = (k: IdKey, id: number) => {
-    const cur = value[k] || [];
-    onChange({ ...value, [k]: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] });
-  };
+  const toggleId = (k: IdKey, id: number) => onChange(toggleAudienceItem(value, k, id));
+  const toggleAll = () => onChange(toggleAudienceAll(value));
   const toggleType = (t: string) => {
     const next = types.includes(t) ? types.filter(x => x !== t) : [...types, t];
     onChange({ ...value, types: next.length ? next : ["حاج"] });
@@ -98,7 +96,7 @@ export function AudiencePicker({ seasonId, value, onChange, onNames }: Props) {
     <div>
       {loadError && <div style={{ fontSize: 11.5, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>تعذر تحميل قوائم الاستهداف. يرجى تحديث الصفحة.</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <button type="button" onClick={() => onChange({ ...value, all: !value.all })} style={pill(!!value.all)}>
+        <button type="button" onClick={toggleAll} style={pill(!!value.all)}>
           {value.all ? "✓ " : ""}جميع الحجاج
         </button>
         {CATS.map(c => {
