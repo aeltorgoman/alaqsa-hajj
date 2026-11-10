@@ -28,6 +28,14 @@ export type Database = {
           target_ids: number[]
           target_type: string
           title: string | null
+          /* Phase 1 (20261110122335) */
+          pinned_at: string | null
+          content_revision: number
+          content_updated_at: string | null
+          audience: Json | null
+          audience_frozen_at: string | null
+          updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           body: string
@@ -42,6 +50,8 @@ export type Database = {
           target_ids?: number[]
           target_type?: string
           title?: string | null
+          pinned_at?: string | null
+          audience?: Json | null
         }
         Update: {
           body?: string
@@ -56,6 +66,9 @@ export type Database = {
           target_ids?: number[]
           target_type?: string
           title?: string | null
+          /* العنوانُ والنصُّ من update_announcement وحدها (المحفّز يرفض المباشر) */
+          pinned_at?: string | null
+          audience?: Json | null
         }
         Relationships: [
           {
@@ -1254,6 +1267,26 @@ export type Database = {
         Returns: {
           passenger_id: number
         }[]
+      }
+      /* Phase 1 — معاينةُ جمهورٍ مركّب (manage_portal) */
+      announcement_audience_preview: {
+        Args: { p_audience: Json }
+        Returns: {
+          passenger_id: number
+        }[]
+      }
+      /* Phase 1 — تعديلُ تنبيه (manage_portal): push = requested | scheduled | expired | none */
+      update_announcement: {
+        Args: { p_id: number; p_title: string | null; p_body: string; p_priority: string; p_expires_at: string | null }
+        Returns: Json
+      }
+      /* Phase 1 — حذفٌ نهائيّ (manage_portal) */
+      delete_announcement: { Args: { p_id: number }; Returns: boolean }
+      /* Phase 1 — بوابة الحاجّ (anon، بالجلسة) */
+      get_pilgrim_announcements: { Args: { p_token: string; p_offset: number }; Returns: Json }
+      acknowledge_pilgrim_announcement: {
+        Args: { p_token: string; p_announcement_id: number; p_revision: number | null }
+        Returns: Json
       }
       assign_passenger_room:
         /* MOD-001: `p_room_id` = null يُخرج الحاجّ من غرفته.

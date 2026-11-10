@@ -20,7 +20,11 @@ export type PortalData = {
      عمداً: هذه بياناتُ موسمٍ لا بياناتُ حملة. */
   season: PortalSeason | null;
   announcements: Ann[];
+  /* Phase 1 — الصفحةُ الأولى (١٠) في `announcements`، والعدُّ هنا. خادمٌ أقدمُ لا يرسله:
+     عندها لا حالاتَ ولا «المزيد»، ويبقى السلوكُ القديم. */
+  announcements_meta?: AnnMeta | null;
 };
+export type AnnMeta = { total: number; unread: number; has_more: boolean; page_size: number };
 /* عقدُ `accommodation` (MOD-001 · D8):
      assigned          ← غرفةٌ في فندقٍ مربوط: `hotel` هو فندقُ الغرفة الفعليّ (اسم · عنوان · رابط)
      assigned_unlinked ← غرفةٌ لم تُربط بفندق: `hotel` فارغ، و`requested_hotel` باسمه وحده إن وُجد
@@ -32,7 +36,15 @@ export type PortalAccommodation = {
   room: { number: string; floor: string; type: string } | null;
   requested_hotel: { name: string } | null;
 };
-export type Ann = { id: number; body: string; priority: string; show_at: string };
+/* Phase 1 — الحقولُ الإضافيّة اختياريّة: خادمٌ أقدمُ يرسل الأربعة الأولى وحدها.
+   state: جديد · مُحدَّث (عُدِّل بعد النشر ولم يُقرَّ بنسخته) · مقروء — من الخادم وحده. */
+export type AnnState = "new" | "updated" | "read";
+export type Ann = {
+  id: number; body: string; priority: string; show_at: string;
+  title?: string | null; pinned?: boolean; revision?: number; state?: AnnState; edited_at?: string | null;
+};
+/* صفحةٌ تالية من `get_pilgrim_announcements` */
+export type AnnPage = { items: Ann[]; total: number; unread: number; has_more: boolean };
 export type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
 /* `hotel_*` في الموسم لواجهة البوابة القديمة وحدها — لا تُقرأ هنا (MOD-001):
    فندقُ الحاجّ من `accommodation` وحده. */

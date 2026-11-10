@@ -76,14 +76,18 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const target = (event.notification.data && event.notification.data.url) || PORTAL_ALERTS_PATH;
+  const data = event.notification.data || {};
+  /* Phase 1 — الإشعارُ لتنبيهٍ بعينه: البوابةُ تُقرّ به وحده عند فتحه (لا كلَّ القائمة) */
+  const annId = Number(data.id) > 0 ? String(Number(data.id)) : "";
+  const base = data.url || PORTAL_ALERTS_PATH;
+  const target = annId ? base + (base.indexOf("?") === -1 ? "?" : "&") + "a=" + annId : base;
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       /* إن كانت البوابة مفتوحة بالفعل، ننتقل إليها بدل فتح نافذة جديدة */
       for (const client of list) {
         if (client.url.indexOf(PORTAL_PATH) !== -1 && "focus" in client) {
-          client.postMessage({ type: "OPEN_ALERTS" });
+          client.postMessage({ type: "OPEN_ALERTS", id: annId ? Number(annId) : null });
           return client.focus();
         }
       }
