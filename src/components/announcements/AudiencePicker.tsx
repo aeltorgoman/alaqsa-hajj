@@ -31,17 +31,22 @@ export function AudiencePicker({ seasonId, value, onChange, onNames }: Props) {
     (async () => {
       const [b, c, h, f, p] = await Promise.all([
         supabase.from("buses").select("id,name").eq("season_id", seasonId).order("id"),
-        supabase.from("camps").select("id,name,page_type,type").eq("season_id", seasonId).order("sort_order", { nullsFirst: false }).order("id"),
+        supabase.from("camps").select("id,name,page_type,type,gender").eq("season_id", seasonId).order("sort_order", { nullsFirst: false }).order("id"),
         supabase.from("hotels").select("id,name").eq("season_id", seasonId).order("id"),
         supabase.from("flights").select("id,name,type,date").eq("season_id", seasonId).order("date").order("id"),
         supabase.from("passengers").select("id,name_ar,short_ar,passenger_type,passport,national_id").eq("season_id", seasonId).order("id"),
       ]);
       if (!alive) return;
       if (b.error || c.error || h.error || f.error || p.error) { setLoadError(true); return; }
-      const camps = (c.data || []) as { id: number; name: string; page_type: string; type: string | null }[];
-      /* الخيمةُ الخاصّة مخيّمٌ بنوع «خاص» في منى أو عرفة: تُعرض في مجموعتها تحت فئتها */
+      const camps = (c.data || []) as { id: number; name: string; page_type: string; type: string | null; gender: string | null }[];
+      /* الخيمةُ الخاصّة مخيّمٌ بنوع «خاص» في منى أو عرفة: تُعرض في مجموعتها تحت فئتها. والجنسُ في
+         الاسم (كما في التقارير): مخيّما رجالٍ ونساءٍ باسمٍ واحد لا يلتبسان؛ والخاصُّ بلا جنسٍ يبقى باسمه */
+      const sex = (g: string | null) => (g === "ذكر" ? "رجال" : g === "أنثى" ? "نساء" : null);
       const campOpt = (page: string) => camps.filter(x => x.page_type === page)
-        .map(x => ({ id: x.id, name: x.name, group: x.type === "خاص" ? "الخيام الخاصة" : "المخيمات" }));
+        .map(x => {
+          const g = sex(x.gender);
+          return { id: x.id, name: g ? `${x.name} (${g})` : x.name, group: x.type === "خاص" ? "الخيام الخاصة" : "المخيمات" };
+        });
       const next: Record<string, Opt[]> = {
         bus: (b.data || []).map(x => ({ id: x.id, name: x.name || `باص ${x.id}` })),
         camp_mina: campOpt("منى"),

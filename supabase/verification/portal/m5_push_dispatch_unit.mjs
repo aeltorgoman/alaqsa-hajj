@@ -315,5 +315,24 @@ for (const reason of ["not_due", "expired", "wrong_season", "not_found"]) {
     out.status === "delivered" && f.log.filter((x) => x === "push_prepare_announcement").length === 1 && f.log.includes("send:5:ann-78:78"), f.log.join());
 }
 
+/* Phase 1 — سياجُ النسخة: الحجزُ بنسخة المحتوى التي قُرئت مع النصّ، وبلاها كما كان */
+for (const [label, rev, want] of [["with content_revision → every claim carries p_revision", 3, 3],
+                                   ["without content_revision (pre-Phase-1 database) → 4-argument claim", undefined, "absent"]]) {
+  const claims = [];
+  const f = fakeDeliver({ eligible: true, prepared: true }, [[{ target_id: 1, attempt: 1, endpoint: "e", p256dh: "k", auth: "a" }]]);
+  const rpc = f.deps.rpc;
+  f.deps.rpc = async (fn, args) => { if (fn === "push_claim_targets") claims.push(args); return rpc(fn, args); };
+  const read = f.deps.readAnnouncement;
+  f.deps.readAnnouncement = async (id) => ({ ...(await read(id)), ...(rev === undefined ? {} : { content_revision: rev }) });
+  await D.deliverAnnouncement(79, 10000, f.deps);
+  const got = claims.map((a) => ("p_revision" in a ? a.p_revision : "absent"));
+  check(label, claims.length >= 1 && got.every((v) => v === want) && claims.every((a) => Object.keys(a).length === (want === "absent" ? 4 : 5)), JSON.stringify(claims));
+}
+{
+  const src = fs.readFileSync(path.join(here, "../../functions/send-pilgrim-push/index.ts"), "utf8");
+  check("send-pilgrim-push forwards the revision it read to every claim",
+    /\.select\("\*"\)/.test(src) && /p_revision: ann\.content_revision/.test(src) && /p_lease_seconds: leaseSeconds,\s*\.\.\.revisionArg/.test(src));
+}
+
 console.log(`\nالنتيجة: ${pass} نجح · ${fail} أخفق`);
 process.exit(fail ? 1 : 0);

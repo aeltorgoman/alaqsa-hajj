@@ -107,6 +107,9 @@ eq "Mina camp"                                                "$(prev '{"camp_mi
 eq "private tent (Mina private camp)"                         "$(prev '{"camp_mina":[6892]}')"                     "5792"
 eq "Arafat camp"                                              "$(prev '{"camp_arafa":[6893]}')"                    "5791"
 eq "hotel (assigned room's hotel)"                            "$(prev '{"hotel":[8391]}')"                         "5791"
+q "set app.season_maintenance = 'on'; update public.passengers set requested_hotel_id = 8391 where id = 5794" > /dev/null
+eq "hotel: a pilgrim who only requested it (no room there) is not targeted" "$(prev '{"hotel":[8391]}')" "5791"
+q "set app.season_maintenance = 'on'; update public.passengers set requested_hotel_id = null where id = 5794" > /dev/null
 eq "outbound flight"                                          "$(prev '{"flight":[7391]}')"                        "5791"
 eq "return flight"                                            "$(prev '{"flight":[7392]}')"                        "5792"
 eq "individual pilgrims — any category when chosen by name"   "$(prev '{"pilgrim":[5795,5794]}')"                  "5794,5795"
@@ -169,6 +172,19 @@ eq "acknowledge without a session → null" "$(anon "select coalesce(acknowledge
 eq "the other pilgrim is unaffected" "$(anon "select get_pilgrim_portal_by_session('$T2')->'announcements_meta'->>'unread'")" "1"
 eq "old portal build (mark_pilgrim_notification_read) still works for its own" "$(anon "select mark_pilgrim_notification_read('$T1', 4816)")" "t"
 eq "…and refuses what is not its own" "$(anon "select mark_pilgrim_notification_read('$T1', 4823)")" "f"
+eq "acknowledge an item on page 2" "$(anon "select acknowledge_pilgrim_announcement('$T1', 4811, 1)->>'state'")" "read"
+eq "…page 2 carries per-item states (4812 new, 4811 read) and the same meta" "$(anon "select get_pilgrim_announcements('$T1', 10)" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(",".join(f"{a['"'"'id'"'"']}:{a['"'"'state'"'"']}" for a in d["items"]), d["total"], d["unread"])')" "4812:new,4811:read 12 9"
+# تنبيهٌ قديم (قبل Phase 1): بلا audience، باستهداف target_type، وقراءتُه في notification_deliveries.read_at
+q "set app.season_maintenance = 'on'; insert into public.announcements (id,season_id,title,body,target_type,target_ids,show_at) overriding system value
+   values (4826,9791,'قديم','تنبيهٌ قديم','bus','{6791}',now() - interval '40 minutes')" > /dev/null
+eq "legacy announcement: frozen by its legacy rule (bus 1, every passenger type as before)" "$(recips 4826)" "5791,5793"
+eq "…shown to its pilgrim as New" "$(anon "select x->>'state' from json_array_elements(get_pilgrim_announcements('$T1', 10)->'items') x where (x->>'id')::int = 4826")" "new"
+q "insert into public.notification_deliveries (announcement_id, passenger_id, status, read_at) values (4826, 5791, 'read', now())" > /dev/null
+eq "…a read recorded by the old build counts as Read (revision 1)" "$(anon "select x->>'state' from json_array_elements(get_pilgrim_announcements('$T1', 10)->'items') x where (x->>'id')::int = 4826")" "read"
+eq "…not shown to a pilgrim outside its legacy audience" "$(anon "select count(*) from json_array_elements(get_pilgrim_portal_by_session('$T2')->'announcements') x where (x->>'id')::int = 4826")" "0"
+r=$(staff $U_ADMIN "select update_announcement(4826, 'قديم مُعدَّل', 'تنبيهٌ قديمٌ مُعدَّل', 'عام', null)->>'push'")
+eq "…editing it: revision 2, Updated (the legacy read was for revision 1), recipients unchanged" "$r:$(anon "select x->>'state' from json_array_elements(get_pilgrim_announcements('$T1', 10)->'items') x where (x->>'id')::int = 4826"):$(recips 4826)" "requested:updated:5791,5793"
+q "set app.season_maintenance = 'on'; delete from public.announcements where id = 4826" > /dev/null
 r=$(anon "select count(*) from announcement_reads"); echo "$r" | grep -q "permission denied" && ok "anon cannot read the reads table" || bad "anon reads table ($r)"
 r=$(anon "select count(*) from announcement_recipients"); echo "$r" | grep -q "permission denied" && ok "anon cannot read the recipients table" || bad "anon recipients ($r)"
 r=$(staff $U_ADMIN "select get_pilgrim_announcements('$T1', 0)"); echo "$r" | grep -q "permission denied" && ok "portal pagination not executable by authenticated" || bad "authenticated pagination ($r)"
@@ -216,6 +232,54 @@ svc "select push_prepare_announcement(4830)" > /dev/null
 eq "a new worker claims the new round" "$(svc "select count(*) from push_claim_targets(4830, '$W2', 5, 60)")" "2"
 r=$(svc "select push_complete_target(t.id, '$W1', 1, 'sent') from announcement_push_targets t where t.announcement_id = 4830 limit 1"); eq "the stale worker's completion does not write" "$r" "stale"
 
+echo "═══ سباقُ التحميل: العاملُ قرأ المحتوى ثم عُدِّل قبل أوّل حجز ═══"
+# العاملُ (الدالّةُ الطرفيّة) يهيّئ ثم يقرأ العنوانَ والنصَّ ونسخةَ المحتوى، ثم يحجز. تعديلٌ يُثبَّت بين
+# القراءة وأوّل حجز، ثم تهيئةُ الجولة الجديدة، لا يجوز أن يُرسل بعده النسخةَ القديمة إلى أيّ جهاز.
+W3=00000000-0000-0000-0000-0000000097b3; W4=00000000-0000-0000-0000-0000000097b4; W5=00000000-0000-0000-0000-0000000097b5
+new_ann 4831 '{"pilgrim":[5791]}' "now() - interval '1 minute'"
+svc "select push_prepare_announcement(4831)" > /dev/null
+READ_REV=$(q "select content_revision from announcements where id = 4831")
+eq "worker read revision 1 (payload loaded)" "$READ_REV" "1"
+staff $U_ADMIN "select update_announcement(4831, 'عنوانٌ أحدث', 'نصٌّ أحدث', 'عام', null)" > /dev/null
+svc "select push_prepare_announcement(4831)" > /dev/null
+r=$(svc "select count(*) from push_claim_targets(4831, '$W3', 5, 60, $READ_REV)"); echo "$r" | grep -q "superseded" && ok "first claim with the revision it read (1) after an edit to 2 is refused — race closed" || bad "stale payload claimed new-round targets ($r)"
+eq "…nothing claimed, the new round untouched" "$(q "select count(*) filter (where status = 'pending') || ':' || count(*) from announcement_push_targets where announcement_id = 4831")" "2:2"
+eq "a worker that read revision 2 claims the new round" "$(svc "select count(*) from push_claim_targets(4831, '$W4', 5, 60, 2)")" "2"
+r=$(svc "select count(*) from push_claim_targets(4831, '$W5', 5, 60, 3)"); echo "$r" | grep -q "superseded" && ok "a revision the row never had is refused too" || bad "unknown revision ($r)"
+eq "legacy 4-argument call still works (older Edge Function)" "$(svc "select count(*) from push_claim_targets(4831, '$W5', 5, 60)")" "0"
+eq "one claim signature only (M-46)" "$(q "select count(*) from pg_proc where proname = 'push_claim_targets' and pronamespace = 'public'::regnamespace")" "1"
+# العاملُ يمسك حجزه (معاملةٌ مفتوحة) والتعديلُ يأتي: ينتظر التعديلُ ولا جمود، ثم يُمحى ما حجزه
+new_ann 4832 '{"pilgrim":[5791]}' "now() - interval '1 minute'"
+svc "select push_prepare_announcement(4832)" > /dev/null
+( psql "$LOCAL" -X -q -At -c "begin; set local role service_role; select count(*) from push_claim_targets(4832, '$W3', 5, 60, 1); select pg_sleep(1.5); commit;" > "$TMPD"/p1_c.out 2>&1 ) &
+sleep 0.4
+r=$(staff $U_ADMIN "select update_announcement(4832, 'أثناء الحجز', 'نصٌّ أثناء الحجز', 'عام', null)->>'push'"); wait
+eq "edit during an open claim waits for it — no deadlock" "$r:$(grep -c 'deadlock' "$TMPD"/p1_c.out):$(head -1 "$TMPD"/p1_c.out)" "requested:0:2"
+eq "…then the old round is cleared (fresh round for revision 2)" "$(q "select count(*) from announcement_push_targets where announcement_id = 4832")" "0"
+svc "select push_prepare_announcement(4832)" > /dev/null
+r=$(svc "select push_complete_target(t.id, '$W3', 1, 'sent') from announcement_push_targets t where t.announcement_id = 4832 limit 1"); eq "the old worker cannot complete a new-round target" "$r" "stale"
+eq "…and the new round's report is untouched" "$(svc "select (push_delivery_summary(4832)->>'sent') || ':' || (push_delivery_summary(4832)->>'pending')")" "0:1"
+# عاملان بالنسخة نفسها معاً: أجهزةٌ مختلفة، بلا تكرار، والتقريرُ مطابق
+( svc "select string_agg(target_id::text, ',') from push_claim_targets(4832, '$W4', 1, 60, 2)" > "$TMPD"/p1_k1.out ) &
+( svc "select string_agg(target_id::text, ',') from push_claim_targets(4832, '$W5', 1, 60, 2)" > "$TMPD"/p1_k2.out ) & wait
+eq "2 concurrent workers of one round claim disjoint devices" "$(cat "$TMPD"/p1_k1.out "$TMPD"/p1_k2.out | sort -u | grep -c .)" "2"
+for w in $W4 $W5; do svc "select push_complete_target(t.id, '$w', t.attempts, 'sent') from announcement_push_targets t where t.announcement_id = 4832 and t.lease_owner = '$w'" > /dev/null; done
+eq "…round report: 1 pilgrim sent, nothing pending, stamped once" "$(svc "select (push_delivery_summary(4832)->>'sent') || ':' || (push_delivery_summary(4832)->>'pending')"):$(q "select (push_sent_at is not null)::text from announcements where id = 4832")" "1:0:true"
+eq "…exactly one delivery row per pilgrim in the round" "$(q "select count(*) || ':' || count(distinct passenger_id) from notification_deliveries where announcement_id = 4832")" "1:1"
+eq "frozen audience unchanged after edits" "$(recips 4832)" "5791"
+rm -f "$TMPD"/p1_c.out "$TMPD"/p1_k1.out "$TMPD"/p1_k2.out
+# قفلُ الصفّ بين الفحص والحجز: حجزٌ تالٍ لم يأخذ جهازاً (كلُّها محجوزة) ما زال يمسك الصفَّ حتى نهاية
+# معاملته، فلا يُثبَّت تعديلٌ بين فحص النسخة وحجز الأجهزة
+new_ann 4833 '{"pilgrim":[5791]}' "now() - interval '1 minute'"
+svc "select push_prepare_announcement(4833)" > /dev/null
+svc "select count(*) from push_claim_targets(4833, '$W4', 5, 60, 1)" > /dev/null
+svc "select count(*) from push_claim_targets(4833, '$W5', 5, 60, 1)" > /dev/null   # سياجُه مسجَّلٌ قبلُ: لا قفلَ مفتاحٍ أجنبيّ في الحجز التالي
+( psql "$LOCAL" -X -q -At -c "begin; set local role service_role; select count(*) from push_claim_targets(4833, '$W5', 5, 60, 1); select pg_sleep(1.5); commit;" > "$TMPD"/p1_s.out 2>&1 ) &
+sleep 0.4
+t0=$(date +%s%N); r=$(staff $U_ADMIN "select update_announcement(4833, 'بعد الفحص', 'نصٌّ بعد الفحص', 'عام', null)->>'push'"); t1=$(date +%s%N); wait
+eq "the revision check holds the row until its claim commits (edit waited ≥0.8s)" "$r:$(head -1 "$TMPD"/p1_s.out):$(( (t1 - t0) / 1000000 >= 800 ))" "requested:0:1"
+rm -f "$TMPD"/p1_s.out
+
 echo "═══ المجدوَل ═══"
 new_ann 4840 '{"pilgrim":[5791]}' "now() + interval '1 hour'"
 r=$(staff $U_ADMIN "select update_announcement(4840, 'مجدوَل مُعدَّل', 'نصٌّ مجدوَل', 'عام', null)->>'push'"); eq "editing a scheduled announcement → push waits for its time" "$r" "scheduled"
@@ -238,7 +302,7 @@ r=$(anon "select delete_announcement(4830)"); echo "$r" | grep -q "permission de
 eq "delete with manage_portal" "$(staff $U_ADMIN "select delete_announcement(4830)")" "t"
 eq "announcement, targets, deliveries, recipients, reads, workers all gone" "$(q "select (select count(*) from announcements where id=4830) + (select count(*) from announcement_push_targets where announcement_id=4830) + (select count(*) from notification_deliveries where announcement_id=4830) + (select count(*) from announcement_recipients where announcement_id=4830) + (select count(*) from announcement_reads where announcement_id=4830) + (select count(*) from announcement_push_workers where announcement_id=4830)")" "0"
 eq "one audit event, by the admin (session), action delete" "$(q "select count(*) - $before || ':' || max(actor_source) || ':' || max(action) || ':' || (max(actor_id::text) = '$U_ADMIN')::text from audit_log where table_name = 'announcements' and row_id = '4830'")" "1:session:delete:true"
-eq "…without title, body or audience ids" "$(q "select (old_value::text ~ 'عنوان|نصّ|5791|title|body')::text || ':' || (new_value is null)::text from audit_log where table_name = 'announcements' and row_id = '4830'")" "false:true"
+eq "…without title, body or audience ids" "$(q "select (old_value::text ~ 'عنوان|نصّ|5791|title|body')::text || ':' || (new_value is null)::text from audit_log where table_name = 'announcements' and row_id = '4830' order by id desc limit 1")" "false:true"
 eq "deleting a missing one → false" "$(staff $U_ADMIN "select delete_announcement(4830)")" "f"
 
 echo "═══ الموسمُ المقفل ═══"

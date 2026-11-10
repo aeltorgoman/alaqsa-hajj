@@ -590,8 +590,12 @@ begin
 end;
 $$;
 
-create or replace function public.push_claim_targets(p_announcement_id bigint, p_worker uuid,
-                                                     p_limit integer default 20, p_lease_seconds integer default 60)
+-- p_revision: نسخةُ المحتوى التي بنى العاملُ منها حمولتَه (قرأها مع العنوان والنصّ). دالّةٌ واحدة
+-- (M-46): الاستدعاءُ القديم بأربع معاملاتٍ يبقى صالحاً (p_revision = null ← سياجُ أوّل حجز).
+drop function public.push_claim_targets(bigint, uuid, integer, integer);
+create function public.push_claim_targets(p_announcement_id bigint, p_worker uuid,
+                                          p_limit integer default 20, p_lease_seconds integer default 60,
+                                          p_revision integer default null)
 returns table(target_id bigint, attempt integer, endpoint text, p256dh text, auth text)
 language plpgsql
 security definer
@@ -618,20 +622,6 @@ begin
     -- غيرُ مستحقٍّ الآن (موسمٌ آخر، أو أُعيدت جدولتُه): لا شيءَ يُحجز، ولا يُغلق شيء
     return;
   end if;
-
-  -- Phase 1 — السياج: العاملُ يبني حمولتَه مرّةً من المحتوى ثم يحجز مراراً. نسخةُ المحتوى
-  -- تُسجَّل عند أوّل حجزٍ له؛ وتعديلٌ بعدها يجعل حمولتَه قديمةً فيُرفض حجزُه.
-  select a.content_revision into v_rev from public.announcements a where a.id = p_announcement_id;
-  insert into public.announcement_push_workers (worker, announcement_id, revision)
-  values (p_worker, p_announcement_id, v_rev)
-  on conflict (worker, announcement_id) do nothing;
-  select w.revision into v_mine from public.announcement_push_workers w
-   where w.worker = p_worker and w.announcement_id = p_announcement_id;
-  if v_mine is distinct from v_rev then
-    raise exception 'superseded: announcement % content changed (revision % -> %)', p_announcement_id, v_mine, v_rev
-      using errcode = 'P0001';
-  end if;
-  delete from public.announcement_push_workers w where w.created_at < now() - interval '1 day';
 
   -- عاملٌ سقط بعد محاولته الثالثة: لا رابعة
   select array_agg(t.id) into v_ids
@@ -660,6 +650,24 @@ begin
       (select array_agg(t.id) from public.announcement_push_targets t
         where t.id = any(v_ids) and t.subscription_id is not null), 'reassigned');
   end if;
+
+  -- Phase 1 — السياج: العاملُ يبني حمولتَه مرّةً من المحتوى ثم يحجز مراراً، فلا يحجز إلا بنسخة
+  -- ما قرأه. p_revision (العاملُ الحاليّ) هي النسخةُ التي قرأها مع النصّ: تعديلٌ ثُبّت بين قراءته
+  -- وأوّل حجزٍ له يُرفض. وبلا p_revision (عاملٌ أقدم) تُسجَّل النسخةُ عند أوّل حجز.
+  -- FOR SHARE حتى نهاية المعاملة: التعديلُ (FOR UPDATE بعد _push_lock) لا يُثبَّت بين هذا الفحص
+  -- والحجز أدناه، فما يُحجز هنا من جولة النسخة المفحوصة. والترتيبُ القفلُ الاستشاريُّ ثم الصفّ
+  -- كما في M6 والتعديل: ما أخذه هذا الحجزُ من _push_lock أعلاه أُخذ قبل الصفّ.
+  select a.content_revision into v_rev from public.announcements a where a.id = p_announcement_id for share;
+  insert into public.announcement_push_workers (worker, announcement_id, revision)
+  values (p_worker, p_announcement_id, coalesce(p_revision, v_rev))
+  on conflict (worker, announcement_id) do nothing;
+  select w.revision into v_mine from public.announcement_push_workers w
+   where w.worker = p_worker and w.announcement_id = p_announcement_id;
+  if v_mine is distinct from v_rev or (p_revision is not null and p_revision is distinct from v_rev) then
+    raise exception 'superseded: announcement % content changed (revision % -> %)', p_announcement_id,
+      coalesce(p_revision, v_mine), v_rev using errcode = 'P0001';
+  end if;
+  delete from public.announcement_push_workers w where w.created_at < now() - interval '1 day';
 
   return query
   with c as (
@@ -1038,7 +1046,8 @@ begin
       'public.update_announcement(bigint, text, text, text, timestamptz)'::regprocedure,
       'public.delete_announcement(bigint)'::regprocedure,
       'public.get_pilgrim_announcements(text, integer)'::regprocedure,
-      'public.acknowledge_pilgrim_announcement(text, bigint, integer)'::regprocedure] loop
+      'public.acknowledge_pilgrim_announcement(text, bigint, integer)'::regprocedure,
+      'public.push_claim_targets(bigint, uuid, integer, integer, integer)'::regprocedure] loop
     execute format('alter function %s owner to postgres', v_fn);
     -- والامتيازاتُ الافتراضيّة تمنح كلَّ دالّةٍ جديدة: يُسحب، ثم يُمنح الواجهةُ وحدها
     execute format('revoke all on function %s from public, anon, authenticated, service_role', v_fn);
@@ -1053,6 +1062,8 @@ grant execute on function public.update_announcement(bigint, text, text, text, t
 grant execute on function public.delete_announcement(bigint) to authenticated;
 grant execute on function public.get_pilgrim_announcements(text, integer) to anon;
 grant execute on function public.acknowledge_pilgrim_announcement(text, bigint, integer) to anon;
+-- الحجزُ أُعيد إنشاؤه بمعاملة النسخة: لـservice_role وحده كما في M6
+grant execute on function public.push_claim_targets(bigint, uuid, integer, integer, integer) to service_role;
 
 comment on function public.update_announcement(bigint, text, text, text, timestamptz) is
   'Phase 1 — تعديلُ تنبيه (manage_portal). تغيّرُ العنوان/النصّ يرفع النسخة، ولمنشورٍ سارٍ يُصفّر جولةَ الدفع (push = requested) إلى الجمهور المجمَّد. المجدوَلُ لا يُدفع قبل موعده.';
@@ -1062,8 +1073,8 @@ comment on function public.acknowledge_pilgrim_announcement(text, bigint, intege
   'Phase 1 — إقرارُ الحاجّ بتنبيهٍ واحدٍ من جمهوره المجمَّد بالنسخة التي رآها. لـanon بالجلسة.';
 comment on function public.get_pilgrim_announcements(text, integer) is
   'Phase 1 — صفحةُ تنبيهاتٍ تالية (١٠) للحاجّ بالجلسة: الجمهورُ المجمَّد والحالات، بلا بيانات تسليم.';
-comment on function public.push_claim_targets(bigint, uuid, integer, integer) is
-  'M6 + Phase 1 — الحجزُ بمهلة، وسياجُ النسخة: عاملٌ بدأ قبل تعديل المحتوى يُرفض حجزُه (superseded).';
+comment on function public.push_claim_targets(bigint, uuid, integer, integer, integer) is
+  'M6 + Phase 1 — الحجزُ بمهلة، وسياجُ النسخة: p_revision نسخةُ ما قرأه العامل؛ تعديلٌ بعدها يرفض حجزَه (superseded).';
 
 -- ── ٩. شروطٌ لاحقة على ما تملكه هذه الترحيلة وحده (S-38) ─────────────
 do $post$
@@ -1090,7 +1101,7 @@ begin
       'public.get_pilgrim_portal_by_session(text)'::regprocedure,
       'public.mark_pilgrim_notification_read(text, bigint)'::regprocedure,
       'public.push_prepare_announcement(bigint)'::regprocedure,
-      'public.push_claim_targets(bigint, uuid, integer, integer)'::regprocedure] loop
+      'public.push_claim_targets(bigint, uuid, integer, integer, integer)'::regprocedure] loop
     if not exists (select 1 from pg_proc p where p.oid = v_fn and p.prosecdef
                     and p.proconfig @> array['search_path=public, pg_temp']) then
       raise exception '% ليست SECURITY DEFINER بمسار بحثٍ ثابت.', v_fn using errcode = 'P0001';
@@ -1131,9 +1142,9 @@ begin
     end if;
   end loop;
   -- الدفعُ لـservice_role وحده كما كان
-  if has_function_privilege('authenticated', 'public.push_claim_targets(bigint, uuid, integer, integer)', 'EXECUTE')
+  if has_function_privilege('authenticated', 'public.push_claim_targets(bigint, uuid, integer, integer, integer)', 'EXECUTE')
      or has_function_privilege('anon', 'public.push_prepare_announcement(bigint)', 'EXECUTE')
-     or not has_function_privilege('service_role', 'public.push_claim_targets(bigint, uuid, integer, integer)', 'EXECUTE')
+     or not has_function_privilege('service_role', 'public.push_claim_targets(bigint, uuid, integer, integer, integer)', 'EXECUTE')
      or not has_function_privilege('service_role', 'public.push_prepare_announcement(bigint)', 'EXECUTE') then
     raise exception 'مِنَحُ دوالّ الدفع تغيّرت.' using errcode = 'P0001';
   end if;
@@ -1164,9 +1175,13 @@ begin
      or position('announcement_audience(' in v_src) > 0 then
     raise exception 'تهيئةُ الدفع لا تستعمل الجمهورَ المجمَّد.' using errcode = 'P0001';
   end if;
-  select p.prosrc into v_src from pg_proc p where p.oid = 'public.push_claim_targets(bigint, uuid, integer, integer)'::regprocedure;
-  if position('announcement_push_workers' in v_src) = 0 or position('for update skip locked' in v_src) = 0 then
+  select p.prosrc into v_src from pg_proc p where p.oid = 'public.push_claim_targets(bigint, uuid, integer, integer, integer)'::regprocedure;
+  if position('announcement_push_workers' in v_src) = 0 or position('for update skip locked' in v_src) = 0
+     or position('for share' in v_src) = 0 or position('p_revision is distinct from v_rev' in v_src) = 0 then
     raise exception 'الحجزُ بلا سياجِ النسخة أو بلا SKIP LOCKED.' using errcode = 'P0001';
+  end if;
+  if (select count(*) from pg_proc p where p.proname = 'push_claim_targets' and p.pronamespace = 'public'::regnamespace) <> 1 then
+    raise exception 'push_claim_targets: توقيعٌ واحدٌ وحده.' using errcode = 'P0001';
   end if;
   if (select count(*) from pg_trigger t where t.tgrelid = 'public.announcements'::regclass and not t.tgisinternal
         and t.tgname in ('trg_announcements_before_write', 'trg_announcements_after_write', 'trg_announcements_audit_delete')) <> 3 then
