@@ -122,7 +122,8 @@ Deno.serve(async (req: Request) => {
     /* ─── (٢) قراءة التنبيه ─── */
     const { data: ann, error: annErr } = await admin
       .from("announcements")
-      .select("id, title, body, priority, expires_at, target_type, target_ids")
+      /* `*` لا قائمةُ أعمدة: content_revision (Phase 1) غائبٌ عن قاعدةٍ لم تُرحَّل بعد، فلا يفشل القراءة */
+      .select("*")
       .eq("id", announcementId)
       .single();
 
@@ -205,6 +206,10 @@ Deno.serve(async (req: Request) => {
        عاملان متزامنان (استدعاءٌ مكرَّر، أو يدويٌّ مع مجدوَل M5) لا يحجزان جهازاً
        واحداً، وعاملٌ سقط تعود أجهزتُه بعد مهلتها. والعابرُ يُعاد حتى ثلاث محاولات. */
     const worker = crypto.randomUUID();
+    /* Phase 1 — سياجُ النسخة: نسخةُ المحتوى التي بُنيت منها الحمولة. تعديلٌ يُثبَّت بعد القراءة
+       يرفض الحجز (superseded) فلا يصل نصٌّ قديمٌ إلى أجهزة الجولة الجديدة. وبلا العمود
+       (قاعدةٌ قبل Phase 1) يُستدعى الحجزُ بمعاملاته الأربع كما كان. */
+    const revisionArg = typeof ann.content_revision === "number" ? { p_revision: ann.content_revision } : {};
     const rpc = async <T>(fn: string, args: Record<string, unknown>): Promise<T> => {
       const { data, error } = await admin.rpc(fn, args);
       if (error) throw new Error(`${fn}: ${error.code ?? "rpc"}`);
@@ -216,6 +221,7 @@ Deno.serve(async (req: Request) => {
       claim: (limit, leaseSeconds) =>
         rpc<Claimed[]>("push_claim_targets", {
           p_announcement_id: ann.id, p_worker: worker, p_limit: limit, p_lease_seconds: leaseSeconds,
+          ...revisionArg,
         }).then((rows) => rows ?? []),
       send: async (t) => {
         await webpush.sendNotification(

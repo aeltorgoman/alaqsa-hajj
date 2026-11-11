@@ -1,0 +1,371 @@
+# ════════════════════════════════════════════════════════════
+# canonical production db push — announcements Phase 1 (20261110122335)
+# ════════════════════════════════════════════════════════════
+# Applies the ONE pending migration through the canonical CLI path:
+#   20261110122335_announcements_phase1
+#
+# Playbook order (M-52 / M-51): run only AFTER its PR (the backend PR) is
+# merged, from main — and BEFORE the frontend PR (#273, the admin/portal UI
+# that writes `audience`, pins, edits and deletes through the new RPCs) is
+# merged. The currently deployed frontend and Edge Functions keep working on
+# the migrated schema (legacy target_type rows, the 4-argument claim call
+# resolves to the 5-argument function through its default, the old portal's
+# mark_pilgrim_notification_read is kept).
+#
+# What the migration does (all additive except two function replacements):
+#   · announcements: 7 new columns (defaults; no row rewritten), 2 checks, 1 index,
+#     3 triggers (revision, publish-time freeze, delete audit)
+#   · 3 new tables (recipients, reads, push workers) with RLS, closed-season
+#     triggers, no client writes
+#   · new functions for audience, freeze, edit, delete, portal paging and ack
+#   · replaced: push_prepare_announcement, mark_pilgrim_notification_read,
+#     get_pilgrim_portal_by_session; push_claim_targets 4 → 5 arguments
+#     (p_revision default null; one signature)
+#   · its own $post$ block asserts grants, RLS, signatures and bodies, and
+#     aborts the whole transaction on any mismatch.
+#
+# ⚠️ `--db-url`, not `--linked` (PR #148).
+#
+# Exactly ONE production-mutating command may run, and only after every
+# gate passes. Deliberately absent: migration repair · migration up ·
+# `--include-all` · manual SQL mutation · rollback · any Dashboard action ·
+# any Edge Function deploy · any change to the M5 scheduler.
+#
+# Gates:
+#   · BEFORE: file hash and statement scope · ledger 77 / 20261107160000 ·
+#     pending set is exactly this migration · no drift: the bodies of the 9
+#     functions this migration replaces or depends on, and the announcements
+#     columns, equal the reviewed baseline · none of the new objects exists ·
+#     no push delivery is in flight (no live lease) · fingerprints.
+#   · AFTER: ledger 78, originals untouched, 78 = 78 correspondence · one
+#     5-argument push_claim_targets for service_role only · RLS on the new
+#     tables · the 3 triggers · announcement rows, deliveries, subscriptions,
+#     the scheduler job and its state unchanged · every public function the
+#     migration does not own unchanged.
+#
+# Running it twice is safe: after success nothing is pending, so the BEFORE
+# gates fail and the second run stops before the write.
+#
+# Rollback: none automatic. The change is additive; recovery is a reviewed
+# forward migration. The old frontend and the old Edge Functions keep
+# working on the migrated schema, so reverting those layers needs no
+# database change. Emergency stop for scheduled pushes (separate approval):
+#   select cron.unschedule('m5-push-dispatch');
+name: Announcements Phase 1 - canonical production db push (ONE authorized write)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PUSH-ANNOUNCEMENTS-PHASE1-20261110122335 to authorize the single production write"
+        required: true
+        default: ""
+      db_host:
+        description: "Session pooler host from dashboard > Connect (NOT a secret)"
+        required: true
+        default: "aws-1-eu-central-1.pooler.supabase.com"
+      db_port:
+        description: "Session pooler port (NOT a secret)"
+        required: true
+        default: "5432"
+      db_user:
+        description: "Session pooler user (NOT a secret)"
+        required: true
+        default: "postgres.zkucwcnclbfvukhdqhgc"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: announcements-phase1-canonical-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      M8: "20261110122335"
+      F8: supabase/migrations/20261110122335_announcements_phase1.sql
+      SHA8: "59f2719da7dacd1a5001f8e4c46257fc6efc4efab281641723510d3658105874"
+      EXPECT_REPO_MIGRATIONS: "78"
+      EXPECT_ROWS_BEFORE: "77"
+      EXPECT_LATEST_BEFORE: "20261107160000"
+      EXPECT_ROWS_AFTER: "78"
+      # md5(prosrc) of the reviewed baseline (ledger 77) — measured read-only on
+      # production and on a database built from the repository's 77 migrations
+      BASE_FNS: >-
+        _push_due_ids:a3409943b30dacc0d3cb37d5e5c12b70
+        _push_finalize:a559f6c91564e68a4189106be72717fe
+        _push_refresh_delivery:697cc4d1df95f3024fd7c9b1d0547434
+        announcement_audience:384fcdeb01c20ed9c9eb640ff90d4df2
+        get_pilgrim_portal_by_session:4c94c954b57a36f8ceaf3fda7a9c5ee4
+        mark_pilgrim_notification_read:c15d0d1b434bb61e09740ef0d78403d6
+        push_claim_targets:4c789e885bceeb3345f7ad722e85ed56
+        push_dispatch_tick:31c5f6fac7fa5f61863c3757d28cc7ee
+        push_prepare_announcement:5787da8206b9d65d9de5d13d24c184c6
+      BASE_ANN_COLS: "acd749fb3291390c01fdaba935d2850c"
+      # functions this migration creates or replaces — everything else must stay byte-identical
+      OWNED_FNS: >-
+        _announcement_audience_check _announcement_audience_members _announcement_resolve
+        _announcement_freeze _announcement_reset_push _announcements_before_write
+        _announcements_after_write _announcements_audit_delete _announcement_admin_guard
+        announcement_audience_preview update_announcement delete_announcement
+        push_prepare_announcement push_claim_targets _pilgrim_announcements
+        get_pilgrim_announcements acknowledge_pilgrim_announcement
+        mark_pilgrim_notification_read get_pilgrim_portal_by_session
+      DB_HOST: ${{ inputs.db_host }}
+      DB_PORT: ${{ inputs.db_port }}
+      DB_USER: ${{ inputs.db_user }}
+      OUT: announcements-phase1-evidence
+
+    steps:
+      - name: "GATE: confirmation, ref and secrets"
+        # the input reaches the shell as data (env), never as script text
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ "${CONFIRM}" = "PUSH-ANNOUNCEMENTS-PHASE1-20261110122335" ] || {
+            echo "::error::confirmation string does not match - dispatch was not authorized"; exit 1; }
+          # M-52: apply after merge, never before
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::must run from main (M-52), got ${GITHUB_REF}"; exit 1; }
+          [ -n "${PGPASSWORD:-}" ] || { echo "::error::SUPABASE_DB_PASSWORD is not set"; exit 1; }
+          printf '%s' "$DB_HOST" | grep -qE '^aws-[0-9]+-[a-z0-9-]+\.pooler\.supabase\.com$' || { echo "::error::db_host is not a Supabase pooler host"; exit 1; }
+          [ "$DB_USER" = "postgres.zkucwcnclbfvukhdqhgc" ] || { echo "::error::db_user is not the production project's pooler user"; exit 1; }
+          echo "Authorized. Secret present (value not printed)."
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "GATE: toolchain and the exact migration under review"
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          v="$(npm run --silent supabase -- --version)"
+          [ "$v" = "2.117.0" ] || { echo "::error::expected pinned CLI 2.117.0, got $v"; exit 1; }
+          command -v psql >/dev/null || { echo "::error::psql is not available"; exit 1; }
+          n="$(ls supabase/migrations/*.sql | wc -l)"
+          [ "$n" -eq "$EXPECT_REPO_MIGRATIONS" ] || { echo "::error::expected $EXPECT_REPO_MIGRATIONS repository migrations, found $n"; exit 1; }
+          git diff --quiet -- supabase/migrations || { echo "::error::supabase/migrations is dirty"; exit 1; }
+          [ -f "$F8" ] || { echo "::error::$F8 missing"; exit 1; }
+          got="$(sha256sum "$F8" | cut -d' ' -f1)"
+          [ "$got" = "$SHA8" ] || { echo "::error::$F8 sha256 mismatch: $got != $SHA8"; exit 1; }
+          echo "ok   $(basename "$F8")  $got"
+          # every top-level statement touches only the announcements surface this migration owns
+          python3 -I - "$F8" <<'PY'
+          import re, sys
+          src = open(sys.argv[1], encoding="utf-8").read()
+          code = re.sub(r"--[^\n]*", "", src)
+          code = re.sub(r"\$([A-Za-z_]*)\$.*?\$\1\$", "", code, flags=re.S)
+          stmts = [re.sub(r"\s+", " ", s.strip()) for s in code.split(";") if s.strip()]
+          T = r"public\.(announcements|announcement_recipients|announcement_reads|announcement_push_workers)"
+          F = (r"public\.(_announcement_audience_check|_announcement_audience_members|_announcement_resolve|_announcement_freeze|"
+               r"_announcement_reset_push|_announcements_before_write|_announcements_after_write|_announcements_audit_delete|"
+               r"_announcement_admin_guard|announcement_audience_preview|update_announcement|delete_announcement|"
+               r"_pilgrim_announcements|get_pilgrim_announcements|acknowledge_pilgrim_announcement|push_claim_targets)")
+          R = r"public\.(push_prepare_announcement|mark_pilgrim_notification_read|get_pilgrim_portal_by_session)"
+          allowed = [
+              r"^do$",
+              rf"^alter table public\.announcements add (column|constraint) ",
+              rf"^comment on (column|table|function) ({T}|{F})\b",
+              rf"^create (unique )?index [a-z_]+ on {T} ",
+              rf"^create table {T} \(",
+              rf"^create trigger [a-z_]+ (before|after) [a-z_ ,]+ on {T} for each row execute function public\.(reject_write_closed_season_derived|_announcements_before_write|_announcements_after_write|_announcements_audit_delete)\(\)$",
+              rf"^alter table {T} enable row level security$",
+              rf"^revoke all on table {T}(, {T})* from public, anon, authenticated, service_role$",
+              rf"^grant select on table {T}(, {T})* to authenticated$",
+              rf"^create policy [a-z_]+ on {T} for select to authenticated using \(public\.has_permission\('manage_portal'\)\)$",
+              rf"^create function {F}\(",
+              rf"^create or replace function {R}\(",
+              r"^drop function public\.push_claim_targets\(bigint, uuid, integer, integer\)$",
+              rf"^grant execute on function {F}\([a-z, ]*\) to (anon|authenticated|service_role)(, (authenticated|service_role))?$",
+          ]
+          bad = [s[:160] for s in stmts if not any(re.match(a, s, re.I) for a in allowed)]
+          if bad:
+              sys.exit(f"::error::{sys.argv[1]} contains statements outside the approved scope: {bad}")
+          if len(stmts) != 61:
+              sys.exit(f"::error::expected 61 top-level statements, found {len(stmts)}")
+          print(f"ok   {len(stmts)} top-level statements, all within the approved scope")
+          PY
+          python3 supabase/verification/assert-no-toplevel-data-writes.py --selftest
+          python3 supabase/verification/assert-no-toplevel-data-writes.py "$F8"
+          python3 supabase/verification/assert-ledger-correspondence.py --selftest
+          { echo "commit=${GITHUB_SHA}"; echo "ref=${GITHUB_REF}"; echo "cli=$v"; } | tee "$OUT/run-sha.txt"
+
+      - name: "GATE: ledger BEFORE = 77 / 20261107160000"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-before.tsv"
+          rows="$(wc -l < "$OUT/ledger-before.tsv")"
+          latest="$(psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-before.txt"
+          [ "$rows" -eq "$EXPECT_ROWS_BEFORE" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_BEFORE"; exit 1; }
+          [ "$latest" = "$EXPECT_LATEST_BEFORE" ] || { echo "::error::latest is $latest, expected $EXPECT_LATEST_BEFORE"; exit 1; }
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" \
+            -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-before.txt"
+
+      - name: "GATE: pending set is exactly 20261110122335"
+        run: |
+          set -euo pipefail
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-before.txt" \
+            "$EXPECT_ROWS_BEFORE" "$EXPECT_LATEST_BEFORE" > "$OUT/correspondence-before.txt" 2>&1 || true
+          cat "$OUT/correspondence-before.txt"
+          grep -q "repository versions absent from production: \['${M8}'\]" "$OUT/correspondence-before.txt" || {
+            echo "::error::the pending set is not exactly [$M8]"; exit 1; }
+          grep -q "ok   no unexpected production migration" "$OUT/correspondence-before.txt" || {
+            echo "::error::production carries a migration the repository does not"; exit 1; }
+
+      - name: "GATE: production preconditions (no drift, nothing in flight)"
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          need() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          for kv in $BASE_FNS; do
+            need "body:${kv%%:*}" "select string_agg(md5(prosrc), ',') from pg_proc where pronamespace='public'::regnamespace and proname='${kv%%:*}'" "${kv##*:}"
+          done
+          need announcements_columns "select md5(string_agg(column_name||data_type||is_nullable, ',' order by column_name)) from information_schema.columns where table_schema='public' and table_name='announcements'" "$BASE_ANN_COLS"
+          need claim_4_args          "select (to_regprocedure('public.push_claim_targets(bigint,uuid,integer,integer)') is not null)::text || ':' || (select count(*) from pg_proc where pronamespace='public'::regnamespace and proname='push_claim_targets')" "true:1"
+          need new_tables_absent     "select count(*) from pg_class where relnamespace='public'::regnamespace and relname in ('announcement_recipients','announcement_reads','announcement_push_workers')" 0
+          need new_functions_absent  "select count(*) from pg_proc where pronamespace='public'::regnamespace and proname in ('update_announcement','delete_announcement','announcement_audience_preview','get_pilgrim_announcements','acknowledge_pilgrim_announcement','_announcement_freeze','_announcement_resolve','_pilgrim_announcements')" 0
+          need no_delivery_in_flight "select count(*) from public.announcement_push_targets where status = 'processing' and lease_expires_at > now()" 0
+          need no_dispatch_lease     "select coalesce((lease_expires_at > now())::text, 'false') from public.push_dispatch_state" false
+          need target_types_known    "select count(*) from public.announcements where coalesce(target_type,'all') not in ('all','bus','camp_mina','camp_arafa','custom')" 0
+          p "select md5(coalesce(string_agg(concat_ws('|', id, season_id, title, body, priority, show_at, expires_at, target_type, target_ids, push_sent_at), E'\n' order by id), '')) from public.announcements" > "$OUT/announcements-before.txt"
+          p "select count(*) || ':' || md5(coalesce(string_agg(concat_ws('|', announcement_id, passenger_id, status, read_at), E'\n' order by announcement_id, passenger_id), '')) from public.notification_deliveries" > "$OUT/deliveries-before.txt"
+          p "select count(*) from public.pilgrim_push_subscriptions" > "$OUT/subscriptions-before.txt"
+          p "select jobname || ' ' || schedule || ' ' || command || ' ' || active::text from cron.job order by jobid" > "$OUT/cron-before.txt"
+          p "select cutoff_id from public.push_dispatch_state" > "$OUT/cutoff-before.txt"
+          p "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname <> all (string_to_array('$(echo $OWNED_FNS)', ' '))" > "$OUT/fn-before.txt"
+          [ "$bad" -eq 0 ] || { echo "::error::preconditions failed - nothing was written"; exit 1; }
+          echo "All preconditions PASS."
+
+      # ════════════════════════════════════════════════════════
+      # THE ONE AUTHORIZED PRODUCTION WRITE
+      # ════════════════════════════════════════════════════════
+      - name: "LIVE WRITE: canonical db push"
+        id: live_push
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_URL="$(python3 -c "import os,urllib.parse as u; print('postgresql://%s:%s@%s:%s/postgres' % (u.quote(os.environ['DB_USER'],safe=''), u.quote(os.environ['SUPABASE_DB_PASSWORD'],safe=''), os.environ['DB_HOST'], os.environ['DB_PORT']))")"
+          echo "::add-mask::$DB_URL"
+          set +e
+          npm run --silent supabase -- db push --db-url "$DB_URL" --output-format json > "$OUT/push.json" 2> "$OUT/push.err"
+          rc=$?
+          set -e
+          sed -E -i 's#postgres(ql)?://[^ ]*@#postgresql://***@#g' "$OUT/push.json" "$OUT/push.err" 2>/dev/null || true
+          echo "--- stdout ---"; cat "$OUT/push.json"
+          echo "--- stderr ---"; cat "$OUT/push.err"
+          [ "$rc" -eq 0 ] || { echo "::error::db push failed with rc=$rc"; exit 1; }
+
+      - name: "POST: ledger 77 -> 78, originals untouched"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          Q="select version || E'\t' || coalesce(name,'') || E'\t'
+                  || coalesce(encode(sha256(convert_to(statements[1],'UTF8')),'hex'),'NULL')
+               from supabase_migrations.schema_migrations order by version"
+          psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$Q" > "$OUT/ledger-after.tsv"
+          rows="$(wc -l < "$OUT/ledger-after.tsv")"
+          latest="$(psql "$URL" -X -q -At -c "$RO" -c "select max(version) from supabase_migrations.schema_migrations")"
+          echo "rows=$rows latest=$latest" | tee "$OUT/ledger-after.txt"
+          bad=0
+          [ "$rows" -eq "$EXPECT_ROWS_AFTER" ] || { echo "::error::ledger holds $rows rows, expected $EXPECT_ROWS_AFTER"; bad=1; }
+          [ "$latest" = "$M8" ] || { echo "::error::latest is $latest, expected $M8"; bad=1; }
+          nm="$(psql "$URL" -X -q -At -c "$RO" -c "select name from supabase_migrations.schema_migrations where version='$M8'")"
+          [ "$nm" = "announcements_phase1" ] || { echo "::error::recorded name '$nm' does not match the repository filename"; bad=1; }
+          awk -F '\t' -v v="$M8" '$1 != v' "$OUT/ledger-after.tsv" > "$OUT/ledger-after-originals.tsv"
+          diff -u "$OUT/ledger-before.tsv" "$OUT/ledger-after-originals.tsv" > "$OUT/ledger-originals.diff" || {
+            echo "::error::one or more original ledger rows changed"; cat "$OUT/ledger-originals.diff"; bad=1; }
+          psql "$URL" -X -q -At -c "$RO" -c "select version from supabase_migrations.schema_migrations order by version" > "$OUT/ledger-versions-after.txt"
+          python3 supabase/verification/assert-ledger-correspondence.py \
+            supabase/migrations "$OUT/ledger-versions-after.txt" "$EXPECT_ROWS_AFTER" "$M8" \
+            | tee "$OUT/correspondence-after.txt" || bad=1
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-ledger.txt"; else echo FAIL > "$OUT/status-ledger.txt"; fi
+          echo "Ledger verdict: $(cat "$OUT/status-ledger.txt")"
+
+      - name: "POST: the Phase 1 surface, and nothing else changed"
+        if: always() && steps.live_push.outcome != 'skipped'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          URL="postgresql://${DB_USER}@${DB_HOST}:${DB_PORT}/postgres"
+          RO="SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"
+          p() { psql "$URL" -X -q -At -v ON_ERROR_STOP=1 -c "$RO" -c "$1"; }
+          bad=0
+          want() { got="$(p "$2")"; if [ "$got" = "$3" ]; then printf 'ok   %-34s %s\n' "$1" "$got"
+                   else echo "::error::$1 = '$got', expected '$3'"; bad=1; fi }
+          C5="public.push_claim_targets(bigint,uuid,integer,integer,integer)"
+          want claim_one_signature   "select string_agg(pg_get_function_identity_arguments(oid), ' | ') from pg_proc where pronamespace='public'::regnamespace and proname='push_claim_targets'" "p_announcement_id bigint, p_worker uuid, p_limit integer, p_lease_seconds integer, p_revision integer"
+          want claim_service_only    "select has_function_privilege('service_role','$C5','EXECUTE')::text || has_function_privilege('authenticated','$C5','EXECUTE')::text || has_function_privilege('anon','$C5','EXECUTE')::text" "truefalsefalse"
+          want new_tables_rls        "select string_agg(relname || '=' || relrowsecurity::text, ',' order by relname) from pg_class where relnamespace='public'::regnamespace and relname in ('announcement_recipients','announcement_reads','announcement_push_workers')" "announcement_push_workers=true,announcement_reads=true,announcement_recipients=true"
+          want workers_no_client     "select (has_table_privilege('authenticated','public.announcement_push_workers','SELECT') or has_table_privilege('anon','public.announcement_push_workers','SELECT'))::text" false
+          want announcements_triggers "select string_agg(tgname, ',' order by tgname) from pg_trigger where tgrelid='public.announcements'::regclass and not tgisinternal" "trg_announcements_after_write,trg_announcements_audit_delete,trg_announcements_before_write,trg_reject_closed_season"
+          want portal_rpcs_anon      "select has_function_privilege('anon','public.get_pilgrim_announcements(text,integer)','EXECUTE')::text || has_function_privilege('anon','public.acknowledge_pilgrim_announcement(text,bigint,integer)','EXECUTE')::text || has_function_privilege('anon','public.update_announcement(bigint,text,text,text,timestamptz)','EXECUTE')::text" "truetruefalse"
+          want announcements_unchanged "select md5(coalesce(string_agg(concat_ws('|', id, season_id, title, body, priority, show_at, expires_at, target_type, target_ids, push_sent_at), E'\n' order by id), '')) from public.announcements" "$(cat "$OUT/announcements-before.txt")"
+          want legacy_rows_revision_1 "select count(*) from public.announcements where content_revision <> 1 or audience is not null or pinned_at is not null" 0
+          want deliveries_unchanged  "select count(*) || ':' || md5(coalesce(string_agg(concat_ws('|', announcement_id, passenger_id, status, read_at), E'\n' order by announcement_id, passenger_id), '')) from public.notification_deliveries" "$(cat "$OUT/deliveries-before.txt")"
+          want subscriptions_unchanged "select count(*) from public.pilgrim_push_subscriptions" "$(cat "$OUT/subscriptions-before.txt")"
+          want scheduler_unchanged   "select jobname || ' ' || schedule || ' ' || command || ' ' || active::text from cron.job order by jobid" "$(cat "$OUT/cron-before.txt")"
+          want cutoff_unchanged      "select cutoff_id from public.push_dispatch_state" "$(cat "$OUT/cutoff-before.txt")"
+          want other_fn_unchanged    "select string_agg(p.oid::regprocedure::text || '=' || md5(p.prosrc) || '=' || coalesce(p.proacl::text,'(default)'), E'\n' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname <> all (string_to_array('$(echo $OWNED_FNS)', ' '))" "$(cat "$OUT/fn-before.txt")"
+          if [ "$bad" -eq 0 ]; then echo PASS > "$OUT/status-surface.txt"; else echo FAIL > "$OUT/status-surface.txt"; fi
+          echo "Surface verdict: $(cat "$OUT/status-surface.txt")"
+
+      - name: "Verdict (fails the run)"
+        if: always() && steps.live_push.outcome != 'skipped'
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          bad=0
+          for k in ledger surface; do
+            f="$OUT/status-$k.txt"
+            if [ ! -s "$f" ]; then printf '%-10s %s\n' "$k" "NOT REACHED"; bad=1
+            else v="$(cat "$f")"; printf '%-10s %s\n' "$k" "$v"; [ "$v" = "PASS" ] || bad=1; fi
+          done
+          if [ "$bad" -ne 0 ]; then echo FAIL > "$OUT/verdict.txt"; exit 1; fi
+          echo PASS > "$OUT/verdict.txt"
+          echo "Migration $M8 applied; ledger 78; one 5-argument push_claim_targets; existing announcements, deliveries, subscriptions, scheduler and every other function unchanged."
+
+      - name: "Scan evidence for secret-like material"
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          if grep -rlnE "eyJ[A-Za-z0-9_-]{20,}|sbp_[A-Za-z0-9]{20,}|postgres(ql)?://[^ ]*:[^ ]*@" "$OUT"; then
+            echo "::error::secret-like material found in the evidence - upload blocked"; exit 1
+          fi
+          echo "Evidence secret scan clean."
+
+      - name: "Upload evidence"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: announcements-phase1-canonical-push
+          path: announcements-phase1-evidence
+          if-no-files-found: warn
