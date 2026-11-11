@@ -52,7 +52,7 @@ q "$FIX
    insert into public.seasons (id,name,hijri_year,closed_at) overriding system value values
      (9702,'موسمٌ مقفل',1471,now()), (9701,'موسم الاختبار',1472,null);
    insert into public.buses (id,season_id,name) overriding system value values (6701,9701,'باص ١'),(6702,9701,'باص ٢');
-   insert into public.camps (id,season_id,name,type,page_type,gender) overriding system value values (6801,9701,'منى ١','منى','منى','ذكر'),(6802,9701,'عرفة ١','عرفة','عرفة','ذكر');
+   insert into public.camps (id,season_id,name,type,page_type,gender) overriding system value values (6801,9701,'منى ١','عادي','منى','ذكر'),(6802,9701,'عرفة ١','عادي','عرفة','ذكر');
    insert into public.passengers (id,season_id,name_ar,passport,national_id,dob,gender,bus_id,camp_mina_id,camp_arafa_id,passenger_type) overriding system value values
      (5701,9701,'حاج ألف','PA000001','28400000001','1960-03-15','ذكر',6701,6801,6802,'حاج'),
      (5702,9701,'حاج باء','PB000002',null,'02/02/1962','ذكر',6702,null,null,'حاج'),
@@ -93,9 +93,18 @@ r=$(ids "$TB"); [ "$r" = "4701,4703,4706" ] && ok "H2 pilgrim B (bus 2, custom) 
 r=$(q "select count(*) from public.announcements a where a.season_id=9701 and a.show_at<=now() and a.target_type in ('all','bus','camp_mina','camp_arafa','custom')
          and (5701 in (select passenger_id from announcement_audience(a.target_type,a.target_ids))) <> (a.id in (4701,4702,4704,4705))")
 [ "$r" = "0" ] && ok "H2 portal visibility == announcement_audience (push) for every known mode" || bad "H2 portal vs push audience differ on $r announcement(s)"
-log=$(psql "$LOCAL" -X -q -At -c "set client_min_messages = log; begin; set local role anon; select (get_pilgrim_portal_by_session('$TA') is not null); commit;" 2>&1)
-echo "$log" | grep -q "unknown target_type hidden (fail-closed), season 9701, announcement ids {4707}" && ! echo "$log" | grep -q "سرّيّ" \
-  && ok "H2 unknown type (4707) shown to nobody and logged (RAISE LOG) with its id only — no body in the log" || bad "H2 unknown-type log ($log)"
+# Phase 1 — الجمهورُ يُجمَّد مرّةً عند النشر: النوعُ المجهول لا جمهورَ له، ويُسجَّل عند تجميده
+# (لا عند كلّ تحميل للبوابة). 4707 جُمِّد في الاستدعاءين أعلاه؛ و4710 يُجمَّد هنا ويُلتقط سجلُّه.
+r=$(q "select count(*) from public.announcement_recipients where announcement_id = 4707")
+[ "$r" = "0" ] && ok "H2 unknown type (4707) frozen with no recipients (fail-closed)" || bad "H2 unknown type has $r recipient(s)"
+q "set app.season_maintenance = 'on';
+   insert into public.announcements (id,season_id,body,target_type,target_ids,show_at) overriding system value
+   values (4710,9701,'نوعٌ مجهولٌ آخر — سرّيّ','hotel','{1}',now()+interval '1 day');" > /dev/null
+# حدُّ النشر: تقديمُ موعده إلى الماضي يجمّده في المعاملة نفسها، فيُلتقط سجلُّها
+log=$(psql "$LOCAL" -X -q -At -c "set client_min_messages = log; update public.announcements set show_at = now() - interval '1 minute' where id = 4710;" 2>&1)
+echo "$log" | grep -q "announcement 4710: unknown target_type hotel" && ! echo "$log" | grep -q "سرّيّ" \
+  && [ "$(q "select count(*) from public.announcement_recipients where announcement_id = 4710")" = "0" ] \
+  && ok "H2 unknown type frozen to nobody and logged (RAISE LOG) with its id only — no body in the log" || bad "H2 unknown-type log ($log)"
 log=$(psql "$LOCAL" -X -q -At -c "begin; set local role anon; select (get_pilgrim_portal_by_session('$TA') is not null); commit;" 2>&1)
 [ "$log" = "t" ] && ok "H2 the diagnostic does not reach a default client (client_min_messages = notice)" || bad "H2 log leaked to client ($log)"
 
@@ -124,7 +133,7 @@ r=$(anon 10.20.0.6 "select get_pilgrim_portal_by_session('$TR')"); [ -z "$r" ] &
 TX=$(tok 7 "'PA000001'" 15 3 1960); q "update public.pilgrim_sessions set idle_expires_at = now() - interval '1 second' where token_hash = extensions.digest('$TX','sha256')" > /dev/null
 r=$(anon 10.20.0.7 "select get_pilgrim_portal_by_session('$TX')"); [ -z "$r" ] && ok "H3 expired session → null" || bad "H3 expired"
 # الإدارةُ تعمل كما هي
-r=$(staff $U_PORTAL "select count(*) from public.announcements where season_id = 9701"); [ "$r" = "9" ] && ok "H3 admin (manage_portal) still lists announcements through the table/RLS" || bad "H3 admin list ($r)"
+r=$(staff $U_PORTAL "select count(*) from public.announcements where season_id = 9701"); [ "$r" = "10" ] && ok "H3 admin (manage_portal) still lists announcements through the table/RLS" || bad "H3 admin list ($r)"
 r=$(staff $U_PORTAL "insert into public.announcements (season_id, body) values (9701,'من الإدارة') returning id"); [ -n "$r" ] && echo "$r" | grep -qv ERROR && ok "H3 admin can still create" || bad "H3 admin create ($r)"
 r=$(staff $U_PORTAL "update public.announcements set expires_at = now() where id = 4709 returning id"); [ "$r" = "4709" ] && ok "H3 admin can still end/update" || bad "H3 admin update ($r)"
 r=$(staff $U_PORTAL "select count(*) from announcement_audience('bus','{6701}')"); [ "$r" = "1" ] && ok "H3 push audience (announcement_audience) unaffected" || bad "H3 audience ($r)"

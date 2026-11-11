@@ -24,6 +24,8 @@ export type Announcement = {
   body: string;
   priority: string;
   expires_at: string | null;
+  /* Phase 1 — نسخةُ المحتوى؛ غائبةٌ عن قاعدةٍ قبل Phase 1 */
+  content_revision?: number | null;
 };
 
 export type SendOptions = {
@@ -105,11 +107,15 @@ export async function deliverAnnouncement(id: number, budgetMs: number, deps: De
   const companyName = await deps.readCompanyName().catch(() => null);
   const payload = buildPayload(ann, companyName);
   const summary = () => deps.rpc<Summary>("push_delivery_summary", { p_announcement_id: id });
+  /* سياجُ النسخة (Phase 1): الحجزُ بنسخة ما قُرئ، فتعديلٌ بعد القراءة يرفضه (superseded) ولا
+     يصل النصُّ القديم إلى الجولة الجديدة. وبلا النسخة يُستدعى بالمعاملات الأربع كما كان. */
+  const revisionArg = typeof ann.content_revision === "number" ? { p_revision: ann.content_revision } : {};
 
   const run = await runDelivery({
     claim: (limit, leaseSeconds) =>
       deps.rpc<Claimed[]>("push_claim_targets", {
         p_announcement_id: id, p_worker: deps.worker, p_limit: limit, p_lease_seconds: leaseSeconds,
+        ...revisionArg,
       }).then((rows) => rows ?? []),
     /* المدّةُ تُحسب عند كلّ إرسال: محاولةٌ مُعادةٌ قربَ الانتهاء تأخذ ما بقي فعلاً */
     send: (t) => deps.send(t, payload, buildSendOptions(ann, deps.now())),

@@ -53,7 +53,7 @@ q "$FIX
    insert into public.seasons (id,name,hijri_year,closed_at) overriding system value values (9721,'موسم اختبار ٢',1473,null);
    insert into public.hotels (id,season_id,city,name) overriding system value values (6731,9721,'مكة','فندق الاختبار');
    insert into public.rooms (id,season_id,hotel_id,number,floor,capacity) overriding system value values (6741,9721,6731,'101','1',4);
-   insert into public.camps (id,season_id,name,type,page_type,gender) overriding system value values (6751,9721,'منى ٢','منى','منى','ذكر'),(6752,9721,'عرفة ٢','عرفة','عرفة','ذكر');
+   insert into public.camps (id,season_id,name,type,page_type,gender) overriding system value values (6751,9721,'منى ٢','عادي','منى','ذكر'),(6752,9721,'عرفة ٢','عادي','عرفة','ذكر');
    insert into public.passengers (id,season_id,name_ar,passport,national_id,dob,gender,room_id,family_id,camp_arafa_id,photo_url,hajj_permit_url,flight_ticket_url,passenger_type) overriding system value values
      (5721,9721,'حاج رجل','pm000021 ','28400000021','1960-03-15','ذكر',6741,'F21',6752,'p/5721.jpg','p/5721-permit.pdf','p/5721-ticket.pdf','حاج'),
      (5722,9721,'رفيق الغرفة السري','PM000022',null,'1961-01-01','ذكر',6741,null,null,null,null,null,'حاج'),
