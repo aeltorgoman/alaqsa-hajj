@@ -33,6 +33,13 @@
 # and a `dispatch` request without a live lease written by the
 # scheduler is refused (409).
 #
+# Phase 1 (20261110122335): index.ts reads the announcement with `select("*")`
+# and deliver.ts passes its content_revision to every claim (`p_revision`);
+# without the column (a database before Phase 1) the claim keeps its 4
+# arguments. Safe on either schema. The previous reviewed source (v1, main
+# 55948b9) is index.ts 423e0fa3… / deliver.ts c101915d…: dispatching this
+# workflow from a ref that pins it redeploys it.
+#
 # Rollback (there is no earlier version to return to):
 #   1. stop the scheduler (`cron.unschedule`, PR 2) — nothing calls it;
 #   2. delete the PUSH_DISPATCH_TOKEN Edge Function secret — every
@@ -67,12 +74,12 @@ jobs:
       SLUG: push-dispatch
       # "<path under supabase/functions>:<sha256>" — the exact bundle
       PINS: >-
-        push-dispatch/index.ts:423e0fa3abe16ae806d6b63b56d864ddd204ad4d43a570c6abba5686a8d021ae
+        push-dispatch/index.ts:b3b4814acb449971f02ee3bec0580076449ee443cb332b67b380dc1758ed3113
         push-dispatch/handler.ts:56ff9ecf23db50de50ae57e17f26b8a5c9e1518fe24f3570d1426d2c4378ecda
-        push-dispatch/deliver.ts:c101915d55dd743e7c1a2fc714b75ee3d0f36b3d58fc7f15e8e0971bcd702cc6
+        push-dispatch/deliver.ts:48cc7557314361478ae2f7fa87c43de9dcedf7cc5dbab1a4db37c048c821bd35
         send-pilgrim-push/delivery.ts:b04f3d68606b1ec9df941f32f52d3733e0a25fbbb6fa3e595f7ed93009acfecf
       # send-pilgrim-push is not deployed here; its entry point must be the reviewed one
-      SPP_INDEX_SHA256: "ef56e7ca3068277ad62074353d451ab97db4242076783ecf2ce31de30231dec1"
+      SPP_INDEX_SHA256: "d98e9d2d635ad9dbe5da112c0ed3ad9655e34307f889be8f4ad38399bdbffec9"
 
     steps:
       - name: "GATE: confirmation and ref"
