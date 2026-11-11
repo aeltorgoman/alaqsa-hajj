@@ -171,7 +171,7 @@ r=$(anon "select poll_results($P1)"); has "results not executable by anon" "$r" 
 echo "═══ جلسةُ البوابة ═══"
 eq "no / unknown session → null" "$(anon "select coalesce(get_pilgrim_polls('nope')::text, 'null')")$(anon "select coalesce(submit_pilgrim_poll_response('nope', $P1, array[1]::bigint[], 0)::text, 'null')")" "nullnull"
 TX=$(tok PQ000004 4 4 1973); anon "select revoke_pilgrim_session('$TX')" > /dev/null
-eq "revoked session → null" "$(anon "select coalesce(get_pilgrim_polls('$TX')::text, 'null')")" "null"
+eq "revoked session → null (list and vote)" "$(anon "select coalesce(get_pilgrim_polls('$TX')::text, 'null')")$(anon "select coalesce(submit_pilgrim_poll_response('$TX', $P1, array[$(opt $P1 1)]::bigint[], 0)::text, 'null')")" "nullnull"
 TY=$(tok PQ000004 4 4 1973); q "update public.pilgrim_sessions set idle_expires_at = now() - interval '1 second' where token_hash = extensions.digest('$TY', 'sha256')" > /dev/null
 eq "expired session → null" "$(anon "select coalesce(submit_pilgrim_poll_response('$TY', $P1, array[$(opt $P1 1)]::bigint[], 0)::text, 'null')")" "null"
 
@@ -179,7 +179,7 @@ echo "═══ التصويت ═══"
 A1=$(opt $P1 1); A2=$(opt $P1 2); A3=$(opt $P1 3)
 L=$(anon "select get_pilgrim_polls('$T1')")
 eq "portal lists the pilgrim's polls, open, unanswered, with options" "$(echo "$L" | jget pending):$(echo "$L" | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[i for i in d["items"] if i["id"]=='"$P1"'][0]; print(m["state"], len(m["options"]), m["my_response"])')" "3:open 4 None"
-eq "portal items carry no counts and no other pilgrims" "$(echo "$L" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sorted({k for i in d["items"] for k in i}))')" "['body', 'closes_at', 'id', 'kind', 'max_choices', 'my_response', 'options', 'published_at', 'state', 'title']"
+eq "portal items carry no counts and no other pilgrims" "$(echo "$L" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(sorted({k for i in d["items"] for k in i}))')" "['allow_answer_changes', 'body', 'closes_at', 'id', 'kind', 'max_choices', 'my_response', 'options', 'published_at', 'state', 'title']"
 r=$(vote "$T1" $P1 "array[$A1,$A2]" 0); eq "first answer (multiple, 2 of max 2) → revision 1" "$(echo "$r" | jget status):$(echo "$r" | jget revision)" "ok:1"
 r=$(vote "$T1" $P1 "array[$A2,$A1,$A1]" 1); eq "same answer (order/duplicates ignored) → unchanged, no write" "$(echo "$r" | jget status):$(echo "$r" | jget revision):$(q "select count(*) from poll_response_events where poll_id = $P1 and passenger_id = 5891")" "unchanged:1:1"
 r=$(vote "$T1" $P1 "array[$A3]" 1); eq "change answer with the current revision → revision 2" "$(echo "$r" | jget status):$(echo "$r" | jget revision)" "ok:2"
@@ -193,9 +193,42 @@ r=$(vote "$T1" $P2 "array[$(opt $P2 1),$(opt $P2 2)]" 0); has "single-choice pol
 r=$(vote "$T1" $P1 "array[$A1]" -1); has "negative revision → 22023" "$r" "22023"
 r=$(vote "$T3" $P1 "array[$A1]" 0); eq "not in the frozen audience → not_found" "$(echo "$r" | jget status)" "not_found"
 eq "…and the poll is not listed for that pilgrim" "$(anon "select get_pilgrim_polls('$T3')" | python3 -c 'import json,sys; print('"$P1"' in [i["id"] for i in json.load(sys.stdin)["items"]])')" "False"
+MINE=$(q "select md5(string_agg(option_id::text, ',' order by option_id)) || ':' || (select revision from poll_responses where poll_id = $P1 and passenger_id = 5891) from poll_response_choices where poll_id = $P1 and passenger_id = 5891")
 r=$(vote "$T6" $P1 "array[$A2]" 0); eq "manually added newcomer can vote" "$(echo "$r" | jget status)" "ok"
+eq "another pilgrim's vote leaves my answer, choices and revision untouched" "$(q "select md5(string_agg(option_id::text, ',' order by option_id)) || ':' || (select revision from poll_responses where poll_id = $P1 and passenger_id = 5891) from poll_response_choices where poll_id = $P1 and passenger_id = 5891")" "$MINE"
+eq "…and the portal shows each pilgrim only their own answer" "$(anon "select get_pilgrim_polls('$T6')" | python3 -c 'import json,sys; m=[i for i in json.load(sys.stdin)["items"] if i["id"]=='"$P1"'][0]["my_response"]; print(m["revision"], m["option_ids"])')" "1 [$A2]"
+eq "no RPC takes a pilgrim id: the vote signature is (token, poll, options, revision)" "$(q "select pg_get_function_identity_arguments('public.submit_pilgrim_poll_response(text,bigint,bigint[],integer)'::regprocedure)")" "p_token text, p_poll_id bigint, p_option_ids bigint[], p_expected_revision integer"
 L=$(anon "select get_pilgrim_polls('$T1')"); eq "portal returns my answer and revision only" "$(echo "$L" | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[i for i in d["items"] if i["id"]=='"$P1"'][0]["my_response"]; print(m["revision"], m["option_ids"])')" "2 [$A3]"
 eq "change history: submit then change, ids recorded" "$(q "select string_agg(action || ':' || revision || ':' || array_to_string(option_ids, '/'), ',' order by id) from poll_response_events where poll_id = $P1 and passenger_id = 5891")" "submit:1:$A1/$A2,change:2:$A3"
+
+echo "═══ إجابةٌ نهائيّة (allow_answer_changes = false) ═══"
+eq "default is true" "$(q "select allow_answer_changes from polls where id = $P1")" "t"
+PL=$(staff $U_ADMIN "select create_poll('سؤال بإجابةٍ نهائيّة', null, 'single', null, '{\"pilgrim\":[5891,5892,5894]}'::jsonb, array['نعم','لا','ربما'], null, false)")
+eq "created with allow_answer_changes = false" "$(q "select allow_answer_changes from polls where id = $PL")" "f"
+staff $U_ADMIN "select update_poll($PL, 'سؤال بإجابةٍ نهائيّة', null, 'single', null, '{\"pilgrim\":[5891,5892,5894]}'::jsonb, array['نعم','لا','ربما'], null, true)" > /dev/null
+eq "editable on a draft (false → true)" "$(q "select allow_answer_changes from polls where id = $PL")" "t"
+staff $U_ADMIN "select update_poll($PL, 'سؤال بإجابةٍ نهائيّة', null, 'single', null, '{\"pilgrim\":[5891,5892,5894]}'::jsonb, array['نعم','لا','ربما'], null, false)" > /dev/null
+r=$(staff $U_ADMIN "select update_poll($PL, 'x', null, 'single', null, '{\"all\":true}'::jsonb, array['a','b'], null, null)"); has "null setting refused" "$r" "22023"
+staff $U_ADMIN "select publish_poll($PL)" > /dev/null
+r=$(qe "update public.polls set allow_answer_changes = true where id = $PL"); has "after publication the setting cannot change, even by a direct owner write" "$r" "22023"
+r=$(staff $U_ADMIN "select update_poll($PL, 'سؤال بإجابةٍ نهائيّة', null, 'single', null, '{\"pilgrim\":[5891,5892,5894]}'::jsonb, array['نعم','لا','ربما'], null, true)"); has "…nor through update_poll" "$r" "22023"
+eq "…still false" "$(q "select allow_answer_changes from polls where id = $PL")" "f"
+F1=$(opt $PL 1); F2=$(opt $PL 2)
+FP() { q "select coalesce((select revision::text from poll_responses where poll_id = $PL and passenger_id = $1), '-') || ':' || coalesce((select string_agg(option_id::text, ',' order by option_id) from poll_response_choices where poll_id = $PL and passenger_id = $1), '-') || ':' || (select count(*) from poll_response_events where poll_id = $PL and passenger_id = $1)"; }
+r=$(vote "$T1" $PL "array[$F1]" 0); eq "first answer accepted" "$(echo "$r" | jget status):$(FP 5891)" "ok:1:$F1:1"
+r=$(vote "$T1" $PL "array[$F2]" 1); eq "change from the same device → final, current answer returned" "$(echo "$r" | jget status):$(echo "$r" | jget option_ids)" "final:[$F1]"
+eq "…response, choices, revision and history untouched" "$(FP 5891)" "1:$F1:1"
+TB=$(tok PQ000001 1 1 1970)
+r=$(vote "$TB" $PL "array[$F2]" 1); eq "change from another device (new session) → final" "$(echo "$r" | jget status)" "final"
+r=$(vote "$TB" $PL "array[$F2]" 0); eq "…also with revision 0 → final" "$(echo "$r" | jget status)" "final"
+r=$(vote "$TB" $PL "array[$F1]" 1); eq "re-sending the same answer → unchanged, nothing written" "$(echo "$r" | jget status):$(FP 5891)" "unchanged:1:$F1:1"
+r=$(qe "update public.poll_responses set revision = 2 where poll_id = $PL and passenger_id = 5891"); has "a direct revision bump is refused by the trigger" "$r" "22023"
+for i in 1 2; do ( vote "$T2" $PL "array[$( [ $i = 1 ] && echo $F1 || echo $F2 )]" 0 > "$TMPD/f$i.out" ) & done; wait
+eq "two devices submit different first answers at once: one ok, the other final" "$(cat "$TMPD"/f1.out "$TMPD"/f2.out | python3 -c 'import json,sys; print(",".join(sorted(json.loads(l)["status"] for l in sys.stdin if l.strip())))')" "final,ok"
+eq "…exactly one response, revision 1, one choice, one history event" "$(q "select count(*) || ':' || max(revision) from poll_responses where poll_id = $PL and passenger_id = 5892"):$(q "select count(*) from poll_response_choices where poll_id = $PL and passenger_id = 5892"):$(q "select count(*) from poll_response_events where poll_id = $PL and passenger_id = 5892")" "1:1:1:1"
+rm -f "$TMPD"/f*.out
+staff $U_ADMIN "select close_poll($PL)" > /dev/null
+r=$(vote "$T4" $PL "array[$F1]" 0); eq "closed final-answer poll → closed" "$(echo "$r" | jget status)" "closed"
 
 echo "═══ التزامن ═══"
 P5=$(mk '{"pilgrim":[5891,5892,5894,5897]}'); staff $U_ADMIN "select publish_poll($P5)" > /dev/null; C1=$(opt $P5 1); C2=$(opt $P5 2)
@@ -251,6 +284,21 @@ eq "…at its time it is published and frozen by the scheduler job (settle)" "$(
 P8=$(mk '{"pilgrim":[5892]}'); staff $U_ADMIN "select publish_poll($P8, now() + interval '2 seconds')" > /dev/null; sleep 3
 r=$(vote "$T2" $P8 "array[$(opt $P8 1)]" 0); eq "…or by the first vote after its time (no job needed)" "$(echo "$r" | jget status):$(st $P8)" "ok:published"
 eq "polls-settle job scheduled every minute" "$(q "select schedule || ' ' || command from cron.job where jobname = 'polls-settle'")" "* * * * * SELECT public._polls_settle_due(50);"
+PUSHFP() { q "select md5(concat_ws('|',
+  (select to_jsonb(d)::text from push_dispatch_state d),
+  (select string_agg(jobname || schedule || command || active::text, ';' order by jobid) from cron.job where jobname <> 'polls-settle'),
+  (select md5(coalesce(string_agg(to_jsonb(a)::text, '' order by id), '')) from announcements a),
+  (select md5(coalesce(string_agg(to_jsonb(x)::text, '' order by announcement_id, passenger_id), '')) from notification_deliveries x),
+  (select md5(coalesce(string_agg(to_jsonb(t)::text, '' order by id), '')) from announcement_push_targets t)))"; }
+P13=$(mk '{"pilgrim":[5891]}'); staff $U_ADMIN "select publish_poll($P13, now() + interval '2 seconds')" > /dev/null
+P14=$(mk '{"pilgrim":[5892]}' single null "array['نعم','لا']" "now() + interval '2 seconds'"); staff $U_ADMIN "select publish_poll($P14)" > /dev/null
+sleep 3
+BEFORE_PUSH=$(PUSHFP); EV0=$(q "select count(*) from poll_admin_events where poll_id in ($P13,$P14)")
+N1=$(q "select public._polls_settle_due(50)"); N2=$(q "select public._polls_settle_due(50)"); N3=$(q "select public._polls_settle_due(50)")
+eq "settle: first run handles the due polls, repeated runs do nothing" "$N1:$N2:$N3:$(st $P13):$(st $P14)" "2:0:0:published:closed:expired"
+eq "…each transition recorded once (publish, close), one snapshot" "$(( $(q "select count(*) from poll_admin_events where poll_id in ($P13,$P14)") - EV0 )):$(q "select count(*) from poll_result_snapshots where poll_id = $P14")" "2:1"
+eq "polls-settle leaves the announcement scheduler untouched (state, M5 job, announcements, deliveries, push targets)" "$(PUSHFP)" "$BEFORE_PUSH"
+eq "the polls job calls no push function" "$(q "select (command !~* 'push') from cron.job where jobname = 'polls-settle'"):$(q "select (prosrc !~* 'push_|announcement_push|notification_deliveries|net\\.') from pg_proc where proname = '_polls_settle_due'")" "t:t"
 
 echo "═══ حدُّ الطلبات ═══"
 q "insert into public.edge_rate_limits (scope, subject, window_start, hits)
@@ -264,7 +312,9 @@ P9=$(mk '{"pilgrim":[5891,5897]}'); staff $U_ADMIN "select publish_poll($P9)" > 
 vote "$T7" $P9 "array[$(opt $P9 1)]" 0 > /dev/null; vote "$T7" $P1 "array[$A1]" 0 > /dev/null
 staff $U_ADMIN "select close_poll($P1)" > /dev/null
 eq "before deletion: 5897 answered the open poll and the closed one" "$(q "select count(*) from poll_responses where passenger_id = 5897 and poll_id in ($P1,$P9)")" "2"
+SNAP_BEFORE=$(q "select md5(to_jsonb(s)::text) from poll_result_snapshots s where poll_id = $P1")
 q "set app.season_maintenance = 'on'; delete from public.pilgrim_sessions where passenger_id = 5897; delete from public.passengers where id = 5897" > /dev/null
+eq "closed poll's frozen snapshot is byte-identical after the pilgrim's deletion" "$(q "select md5(to_jsonb(s)::text) from poll_result_snapshots s where poll_id = $P1")" "$SNAP_BEFORE"
 eq "deleted pilgrim: live audience and answers removed" "$(q "select count(*) from poll_recipients where passenger_id = 5897")$(q "select count(*) from poll_responses where passenger_id = 5897")" "00"
 eq "…live results of the open poll no longer count him" "$(staff $U_ADMIN "select poll_results($P9)->'totals'->>'respondents'")" "0"
 eq "…the closed poll's snapshot keeps his answer" "$(staff $U_ADMIN "select get_poll_snapshot($P1)" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=[x for x in d["rows"] if x["passenger_id"]==5897]; print(len(r), r[0]["responded"], d["checksum_valid"])')" "1 True True"

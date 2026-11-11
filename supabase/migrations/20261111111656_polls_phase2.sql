@@ -17,6 +17,8 @@
 --   · الجمهورُ يُجمَّد عند النشر الفعليّ في poll_recipients (ق٣)، ويُضاف إليه يدوياً
 --     بعملية مخوَّلة (add_poll_recipients).
 --   · التصويتُ بجلسة البوابة وحدها، وبرقم مراجعة (ق١٠): الكتابةُ القديمة تُرفض (stale).
+--     وallow_answer_changes (افتراضاً true) لكلّ استطلاع: false ← أوّلُ إجابةٍ ثُبّتت نهائيّة (final)،
+--     ويثبت الإعدادُ بالنشر كسائر الحقول.
 --   · النتائج: حيّةٌ بالإسناد الحاليّ، ولقطةٌ عند الإغلاق بإسناد لحظة الإغلاق (ق٤)،
 --     غيرُ قابلةٍ للتعديل، ولا مفتاحَ أجنبيّاً فيها إلى الحجّاج: تبقى بعد حذف الحاجّ (ق١٢)
 --     كما يبقى سجلُّ تغيّر الإجابات.
@@ -42,6 +44,8 @@ create table public.polls (
   closes_at           timestamptz,
   closed_at           timestamptz,
   close_reason        text check (close_reason is null or close_reason in ('manual', 'expired', 'season_close')),
+  -- تغييرُ الإجابة بعد أوّل إجابةٍ ناجحة: true يسمح به ما دام مفتوحاً (برقم المراجعة)، false يجعلها نهائيّة
+  allow_answer_changes boolean not null default true,
   created_by          uuid,
   created_at          timestamptz not null default now(),
   updated_by          uuid,
@@ -208,8 +212,9 @@ begin
        or new.kind is distinct from old.kind or new.max_choices is distinct from old.max_choices
        or new.audience is distinct from old.audience or new.published_at is distinct from old.published_at
        or new.audience_frozen_at is distinct from old.audience_frozen_at or new.publish_at is distinct from old.publish_at
-       or new.closes_at is distinct from old.closes_at) then
-    raise exception 'نُشر الاستطلاع: سؤالُه وخياراتُه وجمهورُه ومواعيدُه ثابتة.' using errcode = '22023';
+       or new.closes_at is distinct from old.closes_at
+       or new.allow_answer_changes is distinct from old.allow_answer_changes) then
+    raise exception 'نُشر الاستطلاع: سؤالُه وخياراتُه وجمهورُه ومواعيدُه وإعدادُ تغيير الإجابة ثابتة.' using errcode = '22023';
   end if;
   new.updated_at := now();
   return new;
@@ -231,11 +236,12 @@ declare
   v_status text;
   v_closes timestamptz;
   v_closed timestamptz;
+  v_change boolean;
 begin
   if coalesce(current_setting('app.season_maintenance', true), '') = 'on' then
     return case when tg_op = 'DELETE' then old else new end;
   end if;
-  select p.status, p.closes_at, s.closed_at into v_status, v_closes, v_closed
+  select p.status, p.closes_at, s.closed_at, p.allow_answer_changes into v_status, v_closes, v_closed, v_change
     from public.polls p join public.seasons s on s.id = p.season_id where p.id = v_poll;
   if not found then
     -- الاستطلاعُ يُحذف (تعاقُب من مسوّدة): لا شيء يُحمى
@@ -258,6 +264,10 @@ begin
   else
     if v_status <> 'published' or (v_closes is not null and v_closes <= now()) then
       raise exception 'الاستطلاعُ غيرُ مفتوحٍ للتصويت.' using errcode = '22023';
+    end if;
+    -- الإجابةُ النهائيّة (allow_answer_changes = false): لا مراجعةَ ثانية، أيّاً كان الكاتب
+    if tg_table_name = 'poll_responses' and tg_op = 'UPDATE' and not v_change then
+      raise exception 'الإجابةُ نهائيّةٌ في هذا الاستطلاع.' using errcode = '22023';
     end if;
   end if;
   return case when tg_op = 'DELETE' then old else new end;
@@ -658,7 +668,8 @@ $$;
 -- ── ٥. الإدارة (authenticated + manage_portal) ──────────────────────────
 -- الحارسُ نفسُه في Phase 1 (_announcement_admin_guard): manage_portal نشط، أو service_role، أو اتّصالٌ مباشر.
 create function public.create_poll(p_title text, p_body text, p_kind text, p_max_choices integer,
-                                   p_audience jsonb, p_options text[], p_closes_at timestamptz default null)
+                                   p_audience jsonb, p_options text[], p_closes_at timestamptz default null,
+                                   p_allow_answer_changes boolean default true)
 returns bigint
 language plpgsql
 security definer
@@ -671,20 +682,26 @@ begin
   perform public._announcement_admin_guard();
   perform public._poll_validate(v_season, p_title, p_kind, p_max_choices, p_audience, p_options, p_closes_at);
   perform 1 from public.seasons s where s.id = v_season for share;
-  insert into public.polls (season_id, title, body, kind, max_choices, audience, closes_at, created_by, updated_by)
+  if p_allow_answer_changes is null then
+    raise exception 'إعدادُ تغيير الإجابة مطلوب.' using errcode = '22023';
+  end if;
+  insert into public.polls (season_id, title, body, kind, max_choices, audience, closes_at, allow_answer_changes,
+                            created_by, updated_by)
   values (v_season, btrim(p_title), nullif(btrim(coalesce(p_body, '')), ''), p_kind, p_max_choices, p_audience,
-          p_closes_at, auth.uid(), auth.uid())
+          p_closes_at, p_allow_answer_changes, auth.uid(), auth.uid())
   returning id into v_id;
   insert into public.poll_options (poll_id, label, sort_order)
   select v_id, btrim(x), o from unnest(p_options) with ordinality as t(x, o);
-  perform public._poll_event(v_id, v_season, 'create', jsonb_build_object('options', cardinality(p_options), 'kind', p_kind));
+  perform public._poll_event(v_id, v_season, 'create', jsonb_build_object('options', cardinality(p_options), 'kind', p_kind,
+                                                                         'allow_answer_changes', p_allow_answer_changes));
   return v_id;
 end;
 $$;
 
 -- قبل النشر وحده (مسوّدة أو مجدوَل): السؤالُ والخياراتُ والجمهورُ والموعد
 create function public.update_poll(p_poll_id bigint, p_title text, p_body text, p_kind text, p_max_choices integer,
-                                   p_audience jsonb, p_options text[], p_closes_at timestamptz default null)
+                                   p_audience jsonb, p_options text[], p_closes_at timestamptz default null,
+                                   p_allow_answer_changes boolean default true)
 returns void
 language plpgsql
 security definer
@@ -703,17 +720,22 @@ begin
     raise exception 'نُشر الاستطلاع: لا يُعدَّل سؤالُه ولا خياراتُه ولا جمهورُه.' using errcode = '22023';
   end if;
   perform public._poll_validate(p.season_id, p_title, p_kind, p_max_choices, p_audience, p_options, p_closes_at);
+  if p_allow_answer_changes is null then
+    raise exception 'إعدادُ تغيير الإجابة مطلوب.' using errcode = '22023';
+  end if;
   if p.status = 'scheduled' and p_closes_at is not null and p_closes_at <= p.publish_at then
     raise exception 'موعدُ الإغلاق يجب أن يكون بعد موعد النشر.' using errcode = '22023';
   end if;
   update public.polls
      set title = btrim(p_title), body = nullif(btrim(coalesce(p_body, '')), ''), kind = p_kind,
-         max_choices = p_max_choices, audience = p_audience, closes_at = p_closes_at, updated_by = auth.uid()
+         max_choices = p_max_choices, audience = p_audience, closes_at = p_closes_at,
+         allow_answer_changes = p_allow_answer_changes, updated_by = auth.uid()
    where id = p_poll_id;
   delete from public.poll_options where poll_id = p_poll_id;
   insert into public.poll_options (poll_id, label, sort_order)
   select p_poll_id, btrim(x), o from unnest(p_options) with ordinality as t(x, o);
-  perform public._poll_event(p_poll_id, p.season_id, 'update', jsonb_build_object('options', cardinality(p_options), 'kind', p_kind));
+  perform public._poll_event(p_poll_id, p.season_id, 'update', jsonb_build_object('options', cardinality(p_options), 'kind', p_kind,
+                                                                                'allow_answer_changes', p_allow_answer_changes));
 end;
 $$;
 
@@ -932,6 +954,7 @@ begin
     select json_build_object(
       'items', coalesce(json_agg(json_build_object(
           'id', m.id, 'title', m.title, 'body', m.body, 'kind', m.kind, 'max_choices', m.max_choices,
+          'allow_answer_changes', m.allow_answer_changes,
           'state', case when m.is_open then 'open' else 'closed' end,
           'published_at', m.published_at, 'closes_at', m.closes_at,
           'options', (select json_agg(json_build_object('id', o.id, 'label', o.label) order by o.sort_order, o.id)
@@ -949,7 +972,8 @@ $$;
 
 -- التصويتُ أو تغييرُ الإجابة. الهويّةُ من الجلسة وحدها؛ p_expected_revision = 0 لأوّل إجابة،
 -- وإلا رقمُ المراجعة الذي رآه الحاجّ. يردّ:
---   ok (revision, option_ids) · unchanged · stale (المراجعةُ والخياراتُ الحاليّة) · closed
+--   ok (revision, option_ids) · unchanged · stale (المراجعةُ والخياراتُ الحاليّة)
+--   · final (allow_answer_changes = false وللحاجّ إجابةٌ مختلفة: تبقى هي) · closed
 --   · not_found (ليس في الجمهور أو لا استطلاع) · rate_limited · null (لا جلسة)
 -- والخياراتُ غيرُ الصالحة خطأ 22023.
 create function public.submit_pilgrim_poll_response(p_token text, p_poll_id bigint, p_option_ids bigint[],
@@ -1028,6 +1052,11 @@ begin
   if not v_new then
     v_cur := array(select c.option_id from public.poll_response_choices c
                     where c.poll_id = p_poll_id and c.passenger_id = v_pid order by 1);
+    -- الإجابةُ النهائيّة: أوّلُ إجابةٍ ثُبّتت هي الإجابة، من أيّ جهاز، وبأيّ رقم مراجعة. لا يُكتب شيء.
+    if not p.allow_answer_changes then
+      return json_build_object('status', case when v_cur = v_ids then 'unchanged' else 'final' end,
+                               'revision', v_rev, 'option_ids', to_json(v_cur));
+    end if;
     if p_expected_revision <> v_rev then
       return json_build_object('status', 'stale', 'revision', v_rev, 'option_ids', to_json(v_cur));
     end if;
@@ -1289,8 +1318,8 @@ begin
       'public._polls_settle_due(integer)'::regprocedure,
       'public._polls_close_for_season(bigint)'::regprocedure,
       'public._poll_validate(bigint, text, text, integer, jsonb, text[], timestamptz)'::regprocedure,
-      'public.create_poll(text, text, text, integer, jsonb, text[], timestamptz)'::regprocedure,
-      'public.update_poll(bigint, text, text, text, integer, jsonb, text[], timestamptz)'::regprocedure,
+      'public.create_poll(text, text, text, integer, jsonb, text[], timestamptz, boolean)'::regprocedure,
+      'public.update_poll(bigint, text, text, text, integer, jsonb, text[], timestamptz, boolean)'::regprocedure,
       'public.publish_poll(bigint, timestamptz)'::regprocedure,
       'public.unschedule_poll(bigint)'::regprocedure,
       'public.close_poll(bigint)'::regprocedure,
@@ -1308,8 +1337,8 @@ end
 $grants$;
 
 -- الإدارة: authenticated، وحارسُها الداخليّ manage_portal
-grant execute on function public.create_poll(text, text, text, integer, jsonb, text[], timestamptz) to authenticated;
-grant execute on function public.update_poll(bigint, text, text, text, integer, jsonb, text[], timestamptz) to authenticated;
+grant execute on function public.create_poll(text, text, text, integer, jsonb, text[], timestamptz, boolean) to authenticated;
+grant execute on function public.update_poll(bigint, text, text, text, integer, jsonb, text[], timestamptz, boolean) to authenticated;
 grant execute on function public.publish_poll(bigint, timestamptz) to authenticated;
 grant execute on function public.unschedule_poll(bigint) to authenticated;
 grant execute on function public.close_poll(bigint) to authenticated;
@@ -1321,8 +1350,8 @@ grant execute on function public.get_poll_snapshot(bigint) to authenticated;
 grant execute on function public.get_pilgrim_polls(text) to anon;
 grant execute on function public.submit_pilgrim_poll_response(text, bigint, bigint[], integer) to anon;
 
-comment on function public.create_poll(text, text, text, integer, jsonb, text[], timestamptz) is
-  'Phase 2 — مسوّدةُ استطلاع في الموسم النشط (manage_portal). الجمهورُ بمفردات التنبيهات.';
+comment on function public.create_poll(text, text, text, integer, jsonb, text[], timestamptz, boolean) is
+  'Phase 2 — مسوّدةُ استطلاع في الموسم النشط (manage_portal). الجمهورُ بمفردات التنبيهات. allow_answer_changes (افتراضاً true) يثبت بالنشر.';
 comment on function public.publish_poll(bigint, timestamptz) is
   'Phase 2 — نشرٌ الآن (يُجمَّد الجمهور) أو جدولة (يُجمَّد عند حلول الموعد). manage_portal.';
 comment on function public.close_poll(bigint) is
@@ -1336,7 +1365,7 @@ comment on function public.get_poll_snapshot(bigint) is
 comment on function public.get_pilgrim_polls(text) is
   'Phase 2 — استطلاعاتُ الحاجّ من جمهوره المجمَّد وإجابتُه. بلا أعدادٍ ولا بيانات غيره. anon بالجلسة.';
 comment on function public.submit_pilgrim_poll_response(text, bigint, bigint[], integer) is
-  'Phase 2 — تصويتٌ/تغييرُ إجابة بالجلسة ورقم المراجعة (stale عند التعارض). anon بالجلسة.';
+  'Phase 2 — تصويتٌ/تغييرُ إجابة بالجلسة ورقم المراجعة (stale عند التعارض؛ final حين لا يُسمح بالتغيير). anon بالجلسة.';
 
 -- ── ٩. الاستحقاقُ الزمنيّ: مهمّةٌ كلَّ دقيقة ────────────────────────────────
 -- مجدوَلٌ حان موعدُه يُنشر، ومنشورٌ انتهى يُغلق بلقطته بإسناد تلك الدقيقة — لا عند أوّل قراءةٍ
@@ -1381,8 +1410,8 @@ begin
   end if;
 
   foreach v_fn in array array[
-      'public.create_poll(text, text, text, integer, jsonb, text[], timestamptz)'::regprocedure,
-      'public.update_poll(bigint, text, text, text, integer, jsonb, text[], timestamptz)'::regprocedure,
+      'public.create_poll(text, text, text, integer, jsonb, text[], timestamptz, boolean)'::regprocedure,
+      'public.update_poll(bigint, text, text, text, integer, jsonb, text[], timestamptz, boolean)'::regprocedure,
       'public.publish_poll(bigint, timestamptz)'::regprocedure,
       'public.unschedule_poll(bigint)'::regprocedure,
       'public.close_poll(bigint)'::regprocedure,
@@ -1441,6 +1470,10 @@ begin
     raise exception 'مِنَحُ دوالّ الموسم تغيّرت.' using errcode = 'P0001';
   end if;
 
+  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'polls'
+                   and column_name = 'allow_answer_changes' and is_nullable = 'NO' and column_default = 'true') then
+    raise exception 'polls.allow_answer_changes ليس NOT NULL DEFAULT true.' using errcode = 'P0001';
+  end if;
   if (select count(*) from pg_trigger t where t.tgrelid = 'public.polls'::regclass and not t.tgisinternal
         and t.tgname in ('trg_reject_closed_season', 'trg_polls_before_write')) <> 2 then
     raise exception 'محفّزاتُ الاستطلاعات ناقصة.' using errcode = 'P0001';
