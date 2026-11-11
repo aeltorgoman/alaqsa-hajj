@@ -1021,6 +1021,40 @@ export type Database = {
           },
         ]
       }
+      /* Polls Phase 2 — للقراءة وحدها (سياسة manage_portal). الكتابةُ بالدوالّ وحدها:
+         لا منحَ INSERT/UPDATE/DELETE لأيّ دورٍ تطبيقيّ، فـInsert/Update غيرُ قابلين للاستعمال. */
+      polls: {
+        Row: {
+          id: number
+          season_id: number
+          title: string
+          body: string | null
+          kind: string
+          max_choices: number | null
+          audience: Json
+          status: string
+          publish_at: string | null
+          published_at: string | null
+          audience_frozen_at: string | null
+          closes_at: string | null
+          closed_at: string | null
+          close_reason: string | null
+          allow_answer_changes: boolean
+          created_by: string | null
+          created_at: string
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      poll_options: {
+        Row: { id: number; poll_id: number; label: string; sort_order: number }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       pricing_settings: {
         Row: {
           amount: number
@@ -1286,6 +1320,29 @@ export type Database = {
       get_pilgrim_announcements: { Args: { p_token: string; p_offset: number }; Returns: Json }
       acknowledge_pilgrim_announcement: {
         Args: { p_token: string; p_announcement_id: number; p_revision: number | null }
+        Returns: Json
+      }
+      /* Polls Phase 2 — الإدارة (authenticated، وحارسُها manage_portal) */
+      create_poll: {
+        Args: { p_title: string; p_body: string | null; p_kind: string; p_max_choices: number | null; p_audience: Json;
+                p_options: string[]; p_closes_at?: string | null; p_allow_answer_changes?: boolean }
+        Returns: number
+      }
+      update_poll: {
+        Args: { p_poll_id: number; p_title: string; p_body: string | null; p_kind: string; p_max_choices: number | null; p_audience: Json;
+                p_options: string[]; p_closes_at?: string | null; p_allow_answer_changes?: boolean }
+        Returns: undefined
+      }
+      publish_poll: { Args: { p_poll_id: number; p_publish_at?: string | null }; Returns: Json }
+      unschedule_poll: { Args: { p_poll_id: number }; Returns: undefined }
+      close_poll: { Args: { p_poll_id: number }; Returns: Json }
+      delete_poll: { Args: { p_poll_id: number }; Returns: boolean }
+      poll_results: { Args: { p_poll_id: number; p_dimension?: string | null }; Returns: Json }
+      get_poll_snapshot: { Args: { p_poll_id: number }; Returns: Json }
+      /* Polls Phase 2 — البوابة (anon، بالجلسة) */
+      get_pilgrim_polls: { Args: { p_token: string }; Returns: Json }
+      submit_pilgrim_poll_response: {
+        Args: { p_token: string; p_poll_id: number; p_option_ids: number[]; p_expected_revision: number }
         Returns: Json
       }
       assign_passenger_room:

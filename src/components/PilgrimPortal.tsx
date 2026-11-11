@@ -14,7 +14,8 @@ import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safe
 import { effectivePortalSettings, photoVisibleFor } from "../company/portalSettings";
 import { PORTAL_LOGIN_MESSAGES, normalizeDoc, isValidDoc, isValidDob } from "./portal/portal.login";
 import { setupPortalManifest } from "../utils/portalManifest";
-import type { PortalData, PortalAccommodation, Ann, AnnPage } from "./portal/portal.types";
+import type { PortalData, PortalAccommodation, Ann, AnnPage, PortalPoll, PortalPolls, PollSubmitResult } from "./portal/portal.types";
+import { submitOutcome, type PollOutcome } from "./portal/portal.polls";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
 import { getSeasonArafa, civilDate } from "./portal/portal.dates";
 import { readSession, clearPortalLocalState } from "./portal/portal.session";
@@ -98,6 +99,9 @@ function PilgrimPortal() {
   /* أيُّ تنبيهٍ فُتح من إشعاره عولج (فلا يُقرّ مرّتين عند تحديث القائمة) */
   const handledOpenAnn = useRef<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /* Phase 3 — استطلاعاتُ الحاجّ من `get_pilgrim_polls` بالجلسة. لا تُخزَّن على الجهاز: تُجلب من المصدر
+     عند كلّ فتح، فالتحديثُ يعرض الإجابةَ المسجَّلة كما هي في القاعدة. */
+  const [polls, setPolls] = useState<PortalPoll[]>([]);
   const [pushState, setPushState] = useState<PushState>("unsupported");
   const [pushBusy, setPushBusy] = useState(false);
   const [pushNote, setPushNote] = useState("");
@@ -116,6 +120,17 @@ function PilgrimPortal() {
     return () => clearInterval(id);
   }, []);
 
+  /* رفضٌ صريحٌ للجلسة (انتهت أو أُبطلت أو أُقفل موسمُها أو حُذف الحاجّ): لا تبقى شاشةٌ تبدو داخلة.
+     موضعٌ واحدٌ يستعمله الملفُّ والاستطلاعات معاً. */
+  const expireSession = useCallback(() => {
+    clearPortalLocalState();
+    setSession(null);
+    setData(null);
+    setPolls([]);
+    /* العنوانُ يعود إلى الجذر: لا يبقى رابطٌ عميقٌ لجلسةٍ انتهت */
+    resetToRoot();
+  }, [resetToRoot]);
+
   const refreshPortal = useCallback(async () => {
     const token = readSession();
     if (!token) return;
@@ -133,16 +148,32 @@ function PilgrimPortal() {
     if (!error) {
       /* رفضٌ صريح لا عطل شبكة: الجلسة انتهت أو أُبطلت أو أُقفل
          موسمها أو حُذف الحاجّ. لا نُبقي شاشة تبدو داخلة. */
-      clearPortalLocalState();
-      setSession(null);
-      setData(null);
-      /* العنوانُ يعود إلى الجذر: لا يبقى رابطٌ عميقٌ لجلسةٍ انتهت */
-      resetToRoot();
+      expireSession();
       return;
     }
     /* عطلٌ عابر: تبقى الجلسة والملفُّ المحفوظ كما هما. ولا إسقاطَ إلى
        تنبيهاتٍ بلا جلسة (H3): التنبيهاتُ من مسار الجلسة وحده، بجمهورها. */
-  }, [resetToRoot]);
+  }, [expireSession]);
+
+  /* Phase 3 — الاستطلاعات. null من الدالّة = جلسةٌ مرفوضة (سلوكُ الانتهاء نفسُه)؛ وخادمٌ بلا Phase 2
+     (PGRST202) لا يعرض شيئاً؛ وعطلٌ عابر يُبقي آخرَ قائمةٍ صحيحة. */
+  const refreshPolls = useCallback(async () => {
+    const token = readSession();
+    if (!token) return;
+    try {
+      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_polls", { p_token: token });
+      if (error) { if (error.code === "PGRST202") setPolls([]); return; }
+      if (res === null) { expireSession(); return; }
+      setPolls(((res as unknown as PortalPolls).items) || []);
+    } catch { /* الشبكة: المحاولةُ التالية */ }
+  }, [expireSession]);
+
+  /* Phase 3 — فتحُ تبويب التنبيهات يجلب الاستطلاعات من جديد (إجابةٌ من جهازٍ آخر، أو إغلاق) */
+  useEffect(() => {
+    if (tab !== "alerts" || !session) return;
+    const t0 = setTimeout(() => { void refreshPolls(); }, 0);
+    return () => clearTimeout(t0);
+  }, [tab, session, refreshPolls]);
 
   /* H4 — خروجٌ صريحٌ سابقٌ لم يكتمل على الخادم (انقطاع شبكة): يُتمّ بصمت */
   useEffect(() => { void finishPendingLogout(); }, []);
@@ -159,8 +190,10 @@ function PilgrimPortal() {
        الشبكة لا داخل العرض. صار مرئياً للقاعدة لأن الدالة خرجت من
        جوف الأثر لتُشارَك مع مستمع عامل الخدمة. */
     if (!justLoggedIn) refreshPortal();
-    const t = setInterval(refreshPortal, 180000);
-    return () => clearInterval(t);
+    /* الاستطلاعاتُ بعد العرض لا داخله (كالتنبيهات في الإدارة) */
+    const t0 = setTimeout(() => { void refreshPolls(); }, 0);
+    const t = setInterval(() => { void refreshPortal(); void refreshPolls(); }, 180000);
+    return () => { clearTimeout(t0); clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, !!data]);
 
@@ -292,6 +325,35 @@ function PilgrimPortal() {
     } catch { setMoreError(true); }
     finally { setMoreBusy(false); }
   }, [data, moreAnns.length]);
+
+  /* Phase 3 — التصويت: الجلسةُ وحدها هويّة الحاجّ، ورقمُ المراجعة المرئيّ يُرسَل (0 لأوّل إجابة).
+     ما تقرّره القاعدة يُعتمد محلّيّاً (ok · unchanged · stale · final)، فلا يُكتب فوق إجابةٍ أحدث. */
+  const submitPoll = useCallback(async (p: PortalPoll, optionIds: number[]): Promise<PollOutcome> => {
+    const token = readSession();
+    if (!token) { expireSession(); return { tone: "error", text: "", expired: true }; }
+    let res: PollSubmitResult | null;
+    try {
+      const r = await portalSupabase.rpc("submit_pilgrim_poll_response", {
+        p_token: token, p_poll_id: p.id, p_option_ids: optionIds, p_expected_revision: p.my_response?.revision ?? 0,
+      });
+      if (r.error) {
+        return r.error.code === "22023"
+          ? { tone: "error", text: r.error.message || "اختيارٌ غير صالح لهذا الاستطلاع." }
+          : { tone: "error", text: "تعذّر إرسال الإجابة. تحقّق من الاتصال وحاول مرة أخرى." };
+      }
+      res = r.data as unknown as PollSubmitResult | null;
+    } catch {
+      return { tone: "error", text: "تعذّر إرسال الإجابة. تحقّق من الاتصال وحاول مرة أخرى." };
+    }
+    const o = submitOutcome(res, optionIds);
+    if (o.expired) { expireSession(); return o; }
+    if (o.adopt) {
+      const mine = o.adopt.revision > 0 ? { revision: o.adopt.revision, option_ids: o.adopt.option_ids } : null;
+      setPolls(list => list.map(x => (x.id === p.id ? { ...x, my_response: mine } : x)));
+    }
+    if (o.refresh) void refreshPolls();
+    return o;
+  }, [expireSession, refreshPolls]);
 
   async function turnPushOn() {
     setPushBusy(true);
@@ -454,6 +516,8 @@ function PilgrimPortal() {
         .filter(a => a.state && a.state !== "read" && (localRead[a.id] ?? 0) >= (a.revision ?? 1)).length)
     : (data?.announcements || []).filter(a => a.id > seenAlerts).length;
   const hasMoreAnns = withStates && (moreHas ?? annMeta!.has_more);
+  /* استطلاعاتٌ مفتوحةٌ لم يُجب عنها — تُضيء نقطةَ «جديد» على التبويب نفسه */
+  const pollsPending = polls.filter(x => x.state === "open" && !x.my_response && (!x.closes_at || new Date(x.closes_at).getTime() > now)).length;
   const urgentUnacked = allAnns.filter(a => a.priority === "عاجل" && !ackedUrgent.includes(a.id)
     && (!withStates || a.state !== "read"));
 
@@ -579,7 +643,7 @@ function PilgrimPortal() {
     localStorage.removeItem("portal_push_dismissed");
     setPushDismissed(false); setPushState("available");
     setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
-    setMoreAnns([]); setMoreHas(null); setLocalRead({}); setOpenAnnId(null);
+    setMoreAnns([]); setMoreHas(null); setLocalRead({}); setOpenAnnId(null); setPolls([]);
     setSession(null); setDocView(null);
     /* والعنوانُ إلى الجذر بلا إدخالٍ في التاريخ — كي لا يعيد زرُّ
        الرجوع شاشةَ من خرج */
@@ -706,13 +770,14 @@ function PilgrimPortal() {
             announcements={allAnns}
             withStates={withStates} onAck={(a) => void acknowledge(a)}
             hasMore={hasMoreAnns} moreBusy={moreBusy} moreError={moreError} onLoadMore={() => void loadMoreAnns()}
+            polls={polls} pollsPending={pollsPending} onPollSubmit={submitPoll}
           />
         )}
       </div>
 
       <PortalNav
         t={t} tab={tab} setTab={navigate}
-        unread={unread}
+        unread={unread + pollsPending}
         announcements={data.announcements}
         seenAlerts={seenAlerts} setSeenAlerts={setSeenAlerts}
       />

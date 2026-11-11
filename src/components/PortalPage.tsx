@@ -12,6 +12,7 @@ import { effectivePortalSettings, type PhotoVisibility, type PortalFlagKey, type
 import { AudiencePicker } from "./announcements/AudiencePicker";
 import { cleanAudience, audienceIsEmpty, describeAudience, type Audience } from "./announcements/audience";
 import { AnnouncementEditModal } from "./announcements/AnnouncementEditModal";
+import { PollsAdmin } from "./polls/PollsAdmin";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -53,7 +54,7 @@ function toLocalInput(d: Date): string {
 }
 
 function PortalPage({ currentUser }: { currentUser: User }) {
-  const [tab, setTab] = useState<"alerts" | "settings">("alerts");
+  const [tab, setTab] = useState<"alerts" | "polls" | "settings">("alerts");
   const { alert: alertState, showAlert } = useAlert();
   const { confirmState, confirmAction, handleConfirm, handleCancel } = useConfirm();
   const { writeOk } = createWriteHelpers(showAlert);
@@ -519,7 +520,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text-main)" }}>بوابة الحاج</div>
-          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>إدارة التنبيهات وإعدادات البوابة التي يراها الحجاج</div>
+          <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>إدارة التنبيهات والاستطلاعات وإعدادات البوابة التي يراها الحجاج</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: "var(--text-muted)", direction: "ltr" }}>{portalUrl}</span>
@@ -529,8 +530,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
 
       {/* التبويبات */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
-        {[{ id: "alerts", label: "التنبيهات" }, { id: "settings", label: "إعدادات البوابة" }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id as typeof tab)}
+        {[{ id: "alerts", label: "التنبيهات" }, { id: "polls", label: "الاستطلاعات" }, { id: "settings", label: "إعدادات البوابة" }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id as typeof tab)} aria-pressed={tab === t.id}
             style={{ border: "none", background: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, padding: "8px 16px 10px", color: tab === t.id ? "var(--primary)" : "var(--text-muted)", borderBottom: tab === t.id ? "2.5px solid var(--primary)" : "2.5px solid transparent" }}>
             {t.label}
           </button>
@@ -644,6 +645,9 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         {shown.map(a => annCard(a))}
         </>}
       </>}
+
+      {/* Phase 3 — الاستطلاعات: تبويبٌ مستقلّ يملك حالَه، فلا يمسّ التنبيهات ولا الإعدادات */}
+      {tab === "polls" && <PollsAdmin />}
 
       {tab === "settings" && (cfgLoading ? (
         <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "18px 2px" }}>جاري تحميل الإعدادات...</div>
