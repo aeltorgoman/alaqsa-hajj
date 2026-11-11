@@ -13,11 +13,22 @@ type Props = {
   pushState: PushState; pushBusy: boolean; pushNote: string; pushDismissed: boolean;
   onPushOn: () => void; onPushOff: () => void; onDismissPush: () => void;
   announcements: Ann[];
+  /* Phase 1 — الحالاتُ والإقرارُ والصفحات. خادمٌ أقدمُ: `withStates = false` فلا شارات ولا إقرار */
+  withStates: boolean;
+  onAck: (a: Ann) => void;
+  hasMore: boolean; moreBusy: boolean; moreError: boolean; onLoadMore: () => void;
 };
+
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+
+/* شارةُ الحالة: «جديد» و«مُحدَّث» وحدهما؛ المقروءُ بلا شارة */
+const STATE_LABEL: Record<string, string> = { new: "جديد", updated: "مُحدَّث" };
 
 export function AlertsTab({
   t, pushState, pushBusy, pushNote, pushDismissed,
   onPushOn, onPushOff, onDismissPush, announcements,
+  withStates, onAck, hasMore, moreBusy, moreError, onLoadMore,
 }: Props) {
   return (
     <>
@@ -101,15 +112,50 @@ export function AlertsTab({
               <div style={{ fontSize: 16, fontWeight: 700, color: BODY, marginTop: 12 }}>لا توجد تنبيهات حالياً</div>
             </div>
           )}
-          {announcements.map(a => (
-            <div key={a.id} style={{ ...cardStyle, borderRight: `5px solid ${a.priority === "عاجل" ? t.brand : a.priority === "مهم" ? t.gold : LINE}`, padding: "15px 17px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>{new Date(a.show_at).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}</span>
-                {a.priority !== "عام" && <span style={{ fontSize: 13, fontFamily: t.fontD, background: a.priority === "عاجل" ? t.brand : t.goldBright, color: a.priority === "عاجل" ? "#fff" : t.brandDeep, padding: "4px 15px", borderRadius: 99, fontWeight: 900 }}>{a.priority}</span>}
+          {announcements.map(a => {
+            const unread = withStates && a.state !== undefined && a.state !== "read";
+            const accent = a.priority === "عاجل" ? t.brand : a.priority === "مهم" ? t.gold : LINE;
+            return (
+              <div key={a.id} id={`ann-${a.id}`}
+                /* فتحُ التنبيه (ضغطُه) إقرارٌ به — وحده، لا القائمةُ كلُّها */
+                onClick={unread ? () => onAck(a) : undefined}
+                style={{ ...cardStyle, borderRight: `5px solid ${accent}`, padding: "15px 17px", cursor: unread ? "pointer" : "default", textAlign: "start",
+                         boxShadow: unread ? `0 0 0 2px ${t.gold}55` : (cardStyle as { boxShadow?: string }).boxShadow }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, color: LABEL, fontWeight: 700 }}>{fmtTime(a.show_at)}</span>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {a.pinned && <span style={{ fontSize: 13, fontFamily: t.fontD, background: `${t.brand}14`, color: t.brand, padding: "4px 12px", borderRadius: 99, fontWeight: 900 }}>مثبّت</span>}
+                    {unread && STATE_LABEL[a.state!] && (
+                      <span style={{ fontSize: 13, fontFamily: t.fontD, background: a.state === "updated" ? t.goldBright : "#C1121F", color: a.state === "updated" ? t.brandDeep : "#fff", padding: "4px 12px", borderRadius: 99, fontWeight: 900 }}>
+                        {STATE_LABEL[a.state!]}
+                      </span>
+                    )}
+                    {a.priority !== "عام" && <span style={{ fontSize: 13, fontFamily: t.fontD, background: a.priority === "عاجل" ? t.brand : t.goldBright, color: a.priority === "عاجل" ? "#fff" : t.brandDeep, padding: "4px 15px", borderRadius: 99, fontWeight: 900 }}>{a.priority}</span>}
+                  </div>
+                </div>
+                {a.title && <div style={{ fontSize: 20, color: INK, fontWeight: 900, marginTop: 10, lineHeight: 1.7, fontFamily: t.fontD }}>{a.title}</div>}
+                {/* النصُّ كاملاً: لا اقتطاعَ ولا طيّ، وأسطرُه كما كُتبت */}
+                <div style={{ fontSize: 18, color: INK, fontWeight: 600, marginTop: a.title ? 6 : 9, lineHeight: 2, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{a.body}</div>
+                {a.edited_at && <div style={{ fontSize: 13, color: LABEL, marginTop: 8, fontWeight: 700 }}>عُدِّل في {fmtTime(a.edited_at)}</div>}
+                {unread && (
+                  <button onClick={(e) => { e.stopPropagation(); onAck(a); }}
+                    style={{ marginTop: 12, background: t.brand, color: "#fff", border: "none", borderRadius: 12, padding: "0 18px", minHeight: 44, fontSize: 15, fontWeight: 900, fontFamily: t.fontD, cursor: "pointer" }}>
+                    تمّت القراءة
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 19, color: INK, fontWeight: 700, marginTop: 9, lineHeight: 2 }}>{a.body}</div>
+            );
+          })}
+
+          {(hasMore || moreError) && (
+            <div style={{ textAlign: "center", margin: "6px 0 14px" }}>
+              {moreError && <div style={{ fontSize: 14, color: "#C1121F", fontWeight: 700, marginBottom: 8 }}>تعذّر تحميل المزيد، حاول مرة أخرى.</div>}
+              <button onClick={onLoadMore} disabled={moreBusy}
+                style={{ background: "#fff", color: t.brand, border: `2px solid ${t.brand}`, borderRadius: 14, padding: "0 26px", minHeight: 48, fontSize: 16, fontWeight: 900, fontFamily: t.fontD, cursor: moreBusy ? "default" : "pointer", opacity: moreBusy ? 0.6 : 1 }}>
+                {moreBusy ? "جارٍ التحميل..." : "عرض المزيد"}
+              </button>
             </div>
-          ))}
+          )}
     </>
   );
 }

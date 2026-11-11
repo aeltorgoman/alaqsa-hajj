@@ -5,7 +5,7 @@ import {
 } from "../utils";
 import { portalSupabase } from "../portalSupabase";
 import {
-  getPushState, enablePush, disablePush, markNotificationRead,
+  getPushState, enablePush, disablePush,
   registerServiceWorker, resubscribeIfNeeded,
   logoutDevice, finishPendingLogout, claimDevicePushAfterLogin, retryPendingClaim,
   type PushState,
@@ -14,7 +14,7 @@ import { normalizeCompanyAssetUrl, normalizeCompanyColor } from "../company/safe
 import { effectivePortalSettings, photoVisibleFor } from "../company/portalSettings";
 import { PORTAL_LOGIN_MESSAGES, normalizeDoc, isValidDoc, isValidDob } from "./portal/portal.login";
 import { setupPortalManifest } from "../utils/portalManifest";
-import type { PortalData, PortalAccommodation } from "./portal/portal.types";
+import type { PortalData, PortalAccommodation, Ann, AnnPage } from "./portal/portal.types";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
 import { getSeasonArafa, civilDate } from "./portal/portal.dates";
 import { readSession, clearPortalLocalState } from "./portal/portal.session";
@@ -85,6 +85,18 @@ function PilgrimPortal() {
   const [ackedUrgent, setAckedUrgent] = useState<number[]>(() => {
     try { return JSON.parse(localStorage.getItem("portal_acked_urgent") || "[]"); } catch { return []; }
   });
+  /* Phase 1 — صفحاتٌ تالية، وإقراراتٌ محلّيّة متفائلة (معرّف ← نسخة)، وتنبيهٌ فُتح من الإشعار */
+  const [moreAnns, setMoreAnns] = useState<Ann[]>([]);
+  const [moreHas, setMoreHas] = useState<boolean | null>(null);
+  const [moreBusy, setMoreBusy] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const [localRead, setLocalRead] = useState<Record<number, number>>({});
+  const [openAnnId, setOpenAnnId] = useState<number | null>(() => {
+    const v = Number(new URLSearchParams(window.location.search).get("a"));
+    return Number.isSafeInteger(v) && v > 0 ? v : null;
+  });
+  /* أيُّ تنبيهٍ فُتح من إشعاره عولج (فلا يُقرّ مرّتين عند تحديث القائمة) */
+  const handledOpenAnn = useRef<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [pushState, setPushState] = useState<PushState>("unsupported");
   const [pushBusy, setPushBusy] = useState(false);
@@ -199,6 +211,9 @@ function PilgrimPortal() {
     const onOpenAlerts = (e: MessageEvent) => {
       if (e.data?.type !== "OPEN_ALERTS") return;
       navigate("alerts");
+      /* الإشعارُ لتنبيهٍ بعينه: فتحُه إقرارٌ به وحده (يُقرّ بعد الجلب أدناه) */
+      const id = Number(e.data?.id);
+      if (Number.isSafeInteger(id) && id > 0) { handledOpenAnn.current = null; setOpenAnnId(id); }
       /* بلا جلسةٍ تعود فوراً — والدخولُ يجلب الملفّ بنفسه */
       void refreshPortal();
     };
@@ -244,12 +259,39 @@ function PilgrimPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!data]);
 
-  /* ─── تسجيل قراءة التنبيهات عند فتح تبويبها ─── */
-  useEffect(() => {
-    if (tab !== "alerts" || !data?.announcements?.length) return;
-    data.announcements.forEach(a => markNotificationRead(a.id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, data?.announcements?.length]);
+  /* ─── Phase 1 — الإقرارُ لكلّ تنبيهٍ وحده ───
+     فتحُ التبويب لا يُقرئ شيئاً. ضغطُ التنبيه أو «تمّت القراءة» أو «فهمت» في بانر العاجل،
+     أو فتحُه من إشعاره — يُقرّ به وحده، بنسخته التي رآها. متفائلٌ محلّيّاً، ويُعاد إن رُفض. */
+  const acknowledge = useCallback(async (a: Ann) => {
+    const token = readSession();
+    if (!token || a.state === undefined) return;
+    const rev = a.revision ?? 1;
+    if ((localRead[a.id] ?? 0) >= rev || a.state === "read") return;
+    setLocalRead(m => ({ ...m, [a.id]: rev }));
+    const ok = await portalSupabase.rpc("acknowledge_pilgrim_announcement",
+      { p_token: token, p_announcement_id: a.id, p_revision: rev })
+      .then(({ data: res, error }) => !error && res !== null, () => false);
+    if (!ok) setLocalRead(m => { const n = { ...m }; delete n[a.id]; return n; });
+  }, [localRead]);
+
+  /* «عرض المزيد»: الصفحةُ التالية من الخادم، بالجمهور والحالات نفسها */
+  const loadMoreAnns = useCallback(async () => {
+    const token = readSession();
+    if (!token || !data) return;
+    setMoreBusy(true); setMoreError(false);
+    try {
+      const offset = data.announcements.length + moreAnns.length;
+      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_announcements", { p_token: token, p_offset: offset });
+      const page = res as unknown as AnnPage | null;
+      if (error || !page) { setMoreError(true); return; }
+      setMoreAnns(prev => {
+        const seen = new Set([...data.announcements, ...prev].map(x => x.id));
+        return [...prev, ...page.items.filter(x => !seen.has(x.id))];
+      });
+      setMoreHas(page.has_more);
+    } catch { setMoreError(true); }
+    finally { setMoreBusy(false); }
+  }, [data, moreAnns.length]);
 
   async function turnPushOn() {
     setPushBusy(true);
@@ -398,8 +440,42 @@ function PilgrimPortal() {
      ينتهي تنبيه، فيصير الفرقُ سالباً أو يبتلع جديداً. فصارت على
      **أكبر مُعرَّفٍ رآه الحاجّ**: المعرّفاتُ تتزايد ولا تُعاد، فما
      جاوز آخرَ ما رُئي جديدٌ يقيناً — وكلّه من بيانات الواجهة. */
-  const unread = (data?.announcements || []).filter(a => a.id > seenAlerts).length;
-  const urgentUnacked = (data?.announcements || []).filter(a => a.priority === "عاجل" && !ackedUrgent.includes(a.id));
+  /* Phase 1 — خادمٌ يرسل `announcements_meta` يحمل الحالات؛ وإلا فالسلوكُ القديم (أكبرُ معرّفٍ رُئي) */
+  const annMeta = data?.announcements_meta ?? null;
+  const withStates = !!annMeta;
+  const allAnns: Ann[] = useMemo(() => {
+    const first = data?.announcements || [];
+    const ids = new Set(first.map(a => a.id));
+    return [...first, ...moreAnns.filter(a => !ids.has(a.id))].map(a =>
+      a.state && a.state !== "read" && (localRead[a.id] ?? 0) >= (a.revision ?? 1) ? { ...a, state: "read" as const } : a);
+  }, [data?.announcements, moreAnns, localRead]);
+  const unread = withStates
+    ? Math.max(0, annMeta!.unread - (data?.announcements || []).concat(moreAnns)
+        .filter(a => a.state && a.state !== "read" && (localRead[a.id] ?? 0) >= (a.revision ?? 1)).length)
+    : (data?.announcements || []).filter(a => a.id > seenAlerts).length;
+  const hasMoreAnns = withStates && (moreHas ?? annMeta!.has_more);
+  const urgentUnacked = allAnns.filter(a => a.priority === "عاجل" && !ackedUrgent.includes(a.id)
+    && (!withStates || a.state !== "read"));
+
+  /* تنبيهٌ فُتح من إشعاره (`?a=<id>` عند الفتح البارد، أو رسالةُ العامل): يُعرض ويُقرّ به وحده.
+     والمعرّفُ يُمحى من العنوان فلا يُقرّ ثانيةً عند التحديث. */
+  useEffect(() => {
+    if (openAnnId === null || !data || handledOpenAnn.current === openAnnId) return;
+    handledOpenAnn.current = openAnnId;
+    const a = allAnns.find(x => x.id === openAnnId);
+    if (new URLSearchParams(window.location.search).has("a")) {
+      const u = new URL(window.location.href); u.searchParams.delete("a");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    }
+    if (!a) return;
+    /* استجابةٌ لحدثٍ خارجيّ (ضغطُ الإشعار): تُؤجَّل إلى الإطار التالي */
+    const raf = requestAnimationFrame(() => {
+      if (tab !== "alerts") navigate("alerts");
+      void acknowledge(a);
+      requestAnimationFrame(() => document.getElementById(`ann-${a.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [openAnnId, data, allAnns, acknowledge, navigate, tab]);
 
   /* ═══ اسمُ الفندق — لا تُكرَّر كلمةُ «فندق» ═══
      المخزَّن يكتبه الموظّف كاملاً في الغالب («فندق دار الإيمان»)،
@@ -503,6 +579,7 @@ function PilgrimPortal() {
     localStorage.removeItem("portal_push_dismissed");
     setPushDismissed(false); setPushState("available");
     setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
+    setMoreAnns([]); setMoreHas(null); setLocalRead({}); setOpenAnnId(null);
     setSession(null); setDocView(null);
     /* والعنوانُ إلى الجذر بلا إدخالٍ في التاريخ — كي لا يعيد زرُّ
        الرجوع شاشةَ من خرج */
@@ -513,6 +590,8 @@ function PilgrimPortal() {
     const next = [...ackedUrgent, id];
     setAckedUrgent(next);
     localStorage.setItem("portal_acked_urgent", JSON.stringify(next));
+    const a = allAnns.find(x => x.id === id);
+    if (a) void acknowledge(a);
   }
 
   /* ═══ التركيب ═══ */
@@ -624,7 +703,9 @@ function PilgrimPortal() {
             t={t}
             pushState={pushState} pushBusy={pushBusy} pushNote={pushNote} pushDismissed={pushDismissed}
             onPushOn={turnPushOn} onPushOff={turnPushOff} onDismissPush={dismissPush}
-            announcements={data.announcements}
+            announcements={allAnns}
+            withStates={withStates} onAck={(a) => void acknowledge(a)}
+            hasMore={hasMoreAnns} moreBusy={moreBusy} moreError={moreError} onLoadMore={() => void loadMoreAnns()}
           />
         )}
       </div>

@@ -9,6 +9,9 @@ import { useSeason } from "../season/useSeason";
 import { companyService } from "../company/companyService";
 import { isSaved, saveErrorText } from "../company/saveResult";
 import { effectivePortalSettings, type PhotoVisibility, type PortalFlagKey, type PortalSettings } from "../company/portalSettings";
+import { AudiencePicker } from "./announcements/AudiencePicker";
+import { cleanAudience, audienceIsEmpty, describeAudience, type Audience } from "./announcements/audience";
+import { AnnouncementEditModal } from "./announcements/AnnouncementEditModal";
 
 /* ═══════════════════════════════════════════════════════════════
    صفحة "بوابة الحاج" الإدارية
@@ -16,15 +19,18 @@ import { effectivePortalSettings, type PhotoVisibility, type PortalFlagKey, type
    التبويب الثاني: إعدادات البوابة (إداري الحملة + مفاتيح التشغيل)
    ═══════════════════════════════════════════════════════════════ */
 
-type Announcement = { id: number; title: string | null; body: string; priority: string; show_at: string; expires_at: string | null; created_by: string | null; created_at: string; target_type?: string | null; target_ids?: number[] | null; push_sent_at?: string | null };
+type Announcement = {
+  id: number; title: string | null; body: string; priority: string; show_at: string; expires_at: string | null;
+  created_by: string | null; created_at: string; target_type?: string | null; target_ids?: number[] | null; push_sent_at?: string | null;
+  /* Phase 1 */
+  pinned_at?: string | null; content_revision?: number; content_updated_at?: string | null;
+  audience?: Audience | null; audience_frozen_at?: string | null;
+};
 
-type Target = { id: number; name: string };
-
-const TARGET_KINDS = [
-  { key: "all", label: "جميع الحجاج" },
-  { key: "bus", label: "حسب الباص" },
-  { key: "camp_mina", label: "مخيم منى" },
-  { key: "camp_arafa", label: "مخيم عرفة" },
+/* Phase 1 — مرشّحات القائمة. «ساري» = لم ينتهِ: الظاهرُ الآن والمجدوَلُ معاً، كلٌّ بشارته */
+type ListFilter = "all" | "active" | "expired";
+const FILTERS: { key: ListFilter; label: string }[] = [
+  { key: "all", label: "الكل" }, { key: "active", label: "ساري" }, { key: "expired", label: "منتهي" },
 ];
 
 const PRIORITIES = [
@@ -61,11 +67,13 @@ function PortalPage({ currentUser }: { currentUser: User }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [priority, setPriority] = useState("عام");
-  const [targetKind, setTargetKind] = useState("all");
-  const [targetIds, setTargetIds] = useState<number[]>([]);
-  const [buses, setBuses] = useState<Target[]>([]);
-  const [minaCamps, setMinaCamps] = useState<Target[]>([]);
-  const [arafaCamps, setArafaCamps] = useState<Target[]>([]);
+  /* Phase 1 — جمهورٌ مركّب (اتّحادُ الفئات، بلا تكرار)، يُجمَّد عند النشر في القاعدة */
+  const [audience, setAudience] = useState<Audience>({ all: true });
+  const [audienceNames, setAudienceNames] = useState<Record<string, Record<number, string>>>({});
+  const [filter, setFilter] = useState<ListFilter>("active");
+  const [editing, setEditing] = useState<Announcement | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [audienceIds, setAudienceIds] = useState<number[]>([]);
   const [enabledIds, setEnabledIds] = useState<Set<number>>(new Set());
   const [audienceError, setAudienceError] = useState(false);
@@ -131,30 +139,10 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     return () => { clearTimeout(t0); clearInterval(t); };
   }, [load]);
 
-  /* ─── قوائم الاستهداف ─── */
-  /* ⚠️ استثناء معماريّ مقصود: هذا الموضع يقرأ activeSeason لا
-     viewedSeason — وهو المكان الوحيد في التطبيق الذي يفعل ذلك.
-     لا تُصحّحه إلى viewedSeason.
-
-     السبب أن هذا التبويب أداة تشغيل لبوابة الحاج لا شاشة أرشيف،
-     و§٦ من #42 يقرّر أن البوابة تخدم الموسم النشط وحده. ودالة
-     announcement_audience في القاعدة تفلتر بالموسم النشط بالفعل،
-     فاستهداف باص من موسم مقفل كان سيُنتج جمهوراً فارغاً دائماً —
-     واجهة تعد بإرسال لا يقع. */
-  useEffect(() => {
-    (async () => {
-      const [{ data: bs }, { data: cs }] = await Promise.all([
-        supabase.from("buses").select("id,name").eq("season_id", activeSeason.id).order("id"),
-        supabase.from("camps").select("id,name,page_type").eq("season_id", activeSeason.id).order("id"),
-      ]);
-      if (bs) setBuses(bs as Target[]);
-      if (cs) {
-        const all = cs as { id: number; name: string; page_type: string | null }[];
-        setMinaCamps(all.filter(c => c.page_type === "منى").map(c => ({ id: c.id, name: c.name })));
-        setArafaCamps(all.filter(c => c.page_type === "عرفة").map(c => ({ id: c.id, name: c.name })));
-      }
-    })();
-  }, [activeSeason.id]);
+  /* ─── قوائم الاستهداف ───
+     ⚠️ استثناء معماريّ مقصود: الموسمُ النشط لا المعروض (activeSeason لا viewedSeason).
+     هذا التبويب أداة تشغيل لبوابة الحاج، و§٦ من #42 يقرّر أن البوابة تخدم الموسم
+     النشط وحده؛ والقاعدةُ ترفض جمهوراً يشير إلى غير موسم التنبيه. القوائمُ في AudiencePicker. */
 
   /* ─── المفعّلون للإشعارات ───
      لا تعتمد على الاستهداف إطلاقاً، فتُجلب مرة واحدة بدل استعلام
@@ -171,42 +159,32 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     return () => { cancelled = true; };
   }, []);
 
-  /* ─── جمهور التنبيه حسب الاستهداف ───
-     علامة الإلغاء تمنع استجابة قديمة من دهس أحدث منها عند تبديل
-     الاستهداف بسرعة — والعدد المعروض هو ما يبني عليه المستخدم قرار
-     الإرسال. */
+  /* ─── جمهور التنبيه: معاينةٌ من القاعدة بالقاعدة نفسها التي يُجمَّد بها ───
+     علامة الإلغاء تمنع استجابة قديمة من دهس أحدث منها عند تبديل الفئات بسرعة. */
+  const audienceKey = JSON.stringify(cleanAudience(audience));
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.rpc("announcement_audience", {
-        p_target_type: targetKind,
-        p_target_ids: targetIds,
-      });
+      const a = JSON.parse(audienceKey) as Audience;
+      if (audienceIsEmpty(a)) { setAudienceIds([]); setAudienceError(false); return; }
+      const { data, error } = await supabase.rpc("announcement_audience_preview", { p_audience: a });
       if (cancelled) return;
       if (error) { console.error("تعذر حساب عدد المستهدفين", error); setAudienceIds([]); setAudienceError(true); return; }
       setAudienceIds((data || []).map(r => r.passenger_id));
       setAudienceError(false);
     })();
     return () => { cancelled = true; };
-  }, [targetKind, targetIds]);
+  }, [audienceKey]);
 
   /* العددان مشتقّان من مصدر واحد، فلا يتفارقان ولا يحتاج أحدهما
      إعادة جلب الآخر */
   const audienceCount = audienceIds.length;
   const enabledCount = audienceIds.filter(id => enabledIds.has(id)).length;
 
-  const targetOptions = targetKind === "bus" ? buses
-    : targetKind === "camp_mina" ? minaCamps
-    : targetKind === "camp_arafa" ? arafaCamps
-    : [];
-
-  function toggleTarget(id: number) {
-    setTargetIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
 
   async function send() {
     if (!body.trim()) { showAlert("warning", "يرجى كتابة نص التنبيه."); return; }
-    if (targetKind !== "all" && targetIds.length === 0) { showAlert("warning", "يرجى اختيار جهة واحدة على الأقل، أو تحديد جميع الحجاج."); return; }
+    if (audienceIsEmpty(cleanAudience(audience))) { showAlert("warning", "يرجى اختيار جمهور التنبيه: جميع الحجاج أو فئة واحدة على الأقل."); return; }
     const show = when === "now" ? new Date() : new Date(showAt);
     /* L3 — موعدٌ مجدوَلٌ ممسوحٌ أو فاسد لا يُرسَل، ولا يتحوّل نشراً فوريّاً من
        تلقاء نفسه: `new Date("")` تاريخٌ غير صالح، و`toISOString` عليه ترمي بعد
@@ -241,8 +219,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         ...(when === "now" ? {} : { show_at: show.toISOString() }),
         expires_at: expires ? expires.toISOString() : null,
         created_by: currentUser.name,
-        target_type: targetKind,
-        target_ids: targetKind === "all" ? [] : targetIds,
+        /* Phase 1 — الجمهورُ المركّب؛ والقاعدةُ تضع target_type = 'audience' وتجمّده عند النشر */
+        audience: cleanAudience(audience),
       }).select("id").single();
       if (error || !created) {
         setSending(false);
@@ -256,7 +234,7 @@ function PortalPage({ currentUser }: { currentUser: User }) {
       setSending(false);
       showAlert("success", (when === "now" ? "تم إرسال التنبيه." : "تمت جدولة التنبيه بنجاح.") + pushNote);
       setTitle(""); setBody(""); setPriority("عام"); setWhen("now"); setDuration("24h");
-      setTargetKind("all"); setTargetIds([]);
+      setAudience({ all: true });
       load();
     } catch (e) {
       console.error("تعذر إرسال التنبيه", e);
@@ -325,16 +303,70 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     load();
   }
 
+  /* Phase 1 — حذفٌ نهائيّ بتأكيدٍ واحد: يُحذف التنبيه وسجلُّ تسليمه وجمهورُه وإقراراتُه،
+     ويبقى أثرُ الحذف (من ومتى) في سجلّ التدقيق بلا المحتوى. الإشعارُ الذي وصل الأجهزةَ لا يُسترجع. */
   async function removeItem(a: Announcement) {
-    const ok = await confirmAction("سيتم حذف التنبيه نهائياً. هل أنت متأكد؟", { title: "حذف التنبيه", confirmLabel: "حذف" });
+    const ok = await confirmAction(
+      "سيُحذف التنبيه نهائياً من البوابة ومن سجلات الإدارة، ومعه سجل وصوله وقراءته. الإشعار الذي وصل إلى أجهزة الحجاج سابقاً لا يُسترجع. هل أنت متأكد؟",
+      { title: "حذف التنبيه نهائياً", confirmLabel: "حذف نهائي", danger: true });
     if (!ok) return;
-    if (!await writeOk(supabase.from("announcements").delete().eq("id", a.id), "تعذر حذف التنبيه")) return;
-    load();
+    setBusyId(a.id);
+    try {
+      const { data, error } = await supabase.rpc("delete_announcement", { p_id: a.id });
+      if (error) { console.error("تعذر حذف التنبيه", error); showAlert("error", "تعذر حذف التنبيه، يرجى المحاولة مرة أخرى."); return; }
+      showAlert(data ? "success" : "warning", data ? "تم حذف التنبيه نهائياً." : "التنبيه غير موجود — ربما حُذف من قبل.");
+    } finally { setBusyId(null); load(); }
   }
 
-  const live = items.filter(a => new Date(a.show_at).getTime() <= nowMs && (!a.expires_at || new Date(a.expires_at).getTime() > nowMs));
-  const scheduled = items.filter(a => new Date(a.show_at).getTime() > nowMs);
-  const ended = items.filter(a => a.expires_at && new Date(a.expires_at).getTime() <= nowMs);
+  /* التثبيت: يظهر أولاً في البوابة. لا يغيّر المحتوى ولا يُرسل إشعاراً. */
+  async function togglePin(a: Announcement) {
+    setBusyId(a.id);
+    try {
+      if (!await writeOk(supabase.from("announcements").update({ pinned_at: a.pinned_at ? null : new Date().toISOString() }).eq("id", a.id),
+        a.pinned_at ? "تعذر إلغاء التثبيت" : "تعذر تثبيت التنبيه")) return;
+    } finally { setBusyId(null); load(); }
+  }
+
+  /* التعديل: نداءٌ واحد. تغيّرُ العنوان/النصّ لتنبيهٍ منشورٍ سارٍ يُعيد الدفع إلى جمهوره المجمَّد
+     (push = requested): يُطلب الإرسالُ فوراً ويُعرض حالُه، والمُجدوِلُ يستكمله إن تعذّر. فشلُ
+     الإرسال لا يُلغي التعديل المحفوظ. */
+  async function saveEdit(v: { title: string | null; body: string; priority: string; expires_at: string | null }) {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const { data, error } = await supabase.rpc("update_announcement", {
+        p_id: editing.id, p_title: v.title, p_body: v.body, p_priority: v.priority, p_expires_at: v.expires_at,
+      });
+      if (error || !data) {
+        console.error("تعذر حفظ التعديل", error);
+        showAlert("error", error?.code === "22023" ? (error.message || "قيمة غير صالحة.") : "تعذر حفظ التعديل، يرجى المحاولة مرة أخرى.");
+        return;
+      }
+      const r = data as { push: string; content_changed: boolean };
+      setEditing(null);
+      if (r.push === "requested") {
+        const { note, done } = await pushToDevices(editing.id);
+        showAlert(done ? "success" : "warning", "تم حفظ التعديل، وأُرسل إشعارٌ بالمحتوى الجديد إلى جمهور التنبيه." + note);
+      } else if (r.push === "scheduled") {
+        showAlert("success", "تم حفظ التعديل. التنبيه مجدول وسيُرسل بالمحتوى الجديد عند موعده.");
+      } else if (r.push === "expired") {
+        showAlert("success", "تم حفظ التعديل. التنبيه منتهٍ فلا يُرسل إشعار.");
+      } else {
+        showAlert("success", "تم حفظ التعديل دون إرسال إشعار جديد (لم يتغيّر العنوان ولا النص).");
+      }
+    } finally { setSavingEdit(false); load(); }
+  }
+
+  /* Phase 1 — حالُ كلّ تنبيه من وقته، والمرشّح يختار منها. المثبَّتُ أولاً كما في البوابة. */
+  const kindOf = (a: Announcement): "live" | "scheduled" | "ended" =>
+    a.expires_at && new Date(a.expires_at).getTime() <= nowMs ? "ended"
+      : new Date(a.show_at).getTime() > nowMs ? "scheduled" : "live";
+  const counts = { all: items.length, active: items.filter(a => kindOf(a) !== "ended").length, expired: items.filter(a => kindOf(a) === "ended").length };
+  const shown = items
+    .filter(a => filter === "all" || (filter === "expired" ? kindOf(a) === "ended" : kindOf(a) !== "ended"))
+    .sort((x, y) => (y.pinned_at ? 1 : 0) - (x.pinned_at ? 1 : 0)
+      || (x.pinned_at && y.pinned_at ? new Date(y.pinned_at).getTime() - new Date(x.pinned_at).getTime() : 0)
+      || new Date(y.show_at).getTime() - new Date(x.show_at).getTime());
 
   /* ─── الإعدادات ─── */
   const [cfgId, setCfgId] = useState<number | null>(null);
@@ -417,45 +449,64 @@ function PortalPage({ currentUser }: { currentUser: User }) {
     { key: "none", label: "إخفاء الكل" },
   ];
 
-  const annCard = (a: Announcement, kind: "live" | "scheduled" | "ended") => {
+  const fmt = (iso: string) => new Date(iso).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+  const KIND_BADGE = {
+    live: { l: "ظاهر الآن", bg: "var(--success-bg)", fg: "var(--success)" },
+    scheduled: { l: "مجدول", bg: "var(--warning-bg)", fg: "var(--warning)" },
+    ended: { l: "منتهي", bg: "var(--bg-hover)", fg: "var(--text-muted)" },
+  } as const;
+  const badge = (l: string, bg: string, fg: string) => (
+    <span style={{ fontSize: 9.5, background: bg, color: fg, padding: "2px 9px", borderRadius: 99, fontWeight: 800 }}>{l}</span>
+  );
+  const smallBtn = { ...btnS(), fontSize: 11, padding: "5px 12px" };
+
+  const annCard = (a: Announcement) => {
+    const kind = kindOf(a);
     const pr = PRIORITIES.find(p => p.key === a.priority) || PRIORITIES[2];
+    const kb = KIND_BADGE[kind];
+    const busy = busyId === a.id || resuming === a.id;
     return (
-      <div key={a.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRight: `3px solid ${kind === "ended" ? "var(--border)" : pr.color}`, borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 9, opacity: kind === "ended" ? 0.55 : 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div key={a.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRight: `3px solid ${kind === "ended" ? "var(--border)" : pr.color}`, borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 9, opacity: kind === "ended" ? 0.7 : 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 9.5, background: pr.color, color: pr.txt, padding: "2px 10px", borderRadius: 99, fontWeight: 800 }}>{a.priority}</span>
+          {badge(kb.l, kb.bg, kb.fg)}
+          {a.pinned_at && badge("📌 مثبّت", "var(--bg-hover)", "var(--primary)")}
+          {(a.content_revision ?? 1) > 1 && badge(`عُدِّل${a.content_updated_at ? " " + fmt(a.content_updated_at) : ""}`, "var(--info-bg)", "var(--info)")}
           <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
-            {kind === "scheduled" ? "سيظهر: " : "ظهر: "}{new Date(a.show_at).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}
-            {a.expires_at ? ` — ينتهي: ${new Date(a.expires_at).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })}` : " — بدون انتهاء"}
+            {kind === "scheduled" ? "سيظهر: " : "ظهر: "}{fmt(a.show_at)}
+            {a.expires_at ? ` — ${kind === "ended" ? "انتهى" : "ينتهي"}: ${fmt(a.expires_at)}` : " — بدون انتهاء"}
           </span>
           {a.created_by && <span style={{ fontSize: 10, color: "var(--text-muted)", marginInlineStart: "auto" }}>{a.created_by}</span>}
         </div>
-        {a.title && <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 800, marginTop: 7 }}>{a.title}</div>}
-        <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600, marginTop: a.title ? 3 : 7, lineHeight: 1.9 }}>{a.body}</div>
-        <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
-          {kind !== "ended" && kind === "live" && <button onClick={() => endNow(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>إنهاء الآن</button>}
-          {kind !== "ended" && <button onClick={() => removeItem(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px", color: "var(--primary)" }}>حذف</button>}
+        {a.title && <div style={{ fontSize: 13.5, color: "var(--text-main)", fontWeight: 800, marginTop: 7 }}>{a.title}</div>}
+        <div style={{ fontSize: 13, color: "var(--text-main)", fontWeight: 600, marginTop: a.title ? 3 : 7, lineHeight: 1.9, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{a.body}</div>
+        <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 6 }}>
+          الجمهور: {describeAudience(a.audience ?? null, { type: a.target_type, ids: a.target_ids }, audienceNames)}
+          {a.audience_frozen_at && " · مُجمَّد عند النشر"}
+        </div>
+        <div style={{ display: "flex", gap: 7, marginTop: 9, flexWrap: "wrap" }}>
+          <button disabled={busy} onClick={() => setEditing(a)} style={smallBtn}>تعديل</button>
+          {kind !== "ended" && <button disabled={busy} onClick={() => togglePin(a)} style={smallBtn}>{a.pinned_at ? "إلغاء التثبيت" : "تثبيت"}</button>}
+          {kind === "live" && <button disabled={busy} onClick={() => endNow(a)} style={smallBtn}>إنهاء الآن</button>}
+          <button disabled={busy} onClick={() => removeItem(a)} style={{ ...smallBtn, color: "var(--danger)" }}>حذف نهائي</button>
           {kind === "live" && !a.push_sent_at && unsentPush.has(a.id) && !pendingPush.has(a.id) && (manualSendable(a)
-            ? <button disabled={resuming !== null} onClick={() => sendUnsent(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>{resuming === a.id ? "جارٍ الإرسال…" : "إرسال إلى الأجهزة"}</button>
+            ? <button disabled={resuming !== null} onClick={() => sendUnsent(a)} style={smallBtn}>{resuming === a.id ? "جارٍ الإرسال…" : "إرسال إلى الأجهزة"}</button>
             : <span style={{ fontSize: 10.5, color: "var(--text-muted)", alignSelf: "center" }}>لم يُرسَل إلى الأجهزة — يُرسَل يدوياً التنبيهُ ذو العنوان وحده</span>)}
-          {kind === "live" && pendingPush.has(a.id) && <button disabled={resuming !== null} onClick={() => resumePush(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>{resuming === a.id ? "جارٍ الاستكمال…" : "استكمال الإرسال"}</button>}
-          {(a.push_sent_at || pendingPush.has(a.id)) && <button onClick={() => setReportFor(a)} style={{ ...btnS(), fontSize: 11, padding: "5px 14px" }}>تقرير الوصول</button>}
+          {kind === "live" && pendingPush.has(a.id) && <button disabled={resuming !== null} onClick={() => resumePush(a)} style={smallBtn}>{resuming === a.id ? "جارٍ الاستكمال…" : "استكمال الإرسال"}</button>}
+          {(a.push_sent_at || pendingPush.has(a.id)) && <button onClick={() => setReportFor(a)} style={smallBtn}>تقرير الوصول</button>}
         </div>
       </div>
     );
   };
 
-  const secTitle = (t: string, count: number, dot?: string) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "18px 2px 10px" }}>
-      {dot && <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot }} />}
-      <span style={{ fontSize: 12.5, fontWeight: 800, color: "var(--text-main)" }}>{t}</span>
-      <span style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 700 }}>({count})</span>
-    </div>
-  );
 
   return (
     <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+      {editing && (
+        <AnnouncementEditModal ann={editing} saving={savingEdit} onCancel={() => setEditing(null)} onSave={saveEdit} />
+      )}
       {reportFor && (
         <DeliveryReportModal
           announcementId={reportFor.id}
@@ -491,28 +542,8 @@ function PortalPage({ currentUser }: { currentUser: User }) {
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, marginBottom: 8 }}>
           {/* الاستهداف */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>المستهدفون</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {TARGET_KINDS.map(k => (
-                <button key={k.key} onClick={() => { setTargetKind(k.key); setTargetIds([]); }}
-                  style={{ border: targetKind === k.key ? "2px solid var(--primary)" : "1px solid var(--border)", background: targetKind === k.key ? "var(--primary)" : "var(--bg-card)", color: targetKind === k.key ? "var(--text-inverse)" : "var(--text-main)", borderRadius: 99, fontSize: 11.5, fontWeight: 800, padding: "5px 15px", cursor: "pointer", fontFamily: "inherit" }}>
-                  {k.label}
-                </button>
-              ))}
-            </div>
-            {targetOptions.length > 0 && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 }}>
-                {targetOptions.map(o => {
-                  const on = targetIds.includes(o.id);
-                  return (
-                    <button key={o.id} onClick={() => toggleTarget(o.id)}
-                      style={{ border: on ? "1.5px solid var(--primary)" : "1px solid var(--border)", background: on ? "var(--bg-hover)" : "var(--bg-card)", color: on ? "var(--primary)" : "var(--text-muted)", borderRadius: "var(--radius-md)", fontSize: 11.5, fontWeight: on ? 800 : 600, padding: "5px 13px", cursor: "pointer", fontFamily: "inherit" }}>
-                      {on ? "✓ " : ""}{o.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 6 }}>المستهدفون — يمكن الجمع بين أكثر من فئة، ويصل التنبيه مرة واحدة لكل حاج</div>
+            <AudiencePicker seasonId={activeSeason.id} value={audience} onChange={setAudience} onNames={setAudienceNames} />
             {/* عند فشل حساب الجمهور لا يُعرض رقم إطلاقاً — «0» قد تكون نتيجة
                 صحيحة، فعرضها هنا يوهم بأن الحساب تمّ. السطر يختفي من نفسه
                 عند أول نجاح لاحق، بلا نافذة منبثقة ولا تكرار مع كل نقرة. */}
@@ -598,18 +629,19 @@ function PortalPage({ currentUser }: { currentUser: User }) {
             تعذر تحديث القائمة — المعروض أدناه آخر بيانات وصلت
           </div>
         )}
-        {secTitle("ظاهر الآن للحجاج", live.length, "var(--primary)")}
-        {live.length === 0 && <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "4px 2px" }}>لا توجد تنبيهات ظاهرة حالياً.</div>}
-        {live.map(a => annCard(a, "live"))}
-
-        {secTitle("مجدول", scheduled.length, "var(--accent)")}
-        {scheduled.length === 0 && <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "4px 2px" }}>لا توجد تنبيهات مجدولة.</div>}
-        {scheduled.map(a => annCard(a, "scheduled"))}
-
-        {ended.length > 0 && <>
-          {secTitle("منتهي", ended.length)}
-          {ended.slice(0, 10).map(a => annCard(a, "ended"))}
-        </>}
+        {/* Phase 1 — المرشّحات: الكل · ساري (الظاهرُ والمجدوَل، كلٌّ بشارته) · منتهي */}
+        <div style={{ display: "flex", gap: 6, margin: "16px 2px 10px", flexWrap: "wrap" }}>
+          {FILTERS.map(f => (
+            <button key={f.key} onClick={() => setFilter(f.key)}
+              style={{ border: filter === f.key ? "2px solid var(--primary)" : "1px solid var(--border)", background: filter === f.key ? "var(--primary)" : "var(--bg-card)", color: filter === f.key ? "var(--text-inverse)" : "var(--text-main)", borderRadius: 99, fontSize: 11.5, fontWeight: 800, padding: "5px 15px", cursor: "pointer", fontFamily: "inherit" }}>
+              {f.label} ({counts[f.key]})
+            </button>
+          ))}
+        </div>
+        {shown.length === 0 && <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "4px 2px" }}>
+          {filter === "expired" ? "لا توجد تنبيهات منتهية." : filter === "active" ? "لا توجد تنبيهات سارية (ظاهرة أو مجدولة)." : "لا توجد تنبيهات."}
+        </div>}
+        {shown.map(a => annCard(a))}
         </>}
       </>}
 
