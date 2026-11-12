@@ -6,7 +6,9 @@ import { Icon, ICONS } from "./PortalIcons";
 import { INK, BODY, LABEL, MUTED, LINE, type PortalTheme } from "./portal.theme";
 import { cardStyle } from "./portal.styles";
 import type { PushState } from "../../utils/pushClient";
-import type { Ann } from "./portal.types";
+import type { Ann, PortalPoll } from "./portal.types";
+import { PollsSection } from "./PollsSection";
+import type { PollOutcome } from "./portal.polls";
 
 type Props = {
   t: PortalTheme;
@@ -17,6 +19,9 @@ type Props = {
   withStates: boolean;
   onAck: (a: Ann) => void;
   hasMore: boolean; moreBusy: boolean; moreError: boolean; onLoadMore: () => void;
+  /* Phase 3 — الاستطلاعاتُ داخل هذا التبويب (لا تبويبَ رابع). خادمٌ بلا Phase 2: قائمةٌ فارغة فلا يظهر شيء */
+  polls: PortalPoll[]; pollsPending: number;
+  onPollSubmit: (p: PortalPoll, optionIds: number[]) => Promise<PollOutcome>;
 };
 
 const fmtTime = (iso: string) =>
@@ -29,6 +34,7 @@ export function AlertsTab({
   t, pushState, pushBusy, pushNote, pushDismissed,
   onPushOn, onPushOff, onDismissPush, announcements,
   withStates, onAck, hasMore, moreBusy, moreError, onLoadMore,
+  polls, pollsPending, onPollSubmit,
 }: Props) {
   return (
     <>
@@ -104,6 +110,11 @@ export function AlertsTab({
 
           {pushNote && (
             <div style={{ ...cardStyle, padding: "13px 16px", fontSize: 15, fontWeight: 700, color: INK }}>{pushNote}</div>
+          )}
+
+          <PollsSection t={t} polls={polls} pending={pollsPending} onSubmit={onPollSubmit} />
+          {polls.length > 0 && (
+            <h2 style={{ fontSize: 19, fontWeight: 900, color: INK, fontFamily: t.fontD, margin: "10px 4px 10px" }}>التنبيهات</h2>
           )}
 
           {announcements.length === 0 && (

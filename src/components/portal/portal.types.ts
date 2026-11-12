@@ -43,6 +43,18 @@ export type Ann = {
   id: number; body: string; priority: string; show_at: string;
   title?: string | null; pinned?: boolean; revision?: number; state?: AnnState; edited_at?: string | null;
 };
+/* Polls Phase 2 — عقدُ `get_pilgrim_polls(p_token)` كما يصل: استطلاعاتُ جمهور الحاجّ المجمَّد
+   (منشورةٌ أو مغلقة)، وإجابتُه برقم مراجعتها. ولا أعدادَ ولا بياناتِ غيره. */
+export type PortalPoll = {
+  id: number; title: string; body: string | null; kind: "single" | "multiple"; max_choices: number | null;
+  allow_answer_changes: boolean; state: "open" | "closed"; published_at: string | null; closes_at: string | null;
+  options: { id: number; label: string }[] | null;
+  my_response: { revision: number; option_ids: number[] | null } | null;
+};
+export type PortalPolls = { items: PortalPoll[]; pending: number };
+/* ردُّ `submit_pilgrim_poll_response` — والنداءُ نفسُه null بلا جلسة صالحة */
+export type PollSubmitStatus = "ok" | "unchanged" | "stale" | "final" | "closed" | "not_found" | "rate_limited";
+export type PollSubmitResult = { status: PollSubmitStatus; revision?: number; option_ids?: number[] | null };
 /* صفحةٌ تالية من `get_pilgrim_announcements` */
 export type AnnPage = { items: Ann[]; total: number; unread: number; has_more: boolean };
 export type FlightInfo = { name: string; airline: string; from_airport: string; to_airport: string; date: string; time: string; arrival_time: string; arrival_date: string; class: string };
