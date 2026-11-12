@@ -354,6 +354,21 @@ function PassengersPage({ passengers, setPassengers, currentUser, globalShowManu
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "table">("table");
   const [selected, setSelected] = useState<Passenger | null>(null);
+  /* Polls Phase 4 — رابطٌ مباشرٌ إلى ملفّ حاجّ (`/pilgrims?pid=`) من نتائج الاستطلاع: يُفتح الملفُّ نفسُه
+     حين تصل قائمةُ الحجّاج، ثم يُمحى المعرّف من العنوان فلا يُعاد فتحُه عند التحديث. */
+  const pidFromUrl = useRef(Number(new URLSearchParams(window.location.search).get("pid")) || 0);
+  useEffect(() => {
+    if (!pidFromUrl.current) return;
+    const p = passengers.find(x => x.id === pidFromUrl.current);
+    if (!p) return;
+    const t = setTimeout(() => {
+      pidFromUrl.current = 0;
+      setSelected(p);
+      const u = new URL(window.location.href); u.searchParams.delete("pid");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [passengers]);
   const [editing, setEditing] = useState<Passenger | null>(null);
   /* نافذة التعديل — ما فُتحت عليه (للمقارنة والتحقّق)، ومستنداها،
      والقيمُ المقترحة من مستندٍ بديل. المقترحُ لا يدخل النموذج إلا

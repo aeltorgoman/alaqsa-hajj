@@ -9,6 +9,7 @@ import { btnS } from "../../utils";
 import { useSeason } from "../../season/useSeason";
 import { describeAudience } from "../announcements/audience";
 import { PollFormPanel } from "./PollFormPanel";
+import { PollResults } from "./PollResults";
 import {
   CLOSE_REASON_LABEL, KIND_LABEL, STATUS_LABEL, actionsFor, emptyForm, formFromPoll, participation, rpcErrorText,
   type PollForm, type PollOption, type PollRow, type PollStatus, type PollTotals, type PublishMode, type ValidForm,
@@ -43,6 +44,8 @@ export function PollsAdmin() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [names, setNames] = useState<Record<string, Record<number, string>>>({});
   const formRef = useRef<HTMLDivElement>(null);
+  /* Phase 4 — شاشةُ النتائج تحلّ محلّ القائمة داخل التبويب نفسه (لا وحدةَ جديدة في القائمة الجانبيّة) */
+  const [resultsFor, setResultsFor] = useState<PollRow | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from("polls")
@@ -207,8 +210,9 @@ export function PollsAdmin() {
           {p.status === "closed" && p.closed_at && meta("أُغلق", `${fmt(p.closed_at)}${p.close_reason ? ` · ${CLOSE_REASON_LABEL[p.close_reason] ?? p.close_reason}` : ""}`)}
           {locked && meta("المشاركة", tot ? participation(tot) : "—")}
         </div>
-        {(a.edit || a.publish || a.unschedule || a.close || a.remove) && (
+        {(a.edit || a.publish || a.unschedule || a.close || a.remove || locked) && (
           <div style={{ display: "flex", gap: 7, marginTop: 10, flexWrap: "wrap" }}>
+            {locked && <button type="button" onClick={() => setResultsFor(p)} style={{ ...smallBtn, color: "var(--primary)", fontWeight: 800 }}>عرض النتائج</button>}
             {a.edit && <button type="button" disabled={busy} onClick={() => onEdit(p)} style={smallBtn}>تعديل</button>}
             {a.publish && <button type="button" disabled={busy} onClick={() => onPublish(p)} style={smallBtn}>نشر الآن</button>}
             {a.unschedule && <button type="button" disabled={busy} onClick={() => onUnschedule(p)} style={smallBtn}>إلغاء الجدولة</button>}
@@ -220,10 +224,18 @@ export function PollsAdmin() {
     );
   };
 
+  if (resultsFor) return (
+    <div className="polls-admin" style={{ textAlign: "start" }}>
+      {/* حلقةُ تركيزٍ ظاهرة للوحة المفاتيح: نمطُ الحقول المشترك (`inp`) يُطفئ outline في السطر نفسه، فـ!important */}
+      <style>{`.polls-admin input:focus-visible,.polls-admin textarea:focus-visible,.polls-admin select:focus-visible,.polls-admin a:focus-visible,.polls-admin button:focus-visible{outline:2px solid var(--primary)!important;outline-offset:2px}`}</style>
+      <PollResults poll={resultsFor} onBack={() => { setResultsFor(null); void load(); }} />
+    </div>
+  );
+
   return (
     <div className="polls-admin" style={{ textAlign: "start" }}>
       {/* حلقةُ تركيزٍ ظاهرة للوحة المفاتيح: نمطُ الحقول المشترك (`inp`) يُطفئ outline في السطر نفسه، فـ!important */}
-      <style>{`.polls-admin input:focus-visible,.polls-admin textarea:focus-visible,.polls-admin button:focus-visible{outline:2px solid var(--primary)!important;outline-offset:2px}`}</style>
+      <style>{`.polls-admin input:focus-visible,.polls-admin textarea:focus-visible,.polls-admin select:focus-visible,.polls-admin a:focus-visible,.polls-admin button:focus-visible{outline:2px solid var(--primary)!important;outline-offset:2px}`}</style>
       <AlertModal alert={alertState} onClose={() => showAlert(null)} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
       <div ref={formRef}>
