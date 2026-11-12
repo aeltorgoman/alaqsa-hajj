@@ -135,6 +135,7 @@ try {
       && (await poll(page, 1).locator("[data-poll-status]").innerText()) === "بانتظار إجابتك" && (await poll(page, 4).locator("[data-poll-status]").innerText()) === "مغلق");
     check("card shows closing date and whether changes are allowed", (await poll(page, 1).innerText()).includes("يُغلق في") && (await poll(page, 1).innerText()).includes("يمكنك تغيير إجابتك")
       && (await poll(page, 3).innerText()).includes("إجابتك الأولى نهائية"));
+    check("Phase 4: pilgrims are told that campaign management can see their answers", (await page.locator("[data-polls-disclosure]").innerText()).includes("تطّلع إدارة الحملة على اسمك وإجابتك"));
     check("pending count in the section header", (await page.locator("[data-portal-polls] h2 + span").innerText()).includes("(6)"));
     const hc = await page.evaluate(() => { const h = document.getElementById("pp-polls-h"); let e = h; while (e && getComputedStyle(e).backgroundColor === "rgba(0, 0, 0, 0)") e = e.parentElement; return [getComputedStyle(h).color, e ? getComputedStyle(e).backgroundColor : ""]; });
     check("section heading sits on a white card (readable over the dark header edge)", hc[1] === "rgb(255, 255, 255)", hc.join(" on "));
