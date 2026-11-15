@@ -16,6 +16,7 @@ import { PORTAL_LOGIN_MESSAGES, normalizeDoc, isValidDoc, isValidDob } from "./p
 import { setupPortalManifest } from "../utils/portalManifest";
 import type { PortalData, PortalAccommodation, Ann, AnnPage, PortalPoll, PortalPolls, PollSubmitResult } from "./portal/portal.types";
 import { submitOutcome, type PollOutcome } from "./portal/portal.polls";
+import { createSessionGate, mergeAnnPage, collectAnnRange, type SessionSnapshot } from "./portal/portal.announcements";
 import { buildTheme, IVORY, INK, BODY } from "./portal/portal.theme";
 import { getSeasonArafa, civilDate } from "./portal/portal.dates";
 import { readSession, clearPortalLocalState } from "./portal/portal.session";
@@ -120,27 +121,75 @@ function PilgrimPortal() {
     return () => clearInterval(id);
   }, []);
 
+  /* ═══ عزلُ الجلسة (مراجعة v1.3.0 · P1) ═══
+     كلُّ ما يخصّ الحاجَّ المعروض في الذاكرة يُمسح في موضعٍ واحد، ويستعمله الخروجُ والانتهاءُ ودخولُ
+     حاجٍّ آخر معاً. كان الانتهاءُ يمسح الملفَّ والاستطلاعاتِ وحدها، فتبقى صفحاتُ التنبيهات التالية
+     والإقراراتُ المحلّيّة — والدخولُ التالي على الجهاز نفسِه كان يدمجها في قائمة حاجٍّ آخر.
+     ومعه جيلُ الجلسة: كلُّ طلبٍ يلتقطه قبل أن يبدأ ولا يكتب بعد عودته إلا إن بقي كما هو. */
+  const gate = useRef(createSessionGate()).current;
+  const snap = useCallback((): SessionSnapshot => gate.snapshot(readSession()), [gate]);
+  const isCurrent = useCallback((s: SessionSnapshot) => gate.isCurrent(s, readSession()), [gate]);
+  /* تسلسلُ عمليّات الصفحات التالية: «عرض المزيد» وإعادةُ جلبها لا يكتب أحدُهما فوق الأحدث */
+  const annSeq = useRef(0);
+  const moreRef = useRef<Ann[]>([]);
+  useEffect(() => { moreRef.current = moreAnns; }, [moreAnns]);
+  const clearPilgrimMemory = useCallback(() => {
+    gate.bump();
+    annSeq.current += 1;
+    moreRef.current = [];
+    setData(null); setPolls([]);
+    setMoreAnns([]); setMoreHas(null); setMoreBusy(false); setMoreError(false);
+    setLocalRead({}); setAckedUrgent([]); setSeenAlerts(0);
+    setDocView(null); setDocError(null); setDocBusy(null);
+  }, [gate]);
+
   /* رفضٌ صريحٌ للجلسة (انتهت أو أُبطلت أو أُقفل موسمُها أو حُذف الحاجّ): لا تبقى شاشةٌ تبدو داخلة.
-     موضعٌ واحدٌ يستعمله الملفُّ والاستطلاعات معاً. */
+     موضعٌ واحدٌ يستعمله الملفُّ والاستطلاعات معاً — ويمسح ما يمسحه الخروجُ الصريح. */
   const expireSession = useCallback(() => {
     clearPortalLocalState();
+    clearPilgrimMemory();
+    setOpenAnnId(null); handledOpenAnn.current = null;
     setSession(null);
-    setData(null);
-    setPolls([]);
     /* العنوانُ يعود إلى الجذر: لا يبقى رابطٌ عميقٌ لجلسةٍ انتهت */
     resetToRoot();
-  }, [resetToRoot]);
+  }, [resetToRoot, clearPilgrimMemory]);
+
+  /* مراجعة v1.3.0 · P2 — حداثةُ الصفحات التالية. تحديثُ الصفحة الأولى يعيد جلبَ ما حُمّل بعدها
+     (بعدده لا أكثر، ولا طلبَ إن لم يُحمَّل شيء)، فما حُذف أو انتهى أو عُدّل لا يبقى كما كان.
+     وتعذُّرُ الجلب يُسقطها: يعود «عرض المزيد»، ولا يُعرض قديمٌ على أنّه حاليّ. */
+  const revalidateMoreAnns = useCallback(async (s: SessionSnapshot, fresh: PortalData) => {
+    const loaded = moreRef.current.length;
+    const token = s.token;
+    if (!loaded || !token || !fresh.announcements_meta) return;
+    const seq = ++annSeq.current;
+    const first = fresh.announcements || [];
+    let got: Awaited<ReturnType<typeof collectAnnRange>>;
+    try {
+      got = await collectAnnRange(async (offset) => {
+        const { data: res, error } = await portalSupabase.rpc("get_pilgrim_announcements", { p_token: token, p_offset: offset });
+        return error ? null : (res as unknown as AnnPage | null);
+      }, first.length, loaded, fresh.announcements_meta.page_size);
+    } catch { got = null; }
+    if (!isCurrent(s) || seq !== annSeq.current) return;
+    if (!got) { setMoreAnns([]); setMoreHas(null); return; }
+    setMoreAnns(mergeAnnPage(first, [], got.items));
+    setMoreHas(got.has_more);
+  }, [isCurrent]);
 
   const refreshPortal = useCallback(async () => {
-    const token = readSession();
+    const s = snap();
+    const token = s.token;
     if (!token) return;
 
     const { data: res, error } = await portalSupabase.rpc(
       "get_pilgrim_portal_by_session", { p_token: token });
+    /* ردٌّ لجلسةٍ سابقة (خروجٌ أو دخولُ حاجٍّ آخر أثناء الانتظار): لا يُعرض ولا يُنهي الجلسةَ الحاليّة */
+    if (!isCurrent(s)) return;
 
     if (!error && res) {
       setData(res as unknown as PortalData);
       localStorage.setItem("portal_data", JSON.stringify(res));
+      void revalidateMoreAnns(s, res as unknown as PortalData);
       /* H4 — حكمُ جهازٍ تعذّر عند الدخول يُعاد ما دامت الجلسةُ صالحة */
       void retryPendingClaim(token);
       return;
@@ -153,20 +202,21 @@ function PilgrimPortal() {
     }
     /* عطلٌ عابر: تبقى الجلسة والملفُّ المحفوظ كما هما. ولا إسقاطَ إلى
        تنبيهاتٍ بلا جلسة (H3): التنبيهاتُ من مسار الجلسة وحده، بجمهورها. */
-  }, [expireSession]);
+  }, [expireSession, snap, isCurrent, revalidateMoreAnns]);
 
   /* Phase 3 — الاستطلاعات. null من الدالّة = جلسةٌ مرفوضة (سلوكُ الانتهاء نفسُه)؛ وخادمٌ بلا Phase 2
      (PGRST202) لا يعرض شيئاً؛ وعطلٌ عابر يُبقي آخرَ قائمةٍ صحيحة. */
   const refreshPolls = useCallback(async () => {
-    const token = readSession();
-    if (!token) return;
+    const s = snap();
+    if (!s.token) return;
     try {
-      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_polls", { p_token: token });
+      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_polls", { p_token: s.token });
+      if (!isCurrent(s)) return;
       if (error) { if (error.code === "PGRST202") setPolls([]); return; }
       if (res === null) { expireSession(); return; }
       setPolls(((res as unknown as PortalPolls).items) || []);
     } catch { /* الشبكة: المحاولةُ التالية */ }
-  }, [expireSession]);
+  }, [expireSession, snap, isCurrent]);
 
   /* Phase 3 — فتحُ تبويب التنبيهات يجلب الاستطلاعات من جديد (إجابةٌ من جهازٍ آخر، أو إغلاق) */
   useEffect(() => {
@@ -296,7 +346,8 @@ function PilgrimPortal() {
      فتحُ التبويب لا يُقرئ شيئاً. ضغطُ التنبيه أو «تمّت القراءة» أو «فهمت» في بانر العاجل،
      أو فتحُه من إشعاره — يُقرّ به وحده، بنسخته التي رآها. متفائلٌ محلّيّاً، ويُعاد إن رُفض. */
   const acknowledge = useCallback(async (a: Ann) => {
-    const token = readSession();
+    const s = snap();
+    const token = s.token;
     if (!token || a.state === undefined) return;
     const rev = a.revision ?? 1;
     if ((localRead[a.id] ?? 0) >= rev || a.state === "read") return;
@@ -304,38 +355,45 @@ function PilgrimPortal() {
     const ok = await portalSupabase.rpc("acknowledge_pilgrim_announcement",
       { p_token: token, p_announcement_id: a.id, p_revision: rev })
       .then(({ data: res, error }) => !error && res !== null, () => false);
-    if (!ok) setLocalRead(m => { const n = { ...m }; delete n[a.id]; return n; });
-  }, [localRead]);
+    /* الجلسةُ تغيّرت أثناء الانتظار: إقراراتُها مُسحت، فلا يُكتب فيها شيء */
+    if (!ok && isCurrent(s)) setLocalRead(m => { const n = { ...m }; delete n[a.id]; return n; });
+  }, [localRead, snap, isCurrent]);
 
-  /* «عرض المزيد»: الصفحةُ التالية من الخادم، بالجمهور والحالات نفسها */
+  /* «عرض المزيد»: الصفحةُ التالية من الخادم، بالجمهور والحالات نفسها.
+     الموجودُ يُحدَّث بنسخته الأحدث (لا يُتخطّى)، وردٌّ لجلسةٍ سابقة أو بعد إعادة جلبٍ أحدث يُهمَل. */
   const loadMoreAnns = useCallback(async () => {
-    const token = readSession();
-    if (!token || !data) return;
+    const s = snap();
+    if (!s.token || !data) return;
+    const seq = ++annSeq.current;
+    const first = data.announcements;
     setMoreBusy(true); setMoreError(false);
     try {
-      const offset = data.announcements.length + moreAnns.length;
-      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_announcements", { p_token: token, p_offset: offset });
+      const offset = first.length + moreRef.current.length;
+      const { data: res, error } = await portalSupabase.rpc("get_pilgrim_announcements", { p_token: s.token, p_offset: offset });
+      if (!isCurrent(s) || seq !== annSeq.current) return;
       const page = res as unknown as AnnPage | null;
       if (error || !page) { setMoreError(true); return; }
-      setMoreAnns(prev => {
-        const seen = new Set([...data.announcements, ...prev].map(x => x.id));
-        return [...prev, ...page.items.filter(x => !seen.has(x.id))];
-      });
+      setMoreAnns(prev => mergeAnnPage(first, prev, page.items));
       setMoreHas(page.has_more);
-    } catch { setMoreError(true); }
-    finally { setMoreBusy(false); }
-  }, [data, moreAnns.length]);
+    } catch { if (isCurrent(s) && seq === annSeq.current) setMoreError(true); }
+    finally { if (isCurrent(s)) setMoreBusy(false); }
+  }, [data, snap, isCurrent]);
 
   /* Phase 3 — التصويت: الجلسةُ وحدها هويّة الحاجّ، ورقمُ المراجعة المرئيّ يُرسَل (0 لأوّل إجابة).
      ما تقرّره القاعدة يُعتمد محلّيّاً (ok · unchanged · stale · final)، فلا يُكتب فوق إجابةٍ أحدث. */
-  const submitPoll = useCallback(async (p: PortalPoll, optionIds: number[]): Promise<PollOutcome> => {
-    const token = readSession();
+  /* مراجعة v1.3.0 · P2 — `expectedRevision` هو رقمُ مراجعة الإجابة **التي بدأ منها التعديل** (تلتقطه
+     البطاقة)، لا آخرُ ما وصل من التحديث الدوريّ: إجابةٌ أحدث من جهازٍ آخر تعود `stale` ولا يُكتب فوقها. */
+  const submitPoll = useCallback(async (p: PortalPoll, optionIds: number[], expectedRevision: number): Promise<PollOutcome> => {
+    const s = snap();
+    const token = s.token;
     if (!token) { expireSession(); return { tone: "error", text: "", expired: true }; }
     let res: PollSubmitResult | null;
     try {
       const r = await portalSupabase.rpc("submit_pilgrim_poll_response", {
-        p_token: token, p_poll_id: p.id, p_option_ids: optionIds, p_expected_revision: p.my_response?.revision ?? 0,
+        p_token: token, p_poll_id: p.id, p_option_ids: optionIds, p_expected_revision: expectedRevision,
       });
+      /* الجلسةُ تغيّرت أثناء الإرسال: لا يُعتمد شيءٌ في قائمة حاجٍّ آخر */
+      if (!isCurrent(s)) return { tone: "error", text: "", expired: true };
       if (r.error) {
         return r.error.code === "22023"
           ? { tone: "error", text: r.error.message || "اختيارٌ غير صالح لهذا الاستطلاع." }
@@ -353,7 +411,7 @@ function PilgrimPortal() {
     }
     if (o.refresh) void refreshPolls();
     return o;
-  }, [expireSession, refreshPolls]);
+  }, [expireSession, refreshPolls, snap, isCurrent]);
 
   async function turnPushOn() {
     setPushBusy(true);
@@ -482,7 +540,10 @@ function PilgrimPortal() {
   async function openDoc(type: PortalDocType, title: string) {
     if (docBusy) return;
     setDocBusy(type); setDocError(null);
+    const s = snap();
     const res = await portalDocUrl(session, type);
+    /* وثيقةُ جلسةٍ سابقة لا تُفتح في جلسةِ حاجٍّ آخر */
+    if (!isCurrent(s)) return;
     setDocBusy(null);
     if (res) setDocView({ title, url: res.url, isPdf: res.is_pdf, type });
     else setDocError(type);
@@ -617,6 +678,9 @@ function PilgrimPortal() {
           /* H4 — هذا الجهاز لهذا الحاجّ؟ وإلّا فُكَّ عن سابقه وأُلغي اشتراكُه،
              فيفعّل الداخلُ تنبيهاتِه بنفسه. قبل أن يُقرأ حالُ التنبيهات. */
           await claimDevicePushAfterLogin(s.token);
+          /* تبديلُ الحاجّ على الجهاز: لا يبقى في الذاكرة شيءٌ لجلسةٍ سابقة، ويُهمَل كلُّ ردٍّ متأخّرٍ لها.
+             (إلّا قصدَ فتح تنبيهٍ من إشعاره — ذاك للداخل الآن، ويُطابَق بقائمته وحدها.) */
+          clearPilgrimMemory();
           skipNextRefresh.current = true;
           setSession(s.token);
           setData(res as unknown as PortalData);
@@ -637,14 +701,18 @@ function PilgrimPortal() {
        يُتمّ عند الفتح التالي (`logoutDevice`). ثم التنظيف المحلّي **دائماً**،
        نجح ما على الخادم أو فشل: لا يُترك جهازٌ يبدو داخلاً. */
     const token = session;
+    /* الجيلُ يُرفع قبل الانتظار: ما يعود أثناء الخروج لا يكتب في شاشةٍ تُغلق */
+    gate.bump();
     if (token) await logoutDevice(token);
     clearPortalLocalState();
     /* الداخلُ التالي على هذا الجهاز يرى عرضَ التفعيل من جديد */
     localStorage.removeItem("portal_push_dismissed");
     setPushDismissed(false); setPushState("available");
-    setData(null); setDoc(""); setDay(""); setMonth(""); setYear(""); setAckedUrgent([]); setSeenAlerts(0);
-    setMoreAnns([]); setMoreHas(null); setLocalRead({}); setOpenAnnId(null); setPolls([]);
-    setSession(null); setDocView(null);
+    /* ما يخصّ الحاجَّ في الذاكرة — الموضعُ نفسُه الذي يستعمله الانتهاء */
+    clearPilgrimMemory();
+    setDoc(""); setDay(""); setMonth(""); setYear("");
+    setOpenAnnId(null); handledOpenAnn.current = null;
+    setSession(null);
     /* والعنوانُ إلى الجذر بلا إدخالٍ في التاريخ — كي لا يعيد زرُّ
        الرجوع شاشةَ من خرج */
     resetToRoot();

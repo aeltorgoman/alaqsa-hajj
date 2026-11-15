@@ -21,7 +21,7 @@ type Props = {
   hasMore: boolean; moreBusy: boolean; moreError: boolean; onLoadMore: () => void;
   /* Phase 3 — الاستطلاعاتُ داخل هذا التبويب (لا تبويبَ رابع). خادمٌ بلا Phase 2: قائمةٌ فارغة فلا يظهر شيء */
   polls: PortalPoll[]; pollsPending: number;
-  onPollSubmit: (p: PortalPoll, optionIds: number[]) => Promise<PollOutcome>;
+  onPollSubmit: (p: PortalPoll, optionIds: number[], expectedRevision: number) => Promise<PollOutcome>;
 };
 
 const fmtTime = (iso: string) =>

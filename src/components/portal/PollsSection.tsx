@@ -6,13 +6,14 @@ import { useId, useRef, useState } from "react";
 import { INK, BODY, LABEL, LINE, type PortalTheme } from "./portal.theme";
 import { cardStyle } from "./portal.styles";
 import type { PortalPoll } from "./portal.types";
-import { pollPhase, sameIds, selectionError, type PollOutcome } from "./portal.polls";
+import { changedSinceEdit, expectedRevision, pollPhase, sameIds, selectionError, type PollOutcome } from "./portal.polls";
 
 type Props = {
   t: PortalTheme;
   polls: PortalPoll[];
   pending: number;
-  onSubmit: (p: PortalPoll, optionIds: number[]) => Promise<PollOutcome>;
+  /** `expectedRevision` = مراجعةُ الإجابة التي بدأ منها التعديل (0 لأوّل إجابة) */
+  onSubmit: (p: PortalPoll, optionIds: number[], expectedRevision: number) => Promise<PollOutcome>;
 };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("ar-EG", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
@@ -45,6 +46,8 @@ function PollCard({ t, p, onSubmit }: { t: PortalTheme; p: PortalPoll; onSubmit:
   const phase = pollPhase(p);
   const recorded = (p.my_response?.option_ids || []).slice();
   const [editing, setEditing] = useState(false);
+  /* مراجعة v1.3.0 · P2 — رقمُ مراجعة الإجابة لحظةَ بدء التعديل؛ لا يتبع التحديثَ الدوريّ */
+  const [editBase, setEditBase] = useState<number | null>(null);
   const [sel, setSel] = useState<number[]>(recorded);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: keyof typeof TONE; text: string } | null>(null);
@@ -58,6 +61,7 @@ function PollCard({ t, p, onSubmit }: { t: PortalTheme; p: PortalPoll; onSubmit:
   if (seenKey !== recordedKey) { setSeenKey(recordedKey); if (!editing) setSel(recorded); }
 
   const canPick = phase === "open-unanswered" || (phase === "open-answered" && editing);
+  const conflict = phase === "open-answered" && editing && changedSinceEdit(editBase, p);
   const options = p.options || [];
   const max = p.kind === "multiple" ? (p.max_choices || options.length) : 1;
 
@@ -75,11 +79,14 @@ function PollCard({ t, p, onSubmit }: { t: PortalTheme; p: PortalPoll; onSubmit:
     if (phase === "open-answered" && sameIds(sel, recorded)) { setEditing(false); setMsg({ tone: "info", text: "لم تغيّر إجابتك." }); return; }
     inFlight.current = true; setBusy(true); setMsg(null);
     try {
-      const o = await onSubmit(p, sel);
+      const o = await onSubmit(p, sel, expectedRevision(phase, editing ? editBase : null, p));
       if (o.expired) return;
       setMsg({ tone: o.tone, text: o.text });
       if (o.adopt) setSel(o.adopt.option_ids);
-      setEditing(!!o.keepEditing && p.allow_answer_changes);
+      const keep = !!o.keepEditing && p.allow_answer_changes;
+      setEditing(keep);
+      /* تعارضٌ (stale): عُرضت الإجابةُ المسجَّلةُ الآن، فالتعديلُ التالي يُبنى عليها */
+      setEditBase(keep ? (o.adopt?.revision ?? editBase) : null);
     } finally { inFlight.current = false; setBusy(false); }
   }
 
@@ -126,6 +133,7 @@ function PollCard({ t, p, onSubmit }: { t: PortalTheme; p: PortalPoll; onSubmit:
           );
         })}
       </fieldset>
+      {conflict && <div data-poll-conflict role="alert" style={{ fontSize: 14.5, color: "#7a5200", background: "#fdf3dc", borderRadius: 12, padding: "10px 14px", fontWeight: 800, marginTop: 8, lineHeight: 1.8 }}>تغيّرت إجابتك من جهاز آخر أثناء التعديل. عند الحفظ ستُعرض إجابتك المسجّلة الآن لتراجعها، ولن يُكتب فوقها.</div>}
       {selErr && <div role="alert" style={{ fontSize: 14.5, color: "#9b1c25", fontWeight: 800, marginTop: 8 }}>{selErr}</div>}
 
       <div aria-live="polite" role="status">
@@ -147,13 +155,13 @@ function PollCard({ t, p, onSubmit }: { t: PortalTheme; p: PortalPoll; onSubmit:
               {busy ? "جارٍ الإرسال..." : phase === "open-answered" ? "حفظ التعديل" : p.allow_answer_changes ? "إرسال الإجابة" : "إرسال الإجابة النهائية"}
             </button>
             {phase === "open-answered" && (
-              <button type="button" disabled={busy} onClick={() => { setEditing(false); setSel(recorded); setSelErr(null); }}
+              <button type="button" disabled={busy} onClick={() => { setEditing(false); setEditBase(null); setSel(recorded); setSelErr(null); }}
                 style={{ background: "#fff", color: BODY, border: `1.5px solid ${LINE}`, borderRadius: 14, padding: "0 18px", minHeight: 48, fontSize: 15.5, fontWeight: 800, fontFamily: t.fontD, cursor: "pointer" }}>
                 إلغاء
               </button>
             )}
           </> : (
-            <button type="button" onClick={() => { setEditing(true); setMsg(null); }}
+            <button type="button" onClick={() => { setEditing(true); setEditBase(p.my_response?.revision ?? 0); setMsg(null); }}
               style={{ background: "#fff", color: t.brand, border: `2px solid ${t.brand}`, borderRadius: 14, padding: "0 20px", minHeight: 48, fontSize: 16, fontWeight: 900, fontFamily: t.fontD, cursor: "pointer" }}>
               تعديل الإجابة
             </button>
