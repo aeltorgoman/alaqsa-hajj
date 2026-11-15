@@ -25,10 +25,11 @@ const vite = spawn(process.execPath, [join(ROOT, "node_modules/vite/bin/vite.js"
 let pass = 0, fail = 0;
 const check = (name, ok, detail = "") => { if (ok) { pass++; console.log(`PASS — ${name}`); } else { fail++; console.log(`FAIL — ${name}${detail ? ` (${detail})` : ""}`); } };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 
 const ann = (id, who, o = {}) => ({ id, title: `تنبيه ${id}`, body: `${who} — نص ${id}`, priority: "عام", show_at: new Date(Date.now() - id * 60000).toISOString(), pinned: false, revision: 1, state: "unread", edited_at: null, ...o });
 const portalOf = (name, first, meta) => ({
-  pilgrim: { name_ar: name, name_en: "Test", short_ar: name, gender: "ذكر", has_photo: false, has_hajj_permit: false, has_flight_ticket: false, hotel_type: null, hotel_view: null, camp_mina: null, camp_arafa: null, phone: null },
+  pilgrim: { name_ar: name, name_en: "Test", short_ar: name, gender: "ذكر", has_photo: false, has_hajj_permit: true, has_flight_ticket: false, hotel_type: null, hotel_view: null, camp_mina: null, camp_arafa: null, phone: null },
   bus: null, room: null, accommodation: { status: "none", hotel: null, room: null, requested_hotel: null }, roommates: [], family: [], flight_go: null, flight_back: null,
   config: { name_ar: "حملة تجريبية", tagline: null, color_primary: "#5d2222", color_accent: "#B08D3C", admin_name: null, admin_phone: null, admin_whatsapp: null, portal_settings: {}, settings_stamp: "s1", country: null, city: null, assets: {} },
   season: { name: "موسم تجريبي", hijri_year: 1448, hotel_name: null, hotel_address: null, hotel_url: null, mina_address: null, mina_url: null, arafa_address: null, arafa_url: null },
@@ -41,21 +42,24 @@ function backend() {
   const st = {
     anns: { [TOK.A]: Array.from({ length: 15 }, (_, i) => ann(i + 1, "خاص بالحاج أ")), [TOK.B]: [ann(101, "للحاج ب"), ann(102, "للحاج ب")] },
     name: { [TOK.A]: "الحاج أ", [TOK.B]: "الحاج ب" },
-    invalid: new Set(), stamp: "s1", delay: { portal: 0, page: 0 }, calls: [],
-    poll: { revision: 1, ids: [11] }, submits: [],
+    invalid: new Set(), stamp: "s1", delay: { portal: 0, page: 0, doc: {} }, calls: [],
+    /* «أ» أجاب سابقاً (مراجعة 1)، و«ب» لم يُجب */
+    poll: { revision: 1, ids: [11] }, pollB: { revision: 0, ids: [] }, submits: [], acks: [],
   };
   const portal = (tok) => {
     const all = st.anns[tok]; const first = all.slice(0, 10);
     return portalOf(st.name[tok], first, { total: all.length, unread: all.length, has_more: all.length > 10, page_size: 10 });
   };
   const page = (tok, off) => { const all = st.anns[tok]; return { items: all.slice(off, off + 10), total: all.length, unread: all.length, has_more: all.length > off + 10 }; };
-  const polls = () => ({ items: [{ id: 1, title: "موعد الاجتماع", body: null, kind: "single", max_choices: null, allow_answer_changes: true, state: "open",
+  const pollOf = (tok) => (tok === TOK.B ? st.pollB : st.poll);
+  const polls = (tok) => ({ items: [{ id: 1, title: "موعد الاجتماع", body: null, kind: "single", max_choices: null, allow_answer_changes: true, state: "open",
     published_at: new Date(Date.now() - 86400000).toISOString(), closes_at: null, options: [{ id: 11, label: "الأحد" }, { id: 12, label: "الإثنين" }, { id: 13, label: "الثلاثاء" }],
-    my_response: { revision: st.poll.revision, option_ids: st.poll.ids } }], pending: 0 });
+    my_response: pollOf(tok).revision ? { revision: pollOf(tok).revision, option_ids: pollOf(tok).ids } : null }], pending: pollOf(tok).revision ? 0 : 1 });
   const submit = (b) => {
     st.submits.push(b);
-    if (b.p_expected_revision !== st.poll.revision) return { status: "stale", revision: st.poll.revision, option_ids: st.poll.ids };
-    st.poll = { revision: st.poll.revision + 1, ids: b.p_option_ids }; return { status: "ok", revision: st.poll.revision, option_ids: st.poll.ids };
+    const key = b.p_token === TOK.B ? "pollB" : "poll"; const cur = st[key];
+    if (b.p_expected_revision !== cur.revision) return { status: "stale", revision: cur.revision, option_ids: cur.ids };
+    st[key] = { revision: cur.revision + 1, ids: b.p_option_ids }; return { status: "ok", revision: st[key].revision, option_ids: st[key].ids };
   };
   return { st, portal, page, polls, submit };
 }
@@ -63,17 +67,26 @@ function backend() {
 async function boot(browser, be, tok, { clock = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, locale: "ar" });
   if (clock) await ctx.clock.install();
+  await ctx.route("https://docs.test/**", r => r.fulfill({ status: 200, contentType: "image/png", body: PNG }));
   await ctx.route(`${MOCK}/**`, async route => {
     const url = route.request().url();
     const body = (() => { try { return JSON.parse(route.request().postData() || "{}"); } catch { return {}; } })();
     const json = (d) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(d) });
+    if (url.includes("/functions/v1/pilgrim-doc")) {
+      be.st.calls.push({ fn: "pilgrim-doc", tok: body.token });
+      const d = be.st.delay.doc[body.token] || 0; if (d) await sleep(d);
+      if (be.st.invalid.has(body.token) || !be.st.anns[body.token]) return route.fulfill({ status: 401, contentType: "application/json", body: "{}" });
+      return json({ url: `https://docs.test/${body.token === TOK.A ? "A" : "B"}-${body.doc_type}.png`, is_pdf: false, expires_in: 900 });
+    }
     const fn = url.includes("/rpc/") ? url.split("/rpc/")[1].split("?")[0] : "";
     if (fn) be.st.calls.push({ fn, tok: body.p_token, offset: body.p_offset });
     const bad = (t) => be.st.invalid.has(t) || !be.st.anns[t];
     if (fn === "create_pilgrim_session") return json({ token: TOK.B, idle_expires_at: "2099-01-01", absolute_expires_at: "2099-01-01" });
     if (fn === "get_pilgrim_portal_by_session") {
-      const t = body.p_token; const d = be.st.delay.portal;
-      const res = bad(t) ? null : be.portal(t);
+      const t = body.p_token;
+      /* مصفوفة = تأخيرُ كلِّ طلبٍ بترتيبه (لعكس ترتيب العودة عمداً) */
+      const d = Array.isArray(be.st.delay.portal) ? (be.st.delay.portal.shift() || 0) : be.st.delay.portal;
+      const res = bad(t) ? null : be.portal(t);          // حالةُ الخادم لحظةَ الطلب
       if (d && t === TOK.A) await sleep(d);
       return json(res);
     }
@@ -84,8 +97,9 @@ async function boot(browser, be, tok, { clock = false } = {}) {
       if (d && t === TOK.A) await sleep(d);
       return json(res);
     }
-    if (fn === "get_pilgrim_polls") return json(bad(body.p_token) ? null : be.polls());
-    if (fn === "submit_pilgrim_poll_response") return json(be.submit(body));
+    if (fn === "get_pilgrim_polls") return json(bad(body.p_token) ? null : be.polls(body.p_token));
+    if (fn === "submit_pilgrim_poll_response") return json(bad(body.p_token) ? null : be.submit(body));
+    if (fn === "acknowledge_pilgrim_announcement") { be.st.acks.push({ tok: body.p_token, id: body.p_announcement_id }); return json({ id: body.p_announcement_id, revision: body.p_revision, state: "read" }); }
     return json(null);
   });
   await ctx.addInitScript(([data, token]) => {
@@ -260,6 +274,162 @@ try {
     await page.waitForTimeout(600);
     check("P2 a deliberate re-submit is based on the adopted revision (2) and succeeds", be.st.submits.at(-1)?.p_expected_revision === 2 && be.st.poll.revision === 3 && be.st.poll.ids.join() === "13");
     check("no page errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+
+  /* ══════════ مراجعة #278 — جولة ثانية ══════════ */
+  const ids25 = () => Array.from({ length: 25 }, (_, i) => ann(i + 1, "خاص بالحاج أ"));
+  const gotoTrip = async (page) => { await page.getByRole("button", { name: "رحلتي" }).click(); await page.waitForSelector("text=تصريح الحج", { timeout: 8000 }); await page.waitForTimeout(300); };
+  const gotoAlerts = async (page) => { await page.getByRole("button", { name: "التنبيهات" }).click(); await page.waitForSelector("[id^=ann-]", { timeout: 8000 }); await page.waitForTimeout(300); };
+  const inOrder = (now, server) => JSON.stringify(now) === JSON.stringify(server.slice(0, now.length));
+
+  /* ══ R1 (P1) — وثيقةُ «أ» المتأخّرة لا تُخزَّن ولا تُسلَّم لـ«ب» ══ */
+  {
+    const be = backend();
+    const { ctx, page, errors } = await boot(browser, be, TOK.A);
+    await gotoTrip(page);
+    be.st.delay.doc[TOK.A] = 2500;
+    await page.locator("button", { hasText: "عرض" }).first().click();        // «أ» يطلب تصريحه…
+    await page.waitForTimeout(200);
+    await page.getByRole("button", { name: "تسجيل الخروج" }).click();        // …ويخرج قبل وصوله
+    await loginAsB(page);
+    await page.waitForSelector("text=الحاج ب", { timeout: 8000 });
+    await page.waitForTimeout(3000);                                         // وصل ردُّ «أ» الآن
+    check("R1 A's late document is not displayed in B's session", (await page.locator("img[src*='docs.test']").count()) === 0);
+    await gotoTrip(page);
+    const before = be.st.calls.filter(c => c.fn === "pilgrim-doc" && c.tok === TOK.B).length;
+    await page.locator("button", { hasText: "عرض" }).first().click();        // «ب» يفتح تصريحه
+    await page.waitForSelector("img[src*='docs.test']", { timeout: 8000 }).catch(() => {});
+    const src = await page.locator("img[src*='docs.test']").first().getAttribute("src").catch(() => null);
+    check("R1 B opening B's permit gets B's document, never A's cached URL", src === "https://docs.test/B-hajj_permit.png", `src=${src}`);
+    check("R1 …through a fresh request in B's session (A's reply was never cached)", be.st.calls.filter(c => c.fn === "pilgrim-doc" && c.tok === TOK.B).length === before + 1);
+    check("R1 no page errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+
+  /* ══ R2 (P1) — تبويبان في السياق نفسه: «ب» يدخل في التبويب الثاني بينما الأوّل يعرض «أ» ══ */
+  {
+    const be = backend();
+    be.st.anns[TOK.A] = ids25(); be.st.poll = { revision: 0, ids: [] };     // «أ» لم يُجب بعد
+    const { ctx, page: tabA, errors } = await boot(browser, be, TOK.A);
+    await loadMore(tabA); await tabA.waitForSelector("#ann-20", { timeout: 5000 });
+    await tabA.waitForSelector("#poll-1", { timeout: 8000 });
+    await tabA.locator("#poll-1 label", { hasText: "الإثنين" }).click();      // «أ» يختار ولم يُرسل
+    const tabB = await ctx.newPage();
+    await tabB.goto(`${APP}/hajj`, { waitUntil: "domcontentloaded" }); await tabB.waitForSelector("text=الحاج أ", { timeout: 15000 });
+    await tabB.getByRole("button", { name: "تسجيل الخروج" }).click();
+    await loginAsB(tabB);
+    await tabB.waitForSelector("text=الحاج ب", { timeout: 8000 });
+    await tabA.waitForTimeout(1500);
+    const body = await tabA.locator("body").innerText();
+    check("R2 tab 1 drops A's screen when another tab switches the pilgrim", !body.includes("الحاج أ") && !body.includes("خاص بالحاج أ"));
+    check("R2 tab 1 never mixes B's profile with A's announcements", !(body.includes("الحاج ب") && body.includes("خاص بالحاج أ")));
+    check("R2 A's pending selection cannot be sent (its card is gone)", (await tabA.locator("#poll-1 label input:checked").count()) === 0);
+    check("R2 tab 1 follows the stored session (B), fetched under B's own token", body.includes("الحاج ب")
+      && be.st.calls.some(c => c.fn === "get_pilgrim_portal_by_session" && c.tok === TOK.B));
+    await gotoAlerts(tabA);
+    check("R2 tab 1 alerts now show only B's announcements", JSON.stringify(await ids(tabA)) === "[101,102]", JSON.stringify(await ids(tabA)));
+    check("R2 B's poll on tab 1 is B's own (unanswered)", (await tabA.locator("#poll-1").getAttribute("data-phase")) === "open-unanswered");
+    check("R2 no answer was written into B's account", be.st.pollB.revision === 0 && be.st.submits.length === 0, JSON.stringify(be.st.submits));
+    check("R2 tab 2 (B) session intact", await tabB.evaluate((t) => JSON.parse(localStorage.getItem("portal_session") || "{}").token === t, TOK.B));
+    check("R2 no page errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+
+  /* ══ R3 (P1) — التخزينُ تبدّل ولم يصل حدثُه بعد: لا يُرسَل شيءٌ برمز «ب» من شاشة «أ» ══ */
+  {
+    const be = backend();
+    be.st.poll = { revision: 0, ids: [] };
+    const { ctx, page, errors } = await boot(browser, be, TOK.A);
+    await page.waitForSelector("#poll-1", { timeout: 8000 });
+    await page.locator("#poll-1 label", { hasText: "الإثنين" }).click();
+    /* كتابةٌ في التبويب نفسِه لا تُطلق حدثَ storage فيه: تحاكي تبويباً آخر لم يصل حدثُه بعد */
+    await page.evaluate((t) => localStorage.setItem("portal_session", JSON.stringify({ token: t, idle_expires_at: "2099-01-01", absolute_expires_at: "2099-01-01" })), TOK.B);
+    await page.locator("#poll-1").getByRole("button", { name: /إرسال الإجابة/ }).click();
+    await page.waitForTimeout(1200);
+    check("R3 submit from A's screen is never sent under B's token", !be.st.submits.some(s => s.p_token === TOK.B), JSON.stringify(be.st.submits.map(s => s.p_token.slice(0, 4))));
+    check("R3 A's answer is not written into B's account", be.st.pollB.revision === 0);
+    check("R3 the stored (other tab's) session is not wiped", await page.evaluate((t) => JSON.parse(localStorage.getItem("portal_session") || "{}").token === t, TOK.B));
+    check("R3 the stale screen of A is dropped", !(await page.locator("body").innerText()).includes("الحاج أ"));
+    // الإقرارُ أيضاً: شاشةُ «أ» بلا حدث، ثمّ «تمّت القراءة»
+    const be2 = backend();
+    const r2 = await boot(browser, be2, TOK.A);
+    await r2.page.evaluate((t) => localStorage.setItem("portal_session", JSON.stringify({ token: t, idle_expires_at: "2099-01-01", absolute_expires_at: "2099-01-01" })), TOK.B);
+    await r2.page.locator("#ann-1 >> text=تمّت القراءة").click();
+    await r2.page.waitForTimeout(800);
+    check("R3 acknowledgment from A's screen is never sent under B's token", !be2.st.acks.some(a => a.tok === TOK.B), JSON.stringify(be2.st.acks));
+    check("R3 no page errors", errors.length === 0 && r2.errors.length === 0, [...errors, ...r2.errors].join(" | "));
+    await ctx.close(); await r2.ctx.close();
+  }
+
+  /* ══ R4 (P2) — تحديثٌ و«عرض المزيد» متزامنان، بالترتيبين ══ */
+  for (const order of ["refresh-then-loadmore", "loadmore-then-refresh"]) {
+    const be = backend();
+    be.st.anns[TOK.A] = ids25();
+    const { ctx, page, errors } = await boot(browser, be, TOK.A);
+    await loadMore(page); await page.waitForSelector("#ann-20", { timeout: 5000 });
+    be.st.anns[TOK.A] = be.st.anns[TOK.A].filter(a => a.id !== 12);          // حُذف 12 في الخادم
+    be.st.delay.page = 1500;
+    const pagesBefore = be.st.calls.filter(c => c.fn === "get_pilgrim_announcements").length;
+    if (order === "refresh-then-loadmore") {
+      be.st.stamp = "sE1"; await poke(page); await page.waitForTimeout(300);  // إعادةُ الجلب جارية
+      await page.locator("text=عرض المزيد").click({ force: true });           // ضغطةٌ أثناءها
+    } else {
+      await loadMore(page); await page.waitForTimeout(200);                    // «عرض المزيد» جارٍ
+      be.st.stamp = "sE2"; await poke(page);
+    }
+    await page.waitForTimeout(5000);
+    be.st.delay.page = 0;
+    const now = await ids(page); const server = be.st.anns[TOK.A].map(a => a.id);
+    check(`R4 ${order}: deleted 12 does not reappear`, !now.includes(12), JSON.stringify(now));
+    check(`R4 ${order}: no valid item lost inside the shown range (order kept)`, inOrder(now, server), JSON.stringify(now));
+    check(`R4 ${order}: no duplicates`, now.length === new Set(now).size);
+    check(`R4 ${order}: has_more matches the server`, ((await page.locator("text=عرض المزيد").count()) === 1) === (server.length > now.length), `${now.length}/${server.length}`);
+    const used = be.st.calls.filter(c => c.fn === "get_pilgrim_announcements").length - pagesBefore;
+    check(`R4 ${order}: bounded requests (≤ 3 page calls for one refresh + one tap)`, used <= 3, String(used));
+    check(`R4 ${order}: no page errors`, errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+
+  /* ══ R5 (P2) — تحديثان يعودان بترتيبٍ معكوس عمداً ══ */
+  {
+    const be = backend();
+    be.st.anns[TOK.A] = ids25();
+    const { ctx, page, errors } = await boot(browser, be, TOK.A, { clock: true });
+    await loadMore(page); await page.waitForSelector("#ann-20", { timeout: 5000 });
+    be.st.delay.portal = [2500, 0];                                          // الأوّلُ بطيء (حالةٌ قديمة)، والثاني سريع
+    be.st.stamp = "sF"; await poke(page);                                    // R1: فحصُ البصمة → تحديث
+    await page.waitForTimeout(150);
+    be.st.stamp = "s1";                                                      // لا تحديثاتٍ أخرى من فحص البصمة
+    be.st.anns[TOK.A] = be.st.anns[TOK.A].filter(a => a.id !== 5 && a.id !== 15);
+    await page.clock.runFor(180000);                                         // R2: التحديثُ الدوريّ (حالةٌ جديدة)
+    await page.waitForTimeout(3500);                                         // R1 القديمُ يعود الآن، بعد R2
+    const now = await ids(page); const server = be.st.anns[TOK.A].map(a => a.id);
+    const portalCalls = be.st.calls.filter(c => c.fn === "get_pilgrim_portal_by_session").length;
+    check("R5 setup: two overlapping portal refreshes were sent", portalCalls >= 2, String(portalCalls));
+    check("R5 the older reply does not resurrect deleted 5 (first page)", !now.includes(5), JSON.stringify(now));
+    check("R5 …nor deleted 15 (extra page)", !now.includes(15), JSON.stringify(now));
+    check("R5 pagination consistent with the accepted refresh (no gap, no duplicates)", inOrder(now, server) && now.length === new Set(now).size, JSON.stringify(now));
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("portal_data") || "{}").announcements?.map(a => a.id) || []);
+    check("R5 localStorage keeps the newer profile (5 absent)", !stored.includes(5), JSON.stringify(stored));
+    check("R5 no page errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+  /* ══ R5′ — رفضٌ قديمٌ يعود بعد نجاحٍ أحدث لا يُنهي الجلسة؛ ورفضٌ أحدثُ يُنهيها ══ */
+  {
+    const be = backend();
+    const { ctx, page, errors } = await boot(browser, be, TOK.A, { clock: true });
+    /* R1 يُلتقط والجلسةُ مرفوضة ويعود متأخّراً؛ R2 بعده والجلسةُ صالحة */
+    be.st.invalid.add(TOK.A); be.st.delay.portal = [2500, 0];
+    be.st.stamp = "sG"; await poke(page); await page.waitForTimeout(150);
+    be.st.stamp = "s1"; be.st.invalid.delete(TOK.A);
+    await page.clock.runFor(180000);
+    await page.waitForTimeout(3500);
+    check("R5′ an older rejection arriving after a newer success does not expire the session", (await page.locator("#ann-1").count()) === 1 && await page.evaluate(() => !!localStorage.getItem("portal_session")));
+    be.st.invalid.add(TOK.A); be.st.stamp = "sH"; await poke(page);
+    await page.waitForSelector("input[placeholder=A12345678]", { timeout: 8000 }).catch(() => {});
+    check("R5′ a current rejection still expires the session", (await page.locator("input[placeholder=A12345678]").count()) === 1 && await page.evaluate(() => !localStorage.getItem("portal_session")));
+    check("R5′ no page errors", errors.length === 0, errors.join(" | "));
     await ctx.close();
   }
 

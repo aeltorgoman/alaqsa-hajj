@@ -431,14 +431,21 @@ export const PORTAL_SESSION_KEY = "portal_session";
 
 export type PortalDoc = { url: string; is_pdf: boolean };
 
-/* الرابط الموقّع لا يُخزَّن: ذاكرة الصفحة وحدها، وبهامش نصف دقيقة
+/* الرابط الموقّع لا يُخزَّن: ذاكرة الصفحة وحدها (لا localStorage)، وبهامش نصف دقيقة
    يمنع تسليم رابط يموت بين الطلب والفتح.
-   والمفتاح **النوعُ وحده** لا الرمز: لا سبب لأن يصير رمز جلسة
-   مفتاحَ خريطة، والجلسة واحدة في الصفحة على أي حال. */
-const portalDocCache = new Map<PortalDocType, { doc: PortalDoc; expiresAt: number }>();
 
-/** تُفرَّغ عند الدخول والخروج: روابط حاجٍّ لا تُسلَّم لجلسة أخرى. */
+   ⚠️ مراجعة v1.3.0 (P1) — **مالكُ المدخل**: كان المفتاحُ النوعَ وحده، والكتابةُ بعد انتظار الطلب.
+   فطلبُ الحاجّ «أ» الذي يعود بعد خروجه ودخولِ «ب» كان يكتب رابطَ وثيقة «أ» في الذاكرة بعد مسحها،
+   فيُسلَّم لـ«ب» عند أوّل ضغطة. الآن:
+     · كلُّ مدخلٍ يحمل جلسةَ من طلبه (`owner`)، ولا يُسلَّم إلا لها؛
+     · و«جيلُ» الذاكرة يُرفع عند كلّ مسح: ردٌّ بدأ قبل المسح لا يُكتب ولا يُعاد لمتّصله.
+   والرمزُ في ذاكرة الصفحة وحدها — لا يُسجَّل ولا يُكتب في تخزينٍ دائمٍ ولا في رابط. */
+const portalDocCache = new Map<PortalDocType, { owner: string; doc: PortalDoc; expiresAt: number }>();
+let portalDocEpoch = 0;
+
+/** تُفرَّغ عند الدخول والخروج وتبديل الحاجّ: روابط حاجٍّ لا تُسلَّم لجلسة أخرى، وما في الطريق يُهمَل. */
 export function clearPortalDocCache(): void {
+  portalDocEpoch += 1;
   portalDocCache.clear();
 }
 
@@ -452,7 +459,8 @@ export async function portalDocUrl(
   if (!token) return null;
 
   const cached = portalDocCache.get(docType);
-  if (cached && cached.expiresAt > Date.now()) return cached.doc;
+  if (cached && cached.owner === token && cached.expiresAt > Date.now()) return cached.doc;
+  const epoch = portalDocEpoch;
 
   /* عميل البوابة لا العميل المشترك: `pilgrim-doc` عامة
      (`verify_jwt=false`) فلا تتأثر بوجود جلسة موظّف من عدمه — لكن
@@ -466,8 +474,11 @@ export async function portalDocUrl(
     return null;
   }
 
+  /* مُسحت الذاكرةُ أثناء الطلب (خروجٌ أو تبديلُ حاجّ): الردُّ لجلسةٍ انتهت — لا يُخزَّن ولا يُعاد */
+  if (epoch !== portalDocEpoch) return null;
   const doc: PortalDoc = { url: data.url, is_pdf: data.is_pdf === true };
   portalDocCache.set(docType, {
+    owner: token,
     doc,
     expiresAt: Date.now() + (Number(data.expires_in) || DOC_TTL.portal) * 1000 - SIGN_MARGIN_MS,
   });
