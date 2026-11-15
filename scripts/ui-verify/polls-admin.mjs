@@ -160,9 +160,9 @@ try {
 
     /* ١٢ — الثباتُ بعد النشر */
     const b = async (id) => card(page, id).getByRole("button").allInnerTexts();
-    check("published: only «إغلاق الاستطلاع» — no edit, delete or publish", JSON.stringify(await b(1)) === JSON.stringify(["إغلاق الاستطلاع"]), JSON.stringify(await b(1)));
+    check("published: «عرض النتائج» + «إغلاق الاستطلاع» only — no edit, delete or publish", JSON.stringify(await b(1)) === JSON.stringify(["عرض النتائج", "إغلاق الاستطلاع"]), JSON.stringify(await b(1)));
     check("published: question/options/audience/allow-changes shown as immutable", (await t(1)).includes("🔒 ثابت بعد النشر") && (await t(1)).includes("الإجابة الأولى نهائية") && (await t(1)).includes("صباحاً"));
-    check("closed: no actions at all", (await b(2)).length === 0, JSON.stringify(await b(2)));
+    check("closed: no lifecycle actions — only «عرض النتائج» (Phase 4)", JSON.stringify(await b(2)) === JSON.stringify(["عرض النتائج"]), JSON.stringify(await b(2)));
     check("scheduled: edit · unschedule · delete (no direct publish-now)", JSON.stringify(await b(3)) === JSON.stringify(["تعديل", "إلغاء الجدولة", "حذف"]), JSON.stringify(await b(3)));
     check("draft: edit · publish · delete", JSON.stringify(await b(4)) === JSON.stringify(["تعديل", "نشر الآن", "حذف"]), JSON.stringify(await b(4)));
 

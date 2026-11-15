@@ -1339,6 +1339,8 @@ export type Database = {
       delete_poll: { Args: { p_poll_id: number }; Returns: boolean }
       poll_results: { Args: { p_poll_id: number; p_dimension?: string | null }; Returns: Json }
       get_poll_snapshot: { Args: { p_poll_id: number }; Returns: Json }
+      /* Phase 4 — تفاصيلُ النتائج المسمّاة (manage_portal) — ترحيلة 20261112224117 */
+      poll_details: { Args: { p_poll_id: number }; Returns: Json }
       /* Polls Phase 2 — البوابة (anon، بالجلسة) */
       get_pilgrim_polls: { Args: { p_token: string }; Returns: Json }
       submit_pilgrim_poll_response: {

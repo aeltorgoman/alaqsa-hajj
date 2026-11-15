@@ -1,0 +1,139 @@
+-- ═══════════════════════════════════════════════════════════════════
+-- version : 20261112224117
+-- name    : polls_phase4_results
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- Phase 4 — شاشةُ نتائج الاستطلاع: دالّةٌ واحدةٌ للقراءة، ولا شيءَ غيرُها.
+-- لا جدولَ ولا عمودَ ولا محفّزَ ولا سياسة، ولا تغييرَ لدالّةٍ قائمة.
+--
+-- لماذا دالّةٌ جديدة؟ عقدُ Phase 2 لا يعطي الإدارةَ أسماءَ المجيبين لاستطلاعٍ منشور:
+--   · poll_results  ← أعدادٌ فقط (بلا أسماء ولا أرقام حجّاج) — كما صُمِّمت.
+--   · get_poll_snapshot ← الأسماءُ لكن للمغلق وحده (لقطةُ الإغلاق).
+--   · جداولُ الإجابات والجمهور بلا منحِ قراءةٍ لأيّ دورٍ تطبيقيّ (Phase 2، عن قصد).
+-- والإجاباتُ ليست مجهولة (قرارُ المنتج)، فتحتاج الإدارةُ قائمةً مسمّاة. والطريقُ الآمن
+-- دالّةٌ محروسةٌ بـmanage_portal تُعيد إسقاطاً ضيّقاً، لا فتحُ الجداول.
+--
+-- poll_details(p_poll_id) → jsonb:
+--   { poll_id, status, kind, max_choices, source: 'live'|'snapshot', as_of,
+--     options: [{id,label,sort_order}],
+--     labels:  { bus: {id:name}, camp_mina: {id:name}, flight_go: {id:name}, flight_back: {id:name} },
+--     flight_info: {id: {airline, date, time, from_airport, to_airport, type}}   ← المنشورُ وحده
+--     rows:    [{ passenger_id, name_ar, passenger_type, added_reason,
+--                 bus, camp_mina, flight_go, flight_back, responded, revision, option_ids }] }
+--
+--   · المغلق ← من لقطة الإغلاق نفسها (rows · labels · options) بعد التحقّق من بصمتها (checksum، خوارزميّة
+--     Phase 2 بلا تغيير). لقطةٌ لا تطابق بصمتها ← خطأ XX001 ولا نتائج (لا رجوعَ إلى الحيّ): الإسنادُ (باص · منى · رحلة الذهاب
+--     `flight_id` · رحلة العودة `return_flight_id`) وأسماؤها كما كانت **لحظةَ الإغلاق**، وتبقى بعد حذف
+--     الحاجّ أو تغيّر إسناده. فالتحليلُ التاريخيّ متاحٌ من Phase 2 ولا يُخترَع.
+--     ⚠️ تفاصيلُ الرحلة (الشركة · التاريخ · المسار) لم تحفظها اللقطة — الاسمُ وحده. فـflight_info
+--     فارغةٌ للمغلق ولا تُستكمل من جدول الرحلات الحاليّ (ذاك تزويرٌ للتاريخ).
+--   · المنشور ← الإسنادُ الحاليّ (_poll_rows · _poll_labels) — هو ما تعنيه «نتائجُ حيّة».
+--   · المسوّدةُ والمجدوَل ← لا جمهورَ مجمَّداً بعد: rows فارغة.
+--   · صفٌّ واحدٌ لكلّ حاجٍّ في الجمهور المجمَّد بإجابته **الحاليّة** — تغييرُ الإجابة لا يُضاعف العدّ.
+--   · تقليلُ البيانات: لا عرفةَ ولا فندقَ (خارجُ نطاق Phase 4)، ولا أيُّ عمودٍ آخر.
+--
+-- الصلاحية: الحارسُ نفسُه في Phase 1/2 (_announcement_admin_guard: manage_portal). authenticated
+-- وحده، لا anon ولا service_role ولا public. ودوالُّ البوابة لا تمسّها هذه الترحيلة.
+-- الاستحقاقُ الزمنيّ قبل القراءة (_poll_settle) كسائر دوالّ الإدارة: منتهٍ يُغلق بلقطته أوّلاً.
+
+create function public.poll_details(p_poll_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  p        public.polls%rowtype;
+  s        public.poll_result_snapshots%rowtype;
+  v_rows   jsonb;
+  v_labels jsonb;
+  v_opts   jsonb;
+  v_src    text;
+  v_asof   timestamptz;
+  v_finfo  jsonb := '{}'::jsonb;
+begin
+  perform public._announcement_admin_guard();
+  perform public._poll_settle(p_poll_id);
+  select * into p from public.polls where id = p_poll_id;
+  if not found then
+    raise exception 'الاستطلاع غير موجود.' using errcode = 'P0002';
+  end if;
+
+  if p.status = 'closed' then
+    select * into s from public.poll_result_snapshots where poll_id = p_poll_id;
+    if not found then
+      raise exception 'لقطةُ نتائج الاستطلاع المغلق غير موجودة.' using errcode = 'P0002';
+    end if;
+    /* سلامةُ اللقطة قبل أيّ قراءة — بخوارزميّة Phase 2 نفسها (get_poll_snapshot · _poll_close) دون تغيير.
+       لقطةٌ لا تطابق بصمتَها لا تُعاد، ولا يُستعاض عنها بالإسناد الحاليّ أو بالإجابات الحيّة:
+       خطأٌ صريح (XX001 = data_corrupted) والمعاملةُ كلُّها تُلغى. */
+    if s.checksum is distinct from md5(s.options::text || s.totals::text || s.groups::text || s.rows::text) then
+      raise exception 'تعذّر التحقّق من سلامة نتائج الاستطلاع المغلق.' using errcode = 'XX001';
+    end if;
+    v_rows := s.rows; v_labels := s.labels; v_opts := s.options; v_src := 'snapshot'; v_asof := s.closed_at;
+  elsif p.status = 'published' then
+    v_rows := public._poll_rows(p_poll_id); v_labels := public._poll_labels(p.season_id);
+    v_opts := public._poll_options_json(p_poll_id); v_src := 'live'; v_asof := now();
+  else
+    v_rows := '[]'::jsonb; v_labels := public._poll_labels(p.season_id);
+    v_opts := public._poll_options_json(p_poll_id); v_src := 'live'; v_asof := now();
+  end if;
+  if v_src = 'live' then
+    v_finfo := coalesce((select jsonb_object_agg(f.id::text, jsonb_build_object(
+                 'airline', f.airline, 'date', f.date, 'time', f.time,
+                 'from_airport', f.from_airport, 'to_airport', f.to_airport, 'type', f.type))
+               from public.flights f where f.season_id = p.season_id), '{}'::jsonb);
+  end if;
+
+  return jsonb_build_object(
+    'poll_id', p.id, 'status', p.status, 'kind', p.kind, 'max_choices', p.max_choices,
+    'source', v_src, 'as_of', v_asof,
+    'options', coalesce(v_opts, '[]'::jsonb),
+    'labels', jsonb_build_object('bus', coalesce(v_labels->'bus', '{}'::jsonb),
+                                 'camp_mina', coalesce(v_labels->'camp_mina', '{}'::jsonb),
+                                 'flight_go', coalesce(v_labels->'flight_go', '{}'::jsonb),
+                                 'flight_back', coalesce(v_labels->'flight_back', '{}'::jsonb)),
+    'flight_info', v_finfo,
+    'rows', (select coalesce(jsonb_agg(jsonb_build_object(
+                'passenger_id', e->'passenger_id', 'name_ar', e->'name_ar', 'passenger_type', e->'passenger_type',
+                'added_reason', e->'added_reason', 'bus', e->'bus', 'camp_mina', e->'camp_mina',
+                'flight_go', e->'flight_go', 'flight_back', e->'flight_back',
+                'responded', coalesce(e->'responded', 'false'::jsonb), 'revision', e->'revision',
+                'option_ids', coalesce(e->'option_ids', '[]'::jsonb))
+              order by (e->>'passenger_id')::bigint), '[]'::jsonb)
+             from jsonb_array_elements(coalesce(v_rows, '[]'::jsonb)) e));
+end;
+$$;
+
+alter function public.poll_details(bigint) owner to postgres;
+revoke all on function public.poll_details(bigint) from public, anon, authenticated, service_role;
+grant execute on function public.poll_details(bigint) to authenticated;
+comment on function public.poll_details(bigint) is
+  'Phase 4 — تفاصيلُ النتائج المسمّاة (صفٌّ لكلّ حاجٍّ في الجمهور المجمَّد بإجابته الحاليّة · باص · منى · رحلتا الذهاب والعودة). المغلقُ من لقطة الإغلاق (بلا تفاصيل الرحلات)، والمنشورُ بالإسناد الحاليّ. manage_portal وحده.';
+
+-- ── شروطٌ لاحقة على ما تملكه هذه الترحيلة وحده (S-38) ─────────────
+do $post$
+declare
+  v_fn  regprocedure := 'public.poll_details(bigint)'::regprocedure;
+  v_src text;
+begin
+  if has_function_privilege('anon', v_fn, 'EXECUTE') or has_function_privilege('service_role', v_fn, 'EXECUTE')
+     or not has_function_privilege('authenticated', v_fn, 'EXECUTE') then
+    raise exception 'poll_details: المِنَح غير صحيحة.' using errcode = 'P0001';
+  end if;
+  if not exists (select 1 from pg_proc p where p.oid = v_fn and p.prosecdef
+                  and p.proconfig @> array['search_path=public, pg_temp']) then
+    raise exception 'poll_details ليست SECURITY DEFINER بمسار بحثٍ ثابت.' using errcode = 'P0001';
+  end if;
+  select prosrc into v_src from pg_proc where oid = v_fn;
+  if position('_announcement_admin_guard()' in v_src) = 0 then
+    raise exception 'poll_details بلا حارس manage_portal.' using errcode = 'P0001';
+  end if;
+  /* لا يُمنح anon شيئاً جديداً على جداول الاستطلاعات (ثابتُ Phase 2) */
+  if has_table_privilege('anon', 'public.poll_responses', 'SELECT')
+     or has_table_privilege('authenticated', 'public.poll_responses', 'SELECT')
+     or has_table_privilege('authenticated', 'public.poll_response_choices', 'SELECT') then
+    raise exception 'جداولُ الإجابات صارت مقروءةً مباشرة.' using errcode = 'P0001';
+  end if;
+end
+$post$;

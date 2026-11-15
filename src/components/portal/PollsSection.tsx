@@ -30,6 +30,10 @@ export function PollsSection({ t, polls, pending, onSubmit }: Props) {
       <div style={{ ...cardStyle, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
         <h2 id="pp-polls-h" style={{ fontSize: 19, fontWeight: 900, color: INK, fontFamily: t.fontD, margin: 0 }}>استطلاعات الحملة</h2>
         {pending > 0 && <span style={{ fontSize: 13.5, fontWeight: 900, fontFamily: t.fontD, background: "#C1121F", color: "#fff", padding: "4px 12px", borderRadius: 99 }}>بانتظار إجابتك ({pending})</span>}
+        {/* Phase 4 — الإجاباتُ ليست مجهولة: تُعلَن للحاجّ قبل أن يجيب */}
+        <div data-polls-disclosure style={{ flexBasis: "100%", fontSize: 14, color: BODY, fontWeight: 600, lineHeight: 1.9 }}>
+          إجابتك ليست سرّية: تطّلع إدارة الحملة على اسمك وإجابتك لتنظيم الخدمات.
+        </div>
       </div>
       {polls.map(p => <PollCard key={p.id} t={t} p={p} onSubmit={onSubmit} />)}
     </section>
