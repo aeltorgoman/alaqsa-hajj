@@ -68,8 +68,9 @@ export function PollsAdmin() {
         if (!e && res) t[r.id] = (res as { totals: PollTotals }).totals;
       } else {
         const { data: snap, error: e } = await supabase.rpc("get_poll_snapshot", { p_poll_id: r.id });
-        const s = snap as { totals?: PollTotals } | null;
-        if (!e && s?.totals) t[r.id] = s.totals;
+        const s = snap as { totals?: PollTotals; checksum_valid?: boolean } | null;
+        /* لقطةٌ لم تُثبت سلامتها (checksum_valid) لا تُعرض أرقامُها — تبقى «—» */
+        if (!e && s?.totals && s.checksum_valid === true) t[r.id] = s.totals;
       }
     }));
     setPolls(rows); setOptions(byPoll); setTotals(t); setLoadError(false); setLoading(false);

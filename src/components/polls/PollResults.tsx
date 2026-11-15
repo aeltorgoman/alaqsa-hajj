@@ -27,7 +27,7 @@ const linkBtn = { background: "none", border: "none", padding: "2px 4px", cursor
 export function PollResults({ poll, onBack }: { poll: PollRow; onBack: () => void }) {
   const branding = useReportBranding();
   const [d, setD] = useState<PollDetails | null>(null);
-  const [state, setState] = useState<"loading" | "ok" | "error" | "denied" | "pending-migration">("loading");
+  const [state, setState] = useState<"loading" | "ok" | "error" | "denied" | "pending-migration" | "integrity">("loading");
   const [tab, setTab] = useState<Tab>("results");
   const [drawer, setDrawer] = useState<{ title: string; sub?: string; rows: DetailRow[] } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -36,11 +36,17 @@ export function PollResults({ poll, onBack }: { poll: PollRow; onBack: () => voi
     const { data, error } = await supabase.rpc("poll_details", { p_poll_id: poll.id });
     if (!error && data) { setD(normalizeDetails(data as Record<string, unknown>)); setState("ok"); return; }
     if (error?.code === "42501") { setState("denied"); return; }
+    /* لقطةُ الإغلاق لا تطابق بصمتها: لا نتائج، ولا رجوعَ إلى بياناتٍ حيّة */
+    if (error?.code === "XX001") { setD(null); setState("integrity"); return; }
     /* الترحيلةُ لم تُطبَّق بعد (PGRST202): المغلقُ من لقطته (Phase 2)، والمنشورُ ينتظر */
     if (error?.code === "PGRST202") {
       if (poll.status === "closed") {
         const { data: snap, error: e2 } = await supabase.rpc("get_poll_snapshot", { p_poll_id: poll.id });
-        if (!e2 && snap) { setD(detailsFromSnapshot(snap as Record<string, unknown>, poll.kind, poll.max_choices)); setState("ok"); return; }
+        if (!e2 && snap) {
+          /* البصمةُ نفسُها في المسارين: get_poll_snapshot تحسبها (checksum_valid) ولا تُعرض لقطةٌ لم تُثبت سلامتها */
+          if ((snap as { checksum_valid?: unknown }).checksum_valid !== true) { setD(null); setState("integrity"); return; }
+          setD(detailsFromSnapshot(snap as Record<string, unknown>, poll.kind, poll.max_choices)); setState("ok"); return;
+        }
         setState(e2?.code === "42501" ? "denied" : "error"); return;
       }
       setState("pending-migration"); return;
@@ -102,6 +108,9 @@ export function PollResults({ poll, onBack }: { poll: PollRow; onBack: () => voi
 
       {state === "loading" && <div role="status" style={{ fontSize: 12, color: "var(--text-muted)", padding: 16 }}>جاري تحميل النتائج...</div>}
       {state === "error" && <div role="alert" style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, padding: 16 }}>تعذر تحميل النتائج — يرجى المحاولة مرة أخرى. <button type="button" onClick={load} style={{ ...btnS(), fontSize: 11 }}>إعادة المحاولة</button></div>}
+      {state === "integrity" && <div role="alert" data-integrity-error style={{ ...card, fontSize: 12.5, color: "var(--danger)", fontWeight: 700, lineHeight: 1.9 }}>
+        تعذّر التحقق من سلامة نتائج هذا الاستطلاع المغلق، فلم تُعرض حفاظاً على دقتها. يرجى إبلاغ مسؤول النظام.
+      </div>}
       {state === "denied" && <div role="alert" style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, padding: 16 }}>لا تملك صلاحية عرض نتائج الاستطلاعات.</div>}
       {state === "pending-migration" && <div role="alert" style={{ ...card, fontSize: 12, color: "var(--warning)", fontWeight: 700, lineHeight: 1.9 }}>
         نتائجُ الاستطلاع المنشور بالأسماء تحتاج تحديث قاعدة البيانات (ترحيلة Phase 4) الذي لم يُطبَّق بعد. الاستطلاعات المغلقة تُعرض من لقطة إغلاقها.

@@ -97,11 +97,14 @@ async function boot(browser, { viewport = { width: 1366, height: 900 }, theme = 
       const fn = p.split("/").pop(); const body = JSON.parse(req.postData() || "{}"); calls.push({ fn, body });
       if (fn === "poll_details") {
         if (mode === "denied") return json(route, { code: "42501", message: "لا تملك صلاحية إدارة بوابة الحاج." }, 403);
-        if (mode === "premigration") return json(route, { code: "PGRST202", message: "Could not find the function" }, 404);
+        if (mode === "premigration" || mode === "premigration-corrupt") return json(route, { code: "PGRST202", message: "Could not find the function" }, 404);
+        /* لقطةٌ لا تطابق بصمتها: poll_details ترفع XX001 (PostgREST ← 500) بلا أيّ بيانات */
+        if (mode === "corrupt" && POLLS.find(x => x.id === body.p_poll_id)?.status === "closed")
+          return json(route, { code: "XX001", message: "تعذّر التحقّق من سلامة نتائج الاستطلاع المغلق.", details: "internal: checksum mismatch on poll_result_snapshots", hint: null }, 500);
         return json(route, details(body.p_poll_id));
       }
       if (fn === "get_poll_snapshot") { const dd = details(body.p_poll_id); return json(route, { poll_id: dd.poll_id, closed_at: dd.as_of, options: dd.options, labels: { ...dd.labels, camp_arafa: {} },
-        rows: dd.rows.map(r => ({ ...r, camp_arafa: 5, hotel: 9 })), totals: { audience: 6, respondents: 4, options: [] }, checksum_valid: true }); }
+        rows: dd.rows.map(r => ({ ...r, camp_arafa: 5, hotel: 9 })), totals: { audience: 6, respondents: 4, options: [] }, checksum_valid: mode !== "premigration-corrupt" }); }
       if (fn === "poll_results") return json(route, { totals: { audience: 6, respondents: 4, options: [] } });
       if (fn === "announcement_audience_preview") return json(route, [{ passenger_id: 101 }]);
       return json(route, fn === "push_enabled_passengers" ? [] : null);
@@ -364,6 +367,29 @@ try {
     await page.locator(`[data-poll-id="1"]`).getByRole("button", { name: "عرض النتائج" }).click();
     await page.waitForTimeout(800);
     check("pre-migration: published poll explains the pending migration, shows no numbers", (await page.locator(".poll-results").innerText()).includes("ترحيلة Phase 4") && (await page.locator("[data-kpi]").count()) === 0);
+    await ctx.close();
+  }
+
+  /* ══ سلامةُ لقطة الإغلاق ══ */
+  for (const [mode, label] of [["corrupt", "poll_details refuses (XX001)"], ["premigration-corrupt", "pre-migration snapshot with checksum_valid = false"]]) {
+    const { ctx, page, calls, errors } = await boot(browser, { mode });
+    await page.locator(`[data-poll-id="3"]`).getByRole("button", { name: "عرض النتائج" }).click();
+    await page.locator("[data-integrity-error]").waitFor({ timeout: 8000 }).catch(() => {});
+    const txt = await page.locator(".poll-results").innerText();
+    check(`integrity (${label}): clear Arabic error shown`, txt.includes("تعذّر التحقق من سلامة نتائج هذا الاستطلاع المغلق"));
+    check(`integrity (${label}): no numbers, tabs, names or export`, (await page.locator("[data-kpi]").count()) === 0 && (await page.getByRole("tab").count()) === 0
+      && !/أحمد|جابر|زياد|هشام|داود|بلال/.test(txt) && (await page.getByRole("button", { name: /تصدير/ }).count()) === 0);
+    check(`integrity (${label}): no internal database details exposed`, !/checksum|poll_result_snapshots|XX001|internal/i.test(txt));
+    check(`integrity (${label}): no fallback to live data (no poll_results / live rows requested after the failure)`,
+      !calls.some(c => c.fn === "poll_results" && c.body.p_poll_id === 3) && calls.filter(c => c.body.p_poll_id === 3).every(c => ["poll_details", "get_poll_snapshot"].includes(c.fn)));
+    check(`integrity (${label}): no page errors`, errors.length === 0, errors.join(" | "));
+    if (mode === "corrupt") await page.screenshot({ path: join(OUT, "integrity-error.png") });
+    await page.getByRole("button", { name: /رجوع/ }).click();
+    if (mode === "premigration-corrupt") { await page.locator(`[data-poll-id="3"]`).waitFor();
+      check("poll list: an invalid snapshot's participation is not shown (—)", (await page.locator(`[data-poll-id="3"]`).innerText()).includes("المشاركة: —")); }
+    await page.locator(`[data-poll-id="1"]`).getByRole("button", { name: "عرض النتائج" }).click();
+    await page.locator(".poll-results [data-kpi]").first().waitFor({ timeout: 8000 }).catch(() => {});
+    if (mode === "corrupt") check("integrity failure is per poll: a valid published poll still opens normally", (await page.locator("[data-kpi]").count()) === 4);
     await ctx.close();
   }
 

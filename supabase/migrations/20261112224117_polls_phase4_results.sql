@@ -21,7 +21,8 @@
 --     rows:    [{ passenger_id, name_ar, passenger_type, added_reason,
 --                 bus, camp_mina, flight_go, flight_back, responded, revision, option_ids }] }
 --
---   · المغلق ← من لقطة الإغلاق نفسها (rows · labels · options): الإسنادُ (باص · منى · رحلة الذهاب
+--   · المغلق ← من لقطة الإغلاق نفسها (rows · labels · options) بعد التحقّق من بصمتها (checksum، خوارزميّة
+--     Phase 2 بلا تغيير). لقطةٌ لا تطابق بصمتها ← خطأ XX001 ولا نتائج (لا رجوعَ إلى الحيّ): الإسنادُ (باص · منى · رحلة الذهاب
 --     `flight_id` · رحلة العودة `return_flight_id`) وأسماؤها كما كانت **لحظةَ الإغلاق**، وتبقى بعد حذف
 --     الحاجّ أو تغيّر إسناده. فالتحليلُ التاريخيّ متاحٌ من Phase 2 ولا يُخترَع.
 --     ⚠️ تفاصيلُ الرحلة (الشركة · التاريخ · المسار) لم تحفظها اللقطة — الاسمُ وحده. فـflight_info
@@ -62,6 +63,12 @@ begin
     select * into s from public.poll_result_snapshots where poll_id = p_poll_id;
     if not found then
       raise exception 'لقطةُ نتائج الاستطلاع المغلق غير موجودة.' using errcode = 'P0002';
+    end if;
+    /* سلامةُ اللقطة قبل أيّ قراءة — بخوارزميّة Phase 2 نفسها (get_poll_snapshot · _poll_close) دون تغيير.
+       لقطةٌ لا تطابق بصمتَها لا تُعاد، ولا يُستعاض عنها بالإسناد الحاليّ أو بالإجابات الحيّة:
+       خطأٌ صريح (XX001 = data_corrupted) والمعاملةُ كلُّها تُلغى. */
+    if s.checksum is distinct from md5(s.options::text || s.totals::text || s.groups::text || s.rows::text) then
+      raise exception 'تعذّر التحقّق من سلامة نتائج الاستطلاع المغلق.' using errcode = 'XX001';
     end if;
     v_rows := s.rows; v_labels := s.labels; v_opts := s.options; v_src := 'snapshot'; v_asof := s.closed_at;
   elsif p.status = 'published' then

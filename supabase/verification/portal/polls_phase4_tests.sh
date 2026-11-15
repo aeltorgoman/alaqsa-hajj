@@ -37,6 +37,7 @@ if [ "$(q "select count(*) from public.seasons where closed_at is null")" != "0"
 
 U_ADMIN=00000000-0000-0000-0000-0000000097a1
 U_STAFF=00000000-0000-0000-0000-0000000097a2
+U_INACT=00000000-0000-0000-0000-0000000097a3
 cleanup() {
   q "set app.season_maintenance = 'on';
      delete from public.poll_result_snapshots where season_id = 9871;
@@ -49,8 +50,9 @@ cleanup() {
      delete from public.buses where id in (6871, 6872);
      delete from public.seasons where id = 9871 or hijri_year = 1496;
      delete from public.edge_rate_limits where scope = 'portal-poll';
-     delete from public.user_profiles where id in ('$U_ADMIN', '$U_STAFF');
-     delete from auth.users where id in ('$U_ADMIN', '$U_STAFF');" > /dev/null 2>&1
+     delete from public.user_profiles where id in ('$U_ADMIN', '$U_STAFF', '$U_INACT');
+     delete from auth.users where id in ('$U_ADMIN', '$U_STAFF', '$U_INACT');
+     drop schema if exists p4test cascade;" > /dev/null 2>&1
 }
 trap cleanup EXIT
 
@@ -58,10 +60,12 @@ trap cleanup EXIT
 #   5874 حاجّ: بلا إسناد            5875 مرافق: باص ١ (خارجُ «الكلّ»)    5876 حاجّ: باص ١ · منى ١ (يُحذف بعد الإغلاق)
 q "set app.season_maintenance = 'on';
    insert into auth.users (id,email,aud,role) values
-     ('$U_ADMIN','p4-admin@t.local','authenticated','authenticated'), ('$U_STAFF','p4-staff@t.local','authenticated','authenticated');
+     ('$U_ADMIN','p4-admin@t.local','authenticated','authenticated'), ('$U_STAFF','p4-staff@t.local','authenticated','authenticated'),
+     ('$U_INACT','p4-inactive@t.local','authenticated','authenticated');
    insert into public.user_profiles (id,email,name,permissions,is_active) values
      ('$U_ADMIN','p4-admin@t.local','مدير النتائج','{\"manage_portal\":true}',true),
-     ('$U_STAFF','p4-staff@t.local','موظّف','{\"manage_passengers\":true,\"view_reports\":true}',true);
+     ('$U_STAFF','p4-staff@t.local','موظّف','{\"manage_passengers\":true,\"view_reports\":true}',true),
+     ('$U_INACT','p4-inactive@t.local','مديرٌ موقوف','{\"manage_portal\":true}',false);
    insert into public.seasons (id,name,hijri_year,closed_at) overriding system value values (9871,'موسم P4',1496,null);
    insert into public.buses (id,season_id,name) overriding system value values (6871,9871,'باص ١'),(6872,9871,'باص ٢');
    insert into public.camps (id,season_id,name,type,page_type,gender,capacity) overriding system value values
@@ -122,6 +126,7 @@ eq "multiple: kind and max_choices returned" "$(echo "$r" | py 'print(d["kind"],
 
 echo "═══ الصلاحيات وعزلُ البيانات ═══"
 has "staff without manage_portal → 42501" "$(staff $U_STAFF "select poll_details($P1)")" "42501"
+has "deactivated account that still holds manage_portal → 42501" "$(staff $U_INACT "select poll_details($P1)")" "42501"
 has "anon cannot execute" "$(anon "select poll_details($P1)")" "permission denied"
 has "service_role cannot execute" "$(svc "select poll_details($P1)")" "permission denied"
 has "unknown poll → P0002" "$(staff $U_ADMIN "select poll_details(987654321)")" "P0002"
@@ -148,6 +153,45 @@ q "set app.season_maintenance = 'on'; delete from public.pilgrim_sessions where 
 eq "deleted pilgrim: still in the closed snapshot (name kept)" "$(det $P1 | py 'print([x["name_ar"] for x in d["rows"] if x["passenger_id"]==5876])')" "['حاج سادس']"
 eq "…and gone from the live audience" "$(det $P2 | py 'print(5876 in [x["passenger_id"] for x in d["rows"]])')" "False"
 has "closed poll still refuses votes" "$(vote "$T2" $P1 "array[$A]" 1)" "closed"
+
+echo "═══ سلامةُ لقطة الإغلاق (البصمة) ═══"
+# اللقطةُ إضافةٌ فقط (محفّز): يُعطَّل لتلك المعاملة وحدها لمحاكاة التلف، ثم تُعاد كما كانت حرفاً
+q "create schema p4test; create table p4test.bak as select * from public.poll_result_snapshots where poll_id = $P1" > /dev/null
+snap_set() { q "begin; set local session_replication_role = replica; update public.poll_result_snapshots set $1 where poll_id = $P1; commit;" > /dev/null; }
+snap_restore() { q "begin; set local session_replication_role = replica;
+  update public.poll_result_snapshots s set rows = b.rows, options = b.options, totals = b.totals, groups = b.groups, labels = b.labels, checksum = b.checksum
+    from p4test.bak b where s.poll_id = b.poll_id; commit;" > /dev/null; }
+GOOD=$(det $P1 | md5sum | cut -c1-32)
+eq "valid snapshot: poll_details returns it; Phase 2 get_poll_snapshot agrees (checksum_valid)" "$(det $P1 | py 'print(d["source"], len(d["rows"]))'):$(staff $U_ADMIN "select (get_poll_snapshot($P1)->>'checksum_valid')")" "snapshot 5:true"
+for c in "rows=jsonb_set(rows, '{0,option_ids}', '[]'::jsonb)|rows (an answer erased)" \
+         "rows=jsonb_set(rows, '{0,bus}', '6872'::jsonb)|rows (historical bus rewritten)" \
+         "options=jsonb_set(options, '{0,label}', '\"مزوَّر\"'::jsonb)|options (label rewritten)" \
+         "totals=jsonb_set(totals, '{respondents}', '99'::jsonb)|totals" \
+         "groups=jsonb_set(groups, '{bus}', '[]'::jsonb)|groups" \
+         "checksum=md5('x')|checksum itself"; do
+  set_sql="${c%%|*}"; what="${c##*|}"
+  snap_set "$set_sql"
+  r=$(det $P1)
+  has "corrupted $what → refused with XX001" "$r" "XX001"
+  eq "…no rows, names, numbers or live fallback in the response" "$(echo "$r" | grep -cE 'حاج|\"rows\"|\"source\"|live|6871|6872')" "0"
+  eq "…Phase 2 get_poll_snapshot reports the same snapshot invalid" "$(staff $U_ADMIN "select (get_poll_snapshot($P1)->>'checksum_valid')")" "false"
+  snap_restore
+done
+eq "after restoring the exact snapshot: valid again and byte-identical result" "$(det $P1 | md5sum | cut -c1-32)" "$GOOD"
+eq "integrity failure wrote nothing (no admin/response events, no second snapshot)" "$(q "select count(*) from poll_admin_events where poll_id = $P1 and action = 'close'")$(q "select count(*) from poll_result_snapshots where poll_id = $P1")" "11"
+
+echo "═══ الاستحقاقُ الزمنيّ (_poll_settle) والإغلاقُ المتزامن ═══"
+P3=$(staff $U_ADMIN "select create_poll('ينتهي قريباً', null, 'single', null, '{\"all\":true}'::jsonb, array['أ','ب'], now() + interval '3 seconds')")
+staff $U_ADMIN "select publish_poll($P3)" > /dev/null
+E1=$(opt $P3 1)
+eq "vote before expiry" "$(vote "$T2" $P3 "array[$E1]" 0)" "ok"
+sleep 4
+eq "expired but not yet settled (no cron locally): still published" "$(q "select status from polls where id = $P3")" "published"
+for i in 1 2 3; do ( staff $U_ADMIN "select poll_details($P3)" > "/tmp/p4_settle_$$_$i.out" ) & done; wait
+eq "three concurrent poll_details on an expired poll: all return the closing snapshot" "$(for i in 1 2 3; do py 'print(d["status"], d["source"])' < /tmp/p4_settle_$$_$i.out; done | sort -u)" "closed snapshot"
+rm -f /tmp/p4_settle_$$_*.out
+eq "…closed exactly once: one snapshot, one close event, reason expired" "$(q "select count(*) from poll_result_snapshots where poll_id = $P3"):$(q "select count(*) from poll_admin_events where poll_id = $P3 and action = 'close'"):$(q "select close_reason from polls where id = $P3")" "1:1:expired"
+eq "…the settled snapshot is valid and holds the vote" "$(staff $U_ADMIN "select (get_poll_snapshot($P3)->>'checksum_valid')"):$(det $P3 | py 'print(sum(x["responded"] for x in d["rows"]))')" "true:1"
 
 echo "═══ منحُ الدالّة ═══"
 eq "grants: authenticated only, SECURITY DEFINER, fixed search_path" "$(q "select has_function_privilege('authenticated','public.poll_details(bigint)','EXECUTE')::text || has_function_privilege('anon','public.poll_details(bigint)','EXECUTE')::text || has_function_privilege('service_role','public.poll_details(bigint)','EXECUTE')::text || prosecdef::text || array_to_string(proconfig, ';') from pg_proc where oid = 'public.poll_details(bigint)'::regprocedure")" "truefalsefalsetruesearch_path=public, pg_temp"

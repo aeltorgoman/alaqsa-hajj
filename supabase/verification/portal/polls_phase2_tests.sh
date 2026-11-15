@@ -243,7 +243,11 @@ rm -f "$TMPD"/*.out
 
 echo "═══ النتائجُ الحيّة ═══"
 R=$(staff $U_ADMIN "select poll_results($P5)")
-eq "live totals: audience 4, respondents 4, option counts" "$(echo "$R" | python3 -c 'import json,sys; d=json.load(sys.stdin)["totals"]; print(d["audience"], d["respondents"], [o["count"] for o in d["options"]])')" "4 4 [2, 2, 0]"
+# 5892 أرسل الخيارين معاً أوّلاً (التزامن أعلاه): الفائزُ أيُّهما سبق — عشوائيٌّ بالتصميم (ok واحد وstale).
+# فالمتوقَّعُ يُشتقّ من الفائز المسجَّل لا من افتراضه: 5891→ب · 5894→أ · 5897→أ · و5892→الفائز.
+W=$(q "select option_id from poll_response_choices where poll_id = $P5 and passenger_id = 5892")
+[ "$W" = "$C1" ] && WANT="4 4 [3, 1, 0]" || WANT="4 4 [2, 2, 0]"
+eq "live totals: audience 4, respondents 4, option counts (5892's concurrent winner: $([ "$W" = "$C1" ] && echo أ || echo ب))" "$(echo "$R" | python3 -c 'import json,sys; d=json.load(sys.stdin)["totals"]; print(d["audience"], d["respondents"], [o["count"] for o in d["options"]])')" "$WANT"
 R=$(staff $U_ADMIN "select poll_results($P5, 'bus')")
 eq "live grouping by current bus (unassigned shown explicitly)" "$(echo "$R" | python3 -c 'import json,sys; print(";".join(f"{g["label"]}:{g["audience"]}:{g["respondents"]}" for g in json.load(sys.stdin)["groups"]))')" "باص ١:2:2;باص ٢:1:1;غير مُسنَد:1:1"
 eq "aggregates carry no names or pilgrim ids" "$(echo "$R" | grep -c 'حاج\|5891\|passenger')" "0"
