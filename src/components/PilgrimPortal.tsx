@@ -264,7 +264,7 @@ function PilgrimPortal() {
       localStorage.setItem("portal_data", JSON.stringify(res));
       scheduleRevalidate(s);
       /* H4 — حكمُ جهازٍ تعذّر عند الدخول يُعاد ما دامت الجلسةُ صالحة */
-      void retryPendingClaim(token);
+      void retryPendingClaim(token, () => isCurrent(s));
       return;
     }
     /* رفضٌ صريح لا عطل شبكة: الجلسة انتهت أو أُبطلت أو أُقفل
@@ -493,7 +493,16 @@ function PilgrimPortal() {
     return o;
   }, [expireSession, syncFromStorage, refreshPolls, snap, isCurrent]);
 
+  /* مراجعة #278 — تفعيلُ التنبيهات وإيقافُها لجلسة هذه الشاشة وحدها: إن صار التخزينُ لجلسةٍ أخرى
+     (تبويبٌ آخر) لا يُربط الجهازُ ولا يُفكّ باسمها من شاشةٍ قديمة، وتتبع الشاشةُ التخزين أوّلاً. */
+  const pushSessionOk = () => {
+    if (snap().token) return true;
+    if (sessionRef.current && readSession() !== sessionRef.current) syncFromStorage();
+    return false;
+  };
+
   async function turnPushOn() {
+    if (!pushSessionOk()) return;
     setPushBusy(true);
     setPushNote("");
     const res = await enablePush();
@@ -509,6 +518,7 @@ function PilgrimPortal() {
   }
 
   async function turnPushOff() {
+    if (!pushSessionOk()) return;
     setPushBusy(true);
     await disablePush();
     setPushBusy(false);
@@ -727,6 +737,8 @@ function PilgrimPortal() {
     const dNum = Number(day), mNum = Number(month), yNum = Number(year);
     loggingIn.current = true;
     setLoading(true);
+    /* الرمزُ الذي كتبه هذا الدخولُ في التخزين — ليُمسح هو وحده إن تعثّر الدخولُ قبل اعتماده */
+    let written: string | null = null;
     try {
       /* H4 — خروجُ من سبق على هذا الجهاز يُتمّ أوّلاً: لا يتجاوزه دخولٌ جديد */
       await finishPendingLogout();
@@ -751,15 +763,18 @@ function PilgrimPortal() {
            هذه اللحظة أبداً، ولا يُكتب على الجهاز */
         clearPortalDocCache();
         localStorage.setItem(PORTAL_SESSION_KEY, JSON.stringify(s));
+        written = s.token;
         const { data: res } = await portalSupabase.rpc(
           "get_pilgrim_portal_by_session", { p_token: s.token });
         if (!res) {
-          localStorage.removeItem(PORTAL_SESSION_KEY);
+          /* مراجعة #278 — يُمسح ما كتبه هذا الدخولُ وحده: تبويبٌ آخر قد يكون دخل بعده بجلسةٍ صالحة */
+          if (readSession() === s.token) localStorage.removeItem(PORTAL_SESSION_KEY);
           setLoginError(PORTAL_LOGIN_MESSAGES.network);
         } else {
           /* H4 — هذا الجهاز لهذا الحاجّ؟ وإلّا فُكَّ عن سابقه وأُلغي اشتراكُه،
              فيفعّل الداخلُ تنبيهاتِه بنفسه. قبل أن يُقرأ حالُ التنبيهات. */
-          await claimDevicePushAfterLogin(s.token);
+          /* الحكمُ لهذه الجلسة ما دامت جلسةَ الجهاز: دخولٌ أحدث في تبويبٍ آخر يوقفه (مراجعة #278) */
+          await claimDevicePushAfterLogin(s.token, () => readSession() === s.token);
           /* تبويبٌ آخر دخل بحاجٍّ آخر أثناء هذا الدخول: التخزينُ لجلسته، فلا تُعرض هنا جلسةٌ غيرُها */
           if (readSession() !== s.token) { syncFromStorage(); return; }
           /* تبديلُ الحاجّ على الجهاز: لا يبقى في الذاكرة شيءٌ لجلسةٍ سابقة، ويُهمَل كلُّ ردٍّ متأخّرٍ لها.
@@ -773,7 +788,11 @@ function PilgrimPortal() {
           setDoc(""); setDay(""); setMonth(""); setYear("");
         }
       }
-    } catch { setLoginError(PORTAL_LOGIN_MESSAGES.network); }
+    } catch {
+      /* عطلٌ بعد كتابة الجلسة وقبل اعتمادها: تُمسح إن بقيت جلسةَ هذا الدخول وحده */
+      if (written && readSession() === written && sessionRef.current !== written) localStorage.removeItem(PORTAL_SESSION_KEY);
+      setLoginError(PORTAL_LOGIN_MESSAGES.network);
+    }
     finally { setLoading(false); loggingIn.current = false; }
   }
 

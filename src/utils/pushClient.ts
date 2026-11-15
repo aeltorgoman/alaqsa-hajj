@@ -291,21 +291,33 @@ export async function finishPendingLogout(): Promise<void> {
  *  وعند تعذّر الحكم مرّتين (شبكة، أو خادمٌ أقدم بلا الدالّة) يُلغى اشتراكُ
  *  المتصفّح أيضاً. وإن تعذّر الحكمُ **وتعذّر** إلغاءُ المتصفّح معاً — فقد يبقى
  *  الجهازُ حيّاً لغيره — يُعلَّق الحكمُ ويُعاد عند كلّ تحديثٍ ناجحٍ للبوابة. */
-export async function claimDevicePushAfterLogin(token: string): Promise<void> {
+export async function claimDevicePushAfterLogin(token: string, stillCurrent: () => boolean = () => true): Promise<void> {
+  /* مراجعة #278 — الحكمُ لجلسةٍ ما زالت جلسةَ هذا الجهاز. دخولٌ متأخّرٌ في تبويبٍ آخر صار بعده تخزينُ
+     الجهاز لجلسةٍ أحدث: لا يُربط الجهازُ بالجلسة القديمة، ولا يُلغى اشتراكُ المتصفّح (صار للجلسة الأحدث). */
   const sub = await currentSubscription();
+  if (!stillCurrent()) return;                     // لم يُرسَل شيء: الجلسةُ الأحدث حكمت أو ستحكم بنفسها
   if (!sub) {
     localStorage.removeItem("portal_push_endpoint");
     localStorage.removeItem(PENDING_CLAIM_KEY);
     return;
   }
   let verdict: string | null = null;
+  let sent = false;
   for (let attempt = 0; attempt < 2 && verdict === null; attempt++) {
+    if (!stillCurrent()) break;
+    sent = true;
     try {
       const { data, error } = await portalSupabase.rpc("claim_pilgrim_push_device", {
         p_token: token, p_endpoint: sub.endpoint,
       });
       if (!error && typeof data === "string") verdict = data;
     } catch { verdict = null; }
+  }
+  if (!stillCurrent()) {
+    /* الجلسةُ تبدّلت أثناء الحكم: ربما رُبط الجهازُ على الخادم بالجلسة القديمة. لا يُعمَل بالحكم هنا،
+       ويُعلَّق حكمٌ تعيده جلسةُ الجهاز الحاليّة برمزها هي عند أوّل تحديثٍ ناجح (`retryPendingClaim`). */
+    if (sent) localStorage.setItem(PENDING_CLAIM_KEY, "1");
+    return;
   }
   if (verdict === "own") {
     localStorage.setItem("portal_push_endpoint", sub.endpoint);
@@ -319,9 +331,9 @@ export async function claimDevicePushAfterLogin(token: string): Promise<void> {
   else localStorage.removeItem(PENDING_CLAIM_KEY);
 }
 
-/** حكمُ جهازٍ معلَّقٌ من دخولٍ سابق (انظر أعلاه) — يُعاد بجلسة البوابة الحاليّة. */
-export async function retryPendingClaim(token: string): Promise<void> {
-  if (localStorage.getItem(PENDING_CLAIM_KEY) === "1") await claimDevicePushAfterLogin(token);
+/** حكمُ جهازٍ معلَّقٌ من دخولٍ سابق (انظر أعلاه) — يُعاد بجلسة البوابة الحاليّة ما دامت حاليّة. */
+export async function retryPendingClaim(token: string, stillCurrent: () => boolean = () => true): Promise<void> {
+  if (localStorage.getItem(PENDING_CLAIM_KEY) === "1" && stillCurrent()) await claimDevicePushAfterLogin(token, stillCurrent);
 }
 
 /* ─── إعادة التسجيل عند انتهاء صلاحية الاشتراك ─── */
