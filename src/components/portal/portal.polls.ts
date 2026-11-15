@@ -64,3 +64,17 @@ export const sameIds = (a: number[], b: number[]) => {
   const x = a.slice().sort((m, n) => m - n), y = b.slice().sort((m, n) => m - n);
   return x.length === y.length && x.every((v, i) => v === y[i]);
 };
+
+/* ═══ مراجعة v1.3.0 · P2 — رقمُ المراجعة الذي يُبنى عليه التعديل ═══
+   التحديثُ الدوريّ يغيّر `p.my_response` أثناء التعديل (إجابةٌ من جهازٍ آخر). فلو أُرسل آخرُ رقمٍ وصل
+   لقبلت القاعدةُ تعديلاً بُني على إجابةٍ أقدم وكتبته فوق الأحدث بصمت. فالمُرسَل هو رقمُ الإجابة التي
+   **بدأ منها التعديل**، والقاعدةُ تردّ `stale` إن تغيّرت بعده — وهو الردّ الذي تعالجه البطاقة أصلاً. */
+export function expectedRevision(phase: ReturnType<typeof pollPhase>, editBase: number | null, p: PortalPoll): number {
+  if (phase === "open-unanswered") return 0;
+  return editBase ?? (p.my_response?.revision ?? 0);
+}
+
+/** تغيّرت الإجابةُ المسجَّلة بعد أن بدأ التعديل (يُنبَّه الحاجّ قبل الإرسال) */
+export function changedSinceEdit(editBase: number | null, p: PortalPoll): boolean {
+  return editBase !== null && (p.my_response?.revision ?? 0) !== editBase;
+}
