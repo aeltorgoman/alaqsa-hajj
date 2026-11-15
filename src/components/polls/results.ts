@@ -194,10 +194,10 @@ export function exportSheets(d: PollDetails, m: PollMeta): Record<SheetKey, Cell
       ...where(r), answerLabels(d, r).join("، "), r.revision ?? ""] as Cell[]),
   ];
   const dimSheet = (dim: Dim): Cell[][] => [
-    [DIM_ONE[dim], ...(isFlight(dim) ? ["تفاصيل الرحلة"] : []), "المستهدفون", "المجيبون", "لم يجيبوا", "نسبة المشاركة",
+    [DIM_ONE[dim], ...(isFlight(dim) ? ["تفاصيل الرحلة"] : []), "المستهدفون", "المجيبون", "نسبة المشاركة", "لم يجيبوا",
       ...opts.flatMap(o => [`${o.label} (عدد)`, `${o.label} (٪ من المستهدفين)`, `${o.label} (٪ من المجيبين)`])],
     ...groupBy(d, dim).map(g => [g.label, ...(isFlight(dim) ? [g.detail || (d.source === "snapshot" && g.key != null ? "غير محفوظة في لقطة الإغلاق" : "")] : []),
-      g.audience, g.respondents, g.nonrespondents, fmtPct(g.respondents, g.audience),
+      g.audience, g.respondents, fmtPct(g.respondents, g.audience), g.nonrespondents,
       ...g.options.flatMap(o => [o.count, fmtPct(o.count, g.audience), fmtPct(o.count, g.respondents)])] as Cell[]),
   ];
   const nonrespondents: Cell[][] = [
@@ -207,6 +207,8 @@ export function exportSheets(d: PollDetails, m: PollMeta): Record<SheetKey, Cell
   return { summary, answers, bus: dimSheet("bus"), camp_mina: dimSheet("camp_mina"), flight_go: dimSheet("flight_go"), flight_back: dimSheet("flight_back"), nonrespondents };
 }
 
+/* «لم يجب» في الرسم — اللونُ نفسُه في الشاشة وPDF */
+export const NONRESP_COLOR = "#A8A29E";
 export const OPTION_COLORS = ["#2E7D32", "#1565C0", "#B8860B", "#6A1B9A", "#C62828", "#00838F", "#AD1457", "#5D4037", "#3949AB", "#7CB342"];
 const escHtml = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 
@@ -228,19 +230,23 @@ export function reportBody(d: PollDetails, m: PollMeta): string {
   const results = `<table><thead><tr><th>الخيار</th><th style="width:12%">الأصوات</th><th style="width:12%">النسبة</th><th style="width:36%">الرسم</th></tr></thead><tbody>
     ${s.options.map((o, i) => `<tr><td style="white-space:normal"><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${color(i)};margin-left:4pt"></span>${escHtml(o.label)}</td><td>${o.count}</td><td>${fmtPct(o.count, s.respondents)}</td><td>${bar(pct(o.count, s.respondents), color(i))}</td></tr>`).join("")}
   </tbody></table>${s.multiple ? `<div style="font-size:8pt;color:#666;margin:-4pt 0 8pt">${escHtml(MULTI_NOTE)}</div>` : ""}`;
-  /* الخليّة: العددُ، ثم الأساسيّةُ بخطٍّ عريض، ثم الثانويّةُ صغيرة — كما في الشاشة */
-  const cell = (o: OptionStat, g: Group) => `<td style="white-space:normal"><b>${o.count}</b> · <b>${fmtPct(o.count, g.audience)}</b><div style="font-size:7pt;color:#777">${fmtPct(o.count, g.respondents)} من المجيبين</div></td>`;
-  /* الرسم: شريطٌ لكلّ خيارٍ بعرض نسبته من المستهدفين (لا تكديس — المتعدّدُ قد يتجاوز ١٠٠٪) */
-  const chart = (g: Group) => g.options.map((o, i) => `<div style="display:flex;align-items:center;gap:3pt;margin:1pt 0">${bar(pct(o.count, g.audience), color(i), 5)}</div>`).join("");
+  /* الخليّة كما في الشاشة: العدد · الأساسيّةُ (عريضة) · (الثانويّة) */
+  const cell = (o: OptionStat, g: Group) => `<td>${o.count} · <b>${fmtPct(o.count, g.audience)}</b> <span style="font-size:7pt;color:#777">(${fmtPct(o.count, g.respondents)})</span></td>`;
+  /* الرسم كما في الشاشة: الاختيارُ الواحد شريطٌ واحدٌ = ١٠٠٪ من المستهدفين (الخيارات + «لم يجب»)؛
+     والمتعدّدُ شريطٌ مستقلٌّ لكلّ خيار بنسبته من المستهدفين (لا تكديس — قد يتجاوز المجموعُ ١٠٠٪) */
+  const chart = (g: Group) => s.multiple
+    ? g.options.map((o, i) => `<div style="margin:1pt 0">${bar(pct(o.count, g.audience), color(i), 5)}</div>`).join("")
+    : `<div style="display:flex;height:9pt;border-radius:3pt;overflow:hidden;background:#eee">${g.options.map((o, i) => o.count ? `<div style="width:${pct(o.count, g.audience)}%;background:${color(i)}"></div>` : "").join("")}${g.nonrespondents ? `<div style="width:${pct(g.nonrespondents, g.audience)}%;background:${NONRESP_COLOR}"></div>` : ""}</div>`;
   const dimTable = (dim: Dim) => {
     const gs = groupBy(d, dim);
     return `<div style="break-inside:avoid;page-break-inside:avoid"><div class="section-title">${DIM_LABEL[dim]}</div>
     ${isFlight(dim) && d.source === "snapshot" ? `<div style="font-size:7.5pt;color:#666;margin:-2pt 0 4pt">${escHtml(FLIGHT_SNAPSHOT_NOTE)}</div>` : ""}
-    <table class="wide-table"><thead><tr><th>${DIM_ONE[dim]}</th><th>المستهدفون</th><th>المجيبون</th><th>لم يجيبوا</th><th>المشاركة</th>${opts.map(o => `<th style="white-space:normal">${escHtml(o.label)}</th>`).join("")}<th style="width:14%">الرسم (٪ من المستهدفين)</th></tr></thead><tbody>
-      ${gs.map(g => `<tr style="break-inside:avoid"><td style="white-space:normal"><b>${escHtml(g.label)}</b>${g.detail ? `<div style="font-size:7pt;color:#777">${escHtml(g.detail)}</div>` : ""}</td><td>${g.audience}</td><td>${g.respondents}</td><td>${g.nonrespondents}</td><td>${fmtPct(g.respondents, g.audience)}</td>${g.options.map(o => cell(o, g)).join("")}<td>${chart(g)}</td></tr>`).join("") || `<tr><td colspan="${6 + opts.length}">لا يوجد جمهور</td></tr>`}
+    <table class="wide-table"><thead><tr><th>${DIM_ONE[dim]}</th><th>المستهدفون</th><th>المجيبون</th><th>المشاركة</th><th>لم يجيبوا</th>${opts.map((o, i) => `<th style="white-space:normal"><span style="display:inline-block;width:6pt;height:6pt;border-radius:1.5pt;background:${color(i)};margin-left:3pt"></span>${escHtml(o.label)}</th>`).join("")}<th style="width:14%">الرسم (٪ من المستهدفين)</th></tr></thead><tbody>
+      ${gs.map(g => `<tr style="break-inside:avoid"><td style="white-space:normal"><b>${escHtml(g.label)}</b>${g.detail ? `<div style="font-size:7pt;color:#777">${escHtml(g.detail)}</div>` : ""}</td><td>${g.audience}</td><td>${g.respondents}</td><td><b>${fmtPct(g.respondents, g.audience)}</b></td><td>${g.nonrespondents}</td>${g.options.map(o => cell(o, g)).join("")}<td>${chart(g)}</td></tr>`).join("") || `<tr><td colspan="${6 + opts.length}">لا يوجد جمهور</td></tr>`}
     </tbody></table></div>`;
   };
-  const legend = `<div style="display:flex;flex-wrap:wrap;gap:8pt;font-size:8pt;margin:2pt 0 6pt">${opts.map((o, i) => `<span><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${color(i)};margin-left:3pt"></span>${escHtml(o.label)}</span>`).join("")}</div>
+  const legend = `<div style="display:flex;flex-wrap:wrap;gap:8pt;font-size:8pt;margin:2pt 0 6pt">${opts.map((o, i) => `<span><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${color(i)};margin-left:3pt"></span>${escHtml(o.label)}</span>`).join("")}${s.multiple ? "" : `<span><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${NONRESP_COLOR};margin-left:3pt"></span>لم يجب</span>`}</div>
+  <div style="font-size:7.5pt;color:#666;margin-bottom:2pt">في كل خانة: العدد · <b>٪ من المستهدفين</b> (الأساسية) · (٪ من المجيبين)</div>
   <div style="font-size:7.5pt;color:#666;margin-bottom:4pt">${escHtml(DIST_NOTE)}${s.multiple ? ` ${escHtml(MULTI_NOTE)}` : ""}</div>`;
   return `<div class="section-title">معلومات الاستطلاع</div>${info}
 <div class="section-title">نتائج التصويت</div>${kpis}${results}

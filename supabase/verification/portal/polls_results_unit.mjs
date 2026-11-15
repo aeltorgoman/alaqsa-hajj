@@ -74,10 +74,10 @@ const x = R.exportSheets(single, meta);
 eq("Excel: sheets incl. outbound and return flights", Object.keys(x), ["summary", "answers", "bus", "camp_mina", "flight_go", "flight_back", "nonrespondents"]);
 const kv = Object.fromEntries(x.summary.filter(r => r.length === 2).map(r => [r[0], r[1]]));
 eq("Excel summary totals match the screen", [kv["المستهدفون"], kv["المجيبون"], kv["لم يجيبوا"], kv["نسبة المشاركة"]], [5, 3, 2, "60٪"]);
-eq("Excel bus header: nonrespondents + both % per option", x.bus[0].slice(0, 8), ["الباص", "المستهدفون", "المجيبون", "لم يجيبوا", "نسبة المشاركة", "صباحاً (عدد)", "صباحاً (٪ من المستهدفين)", "صباحاً (٪ من المجيبين)"]);
-eq("Excel bus 2 row: «مساءً» 1 · 50% of targeted · 100% of respondents", x.bus[2].slice(0, 11), ["باص ٢", 2, 1, 1, "50٪", 0, "0٪", "0٪", 1, "50٪", "100٪"]);
+eq("Excel bus header: nonrespondents + both % per option", x.bus[0].slice(0, 8), ["الباص", "المستهدفون", "المجيبون", "نسبة المشاركة", "لم يجيبوا", "صباحاً (عدد)", "صباحاً (٪ من المستهدفين)", "صباحاً (٪ من المجيبين)"]);
+eq("Excel bus 2 row: «مساءً» 1 · 50% of targeted · 100% of respondents", x.bus[2].slice(0, 11), ["باص ٢", 2, 1, "50٪", 1, 0, "0٪", "0٪", 1, "50٪", "100٪"]);
 eq("Excel outbound sheet: flight details column + same numbers as the screen", x.flight_go.slice(1).map(r => r.slice(0, 6)),
-  go.map(g => [g.label, g.detail, g.audience, g.respondents, g.nonrespondents, R.fmtPct(g.respondents, g.audience)]));
+  go.map(g => [g.label, g.detail, g.audience, g.respondents, R.fmtPct(g.respondents, g.audience), g.nonrespondents]));
 eq("Excel return sheet incl. unassigned", x.flight_back.slice(1).map(r => [r[0], r[2]]), [["QR2", 3], ["غير مُسنَد", 2]]);
 eq("Excel answers carry both flights per pilgrim", x.answers.slice(1).map(r => `${r[1]}|${r[5]}|${r[6]}|${r[7]}`), ["أحمد|QR1|QR2|مساءً", "بلال|QR1|غير مُسنَد|صباحاً", "جابر|QR3|QR2|مساءً"]);
 eq("Excel closed: flight details marked as not captured", R.exportSheets(ds, { ...meta, status: "closed" }).flight_go.slice(1).map(r => r[1]), ["غير محفوظة في لقطة الإغلاق", ""]);
@@ -86,8 +86,11 @@ eq("Excel multiple: explanatory note included", R.exportSheets(multi, { ...meta,
 const html = R.reportBody(single, { ...meta, title: "<img src=x onerror=alert(1)>" });
 eq("PDF escapes the question", [html.includes("<img src=x"), html.includes("&lt;img src=x onerror=alert(1)&gt;")], [false, true]);
 eq("PDF has all four dimensions and unassigned", ["الباصات", "مخيمات منى", "رحلات الذهاب", "رحلات العودة", "غير مُسنَد", "QR1", "من DOH إلى JED"].every(t => noIso(html).includes(t)), true);
-eq("PDF shows both percentages consistent with Excel (bus 2 «مساءً»: 50٪ / 100٪ من المجيبين)", html.includes("<b>1</b> · <b>50٪</b><div style=\"font-size:7pt;color:#777\">100٪ من المجيبين</div>"), true);
+eq("PDF shows both percentages consistent with Excel (bus 2 «مساءً»: 50٪ / 100٪ من المجيبين)", html.includes("<td>1 · <b>50٪</b> <span style=\"font-size:7pt;color:#777\">(100٪)</span></td>"), true);
 eq("PDF has nonrespondents column and the two-denominator note", html.includes("<th>لم يجيبوا</th>") && html.includes(R.DIST_NOTE), true);
+eq("PDF single-choice chart: one bar = options + nonrespondents (grey), widths from % of targeted", html.includes(`background:${R.NONRESP_COLOR}`) && html.includes("لم يجب"), true);
+const mhtml = R.reportBody(multi, { ...meta, kind: "multiple" });
+eq("PDF multiple-choice chart: no nonrespondent segment, independent bars", !mhtml.includes(`background:${R.NONRESP_COLOR}`), true);
 eq("PDF has no Arafat/hotel sections", ["عرفة", "الفندق"].some(t => html.includes(t)), false);
 eq("PDF closed: flight snapshot limitation stated", R.reportBody(ds, { ...meta, status: "closed" }).includes(R.FLIGHT_SNAPSHOT_NOTE), true);
 

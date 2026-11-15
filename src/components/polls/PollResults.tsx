@@ -11,9 +11,9 @@ import { btnP, btnS, inp, makeHTML, printInPage, addSummarySheet, freezeHeaderRo
 import { useReportBranding } from "../../company/CompanyContext";
 import { STATUS_LABEL, type PollRow } from "./polls";
 import {
-  DIMS, DIM_LABEL, DIM_ONE, DIST_NOTE, FLIGHT_SNAPSHOT_NOTE, MULTI_NOTE, OPTION_COLORS, SHEET_NAME, UNASSIGNED, answerLabels, cellText,
+  DIMS, DIM_LABEL, DIM_ONE, DIST_NOTE, FLIGHT_SNAPSHOT_NOTE, MULTI_NOTE, NONRESP_COLOR, OPTION_COLORS, SHEET_NAME, UNASSIGNED, answerLabels, cellText,
   detailsFromSnapshot, exportSheets, filterRows, fmtPct, groupBy, isFlight, labelOf, normalizeDetails, pct, reportBody, sortRows, sourceNote, summarize,
-  type DetailRow, type Dim, type PollDetails, type PollMeta, type SortKey,
+  type DetailRow, type Dim, type Group, type OptionStat, type PollDetails, type PollMeta, type SortKey,
 } from "./results";
 
 type Tab = "results" | "distribution" | "participation";
@@ -168,20 +168,59 @@ function ResultsTab({ d, open }: { d: PollDetails; open: (t: string, r: DetailRo
 
 function DistributionTab({ d, open }: { d: PollDetails; open: (t: string, r: DetailRow[], sub?: string) => void }) {
   const [dim, setDim] = useState<Dim>("bus");
+  /* الجدولُ هو الافتراض: صفٌّ مضغوطٌ لكلّ مجموعة يسهّل المقارنة؛ والرسمُ اختياريّ */
   const [view, setView] = useState<"table" | "chart">("table");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const groups = useMemo(() => groupBy(d, dim), [d, dim]);
   const opts = summarize(d).options;
+  const multiple = d.kind === "multiple";
+  const gkey = (g: Group) => `${dim}:${g.key ?? "none"}`;
+  const toggle = (k: string) => setExpanded(s => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const num = (n: number, title: string, rows: DetailRow[], sub?: string) => n > 0
     ? <button type="button" onClick={() => open(title, rows, sub)} style={linkBtn}>{n}</button> : <span style={{ color: "var(--text-muted)" }}>0</span>;
-  const pill = (on: boolean) => ({ border: on ? "2px solid var(--primary)" : "1px solid var(--border)", background: on ? "var(--primary)" : "var(--bg-card)", color: on ? "var(--text-inverse)" : "var(--text)", borderRadius: 99, fontSize: 11.5, fontWeight: 800, padding: "5px 14px", cursor: "pointer", fontFamily: "inherit", minHeight: 32 });
-  const groupName = (g: ReturnType<typeof groupBy>[number]) => (
-    <>
-      <span style={{ color: g.key === null ? "var(--warning)" : "var(--text)", fontWeight: 800 }}>{g.label}</span>
-      {g.detail && <div data-flight-detail style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, marginTop: 2, whiteSpace: "normal" }}>{g.detail}</div>}
-    </>
+  const pill = (on: boolean) => ({ border: on ? "2px solid var(--primary)" : "1px solid var(--border)", background: on ? "var(--primary)" : "var(--bg-card)", color: on ? "var(--text-inverse)" : "var(--text)", borderRadius: 99, fontSize: 12, fontWeight: 800, padding: "5px 14px", cursor: "pointer", fontFamily: "inherit", minHeight: 32 });
+  const swatch = (i: number) => <span aria-hidden style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color(i), marginInlineEnd: 5, verticalAlign: "middle", flexShrink: 0 }} />;
+  /* خليّةُ الخيار المضغوطة: العدد · الأساسيّة (عريضة) · (الثانويّة) */
+  const optCell = (o: OptionStat, g: Group) => (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {num(o.count, `${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
+      {" "}<b data-pct-targeted style={{ color: "var(--text)", fontSize: 13 }}>{fmtPct(o.count, g.audience)}</b>
+      {" "}<span data-pct-respondents title="من المجيبين" style={{ color: "var(--text-muted)", fontSize: 11 }}>({fmtPct(o.count, g.respondents)})</span>
+    </span>
   );
+  const nameCell = (g: Group) => (
+    <span style={{ display: "inline-flex", flexDirection: "column", minWidth: 0 }}>
+      <span style={{ color: g.key === null ? "var(--warning)" : "var(--text)", fontWeight: 800 }}>{g.label}</span>
+      {g.detail && <span data-flight-detail style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, whiteSpace: "nowrap" }}>{g.detail}</span>}
+    </span>
+  );
+  const headCols = [DIM_ONE[dim], "المستهدفون", "المجيبون", "المشاركة", "لم يجيبوا"];
+
+  /* تفاصيلُ المجموعة الموسَّعة — تبقى ظاهرةً في إطار التمرير الأفقيّ (لاصقة) */
+  const details = (g: Group) => (
+    <div data-group-details style={{ position: "sticky", insetInlineStart: 0, width: "min(680px, calc(100vw - 48px))", padding: "10px 12px", boxSizing: "border-box" }}>
+      {g.detail && <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 6 }}><b>{DIM_ONE[dim]}:</b> {g.label} · <span style={{ color: "var(--text-muted)" }}>{g.detail}</span></div>}
+      {isFlight(dim) && d.source === "snapshot" && g.key !== null && <div style={{ fontSize: 11, color: "var(--warning)", marginBottom: 6 }}>تفاصيل الرحلة غير محفوظة في لقطة الإغلاق.</div>}
+      <div style={{ display: "flex", gap: "6px 16px", flexWrap: "wrap", fontSize: 12.5, marginBottom: 8 }}>
+        <span>المستهدفون: {num(g.audience, `${g.label} — المستهدفون`, g.rows)}</span>
+        <span>المجيبون: {num(g.respondents, `${g.label} — المجيبون`, g.rows.filter(r => r.responded))}</span>
+        <span>لم يجيبوا: {num(g.nonrespondents, `${g.label} — لم يجيبوا`, g.rows.filter(r => !r.responded))}</span>
+        <span>المشاركة: <b>{fmtPct(g.respondents, g.audience)}</b></span>
+      </div>
+      <div style={{ display: "grid", gap: 5 }}>
+        {g.options.map((o, i) => (
+          <div key={o.id} data-detail-opt={o.id} style={{ display: "grid", gridTemplateColumns: "minmax(70px, 150px) 1fr auto", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span style={{ display: "flex", alignItems: "center", minWidth: 0 }}>{swatch(i)}<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.label}>{o.label}</span></span>
+            <span style={{ height: 10, borderRadius: 5, background: "var(--bg-hover)", overflow: "hidden" }}><span style={{ display: "block", width: `${Math.min(100, pct(o.count, g.audience))}%`, height: "100%", background: color(i) }} /></span>
+            <span style={{ whiteSpace: "nowrap" }}>{num(o.count, `${g.label} — «${o.label}»`, o.rows, cellText(o, g))} <b>{fmtPct(o.count, g.audience)}</b> <span style={{ color: "var(--text-muted)", fontSize: 11 }}>· {fmtPct(o.count, g.respondents)} من المجيبين</span></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return <section aria-label="تحليل التوزيع">
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
       <div role="radiogroup" aria-label="التوزيع حسب" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         {DIMS.map(k => <button key={k} type="button" role="radio" aria-checked={dim === k} onClick={() => setDim(k)} style={pill(dim === k)}>{DIM_LABEL[k]}</button>)}
       </div>
@@ -190,70 +229,110 @@ function DistributionTab({ d, open }: { d: PollDetails; open: (t: string, r: Det
         <button type="button" role="radio" aria-checked={view === "chart"} onClick={() => setView("chart")} style={pill(view === "chart")}>رسم</button>
       </div>
     </div>
-    {d.source === "snapshot" && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>الإسناد كما كان لحظة إغلاق الاستطلاع.</div>}
-    {isFlight(dim) && d.source === "snapshot" && <div data-flight-snapshot-note style={{ fontSize: 11, color: "var(--warning)", fontWeight: 700, marginBottom: 8, lineHeight: 1.8 }}>{FLIGHT_SNAPSHOT_NOTE}</div>}
-    <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.8 }}>
-      لكل خيار: <b style={{ color: "var(--text)" }}>٪ من المستهدفين</b> (الأساسية) و٪ من المجيبين (الثانوية).
+    {d.source === "snapshot" && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>الإسناد كما كان لحظة إغلاق الاستطلاع.</div>}
+    {isFlight(dim) && d.source === "snapshot" && <div data-flight-snapshot-note style={{ fontSize: 11, color: "var(--warning)", fontWeight: 700, marginBottom: 6, lineHeight: 1.8 }}>{FLIGHT_SNAPSHOT_NOTE}</div>}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 11.5, color: "var(--text-muted)", marginBottom: 8, alignItems: "center" }}>
+      <span>في كل خانة: العدد · <b style={{ color: "var(--text)" }}>٪ من المستهدفين</b> (الأساسية) · (٪ من المجيبين)</span>
+      <span style={{ display: "inline-flex", gap: 10, flexWrap: "wrap" }}>{opts.map((o, i) => <span key={o.id} style={{ color: "var(--text)" }}>{swatch(i)}{o.label}</span>)}
+        {view === "chart" && !multiple && <span style={{ color: "var(--text)" }}><span aria-hidden style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: NONRESP_COLOR, marginInlineEnd: 5, verticalAlign: "middle" }} />لم يجب</span>}
+      </span>
     </div>
+
     {view === "table" ? (
       <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }} data-dist-table>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 520 + opts.length * 120 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
           <thead><tr style={{ background: "var(--bg-2)" }}>
-            {[DIM_ONE[dim], "المستهدفون", "المجيبون", "لم يجيبوا", "المشاركة", ...opts.map(o => o.label)].map((h, i) => <th key={i} scope="col" style={{ padding: "8px 10px", textAlign: "start", color: "var(--text)", fontWeight: 800, borderBottom: "1px solid var(--border)", whiteSpace: i >= 5 ? "normal" : "nowrap" }}>{h}</th>)}
+            {headCols.map((h, i) => <th key={h} scope="col" style={{ ...th, ...(i === 0 ? stickyCell("var(--bg-2)") : {}) }}>{h}</th>)}
+            {opts.map((o, i) => <th key={o.id} scope="col" style={{ ...th, whiteSpace: "normal", minWidth: 110, maxWidth: 180 }}><span style={{ display: "inline-flex", alignItems: "center" }}>{swatch(i)}{o.label}</span></th>)}
+          </tr></thead>
+          <tbody>
+            {groups.map(g => {
+              const k = gkey(g), on = expanded.has(k);
+              return [
+                <tr key={k} data-group={g.key ?? "none"} aria-expanded={on}
+                  onClick={e => { if ((e.target as HTMLElement).closest("button,a,input,select")) return; toggle(k); }}
+                  style={{ borderTop: "1px solid var(--border)", cursor: "pointer", background: on ? "var(--bg-hover)" : undefined }}>
+                  <th scope="row" style={{ ...tdc, ...stickyCell(on ? "var(--bg-hover)" : "var(--bg-card)"), fontWeight: 400 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button type="button" data-expand aria-expanded={on} aria-controls={`dg-${k}`} aria-label={`${on ? "إخفاء" : "عرض"} تفاصيل ${g.label}`} onClick={() => toggle(k)}
+                        style={{ border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text)", borderRadius: 6, width: 24, height: 24, padding: 0, cursor: "pointer", flexShrink: 0, fontSize: 11 }}>{on ? "▾" : "◂"}</button>
+                      {nameCell(g)}
+                    </span>
+                  </th>
+                  <td style={tdc}>{num(g.audience, `${g.label} — المستهدفون`, g.rows)}</td>
+                  <td style={tdc}>{num(g.respondents, `${g.label} — المجيبون`, g.rows.filter(r => r.responded))}</td>
+                  <td style={tdc}><b>{fmtPct(g.respondents, g.audience)}</b></td>
+                  <td style={tdc}>{num(g.nonrespondents, `${g.label} — لم يجيبوا`, g.rows.filter(r => !r.responded))}</td>
+                  {g.options.map(o => <td key={o.id} style={tdc} data-opt-cell={o.id}>{optCell(o, g)}</td>)}
+                </tr>,
+                on ? <tr key={`${k}-d`} id={`dg-${k}`} data-group-detail-row={g.key ?? "none"} style={{ background: "var(--bg-2)" }}><td colSpan={headCols.length + opts.length} style={{ padding: 0 }}>{details(g)}</td></tr> : null,
+              ];
+            })}
+            {groups.length === 0 && <tr><td colSpan={headCols.length + opts.length} style={{ ...tdc, color: "var(--text-muted)" }}>لا يوجد جمهور.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    ) : multiple ? (
+      /* المتعدّد: مصفوفةٌ مضغوطة — صفٌّ لكلّ مجموعة وعمودٌ لكلّ خيار، وشريطٌ مستقلٌّ بنسبته من المستهدفين (لا تكديس) */
+      <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }} data-dist-chart data-chart-kind="matrix">
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead><tr style={{ background: "var(--bg-2)" }}>
+            <th scope="col" style={{ ...th, ...stickyCell("var(--bg-2)") }}>{DIM_ONE[dim]}</th>
+            <th scope="col" style={th}>المشاركة</th>
+            {opts.map((o, i) => <th key={o.id} scope="col" style={{ ...th, whiteSpace: "normal", minWidth: 120 }}><span style={{ display: "inline-flex", alignItems: "center" }}>{swatch(i)}{o.label}</span></th>)}
           </tr></thead>
           <tbody>
             {groups.map(g => (
-              <tr key={String(g.key)} data-group={g.key ?? "none"} style={{ borderBottom: "1px solid var(--border)", verticalAlign: "top" }}>
-                <th scope="row" style={{ padding: "8px 10px", textAlign: "start", whiteSpace: "nowrap", minWidth: 110 }}>{groupName(g)}</th>
-                <td style={td}>{num(g.audience, `${g.label} — المستهدفون`, g.rows)}</td>
-                <td style={td}>{num(g.respondents, `${g.label} — المجيبون`, g.rows.filter(r => r.responded))}</td>
-                <td style={td}>{num(g.nonrespondents, `${g.label} — لم يجيبوا`, g.rows.filter(r => !r.responded))}</td>
-                <td style={td}>{fmtPct(g.respondents, g.audience)}</td>
-                {g.options.map(o => (
-                  <td key={o.id} style={td} data-opt-cell={o.id}>
-                    {num(o.count, `${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
-                    {" "}<b data-pct-targeted style={{ color: "var(--text)", fontSize: 12.5 }}>{fmtPct(o.count, g.audience)}</b>
-                    <div data-pct-respondents style={{ color: "var(--text-muted)", fontSize: 10.5 }}>{fmtPct(o.count, g.respondents)} من المجيبين</div>
+              <tr key={gkey(g)} data-chart-group={g.key ?? "none"} style={{ borderTop: "1px solid var(--border)" }}>
+                <th scope="row" style={{ ...tdc, ...stickyCell("var(--bg-card)"), fontWeight: 400 }}>{nameCell(g)}</th>
+                <td style={tdc}>{g.respondents}/{g.audience} · <b>{fmtPct(g.respondents, g.audience)}</b></td>
+                {g.options.map((o, i) => (
+                  <td key={o.id} style={tdc}>
+                    <button type="button" role="img" disabled={!o.count} aria-label={`${g.label} — ${o.label}: ${cellText(o, g)}`} onClick={() => open(`${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
+                      style={{ display: "block", width: "100%", height: 10, borderRadius: 5, background: "var(--bg-hover)", border: "none", padding: 0, overflow: "hidden", cursor: o.count ? "pointer" : "default", marginBottom: 3 }}>
+                      <span style={{ display: "block", width: `${Math.min(100, pct(o.count, g.audience))}%`, height: "100%", background: color(i) }} />
+                    </button>
+                    <span style={{ whiteSpace: "nowrap" }}><b>{fmtPct(o.count, g.audience)}</b> <span style={{ color: "var(--text-muted)", fontSize: 10.5 }}>({fmtPct(o.count, g.respondents)})</span></span>
                   </td>
                 ))}
               </tr>
             ))}
-            {groups.length === 0 && <tr><td colSpan={5 + opts.length} style={{ ...td, color: "var(--text-muted)" }}>لا يوجد جمهور.</td></tr>}
           </tbody>
         </table>
       </div>
     ) : (
-      <div style={card} data-dist-chart>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 11, marginBottom: 10 }}>
-          {opts.map((o, i) => <span key={o.id}><span aria-hidden style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color(i), marginInlineEnd: 4 }} />{o.label}</span>)}
-        </div>
+      /* الاختيار الواحد: شريطٌ واحدٌ لكلّ مجموعة = ١٠٠٪ من مستهدفيها (الخياراتُ متنافية + «لم يجب») — مقارنةٌ مباشرةٌ بين المجموعات */
+      <div style={{ ...card, padding: "10px 12px" }} data-dist-chart data-chart-kind="stacked">
         {groups.map(g => (
-          <div key={String(g.key)} data-chart-group={g.key ?? "none"} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px dashed var(--border)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, gap: 8, flexWrap: "wrap" }}>
-              <div>{groupName(g)}</div>
-              <span style={{ color: "var(--text-muted)", fontWeight: 700 }}>أجاب {g.respondents} من {g.audience} · {fmtPct(g.respondents, g.audience)} · لم يجب {g.nonrespondents}</span>
+          <div key={gkey(g)} data-chart-group={g.key ?? "none"} style={{ display: "grid", gridTemplateColumns: "minmax(80px, 160px) 1fr auto", alignItems: "center", gap: 10, padding: "5px 0" }}>
+            <span style={{ fontSize: 12, minWidth: 0, overflow: "hidden" }} title={g.detail || g.label}>
+              <span style={{ display: "block", color: g.key === null ? "var(--warning)" : "var(--text)", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+            </span>
+            <div style={{ display: "flex", height: 18, borderRadius: 6, overflow: "hidden", background: "var(--bg-hover)" }}>
+              {g.options.map((o, i) => o.count ? (
+                <button key={o.id} type="button" role="img" aria-label={`${g.label} — ${o.label}: ${cellText(o, g)}`} title={`${o.label}: ${cellText(o, g)}`}
+                  onClick={() => open(`${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
+                  style={{ width: `${pct(o.count, g.audience)}%`, background: color(i), border: "none", padding: 0, cursor: "pointer" }} />
+              ) : null)}
+              {g.nonrespondents > 0 && <button type="button" role="img" aria-label={`${g.label} — لم يجيبوا: ${g.nonrespondents} · ${fmtPct(g.nonrespondents, g.audience)} من المستهدفين`}
+                title={`لم يجيبوا: ${g.nonrespondents}`} onClick={() => open(`${g.label} — لم يجيبوا`, g.rows.filter(r => !r.responded))}
+                style={{ width: `${pct(g.nonrespondents, g.audience)}%`, background: NONRESP_COLOR, border: "none", padding: 0, cursor: "pointer" }} />}
             </div>
-            {/* شريطٌ لكلّ خيارٍ بعرض نسبته من المستهدفين — لا تكديس: في المتعدّد قد يتجاوز المجموعُ ١٠٠٪ */}
-            {g.options.map((o, i) => (
-              <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 11, color: "var(--text)", width: 90, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.label}>{o.label}</span>
-                <button type="button" disabled={!o.count} onClick={() => open(`${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
-                  aria-label={`${o.label}: ${cellText(o, g)}`} role="img"
-                  style={{ flex: 1, height: 14, borderRadius: 5, background: "var(--bg-hover)", border: "none", padding: 0, overflow: "hidden", cursor: o.count ? "pointer" : "default", display: "flex" }}>
-                  <span style={{ width: `${Math.min(100, pct(o.count, g.audience))}%`, background: color(i), height: "100%" }} />
-                </button>
-                <span style={{ fontSize: 11, whiteSpace: "nowrap", minWidth: 110, textAlign: "end" }}><b>{fmtPct(o.count, g.audience)}</b> <span style={{ color: "var(--text-muted)" }}>· {fmtPct(o.count, g.respondents)} من المجيبين</span></span>
-              </div>
-            ))}
+            <span style={{ fontSize: 11.5, whiteSpace: "nowrap", color: "var(--text-muted)" }}><b style={{ color: "var(--text)" }}>{fmtPct(g.respondents, g.audience)}</b> مشاركة · {g.audience}</span>
           </div>
         ))}
+        <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 6 }}>كل شريط = ١٠٠٪ من المستهدفين في المجموعة؛ مرّر أو اضغط مقطعاً لعرض العدد والنسبتين والأسماء.</div>
       </div>
     )}
     <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.8 }}>
-      الأرقام قابلة للضغط لعرض أسماء الحجاج. «{UNASSIGNED}» = حجاج بلا {DIM_ONE[dim]} ولا يُسقَطون من الحساب. {DIST_NOTE} {d.kind === "multiple" ? MULTI_NOTE : ""}
+      اضغط صفاً لعرض تفاصيله، أو رقماً لعرض أسماء الحجاج. «{UNASSIGNED}» = حجاج بلا {DIM_ONE[dim]} ولا يُسقَطون من الحساب. {DIST_NOTE} {multiple ? MULTI_NOTE : ""}
     </div>
   </section>;
 }
+const th = { padding: "7px 10px", textAlign: "start", color: "var(--text)", fontWeight: 800, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", verticalAlign: "bottom" } as const;
+const tdc = { padding: "6px 10px", textAlign: "start", color: "var(--text)", whiteSpace: "nowrap", verticalAlign: "middle" } as const;
+/* العمودُ الأوّل لاصقٌ عند التمرير الأفقيّ (الخيارات الكثيرة) */
+const stickyCell = (bg: string) => ({ position: "sticky", insetInlineStart: 0, background: bg, zIndex: 1, boxShadow: "inset -1px 0 0 var(--border)" }) as const;
 const td = { padding: "8px 10px", textAlign: "start", color: "var(--text)", whiteSpace: "nowrap" } as const;
 
 function ParticipationTab({ d }: { d: PollDetails }) {
