@@ -44,6 +44,7 @@ cleanup() {
      delete from public.polls where season_id = 9871;
      delete from public.pilgrim_sessions where passenger_id between 5870 and 5879;
      delete from public.passengers where id between 5870 and 5879;
+     delete from public.flights where id in (7871, 7872, 7873);
      delete from public.camps where id in (6971, 6972, 6973);
      delete from public.buses where id in (6871, 6872);
      delete from public.seasons where id = 9871 or hijri_year = 1496;
@@ -65,13 +66,16 @@ q "set app.season_maintenance = 'on';
    insert into public.buses (id,season_id,name) overriding system value values (6871,9871,'باص ١'),(6872,9871,'باص ٢');
    insert into public.camps (id,season_id,name,type,page_type,gender,capacity) overriding system value values
      (6971,9871,'منى ١','عادي','منى','ذكر',50),(6972,9871,'خيمة خاصّة','خاص','منى',null,50),(6973,9871,'عرفة ١','عادي','عرفة','ذكر',50);
-   insert into public.passengers (id,season_id,name_ar,passport,dob,gender,passenger_type,bus_id,camp_mina_id,camp_arafa_id) overriding system value values
-     (5871,9871,'حاج أول','PR000001','01/01/1970','ذكر','حاج',6871,6971,6973),
-     (5872,9871,'حاج ثان','PR000002','02/02/1971','ذكر','حاج',6872,6972,null),
-     (5873,9871,'حاج ثالث','PR000003','03/03/1972','ذكر','حاج',6871,null,null),
-     (5874,9871,'حاج رابع','PR000004','04/04/1973','ذكر','حاج',null,null,null),
-     (5875,9871,'مرافق خامس','PR000005','05/05/1974','ذكر','مرافق',6871,null,null),
-     (5876,9871,'حاج سادس','PR000006','06/06/1975','ذكر','حاج',6871,6971,null);" > /dev/null || { echo "تعذّرت التهيئة"; exit 2; }
+   insert into public.flights (id,season_id,name,airline,date,time,from_airport,to_airport,type,capacity) overriding system value values
+     (7871,9871,'QR1','القطرية','2027-05-01','08:00','DOH','JED','ذهاب',50),(7872,9871,'QR3','القطرية','2027-05-02','09:00','DOH','MED','ذهاب',50),
+     (7873,9871,'QR2','القطرية','2027-06-10','12:00','JED','DOH','إياب',50);
+   insert into public.passengers (id,season_id,name_ar,passport,dob,gender,passenger_type,bus_id,camp_mina_id,camp_arafa_id,flight_id,return_flight_id) overriding system value values
+     (5871,9871,'حاج أول','PR000001','01/01/1970','ذكر','حاج',6871,6971,6973,7871,7873),
+     (5872,9871,'حاج ثان','PR000002','02/02/1971','ذكر','حاج',6872,6972,null,7872,null),
+     (5873,9871,'حاج ثالث','PR000003','03/03/1972','ذكر','حاج',6871,null,null,7871,7873),
+     (5874,9871,'حاج رابع','PR000004','04/04/1973','ذكر','حاج',null,null,null,null,null),
+     (5875,9871,'مرافق خامس','PR000005','05/05/1974','ذكر','مرافق',6871,null,null,7871,null),
+     (5876,9871,'حاج سادس','PR000006','06/06/1975','ذكر','حاج',6871,6971,null,7871,7873);" > /dev/null || { echo "تعذّرت التهيئة"; exit 2; }
 tok() { anon "select create_pilgrim_session('$1',$2,$3,$4)->>'token'"; }
 T1=$(tok PR000001 1 1 1970); T2=$(tok PR000002 2 2 1971); T3=$(tok PR000003 3 3 1972); T6=$(tok PR000006 6 6 1975)
 [ ${#T1} -ge 40 ] && [ ${#T2} -ge 40 ] && [ ${#T3} -ge 40 ] && [ ${#T6} -ge 40 ] && ok "fixtures: four portal sessions" || bad "fixtures: logins"
@@ -98,8 +102,11 @@ from collections import Counter; c=Counter(o for x in d['rows'] for o in x['opti
 eq "…5873: one row, revision 2, option ب" "$(echo "$r" | py "x=[x for x in d['rows'] if x['passenger_id']==5873]; print(len(x), x[0]['revision'], x[0]['option_ids'])")" "1 2 [$B]"
 eq "names are present for drill-down" "$(echo "$r" | py 'print([x["name_ar"] for x in d["rows"] if x["passenger_id"]==5871][0])')" "حاج أول"
 eq "assignment: bus and Mina, unassigned explicit (null)" "$(echo "$r" | py 'print(";".join("%s:%s:%s" % (x["passenger_id"], x["bus"], x["camp_mina"]) for x in d["rows"]))')" "5871:6871:6971;5872:6872:6972;5873:6871:None;5874:None:None;5876:6871:6971"
-eq "narrow projection: only these row keys (no Arafat, hotel, flights)" "$(echo "$r" | py 'print(",".join(sorted(d["rows"][0].keys())))')" "added_reason,bus,camp_mina,name_ar,option_ids,passenger_id,passenger_type,responded,revision"
-eq "labels: buses and Mina camps only, with names" "$(echo "$r" | py 'print(sorted(d["labels"].keys()), d["labels"]["bus"]["6871"], d["labels"]["camp_mina"]["6972"], "6973" in d["labels"]["camp_mina"])')" "['bus', 'camp_mina'] باص ١ خيمة خاصّة False"
+eq "narrow projection: only these row keys (no Arafat, hotel)" "$(echo "$r" | py 'print(",".join(sorted(d["rows"][0].keys())))')" "added_reason,bus,camp_mina,flight_back,flight_go,name_ar,option_ids,passenger_id,passenger_type,responded,revision"
+eq "labels: buses, Mina camps, outbound and return flights, with names" "$(echo "$r" | py 'print(sorted(d["labels"].keys()), d["labels"]["bus"]["6871"], d["labels"]["camp_mina"]["6972"], "6973" in d["labels"]["camp_mina"], d["labels"]["flight_go"]["7871"], d["labels"]["flight_back"]["7873"])')" "['bus', 'camp_mina', 'flight_back', 'flight_go'] باص ١ خيمة خاصّة False QR1 QR2"
+eq "flights: outbound (flight_id) and return (return_flight_id) per row, unassigned explicit (null)" "$(echo "$r" | py 'print(";".join("%s:%s:%s" % (x["passenger_id"], x["flight_go"], x["flight_back"]) for x in d["rows"]))')" "5871:7871:7873;5872:7872:None;5873:7871:7873;5874:None:None;5876:7871:7873"
+eq "flights: one row per pilgrim → outbound QR1 counts 3 (no double count), return QR2 counts 3" "$(echo "$r" | py 'print(sum(x["flight_go"]==7871 for x in d["rows"]), sum(x["flight_back"]==7873 for x in d["rows"]), len(d["rows"]) == len({x["passenger_id"] for x in d["rows"]}))')" "3 3 True"
+eq "live flight_info: airline, date, route and type (outbound vs return)" "$(echo "$r" | py 'f=d["flight_info"]; print(f["7871"]["airline"], f["7871"]["date"], f["7871"]["from_airport"]+">"+f["7871"]["to_airport"], f["7871"]["type"], f["7873"]["type"])')" "القطرية 2027-05-01 DOH>JED ذهاب إياب"
 eq "published: source live" "$(echo "$r" | py 'print(d["source"], d["kind"])')" "live single"
 ev0=$(q "select count(*) from poll_response_events where poll_id = $P1")$(q "select count(*) from poll_admin_events where poll_id = $P1")
 det $P1 > /dev/null
@@ -124,13 +131,17 @@ eq "answer tables still not directly readable by anon/authenticated" "$(staff $U
 
 echo "═══ المغلق: لقطةُ الإغلاق بإسناد تلك اللحظة ═══"
 staff $U_ADMIN "select close_poll($P1)" > /dev/null
-q "update public.passengers set bus_id = 6872, camp_mina_id = 6972 where id = 5871" > /dev/null
+q "update public.passengers set bus_id = 6872, camp_mina_id = 6972, flight_id = 7872, return_flight_id = null where id = 5871" > /dev/null
+q "update public.flights set name = 'QR1-NEW', airline = 'شركة أخرى' where id = 7871" > /dev/null
 q "update public.buses set name = 'باص ١ (اسمٌ جديد)' where id = 6871" > /dev/null
 r=$(det $P1)
 eq "closed: source snapshot" "$(echo "$r" | py 'print(d["status"], d["source"])')" "closed snapshot"
 eq "closed: 5871 keeps the bus/Mina it had at closure" "$(echo "$r" | py 'x=[x for x in d["rows"] if x["passenger_id"]==5871][0]; print(x["bus"], x["camp_mina"])')" "6871 6971"
+eq "closed: 5871 keeps the outbound/return flights it had at closure" "$(echo "$r" | py 'x=[x for x in d["rows"] if x["passenger_id"]==5871][0]; print(x["flight_go"], x["flight_back"], d["labels"]["flight_go"]["7871"])')" "7871 7873 QR1"
+eq "closed: no flight details invented (flight_info empty — not captured in the snapshot)" "$(echo "$r" | py 'print(d["flight_info"])')" "{}"
 eq "closed: bus name as at closure" "$(echo "$r" | py 'print(d["labels"]["bus"]["6871"])')" "باص ١"
 r=$(det $P2)
+eq "published (live): 5871 flights are current (outbound QR3, no return); renamed flight shows its new name" "$(echo "$r" | py 'x=[x for x in d["rows"] if x["passenger_id"]==5871][0]; print(x["flight_go"], x["flight_back"], d["labels"]["flight_go"]["7871"], d["flight_info"]["7871"]["airline"])')" "7872 None QR1-NEW شركة أخرى"
 eq "published (live): 5871 now shows the current assignment" "$(echo "$r" | py 'x=[x for x in d["rows"] if x["passenger_id"]==5871][0]; print(x["bus"], x["camp_mina"], d["labels"]["bus"]["6871"])')" "6872 6972 باص ١ (اسمٌ جديد)"
 eq "closed counts unchanged by later edits (respondents 3)" "$(det $P1 | py 'print(sum(x["responded"] for x in d["rows"]))')" "3"
 q "set app.season_maintenance = 'on'; delete from public.pilgrim_sessions where passenger_id = 5876; delete from public.passengers where id = 5876" > /dev/null

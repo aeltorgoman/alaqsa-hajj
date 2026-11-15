@@ -1,5 +1,6 @@
 /* ═══ شاشةُ نتائج الاستطلاع — داخل تبويب «الاستطلاعات» (Phase 4) ═══
-   ثلاثةُ تبويبات: نتائج التصويت · تحليل التوزيع (الباصات ومخيمات منى وحدها) · المشاركة والمتابعة.
+   ثلاثةُ تبويبات: نتائج التصويت · تحليل التوزيع (الباصات · مخيمات منى · رحلات الذهاب · رحلات العودة)
+   · المشاركة والمتابعة. وفي التوزيع لكلّ خيارٍ نسبتان: من المستهدفين (الأساسيّة) ومن المجيبين.
    المصدرُ دالّةٌ واحدة محروسةٌ بـmanage_portal: `poll_details` (ترحيلة Phase 4). وقبل تطبيقها:
    المغلقُ يُعرض من لقطة الإغلاق (`get_poll_snapshot` — Phase 2، بالحارس نفسه)، والمنشورُ يُبلَّغ
    بوضوح أنّ الشاشة تنتظر الترحيلة — لا التفافَ على الصلاحيات ولا قراءةَ جداولَ مغلقة.
@@ -10,8 +11,8 @@ import { btnP, btnS, inp, makeHTML, printInPage, addSummarySheet, freezeHeaderRo
 import { useReportBranding } from "../../company/CompanyContext";
 import { STATUS_LABEL, type PollRow } from "./polls";
 import {
-  DIM_LABEL, DIM_ONE, MULTI_NOTE, OPTION_COLORS, UNASSIGNED, answerLabels, detailsFromSnapshot, exportSheets, filterRows, fmtPct,
-  groupBy, labelOf, reportBody, sortRows, sourceNote, summarize,
+  DIMS, DIM_LABEL, DIM_ONE, DIST_NOTE, FLIGHT_SNAPSHOT_NOTE, MULTI_NOTE, OPTION_COLORS, SHEET_NAME, UNASSIGNED, answerLabels, cellText,
+  detailsFromSnapshot, exportSheets, filterRows, fmtPct, groupBy, isFlight, labelOf, normalizeDetails, pct, reportBody, sortRows, sourceNote, summarize,
   type DetailRow, type Dim, type PollDetails, type PollMeta, type SortKey,
 } from "./results";
 
@@ -28,12 +29,12 @@ export function PollResults({ poll, onBack }: { poll: PollRow; onBack: () => voi
   const [d, setD] = useState<PollDetails | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error" | "denied" | "pending-migration">("loading");
   const [tab, setTab] = useState<Tab>("results");
-  const [drawer, setDrawer] = useState<{ title: string; rows: DetailRow[] } | null>(null);
+  const [drawer, setDrawer] = useState<{ title: string; sub?: string; rows: DetailRow[] } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc("poll_details", { p_poll_id: poll.id });
-    if (!error && data) { setD(data as unknown as PollDetails); setState("ok"); return; }
+    if (!error && data) { setD(normalizeDetails(data as Record<string, unknown>)); setState("ok"); return; }
     if (error?.code === "42501") { setState("denied"); return; }
     /* الترحيلةُ لم تُطبَّق بعد (PGRST202): المغلقُ من لقطته (Phase 2)، والمنشورُ ينتظر */
     if (error?.code === "PGRST202") {
@@ -63,11 +64,10 @@ export function PollResults({ poll, onBack }: { poll: PollRow; onBack: () => voi
       (ws as unknown as { "!dir"?: string })["!dir"] = "rtl";
       XLSX.utils.book_append_sheet(wb, ws, name);
     };
-    add(sh.answers, "الإجابات", [10, 28, 10, 18, 18, 34, 10]);
-    add(sh.bus, "تحليل الباصات", [22, 10, 10, 12, ...Array(sh.bus[0].length - 4).fill(12)]);
-    add(sh.mina, "تحليل منى", [22, 10, 10, 12, ...Array(sh.mina[0].length - 4).fill(12)]);
-    add(sh.nonrespondents, "لم يجيبوا", [10, 28, 10, 18, 18]);
-    addSummarySheet(wb, XLSX, `نتائج استطلاع: ${poll.title}`, branding.companyName || "", sh.summary, "الملخص");
+    add(sh.answers, SHEET_NAME.answers, [10, 28, 10, 18, 18, 18, 18, 34, 10]);
+    for (const dim of DIMS) add(sh[dim], SHEET_NAME[dim], [22, ...(isFlight(dim) ? [34] : []), 10, 10, 10, 12, ...Array(sh[dim][0].length - (isFlight(dim) ? 6 : 5)).fill(14)]);
+    add(sh.nonrespondents, SHEET_NAME.nonrespondents, [10, 28, 10, 18, 18, 18, 18]);
+    addSummarySheet(wb, XLSX, `نتائج استطلاع: ${poll.title}`, branding.companyName || "", sh.summary, SHEET_NAME.summary);
     XLSX.writeFile(wb, `نتائج_استطلاع_${poll.id}.xlsx`);
   }
   function exportPdf() {
@@ -116,10 +116,10 @@ export function PollResults({ poll, onBack }: { poll: PollRow; onBack: () => voi
           ))}
         </div>
         {tab === "results" && <ResultsTab d={d} open={(title, rows) => setDrawer({ title, rows })} />}
-        {tab === "distribution" && <DistributionTab d={d} open={(title, rows) => setDrawer({ title, rows })} />}
+        {tab === "distribution" && <DistributionTab d={d} open={(title, rows, sub) => setDrawer({ title, sub, rows })} />}
         {tab === "participation" && <ParticipationTab d={d} />}
       </>}
-      {drawer && d && <NamesDrawer d={d} title={drawer.title} rows={drawer.rows} onClose={() => setDrawer(null)} />}
+      {drawer && d && <NamesDrawer d={d} title={drawer.title} sub={drawer.sub} rows={drawer.rows} onClose={() => setDrawer(null)} />}
     </div>
   );
 }
@@ -166,18 +166,24 @@ function ResultsTab({ d, open }: { d: PollDetails; open: (t: string, r: DetailRo
   </section>;
 }
 
-function DistributionTab({ d, open }: { d: PollDetails; open: (t: string, r: DetailRow[]) => void }) {
+function DistributionTab({ d, open }: { d: PollDetails; open: (t: string, r: DetailRow[], sub?: string) => void }) {
   const [dim, setDim] = useState<Dim>("bus");
   const [view, setView] = useState<"table" | "chart">("table");
   const groups = useMemo(() => groupBy(d, dim), [d, dim]);
   const opts = summarize(d).options;
-  const num = (n: number, title: string, rows: DetailRow[]) => n > 0
-    ? <button type="button" onClick={() => open(title, rows)} style={linkBtn}>{n}</button> : <span style={{ color: "var(--text-muted)" }}>0</span>;
+  const num = (n: number, title: string, rows: DetailRow[], sub?: string) => n > 0
+    ? <button type="button" onClick={() => open(title, rows, sub)} style={linkBtn}>{n}</button> : <span style={{ color: "var(--text-muted)" }}>0</span>;
   const pill = (on: boolean) => ({ border: on ? "2px solid var(--primary)" : "1px solid var(--border)", background: on ? "var(--primary)" : "var(--bg-card)", color: on ? "var(--text-inverse)" : "var(--text)", borderRadius: 99, fontSize: 11.5, fontWeight: 800, padding: "5px 14px", cursor: "pointer", fontFamily: "inherit", minHeight: 32 });
+  const groupName = (g: ReturnType<typeof groupBy>[number]) => (
+    <>
+      <span style={{ color: g.key === null ? "var(--warning)" : "var(--text)", fontWeight: 800 }}>{g.label}</span>
+      {g.detail && <div data-flight-detail style={{ fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, marginTop: 2, whiteSpace: "normal" }}>{g.detail}</div>}
+    </>
+  );
   return <section aria-label="تحليل التوزيع">
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-      <div role="radiogroup" aria-label="التوزيع حسب" style={{ display: "flex", gap: 6 }}>
-        {(["bus", "camp_mina"] as Dim[]).map(k => <button key={k} type="button" role="radio" aria-checked={dim === k} onClick={() => setDim(k)} style={pill(dim === k)}>{DIM_LABEL[k]}</button>)}
+      <div role="radiogroup" aria-label="التوزيع حسب" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {DIMS.map(k => <button key={k} type="button" role="radio" aria-checked={dim === k} onClick={() => setDim(k)} style={pill(dim === k)}>{DIM_LABEL[k]}</button>)}
       </div>
       <div role="radiogroup" aria-label="طريقة العرض" style={{ display: "flex", gap: 6, marginInlineStart: "auto" }}>
         <button type="button" role="radio" aria-checked={view === "table"} onClick={() => setView("table")} style={pill(view === "table")}>جدول</button>
@@ -185,23 +191,34 @@ function DistributionTab({ d, open }: { d: PollDetails; open: (t: string, r: Det
       </div>
     </div>
     {d.source === "snapshot" && <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>الإسناد كما كان لحظة إغلاق الاستطلاع.</div>}
+    {isFlight(dim) && d.source === "snapshot" && <div data-flight-snapshot-note style={{ fontSize: 11, color: "var(--warning)", fontWeight: 700, marginBottom: 8, lineHeight: 1.8 }}>{FLIGHT_SNAPSHOT_NOTE}</div>}
+    <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.8 }}>
+      لكل خيار: <b style={{ color: "var(--text)" }}>٪ من المستهدفين</b> (الأساسية) و٪ من المجيبين (الثانوية).
+    </div>
     {view === "table" ? (
       <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }} data-dist-table>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 420 + opts.length * 90 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 520 + opts.length * 120 }}>
           <thead><tr style={{ background: "var(--bg-2)" }}>
-            {[DIM_ONE[dim], "المستهدفون", "المجيبون", "المشاركة", ...opts.map(o => o.label)].map((h, i) => <th key={i} scope="col" style={{ padding: "8px 10px", textAlign: "start", color: "var(--text)", fontWeight: 800, borderBottom: "1px solid var(--border)", whiteSpace: i >= 4 ? "normal" : "nowrap" }}>{h}</th>)}
+            {[DIM_ONE[dim], "المستهدفون", "المجيبون", "لم يجيبوا", "المشاركة", ...opts.map(o => o.label)].map((h, i) => <th key={i} scope="col" style={{ padding: "8px 10px", textAlign: "start", color: "var(--text)", fontWeight: 800, borderBottom: "1px solid var(--border)", whiteSpace: i >= 5 ? "normal" : "nowrap" }}>{h}</th>)}
           </tr></thead>
           <tbody>
             {groups.map(g => (
-              <tr key={String(g.key)} data-group={g.key ?? "none"} style={{ borderBottom: "1px solid var(--border)" }}>
-                <th scope="row" style={{ padding: "8px 10px", textAlign: "start", color: g.key === null ? "var(--warning)" : "var(--text)", fontWeight: 800, whiteSpace: "nowrap" }}>{g.label}</th>
+              <tr key={String(g.key)} data-group={g.key ?? "none"} style={{ borderBottom: "1px solid var(--border)", verticalAlign: "top" }}>
+                <th scope="row" style={{ padding: "8px 10px", textAlign: "start", whiteSpace: "nowrap", minWidth: 110 }}>{groupName(g)}</th>
                 <td style={td}>{num(g.audience, `${g.label} — المستهدفون`, g.rows)}</td>
                 <td style={td}>{num(g.respondents, `${g.label} — المجيبون`, g.rows.filter(r => r.responded))}</td>
+                <td style={td}>{num(g.nonrespondents, `${g.label} — لم يجيبوا`, g.rows.filter(r => !r.responded))}</td>
                 <td style={td}>{fmtPct(g.respondents, g.audience)}</td>
-                {g.options.map(o => <td key={o.id} style={td}>{num(o.count, `${g.label} — «${o.label}»`, o.rows)} <span style={{ color: "var(--text-muted)", fontSize: 11 }}>({fmtPct(o.count, g.respondents)})</span></td>)}
+                {g.options.map(o => (
+                  <td key={o.id} style={td} data-opt-cell={o.id}>
+                    {num(o.count, `${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
+                    {" "}<b data-pct-targeted style={{ color: "var(--text)", fontSize: 12.5 }}>{fmtPct(o.count, g.audience)}</b>
+                    <div data-pct-respondents style={{ color: "var(--text-muted)", fontSize: 10.5 }}>{fmtPct(o.count, g.respondents)} من المجيبين</div>
+                  </td>
+                ))}
               </tr>
             ))}
-            {groups.length === 0 && <tr><td colSpan={4 + opts.length} style={{ ...td, color: "var(--text-muted)" }}>لا يوجد جمهور.</td></tr>}
+            {groups.length === 0 && <tr><td colSpan={5 + opts.length} style={{ ...td, color: "var(--text-muted)" }}>لا يوجد جمهور.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -210,23 +227,30 @@ function DistributionTab({ d, open }: { d: PollDetails; open: (t: string, r: Det
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontSize: 11, marginBottom: 10 }}>
           {opts.map((o, i) => <span key={o.id}><span aria-hidden style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color(i), marginInlineEnd: 4 }} />{o.label}</span>)}
         </div>
-        {groups.map(g => {
-          const tot = g.options.reduce((s, o) => s + o.count, 0);
-          return <div key={String(g.key)} style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 800, color: g.key === null ? "var(--warning)" : "var(--text)", gap: 8, flexWrap: "wrap" }}>
-              <span>{g.label}</span><span style={{ color: "var(--text-muted)", fontWeight: 700 }}>{g.respondents} من {g.audience} · {fmtPct(g.respondents, g.audience)}</span>
+        {groups.map(g => (
+          <div key={String(g.key)} data-chart-group={g.key ?? "none"} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px dashed var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, gap: 8, flexWrap: "wrap" }}>
+              <div>{groupName(g)}</div>
+              <span style={{ color: "var(--text-muted)", fontWeight: 700 }}>أجاب {g.respondents} من {g.audience} · {fmtPct(g.respondents, g.audience)} · لم يجب {g.nonrespondents}</span>
             </div>
-            <div style={{ display: "flex", height: 16, borderRadius: 6, overflow: "hidden", background: "var(--bg-hover)", marginTop: 5 }}
-              role="img" aria-label={`${g.label}: ${g.options.map(o => `${o.label} ${o.count}`).join("، ")}`}>
-              {tot > 0 && g.options.map((o, i) => o.count ? <button key={o.id} type="button" title={`${o.label}: ${o.count}`} onClick={() => open(`${g.label} — «${o.label}»`, o.rows)}
-                style={{ width: `${(o.count / tot) * 100}%`, background: color(i), border: "none", padding: 0, cursor: "pointer" }} aria-label={`${o.label}: ${o.count}`} /> : null)}
-            </div>
-          </div>;
-        })}
+            {/* شريطٌ لكلّ خيارٍ بعرض نسبته من المستهدفين — لا تكديس: في المتعدّد قد يتجاوز المجموعُ ١٠٠٪ */}
+            {g.options.map((o, i) => (
+              <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: "var(--text)", width: 90, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o.label}>{o.label}</span>
+                <button type="button" disabled={!o.count} onClick={() => open(`${g.label} — «${o.label}»`, o.rows, cellText(o, g))}
+                  aria-label={`${o.label}: ${cellText(o, g)}`} role="img"
+                  style={{ flex: 1, height: 14, borderRadius: 5, background: "var(--bg-hover)", border: "none", padding: 0, overflow: "hidden", cursor: o.count ? "pointer" : "default", display: "flex" }}>
+                  <span style={{ width: `${Math.min(100, pct(o.count, g.audience))}%`, background: color(i), height: "100%" }} />
+                </button>
+                <span style={{ fontSize: 11, whiteSpace: "nowrap", minWidth: 110, textAlign: "end" }}><b>{fmtPct(o.count, g.audience)}</b> <span style={{ color: "var(--text-muted)" }}>· {fmtPct(o.count, g.respondents)} من المجيبين</span></span>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     )}
     <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.8 }}>
-      الأرقام قابلة للضغط لعرض أسماء الحجاج. «{UNASSIGNED}» = حجاج بلا {DIM_ONE[dim]} ولا يُسقَطون من الحساب. {d.kind === "multiple" ? MULTI_NOTE : ""}
+      الأرقام قابلة للضغط لعرض أسماء الحجاج. «{UNASSIGNED}» = حجاج بلا {DIM_ONE[dim]} ولا يُسقَطون من الحساب. {DIST_NOTE} {d.kind === "multiple" ? MULTI_NOTE : ""}
     </div>
   </section>;
 }
@@ -299,7 +323,7 @@ function PilgrimLink({ r }: { r: DetailRow }) {
     title="فتح ملف الحاج">{r.name_ar || `#${r.passenger_id}`}</a>;
 }
 
-function NamesDrawer({ d, title, rows, onClose }: { d: PollDetails; title: string; rows: DetailRow[]; onClose: () => void }) {
+function NamesDrawer({ d, title, sub, rows, onClose }: { d: PollDetails; title: string; sub?: string; rows: DetailRow[]; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("name");
   const ref = useRef<HTMLDivElement>(null);
@@ -318,7 +342,7 @@ function NamesDrawer({ d, title, rows, onClose }: { d: PollDetails; title: strin
         <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text)", overflowWrap: "anywhere" }}>{title}</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{rows.length} حاج</div>
+            <div data-drawer-sub style={{ fontSize: 11, color: "var(--text-muted)" }}>{sub || `${rows.length} حاج`}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="إغلاق" style={{ ...btnS(), padding: "6px 10px" }}>✕</button>
         </div>
@@ -333,7 +357,8 @@ function NamesDrawer({ d, title, rows, onClose }: { d: PollDetails; title: strin
             <li key={r.passenger_id} data-pid={r.passenger_id} style={{ padding: "9px 14px", borderBottom: "1px solid var(--border)" }}>
               <PilgrimLink r={r} />
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                {labelOf(d, "bus", r.bus)} · {labelOf(d, "camp_mina", r.camp_mina)}{r.responded ? ` · ${answerLabels(d, r).join("، ")}` : " · لم يجب"}
+                {labelOf(d, "bus", r.bus)} · {labelOf(d, "camp_mina", r.camp_mina)} · ذهاب: {labelOf(d, "flight_go", r.flight_go)} · عودة: {labelOf(d, "flight_back", r.flight_back)}
+                {r.responded ? ` · ${answerLabels(d, r).join("، ")}` : " · لم يجب"}
               </div>
             </li>
           ))}

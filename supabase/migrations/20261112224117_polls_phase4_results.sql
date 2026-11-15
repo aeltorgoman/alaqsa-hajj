@@ -16,17 +16,20 @@
 -- poll_details(p_poll_id) → jsonb:
 --   { poll_id, status, kind, max_choices, source: 'live'|'snapshot', as_of,
 --     options: [{id,label,sort_order}],
---     labels:  { bus: {id:name}, camp_mina: {id:name} },
+--     labels:  { bus: {id:name}, camp_mina: {id:name}, flight_go: {id:name}, flight_back: {id:name} },
+--     flight_info: {id: {airline, date, time, from_airport, to_airport, type}}   ← المنشورُ وحده
 --     rows:    [{ passenger_id, name_ar, passenger_type, added_reason,
---                 bus, camp_mina, responded, revision, option_ids }] }
+--                 bus, camp_mina, flight_go, flight_back, responded, revision, option_ids }] }
 --
---   · المغلق ← من لقطة الإغلاق نفسها (rows · labels · options): الإسنادُ (باص · منى) وأسماؤها
---     كما كانت **لحظةَ الإغلاق**، وتبقى بعد حذف الحاجّ أو تغيّر إسناده. فالتحليلُ التاريخيّ
---     متاحٌ من Phase 2 ولا يُخترَع.
+--   · المغلق ← من لقطة الإغلاق نفسها (rows · labels · options): الإسنادُ (باص · منى · رحلة الذهاب
+--     `flight_id` · رحلة العودة `return_flight_id`) وأسماؤها كما كانت **لحظةَ الإغلاق**، وتبقى بعد حذف
+--     الحاجّ أو تغيّر إسناده. فالتحليلُ التاريخيّ متاحٌ من Phase 2 ولا يُخترَع.
+--     ⚠️ تفاصيلُ الرحلة (الشركة · التاريخ · المسار) لم تحفظها اللقطة — الاسمُ وحده. فـflight_info
+--     فارغةٌ للمغلق ولا تُستكمل من جدول الرحلات الحاليّ (ذاك تزويرٌ للتاريخ).
 --   · المنشور ← الإسنادُ الحاليّ (_poll_rows · _poll_labels) — هو ما تعنيه «نتائجُ حيّة».
 --   · المسوّدةُ والمجدوَل ← لا جمهورَ مجمَّداً بعد: rows فارغة.
 --   · صفٌّ واحدٌ لكلّ حاجٍّ في الجمهور المجمَّد بإجابته **الحاليّة** — تغييرُ الإجابة لا يُضاعف العدّ.
---   · تقليلُ البيانات: لا عرفةَ ولا فندقَ ولا رحلات (خارجُ نطاق Phase 4)، ولا أيُّ عمودٍ آخر.
+--   · تقليلُ البيانات: لا عرفةَ ولا فندقَ (خارجُ نطاق Phase 4)، ولا أيُّ عمودٍ آخر.
 --
 -- الصلاحية: الحارسُ نفسُه في Phase 1/2 (_announcement_admin_guard: manage_portal). authenticated
 -- وحده، لا anon ولا service_role ولا public. ودوالُّ البوابة لا تمسّها هذه الترحيلة.
@@ -46,6 +49,7 @@ declare
   v_opts   jsonb;
   v_src    text;
   v_asof   timestamptz;
+  v_finfo  jsonb := '{}'::jsonb;
 begin
   perform public._announcement_admin_guard();
   perform public._poll_settle(p_poll_id);
@@ -67,16 +71,26 @@ begin
     v_rows := '[]'::jsonb; v_labels := public._poll_labels(p.season_id);
     v_opts := public._poll_options_json(p_poll_id); v_src := 'live'; v_asof := now();
   end if;
+  if v_src = 'live' then
+    v_finfo := coalesce((select jsonb_object_agg(f.id::text, jsonb_build_object(
+                 'airline', f.airline, 'date', f.date, 'time', f.time,
+                 'from_airport', f.from_airport, 'to_airport', f.to_airport, 'type', f.type))
+               from public.flights f where f.season_id = p.season_id), '{}'::jsonb);
+  end if;
 
   return jsonb_build_object(
     'poll_id', p.id, 'status', p.status, 'kind', p.kind, 'max_choices', p.max_choices,
     'source', v_src, 'as_of', v_asof,
     'options', coalesce(v_opts, '[]'::jsonb),
     'labels', jsonb_build_object('bus', coalesce(v_labels->'bus', '{}'::jsonb),
-                                 'camp_mina', coalesce(v_labels->'camp_mina', '{}'::jsonb)),
+                                 'camp_mina', coalesce(v_labels->'camp_mina', '{}'::jsonb),
+                                 'flight_go', coalesce(v_labels->'flight_go', '{}'::jsonb),
+                                 'flight_back', coalesce(v_labels->'flight_back', '{}'::jsonb)),
+    'flight_info', v_finfo,
     'rows', (select coalesce(jsonb_agg(jsonb_build_object(
                 'passenger_id', e->'passenger_id', 'name_ar', e->'name_ar', 'passenger_type', e->'passenger_type',
                 'added_reason', e->'added_reason', 'bus', e->'bus', 'camp_mina', e->'camp_mina',
+                'flight_go', e->'flight_go', 'flight_back', e->'flight_back',
                 'responded', coalesce(e->'responded', 'false'::jsonb), 'revision', e->'revision',
                 'option_ids', coalesce(e->'option_ids', '[]'::jsonb))
               order by (e->>'passenger_id')::bigint), '[]'::jsonb)
@@ -88,7 +102,7 @@ alter function public.poll_details(bigint) owner to postgres;
 revoke all on function public.poll_details(bigint) from public, anon, authenticated, service_role;
 grant execute on function public.poll_details(bigint) to authenticated;
 comment on function public.poll_details(bigint) is
-  'Phase 4 — تفاصيلُ النتائج المسمّاة (صفٌّ لكلّ حاجٍّ في الجمهور المجمَّد بإجابته الحاليّة · باص · منى). المغلقُ من لقطة الإغلاق، والمنشورُ بالإسناد الحاليّ. manage_portal وحده.';
+  'Phase 4 — تفاصيلُ النتائج المسمّاة (صفٌّ لكلّ حاجٍّ في الجمهور المجمَّد بإجابته الحاليّة · باص · منى · رحلتا الذهاب والعودة). المغلقُ من لقطة الإغلاق (بلا تفاصيل الرحلات)، والمنشورُ بالإسناد الحاليّ. manage_portal وحده.';
 
 -- ── شروطٌ لاحقة على ما تملكه هذه الترحيلة وحده (S-38) ─────────────
 do $post$

@@ -3,56 +3,90 @@
    الجمهور المجمَّد بإجابته الحاليّة). فلا يختلف رقمُ الشاشة عن رقم الملفّ، ولا يُعدّ حاجٌّ مرّتين.
    النِّسَب:
      · المشاركة = المجيبون ÷ المستهدفين.
-     · الخيار   = مختاروه ÷ المجيبين — في المتعدّد قد يتجاوز المجموعُ ١٠٠٪ (يختار الحاجُّ أكثرَ من خيار).
-     · صفرُ مجيبين ← ٠٪ لا قسمةٌ على صفر.
-   التوزيع: الباصاتُ ومخيّماتُ منى وحدها، و«غير مُسنَد» مجموعةٌ صريحةٌ لا تُسقَط.
+     · نتائجُ التصويت (الإجماليّ): الخيار = مختاروه ÷ المجيبين.
+     · التوزيع — نسبتان لكلّ خيارٍ في كلّ مجموعة:
+         الأساسيّة = مختاروه في المجموعة ÷ مستهدَفي المجموعة
+         الثانويّة = مختاروه في المجموعة ÷ مجيبي المجموعة
+     · في المتعدّد قد يتجاوز مجموعُ نسب الخيارات ١٠٠٪ (يختار الحاجُّ أكثرَ من خيار).
+     · مقامٌ صفر ← ٠٪ لا قسمةٌ على صفر.
+   التوزيع: الباصات · مخيمات منى · رحلات الذهاب · رحلات العودة. لكلّ حاجٍّ قيمةٌ واحدةٌ في كلّ بُعد
+   (`flight_id` للذهاب و`return_flight_id` للعودة)، فلا يُعدّ مرّتين في مجموعةٍ واحدة. و«غير مُسنَد»
+   مجموعةٌ صريحةٌ لا تُسقَط.
    ملفٌّ بلا مكوّنات (Fast Refresh) ويُختبر بـnode وحده. */
 
 export type DetailOption = { id: number; label: string; sort_order?: number };
 export type DetailRow = {
   passenger_id: number; name_ar: string | null; passenger_type: string | null; added_reason?: string | null;
-  bus: number | null; camp_mina: number | null; responded: boolean; revision: number | null; option_ids: number[];
+  bus: number | null; camp_mina: number | null; flight_go: number | null; flight_back: number | null;
+  responded: boolean; revision: number | null; option_ids: number[];
 };
+/* تفاصيلُ الرحلة — للمنشور من جدول الرحلات الآن؛ ولقطةُ الإغلاق لم تحفظها (الاسمُ وحده محفوظ) */
+export type FlightInfo = { airline: string | null; date: string | null; time: string | null; from_airport: string | null; to_airport: string | null; type: string | null };
 export type PollDetails = {
   poll_id: number; status: string; kind: "single" | "multiple"; max_choices: number | null;
   source: "live" | "snapshot"; as_of: string | null;
   options: DetailOption[];
-  labels: { bus: Record<string, string>; camp_mina: Record<string, string> };
+  labels: Record<Dim, Record<string, string>>;
+  flight_info?: Record<string, FlightInfo>;
   rows: DetailRow[];
 };
-export type Dim = "bus" | "camp_mina";
-export const DIM_LABEL: Record<Dim, string> = { bus: "الباصات", camp_mina: "مخيمات منى" };
-export const DIM_ONE: Record<Dim, string> = { bus: "الباص", camp_mina: "مخيم منى" };
+export type Dim = "bus" | "camp_mina" | "flight_go" | "flight_back";
+export const DIMS: Dim[] = ["bus", "camp_mina", "flight_go", "flight_back"];
+export const DIM_LABEL: Record<Dim, string> = { bus: "الباصات", camp_mina: "مخيمات منى", flight_go: "رحلات الذهاب", flight_back: "رحلات العودة" };
+export const DIM_ONE: Record<Dim, string> = { bus: "الباص", camp_mina: "مخيم منى", flight_go: "رحلة الذهاب", flight_back: "رحلة العودة" };
+export const isFlight = (dim: Dim) => dim === "flight_go" || dim === "flight_back";
 export const UNASSIGNED = "غير مُسنَد";
 
 export const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
 export const fmtPct = (n: number, d: number) => `${pct(n, d).toLocaleString("en-US", { maximumFractionDigits: 1 })}٪`;
 
-/** شكلُ لقطة Phase 2 (get_poll_snapshot) ← شكلُ poll_details. للمغلق وحده، قبل تطبيق ترحيلة Phase 4. */
+const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+const toRow = (e: Record<string, unknown>): DetailRow => ({
+  passenger_id: Number(e.passenger_id), name_ar: (e.name_ar as string) ?? null, passenger_type: (e.passenger_type as string) ?? null,
+  added_reason: (e.added_reason as string) ?? null, bus: num(e.bus), camp_mina: num(e.camp_mina),
+  flight_go: num(e.flight_go), flight_back: num(e.flight_back),
+  responded: !!e.responded, revision: (e.revision as number) ?? null, option_ids: ((e.option_ids as number[]) || []).map(Number),
+});
+const labelsFrom = (l: Record<string, Record<string, string>> | undefined) =>
+  Object.fromEntries(DIMS.map(k => [k, (l || {})[k] || {}])) as Record<Dim, Record<string, string>>;
+
+/** ردُّ `poll_details` كما وصل ← الشكلُ الداخليّ (ويحتمل غيابَ حقلٍ في خادمٍ أقدم) */
+export function normalizeDetails(raw: Record<string, unknown>): PollDetails {
+  return {
+    poll_id: Number(raw.poll_id), status: String(raw.status), kind: raw.kind === "multiple" ? "multiple" : "single",
+    max_choices: (raw.max_choices as number) ?? null, source: raw.source === "snapshot" ? "snapshot" : "live", as_of: (raw.as_of as string) ?? null,
+    options: (raw.options || []) as DetailOption[], labels: labelsFrom(raw.labels as Record<string, Record<string, string>>),
+    flight_info: (raw.flight_info || {}) as Record<string, FlightInfo>,
+    rows: ((raw.rows || []) as Record<string, unknown>[]).map(toRow).sort((a, b) => a.passenger_id - b.passenger_id),
+  };
+}
+
+/** شكلُ لقطة Phase 2 (get_poll_snapshot) ← شكلُ poll_details. للمغلق وحده، قبل تطبيق ترحيلة Phase 4.
+    اللقطةُ تحفظ إسنادَ الباص ومنى ورحلتي الذهاب والعودة وأسماءَها لحظةَ الإغلاق — لا تفاصيلَ الرحلات. */
 export function detailsFromSnapshot(s: Record<string, unknown>, kind: "single" | "multiple", maxChoices: number | null): PollDetails {
-  const labels = (s.labels || {}) as Record<string, Record<string, string>>;
-  const rows = ((s.rows || []) as Record<string, unknown>[]).map(e => ({
-    passenger_id: Number(e.passenger_id), name_ar: (e.name_ar as string) ?? null, passenger_type: (e.passenger_type as string) ?? null,
-    added_reason: (e.added_reason as string) ?? null, bus: (e.bus as number) ?? null, camp_mina: (e.camp_mina as number) ?? null,
-    responded: !!e.responded, revision: (e.revision as number) ?? null, option_ids: ((e.option_ids as number[]) || []).map(Number),
-  })).sort((a, b) => a.passenger_id - b.passenger_id);
   return {
     poll_id: Number(s.poll_id), status: "closed", kind, max_choices: maxChoices, source: "snapshot", as_of: (s.closed_at as string) ?? null,
-    options: ((s.options || []) as DetailOption[]), labels: { bus: labels.bus || {}, camp_mina: labels.camp_mina || {} }, rows,
+    options: ((s.options || []) as DetailOption[]), labels: labelsFrom(s.labels as Record<string, Record<string, string>>), flight_info: {},
+    rows: ((s.rows || []) as Record<string, unknown>[]).map(toRow).sort((a, b) => a.passenger_id - b.passenger_id),
   };
 }
 
 export const sortedOptions = (d: PollDetails) =>
   d.options.slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id);
 
-export type OptionStat = { id: number; label: string; count: number; pct: number; rows: DetailRow[] };
+export type OptionStat = {
+  id: number; label: string; count: number;
+  /** ٪ من المجيبين */ pct: number;
+  /** ٪ من المستهدفين */ pctTargeted: number;
+  rows: DetailRow[];
+};
 export type Summary = { audience: number; respondents: number; nonrespondents: number; participation: number; options: OptionStat[]; multiple: boolean; optionTotal: number };
 
 export function summarize(d: PollDetails, rows: DetailRow[] = d.rows): Summary {
   const respondents = rows.filter(r => r.responded).length;
   const options = sortedOptions(d).map(o => {
     const who = rows.filter(r => r.responded && r.option_ids.includes(o.id));
-    return { id: o.id, label: o.label, count: who.length, pct: pct(who.length, respondents), rows: who };
+    return { id: o.id, label: o.label, count: who.length, pct: pct(who.length, respondents), pctTargeted: pct(who.length, rows.length), rows: who };
   });
   return {
     audience: rows.length, respondents, nonrespondents: rows.length - respondents, participation: pct(respondents, rows.length),
@@ -61,23 +95,41 @@ export function summarize(d: PollDetails, rows: DetailRow[] = d.rows): Summary {
 }
 
 export const labelOf = (d: PollDetails, dim: Dim, id: number | null) =>
-  id == null ? UNASSIGNED : (d.labels[dim][String(id)] || `#${id}`);
+  id == null ? UNASSIGNED : ((d.labels[dim] || {})[String(id)] || `#${id}`);
 
-export type Group = Summary & { key: number | null; label: string; rows: DetailRow[] };
-/** التوزيعُ بالباص أو بمخيّم منى. غيرُ المُسنَد مجموعةٌ أخيرةٌ صريحة؛ والبقيّةُ بالاسم. */
+/** تفاصيلُ رحلةٍ للعرض (شركة · تاريخ ووقت · مسار). فارغةٌ حيث لم تُحفظ (لقطةُ الإغلاق) — لا تُستكمل من الحاليّ. */
+export function flightDetail(d: PollDetails, id: number | null): string {
+  if (id == null) return "";
+  const f = (d.flight_info || {})[String(id)];
+  if (!f) return "";
+  /* المقاطعُ اللاتينيّة (التاريخ والوقت ورموز المطارات) معزولةٌ اتّجاهيّاً (LRI…PDI): بدونها يُعاد ترتيبُها
+     داخل السطر العربيّ فيُقرأ التاريخُ والمسارُ مقلوبَين — في الشاشة وExcel وPDF */
+  const ltr = (t: string) => `\u2066${t}\u2069`;
+  const when = [f.date, f.time].filter(Boolean).join(" ");
+  const route = f.from_airport || f.to_airport ? `من ${ltr(f.from_airport || "؟")} إلى ${ltr(f.to_airport || "؟")}` : "";
+  return [f.airline, when ? ltr(when) : "", route].filter(Boolean).join(" · ");
+}
+export const FLIGHT_SNAPSHOT_NOTE = "في الاستطلاع المغلق تُعرض الرحلة التي كان الحاج مُسنَداً إليها لحظة الإغلاق باسمها المحفوظ؛ تفاصيلها (الشركة والتاريخ والمسار) لم تُحفظ في لقطة الإغلاق فلا تُعرض.";
+
+export type Group = Summary & { key: number | null; label: string; detail: string; rows: DetailRow[] };
+/** التوزيعُ بأحد الأبعاد الأربعة. غيرُ المُسنَد مجموعةٌ أخيرةٌ صريحة؛ والبقيّةُ بالاسم. */
 export function groupBy(d: PollDetails, dim: Dim): Group[] {
   const keys = new Map<string, number | null>();
   for (const r of d.rows) keys.set(r[dim] == null ? "" : String(r[dim]), r[dim] ?? null);
   return Array.from(keys.values())
     .map(key => {
       const rows = d.rows.filter(r => (r[dim] ?? null) === key);
-      return { ...summarize(d, rows), key, label: labelOf(d, dim, key), rows };
+      return { ...summarize(d, rows), key, label: labelOf(d, dim, key), detail: isFlight(dim) ? flightDetail(d, key) : "", rows };
     })
     .sort((a, b) => (a.key === null ? 1 : 0) - (b.key === null ? 1 : 0) || a.label.localeCompare(b.label, "ar") || (a.key ?? 0) - (b.key ?? 0));
 }
 
 export const answerLabels = (d: PollDetails, r: DetailRow) =>
   sortedOptions(d).filter(o => r.option_ids.includes(o.id)).map(o => o.label);
+
+/** سطرُ التفصيل لخيارٍ في مجموعة: العددُ والنسبتان — الأساسيّةُ (من المستهدفين) أوّلاً */
+export const cellText = (o: OptionStat, g: Summary) =>
+  `${o.count} · ${fmtPct(o.count, g.audience)} من المستهدفين · ${fmtPct(o.count, g.respondents)} من المجيبين`;
 
 export type RowFilter = { q?: string; bus?: number | null | "all"; mina?: number | null | "all"; status?: "all" | "answered" | "not" };
 export type SortKey = "name" | "bus" | "mina" | "status";
@@ -108,12 +160,19 @@ const KIND_AR = { single: "اختيار واحد", multiple: "اختيار مت�
 const STATUS_AR: Record<string, string> = { draft: "مسودة", scheduled: "مجدول", published: "منشور", closed: "مغلق" };
 const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("ar-EG", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
 export const sourceNote = (d: PollDetails) => d.source === "snapshot"
-  ? `لقطة الإغلاق — الأعداد والإسناد (الباص ومنى) كما كانت لحظة الإغلاق (${dt(d.as_of)})`
-  : `نتائج حيّة — الإسناد (الباص ومنى) الحالي، حتى ${dt(d.as_of)}`;
-export const MULTI_NOTE = "في الاختيار المتعدد تُحسب نسبة كل خيار من عدد المجيبين، فقد يتجاوز مجموع النسب ١٠٠٪.";
+  ? `لقطة الإغلاق — الأعداد والإسناد (الباص ومنى ورحلتا الذهاب والعودة) كما كانت لحظة الإغلاق (${dt(d.as_of)})`
+  : `نتائج حيّة — الإسناد (الباص ومنى ورحلتا الذهاب والعودة) الحالي، حتى ${dt(d.as_of)}`;
+export const MULTI_NOTE = "في الاختيار المتعدد قد يختار الحاج أكثر من خيار، فقد يتجاوز مجموع نسب الخيارات ١٠٠٪.";
+export const DIST_NOTE = "في التوزيع لكل خيار نسبتان: الأساسية من المستهدفين في المجموعة، والثانوية من المجيبين فيها.";
+
+export type SheetKey = "summary" | "answers" | Dim | "nonrespondents";
+export const SHEET_NAME: Record<SheetKey, string> = {
+  summary: "الملخص", answers: "الإجابات", bus: "تحليل الباصات", camp_mina: "تحليل منى",
+  flight_go: "رحلات الذهاب", flight_back: "رحلات العودة", nonrespondents: "لم يجيبوا",
+};
 
 /** أوراقُ Excel (مصفوفاتٌ صافية) — تختبرها الوحداتُ بلا متصفّح */
-export function exportSheets(d: PollDetails, m: PollMeta): Record<"summary" | "answers" | "bus" | "mina" | "nonrespondents", Cell[][]> {
+export function exportSheets(d: PollDetails, m: PollMeta): Record<SheetKey, Cell[][]> {
   const s = summarize(d);
   const opts = sortedOptions(d);
   const summary: Cell[][] = [
@@ -125,23 +184,27 @@ export function exportSheets(d: PollDetails, m: PollMeta): Record<"summary" | "a
     ["الخيار", "عدد الأصوات", "النسبة من المجيبين"],
     ...s.options.map(o => [o.label, o.count, fmtPct(o.count, s.respondents)] as Cell[]),
     ...(s.multiple ? [[], [MULTI_NOTE]] : []),
+    [], [DIST_NOTE],
+    ...(d.source === "snapshot" ? [[FLIGHT_SNAPSHOT_NOTE]] : []),
   ];
+  const where = (r: DetailRow) => [labelOf(d, "bus", r.bus), labelOf(d, "camp_mina", r.camp_mina), labelOf(d, "flight_go", r.flight_go), labelOf(d, "flight_back", r.flight_back)];
   const answers: Cell[][] = [
-    ["رقم الحاج", "الاسم", "النوع", "الباص", "مخيم منى", "الإجابة", "رقم المراجعة"],
+    ["رقم الحاج", "الاسم", "النوع", "الباص", "مخيم منى", "رحلة الذهاب", "رحلة العودة", "الإجابة", "رقم المراجعة"],
     ...sortRows(d, d.rows.filter(r => r.responded), "name").map(r => [r.passenger_id, r.name_ar || "", r.passenger_type || "",
-      labelOf(d, "bus", r.bus), labelOf(d, "camp_mina", r.camp_mina), answerLabels(d, r).join("، "), r.revision ?? ""] as Cell[]),
+      ...where(r), answerLabels(d, r).join("، "), r.revision ?? ""] as Cell[]),
   ];
   const dimSheet = (dim: Dim): Cell[][] => [
-    [DIM_ONE[dim], "المستهدفون", "المجيبون", "نسبة المشاركة", ...opts.flatMap(o => [`${o.label} (عدد)`, `${o.label} (٪)`])],
-    ...groupBy(d, dim).map(g => [g.label, g.audience, g.respondents, fmtPct(g.respondents, g.audience),
-      ...g.options.flatMap(o => [o.count, fmtPct(o.count, g.respondents)])] as Cell[]),
+    [DIM_ONE[dim], ...(isFlight(dim) ? ["تفاصيل الرحلة"] : []), "المستهدفون", "المجيبون", "لم يجيبوا", "نسبة المشاركة",
+      ...opts.flatMap(o => [`${o.label} (عدد)`, `${o.label} (٪ من المستهدفين)`, `${o.label} (٪ من المجيبين)`])],
+    ...groupBy(d, dim).map(g => [g.label, ...(isFlight(dim) ? [g.detail || (d.source === "snapshot" && g.key != null ? "غير محفوظة في لقطة الإغلاق" : "")] : []),
+      g.audience, g.respondents, g.nonrespondents, fmtPct(g.respondents, g.audience),
+      ...g.options.flatMap(o => [o.count, fmtPct(o.count, g.audience), fmtPct(o.count, g.respondents)])] as Cell[]),
   ];
   const nonrespondents: Cell[][] = [
-    ["رقم الحاج", "الاسم", "النوع", "الباص", "مخيم منى"],
-    ...sortRows(d, d.rows.filter(r => !r.responded), "name").map(r => [r.passenger_id, r.name_ar || "", r.passenger_type || "",
-      labelOf(d, "bus", r.bus), labelOf(d, "camp_mina", r.camp_mina)] as Cell[]),
+    ["رقم الحاج", "الاسم", "النوع", "الباص", "مخيم منى", "رحلة الذهاب", "رحلة العودة"],
+    ...sortRows(d, d.rows.filter(r => !r.responded), "name").map(r => [r.passenger_id, r.name_ar || "", r.passenger_type || "", ...where(r)] as Cell[]),
   ];
-  return { summary, answers, bus: dimSheet("bus"), mina: dimSheet("camp_mina"), nonrespondents };
+  return { summary, answers, bus: dimSheet("bus"), camp_mina: dimSheet("camp_mina"), flight_go: dimSheet("flight_go"), flight_back: dimSheet("flight_back"), nonrespondents };
 }
 
 export const OPTION_COLORS = ["#2E7D32", "#1565C0", "#B8860B", "#6A1B9A", "#C62828", "#00838F", "#AD1457", "#5D4037", "#3949AB", "#7CB342"];
@@ -152,7 +215,7 @@ export function reportBody(d: PollDetails, m: PollMeta): string {
   const s = summarize(d);
   const opts = sortedOptions(d);
   const color = (i: number) => OPTION_COLORS[i % OPTION_COLORS.length];
-  const bar = (p: number, c: string) => `<div style="background:#eee;border-radius:3pt;height:8pt;width:100%;overflow:hidden"><div style="width:${Math.min(100, Math.max(0, p))}%;height:100%;background:${c}"></div></div>`;
+  const bar = (p: number, c: string, h = 8) => `<div style="background:#eee;border-radius:3pt;height:${h}pt;width:100%;overflow:hidden"><div style="width:${Math.min(100, Math.max(0, p))}%;height:100%;background:${c}"></div></div>`;
   const info = `<table><tbody>
     <tr><td style="width:28%;font-weight:700">السؤال</td><td style="white-space:normal">${escHtml(m.title)}</td></tr>
     ${m.body ? `<tr><td style="font-weight:700">التوضيح</td><td style="white-space:normal">${escHtml(m.body)}</td></tr>` : ""}
@@ -165,17 +228,21 @@ export function reportBody(d: PollDetails, m: PollMeta): string {
   const results = `<table><thead><tr><th>الخيار</th><th style="width:12%">الأصوات</th><th style="width:12%">النسبة</th><th style="width:36%">الرسم</th></tr></thead><tbody>
     ${s.options.map((o, i) => `<tr><td style="white-space:normal"><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${color(i)};margin-left:4pt"></span>${escHtml(o.label)}</td><td>${o.count}</td><td>${fmtPct(o.count, s.respondents)}</td><td>${bar(pct(o.count, s.respondents), color(i))}</td></tr>`).join("")}
   </tbody></table>${s.multiple ? `<div style="font-size:8pt;color:#666;margin:-4pt 0 8pt">${escHtml(MULTI_NOTE)}</div>` : ""}`;
+  /* الخليّة: العددُ، ثم الأساسيّةُ بخطٍّ عريض، ثم الثانويّةُ صغيرة — كما في الشاشة */
+  const cell = (o: OptionStat, g: Group) => `<td style="white-space:normal"><b>${o.count}</b> · <b>${fmtPct(o.count, g.audience)}</b><div style="font-size:7pt;color:#777">${fmtPct(o.count, g.respondents)} من المجيبين</div></td>`;
+  /* الرسم: شريطٌ لكلّ خيارٍ بعرض نسبته من المستهدفين (لا تكديس — المتعدّدُ قد يتجاوز ١٠٠٪) */
+  const chart = (g: Group) => g.options.map((o, i) => `<div style="display:flex;align-items:center;gap:3pt;margin:1pt 0">${bar(pct(o.count, g.audience), color(i), 5)}</div>`).join("");
   const dimTable = (dim: Dim) => {
     const gs = groupBy(d, dim);
-    const stacked = (g: Group) => `<div style="display:flex;height:9pt;border-radius:3pt;overflow:hidden;background:#eee;min-width:60pt">${
-      g.respondents ? g.options.map((o, i) => o.count ? `<div style="width:${(o.count / Math.max(1, g.options.reduce((x, y) => x + y.count, 0))) * 100}%;background:${color(i)}"></div>` : "").join("") : ""}</div>`;
-    return `<div class="section-title">${DIM_LABEL[dim]}</div>
-    <table class="wide-table"><thead><tr><th>${DIM_ONE[dim]}</th><th>المستهدفون</th><th>المجيبون</th><th>المشاركة</th>${opts.map(o => `<th>${escHtml(o.label)}</th>`).join("")}<th style="width:18%">التوزيع</th></tr></thead><tbody>
-      ${gs.map(g => `<tr><td>${escHtml(g.label)}</td><td>${g.audience}</td><td>${g.respondents}</td><td>${fmtPct(g.respondents, g.audience)}</td>${g.options.map(o => `<td>${o.count} (${fmtPct(o.count, g.respondents)})</td>`).join("")}<td>${stacked(g)}</td></tr>`).join("") || `<tr><td colspan="${5 + opts.length}">لا يوجد جمهور</td></tr>`}
-    </tbody></table>`;
+    return `<div style="break-inside:avoid;page-break-inside:avoid"><div class="section-title">${DIM_LABEL[dim]}</div>
+    ${isFlight(dim) && d.source === "snapshot" ? `<div style="font-size:7.5pt;color:#666;margin:-2pt 0 4pt">${escHtml(FLIGHT_SNAPSHOT_NOTE)}</div>` : ""}
+    <table class="wide-table"><thead><tr><th>${DIM_ONE[dim]}</th><th>المستهدفون</th><th>المجيبون</th><th>لم يجيبوا</th><th>المشاركة</th>${opts.map(o => `<th style="white-space:normal">${escHtml(o.label)}</th>`).join("")}<th style="width:14%">الرسم (٪ من المستهدفين)</th></tr></thead><tbody>
+      ${gs.map(g => `<tr style="break-inside:avoid"><td style="white-space:normal"><b>${escHtml(g.label)}</b>${g.detail ? `<div style="font-size:7pt;color:#777">${escHtml(g.detail)}</div>` : ""}</td><td>${g.audience}</td><td>${g.respondents}</td><td>${g.nonrespondents}</td><td>${fmtPct(g.respondents, g.audience)}</td>${g.options.map(o => cell(o, g)).join("")}<td>${chart(g)}</td></tr>`).join("") || `<tr><td colspan="${6 + opts.length}">لا يوجد جمهور</td></tr>`}
+    </tbody></table></div>`;
   };
-  const legend = `<div style="display:flex;flex-wrap:wrap;gap:8pt;font-size:8pt;margin:2pt 0 6pt">${opts.map((o, i) => `<span><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${color(i)};margin-left:3pt"></span>${escHtml(o.label)}</span>`).join("")}</div>`;
+  const legend = `<div style="display:flex;flex-wrap:wrap;gap:8pt;font-size:8pt;margin:2pt 0 6pt">${opts.map((o, i) => `<span><span style="display:inline-block;width:7pt;height:7pt;border-radius:2pt;background:${color(i)};margin-left:3pt"></span>${escHtml(o.label)}</span>`).join("")}</div>
+  <div style="font-size:7.5pt;color:#666;margin-bottom:4pt">${escHtml(DIST_NOTE)}${s.multiple ? ` ${escHtml(MULTI_NOTE)}` : ""}</div>`;
   return `<div class="section-title">معلومات الاستطلاع</div>${info}
 <div class="section-title">نتائج التصويت</div>${kpis}${results}
-${legend}${dimTable("bus")}${dimTable("camp_mina")}`;
+${legend}${DIMS.map(dimTable).join("")}`;
 }

@@ -37,9 +37,16 @@ const iso = (ms) => new Date(Date.now() + ms).toISOString();
 
 /* جمهورٌ مجمَّد من ستة: أحمد غيّر إجابته (مراجعة ٣)، وداود بلا إسناد، وهشام وداود لم يجيبا */
 const OPTS = [{ id: 11, label: "صباحاً", sort_order: 1 }, { id: 12, label: "مساءً", sort_order: 2 }, { id: 13, label: "ليلاً", sort_order: 3 }];
-const R = (id, name, bus, mina, opts, rev) => ({ passenger_id: id, name_ar: name, passenger_type: "حاج", added_reason: "publish", bus, camp_mina: mina, responded: opts.length > 0, revision: opts.length ? (rev ?? 1) : null, option_ids: opts });
-const ROWS = [R(101, "أحمد سالم", 1, 7, [12], 3), R(102, "بلال حسن", 1, null, [11]), R(103, "جابر علي", 2, 7, [12]), R(104, "داود يوسف", null, null, []), R(105, "هشام عمر", 2, 8, []), R(106, "زياد خالد", 1, 8, [12])];
-const LABELS = { bus: { 1: "باص ١", 2: "باص ٢" }, camp_mina: { 7: "منى أ", 8: "منى ب" } };
+/* الرحلات: 31 QR1 و32 QR3 للذهاب (flight_id)، و41 QR2 للعودة (return_flight_id) */
+const R = (id, name, bus, mina, go, back, opts, rev) => ({ passenger_id: id, name_ar: name, passenger_type: "حاج", added_reason: "publish", bus, camp_mina: mina, flight_go: go, flight_back: back,
+  responded: opts.length > 0, revision: opts.length ? (rev ?? 1) : null, option_ids: opts });
+const ROWS = [R(101, "أحمد سالم", 1, 7, 31, 41, [12], 3), R(102, "بلال حسن", 1, null, 31, null, [11]), R(103, "جابر علي", 2, 7, 32, 41, [12]), R(104, "داود يوسف", null, null, null, null, []),
+  R(105, "هشام عمر", 2, 8, 31, 41, []), R(106, "زياد خالد", 1, 8, 32, null, [12])];
+const FL = { 31: "QR1", 32: "QR3", 41: "QR2" };
+const LABELS = { bus: { 1: "باص ١", 2: "باص ٢" }, camp_mina: { 7: "منى أ", 8: "منى ب" }, flight_go: FL, flight_back: FL };
+const FINFO = { 31: { airline: "القطرية", date: "2027-05-01", time: "08:00", from_airport: "DOH", to_airport: "JED", type: "ذهاب" },
+  32: { airline: "القطرية", date: "2027-05-02", time: "09:00", from_airport: "DOH", to_airport: "MED", type: "ذهاب" },
+  41: { airline: "القطرية", date: "2027-06-10", time: "12:00", from_airport: "JED", to_airport: "DOH", type: "إياب" } };
 const poll = (id, status, extra = {}) => ({ id, season_id: 1, title: `استطلاع ${id}`, body: null, kind: "single", max_choices: null, audience: { all: true }, status,
   publish_at: iso(-86400000), published_at: iso(-86400000), audience_frozen_at: iso(-86400000), closes_at: null, closed_at: null, close_reason: null,
   allow_answer_changes: true, created_by: null, created_at: iso(-id * 60000), updated_by: null, updated_at: iso(-id * 60000), ...extra });
@@ -55,7 +62,7 @@ const rowsFor = (pid, multi) => ROWS.map(r => ({ ...r, option_ids: (multi && r.p
 const details = (pid) => {
   const p = POLLS.find(x => x.id === pid);
   return { poll_id: pid, status: p.status, kind: p.kind, max_choices: p.max_choices, source: p.status === "closed" ? "snapshot" : "live", as_of: p.closed_at || new Date().toISOString(),
-    options: optFor(pid), labels: LABELS, rows: rowsFor(pid, p.kind === "multiple") };
+    options: optFor(pid), labels: LABELS, flight_info: p.status === "closed" ? {} : FINFO, rows: rowsFor(pid, p.kind === "multiple") };
 };
 const PAX = [101, 102, 103, 104, 105, 106].map((id, i) => ({ id, season_id: 1, name_ar: ROWS[i].name_ar, short_ar: ROWS[i].name_ar, name_en: `P${id}`, passenger_type: "حاج", gender: "ذكر",
   sort_order: id, nat: "قطر", passport: `P${id}`, services: {}, bus_id: ROWS[i].bus, camp_mina_id: ROWS[i].camp_mina }));
@@ -94,7 +101,7 @@ async function boot(browser, { viewport = { width: 1366, height: 900 }, theme = 
         return json(route, details(body.p_poll_id));
       }
       if (fn === "get_poll_snapshot") { const dd = details(body.p_poll_id); return json(route, { poll_id: dd.poll_id, closed_at: dd.as_of, options: dd.options, labels: { ...dd.labels, camp_arafa: {} },
-        rows: dd.rows.map(r => ({ ...r, camp_arafa: 5, hotel: 9, flight_go: 3 })), totals: { audience: 6, respondents: 4, options: [] }, checksum_valid: true }); }
+        rows: dd.rows.map(r => ({ ...r, camp_arafa: 5, hotel: 9 })), totals: { audience: 6, respondents: 4, options: [] }, checksum_valid: true }); }
       if (fn === "poll_results") return json(route, { totals: { audience: 6, respondents: 4, options: [] } });
       if (fn === "announcement_audience_preview") return json(route, [{ passenger_id: 101 }]);
       return json(route, fn === "push_enabled_passengers" ? [] : null);
@@ -164,11 +171,20 @@ try {
     const grp = (k) => page.locator(`[data-group="${k}"]`);
     check("bus table: one row per bus + explicit «غير مُسنَد» last", JSON.stringify(await page.locator("[data-dist-table] tbody th").allInnerTexts()) === JSON.stringify(["باص ١", "باص ٢", "غير مُسنَد"]));
     const cells = async (k) => (await grp(k).locator("td").allInnerTexts()).map(s => s.replace(/\s+/g, " ").trim());
-    check("bus 1: targeted 3, respondents 3, 100%, options 1 (33.3%) / 2 (66.7%) / 0", JSON.stringify(await cells(1)) === JSON.stringify(["3", "3", "100٪", "1 (33.3٪)", "2 (66.7٪)", "0 (0٪)"]), JSON.stringify(await cells(1)));
-    check("unassigned bus: 1 targeted, 0 respondents (not dropped)", JSON.stringify((await cells("none")).slice(0, 3)) === JSON.stringify(["1", "0", "0٪"]));
-    await grp(1).locator("td").nth(4).getByRole("button").click();
+    check("bus 1: targeted 3, respondents 3, nonrespondents 0, 100%, each option with both %", JSON.stringify(await cells(1)) === JSON.stringify(["3", "3", "0", "100٪", "1 33.3٪ 33.3٪ من المجيبين", "2 66.7٪ 66.7٪ من المجيبين", "0 0٪ 0٪ من المجيبين"]), JSON.stringify(await cells(1)));
+    check("bus 2 «مساءً»: 1 → 50٪ of targeted (primary) vs 100٪ of respondents (secondary)", (await grp(2).locator("[data-opt-cell='112'] [data-pct-targeted]").innerText()) === "50٪"
+      && (await grp(2).locator("[data-opt-cell='112'] [data-pct-respondents]").innerText()) === "100٪ من المجيبين");
+    const w = async (sel) => grp(2).locator(`[data-opt-cell='112'] ${sel}`).evaluate(e => [getComputedStyle(e).fontWeight, parseFloat(getComputedStyle(e).fontSize)]);
+    const [tw, ts] = await w("[data-pct-targeted]"), [rw, rs] = await w("[data-pct-respondents]");
+    check("targeted % is visually emphasised (bolder and larger than respondents %)", +tw >= 700 && +rw < 700 && ts > rs, `${tw}/${ts} vs ${rw}/${rs}`);
+    check("unassigned bus: 1 targeted, 0 respondents, 1 nonrespondent (not dropped)", JSON.stringify((await cells("none")).slice(0, 4)) === JSON.stringify(["1", "0", "1", "0٪"]));
+    await grp(2).locator("td").nth(2).getByRole("button").click();
+    check("nonrespondents count is clickable → names (باص ٢: هشام)", JSON.stringify(await drawerNames(page)) === JSON.stringify(["هشام عمر"]));
+    await closeDrawer(page);
+    await grp(1).locator("[data-opt-cell='112']").getByRole("button").click();
     await page.locator("[data-drawer]").waitFor();
     check("bus × option count is clickable → names", JSON.stringify((await drawerNames(page)).sort()) === JSON.stringify(["أحمد سالم", "زياد خالد"].sort()));
+    check("drill-down header shows the count and both percentages", (await page.locator("[data-drawer-sub]").innerText()) === "2 · 66.7٪ من المستهدفين · 66.7٪ من المجيبين", await page.locator("[data-drawer-sub]").innerText());
     await closeDrawer(page);
     await grp(2).locator("td").nth(0).getByRole("button").click();
     check("bus targeted count → names (incl. nonrespondent)", JSON.stringify((await drawerNames(page)).sort()) === JSON.stringify(["جابر علي", "هشام عمر"].sort()));
@@ -176,9 +192,33 @@ try {
     await page.getByRole("radio", { name: "مخيمات منى" }).click();
     check("Mina table: منى أ · منى ب · غير مُسنَد", JSON.stringify(await page.locator("[data-dist-table] tbody th").allInnerTexts()) === JSON.stringify(["منى أ", "منى ب", "غير مُسنَد"]));
     check("Mina unassigned: 2 targeted (بلال, داود)", (await cells("none"))[0] === "2");
-    check("no Arafat / hotel / flight dimension offered", (await page.locator("section[aria-label='تحليل التوزيع']").innerText()).match(/عرفة|الفنادق|الرحلات/) === null);
+    check("dimensions offered: buses · Mina · outbound · return (no Arafat / hotels)", JSON.stringify(await page.getByRole("radiogroup", { name: "التوزيع حسب" }).getByRole("radio").allInnerTexts()) === JSON.stringify(["الباصات", "مخيمات منى", "رحلات الذهاب", "رحلات العودة"])
+      && (await page.locator("section[aria-label='تحليل التوزيع']").innerText()).match(/عرفة|الفنادق/) === null);
+    /* الرحلات */
+    await page.getByRole("radio", { name: "رحلات الذهاب" }).click();
+    const names = async () => (await page.locator("[data-dist-table] tbody th").allInnerTexts()).map(t => t.split("\n")[0]);
+    check("outbound flights: QR1 · QR3 · غير مُسنَد", JSON.stringify(await names()) === JSON.stringify(["QR1", "QR3", "غير مُسنَد"]), JSON.stringify(await names()));
+    check("outbound flight details shown (airline · date time · route)", (await grp(31).locator("[data-flight-detail]").innerText()).replace(/[\u2066\u2069]/g, "") === "القطرية · 2027-05-01 08:00 · من DOH إلى JED");
+    check("outbound QR1: 3 targeted, 2 respondents, 1 nonrespondent, 66.7٪", JSON.stringify((await cells(31)).slice(0, 4)) === JSON.stringify(["3", "2", "1", "66.7٪"]), JSON.stringify(await cells(31)));
+    check("outbound QR1 «صباحاً»: 33.3٪ of targeted · 50٪ of respondents", (await grp(31).locator("[data-opt-cell='111']").innerText()).replace(/\s+/g, " ").trim() === "1 33.3٪ 50٪ من المجيبين");
+    check("outbound unassigned explicit (داود)", JSON.stringify((await cells("none")).slice(0, 3)) === JSON.stringify(["1", "0", "1"]));
+    await grp(32).locator("td").nth(0).getByRole("button").click();
+    check("outbound QR3 targeted → names", JSON.stringify((await drawerNames(page)).sort()) === JSON.stringify(["جابر علي", "زياد خالد"].sort()));
+    await closeDrawer(page);
+    await page.getByRole("radio", { name: "رحلات العودة" }).click();
+    check("return flights are a separate dimension: QR2 (3) · غير مُسنَد (3)", JSON.stringify(await names()) === JSON.stringify(["QR2", "غير مُسنَد"]) && (await cells(41))[0] === "3" && (await cells("none"))[0] === "3");
+    const targetedSum = async () => (await page.locator("[data-dist-table] tbody tr").evaluateAll(trs => trs.map(tr => +tr.querySelector("td").innerText.trim()))).reduce((a, b) => a + b, 0);
+    const backSum = await targetedSum();
+    await page.getByRole("radio", { name: "رحلات الذهاب" }).click();
+    const goSum = await targetedSum();
+    check("no double counting: outbound and return groups each add up to the 6 targeted", goSum === 6 && backSum === 6, `${goSum} ${backSum}`);
+    await page.getByRole("radio", { name: "مخيمات منى" }).click();
     await page.getByRole("radio", { name: "رسم" }).click();
-    check("chart view renders one stacked bar per group", (await page.locator("[data-dist-chart] [role=img]").count()) === 3);
+    check("chart view: one block per group, one bar per option (3 × 3), labelled with both %", (await page.locator("[data-dist-chart] [data-chart-group]").count()) === 3 && (await page.locator("[data-dist-chart] [role=img]").count()) === 9
+      && ((await page.locator("[data-chart-group='7'] [role=img]").first().getAttribute("aria-label")) || "").includes("من المستهدفين"));
+    await page.locator("[data-chart-group='7'] [role=img]").nth(1).click();
+    check("chart bar is clickable → names (منى أ «مساءً»)", JSON.stringify((await drawerNames(page)).sort()) === JSON.stringify(["أحمد سالم", "جابر علي"].sort()));
+    await closeDrawer(page);
     await page.screenshot({ path: join(OUT, "distribution-chart.png"), fullPage: true });
 
     /* المشاركة والمتابعة */
@@ -208,13 +248,18 @@ try {
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /Excel/ }).click()]);
     const file = join(OUT, "export.xlsx"); await dl.saveAs(file);
     const wb = XLSX.read(readFileSync(file));
-    check("Excel: sheets summary · answers · bus · Mina · nonrespondents", JSON.stringify(wb.SheetNames) === JSON.stringify(["الملخص", "الإجابات", "تحليل الباصات", "تحليل منى", "لم يجيبوا"]), wb.SheetNames.join(","));
+    check("Excel: sheets summary · answers · bus · Mina · outbound · return · nonrespondents", JSON.stringify(wb.SheetNames) === JSON.stringify(["الملخص", "الإجابات", "تحليل الباصات", "تحليل منى", "رحلات الذهاب", "رحلات العودة", "لم يجيبوا"]), wb.SheetNames.join(","));
     const aoa = (n) => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1 });
     const sum = Object.fromEntries(aoa("الملخص").filter(r => r.length === 2).map(r => [r[0], r[1]]));
     check("Excel summary matches the screen (6 / 4 / 2 / 66.7%)", sum["المستهدفون"] === 6 && sum["المجيبون"] === 4 && sum["لم يجيبوا"] === 2 && sum["نسبة المشاركة"] === "66.7٪", JSON.stringify(sum));
     const ans = aoa("الإجابات").slice(1);
-    check("Excel answers: 4 named respondents, changed answer once with revision 3", ans.length === 4 && ans.filter(r => r[1] === "أحمد سالم").length === 1 && ans.find(r => r[1] === "أحمد سالم")[5] === "مساءً" && ans.find(r => r[1] === "أحمد سالم")[6] === 3);
-    check("Excel bus sheet incl. unassigned", JSON.stringify(aoa("تحليل الباصات").slice(1).map(r => [r[0], r[1], r[2]])) === JSON.stringify([["باص ١", 3, 3], ["باص ٢", 2, 1], ["غير مُسنَد", 1, 0]]));
+    check("Excel answers: 4 named respondents, changed answer once with revision 3", ans.length === 4 && ans.filter(r => r[1] === "أحمد سالم").length === 1 && ans.find(r => r[1] === "أحمد سالم")[7] === "مساءً" && ans.find(r => r[1] === "أحمد سالم")[8] === 3 && ans.find(r => r[1] === "أحمد سالم")[5] === "QR1" && ans.find(r => r[1] === "أحمد سالم")[6] === "QR2");
+    check("Excel bus sheet incl. unassigned and nonrespondents", JSON.stringify(aoa("تحليل الباصات").slice(1).map(r => r.slice(0, 4))) === JSON.stringify([["باص ١", 3, 3, 0], ["باص ٢", 2, 1, 1], ["غير مُسنَد", 1, 0, 1]]));
+    const b2 = aoa("تحليل الباصات")[2], hdr = aoa("تحليل الباصات")[0], ci = hdr.indexOf("مساءً (عدد)");
+    check("Excel bus 2 «مساءً»: same as screen — 1 · 50٪ of targeted · 100٪ of respondents", JSON.stringify(b2.slice(ci, ci + 3)) === JSON.stringify([1, "50٪", "100٪"]) && hdr[ci + 1] === "مساءً (٪ من المستهدفين)", JSON.stringify(b2));
+    check("Excel outbound sheet: QR1 with details, 3 / 2 / 1; unassigned row", JSON.stringify(aoa("رحلات الذهاب").slice(1).map(r => [r[0], String(r[1] ?? "").replace(/[\u2066\u2069]/g, ""), r[2], r[3], r[4]]))
+      === JSON.stringify([["QR1", "القطرية · 2027-05-01 08:00 · من DOH إلى JED", 3, 2, 1], ["QR3", "القطرية · 2027-05-02 09:00 · من DOH إلى MED", 2, 2, 0], ["غير مُسنَد", "", 1, 0, 1]]), JSON.stringify(aoa("رحلات الذهاب").slice(1)));
+    check("Excel return sheet: QR2 3, unassigned 3", JSON.stringify(aoa("رحلات العودة").slice(1).map(r => [r[0], r[2]])) === JSON.stringify([["QR2", 3], ["غير مُسنَد", 3]]));
     check("Excel nonrespondents", JSON.stringify(aoa("لم يجيبوا").slice(1).map(r => r[1]).sort()) === JSON.stringify(["داود يوسف", "هشام عمر"].sort()));
 
     /* PDF (عبر الطباعة الموحّدة) */
@@ -225,7 +270,8 @@ try {
     const pdf = await page.evaluate(() => document.getElementById("__print_frame__")?.contentDocument?.documentElement.outerHTML || "");
     (await import("node:fs")).writeFileSync(join(OUT, "report.html"), pdf);
     check("PDF: branded RTL report with poll info, totals, both dimensions and charts", pdf.includes("حملة الاختبار") && pdf.includes("direction: rtl") && pdf.includes("متى تفضّل زيارة المدينة؟")
-      && pdf.includes("66.7٪") && pdf.includes("الباصات") && pdf.includes("مخيمات منى") && pdf.includes("غير مُسنَد") && /background:#[0-9A-F]{6}/i.test(pdf));
+      && pdf.includes("66.7٪") && pdf.includes("الباصات") && pdf.includes("مخيمات منى") && pdf.includes("رحلات الذهاب") && pdf.includes("رحلات العودة") && pdf.includes("غير مُسنَد")
+      && pdf.includes("<b>1</b> · <b>50٪</b>") && pdf.includes("100٪ من المجيبين") && /background:#[0-9A-F]{6}/i.test(pdf));
     check("no writes to any table while viewing/exporting results", writes.length === 0, writes.join(" "));
     check("no page errors", errors.length === 0, errors.join(" | "));
     await page.getByRole("button", { name: /رجوع إلى الاستطلاعات/ }).click();
@@ -238,7 +284,7 @@ try {
     const { ctx, page } = await boot(browser);
     await openResults(page, 2);
     const t = await page.locator("section[aria-label='نتائج التصويت']").innerText();
-    check("multiple: explains totals may exceed 100%", t.includes("قد يتجاوز مجموع النسب ١٠٠٪"));
+    check("multiple: explains totals may exceed 100%", t.includes("قد يتجاوز مجموع نسب الخيارات ١٠٠٪"));
     const rowTxt = async (oid) => page.locator(`[data-option-row="${oid}"] [data-count]`).innerText();
     check("multiple: % of respondents (صباحاً 2/4=50%, مساءً 3/4=75%)", `${await rowTxt(211)}|${await rowTxt(212)}` === "2 صوت · 50٪|3 صوت · 75٪", `${await rowTxt(211)}|${await rowTxt(212)}`);
     await ctx.close();
@@ -251,6 +297,10 @@ try {
     check("closed: labelled as the closing snapshot (assignment at closure)", (await page.locator("[data-source]").innerText()).startsWith("لقطة الإغلاق"));
     await page.getByRole("tab", { name: "تحليل التوزيع" }).click();
     check("closed distribution notes the assignment is as at closure", (await page.locator("section[aria-label='تحليل التوزيع']").innerText()).includes("لحظة إغلاق الاستطلاع"));
+    await page.getByRole("radio", { name: "رحلات الذهاب" }).click();
+    check("closed: flights from the snapshot by name, limitation stated, no invented flight details",
+      (await page.locator("[data-flight-snapshot-note]").count()) === 1 && (await page.locator("[data-flight-detail]").count()) === 0
+      && (await page.locator("[data-dist-table] tbody th").first().innerText()).startsWith("QR1"));
     await ctx.close();
   }
 
